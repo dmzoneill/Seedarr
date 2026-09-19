@@ -368,6 +368,7 @@ public class ConnectionManagerTest
     [Test]
     public void ProcessDropouts_should_return_early_when_probability_is_zero()
     {
+        _configService.SimulationModeEnabled.Returns(true);
         _configService.PeerDropoutProbability.Returns(0.0);
         var conn = CreateTestConnection();
         _manager.Add(conn);
@@ -380,6 +381,7 @@ public class ConnectionManagerTest
     [Test]
     public void ProcessDropouts_should_return_early_when_no_connections()
     {
+        _configService.SimulationModeEnabled.Returns(true);
         _configService.PeerDropoutProbability.Returns(0.5);
 
         _manager.ProcessDropouts();
@@ -443,6 +445,7 @@ public class ConnectionManagerTest
     [Test]
     public void ProcessDropouts_should_remove_all_connections_when_probability_is_one()
     {
+        _configService.SimulationModeEnabled.Returns(true);
         _configService.PeerDropoutProbability.Returns(1.0);
         var conn1 = CreateTestConnection();
         var conn2 = CreateTestConnection();
@@ -459,6 +462,7 @@ public class ConnectionManagerTest
     [Test]
     public void ProcessDropouts_should_log_disconnects_for_removed_connections()
     {
+        _configService.SimulationModeEnabled.Returns(true);
         _configService.PeerDropoutProbability.Returns(1.0);
         var conn = CreateTestConnection();
         _manager.Add(conn);
@@ -649,6 +653,7 @@ public class ConnectionManagerTest
     [Test]
     public void ProcessDropouts_should_dispose_removed_connections()
     {
+        _configService.SimulationModeEnabled.Returns(true);
         _configService.PeerDropoutProbability.Returns(1.0);
         var conn = CreateTestConnection();
         _manager.Add(conn);
@@ -1184,5 +1189,183 @@ public class ConnectionManagerTest
 
         _manager.UnbanPeer("192.168.1.50");
         Assert.That(_manager.IsPeerBanned("192.168.1.50"), Is.False);
+    }
+
+    private PeerConnection CreateMockConnection(string ip, int port = 6881)
+    {
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, ip, port);
+        _createdConnections.Add(conn);
+        return conn;
+    }
+
+    [Test]
+    public void TryAdd_eviction_should_protect_LAN_peer_when_non_LAN_peer_can_be_evicted()
+    {
+        _configService.MaxGlobalConnections.Returns(2);
+
+        var lanPeer = CreateMockConnection("192.168.1.100");
+        var wanPeer = CreateMockConnection("93.184.216.34");
+        var newPeer = CreateMockConnection("93.184.216.35");
+
+        _manager.Add(lanPeer);
+        _manager.Add(wanPeer);
+        _manager.Add(newPeer);
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(2));
+        var remaining = _manager.GetAllConnections();
+        Assert.That(remaining, Does.Contain(lanPeer));
+        Assert.That(remaining, Does.Not.Contain(wanPeer));
+        Assert.That(remaining, Does.Contain(newPeer));
+    }
+
+    [Test]
+    public void TryAdd_eviction_should_prioritize_snubbed_and_idle_peers_over_high_throughput_transfers()
+    {
+        _configService.MaxGlobalConnections.Returns(2);
+
+        var snubbedPeer = CreateMockConnection("93.184.216.10");
+        snubbedPeer.IsSnubbed = true;
+        snubbedPeer.DownloadRate = 0;
+        snubbedPeer.UploadRate = 0;
+
+        var activePeer = CreateMockConnection("93.184.216.20");
+        activePeer.DownloadRate = 100_000;
+        activePeer.UploadRate = 50_000;
+
+        var newPeer = CreateMockConnection("93.184.216.30");
+
+        _manager.Add(snubbedPeer);
+        _manager.Add(activePeer);
+        _manager.Add(newPeer);
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(2));
+        var remaining = _manager.GetAllConnections();
+        Assert.That(remaining, Does.Not.Contain(snubbedPeer));
+        Assert.That(remaining, Does.Contain(activePeer));
+        Assert.That(remaining, Does.Contain(newPeer));
+    }
+
+    [Test]
+    public void ProcessDropouts_deterministic_should_prune_mutually_disinterested_and_inactive_peer()
+    {
+        _configService.SimulationModeEnabled.Returns(false);
+
+        var conn = CreateMockConnection("93.184.216.34");
+        conn.AmInterested = false;
+        conn.PeerInterested = false;
+        conn.DownloadRate = 0;
+        conn.UploadRate = 0;
+        conn.LastActivity = DateTime.UtcNow.AddSeconds(-150);
+
+        _manager.Add(conn);
+        _manager.ProcessDropouts();
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessDropouts_deterministic_should_not_prune_recently_active_peer()
+    {
+        _configService.SimulationModeEnabled.Returns(false);
+
+        var conn = CreateMockConnection("93.184.216.34");
+        conn.AmInterested = false;
+        conn.PeerInterested = false;
+        conn.LastActivity = DateTime.UtcNow.AddSeconds(-30);
+
+        _manager.Add(conn);
+        _manager.ProcessDropouts();
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ProcessDropouts_deterministic_should_prune_snubbed_stalled_leecher()
+    {
+        _configService.SimulationModeEnabled.Returns(false);
+
+        var conn = CreateMockConnection("93.184.216.34");
+        conn.AmInterested = true;
+        conn.PeerChoking = false;
+        conn.PendingRequestCount = 5;
+        conn.LastBytesReceived = DateTime.UtcNow.AddSeconds(-75);
+
+        _manager.Add(conn);
+        _manager.ProcessDropouts();
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessDropouts_deterministic_should_prune_unreciprocated_upload_leecher()
+    {
+        _configService.SimulationModeEnabled.Returns(false);
+
+        var torrent = new Torrent { InfoHash = "hash1", Progress = 0.5 };
+        _torrentService.GetByInfoHash("hash1").Returns(torrent);
+        _torrentService.FindByInfoHash("hash1").Returns(torrent);
+
+        var conn = CreateMockConnection("93.184.216.34");
+        SetInfoHash(conn, "hash1");
+        conn.AmChoking = false;
+        conn.UploadRate = 20_000;
+        conn.PeerChoking = true;
+        conn.DownloadRate = 0;
+
+        _manager.Add(conn);
+        _manager.ProcessDropouts();
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessDropouts_deterministic_should_protect_LAN_peer_from_pruning()
+    {
+        _configService.SimulationModeEnabled.Returns(false);
+
+        var lanConn = CreateMockConnection("192.168.1.50");
+        lanConn.AmInterested = false;
+        lanConn.PeerInterested = false;
+        lanConn.DownloadRate = 0;
+        lanConn.UploadRate = 0;
+        lanConn.LastActivity = DateTime.UtcNow.AddSeconds(-300);
+
+        _manager.Add(lanConn);
+        _manager.ProcessDropouts();
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ProcessDropouts_deterministic_should_protect_optimistic_unchoke_candidate()
+    {
+        _configService.SimulationModeEnabled.Returns(false);
+
+        var conn = CreateMockConnection("93.184.216.34");
+        conn.IsOptimisticUnchoked = true;
+        conn.LastUnchokedAt = DateTime.UtcNow.AddSeconds(-10);
+        conn.AmInterested = false;
+        conn.PeerInterested = false;
+        conn.LastActivity = DateTime.UtcNow.AddSeconds(-200);
+
+        _manager.Add(conn);
+        _manager.ProcessDropouts();
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void RotateConnections_should_protect_LAN_peers()
+    {
+        _configService.ConnectionRotationPercentage.Returns(1.0);
+
+        var lanConn = CreateMockConnection("192.168.1.50");
+        lanConn.ConnectedAt = DateTime.UtcNow.AddMinutes(-5);
+
+        _manager.Add(lanConn);
+        _manager.RotateConnections();
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
     }
 }

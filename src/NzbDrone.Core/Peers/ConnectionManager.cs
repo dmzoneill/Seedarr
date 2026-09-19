@@ -170,6 +170,11 @@ public class ConnectionManager : IConnectionManager,
 
             if (reservation is ConnectionReservation res && _reservations.Remove(res))
             {
+                if (res.IsInbound)
+                {
+                    connection.IsInbound = true;
+                }
+
                 _connections.Add(connection);
             }
             else
@@ -183,7 +188,10 @@ public class ConnectionManager : IConnectionManager,
 
                 if (maxPerTorrent > 0 && sameTorrentPeers.Count >= maxPerTorrent)
                 {
-                    evicted = sameTorrentPeers
+                    var nonLanCandidates = sameTorrentPeers.Where(c => !c.IsLocalPeer).ToList();
+                    var evictionPool = nonLanCandidates.Count > 0 ? nonLanCandidates : sameTorrentPeers;
+
+                    evicted = evictionPool
                         .OrderByDescending(GetEvictionPriority)
                         .ThenBy(c => c.DownloadRate + c.UploadRate)
                         .ThenBy(c => c.LastActivity)
@@ -203,7 +211,10 @@ public class ConnectionManager : IConnectionManager,
                 else if (maxGlobal > 0 && _connections.Count >= maxGlobal)
                 {
                     var candidates = sameTorrentPeers.Count > 0 ? sameTorrentPeers : _connections;
-                    evicted = candidates
+                    var nonLanCandidates = candidates.Where(c => !c.IsLocalPeer).ToList();
+                    var evictionPool = nonLanCandidates.Count > 0 ? nonLanCandidates : candidates;
+
+                    evicted = evictionPool
                         .OrderByDescending(GetEvictionPriority)
                         .ThenBy(c => c.DownloadRate + c.UploadRate)
                         .ThenBy(c => c.LastActivity)
@@ -470,21 +481,104 @@ public class ConnectionManager : IConnectionManager,
     public void ProcessDropouts()
     {
         List<PeerConnection> toRemove;
-        double dropoutProbability;
+
+        if (_configService.SimulationModeEnabled)
+        {
+            double dropoutProbability;
+            lock (_lock)
+            {
+                dropoutProbability = _clientBehaviorSimulator != null
+                    ? _clientBehaviorSimulator.GetEffectiveDropoutProbability(_configService.PeerDropoutProbability)
+                    : _configService.PeerDropoutProbability;
+
+                if (dropoutProbability <= 0 || _connections.Count == 0)
+                {
+                    return;
+                }
+
+                toRemove = _connections
+                    .Where(_ => _random.NextDouble() < dropoutProbability)
+                    .ToList();
+
+                foreach (var conn in toRemove)
+                {
+                    _connections.Remove(conn);
+                }
+            }
+
+            foreach (var conn in toRemove)
+            {
+                _logger.Debug(
+                    "Peer {0} dropped out (probability: {1:F2})",
+                    conn.RemoteIp,
+                    dropoutProbability);
+                LogDisconnect(conn);
+                _fastExtensionHandler?.UnregisterPeer(conn);
+                conn.Dispose();
+            }
+
+            return;
+        }
+
+        var now = DateTime.UtcNow;
         lock (_lock)
         {
-            dropoutProbability = _clientBehaviorSimulator != null
-                ? _clientBehaviorSimulator.GetEffectiveDropoutProbability(_configService.PeerDropoutProbability)
-                : _configService.PeerDropoutProbability;
-
-            if (dropoutProbability <= 0 || _connections.Count == 0)
+            if (_connections.Count == 0)
             {
                 return;
             }
 
-            toRemove = _connections
-                .Where(_ => _random.NextDouble() < dropoutProbability)
-                .ToList();
+            toRemove = new List<PeerConnection>();
+
+            foreach (var conn in _connections)
+            {
+                // LAN Peer Immunity: Never drop peers tagged with L (LAN peers)
+                if (conn.IsLocalPeer)
+                {
+                    continue;
+                }
+
+                // Active optimistic unchoke candidates during their 30s evaluation window
+                if (conn.IsOptimisticUnchoked)
+                {
+                    if (conn.LastUnchokedAt == null || (now - conn.LastUnchokedAt.Value).TotalSeconds <= 30)
+                    {
+                        continue;
+                    }
+                }
+
+                // Deterministic Anti-Leech Pruning Rules:
+                // 1. Mutual Disinterest & Inactivity: Both !AmInterested && !PeerInterested with zero transfer for > 120s
+                var isZeroSpeed = (conn.DownloadRate + conn.UploadRate) == 0;
+                var inactiveTime = (now - conn.LastActivity).TotalSeconds;
+                if (!conn.AmInterested && !conn.PeerInterested && isZeroSpeed && inactiveTime > 120)
+                {
+                    toRemove.Add(conn);
+                    continue;
+                }
+
+                // 2. Snubbed Stalled Leechers: AmInterested && !PeerChoking (unchoked by peer) where zero payload bytes have been received for > 60s while requests remain pending
+                var idleBytesTime = (now - conn.LastBytesReceived).TotalSeconds;
+                if (conn.AmInterested && !conn.PeerChoking && (conn.PendingRequestCount > 0 || conn.IsSnubbed) && idleBytesTime > 60)
+                {
+                    toRemove.Add(conn);
+                    continue;
+                }
+
+                // 3. Unreciprocated Upload Leechers: We are unchoking the peer and uploading blocks, but the peer is choked/choking us and we are in leecher mode on that torrent without download reciprocity
+                if (!conn.AmChoking && (conn.UploadRate > 0 || conn.BytesUploaded > 0) && conn.PeerChoking && conn.DownloadRate == 0)
+                {
+                    var isLeecherMode = conn.MatchedTorrent != null
+                        ? conn.MatchedTorrent.Progress < 1.0
+                        : ResolveTorrent(conn.InfoHash) is { } t && t.Progress < 1.0;
+
+                    if (isLeecherMode)
+                    {
+                        toRemove.Add(conn);
+                        continue;
+                    }
+                }
+            }
 
             foreach (var conn in toRemove)
             {
@@ -494,12 +588,9 @@ public class ConnectionManager : IConnectionManager,
 
         foreach (var conn in toRemove)
         {
-            _logger.Debug(
-                "Peer {0} dropped out (probability: {1:F2})",
-                conn.RemoteIp,
-                dropoutProbability);
+            _logger.Debug("Pruning stale/unhealthy peer {0}", conn.RemoteIp);
             LogDisconnect(conn);
-            _fastExtensionHandler.UnregisterPeer(conn);
+            _fastExtensionHandler?.UnregisterPeer(conn);
             conn.Dispose();
         }
     }
@@ -525,9 +616,11 @@ public class ConnectionManager : IConnectionManager,
             var now = DateTime.UtcNow;
             var gracePeriod = TimeSpan.FromSeconds(60);
 
-            // 1. Grace Period Protection: Protect connections created within the last 60 seconds
+            // 1. Grace Period Protection: Protect connections created within the last 60 seconds, LAN peers, and optimistic unchoke candidates
             var matureConnections = _connections
-                .Where(c => (now - c.ConnectedAt) >= gracePeriod)
+                .Where(c => (now - c.ConnectedAt) >= gracePeriod &&
+                            !c.IsLocalPeer &&
+                            (!c.IsOptimisticUnchoked || (c.LastUnchokedAt != null && (now - c.LastUnchokedAt.Value).TotalSeconds > 30)))
                 .ToList();
 
             if (matureConnections.Count == 0)
@@ -580,7 +673,10 @@ public class ConnectionManager : IConnectionManager,
 
     private static int GetEvictionPriority(PeerConnection c)
     {
-        if (c.IsSnubbed)
+        var now = DateTime.UtcNow;
+
+        // 1. Unresponsive / snubbed peers (no bytes received in >60s while interested)
+        if (c.IsSnubbed || (c.AmInterested && !c.PeerChoking && (now - c.LastBytesReceived).TotalSeconds > 60))
         {
             return 100;
         }
@@ -588,9 +684,21 @@ public class ConnectionManager : IConnectionManager,
         var isZeroSpeed = (c.DownloadRate + c.UploadRate) == 0;
         var noMutualInterest = !c.AmInterested && !c.PeerInterested;
 
+        // 2. Mutually choked, non-interested peers with zero transfer rate
+        if (isZeroSpeed && noMutualInterest && c.AmChoking && c.PeerChoking)
+        {
+            return 85;
+        }
+
         if (isZeroSpeed && noMutualInterest)
         {
             return 80;
+        }
+
+        // 3. Unreciprocated upload leechers (we unchoke and upload, but peer chokes us with zero download)
+        if (!c.AmChoking && (c.UploadRate > 0 || c.BytesUploaded > 0) && c.PeerChoking && c.DownloadRate == 0)
+        {
+            return 70;
         }
 
         if (isZeroSpeed)
