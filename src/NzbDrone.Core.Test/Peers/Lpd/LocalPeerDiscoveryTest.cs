@@ -359,6 +359,7 @@ public class LocalPeerDiscoveryTest
             : base(configService, torrentService, peerDiscovery) { }
 
         protected override int AnnounceIntervalSeconds => 0;
+        protected internal override int InterAnnounceDelayMs => 0;
 
         protected override Task SendAnnouncementAsync(UdpClient client, byte[] data, IPEndPoint endpoint, CancellationToken stoppingToken)
         {
@@ -372,6 +373,36 @@ public class LocalPeerDiscoveryTest
                 else if (line.StartsWith("cookie:", StringComparison.OrdinalIgnoreCase))
                 {
                     AnnouncedCookies.Add(line[7..].Trim());
+                }
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class PacedAnnouncingLpd : LocalPeerDiscovery
+    {
+        private readonly Action<int> _onAnnounced;
+        public List<(string InfoHash, DateTime Timestamp)> Announcements { get; } = new();
+
+        public PacedAnnouncingLpd(IConfigService configService, ITorrentService torrentService, IPeerDiscoveryService peerDiscovery, int delayMs = 50, Action<int> onAnnounced = null)
+            : base(configService, torrentService, peerDiscovery)
+        {
+            InterAnnounceDelayMs = delayMs;
+            _onAnnounced = onAnnounced;
+        }
+
+        protected override int AnnounceIntervalSeconds => 0;
+
+        protected override Task SendAnnouncementAsync(UdpClient client, byte[] data, IPEndPoint endpoint, CancellationToken stoppingToken)
+        {
+            var message = Encoding.ASCII.GetString(data);
+            foreach (var line in message.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (line.StartsWith("Infohash:", StringComparison.OrdinalIgnoreCase))
+                {
+                    Announcements.Add((line[9..].Trim(), DateTime.UtcNow));
+                    _onAnnounced?.Invoke(Announcements.Count);
                 }
             }
 
@@ -1077,5 +1108,130 @@ public class LocalPeerDiscoveryTest
         Assert.That(interfaces, Is.Not.Null);
         Assert.That(interfaces.All(nic => nic.OperationalStatus == OperationalStatus.Up), Is.True);
         Assert.That(interfaces.All(nic => nic.NetworkInterfaceType != NetworkInterfaceType.Loopback), Is.True);
+    }
+
+    [Test]
+    public void InterAnnounceDelayMs_defaults_to_50ms()
+    {
+        Assert.That(_lpd.InterAnnounceDelayMs, Is.EqualTo(50));
+    }
+
+    [Test]
+    public void InterAnnounceDelayMs_can_be_configured()
+    {
+        _lpd.InterAnnounceDelayMs = 100;
+        Assert.That(_lpd.InterAnnounceDelayMs, Is.EqualTo(100));
+    }
+
+    [Test]
+    public async Task AnnounceLoop_only_announces_downloading_and_seeding_torrents()
+    {
+        var torrents = new List<Torrent>
+        {
+            new Torrent { InfoHash = "hash-downloading", Status = TorrentStatus.Downloading, IsPrivate = false },
+            new Torrent { InfoHash = "hash-seeding", Status = TorrentStatus.Seeding, IsPrivate = false },
+            new Torrent { InfoHash = "hash-paused", Status = TorrentStatus.Paused, IsPrivate = false },
+            new Torrent { InfoHash = "hash-stopped", Status = TorrentStatus.Stopped, IsPrivate = false },
+            new Torrent { InfoHash = "hash-error", Status = TorrentStatus.Error, IsPrivate = false },
+            new Torrent { InfoHash = "hash-queued", Status = TorrentStatus.Queued, IsPrivate = false },
+            new Torrent { InfoHash = "hash-checking", Status = TorrentStatus.Checking, IsPrivate = false },
+            new Torrent { InfoHash = "hash-queuedforchecking", Status = TorrentStatus.QueuedForChecking, IsPrivate = false },
+            new Torrent { InfoHash = "hash-moving", Status = TorrentStatus.Moving, IsPrivate = false },
+            new Torrent { InfoHash = "hash-private-downloading", Status = TorrentStatus.Downloading, IsPrivate = true },
+            new Torrent { InfoHash = "hash-private-seeding", Status = TorrentStatus.Seeding, IsPrivate = true }
+        };
+
+        _torrentService.GetAll().Returns(torrents);
+
+        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService, _peerDiscovery);
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "AnnounceLoop",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var task = (Task)method.Invoke(fastLpd, new object[] { cts.Token });
+
+        await task.WaitAsync(TimeSpan.FromSeconds(4));
+
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Contain("hash-downloading"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Contain("hash-seeding"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("hash-paused"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("hash-stopped"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("hash-error"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("hash-queued"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("hash-checking"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("hash-queuedforchecking"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("hash-moving"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("hash-private-downloading"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("hash-private-seeding"));
+    }
+
+    [Test]
+    public async Task AnnounceLoop_paces_multicast_announcements()
+    {
+        var torrents = new List<Torrent>
+        {
+            new Torrent { InfoHash = "hash-1", Status = TorrentStatus.Downloading, IsPrivate = false },
+            new Torrent { InfoHash = "hash-2", Status = TorrentStatus.Downloading, IsPrivate = false },
+            new Torrent { InfoHash = "hash-3", Status = TorrentStatus.Downloading, IsPrivate = false }
+        };
+
+        _torrentService.GetAll().Returns(torrents);
+
+        using var cts = new CancellationTokenSource();
+        var pacedLpd = new PacedAnnouncingLpd(_configService, _torrentService, _peerDiscovery, delayMs: 60, onAnnounced: count =>
+        {
+            if (count >= 3)
+            {
+                cts.Cancel();
+            }
+        });
+
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "AnnounceLoop",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var task = (Task)method.Invoke(pacedLpd, new object[] { cts.Token });
+
+        await task.WaitAsync(TimeSpan.FromSeconds(4));
+
+        Assert.That(pacedLpd.Announcements.Count, Is.GreaterThanOrEqualTo(3));
+        var delta1 = pacedLpd.Announcements[1].Timestamp - pacedLpd.Announcements[0].Timestamp;
+        var delta2 = pacedLpd.Announcements[2].Timestamp - pacedLpd.Announcements[1].Timestamp;
+
+        Assert.That(delta1.TotalMilliseconds, Is.GreaterThanOrEqualTo(40));
+        Assert.That(delta2.TotalMilliseconds, Is.GreaterThanOrEqualTo(40));
+    }
+
+    [Test]
+    public async Task AnnounceLoop_aborts_pacing_delay_on_cancellation()
+    {
+        var torrents = new List<Torrent>
+        {
+            new Torrent { InfoHash = "hash-1", Status = TorrentStatus.Downloading, IsPrivate = false },
+            new Torrent { InfoHash = "hash-2", Status = TorrentStatus.Downloading, IsPrivate = false },
+            new Torrent { InfoHash = "hash-3", Status = TorrentStatus.Downloading, IsPrivate = false }
+        };
+
+        _torrentService.GetAll().Returns(torrents);
+
+        using var cts = new CancellationTokenSource();
+        var pacedLpd = new PacedAnnouncingLpd(_configService, _torrentService, _peerDiscovery, delayMs: 10000, onAnnounced: count =>
+        {
+            if (count == 1)
+            {
+                cts.Cancel();
+            }
+        });
+
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "AnnounceLoop",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var task = (Task)method.Invoke(pacedLpd, new object[] { cts.Token });
+
+        await task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.That(task.IsCompleted, Is.True);
+        Assert.That(pacedLpd.Announcements.Count, Is.EqualTo(1));
     }
 }

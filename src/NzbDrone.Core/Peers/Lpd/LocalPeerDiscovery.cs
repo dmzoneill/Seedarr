@@ -25,6 +25,14 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
 
     protected virtual int AnnounceIntervalSeconds => 300;
 
+    private int? _interAnnounceDelayMs;
+
+    protected internal virtual int InterAnnounceDelayMs
+    {
+        get => _interAnnounceDelayMs ?? 50;
+        set => _interAnnounceDelayMs = value;
+    }
+
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
     private readonly IPeerDiscoveryService _peerDiscovery;
@@ -332,16 +340,24 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                     continue;
                 }
 
-                var activeTorrents = torrents
+                var activeTorrents = (torrents ?? Enumerable.Empty<Torrent>())
                     .Where(t => t != null && !t.IsPrivate && !string.IsNullOrEmpty(t.InfoHash) && (t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.Seeding))
                     .ToList();
 
-                foreach (var torrent in activeTorrents)
+                for (var i = 0; i < activeTorrents.Count; i++)
                 {
+                    stoppingToken.ThrowIfCancellationRequested();
+
+                    var torrent = activeTorrents[i];
                     var port = _configService.ListeningPort > 0 ? _configService.ListeningPort : PeerPort;
                     var data = BuildAnnouncement(torrent.InfoHash, port, _clientCookie);
                     await SendAnnouncementAsync(sender, data, endpoint, stoppingToken);
                     _logger.Debug("LPD: announced {0}", torrent.InfoHash);
+
+                    if (i < activeTorrents.Count - 1 && InterAnnounceDelayMs > 0)
+                    {
+                        await Task.Delay(InterAnnounceDelayMs, stoppingToken);
+                    }
                 }
             }
             catch (OperationCanceledException)
