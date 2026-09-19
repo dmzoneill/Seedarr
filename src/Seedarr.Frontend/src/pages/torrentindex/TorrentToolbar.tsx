@@ -36,6 +36,7 @@ interface TorrentToolbarProps {
   onBulkStop: () => void;
   onBulkDelete: () => void;
   onBulkClear: () => void;
+  onBulkMoveQueue?: (position: "top" | "up" | "down" | "bottom") => void;
   isFilterCollapsed?: boolean;
   onToggleFilter?: () => void;
   isQuickControlsOpen?: boolean;
@@ -62,6 +63,7 @@ export function TorrentToolbar({
   onBulkStop,
   onBulkDelete,
   onBulkClear,
+  onBulkMoveQueue,
   isFilterCollapsed = false,
   onToggleFilter,
   isQuickControlsOpen = false,
@@ -97,13 +99,25 @@ export function TorrentToolbar({
             style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
           >
             <FilterIcon size={12} />
-            <span>{isFilterCollapsed ? `▶ ${t("torrents.toggleFilter", undefined, "Filter")}` : `◀ ${t("torrents.toggleFilter", undefined, "Filter")}`}</span>
+            <span>
+              {isFilterCollapsed
+                ? `▶ ${t("torrents.toggleFilter", undefined, "Filter")}`
+                : `◀ ${t("torrents.toggleFilter", undefined, "Filter")}`}
+            </span>
           </button>
         )}
-        <h1 className="page-heading">{t("torrents.title", undefined, "Torrents")} ({count})</h1>
+        <h1 className="page-heading">
+          {t("torrents.title", undefined, "Torrents")} ({count})
+        </h1>
         {selectedCount > 0 ? (
           <div className="bulk-actions">
-            <span className="bulk-actions-count">{t("torrents.selectedCount", { count: selectedCount }, `${selectedCount} selected`)}</span>
+            <span className="bulk-actions-count">
+              {t(
+                "torrents.selectedCount",
+                { count: selectedCount },
+                `${selectedCount} selected`,
+              )}
+            </span>
             <button
               className="btn btn-success"
               onClick={onBulkStart}
@@ -125,6 +139,69 @@ export function TorrentToolbar({
             >
               {t("common.delete", undefined, "Delete")}
             </button>
+            {onBulkMoveQueue && (
+              <div
+                className="btn-group"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "2px",
+                  marginLeft: "4px",
+                  borderLeft:
+                    "1px solid var(--border, rgba(255, 255, 255, 0.15))",
+                  paddingLeft: "6px",
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => onBulkMoveQueue("top")}
+                  disabled={bulkPending}
+                  title={t(
+                    "torrents.contextMenu.top",
+                    undefined,
+                    "Move to Top",
+                  )}
+                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                >
+                  ⤒ {t("torrents.contextMenu.top", undefined, "Top")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => onBulkMoveQueue("up")}
+                  disabled={bulkPending}
+                  title={t("torrents.contextMenu.up", undefined, "Move Up")}
+                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                >
+                  ▲ {t("torrents.contextMenu.up", undefined, "Up")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => onBulkMoveQueue("down")}
+                  disabled={bulkPending}
+                  title={t("torrents.contextMenu.down", undefined, "Move Down")}
+                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                >
+                  ▼ {t("torrents.contextMenu.down", undefined, "Down")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => onBulkMoveQueue("bottom")}
+                  disabled={bulkPending}
+                  title={t(
+                    "torrents.contextMenu.bottom",
+                    undefined,
+                    "Move to Bottom",
+                  )}
+                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                >
+                  ⤓ {t("torrents.contextMenu.bottom", undefined, "Bottom")}
+                </button>
+              </div>
+            )}
             <button
               className="btn btn-outline"
               onClick={onBulkClear}
@@ -136,7 +213,8 @@ export function TorrentToolbar({
         ) : (
           <>
             <button className="btn btn-success" onClick={onAddTorrent}>
-              <PlusIcon size={13} /> {t("torrents.addTorrent", undefined, "Add Torrent")}
+              <PlusIcon size={13} />{" "}
+              {t("torrents.addTorrent", undefined, "Add Torrent")}
             </button>
             {onSearchIndexers && (
               <button
@@ -159,10 +237,16 @@ export function TorrentToolbar({
                     : "Show Quick Controls (Q)"
                 }
                 aria-label="Toggle Quick Controls drawer"
-                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
               >
                 <SlidersIcon size={13} />
-                <span>{t("torrents.quickControls", undefined, "Quick Controls")}</span>
+                <span>
+                  {t("torrents.quickControls", undefined, "Quick Controls")}
+                </span>
                 <kbd className="quick-controls-kbd">Q</kbd>
               </button>
             )}
@@ -171,7 +255,8 @@ export function TorrentToolbar({
       </div>
       <div className="page-header-actions">
         <button className="btn btn-success" onClick={onStartAll}>
-          <PlayIcon size={13} /> {t("torrents.startAll", undefined, "Start All")}
+          <PlayIcon size={13} />{" "}
+          {t("torrents.startAll", undefined, "Start All")}
         </button>
         <button className="btn btn-danger" onClick={onStopAll}>
           <StopIcon size={13} /> {t("torrents.stopAll", undefined, "Stop All")}
@@ -222,7 +307,11 @@ export function TorrentToolbar({
         <input
           type="text"
           className="search-input"
-          placeholder={t("torrents.filterPlaceholder", undefined, "Filter torrents...")}
+          placeholder={t(
+            "torrents.filterPlaceholder",
+            undefined,
+            "Filter torrents...",
+          )}
           value={localFilter}
           onChange={(e) => setLocalFilter(e.target.value)}
         />
@@ -232,7 +321,8 @@ export function TorrentToolbar({
             onClick={() => onViewModeChange("table")}
             title="Table view"
           >
-            <TableIcon size={13} /> {t("torrents.tableView", undefined, "Table")}
+            <TableIcon size={13} />{" "}
+            {t("torrents.tableView", undefined, "Table")}
           </button>
           <button
             className={`view-toggle-btn${viewMode === "grid" ? " active" : ""}`}

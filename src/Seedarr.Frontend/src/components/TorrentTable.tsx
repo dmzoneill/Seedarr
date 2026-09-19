@@ -33,6 +33,7 @@ import type { Torrent } from "../api/types";
 
 type ColumnKey =
   | "#"
+  | "queuePosition"
   | "name"
   | "status"
   | "totalSize"
@@ -79,6 +80,7 @@ interface ColumnDef {
 
 export const COLUMN_I18N_KEYS: Record<ColumnKey, string> = {
   "#": "torrents.table.index",
+  queuePosition: "torrents.table.queuePosition",
   name: "torrents.table.name",
   status: "torrents.table.status",
   progress: "torrents.table.progress",
@@ -120,6 +122,7 @@ export const COLUMN_I18N_KEYS: Record<ColumnKey, string> = {
 
 const ALL_COLUMNS: ColumnDef[] = [
   { key: "#", label: "#", sortable: true },
+  { key: "queuePosition", label: "Queue #", sortable: true },
   { key: "name", label: "Name", sortable: true },
   { key: "status", label: "Status", sortable: true },
   { key: "progress", label: "Progress", sortable: true },
@@ -211,6 +214,7 @@ interface ContextMenuState {
   x: number;
   y: number;
   torrent: Torrent | null;
+  selectedTorrents?: Torrent[];
 }
 
 function getSortValue(
@@ -219,6 +223,8 @@ function getSortValue(
 ): string | number | null | undefined {
   switch (key) {
     case "#":
+      return t.sortOrder ?? t.id;
+    case "queuePosition":
       return t.sortOrder ?? t.id;
     case "trackerUrl":
       return t.trackerUrl ?? "";
@@ -246,10 +252,7 @@ function getSortValue(
       return t.active ? 1 : 0;
     default:
       return (t as unknown as Record<string, unknown>)[key] as
-        | string
-        | number
-        | null
-        | undefined;
+        string | number | null | undefined;
   }
 }
 
@@ -629,7 +632,31 @@ function TorrentTable({
 
   function handleContextMenu(e: React.MouseEvent, torrent: Torrent | null) {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, torrent });
+    e.stopPropagation();
+    let effectiveSelectedIds = selectedIds;
+    if (torrent && selectedIds) {
+      if (!selectedIds.has(torrent.id)) {
+        effectiveSelectedIds = new Set([torrent.id]);
+        if (onSelectAll) {
+          onSelectAll([torrent.id]);
+        } else if (onSelectMultiple) {
+          onSelectMultiple(effectiveSelectedIds);
+        }
+        onSelectTorrent?.(torrent.id);
+      }
+    }
+    const currentTorrents = sorted || [];
+    const selectedTorrents = effectiveSelectedIds
+      ? currentTorrents.filter((t) => effectiveSelectedIds.has(t.id))
+      : torrent
+        ? [torrent]
+        : [];
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      torrent,
+      selectedTorrents,
+    });
   }
 
   function handleSort(key: SortKey) {
@@ -657,7 +684,11 @@ function TorrentTable({
               <th className="torrent-table-th" style={{ width: 36 }} />
               {columns.map((c) => (
                 <th key={c.key} className="torrent-table-th">
-                  {t(COLUMN_I18N_KEYS[c.key] || `torrents.table.${c.key}`, undefined, c.label)}
+                  {t(
+                    COLUMN_I18N_KEYS[c.key] || `torrents.table.${c.key}`,
+                    undefined,
+                    c.label,
+                  )}
                 </th>
               ))}
             </tr>
@@ -683,6 +714,8 @@ function TorrentTable({
     switch (key) {
       case "#":
         return index + 1;
+      case "queuePosition":
+        return torrent.sortOrder != null ? torrent.sortOrder + 1 : "-";
       case "name": {
         const historyMatch = history?.find(
           (h) =>
@@ -771,7 +804,11 @@ function TorrentTable({
         if (torrent.isVpnPaused) {
           return (
             <span className="badge badge-vpn-paused" aria-label={ariaLabel}>
-              {t("torrents.pausedVpnKillSwitch", undefined, "Paused (VPN Kill Switch)")}
+              {t(
+                "torrents.pausedVpnKillSwitch",
+                undefined,
+                "Paused (VPN Kill Switch)",
+              )}
             </span>
           );
         }
@@ -780,7 +817,13 @@ function TorrentTable({
             className={`badge badge-${torrent.status.toLowerCase()}`}
             aria-label={ariaLabel}
           >
-            {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status === "QueuedForChecking" ? "Queued for Recheck" : torrent.status)}
+            {t(
+              `torrents.${torrent.status.toLowerCase()}`,
+              undefined,
+              torrent.status === "QueuedForChecking"
+                ? "Queued for Recheck"
+                : torrent.status,
+            )}
           </span>
         );
       }
@@ -841,7 +884,10 @@ function TorrentTable({
               gap: "0.35rem",
             }}
           >
-            <TrackerFavicon urlOrHost={torrent.trackerUrl || domain} size={14} />
+            <TrackerFavicon
+              urlOrHost={torrent.trackerUrl || domain}
+              size={14}
+            />
             <span>{domain}</span>
           </div>
         );
@@ -875,9 +921,13 @@ function TorrentTable({
       case "priority":
         return priorityLabel(torrent.priority);
       case "uploadLimit":
-        return torrent.uploadLimit > 0 ? `${torrent.uploadLimit} KB/s` : "Global";
+        return torrent.uploadLimit > 0
+          ? `${torrent.uploadLimit} KB/s`
+          : "Global";
       case "downloadLimit":
-        return torrent.downloadLimit > 0 ? `${torrent.downloadLimit} KB/s` : "Global";
+        return torrent.downloadLimit > 0
+          ? `${torrent.downloadLimit} KB/s`
+          : "Global";
       case "superSeeding":
         return torrent.superSeeding ? "Yes" : "No";
       case "sequentialDownload":
@@ -932,7 +982,11 @@ function TorrentTable({
                 onClick={() => col.sortable && handleSort(col.key)}
                 className={`torrent-table-th${col.key === "#" ? " torrent-table-index" : ""}`}
               >
-                {t(COLUMN_I18N_KEYS[col.key] || `torrents.table.${col.key}`, undefined, col.label)}
+                {t(
+                  COLUMN_I18N_KEYS[col.key] || `torrents.table.${col.key}`,
+                  undefined,
+                  col.label,
+                )}
                 {sortKey === col.key && (sortAsc ? " ▲" : " ▼")}
               </th>
             ))}
@@ -955,8 +1009,12 @@ function TorrentTable({
               }}
               onClick={(e) => {
                 setFocusedIndex(index);
-                if (e.shiftKey && (anchorIndex !== null || lastClickedIndex !== null)) {
-                  const base = anchorIndex !== null ? anchorIndex : lastClickedIndex!;
+                if (
+                  e.shiftKey &&
+                  (anchorIndex !== null || lastClickedIndex !== null)
+                ) {
+                  const base =
+                    anchorIndex !== null ? anchorIndex : lastClickedIndex!;
                   const start = Math.min(base, index);
                   const end = Math.max(base, index);
                   const rangeIds = sorted
@@ -990,8 +1048,12 @@ function TorrentTable({
                   onClick={(e) => {
                     e.stopPropagation();
                     setFocusedIndex(index);
-                    if (e.shiftKey && (anchorIndex !== null || lastClickedIndex !== null)) {
-                      const base = anchorIndex !== null ? anchorIndex : lastClickedIndex!;
+                    if (
+                      e.shiftKey &&
+                      (anchorIndex !== null || lastClickedIndex !== null)
+                    ) {
+                      const base =
+                        anchorIndex !== null ? anchorIndex : lastClickedIndex!;
                       const start = Math.min(base, index);
                       const end = Math.max(base, index);
                       const rangeIds = sorted
@@ -1037,6 +1099,7 @@ function TorrentTable({
           x={contextMenu.x}
           y={contextMenu.y}
           torrent={contextMenu.torrent}
+          selectedTorrents={contextMenu.selectedTorrents}
           visibleColumns={visibleColumns}
           allColumns={ALL_COLUMNS}
           onClose={closeContextMenu}
@@ -1048,6 +1111,34 @@ function TorrentTable({
           onRecheck={(id) => recheckTorrent.mutate(id)}
           onDelete={(payload) => deleteTorrent.mutate(payload)}
           onMoveQueue={(payload) => moveTorrentQueue.mutate(payload)}
+          onBatchStart={(ids) => ids.forEach((id) => startSeeding.mutate(id))}
+          onBatchStop={(ids) => ids.forEach((id) => stopSeeding.mutate(id))}
+          onBatchAnnounce={(ids) =>
+            ids.forEach((id) => announceTorrent.mutate(id))
+          }
+          onBatchRecheck={(ids) =>
+            ids.forEach((id) => recheckTorrent.mutate(id))
+          }
+          onBatchDelete={(payload) => {
+            if (payload.ids.length > 0) {
+              setDeleteModalState({
+                isOpen: true,
+                ids: payload.ids,
+                torrentName:
+                  payload.ids.length === 1
+                    ? sorted.find((t) => t.id === payload.ids[0])?.name
+                    : undefined,
+              });
+            }
+          }}
+          onBatchUpdate={(torrents) =>
+            torrents.forEach((tor) => updateTorrent.mutate(tor))
+          }
+          onBatchMoveQueue={(payload) =>
+            payload.ids.forEach((id) =>
+              moveTorrentQueue.mutate({ id, position: payload.position }),
+            )
+          }
           onSearchIndexers={(q) => setSearchModalQuery(q)}
         />
       )}

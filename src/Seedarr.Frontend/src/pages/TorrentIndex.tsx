@@ -9,7 +9,12 @@ import { QuickSettingsDrawer } from "../components/quicksettings";
 import { TorrentToolbar } from "./torrentindex/TorrentToolbar";
 import { TorrentFilterPanel } from "./torrentindex/TorrentFilterPanel";
 import { useTorrentIndexState } from "./torrentindex/useTorrentIndexState";
-import { useAnnounceTorrent, useRecheckTorrent, useBulkTorrentAction } from "../api/hooks";
+import {
+  useAnnounceTorrent,
+  useRecheckTorrent,
+  useBulkTorrentAction,
+  useMoveTorrentQueue,
+} from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 import { useModalStack } from "../components/ModalProvider";
 
@@ -99,7 +104,8 @@ function TorrentIndex() {
         );
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to start torrents";
+      const msg =
+        err instanceof Error ? err.message : "Failed to start torrents";
       showToast(msg, "error");
     } finally {
       setBulkPending(false);
@@ -135,7 +141,8 @@ function TorrentIndex() {
         );
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to stop torrents";
+      const msg =
+        err instanceof Error ? err.message : "Failed to stop torrents";
       showToast(msg, "error");
     } finally {
       setBulkPending(false);
@@ -180,7 +187,10 @@ function TorrentIndex() {
           return next;
         });
 
-        if (selectedTorrentId != null && succeeded.includes(selectedTorrentId)) {
+        if (
+          selectedTorrentId != null &&
+          succeeded.includes(selectedTorrentId)
+        ) {
           setSelectedTorrentId(null);
         }
 
@@ -248,6 +258,40 @@ function TorrentIndex() {
     stopSeeding,
     startSeeding,
   ]);
+
+  const moveTorrentQueue = useMoveTorrentQueue();
+
+  const handleBulkMoveQueue = useCallback(
+    async (position: "top" | "up" | "down" | "bottom") => {
+      const activeIds = new Set((torrents ?? []).map((t) => t.id));
+      const validSelectedIds = Array.from(selectedIds).filter((id) =>
+        activeIds.has(id),
+      );
+      if (validSelectedIds.length === 0) return;
+
+      const orderedIds = (torrents ?? [])
+        .filter((t) => validSelectedIds.includes(t.id))
+        .map((t) => t.id);
+
+      if (position === "down" || position === "bottom") {
+        orderedIds.reverse();
+      }
+
+      setBulkPending(true);
+      try {
+        for (const id of orderedIds) {
+          await moveTorrentQueue.mutateAsync({ id, position });
+        }
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to move torrents";
+        showToast(msg, "error");
+      } finally {
+        setBulkPending(false);
+      }
+    },
+    [selectedIds, torrents, moveTorrentQueue, showToast],
+  );
 
   // Keyboard Shortcuts Listener for Torrent Operations, Navigation & Modals
   useEffect(() => {
@@ -408,6 +452,7 @@ function TorrentIndex() {
         onBulkStop={handleBulkStop}
         onBulkDelete={handleBulkDelete}
         onBulkClear={() => setSelectedIds(new Set())}
+        onBulkMoveQueue={handleBulkMoveQueue}
         isFilterCollapsed={isFilterCollapsed}
         onToggleFilter={toggleFilterCollapse}
         isQuickControlsOpen={isQuickControlsOpen}
