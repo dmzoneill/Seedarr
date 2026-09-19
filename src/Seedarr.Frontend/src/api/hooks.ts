@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
+import { trackTorrentAction } from "../utils/analytics";
 import type {
   Torrent,
   BulkTorrentActionResource,
@@ -323,7 +324,10 @@ export function useDeleteTorrent() {
       apiClient.delete(
         `/torrent/${id}${deleteFiles ? "?deleteFiles=true" : ""}`,
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["torrents"] }),
+    onSuccess: (_, variables) => {
+      trackTorrentAction("delete", variables.id, variables.deleteFiles);
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
   });
 }
 
@@ -362,7 +366,8 @@ export function useStartSeeding() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiClient.post(`/seeding/start/${id}`),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      trackTorrentAction("start_seeding", id);
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
       queryClient.invalidateQueries({ queryKey: ["seeding"] });
     },
@@ -373,7 +378,8 @@ export function useStopSeeding() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiClient.post(`/seeding/stop/${id}`),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      trackTorrentAction("stop_seeding", id);
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
       queryClient.invalidateQueries({ queryKey: ["seeding"] });
     },

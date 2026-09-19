@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "../i18n";
 import { LocaleCode } from "../i18n/types";
+import { trackLanguageChange } from "../utils/analytics";
 
 export function LanguageSelector() {
   const { locale, setLocale, currentLanguage, languages, t } = useTranslation();
@@ -37,6 +38,7 @@ export function LanguageSelector() {
   }, [isOpen]);
 
   const handleSelectLanguage = (code: LocaleCode) => {
+    trackLanguageChange(code);
     setLocale(code);
     setIsOpen(false);
   };

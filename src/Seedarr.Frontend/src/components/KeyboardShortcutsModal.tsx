@@ -1,5 +1,6 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { useModalRegistration } from "./ModalProvider";
+import { trackModalOpen } from "../utils/analytics";
 
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
@@ -16,6 +17,12 @@ export function KeyboardShortcutsModal({
   onClose,
 }: KeyboardShortcutsModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      trackModalOpen("keyboard_shortcuts");
+    }
+  }, [isOpen]);
 
   useModalRegistration({
     id: "keyboard-shortcuts-modal",
