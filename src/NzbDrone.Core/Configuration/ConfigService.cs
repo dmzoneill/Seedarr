@@ -247,6 +247,12 @@ public interface IConfigService
 
     // Update
     string UpdateBranch { get; set; }
+
+    // Blocklist
+    bool BlocklistEnabled { get; }
+    string BlocklistUrl { get; }
+    string BlocklistETag { get; set; }
+    string BlocklistLastModified { get; set; }
 }
 
 public class ConfigModel : ModelBase
@@ -673,6 +679,21 @@ public class ConfigService : IConfigService
     {
         get => GetValue("UpdateBranch", "main");
         set => SaveConfigDictionary(new Dictionary<string, object> { { "UpdateBranch", value } });
+    }
+
+    // Blocklist
+    public bool BlocklistEnabled => GetValueBoolean("BlocklistEnabled", false);
+    public string BlocklistUrl => GetValue("BlocklistUrl", string.Empty);
+    public string BlocklistETag
+    {
+        get => GetValue("BlocklistETag", string.Empty);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "BlocklistETag", value } }, false);
+    }
+
+    public string BlocklistLastModified
+    {
+        get => GetValue("BlocklistLastModified", string.Empty);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "BlocklistLastModified", value } }, false);
     }
 }
 
