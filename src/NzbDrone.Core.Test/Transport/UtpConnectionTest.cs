@@ -1208,7 +1208,7 @@ public class UtpConnectionTest
             var buf = new byte[100];
             for (var i = 0; i < 10; i++)
             {
-                connection.Receive(buf, 0, buf.Length);
+                connection.Receive(buf, 0, buf.Length, timeoutMs: 50);
             }
         });
 
