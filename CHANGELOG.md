@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.8.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.8.0) - 2026-09-19
+
+### ✨ Features
+- feat(ui): make context menu selection-aware and add queue reordering buttons
+
 ## [v1.7.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.7.0) - 2026-09-19
 
 ### ✨ Features
