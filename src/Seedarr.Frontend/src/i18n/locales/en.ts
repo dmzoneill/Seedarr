@@ -1,4 +1,24 @@
 const en = {
+  auth: {
+    screenLocked: "Screen Locked",
+    sessionExpired: "Session Expired",
+    lockedDescription: "Your session was locked due to inactivity. Enter your password or PIN to unlock.",
+    expiredDescription: "Your session has expired. Enter your password to resume without losing your current work.",
+    unlockButton: "Unlock Session",
+    unlocking: "Unlocking...",
+    stayLoggedIn: "Stay Signed In",
+    lockNow: "Lock Now",
+    signOut: "Sign Out",
+    inactivityWarning: "Inactivity Warning",
+    inactivityWarningDesc: "Your session will automatically lock due to inactivity in:",
+    activityHint: "Move your mouse or press any key to remain active.",
+    passwordPlaceholder: "Enter password or API key",
+    passwordRequired: "Password or API key is required",
+    invalidPassword: "Invalid password or credentials",
+    sessionUnlocked: "Session unlocked successfully",
+    lockScreen: "Lock Screen",
+  },
+
   common: {
     appName: "Seedarr",
     save: "Save",
