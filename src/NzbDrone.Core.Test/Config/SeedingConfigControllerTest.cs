@@ -138,4 +138,126 @@ public class SeedingConfigControllerTest
 
         Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
     }
+
+    [Test]
+    public void SaveConfig_should_return_bad_request_when_MaxActiveDownloads_is_negative()
+    {
+        var resource = new SeedingConfigResource
+        {
+            UploadStoppedMinPercentage = 20,
+            UploadStoppedMaxPercentage = 40,
+            DownloadStoppedMinPercentage = 20,
+            DownloadStoppedMaxPercentage = 40,
+            SpeedVariationMin = 0.2,
+            SpeedVariationMax = 0.8,
+            UploadCustomIntervalMinutes = 5,
+            DownloadCustomIntervalMinutes = 5,
+            MaxActiveDownloads = -1,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        var errors = (IList<ValidationFailure>)badRequest.Value;
+
+        Assert.That(errors, Has.Some.Matches<ValidationFailure>(e =>
+            e.PropertyName == nameof(SeedingConfigResource.MaxActiveDownloads)));
+    }
+
+    [Test]
+    public void SaveConfig_should_return_bad_request_when_MaxActiveSeeds_is_negative()
+    {
+        var resource = new SeedingConfigResource
+        {
+            UploadStoppedMinPercentage = 20,
+            UploadStoppedMaxPercentage = 40,
+            DownloadStoppedMinPercentage = 20,
+            DownloadStoppedMaxPercentage = 40,
+            SpeedVariationMin = 0.2,
+            SpeedVariationMax = 0.8,
+            UploadCustomIntervalMinutes = 5,
+            DownloadCustomIntervalMinutes = 5,
+            MaxActiveSeeds = -1,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        var errors = (IList<ValidationFailure>)badRequest.Value;
+
+        Assert.That(errors, Has.Some.Matches<ValidationFailure>(e =>
+            e.PropertyName == nameof(SeedingConfigResource.MaxActiveSeeds)));
+    }
+
+    [Test]
+    public void SaveConfig_should_return_bad_request_when_MaxActiveTorrents_is_negative()
+    {
+        var resource = new SeedingConfigResource
+        {
+            UploadStoppedMinPercentage = 20,
+            UploadStoppedMaxPercentage = 40,
+            DownloadStoppedMinPercentage = 20,
+            DownloadStoppedMaxPercentage = 40,
+            SpeedVariationMin = 0.2,
+            SpeedVariationMax = 0.8,
+            UploadCustomIntervalMinutes = 5,
+            DownloadCustomIntervalMinutes = 5,
+            MaxActiveTorrents = -1,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        var errors = (IList<ValidationFailure>)badRequest.Value;
+
+        Assert.That(errors, Has.Some.Matches<ValidationFailure>(e =>
+            e.PropertyName == nameof(SeedingConfigResource.MaxActiveTorrents)));
+    }
+
+    [Test]
+    public void SaveConfig_should_return_bad_request_when_SlowTorrentThresholdKbps_is_negative()
+    {
+        var resource = new SeedingConfigResource
+        {
+            UploadStoppedMinPercentage = 20,
+            UploadStoppedMaxPercentage = 40,
+            DownloadStoppedMinPercentage = 20,
+            DownloadStoppedMaxPercentage = 40,
+            SpeedVariationMin = 0.2,
+            SpeedVariationMax = 0.8,
+            UploadCustomIntervalMinutes = 5,
+            DownloadCustomIntervalMinutes = 5,
+            SlowTorrentThresholdKbps = -1,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        var errors = (IList<ValidationFailure>)badRequest.Value;
+
+        Assert.That(errors, Has.Some.Matches<ValidationFailure>(e =>
+            e.PropertyName == nameof(SeedingConfigResource.SlowTorrentThresholdKbps)));
+    }
+
+    [Test]
+    public void GetConfig_should_map_queue_concurrency_properties()
+    {
+        _configService.MaxActiveDownloads.Returns(8);
+        _configService.MaxActiveSeeds.Returns(15);
+        _configService.MaxActiveTorrents.Returns(25);
+        _configService.IgnoreSlowTorrents.Returns(false);
+        _configService.SlowTorrentThresholdKbps.Returns(20);
+
+        var resource = _controller.GetConfig();
+
+        Assert.That(resource.MaxActiveDownloads, Is.EqualTo(8));
+        Assert.That(resource.MaxActiveSeeds, Is.EqualTo(15));
+        Assert.That(resource.MaxActiveTorrents, Is.EqualTo(25));
+        Assert.That(resource.IgnoreSlowTorrents, Is.False);
+        Assert.That(resource.SlowTorrentThresholdKbps, Is.EqualTo(20));
+    }
 }

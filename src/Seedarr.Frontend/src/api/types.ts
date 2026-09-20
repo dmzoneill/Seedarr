@@ -453,6 +453,12 @@ export interface SeedingConfig {
   speedVariationMin: number;
   speedVariationMax: number;
   seedGoalReachedAction?: string;
+  preserveSeedingOnArrDelete?: boolean;
+  maxActiveDownloads?: number;
+  maxActiveSeeds?: number;
+  maxActiveTorrents?: number;
+  ignoreSlowTorrents?: boolean;
+  slowTorrentThresholdKbps?: number;
 }
 
 export interface NetworkConfig {

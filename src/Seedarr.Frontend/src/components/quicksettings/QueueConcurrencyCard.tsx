@@ -1,35 +1,32 @@
 import { useState, useEffect } from "react";
-import { useTorrents } from "../../api/hooks";
+import {
+  useTorrents,
+  useSeedingConfig,
+  useSaveSeedingConfig,
+} from "../../api/hooks";
 
 export function QueueConcurrencyCard() {
   const { data: torrents } = useTorrents();
+  const { data: config } = useSeedingConfig();
+  const save = useSaveSeedingConfig();
 
-  const [maxActiveDownloads, setMaxActiveDownloads] = useState<number>(() => {
-    const saved = localStorage.getItem("seedarr_max_active_dl");
-    return saved !== null ? Number(saved) : 5;
-  });
-
-  const [maxActiveSeeds, setMaxActiveSeeds] = useState<number>(() => {
-    const saved = localStorage.getItem("seedarr_max_active_seeds");
-    return saved !== null ? Number(saved) : 10;
-  });
-
-  const [ignoreSlow, setIgnoreSlow] = useState<boolean>(() => {
-    const saved = localStorage.getItem("seedarr_ignore_slow_torrents");
-    return saved !== null ? saved === "true" : true;
-  });
+  const [maxActiveDownloads, setMaxActiveDownloads] = useState<number>(5);
+  const [maxActiveSeeds, setMaxActiveSeeds] = useState<number>(10);
+  const [ignoreSlow, setIgnoreSlow] = useState<boolean>(true);
 
   useEffect(() => {
-    localStorage.setItem("seedarr_max_active_dl", String(maxActiveDownloads));
-  }, [maxActiveDownloads]);
-
-  useEffect(() => {
-    localStorage.setItem("seedarr_max_active_seeds", String(maxActiveSeeds));
-  }, [maxActiveSeeds]);
-
-  useEffect(() => {
-    localStorage.setItem("seedarr_ignore_slow_torrents", String(ignoreSlow));
-  }, [ignoreSlow]);
+    if (config) {
+      if (config.maxActiveDownloads !== undefined) {
+        setMaxActiveDownloads(config.maxActiveDownloads);
+      }
+      if (config.maxActiveSeeds !== undefined) {
+        setMaxActiveSeeds(config.maxActiveSeeds);
+      }
+      if (config.ignoreSlowTorrents !== undefined) {
+        setIgnoreSlow(config.ignoreSlowTorrents);
+      }
+    }
+  }, [config]);
 
   // Compute live active downloads and seeds
   const activeDownloads = (torrents ?? []).filter(
@@ -45,11 +42,35 @@ export function QueueConcurrencyCard() {
   ).length;
 
   const handleAdjustDownloads = (delta: number) => {
-    setMaxActiveDownloads((prev) => Math.max(0, prev + delta));
+    const nextVal = Math.max(0, maxActiveDownloads + delta);
+    setMaxActiveDownloads(nextVal);
+    if (config) {
+      save.mutate({
+        ...config,
+        maxActiveDownloads: nextVal,
+      });
+    }
   };
 
   const handleAdjustSeeds = (delta: number) => {
-    setMaxActiveSeeds((prev) => Math.max(0, prev + delta));
+    const nextVal = Math.max(0, maxActiveSeeds + delta);
+    setMaxActiveSeeds(nextVal);
+    if (config) {
+      save.mutate({
+        ...config,
+        maxActiveSeeds: nextVal,
+      });
+    }
+  };
+
+  const handleToggleIgnoreSlow = (checked: boolean) => {
+    setIgnoreSlow(checked);
+    if (config) {
+      save.mutate({
+        ...config,
+        ignoreSlowTorrents: checked,
+      });
+    }
   };
 
   return (
@@ -134,7 +155,7 @@ export function QueueConcurrencyCard() {
               type="checkbox"
               className="quick-settings-checkbox"
               checked={ignoreSlow}
-              onChange={(e) => setIgnoreSlow(e.target.checked)}
+              onChange={(e) => handleToggleIgnoreSlow(e.target.checked)}
             />
             <span>Ignore slow / stalled transfers in queue</span>
           </label>
