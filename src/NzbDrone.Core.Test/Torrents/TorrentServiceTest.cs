@@ -1326,7 +1326,7 @@ namespace NzbDrone.Core.Test.Torrents
 
             _repository.Get(15).Returns(torrent);
             _repository.Update(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
-            _torrentFileService.GetFilesByTorrentId(15).Returns(files);
+            _torrentFileService.GetByTorrentId(15).Returns(files);
 
             var diskAllocationService = Substitute.For<IDiskAllocationService>();
             _subject.DiskAllocationService = diskAllocationService;

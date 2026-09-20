@@ -285,6 +285,8 @@ public class EndgameManagerTest
             Status = TorrentStatus.Downloading
         };
 
+        server1.MatchedTorrent = torrent;
+        server2.MatchedTorrent = torrent;
         _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { server1, server2 });
 
         var picker = _server.PiecePicker;

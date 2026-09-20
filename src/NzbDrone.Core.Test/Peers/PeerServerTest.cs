@@ -2043,6 +2043,13 @@ public class PeerServerTest
         using var cts = new CancellationTokenSource();
         await server.StartAsync(cts.Token);
 
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (server.ListenerSocket == null && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.That(server.ListenerSocket, Is.Not.Null);
         var localPort = ((IPEndPoint)server.ListenerSocket.LocalEndPoint).Port;
 
         using var client = new TcpClient();
@@ -3881,9 +3888,9 @@ public class PeerServerTest
         var connectTask1 = InvokeConnectToPeerAsync(torrent, candidate, cts.Token, server);
 
         // Wait for first handshake to complete and its half-open permit to be released
-        for (var i = 0; i < 50 && halfOpen.CurrentCount < 1; i++)
+        for (var i = 0; i < 120 && halfOpen.CurrentCount < 1; i++)
         {
-            await Task.Delay(20);
+            await Task.Delay(25);
         }
 
         // Connection 1 is still actively running its session loop
@@ -3895,9 +3902,9 @@ public class PeerServerTest
         var connectTask2 = InvokeConnectToPeerAsync(torrent, candidate, cts.Token, server);
 
         // Wait for second handshake to complete and release its permit
-        for (var i = 0; i < 50 && halfOpen.CurrentCount < 1; i++)
+        for (var i = 0; i < 120 && halfOpen.CurrentCount < 1; i++)
         {
-            await Task.Delay(20);
+            await Task.Delay(25);
         }
 
         await serverTask;

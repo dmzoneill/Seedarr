@@ -203,6 +203,6 @@ public class TorrentExporterTest
         var info = (BDictionary)root["info"];
         var pieces = ((BString)info["pieces"]).Value;
 
-        Assert.That(pieces, Is.EqualTo(pieceHashes));
+        Assert.That(pieces.ToArray(), Is.EqualTo(pieceHashes));
     }
 }

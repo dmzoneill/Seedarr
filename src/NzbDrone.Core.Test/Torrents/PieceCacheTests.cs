@@ -157,7 +157,7 @@ public class PieceCacheTests
         var result = cache.VerifyAndFlushPiece(1, 0, expectedHash, _storage, _torrent, _files);
 
         Assert.That(result, Is.True);
-        _storage.Received(1).WritePiece(_torrent, _files, 0, Arg.Is<ReadOnlyMemory<byte>>(m => m.Span.SequenceEqual(pieceData)), null);
+        _storage.Received(1).WritePiece(_torrent, _files, 0, Arg.Is<ReadOnlyMemory<byte>>(m => m.ToArray().SequenceEqual(pieceData)), null);
         Assert.That(cache.IsPieceFlushed(1, 0), Is.True);
         Assert.That(cache.IsPieceComplete(1, 0), Is.True);
     }

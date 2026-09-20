@@ -202,6 +202,7 @@ public class MainDatabaseTest
                 {
                     throw new IOException("Simulated disk error during db swap");
                 }
+
                 File.Move(src, dst, overwrite);
             },
             fileCopy: (src, dst, overwrite) =>
@@ -210,6 +211,7 @@ public class MainDatabaseTest
                 {
                     throw new IOException("Simulated copy failure during fallback");
                 }
+
                 File.Copy(src, dst, overwrite);
             });
 

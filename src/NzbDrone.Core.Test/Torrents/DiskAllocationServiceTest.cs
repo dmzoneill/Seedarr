@@ -69,7 +69,7 @@ public class DiskAllocationServiceTest
         var ex = Assert.Throws<InsufficientDiskSpaceException>(() =>
             _subject.PreallocateFiles(torrent, files));
 
-        StringAssert.Contains("Insufficient disk space", ex.Message);
+        Assert.That(ex.Message, Does.Contain("Insufficient disk space"));
     }
 
     [Test]

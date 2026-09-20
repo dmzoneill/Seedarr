@@ -502,7 +502,7 @@ public class PeerDiscoveryServiceTest
         };
 
         service.AddPeers(InfoHash, peers, "tracker");
-        Assert.That(service.GetPeers(InfoHash, 10).Count, Is.EqualTo(2));
+        Assert.That(service.PeerCount(InfoHash), Is.EqualTo(2));
 
         // Now block 1.2.3.4
         blocklistService.IsBlocked("1.2.3.4").Returns(true);
