@@ -141,12 +141,26 @@ public class IdentityProviderServiceTest
     [TestCase("https://127.0.0.1/auth")]
     [TestCase("http://localhost/auth")]
     [TestCase("https://localhost/auth")]
+    [TestCase("https://sub.localhost/auth")]
+    [TestCase("http://[::1]/auth")]
+    [TestCase("https://[::1]/auth")]
+    [TestCase("http://0.0.0.0/auth")]
+    [TestCase("https://0.0.0.0/auth")]
+    [TestCase("http://[::]/auth")]
+    [TestCase("https://[::]/auth")]
+    [TestCase("https://[::ffff:127.0.0.1]/auth")]
     [TestCase("http://10.0.0.1/auth")]
     [TestCase("https://10.0.0.1/auth")]
+    [TestCase("https://[::ffff:10.0.0.1]/auth")]
     [TestCase("http://172.16.0.1/auth")]
     [TestCase("https://172.16.0.1/auth")]
     [TestCase("http://192.168.1.1/auth")]
     [TestCase("https://192.168.1.1/auth")]
+    [TestCase("https://[::ffff:192.168.1.1]/auth")]
+    [TestCase("https://[fd00::1]/auth")]
+    [TestCase("https://[fe80::1]/auth")]
+    [TestCase("https://100.64.0.1/auth")]
+    [TestCase("https://100.127.255.255/auth")]
     [TestCase("http://metadata.google.internal/computeMetadata/v1")]
     [TestCase("https://metadata.google.internal/computeMetadata/v1")]
     [TestCase("http://instance-data/latest/meta-data")]
@@ -171,8 +185,20 @@ public class IdentityProviderServiceTest
     [TestCase("https://169.254.169.254/metadata.xml")]
     [TestCase("http://169.254.169.254/metadata.xml")]
     [TestCase("https://127.0.0.1/metadata.xml")]
+    [TestCase("http://127.0.0.1/metadata.xml")]
+    [TestCase("https://localhost/metadata.xml")]
+    [TestCase("http://localhost/metadata.xml")]
     [TestCase("https://10.0.0.1/metadata.xml")]
+    [TestCase("http://10.0.0.1/metadata.xml")]
+    [TestCase("https://172.16.0.1/metadata.xml")]
     [TestCase("https://192.168.1.1/metadata.xml")]
+    [TestCase("https://[::1]/metadata.xml")]
+    [TestCase("http://[::1]/metadata.xml")]
+    [TestCase("https://[fd00::1]/metadata.xml")]
+    [TestCase("https://[fe80::1]/metadata.xml")]
+    [TestCase("https://100.64.0.1/metadata.xml")]
+    [TestCase("https://metadata.google.internal/metadata.xml")]
+    [TestCase("https://instance-data/metadata.xml")]
     public async Task TestConnectionAsync_WhenSamlMetadataUrlIsUnsafe_ReturnsFalse(string url)
     {
         var provider = new IdentityProviderDefinition
@@ -186,6 +212,32 @@ public class IdentityProviderServiceTest
         var result = await _service.TestConnectionAsync(provider);
 
         Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void SharedHandler_AllowAutoRedirect_IsFalse()
+    {
+        Assert.That(IdentityProviderService.SharedHandler.AllowAutoRedirect, Is.False);
+    }
+
+    [Test]
+    public async Task TestConnectionAsync_WhenSamlMetadataUrlIsValidHttps_ReturnsTrue()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.OK, "<EntityDescriptor></EntityDescriptor>");
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "valid-saml",
+            Name = "Valid SAML",
+            ProviderType = IdentityProviderType.Saml,
+            MetadataUrl = "https://8.8.8.8/saml/metadata.xml",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.LastRequest, Is.Not.Null);
+        Assert.That(_httpHandler.LastRequest.RequestUri.ToString(), Is.EqualTo("https://8.8.8.8/saml/metadata.xml"));
     }
 
     [Test]
@@ -219,6 +271,26 @@ public class IdentityProviderServiceTest
             Name = "Valid OIDC",
             ProviderType = IdentityProviderType.Oidc,
             IssuerUrl = "https://8.8.8.8/.well-known/openid-configuration",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.LastRequest, Is.Not.Null);
+        Assert.That(_httpHandler.LastRequest.RequestUri.ToString(), Is.EqualTo("https://8.8.8.8/.well-known/openid-configuration"));
+    }
+
+    [Test]
+    public async Task TestConnectionAsync_WhenValidHttpsDiscoveryUrlHasWhitespace_TrimsAndReturnsTrue()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.OK, "{\"issuer\":\"https://8.8.8.8\"}");
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "valid-oidc",
+            Name = "Valid OIDC",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "   https://8.8.8.8   ",
         };
 
         var result = await _service.TestConnectionAsync(provider);
