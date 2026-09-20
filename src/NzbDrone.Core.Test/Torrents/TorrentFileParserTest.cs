@@ -1236,6 +1236,7 @@ public class TorrentFileParserTest
         Assert.That(result.UrlList, Has.Count.EqualTo(2));
         Assert.That(result.UrlList[0], Is.EqualTo("http://webseed1.example.com/files/"));
         Assert.That(result.UrlList[1], Is.EqualTo("http://webseed2.example.com/files/"));
+        Assert.That(result.WebSeeds, Is.EqualTo(result.UrlList));
     }
 
     [Test]
@@ -1638,5 +1639,90 @@ public class TorrentFileParserTest
 
         var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
         Assert.That(ex.Message, Does.Contain("multiple of 32 bytes"));
+    }
+
+    [Test]
+    public void Parse_should_filter_invalid_or_non_http_urls_in_url_list()
+    {
+        var torrentDict = CreateMinimalTorrent("test.iso");
+        torrentDict["url-list"] = new BList
+        {
+            new BString("https://webseed.example.com/files/"),
+            new BString("ftp://mirror.example.com/files/"),
+            new BString("javascript:alert(1)"),
+            new BString("relative/path/file.iso"),
+            new BString(""),
+            new BString("https://webseed.example.com/files/") // duplicate
+        };
+
+        using var stream = CreateTorrentStream(torrentDict);
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.UrlList, Has.Count.EqualTo(2));
+        Assert.That(result.UrlList[0], Is.EqualTo("https://webseed.example.com/files/"));
+        Assert.That(result.UrlList[1], Is.EqualTo("ftp://mirror.example.com/files/"));
+    }
+
+    [Test]
+    public void Parse_should_extract_nested_lists_in_url_list()
+    {
+        var torrentDict = CreateMinimalTorrent("test.iso");
+        torrentDict["url-list"] = new BList
+        {
+            new BList
+            {
+                new BString("https://tier1.example.com/files/"),
+                new BString("https://tier1-backup.example.com/files/")
+            },
+            new BString("https://tier2.example.com/files/")
+        };
+
+        using var stream = CreateTorrentStream(torrentDict);
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.UrlList, Has.Count.EqualTo(3));
+        Assert.That(result.UrlList[0], Is.EqualTo("https://tier1.example.com/files/"));
+        Assert.That(result.UrlList[1], Is.EqualTo("https://tier1-backup.example.com/files/"));
+        Assert.That(result.UrlList[2], Is.EqualTo("https://tier2.example.com/files/"));
+    }
+
+    [Test]
+    public void ResolveWebSeedUrl_should_resolve_single_file_url_correctly()
+    {
+        // Trailing slash -> appends escaped filename
+        var urlWithSlash = TorrentFileParser.ResolveWebSeedUrl("https://webseed.example.com/files/", "Ubuntu 22.04 [Desktop].iso");
+        Assert.That(urlWithSlash, Is.EqualTo("https://webseed.example.com/files/Ubuntu%2022.04%20%5BDesktop%5D.iso"));
+
+        // No trailing slash -> uses base URL directly
+        var urlWithoutSlash = TorrentFileParser.ResolveWebSeedUrl("https://webseed.example.com/files/ubuntu.iso", "Ubuntu 22.04 [Desktop].iso");
+        Assert.That(urlWithoutSlash, Is.EqualTo("https://webseed.example.com/files/ubuntu.iso"));
+    }
+
+    [Test]
+    public void ResolveWebSeedUrl_should_resolve_multi_file_url_correctly()
+    {
+        // Trailing slash -> appends relative path with escaped segments
+        var urlWithSlash = TorrentFileParser.ResolveWebSeedUrl(
+            "https://webseed.example.com/downloads/",
+            "TorrentRoot",
+            "Music/Band - Album [FLAC]/01. Track.flac");
+        Assert.That(urlWithSlash, Is.EqualTo("https://webseed.example.com/downloads/Music/Band%20-%20Album%20%5BFLAC%5D/01.%20Track.flac"));
+
+        // No trailing slash -> treated as single concatenated file or returns base URL directly per BEP 19
+        var urlWithoutSlash = TorrentFileParser.ResolveWebSeedUrl(
+            "https://webseed.example.com/downloads/complete.tar",
+            "TorrentRoot",
+            "Music/01. Track.flac");
+        Assert.That(urlWithoutSlash, Is.EqualTo("https://webseed.example.com/downloads/complete.tar"));
+    }
+
+    [Test]
+    public void ResolveWebSeedUrl_should_prevent_path_traversal()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            TorrentFileParser.ResolveWebSeedUrl("https://webseed.example.com/files/", "../secret.iso"));
+
+        Assert.Throws<ArgumentException>(() =>
+            TorrentFileParser.ResolveWebSeedUrl("https://webseed.example.com/downloads/", "Root", "../etc/passwd"));
     }
 }

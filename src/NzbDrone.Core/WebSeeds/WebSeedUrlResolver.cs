@@ -9,6 +9,7 @@ public interface IWebSeedUrlResolver
     string ResolveMultiFileUrl(string baseUrl, IEnumerable<string> pathSegments);
     string ResolveMultiFileUrl(string baseUrl, string relativePath);
     string ResolveSingleFileUrl(string baseUrl, string torrentName);
+    string ResolveWebSeedUrl(string baseUrl, string torrentName, string relativeFilePath = null);
 }
 
 public class WebSeedUrlResolver : IWebSeedUrlResolver
@@ -116,5 +117,105 @@ public class WebSeedUrlResolver : IWebSeedUrlResolver
         }
 
         return trimmedBaseUrl;
+    }
+
+    string IWebSeedUrlResolver.ResolveWebSeedUrl(string baseUrl, string torrentName, string relativeFilePath)
+    {
+        return ResolveWebSeedUrl(baseUrl, torrentName, relativeFilePath);
+    }
+
+    public static bool IsValidWebSeedUrl(string url, out string validUrl)
+    {
+        validUrl = null;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        var trimmed = url.Trim();
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttp &&
+            uri.Scheme != Uri.UriSchemeHttps &&
+            uri.Scheme != Uri.UriSchemeFtp &&
+            !string.Equals(uri.Scheme, "ftps", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        validUrl = trimmed;
+        return true;
+    }
+
+    public static string ResolveWebSeedUrl(string baseUrl, string torrentName, string relativeFilePath = null)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            throw new ArgumentException("Base URL cannot be null or whitespace.", nameof(baseUrl));
+        }
+
+        var trimmedBaseUrl = baseUrl.Trim();
+
+        if (string.IsNullOrWhiteSpace(relativeFilePath))
+        {
+            if (trimmedBaseUrl.EndsWith('/'))
+            {
+                if (string.IsNullOrWhiteSpace(torrentName))
+                {
+                    return trimmedBaseUrl;
+                }
+
+                var cleanName = torrentName.Trim().TrimStart('/', '\\');
+                var parts = cleanName.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (var part in parts)
+                {
+                    if (part.Trim() == "..")
+                    {
+                        throw new ArgumentException($"Path traversal attempt detected in torrent name: '{torrentName}'", nameof(torrentName));
+                    }
+                }
+
+                return trimmedBaseUrl + EncodePathSegment(cleanName);
+            }
+
+            return trimmedBaseUrl;
+        }
+        else
+        {
+            if (trimmedBaseUrl.EndsWith('/'))
+            {
+                var parts = relativeFilePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                var encodedParts = new List<string>();
+
+                foreach (var part in parts)
+                {
+                    var trimmed = part.Trim();
+                    if (trimmed == ".")
+                    {
+                        continue;
+                    }
+
+                    if (trimmed == "..")
+                    {
+                        throw new ArgumentException($"Path traversal attempt detected with '..' in path segment: '{relativeFilePath}'", nameof(relativeFilePath));
+                    }
+
+                    encodedParts.Add(EncodePathSegment(trimmed));
+                }
+
+                if (encodedParts.Count == 0)
+                {
+                    return trimmedBaseUrl;
+                }
+
+                return trimmedBaseUrl + string.Join("/", encodedParts);
+            }
+
+            return trimmedBaseUrl;
+        }
     }
 }

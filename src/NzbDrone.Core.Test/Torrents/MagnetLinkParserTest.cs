@@ -180,4 +180,40 @@ public class MagnetLinkParserTest
         var ex = Assert.Throws<ArgumentException>(() => MagnetLinkParser.Parse(magnetUri));
         Assert.That(ex.Message, Does.Contain("v2 info hash must be 64 valid hexadecimal characters"));
     }
+
+    [Test]
+    public void Parse_should_extract_ws_parameters_into_webseeds_and_urllist()
+    {
+        var magnetUri = $"magnet:?xt=urn:btih:{ValidInfoHash}&dn=WebSeedTest&ws=https%3A%2F%2Fwebseed1.example.com%2Ffiles%2F&ws=http%3A%2F%2Fwebseed2.example.com%2Ffile.iso";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.WebSeeds, Has.Count.EqualTo(2));
+        Assert.That(result.WebSeeds[0], Is.EqualTo("https://webseed1.example.com/files/"));
+        Assert.That(result.WebSeeds[1], Is.EqualTo("http://webseed2.example.com/file.iso"));
+        Assert.That(result.UrlList, Is.EqualTo(result.WebSeeds));
+    }
+
+    [Test]
+    public void Parse_should_deduplicate_and_filter_invalid_ws_urls()
+    {
+        var magnetUri = $"magnet:?xt=urn:btih:{ValidInfoHash}&ws=https%3A%2F%2Fwebseed1.example.com%2Ffile.iso&ws=HTTPS%3A%2F%2FWEBSEED1.EXAMPLE.COM%2Ffile.iso&ws=invalid-url&ws=javascript:alert(1)&ws=";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.WebSeeds, Has.Count.EqualTo(1));
+        Assert.That(result.WebSeeds[0], Is.EqualTo("https://webseed1.example.com/file.iso"));
+    }
+
+    [Test]
+    public void Parse_should_return_empty_webseeds_when_no_ws_parameters()
+    {
+        var magnetUri = $"magnet:?xt=urn:btih:{ValidInfoHash}&dn=NoWebSeeds";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.WebSeeds, Is.Not.Null);
+        Assert.That(result.WebSeeds, Is.Empty);
+        Assert.That(result.UrlList, Is.Empty);
+    }
 }
