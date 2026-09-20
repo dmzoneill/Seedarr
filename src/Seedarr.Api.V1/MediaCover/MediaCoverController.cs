@@ -342,35 +342,39 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             path = meta?.BackdropLocalPath;
         }
 
+        if (!string.IsNullOrEmpty(path))
+        {
+            if (path.Contains("..") || !IsPathAllowed(path, out var fullCandidatePath))
+            {
+                if (path.Contains(".."))
+                {
+                    _logger.Warn("Media cover artwork path contains directory traversal characters: {0}", path);
+                }
+
+                return NotFound();
+            }
+
+            path = fullCandidatePath;
+        }
+
         if (string.IsNullOrEmpty(path) || !global::System.IO.File.Exists(path))
         {
             path = FindArtworkOnDisk(torrentId, meta, type);
         }
 
-        if (!string.IsNullOrEmpty(path) && path.Contains(".."))
-        {
-            return NotFound();
-        }
-
-        if (string.IsNullOrEmpty(path) || !global::System.IO.File.Exists(path))
+        if (string.IsNullOrEmpty(path))
         {
             return ServeMissingArtworkFallback(torrentId, meta, type);
         }
 
-        var fullPath = Path.GetFullPath(path);
-
-        if (_appFolderInfo != null && !string.IsNullOrEmpty(_appFolderInfo.AppDataFolder))
+        if (!IsPathAllowed(path, out var fullPath))
         {
-            var mediaCoverRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover"))
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            var mediaCacheRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache"))
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return NotFound();
+        }
 
-            if (!fullPath.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) &&
-                !fullPath.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase))
-            {
-                return NotFound();
-            }
+        if (!global::System.IO.File.Exists(fullPath))
+        {
+            return ServeMissingArtworkFallback(torrentId, meta, type);
         }
 
         var ext = Path.GetExtension(fullPath).ToLowerInvariant();
@@ -437,46 +441,38 @@ public class MediaCoverController : RestController<MediaMetadataResource>
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is resolved internally from server metadata storage")]
     private string FindArtworkOnDisk(int torrentId, TorrentMediaMetadata meta, string type)
     {
-        var candidateDirs = new List<string>();
-
-        if (_appFolderInfo != null && !string.IsNullOrEmpty(_appFolderInfo.AppDataFolder))
+        if (_appFolderInfo == null || string.IsNullOrWhiteSpace(_appFolderInfo.AppDataFolder))
         {
-            var mediaCoverRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover"))
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            var mediaCacheRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache"))
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return null;
+        }
 
-            candidateDirs.Add(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover", torrentId.ToString()));
-            candidateDirs.Add(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache", torrentId.ToString()));
+        var candidateDirs = new List<string>
+        {
+            Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover", torrentId.ToString()),
+            Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache", torrentId.ToString()),
+        };
 
-            if (meta != null)
+        if (meta != null)
+        {
+            if (!string.IsNullOrEmpty(meta.PosterLocalPath) &&
+                !meta.PosterLocalPath.Contains("..") &&
+                IsPathAllowed(meta.PosterLocalPath, out var fullPoster))
             {
-                if (!string.IsNullOrEmpty(meta.PosterLocalPath))
+                var dir = Path.GetDirectoryName(fullPoster);
+                if (!string.IsNullOrEmpty(dir) && IsCandidateDirectoryAllowed(dir) && !candidateDirs.Contains(dir))
                 {
-                    var fullPoster = Path.GetFullPath(meta.PosterLocalPath);
-                    if (fullPoster.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) ||
-                        fullPoster.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var dir = Path.GetDirectoryName(fullPoster);
-                        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir) && !candidateDirs.Contains(dir))
-                        {
-                            candidateDirs.Add(dir);
-                        }
-                    }
+                    candidateDirs.Add(dir);
                 }
+            }
 
-                if (!string.IsNullOrEmpty(meta.BackdropLocalPath))
+            if (!string.IsNullOrEmpty(meta.BackdropLocalPath) &&
+                !meta.BackdropLocalPath.Contains("..") &&
+                IsPathAllowed(meta.BackdropLocalPath, out var fullBackdrop))
+            {
+                var dir = Path.GetDirectoryName(fullBackdrop);
+                if (!string.IsNullOrEmpty(dir) && IsCandidateDirectoryAllowed(dir) && !candidateDirs.Contains(dir))
                 {
-                    var fullBackdrop = Path.GetFullPath(meta.BackdropLocalPath);
-                    if (fullBackdrop.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) ||
-                        fullBackdrop.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var dir = Path.GetDirectoryName(fullBackdrop);
-                        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir) && !candidateDirs.Contains(dir))
-                        {
-                            candidateDirs.Add(dir);
-                        }
-                    }
+                    candidateDirs.Add(dir);
                 }
             }
         }
@@ -509,7 +505,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
 
         foreach (var dir in candidateDirs)
         {
-            if (!Directory.Exists(dir))
+            if (!IsCandidateDirectoryAllowed(dir) || !Directory.Exists(dir))
             {
                 continue;
             }
@@ -519,7 +515,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
                 foreach (var ext in extensions)
                 {
                     var file = Path.Combine(dir, $"{name}{ext}");
-                    if (global::System.IO.File.Exists(file))
+                    if (global::System.IO.File.Exists(file) && IsPathAllowed(file, out _))
                     {
                         matchingFiles.Add(new FileInfo(file));
                     }
@@ -530,5 +526,89 @@ public class MediaCoverController : RestController<MediaMetadataResource>
         return matchingFiles
             .OrderByDescending(f => f.LastWriteTimeUtc)
             .FirstOrDefault()?.FullName;
+    }
+
+    private bool IsPathAllowed(string path, out string fullPath)
+    {
+        fullPath = null;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        if (_appFolderInfo == null || string.IsNullOrWhiteSpace(_appFolderInfo.AppDataFolder))
+        {
+            _logger.Warn("AppDataFolder is not configured; refusing to serve media cover artwork from path: {0}", path);
+            return false;
+        }
+
+        try
+        {
+            fullPath = Path.GetFullPath(path);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to resolve full path for artwork: {0}", path);
+            return false;
+        }
+
+        string appDataRoot;
+        string mediaCoverRoot;
+        string mediaCacheRoot;
+        try
+        {
+            appDataRoot = Path.GetFullPath(_appFolderInfo.AppDataFolder)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            mediaCoverRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            mediaCacheRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to resolve allowed media cover directories from AppDataFolder: {0}", _appFolderInfo.AppDataFolder);
+            return false;
+        }
+
+        var isWithinAllowedDir = (fullPath.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) ||
+                                  fullPath.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase)) &&
+                                 fullPath.StartsWith(appDataRoot, StringComparison.OrdinalIgnoreCase);
+
+        if (!isWithinAllowedDir)
+        {
+            _logger.Warn("Media cover artwork path '{0}' is outside allowed AppDataFolder directory.", fullPath);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool IsCandidateDirectoryAllowed(string dir)
+    {
+        if (string.IsNullOrWhiteSpace(dir) || dir.Contains("..") || _appFolderInfo == null || string.IsNullOrWhiteSpace(_appFolderInfo.AppDataFolder))
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullDir = Path.GetFullPath(dir)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var appDataRoot = Path.GetFullPath(_appFolderInfo.AppDataFolder)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var mediaCoverRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var mediaCacheRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+            return (fullDir.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) ||
+                    fullDir.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase)) &&
+                   fullDir.StartsWith(appDataRoot, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to validate candidate directory path: {0}", dir);
+            return false;
+        }
     }
 }
