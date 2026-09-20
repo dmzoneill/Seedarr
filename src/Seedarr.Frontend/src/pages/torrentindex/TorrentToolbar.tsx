@@ -44,7 +44,6 @@ interface TorrentToolbarProps {
   onBulkStop: () => void;
   onBulkDelete: () => void;
   onBulkClear: () => void;
-  onBulkRecheck?: () => void;
   onBulkMoveQueue?: (position: "top" | "up" | "down" | "bottom") => void;
   onBulkAddTags?: () => void;
   onBulkRemoveTags?: () => void;
@@ -84,7 +83,6 @@ export function TorrentToolbar({
   onBulkStop,
   onBulkDelete,
   onBulkClear,
-  onBulkRecheck,
   onBulkMoveQueue,
   onBulkAddTags,
   onBulkRemoveTags,
@@ -198,18 +196,6 @@ export function TorrentToolbar({
             >
               <StopIcon size={13} /> {t("torrents.stop", undefined, "Stop")}
             </button>
-            {onBulkRecheck && (
-              <button
-                type="button"
-                className="btn btn-outline bulk-recheck-btn"
-                onClick={onBulkRecheck}
-                disabled={bulkPending}
-                title={t("torrents.forceRecheck", undefined, "Force Recheck")}
-                style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
-              >
-                🔄 {t("torrents.forceRecheck", undefined, "Force Recheck")}
-              </button>
-            )}
             {onBulkAddTags && (
               <button
                 type="button"

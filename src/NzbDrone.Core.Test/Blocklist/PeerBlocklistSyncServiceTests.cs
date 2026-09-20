@@ -387,10 +387,12 @@ public class PeerBlocklistSyncServiceTests
 
         var readCount = 0;
         var cts = new CancellationTokenSource();
+        using var started = new ManualResetEventSlim(false);
 
         var reader = Task.Run(() =>
         {
             var testIp = IPAddress.Parse("10.10.1.1");
+            started.Set();
             while (!cts.Token.IsCancellationRequested)
             {
                 _service.IsBlocked(testIp);
@@ -398,6 +400,7 @@ public class PeerBlocklistSyncServiceTests
             }
         });
 
+        started.Wait(TimeSpan.FromSeconds(5));
         var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
 
         await cts.CancelAsync();

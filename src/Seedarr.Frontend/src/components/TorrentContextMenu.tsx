@@ -23,7 +23,7 @@ export interface TorrentContextMenuProps {
   onStop: (id: number) => void;
   onUpdate: (torrent: Torrent) => void;
   onAnnounce: (id: number) => void;
-  onRecheck: (id: number) => void;
+  onRecheck?: (id: number) => void;
   onDelete: (payload: { id: number; deleteFiles?: boolean }) => void;
   onMoveQueue: (payload: {
     id: number;
@@ -202,18 +202,6 @@ function TorrentContextMenu({
     onClose();
   };
 
-  const handleRecheckAll = () => {
-    if (isMulti) {
-      if (onBatchRecheck) {
-        onBatchRecheck(effectiveTorrents.map((t) => t.id));
-      } else {
-        effectiveTorrents.forEach((t) => onRecheck(t.id));
-      }
-    } else if (ct) {
-      onRecheck(ct.id);
-    }
-    onClose();
-  };
 
   const handleDeleteAll = (deleteFiles: boolean) => {
     if (isMulti) {
@@ -441,10 +429,7 @@ function TorrentContextMenu({
               {t("torrents.updateTracker", undefined, "Update Tracker")}
               {countSuffix}
             </button>
-            <button className="context-menu-item" onClick={handleRecheckAll}>
-              {t("torrents.forceRecheck", undefined, "Force Recheck")}
-              {countSuffix}
-            </button>
+
             {(!isMulti && ct && ct.progress < 1.0) ||
             (isMulti && effectiveTorrents.some((t) => t.progress < 1.0)) ? (
               <button

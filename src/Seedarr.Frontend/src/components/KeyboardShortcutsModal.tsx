@@ -92,7 +92,6 @@ export function KeyboardShortcutsModal({
         { keys: ["Space"], description: "Pause / Resume Seeding" },
         { keys: ["p"], description: "Pause / Resume Seeding" },
         { keys: ["a"], description: "Force Announce to All Trackers" },
-        { keys: ["r"], description: "Force Recheck Torrent Files" },
         { keys: ["Delete"], description: "Delete Torrent" },
       ],
     },

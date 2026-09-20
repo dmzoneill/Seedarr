@@ -192,31 +192,37 @@ public class DhtStateService : IDhtStateService
             var firstChar = (char)content[0];
             if (firstChar == '[' || firstChar == '{')
             {
-                var json = System.Text.Encoding.UTF8.GetString(content);
-                var nodes = JsonSerializer.Deserialize<List<Node>>(json, new JsonSerializerOptions
+                try
                 {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                if (nodes == null)
-                {
-                    return new List<DhtNode>();
-                }
-
-                var dhtNodes = new List<DhtNode>();
-                foreach (var n in nodes)
-                {
-                    var dhtNode = n.ToDhtNode();
-                    if (dhtNode != null)
+                    var json = System.Text.Encoding.UTF8.GetString(content);
+                    var nodes = JsonSerializer.Deserialize<List<Node>>(json, new JsonSerializerOptions
                     {
-                        dhtNodes.Add(dhtNode);
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                    if (nodes != null)
+                    {
+                        var dhtNodes = new List<DhtNode>();
+                        foreach (var n in nodes)
+                        {
+                            var dhtNode = n.ToDhtNode();
+                            if (dhtNode != null)
+                            {
+                                dhtNodes.Add(dhtNode);
+                            }
+                        }
+
+                        _logger.Debug("Loaded {0} DHT nodes from {1}", dhtNodes.Count, filePath);
+                        return dhtNodes;
                     }
                 }
-
-                _logger.Debug("Loaded {0} DHT nodes from {1}", dhtNodes.Count, filePath);
-                return dhtNodes;
+                catch (JsonException)
+                {
+                    // Random binary data may start with '[' or '{'; fall through to binary compact format
+                }
             }
-            else if (content.Length % 26 == 0)
+
+            if (content.Length % 26 == 0)
             {
                 var dhtNodes = new List<DhtNode>();
                 for (var i = 0; i + 25 < content.Length; i += 26)

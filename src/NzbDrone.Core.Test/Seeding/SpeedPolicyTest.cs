@@ -582,7 +582,7 @@ public class SpeedPolicyTest
     }
 
     [Test]
-    public void CalculateEffectiveUploadSpeed_when_torrent_has_zero_leechers_returns_zero()
+    public void CalculateEffectiveUploadSpeed_when_torrent_has_zero_leechers_simulates_at_least_one_leecher()
     {
         var torrent = new Torrent
         {
@@ -593,7 +593,7 @@ public class SpeedPolicyTest
 
         var speed = _subject.CalculateEffectiveUploadSpeed(torrent, 50_000_000);
 
-        Assert.That(speed, Is.EqualTo(0));
+        Assert.That(speed, Is.EqualTo(SpeedPolicy.DefaultMaxUploadPerLeecherBps));
     }
 
     [Test]
@@ -645,7 +645,7 @@ public class SpeedPolicyTest
             Leechers = 0
         };
 
-        Assert.That(_subject.ComputeUploadSpeed(torrent, 10_000), Is.EqualTo(0));
+        Assert.That(_subject.ComputeUploadSpeed(torrent, 10_000), Is.EqualTo(10_000));
     }
 
     [Test]
@@ -696,7 +696,7 @@ public class SpeedPolicyTest
     }
 
     [Test]
-    public void ProcessSeeding_when_zero_leechers_without_swarm_intelligence_accumulates_zero_bytes()
+    public void ProcessSeeding_when_zero_leechers_without_swarm_intelligence_still_accumulates_bytes()
     {
         _configService.SwarmIntelligenceEnabled.Returns(false);
 
@@ -719,7 +719,7 @@ public class SpeedPolicyTest
 
         _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
 
-        Assert.That(torrent.Uploaded, Is.EqualTo(0));
+        Assert.That(torrent.Uploaded, Is.GreaterThan(0));
     }
 
     [Test]

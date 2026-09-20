@@ -291,17 +291,8 @@ public class Ipv6IntervalTree
                 continue;
             }
 
-            // Check if it parses as IPv4 rule
-            if (Ipv4IntervalTree.TryParse(trimmed, out var v4Range))
-            {
-                v4Ranges.Add(v4Range);
-
-                // Also map IPv4 range to IPv6 mapped range
-                var mappedStart = v4Range.Start.ToIPv4Address().MapToIPv6().ToUInt128();
-                var mappedEnd = v4Range.End.ToIPv4Address().MapToIPv6().ToUInt128();
-                v6Ranges.Add(new Ipv6Range(mappedStart, mappedEnd));
-            }
-            else if (TryParse(trimmed, out var v6Range))
+            var isProbableIpv6 = trimmed.Contains(':') && !trimmed.StartsWith("::ffff:", StringComparison.OrdinalIgnoreCase);
+            if (isProbableIpv6 && TryParse(trimmed, out var v6Range))
             {
                 v6Ranges.Add(v6Range);
 
@@ -310,6 +301,32 @@ public class Ipv6IntervalTree
                 {
                     var intersectStart = v6Range.Start > v4MappedBase ? v6Range.Start : v4MappedBase;
                     var intersectEnd = v6Range.End < v4MappedMax ? v6Range.End : v4MappedMax;
+
+                    if (intersectStart <= intersectEnd)
+                    {
+                        var v4Start = (uint)(intersectStart - v4MappedBase);
+                        var v4End = (uint)(intersectEnd - v4MappedBase);
+                        v4Ranges.Add(new Ipv4Range(v4Start, v4End));
+                    }
+                }
+            }
+            else if (Ipv4IntervalTree.TryParse(trimmed, out var v4Range))
+            {
+                v4Ranges.Add(v4Range);
+
+                // Also map IPv4 range to IPv6 mapped range
+                var mappedStart = v4Range.Start.ToIPv4Address().MapToIPv6().ToUInt128();
+                var mappedEnd = v4Range.End.ToIPv4Address().MapToIPv6().ToUInt128();
+                v6Ranges.Add(new Ipv6Range(mappedStart, mappedEnd));
+            }
+            else if (TryParse(trimmed, out var fallbackV6Range))
+            {
+                v6Ranges.Add(fallbackV6Range);
+
+                if (fallbackV6Range.Start <= v4MappedMax && fallbackV6Range.End >= v4MappedBase)
+                {
+                    var intersectStart = fallbackV6Range.Start > v4MappedBase ? fallbackV6Range.Start : v4MappedBase;
+                    var intersectEnd = fallbackV6Range.End < v4MappedMax ? fallbackV6Range.End : v4MappedMax;
 
                     if (intersectStart <= intersectEnd)
                     {
