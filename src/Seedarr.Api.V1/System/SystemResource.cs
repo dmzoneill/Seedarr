@@ -182,4 +182,24 @@ public class SystemResource : RestResource
     /// Gets or sets the available thread pool I/O completion port threads.
     /// </summary>
     public int AvailableCompletionPortThreads { get; set; }
+
+    /// <summary>
+    /// Gets or sets the current working set memory in bytes.
+    /// </summary>
+    public long WorkingSetBytes { get; set; }
+
+    /// <summary>
+    /// Gets or sets the managed memory allocated in bytes.
+    /// </summary>
+    public long GcTotalMemoryBytes { get; set; }
+
+    /// <summary>
+    /// Gets or sets the total available container/host memory limit in bytes.
+    /// </summary>
+    public long ContainerMemoryLimitBytes { get; set; }
+
+    /// <summary>
+    /// Gets or sets the memory usage percentage relative to container/host limit (0-100%).
+    /// </summary>
+    public double MemoryUsagePercentage { get; set; }
 }
