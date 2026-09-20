@@ -44,6 +44,7 @@ import type {
   DiskSpaceInfo,
   Backup,
   UpdateEntry,
+  UpdateInstallProgress,
   LogFile,
   PeerGraphData,
   SpeedScheduleEntry,
@@ -1087,6 +1088,27 @@ export function useUpdates() {
     queryKey: ["updates"],
     queryFn: () => apiClient.get("/update"),
     staleTime: 60_000,
+  });
+}
+
+export function useUpdateProgress(enabled: boolean = false) {
+  return useQuery<UpdateInstallProgress>({
+    queryKey: ["updateProgress"],
+    queryFn: () => apiClient.get("/update/progress"),
+    refetchInterval: enabled ? 1000 : false,
+    enabled,
+  });
+}
+
+export function useInstallUpdate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (version?: string) =>
+      apiClient.post("/update/install", version ? { version } : {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["updates"] });
+      queryClient.invalidateQueries({ queryKey: ["updateProgress"] });
+    },
   });
 }
 

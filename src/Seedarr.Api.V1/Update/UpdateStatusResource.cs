@@ -26,4 +26,6 @@ public class UpdateStatusResource
     public string PackageFileName { get; set; }
 
     public string ReleaseChannel { get; set; }
+
+    public UpdateInstallProgress InstallProgress { get; set; }
 }
