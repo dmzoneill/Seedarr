@@ -964,4 +964,95 @@ public class CustomScriptServiceTest
             Directory.Delete(tempDir, true);
         }
     }
+
+    [Test]
+    public async Task ReadBoundedAsync_should_truncate_output_exceeding_max_bytes_and_append_warning()
+    {
+        var input = new string('x', CustomScriptService.MaxStreamCaptureBytes + 1024);
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(input));
+        using var reader = new StreamReader(stream);
+
+        var result = await CustomScriptService.ReadBoundedAsync(reader, CustomScriptService.MaxStreamCaptureBytes, CancellationToken.None);
+
+        var expectedPrefix = new string('x', CustomScriptService.MaxStreamCaptureBytes);
+        Assert.That(result, Does.StartWith(expectedPrefix));
+        Assert.That(result, Does.Contain("[... output truncated after reaching maximum capture limit ...]"));
+        Assert.That(result.Length, Is.EqualTo(CustomScriptService.MaxStreamCaptureBytes + "\n[... output truncated after reaching maximum capture limit ...]".Length));
+    }
+
+    [Test]
+    public async Task ReadBoundedAsync_should_not_truncate_output_within_limit()
+    {
+        var input = "Short custom script output line 1\nLine 2\n";
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(input));
+        using var reader = new StreamReader(stream);
+
+        var result = await CustomScriptService.ReadBoundedAsync(reader, CustomScriptService.MaxStreamCaptureBytes, CancellationToken.None);
+
+        Assert.That(result, Is.EqualTo(input));
+        Assert.That(result, Does.Not.Contain("[... output truncated after reaching maximum capture limit ...]"));
+    }
+
+    [Test]
+    public async Task ReadBoundedAsync_should_respect_cancellation_token()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("Some output"));
+        using var reader = new StreamReader(stream);
+
+        Assert.CatchAsync<OperationCanceledException>(async () =>
+        {
+            await CustomScriptService.ReadBoundedAsync(reader, 1024, cts.Token);
+        });
+    }
+
+    [Test]
+    public async Task ReadBoundedAsync_should_throw_OperationCanceledException_and_not_ObjectDisposedException_when_stream_disposed_and_token_cancelled()
+    {
+        using var cts = new CancellationTokenSource();
+        var ms = new MemoryStream(new byte[100]);
+        var reader = new StreamReader(ms);
+        reader.Dispose();
+        await cts.CancelAsync();
+
+        Assert.CatchAsync<OperationCanceledException>(async () =>
+        {
+            await CustomScriptService.ReadBoundedAsync(reader, 1024, cts.Token);
+        });
+    }
+
+    [Test]
+    public async Task TestScriptAsync_should_cancel_stream_reader_and_not_escape_ObjectDisposedException_when_stream_drain_times_out()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Pass("POSIX process fork test not applicable on Windows");
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var scriptPath = Path.Combine(tempDir, "drain_hang.sh");
+            await File.WriteAllTextAsync(scriptPath, "#!/bin/sh\n(sleep 5) &\nexit 0\n");
+            File.SetUnixFileMode(scriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+            var service = new CustomScriptService(
+                scriptTimeout: TimeSpan.FromSeconds(5),
+                streamDrainTimeout: TimeSpan.FromMilliseconds(100));
+
+            var result = await service.TestScriptAsync(scriptPath);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.ExitCode, Is.EqualTo(0));
+            Assert.That(result.TimedOut, Is.False);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
 }

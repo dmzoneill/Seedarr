@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
@@ -24,6 +25,8 @@ public interface ICustomScriptService
 
 public class CustomScriptService : ICustomScriptService, IDisposable
 {
+    public const int MaxStreamCaptureBytes = 256 * 1024;
+
     private readonly ITorrentMediaMetadataRepository _mediaMetadataRepository;
     private readonly ITagService _tagService;
     private readonly ISidecarProcessSupervisor _processSupervisor;
@@ -471,6 +474,49 @@ public class CustomScriptService : ICustomScriptService, IDisposable
         {
             startInfo.ArgumentList.Add(arg);
         }
+    }
+
+    internal static async Task<string> ReadBoundedAsync(StreamReader reader, int maxBytes, CancellationToken cancellationToken)
+    {
+        var buffer = new char[4096];
+        var sb = new StringBuilder();
+        var totalCharsRead = 0;
+        var maxChars = maxBytes; // 1 char >= 1 byte
+        int charsRead;
+
+        try
+        {
+            while ((charsRead = await reader.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                if (totalCharsRead + charsRead <= maxChars)
+                {
+                    sb.Append(buffer, 0, charsRead);
+                    totalCharsRead += charsRead;
+                }
+                else
+                {
+                    var remaining = maxChars - totalCharsRead;
+                    if (remaining > 0)
+                    {
+                        sb.Append(buffer, 0, remaining);
+                        totalCharsRead += remaining;
+                    }
+
+                    sb.Append("\n[... output truncated after reaching maximum capture limit ...]");
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (cancellationToken.IsCancellationRequested && (ex is ObjectDisposedException or IOException))
+        {
+            throw new OperationCanceledException("Stream read canceled.", ex, cancellationToken);
+        }
+
+        return sb.ToString();
     }
 
     internal static async Task TerminateProcessTreeAsync(Process process, string scriptPath, Logger logger)
@@ -963,8 +1009,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
             try
             {
                 using var timeoutCts = new CancellationTokenSource(_scriptTimeout);
-                var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-                var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+                using var streamCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token);
+                var stdoutTask = ReadBoundedAsync(process.StandardOutput, MaxStreamCaptureBytes, streamCts.Token);
+                var stderrTask = ReadBoundedAsync(process.StandardError, MaxStreamCaptureBytes, streamCts.Token);
 
                 try
                 {
@@ -973,6 +1020,14 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 catch (OperationCanceledException)
                 {
                     _logger.Error("Custom script timed out after {0}s: {1}", _scriptTimeout.TotalSeconds, resolvedScriptPath);
+                    try
+                    {
+                        await streamCts.CancelAsync().ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                    }
+
                     await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
                     return false;
                 }
@@ -992,6 +1047,13 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
                     {
                         _logger.Debug("Custom script stream draining timed out after process exit: {0}", resolvedScriptPath);
+                        try
+                        {
+                            await streamCts.CancelAsync().ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                        }
                     }
 
                     if (stdoutTask.IsCompletedSuccessfully)
@@ -1007,6 +1069,18 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 catch (Exception ex)
                 {
                     _logger.Debug(ex, "Exception while draining custom script streams: {0}", resolvedScriptPath);
+                    try
+                    {
+                        await streamCts.CancelAsync().ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                    }
+                }
+                finally
+                {
+                    _ = stdoutTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                    _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
                 }
 
                 if (!string.IsNullOrWhiteSpace(stdout))
@@ -1172,8 +1246,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 try
                 {
                     using var timeoutCts = new CancellationTokenSource(_scriptTimeout);
-                    var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-                    var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+                    using var streamCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token);
+                    var stdoutTask = ReadBoundedAsync(process.StandardOutput, MaxStreamCaptureBytes, streamCts.Token);
+                    var stderrTask = ReadBoundedAsync(process.StandardError, MaxStreamCaptureBytes, streamCts.Token);
 
                     var timedOut = false;
                     try
@@ -1184,6 +1259,14 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     {
                         timedOut = true;
                         _logger.Error("Custom script test timed out after {0}s: {1}", _scriptTimeout.TotalSeconds, resolvedScriptPath);
+                        try
+                        {
+                            await streamCts.CancelAsync().ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                        }
+
                         await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
                     }
 
@@ -1205,6 +1288,13 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                         catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
                         {
                             _logger.Debug("Custom script test stream draining timed out after process exit: {0}", resolvedScriptPath);
+                            try
+                            {
+                                await streamCts.CancelAsync().ConfigureAwait(false);
+                            }
+                            catch
+                            {
+                            }
                         }
 
                         if (stdoutTask.IsCompletedSuccessfully)
@@ -1220,6 +1310,18 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     catch (Exception ex)
                     {
                         _logger.Debug(ex, "Exception while draining custom script test streams: {0}", resolvedScriptPath);
+                        try
+                        {
+                            await streamCts.CancelAsync().ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    finally
+                    {
+                        _ = stdoutTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                        _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
                     }
 
                     var exitCode = timedOut ? -1 : process.ExitCode;
