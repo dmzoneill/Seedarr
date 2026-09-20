@@ -587,8 +587,8 @@ public class RoutingTable
         var suffixMask = (byte)((1 << bitOffset) - 1);
 
         result[byteIndex] = (byte)((_localNodeId[byteIndex] & prefixMask) |
-                                  ((_localNodeId[byteIndex] ^ diffMask) & diffMask) |
-                                  (result[byteIndex] & suffixMask));
+            ((_localNodeId[byteIndex] ^ diffMask) & diffMask) |
+            (result[byteIndex] & suffixMask));
 
         return result;
     }
