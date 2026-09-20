@@ -254,6 +254,8 @@ public interface IConfigService
     // Blocklist
     bool BlocklistEnabled { get; }
     string BlocklistUrl { get; }
+    bool BlocklistAutoUpdate { get; }
+    int BlocklistUpdateIntervalDays { get; }
     string BlocklistETag { get; set; }
     string BlocklistLastModified { get; set; }
 }
@@ -690,6 +692,8 @@ public class ConfigService : IConfigService
     // Blocklist
     public bool BlocklistEnabled => GetValueBoolean("BlocklistEnabled", false);
     public string BlocklistUrl => GetValue("BlocklistUrl", string.Empty);
+    public bool BlocklistAutoUpdate => GetValueBoolean("BlocklistAutoUpdate", true);
+    public int BlocklistUpdateIntervalDays => GetValueInt("BlocklistUpdateIntervalDays", 1);
     public string BlocklistETag
     {
         get => GetValue("BlocklistETag", string.Empty);

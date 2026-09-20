@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.Blocklist;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
@@ -83,6 +84,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
     private readonly ICategoryService _categoryService;
     private readonly ITorrentRelocationService _relocationService;
     private readonly IStopPolicy _stopPolicy;
+    private readonly IPeerBlocklistSyncService _blocklistSyncService;
     private readonly Logger _logger;
 
     public static void RecordRemovedId(int id)
@@ -193,7 +195,8 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         ICallerHostResolver callerHostResolver = null,
         ICategoryService categoryService = null,
         ITorrentRelocationService relocationService = null,
-        IStopPolicy stopPolicy = null)
+        IStopPolicy stopPolicy = null,
+        IPeerBlocklistSyncService blocklistSyncService = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -209,6 +212,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         _categoryService = categoryService;
         _relocationService = relocationService;
         _stopPolicy = stopPolicy;
+        _blocklistSyncService = blocklistSyncService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -339,7 +343,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 "torrent-remove" => HandleTorrentRemove(request, tag),
                 "torrent-rename-path" => HandleTorrentRenamePath(request, tag),
                 "port-test" => HandlePortTest(tag),
-                "blocklist-update" => HandleBlocklistUpdate(tag),
+                "blocklist-update" => await HandleBlocklistUpdateAsync(tag),
                 _ => HandleUnknownMethod(request, tag),
             };
         }
@@ -373,9 +377,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 { "alt-speed-down", _configService?.AltDownloadSpeedKbps ?? 100 },
                 { "alt-speed-up", _configService?.AltUploadSpeedKbps ?? 50 },
                 { "peer-port", _configService?.ListeningPort ?? 6881 },
-                { "blocklist-enabled", false },
-                { "blocklist-size", 0 },
-                { "blocklist-url", string.Empty },
+                { "blocklist-enabled", _configService?.BlocklistEnabled ?? false },
+                { "blocklist-size", _blocklistSyncService?.RuleCount ?? 0 },
+                { "blocklist-url", _configService?.BlocklistUrl ?? string.Empty },
                 { "script-torrent-done-filename", string.Empty },
                 { "script-torrent-done-enabled", false },
                 { "script-torrent-added-filename", string.Empty },
@@ -455,6 +459,16 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             if (request.Arguments.TryGetValue("peer-port", out var peerPort) && peerPort.ValueKind == JsonValueKind.Number)
             {
                 updates["ListeningPort"] = peerPort.GetInt32();
+            }
+
+            if (request.Arguments.TryGetValue("blocklist-enabled", out var blEnabled))
+            {
+                updates["BlocklistEnabled"] = SafeGetBoolean(blEnabled);
+            }
+
+            if (request.Arguments.TryGetValue("blocklist-url", out var blUrl) && blUrl.ValueKind == JsonValueKind.String)
+            {
+                updates["BlocklistUrl"] = blUrl.GetString();
             }
 
             if (updates.Count > 0)
@@ -1442,14 +1456,21 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         });
     }
 
-    private IActionResult HandleBlocklistUpdate(object tag)
+    private async Task<IActionResult> HandleBlocklistUpdateAsync(object tag)
     {
+        var ruleCount = 0;
+        if (_blocklistSyncService != null)
+        {
+            await _blocklistSyncService.SyncBlocklistAsync().ConfigureAwait(false);
+            ruleCount = _blocklistSyncService.RuleCount;
+        }
+
         return Ok(new TransmissionRpcResponse
         {
             Result = "success",
             Arguments = new Dictionary<string, object>
             {
-                ["blocklist-size"] = 0,
+                ["blocklist-size"] = ruleCount,
             },
             Tag = tag,
         });
