@@ -2329,7 +2329,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         {
             var negotiated = _mseSkeyRegistry != null
                 ? await connection.NegotiateEncryptionIncomingAsync(_mseSkeyRegistry, GetEncryptionMode(), stoppingToken)
-                : await connection.NegotiateEncryptionIncomingAsync(ValidateInfoHash, GetEncryptionMode(), stoppingToken);
+                : await connection.NegotiateEncryptionIncomingAsync(hash => ValidateInfoHash(hash, connection), GetEncryptionMode(), stoppingToken);
             if (!negotiated)
             {
                 _logger.Debug("Encryption negotiation failed from {0}", connection.RemoteIp);
@@ -2489,7 +2489,54 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     private bool ValidateInfoHash(byte[] skeyHash)
     {
-        return _mseSkeyRegistry != null && _mseSkeyRegistry.TryMatchTorrent(skeyHash, out _);
+        return ValidateInfoHash(skeyHash, null);
+    }
+
+    private bool ValidateInfoHash(byte[] skeyHash, PeerConnection connection)
+    {
+        if (_mseSkeyRegistry != null && _mseSkeyRegistry.TryMatchTorrent(skeyHash, out var matchedTorrent))
+        {
+            if (connection != null && matchedTorrent != null)
+            {
+                connection.InfoHash = matchedTorrent.InfoHash;
+                connection.MatchedTorrent = matchedTorrent;
+            }
+
+            return true;
+        }
+
+        if (_torrentService != null)
+        {
+            try
+            {
+                var torrents = _torrentService.GetAll();
+                if (torrents != null)
+                {
+                    matchedTorrent = torrents.FirstOrDefault(t =>
+                        !string.IsNullOrEmpty(t.InfoHash) &&
+                        MseKeyDerivation.DeriveKey(Convert.FromHexString(t.InfoHash.Trim()), System.Text.Encoding.ASCII.GetBytes("req2"))
+                            .AsSpan().SequenceEqual(skeyHash));
+
+                    if (matchedTorrent != null)
+                    {
+                        _mseSkeyRegistry?.RegisterTorrent(matchedTorrent);
+                        if (connection != null)
+                        {
+                            connection.InfoHash = matchedTorrent.InfoHash;
+                            connection.MatchedTorrent = matchedTorrent;
+                        }
+
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to validate info hash against torrent service");
+            }
+        }
+
+        return false;
     }
 
     private void DecrementConnectionCount(string clientIp)

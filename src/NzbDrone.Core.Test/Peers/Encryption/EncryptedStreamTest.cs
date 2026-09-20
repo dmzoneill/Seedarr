@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Peers.Encryption;
 
@@ -191,5 +193,85 @@ public class EncryptedStreamTest
         stream.Write(data, 0, data.Length);
 
         Assert.That(stream.Length, Is.EqualTo(data.Length));
+    }
+
+    [Test]
+    public void Length_and_Position_should_throw_when_inner_stream_cannot_seek()
+    {
+        using var inner = new NonSeekableStream();
+        var enc = new Rc4StreamCipher(TestKey);
+        var dec = new Rc4StreamCipher(TestKey);
+
+        using var stream = new EncryptedStream(inner, enc, dec);
+
+        Assert.That(() => stream.Length, Throws.TypeOf<NotSupportedException>());
+        Assert.That(() => stream.Position, Throws.TypeOf<NotSupportedException>());
+    }
+
+    [Test]
+    public async Task ReadAsync_and_WriteAsync_Memory_should_roundtrip_data()
+    {
+        var plaintext = new byte[] { 0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x20, 0x41, 0x73, 0x79, 0x6E, 0x63 };
+        using var inner = new MemoryStream();
+
+        var writeEnc = new Rc4StreamCipher(TestKey, discard1024: true);
+        var writeDec = new Rc4StreamCipher(TestKey, discard1024: true);
+        using (var writeStream = new EncryptedStream(inner, writeEnc, writeDec, ownsStream: false))
+        {
+            await writeStream.WriteAsync(plaintext.AsMemory(), CancellationToken.None);
+            await writeStream.FlushAsync(CancellationToken.None);
+        }
+
+        inner.Position = 0;
+
+        var readEnc = new Rc4StreamCipher(TestKey, discard1024: true);
+        var readDec = new Rc4StreamCipher(TestKey, discard1024: true);
+        using var readStream = new EncryptedStream(inner, readDec, readEnc, ownsStream: false);
+
+        var buffer = new byte[plaintext.Length];
+        var bytesRead = await readStream.ReadAsync(buffer.AsMemory(), CancellationToken.None);
+
+        Assert.That(bytesRead, Is.EqualTo(plaintext.Length));
+        Assert.That(buffer, Is.EqualTo(plaintext));
+    }
+
+    [Test]
+    public async Task WriteInPlaceAsync_should_encrypt_and_write()
+    {
+        var original = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05 };
+        var plaintext = (byte[])original.Clone();
+        using var inner = new MemoryStream();
+
+        var writeEnc = new Rc4StreamCipher(TestKey, discard1024: true);
+        var writeDec = new Rc4StreamCipher(TestKey, discard1024: true);
+        using (var writeStream = new EncryptedStream(inner, writeEnc, writeDec, ownsStream: false))
+        {
+            await writeStream.WriteInPlaceAsync(plaintext.AsMemory(), CancellationToken.None);
+            await writeStream.FlushAsync(CancellationToken.None);
+        }
+
+        inner.Position = 0;
+
+        var readEnc = new Rc4StreamCipher(TestKey, discard1024: true);
+        var readDec = new Rc4StreamCipher(TestKey, discard1024: true);
+        using var readStream = new EncryptedStream(inner, readDec, readEnc, ownsStream: false);
+
+        var buffer = new byte[original.Length];
+        var bytesRead = await readStream.ReadAsync(buffer.AsMemory(), CancellationToken.None);
+
+        Assert.That(bytesRead, Is.EqualTo(original.Length));
+        Assert.That(buffer, Is.EqualTo(original));
+        Assert.That(plaintext, Is.Not.EqualTo(original), "Plaintext buffer should have been modified in place");
+    }
+
+    private sealed class NonSeekableStream : MemoryStream
+    {
+        public override bool CanSeek => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
     }
 }

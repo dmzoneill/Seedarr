@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -27,11 +28,15 @@ public class EncryptedStream : Stream
 
     public override bool CanWrite => _inner.CanWrite;
 
-    public override long Length => _inner.Length;
+    public bool DataAvailable => (_inner is NetworkStream ns && ns.DataAvailable) ||
+        (_inner is PrefixedStream ps && ps.DataAvailable) ||
+        (_inner is EncryptedStream es && es.DataAvailable);
+
+    public override long Length => _inner.CanSeek ? _inner.Length : throw new NotSupportedException("EncryptedStream does not support seeking");
 
     public override long Position
     {
-        get => _inner.Position;
+        get => _inner.CanSeek ? _inner.Position : throw new NotSupportedException("EncryptedStream does not support seeking");
         set => throw new NotSupportedException();
     }
 
