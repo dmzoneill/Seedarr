@@ -78,6 +78,7 @@ public class QueueServiceTest
 
         Assert.That(promoted.Select(t => t.Id), Contains.Item(2));
     }
+
     [Test]
     public void CanDownload_ignores_slow_downloading_torrents_under_threshold_when_ignore_slow_enabled()
     {
