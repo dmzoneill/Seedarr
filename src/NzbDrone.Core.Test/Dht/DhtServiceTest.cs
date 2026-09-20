@@ -264,17 +264,19 @@ public class DhtServiceTest
     public void GenerateToken_should_produce_sha1_hash()
     {
         var method = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token = (byte[])method.Invoke(_service, new object[] { IPAddress.Parse("192.168.1.1") });
+        var token = (byte[])method.Invoke(_service, new object[] { new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881), RandomNumberGenerator.GetBytes(20) });
 
         Assert.That(token.Length, Is.EqualTo(20));
     }
 
     [Test]
-    public void GenerateToken_should_produce_same_token_for_same_ip()
+    public void GenerateToken_should_produce_same_token_for_same_endpoint_and_infohash()
     {
         var method = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token1 = (byte[])method.Invoke(_service, new object[] { IPAddress.Parse("192.168.1.1") });
-        var token2 = (byte[])method.Invoke(_service, new object[] { IPAddress.Parse("192.168.1.1") });
+        var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+        var token1 = (byte[])method.Invoke(_service, new object[] { ep, infoHash });
+        var token2 = (byte[])method.Invoke(_service, new object[] { ep, infoHash });
 
         Assert.That(token1, Is.EqualTo(token2));
     }
@@ -283,8 +285,33 @@ public class DhtServiceTest
     public void GenerateToken_should_produce_different_tokens_for_different_ips()
     {
         var method = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token1 = (byte[])method.Invoke(_service, new object[] { IPAddress.Parse("192.168.1.1") });
-        var token2 = (byte[])method.Invoke(_service, new object[] { IPAddress.Parse("192.168.1.2") });
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+        var token1 = (byte[])method.Invoke(_service, new object[] { new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881), infoHash });
+        var token2 = (byte[])method.Invoke(_service, new object[] { new IPEndPoint(IPAddress.Parse("192.168.1.2"), 6881), infoHash });
+
+        Assert.That(token1, Is.Not.EqualTo(token2));
+    }
+
+    [Test]
+    public void GenerateToken_should_produce_different_tokens_for_different_ports()
+    {
+        var method = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+        var token1 = (byte[])method.Invoke(_service, new object[] { new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881), infoHash });
+        var token2 = (byte[])method.Invoke(_service, new object[] { new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6882), infoHash });
+
+        Assert.That(token1, Is.Not.EqualTo(token2));
+    }
+
+    [Test]
+    public void GenerateToken_should_produce_different_tokens_for_different_infohashes()
+    {
+        var method = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
+        var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
+        var hash1 = RandomNumberGenerator.GetBytes(20);
+        var hash2 = RandomNumberGenerator.GetBytes(20);
+        var token1 = (byte[])method.Invoke(_service, new object[] { ep, hash1 });
+        var token2 = (byte[])method.Invoke(_service, new object[] { ep, hash2 });
 
         Assert.That(token1, Is.Not.EqualTo(token2));
     }
@@ -294,10 +321,11 @@ public class DhtServiceTest
     {
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
         var validateMethod = typeof(DhtService).GetMethod("ValidateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var ip = IPAddress.Parse("192.168.1.1");
+        var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
 
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { ip });
-        var result = (bool)validateMethod.Invoke(_service, new object[] { token, ip });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { ep, infoHash });
+        var result = (bool)validateMethod.Invoke(_service, new object[] { token, ep, infoHash });
 
         Assert.That(result, Is.True);
     }
@@ -306,10 +334,39 @@ public class DhtServiceTest
     public void ValidateToken_should_reject_invalid_token()
     {
         var validateMethod = typeof(DhtService).GetMethod("ValidateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var ip = IPAddress.Parse("192.168.1.1");
+        var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
         var badToken = new byte[20];
 
-        var result = (bool)validateMethod.Invoke(_service, new object[] { badToken, ip });
+        var result = (bool)validateMethod.Invoke(_service, new object[] { badToken, ep, infoHash });
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void ValidateToken_should_reject_token_for_different_infohash()
+    {
+        var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
+        var validateMethod = typeof(DhtService).GetMethod("ValidateToken", BindingFlags.NonPublic | BindingFlags.Instance);
+        var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
+        var hashA = RandomNumberGenerator.GetBytes(20);
+        var hashB = RandomNumberGenerator.GetBytes(20);
+
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { ep, hashA });
+        var result = (bool)validateMethod.Invoke(_service, new object[] { token, ep, hashB });
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void ValidateToken_should_reject_token_from_different_port()
+    {
+        var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
+        var validateMethod = typeof(DhtService).GetMethod("ValidateToken", BindingFlags.NonPublic | BindingFlags.Instance);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881), infoHash });
+        var result = (bool)validateMethod.Invoke(_service, new object[] { token, new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6882), infoHash });
 
         Assert.That(result, Is.False);
     }
@@ -320,11 +377,12 @@ public class DhtServiceTest
         var generateWithSecretMethod = typeof(DhtService).GetMethod("GenerateTokenWithSecret", BindingFlags.NonPublic | BindingFlags.Instance);
         var validateMethod = typeof(DhtService).GetMethod("ValidateToken", BindingFlags.NonPublic | BindingFlags.Instance);
         var previousSecretField = typeof(DhtService).GetField("_previousTokenSecret", BindingFlags.NonPublic | BindingFlags.Instance);
-        var ip = IPAddress.Parse("192.168.1.1");
+        var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
 
         var previousSecret = (byte[])previousSecretField.GetValue(_service);
-        var token = (byte[])generateWithSecretMethod.Invoke(_service, new object[] { ip, previousSecret });
-        var result = (bool)validateMethod.Invoke(_service, new object[] { token, ip });
+        var token = (byte[])generateWithSecretMethod.Invoke(_service, new object[] { ep, infoHash, previousSecret });
+        var result = (bool)validateMethod.Invoke(_service, new object[] { token, ep, infoHash });
 
         Assert.That(result, Is.True);
     }
@@ -334,9 +392,10 @@ public class DhtServiceTest
     {
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
         var validateMethod = typeof(DhtService).GetMethod("ValidateToken", BindingFlags.NonPublic | BindingFlags.Instance);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
 
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { IPAddress.Parse("192.168.1.1") });
-        var result = (bool)validateMethod.Invoke(_service, new object[] { token, IPAddress.Parse("10.0.0.1") });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881), infoHash });
+        var result = (bool)validateMethod.Invoke(_service, new object[] { token, new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881), infoHash });
 
         Assert.That(result, Is.False);
     }
@@ -346,10 +405,11 @@ public class DhtServiceTest
     {
         var method = typeof(DhtService).GetMethod("GenerateTokenWithSecret", BindingFlags.NonPublic | BindingFlags.Instance);
         var secret = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
-        var ip = IPAddress.Parse("192.168.1.1");
+        var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
 
-        var token1 = (byte[])method.Invoke(_service, new object[] { ip, secret });
-        var token2 = (byte[])method.Invoke(_service, new object[] { ip, secret });
+        var token1 = (byte[])method.Invoke(_service, new object[] { ep, infoHash, secret });
+        var token2 = (byte[])method.Invoke(_service, new object[] { ep, infoHash, secret });
 
         Assert.That(token1, Is.EqualTo(token2));
     }
@@ -422,17 +482,18 @@ public class DhtServiceTest
         var validateMethod = typeof(DhtService).GetMethod("ValidateToken", BindingFlags.NonPublic | BindingFlags.Instance);
         var lastRotationField = typeof(DhtService).GetField("_lastSecretRotation", BindingFlags.NonPublic | BindingFlags.Instance);
         var rotateMethod = typeof(DhtService).GetMethod("RotateSecretIfNeeded", BindingFlags.NonPublic | BindingFlags.Instance);
-        var ip = IPAddress.Parse("192.168.1.1");
+        var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
 
         // Generate token with current secret
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { ip });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { ep, infoHash });
 
         // Force rotation
         lastRotationField.SetValue(_service, DateTime.UtcNow.AddMinutes(-15));
         rotateMethod.Invoke(_service, null);
 
         // Token from previous secret should still validate
-        var result = (bool)validateMethod.Invoke(_service, new object[] { token, ip });
+        var result = (bool)validateMethod.Invoke(_service, new object[] { token, ep, infoHash });
         Assert.That(result, Is.True);
     }
 
@@ -942,9 +1003,9 @@ public class DhtServiceTest
         var infoHash = RandomNumberGenerator.GetBytes(20);
         var senderIp = IPAddress.Parse("10.0.0.1");
 
-        // Generate a valid token for this IP
+        // Generate a valid token for this IP, port, and info_hash
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { senderIp });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { new IPEndPoint(senderIp, 6881), infoHash });
 
         var message = new BDictionary
         {
@@ -1052,7 +1113,7 @@ public class DhtServiceTest
         var senderPort = 12345;
 
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { senderIp });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { new IPEndPoint(senderIp, senderPort), infoHash });
 
         var message = new BDictionary
         {
@@ -1083,7 +1144,7 @@ public class DhtServiceTest
         var senderIp = IPAddress.Parse("10.0.0.1");
 
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { senderIp });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { new IPEndPoint(senderIp, 6881), infoHash });
 
         var message = new BDictionary
         {
@@ -1114,7 +1175,7 @@ public class DhtServiceTest
         var senderIp = IPAddress.Parse("10.0.0.1");
 
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { senderIp });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { new IPEndPoint(senderIp, 6881), infoHash });
 
         var message = new BDictionary
         {
@@ -1146,7 +1207,7 @@ public class DhtServiceTest
         var senderIp = IPAddress.Parse("10.0.0.1");
 
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { senderIp });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { new IPEndPoint(senderIp, 6881), infoHash });
 
         var message = new BDictionary
         {
@@ -1176,7 +1237,7 @@ public class DhtServiceTest
         var senderIp = IPAddress.Parse("10.0.0.1");
 
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { senderIp });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { new IPEndPoint(senderIp, 6881), infoHash });
 
         var message = new BDictionary
         {
@@ -1363,7 +1424,7 @@ public class DhtServiceTest
         var invalidHash = new byte[10]; // Invalid length != 20
 
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { listenerEp.Address });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { listenerEp, validHash });
 
         // Test 1: Invalid infoHash length (!= 20)
         var msgInvalidHash = new BDictionary
@@ -1698,8 +1759,9 @@ public class DhtServiceTest
         var infoHash = RandomNumberGenerator.GetBytes(20);
         var senderIp = IPAddress.Parse("10.0.0.1");
 
+        var sender = new IPEndPoint(senderIp, 6881);
         var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
-        var token = (byte[])generateMethod.Invoke(_service, new object[] { senderIp });
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { sender, infoHash });
 
         var args = new BDictionary
         {
@@ -1709,7 +1771,6 @@ public class DhtServiceTest
             ["port"] = new BNumber(51413)
         };
         var transactionId = new BString(new byte[] { 0x01, 0x02 });
-        var sender = new IPEndPoint(senderIp, 6881);
 
         var method = typeof(DhtService).GetMethod("HandleAnnouncePeerQuery", BindingFlags.NonPublic | BindingFlags.Instance);
         method.Invoke(_service, new object[] { args, sender, transactionId });
