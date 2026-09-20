@@ -1149,15 +1149,54 @@ public class PeerConnectionTest
     {
         var (conn, rawClient) = CreateConnectionWithRawClient();
 
-        // Send byte 0x13 - BT plain handshake start - then close so MSE negotiation fails fast
+        // Send byte 0x13 - BT plain handshake start
         rawClient.GetStream().WriteByte(0x13);
         rawClient.GetStream().Flush();
         rawClient.Close();
 
-        // RequireEncrypted: peek[0]==19 is not the PlainText shortcut; goes into MSE path which fails
+        // RequireEncrypted: peek[0]==19 is immediately rejected without entering MSE path
         var result = conn.NegotiateEncryptionIncoming(
             _ => true,
             NzbDrone.Core.Peers.Encryption.EncryptionMode.RequireEncrypted);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void NegotiateEncryptionIncoming_should_immediately_reject_plain_bt_in_require_encrypted_mode_without_dh()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+
+        // Send a full 68-byte BitTorrent handshake, keeping connection open
+        var handshake = new byte[68];
+        handshake[0] = 0x13;
+        Encoding.ASCII.GetBytes("BitTorrent protocol", 0, 19, handshake, 1);
+        rawClient.GetStream().Write(handshake, 0, handshake.Length);
+        rawClient.GetStream().Flush();
+
+        // In RequireEncrypted mode, peek[0] == 19 must immediately return false without DH or blocking
+        var result = conn.NegotiateEncryptionIncoming(
+            _ => true,
+            NzbDrone.Core.Peers.Encryption.EncryptionMode.RequireEncrypted);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task NegotiateEncryptionIncomingAsync_should_immediately_reject_plain_bt_in_require_encrypted_mode_without_dh()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+
+        var handshake = new byte[68];
+        handshake[0] = 0x13;
+        Encoding.ASCII.GetBytes("BitTorrent protocol", 0, 19, handshake, 1);
+        await rawClient.GetStream().WriteAsync(handshake.AsMemory(0, handshake.Length));
+        await rawClient.GetStream().FlushAsync();
+
+        var result = await conn.NegotiateEncryptionIncomingAsync(
+            _ => true,
+            NzbDrone.Core.Peers.Encryption.EncryptionMode.RequireEncrypted,
+            CancellationToken.None);
 
         Assert.That(result, Is.False);
     }

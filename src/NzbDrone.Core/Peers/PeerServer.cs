@@ -1609,6 +1609,54 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
     }
 
+    private PeerConnection CreateOutgoingPeerConnection(DiscoveredPeer candidate, IPAddress localBind)
+    {
+        PeerConnection connection = null;
+
+        if (_utpManager != null && _utpManager.IsEnabled)
+        {
+            try
+            {
+                var utp = _utpManager.CreateConnection();
+                var endpoint = new IPEndPoint(IPAddress.Parse(candidate.Ip), candidate.Port);
+                utp.Connect(endpoint);
+                if (utp.IsConnected)
+                {
+                    connection = new PeerConnection(utp.GetStream(), candidate.Ip, candidate.Port, _dhKeyPool);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "uTP connection attempt to {0}:{1} failed", candidate.Ip, candidate.Port);
+            }
+
+            if (connection == null && _utpManager.TcpFallbackEnabled)
+            {
+                _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
+                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
+            }
+        }
+        else
+        {
+            connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
+        }
+
+        if (connection != null)
+        {
+            connection.DiscoverySource = candidate.Source;
+            connection.IsInbound = false;
+            connection.HandshakeTimeoutMs = Math.Min(_configService.HandshakeTimeoutSeconds * 1000, OutgoingConnectTimeoutMs);
+            connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
+            connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
+            connection.MaxPipelinedRequests = _configService.PeerRequestCount;
+            connection.IdleChance = _clientBehaviorSimulator != null
+                ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
+                : _configService.PeerIdleChance;
+        }
+
+        return connection;
+    }
+
     private Task ConnectToPeer(Torrent torrent, DiscoveredPeer candidate)
     {
         return ConnectToPeerAsync(torrent, candidate, CancellationToken.None);
@@ -1718,33 +1766,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     return;
                 }
 
-                if (_utpManager != null && _utpManager.IsEnabled)
-                {
-                    try
-                    {
-                        var utp = _utpManager.CreateConnection();
-                        var endpoint = new IPEndPoint(IPAddress.Parse(candidate.Ip), candidate.Port);
-                        utp.Connect(endpoint);
-                        if (utp.IsConnected)
-                        {
-                            connection = new PeerConnection(utp.GetStream(), candidate.Ip, candidate.Port, _dhKeyPool);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Debug(ex, "uTP connection attempt to {0}:{1} failed", candidate.Ip, candidate.Port);
-                    }
-
-                    if (connection == null && _utpManager.TcpFallbackEnabled)
-                    {
-                        _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
-                        connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
-                    }
-                }
-                else
-                {
-                    connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
-                }
+                connection = CreateOutgoingPeerConnection(candidate, localBind);
 
                 if (connection == null)
                 {
@@ -1752,28 +1774,52 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     return;
                 }
 
-                connection.DiscoverySource = candidate.Source;
-                connection.IsInbound = false;
-                connection.HandshakeTimeoutMs = Math.Min(_configService.HandshakeTimeoutSeconds * 1000, OutgoingConnectTimeoutMs);
-                connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
-                connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
-                connection.MaxPipelinedRequests = _configService.PeerRequestCount;
-                connection.IdleChance = _clientBehaviorSimulator != null
-                    ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
-                    : _configService.PeerIdleChance;
-
                 if (!string.Equals(_configService.EncryptionMode, "disabled", StringComparison.OrdinalIgnoreCase) &&
                     !string.Equals(_configService.EncryptionMode, "plain", StringComparison.OrdinalIgnoreCase) &&
                     !string.Equals(_configService.EncryptionMode, "none", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!await connection.NegotiateEncryptionOutgoingAsync(torrent.InfoHash, GetEncryptionMode(), stoppingToken))
                     {
-                        _logger.Debug("Outgoing encryption failed to {0}:{1}", candidate.Ip, candidate.Port);
-                        _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-                        _eventLogService?.Debug(torrent.Id, "Peers", $"Encryption negotiation rejected by peer {candidate.Ip}:{candidate.Port}");
+                        if (GetEncryptionMode() == EncryptionMode.RequireEncrypted)
+                        {
+                            _logger.Debug("Outgoing encryption failed to {0}:{1} in RequireEncrypted mode", candidate.Ip, candidate.Port);
+                            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                            _eventLogService?.Debug(torrent.Id, "Peers", $"Encryption negotiation rejected by peer {candidate.Ip}:{candidate.Port}");
+                            connection.Dispose();
+                            return;
+                        }
+
+                        _logger.Debug("Outgoing encryption failed to {0}:{1}; falling back to plaintext", candidate.Ip, candidate.Port);
                         connection.Dispose();
-                        return;
+                        connection = null;
+
+                        try
+                        {
+                            connection = CreateOutgoingPeerConnection(candidate, localBind);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Debug(ex, "Plaintext fallback connection to {0}:{1} failed", candidate.Ip, candidate.Port);
+                        }
+
+                        if (connection == null)
+                        {
+                            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                            return;
+                        }
+
+                        if (stoppingToken.IsCancellationRequested)
+                        {
+                            connection.Dispose();
+                            return;
+                        }
+
+                        connection.EncryptionMethod = CryptoMethod.PlainText;
                     }
+                }
+                else
+                {
+                    connection.EncryptionMethod = CryptoMethod.PlainText;
                 }
 
                 var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)

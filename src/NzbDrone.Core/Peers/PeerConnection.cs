@@ -47,7 +47,7 @@ public class PeerConnection : IDisposable
     public DateTime LastBytesReceived { get; set; } = DateTime.UtcNow;
     public bool IsConnected => !_isDisposed && (_client != null ? _client.Connected : (_activeStream != null));
     public bool IsEncrypted { get; private set; }
-    public CryptoMethod EncryptionMethod { get; private set; }
+    public CryptoMethod EncryptionMethod { get; internal set; }
     public bool AmChoking { get; set; } = true;
     public bool AmInterested { get; set; }
     public bool PeerChoking { get; set; } = true;
@@ -764,11 +764,18 @@ public class PeerConnection : IDisposable
                 return false;
             }
 
-            if (peek[0] == 19 && mode != EncryptionMode.RequireEncrypted)
+            if (peek[0] == 19)
             {
+                if (mode == EncryptionMode.RequireEncrypted)
+                {
+                    _logger.Debug("Rejecting unencrypted incoming BitTorrent handshake from {0}:{1} in RequireEncrypted mode", RemoteIp, RemotePort);
+                    return false;
+                }
+
                 // Plain BitTorrent handshake - feed the peeked byte back through a PrefixedStream
                 _activeStream = new PrefixedStream(peek, _networkStream, ownsStream: false);
                 EncryptionMethod = CryptoMethod.PlainText;
+                InitialApplicationData = null;
                 IsEncrypted = false;
                 return true;
             }
@@ -816,8 +823,14 @@ public class PeerConnection : IDisposable
                 return false;
             }
 
-            if (peek[0] == 19 && mode != EncryptionMode.RequireEncrypted)
+            if (peek[0] == 19)
             {
+                if (mode == EncryptionMode.RequireEncrypted)
+                {
+                    _logger.Debug("Rejecting unencrypted incoming BitTorrent handshake from {0}:{1} in RequireEncrypted mode", RemoteIp, RemotePort);
+                    return false;
+                }
+
                 // Plain BitTorrent handshake - feed the peeked byte back through a PrefixedStream
                 _activeStream = new PrefixedStream(peek, _networkStream, ownsStream: false);
                 EncryptionMethod = CryptoMethod.PlainText;
