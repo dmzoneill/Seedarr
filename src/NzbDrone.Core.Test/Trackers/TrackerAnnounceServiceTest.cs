@@ -1238,4 +1238,203 @@ public class TrackerAnnounceServiceTest
         Assert.That(results[0].Success, Is.False);
         Assert.That(results[0].FailureReason, Does.Contain("Rate limited: minimum announce interval of 60s not elapsed"));
     }
+
+    [Test]
+    public void AnnounceTorrent_should_not_leak_simulated_upload_bytes_to_external_tracker_when_torrent_is_simulated()
+    {
+        var torrent = new Torrent
+        {
+            Id = 201,
+            Name = "Simulated.Ratio.Torrent",
+            InfoHash = "1111222233334444555566667777888899990000",
+            Uploaded = 100_000_000,
+            RealUploaded = 0,
+            SimulatedUploaded = 100_000_000,
+            IsSimulated = true,
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 201, Url = "http://external-tracker.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(201).Returns(new List<TrackerEntry> { tracker });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Uploaded == 0),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_report_real_wire_bytes_to_external_tracker_when_simulation_mode_enabled()
+    {
+        _configService.SimulationModeEnabled.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 202,
+            Name = "Simulated.Mode.Torrent",
+            InfoHash = "2222333344445555666677778888999900001111",
+            Uploaded = 75_000_000,
+            RealUploaded = 12_345,
+            SimulatedUploaded = 74_987_655,
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 2, TorrentId = 202, Url = "http://external-tracker.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(202).Returns(new List<TrackerEntry> { tracker });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Uploaded == 12_345),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_allow_simulated_upload_bytes_to_loopback_or_mock_tracker()
+    {
+        var torrent = new Torrent
+        {
+            Id = 203,
+            Name = "Local.Simulated.Torrent",
+            InfoHash = "3333444455556666777788889999000011112222",
+            Uploaded = 50_000_000,
+            RealUploaded = 0,
+            SimulatedUploaded = 50_000_000,
+            IsSimulated = true,
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 3, TorrentId = 203, Url = "http://127.0.0.1:8989/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(203).Returns(new List<TrackerEntry> { tracker });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Uploaded == 50_000_000),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_align_peer_id_with_client_profile_from_torrent_ClientProfile()
+    {
+        var torrent = new Torrent
+        {
+            Id = 204,
+            Name = "Transmission.Torrent",
+            InfoHash = "4444555566667777888899990000111122223333",
+            ClientProfile = "Transmission",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 4, TorrentId = 204, Url = "http://tracker.example.com/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(204).Returns(new List<TrackerEntry> { tracker });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r =>
+                r.PeerId.StartsWith("-TR3000-") &&
+                r.UserAgent.Contains("Transmission") &&
+                r.ClientProfile != null &&
+                r.ClientProfile.Name.Contains("Transmission")),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_align_peer_id_with_BitTorrentUserAgent_when_client_behavior_is_disabled()
+    {
+        var torrent = new Torrent
+        {
+            Id = 205,
+            Name = "CustomAgent.Torrent",
+            InfoHash = "5555666677778888999900001111222233334444",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 5, TorrentId = 205, Url = "http://tracker.example.com/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(205).Returns(new List<TrackerEntry> { tracker });
+        _configService.ClientBehaviorEngineEnabled.Returns(false);
+        _configService.BitTorrentUserAgent.Returns("Transmission/3.00");
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r =>
+                r.PeerId.StartsWith("-TR3000-") &&
+                r.UserAgent == "Transmission/3.00" &&
+                r.ClientProfile != null &&
+                r.ClientProfile.Name.Contains("Transmission")),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_use_IClientProfileFactory_when_available()
+    {
+        var mockProfileFactory = Substitute.For<IClientProfileFactory>();
+        var transmissionProfile = new NzbDrone.Core.Simulation.ClientBehavior.Profiles.TransmissionProfile();
+        mockProfileFactory.GetAvailableProviders().Returns(new List<IClientProfile> { transmissionProfile });
+
+        var service = new TrackerAnnounceService(
+            _trackerEntryService,
+            _multiTracker,
+            _peerDiscovery,
+            _eventLogService,
+            _configService,
+            _trackerMetricService,
+            eventAggregator: null,
+            torrentService: _torrentService,
+            clientBehaviorSimulator: null,
+            vpnKillSwitchService: null,
+            clientProfileFactory: mockProfileFactory);
+
+        var torrent = new Torrent
+        {
+            Id = 206,
+            Name = "Factory.Torrent",
+            InfoHash = "6666777788889999000011112222333344445555",
+            ClientProfile = "Transmission 3.00",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 6, TorrentId = 206, Url = "http://tracker.example.com/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(206).Returns(new List<TrackerEntry> { tracker });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        mockProfileFactory.Received().GetAvailableProviders();
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.PeerId.StartsWith("-TR3000-")),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void IsLoopbackOrMockTracker_should_correctly_identify_loopback_and_external_urls()
+    {
+        Assert.That(TrackerAnnounceService.IsLoopbackOrMockTracker("http://127.0.0.1:1337/announce"), Is.True);
+        Assert.That(TrackerAnnounceService.IsLoopbackOrMockTracker("http://localhost:8080/announce"), Is.True);
+        Assert.That(TrackerAnnounceService.IsLoopbackOrMockTracker("http://[::1]:8080/announce"), Is.True);
+        Assert.That(TrackerAnnounceService.IsLoopbackOrMockTracker("mock://tracker.local/announce"), Is.True);
+        Assert.That(TrackerAnnounceService.IsLoopbackOrMockTracker("http://tracker.example.com/announce"), Is.False);
+        Assert.That(TrackerAnnounceService.IsLoopbackOrMockTracker("udp://tracker.openbittorrent.com:6969/announce"), Is.False);
+    }
 }

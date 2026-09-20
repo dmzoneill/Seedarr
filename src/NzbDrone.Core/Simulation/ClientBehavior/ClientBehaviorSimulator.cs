@@ -104,7 +104,7 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
             return new TorrentClientSession
             {
                 ProfileName = fallbackProfile?.Name ?? string.Empty,
-                PeerId = fallbackProfile?.GeneratePeerId() ?? "-SD1000-000000000000",
+                PeerId = fallbackProfile?.GeneratePeerId() ?? FallbackProfile.GeneratePeerId(),
                 AnnounceKey = GenerateAnnounceKey(),
                 CreatedAt = DateTime.UtcNow,
                 Profile = fallbackProfile,
@@ -153,7 +153,7 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
                 profile = _currentProfile ?? FallbackProfile;
             }
 
-            var peerId = profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+            var peerId = profile?.GeneratePeerId() ?? FallbackProfile.GeneratePeerId();
             var announceKey = GenerateAnnounceKey();
 
             var session = new TorrentClientSession

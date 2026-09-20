@@ -60,6 +60,18 @@ public class Torrent : ModelBase
     public int? DownloadClientId { get; set; }
 
     [Ignore]
+    public bool IsSimulated { get; set; }
+
+    [Ignore]
+    public string ClientProfile { get; set; }
+
+    [Ignore]
+    public long RealUploaded { get; set; }
+
+    [Ignore]
+    public long SimulatedUploaded { get; set; }
+
+    [Ignore]
     public bool IsExtinct { get; set; }
 
     [Ignore]
@@ -167,6 +179,16 @@ public class Torrent : ModelBase
         if (!string.IsNullOrWhiteSpace(updates.TrackerUrl))
         {
             TrackerUrl = updates.TrackerUrl;
+        }
+
+        if (updates.ClientProfile != null)
+        {
+            ClientProfile = updates.ClientProfile;
+        }
+
+        if (updates.IsSimulated)
+        {
+            IsSimulated = updates.IsSimulated;
         }
 
         if (updates.ForceCompleted || updates.Progress >= 1.0)
