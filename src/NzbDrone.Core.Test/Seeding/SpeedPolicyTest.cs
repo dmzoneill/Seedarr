@@ -1022,25 +1022,12 @@ public class SpeedPolicyTest
     }
 
     [Test]
-    public void ProcessSeeding_when_selective_download_reaches_wanted_size_sets_progress_to_one()
+    public void ProcessSeeding_does_not_simulate_downloads_for_incomplete_torrents()
     {
-        var eventAggregator = Substitute.For<IEventAggregator>();
-        var subject = new SpeedPolicy(
-            _distributionManager,
-            _speedScheduler,
-            _configService,
-            _eventLogService,
-            _stateMachine,
-            _stopPolicy,
-            new RandomNumberGenerator(42),
-            eventAggregator: eventAggregator,
-            categoryService: _categoryService,
-            tagService: _tagService);
-
         var torrent = new Torrent
         {
             Id = 44,
-            Status = TorrentStatus.Downloading,
+            Status = TorrentStatus.Seeding,
             Downloaded = 0,
             TotalSize = 10_000,
             Progress = 0.0,
@@ -1054,10 +1041,159 @@ public class SpeedPolicyTest
         var torrents = new List<Torrent> { torrent };
 
         _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100 });
 
-        subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 100, MaxDownloadSpeed = 500 }, TimeSpan.FromSeconds(1));
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 100, MaxDownloadSpeed = 500 }, TimeSpan.FromSeconds(1));
 
-        Assert.That(torrent.Downloaded, Is.GreaterThanOrEqualTo(500));
-        Assert.That(torrent.Progress, Is.EqualTo(1.0));
+        Assert.That(torrent.Downloaded, Is.EqualTo(0));
+        Assert.That(torrent.Progress, Is.EqualTo(0.0));
+    }
+
+    [Test]
+    public void ProcessDownloading_distributes_download_bandwidth_only_to_active_torrents_excluding_stopped_and_force_completed()
+    {
+        var activeTorrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000,
+            Progress = 0.0,
+            Priority = 1
+        };
+        var stoppedTorrent = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000,
+            Progress = 0.0,
+            Priority = 1
+        };
+        var forceCompletedTorrent = new Torrent
+        {
+            Id = 3,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000,
+            Progress = 0.0,
+            Priority = 1,
+            ForceCompleted = true
+        };
+        var torrents = new List<Torrent> { activeTorrent, stoppedTorrent, forceCompletedTorrent };
+
+        // Index 1 is stopped
+        _stopPolicy.SelectDownloadStoppedTorrents(torrents).Returns(new HashSet<int> { 1 });
+        _distributionManager.DistributeDownloadSpeeds(1, 1_000, Arg.Is<double[]>(w => w.Length == 1))
+            .Returns(new long[] { 1_000 });
+
+        _subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = 1_000 }, TimeSpan.FromSeconds(1));
+
+        // Distribution manager should only receive activeCount = 1
+        _distributionManager.Received(1).DistributeDownloadSpeeds(1, 1_000, Arg.Any<double[]>());
+        _distributionManager.DidNotReceive().DistributeDownloadSpeeds(3, Arg.Any<long>(), Arg.Any<double[]>());
+
+        // State machine handles force completed
+        _stateMachine.Received(1).HandleForceCompleted(forceCompletedTorrent);
+
+        // Active torrent received all 1_000 bytes, stopped and force-completed torrents received 0
+        Assert.That(activeTorrent.Downloaded, Is.EqualTo(1_000));
+        Assert.That(stoppedTorrent.Downloaded, Is.EqualTo(0));
+        Assert.That(forceCompletedTorrent.Downloaded, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessDownloading_when_download_speed_is_unlimited_scales_speeds_by_priority_weights()
+    {
+        var highPriorityTorrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000_000_000L,
+            Progress = 0.0,
+            Priority = 2 // Weight: 2.0
+        };
+        var normalPriorityTorrent = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000_000_000L,
+            Progress = 0.0,
+            Priority = 1 // Weight: 1.0
+        };
+        var lowPriorityTorrent = new Torrent
+        {
+            Id = 3,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000_000_000L,
+            Progress = 0.0,
+            Priority = 0 // Weight: 0.5
+        };
+        var torrents = new List<Torrent> { highPriorityTorrent, normalPriorityTorrent, lowPriorityTorrent };
+
+        _stopPolicy.SelectDownloadStoppedTorrents(torrents).Returns(new HashSet<int>());
+
+        _subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = SpeedLimits.Unlimited }, TimeSpan.FromSeconds(1));
+
+        // Base unlimited speed is 1_000_000_000L scaled by priority weight
+        Assert.That(highPriorityTorrent.Downloaded, Is.EqualTo(2_000_000_000L));
+        Assert.That(normalPriorityTorrent.Downloaded, Is.EqualTo(1_000_000_000L));
+        Assert.That(lowPriorityTorrent.Downloaded, Is.EqualTo(500_000_000L));
+
+        _distributionManager.DidNotReceive().DistributeDownloadSpeeds(Arg.Any<int>(), Arg.Any<long>(), Arg.Any<double[]>());
+    }
+
+    [Test]
+    public void ProcessSeeding_when_upload_speed_is_unlimited_scales_speeds_by_priority_weights()
+    {
+        var highPriorityTorrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000_000L,
+            Progress = 1.0,
+            Leechers = 1_000,
+            SeedingTime = 300,
+            Priority = 2 // Weight: 2.0
+        };
+        var normalPriorityTorrent = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000_000L,
+            Progress = 1.0,
+            Leechers = 1_000,
+            SeedingTime = 300,
+            Priority = 1 // Weight: 1.0
+        };
+        var lowPriorityTorrent = new Torrent
+        {
+            Id = 3,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000_000L,
+            Progress = 1.0,
+            Leechers = 1_000,
+            SeedingTime = 300,
+            Priority = 0 // Weight: 0.5
+        };
+        var torrents = new List<Torrent> { highPriorityTorrent, normalPriorityTorrent, lowPriorityTorrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = SpeedLimits.Unlimited }, TimeSpan.FromSeconds(1));
+
+        // Base unlimited speed is 1_000_000_000L scaled by priority weight
+        Assert.That(highPriorityTorrent.Uploaded, Is.EqualTo(2_000_000_000L));
+        Assert.That(normalPriorityTorrent.Uploaded, Is.EqualTo(1_000_000_000L));
+        Assert.That(lowPriorityTorrent.Uploaded, Is.EqualTo(500_000_000L));
+
+        _distributionManager.DidNotReceive().DistributeUploadSpeeds(Arg.Any<int>(), Arg.Any<long>(), Arg.Any<double[]>());
     }
 }

@@ -175,7 +175,31 @@ public class SpeedPolicy : ISpeedPolicy,
         }
 
         var stoppedIndices = _stopPolicy.SelectDownloadStoppedTorrents(torrents);
-        var priorityWeights = GetPriorityWeights(torrents);
+
+        var activeTorrentIndices = new List<int>();
+        for (var i = 0; i < torrents.Count; i++)
+        {
+            var torrent = torrents[i];
+
+            if (torrent.ForceCompleted)
+            {
+                _stateMachine.HandleForceCompleted(torrent);
+                continue;
+            }
+
+            if (!stoppedIndices.Contains(i))
+            {
+                activeTorrentIndices.Add(i);
+            }
+        }
+
+        var activeCount = activeTorrentIndices.Count;
+        var activePriorityWeights = new double[activeCount];
+        for (var j = 0; j < activeCount; j++)
+        {
+            activePriorityWeights[j] = GetPriorityWeight(torrents[activeTorrentIndices[j]].Priority);
+        }
+
         var variationMin = _configService.SpeedVariationMin;
         var variationMax = _configService.SpeedVariationMax;
         var thresholdPercent = _configService.DownloadThresholdPercent;
@@ -191,27 +215,32 @@ public class SpeedPolicy : ISpeedPolicy,
             }
         }
 
-        var speeds = (maxDownloadSpeed == SpeedLimits.Unlimited
-            ? Enumerable.Repeat(1_000_000_000L, torrents.Count).ToArray()
-            : _distributionManager.DistributeDownloadSpeeds(torrents.Count, maxDownloadSpeed, priorityWeights))
-            ?? Array.Empty<long>();
-
-        for (var i = 0; i < torrents.Count; i++)
+        long[] speeds;
+        if (activeCount > 0)
         {
-            var torrent = torrents[i];
-
-            if (torrent.ForceCompleted)
+            if (maxDownloadSpeed == SpeedLimits.Unlimited)
             {
-                _stateMachine.HandleForceCompleted(torrent);
-                continue;
+                speeds = new long[activeCount];
+                for (var j = 0; j < activeCount; j++)
+                {
+                    speeds[j] = (long)(1_000_000_000L * activePriorityWeights[j]);
+                }
             }
-
-            if (stoppedIndices.Contains(i))
+            else
             {
-                continue;
+                speeds = _distributionManager.DistributeDownloadSpeeds(activeCount, maxDownloadSpeed, activePriorityWeights)
+                    ?? Array.Empty<long>();
             }
+        }
+        else
+        {
+            speeds = Array.Empty<long>();
+        }
 
-            var bytesPerSecond = i < speeds.Length ? speeds[i] : 0L;
+        for (var j = 0; j < activeCount; j++)
+        {
+            var torrent = torrents[activeTorrentIndices[j]];
+            var bytesPerSecond = j < speeds.Length ? speeds[j] : 0L;
 
             var effectiveDlLimit = GetDownloadLimit(torrent);
 
@@ -292,7 +321,10 @@ public class SpeedPolicy : ISpeedPolicy,
             if (limits.MaxUploadSpeed == SpeedLimits.Unlimited)
             {
                 speeds = new long[activeCount];
-                Array.Fill(speeds, 1_000_000_000L);
+                for (var j = 0; j < activeCount; j++)
+                {
+                    speeds[j] = (long)(1_000_000_000L * activePriorityWeights[j]);
+                }
             }
             else
             {
@@ -483,16 +515,6 @@ public class SpeedPolicy : ISpeedPolicy,
 
             torrent.Uploaded += uploadBytesThisTick;
             torrent.SimulatedUploaded += uploadBytesThisTick;
-
-            if (!torrent.ForceCompleted && torrent.Progress < 1.0 && (torrent.TotalSize > 0 || (torrent.Files != null && torrent.Files.Count > 0)))
-            {
-                var dlVariationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
-                var effectiveDownloadBps = limits.MaxDownloadSpeed == SpeedLimits.Unlimited ? 1_000_000_000L : limits.MaxDownloadSpeed;
-                var dlBytesThisTick = (long)(effectiveDownloadBps * dlVariationFactor * tickInterval.TotalSeconds / Math.Max(1, torrents.Count));
-
-                torrent.Downloaded += dlBytesThisTick;
-                UpdateDownloadProgress(torrent);
-            }
 
             torrent.UpdateRatio();
         }
