@@ -352,14 +352,24 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private static string ExtractInfoHash(string path)
     {
-        var queryIndex = path.IndexOf('?');
-        if (queryIndex < 0)
+        var hashes = ExtractInfoHashes(path);
+        return hashes.Count > 0 ? hashes[0] : null;
+    }
+
+    internal static List<string> ExtractInfoHashes(string path)
+    {
+        if (string.IsNullOrEmpty(path))
         {
-            return null;
+            return new List<string>();
         }
 
-        var parameters = ParseQueryString(path[(queryIndex + 1)..]);
-        return parameters.GetValueOrDefault("info_hash");
+        var queryIndex = path.IndexOf('?');
+        if (queryIndex < 0 || queryIndex >= path.Length - 1)
+        {
+            return new List<string>();
+        }
+
+        return ParseInfoHashes(path[(queryIndex + 1)..]);
     }
 
     internal static string ExtractPasskey(string path, Dictionary<string, string> parameters = null)
@@ -465,6 +475,44 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
                     catch (UriFormatException)
                     {
                         result[key] = rawValue;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    internal static List<string> ParseInfoHashes(string query)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrEmpty(query))
+        {
+            return result;
+        }
+
+        foreach (var pair in query.Split('&'))
+        {
+            var eqIndex = pair.IndexOf('=');
+            if (eqIndex > 0)
+            {
+                string key;
+                try
+                {
+                    key = Uri.UnescapeDataString(pair[..eqIndex]);
+                }
+                catch (UriFormatException)
+                {
+                    key = pair[..eqIndex];
+                }
+
+                if (string.Equals(key, "info_hash", StringComparison.OrdinalIgnoreCase))
+                {
+                    var rawValue = pair[(eqIndex + 1)..];
+                    var rawBytes = DecodeUrlBytes(rawValue);
+                    if (rawBytes.Length > 0)
+                    {
+                        result.Add(NormalizeInfoHashToHex(rawBytes));
                     }
                 }
             }
@@ -685,24 +733,22 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private byte[] HandleScrape(string path)
     {
-        var queryIndex = path.IndexOf('?');
-        var isFullScrape = queryIndex < 0 || queryIndex == path.Length - 1;
+        var infoHashes = ExtractInfoHashes(path);
 
-        if (!isFullScrape)
+        _peerDatabase.IncrementScrapes();
+
+        if (infoHashes.Count == 0)
         {
-            var (parameters, error) = ParseRequest(path);
-            if (error != null)
+            return _scrapeCache.GetOrCreateFullScrape(() =>
             {
-                return Encoding.ASCII.GetBytes(error);
-            }
+                var allStats = _peerDatabase.GetAllStats();
+                return BuildFullScrapeResponse(allStats);
+            });
+        }
 
-            if (!parameters.TryGetValue("info_hash", out var infoHash))
-            {
-                return Encoding.ASCII.GetBytes("d14:failure reason18:Missing info_hashe");
-            }
-
-            _peerDatabase.IncrementScrapes();
-
+        if (infoHashes.Count == 1)
+        {
+            var infoHash = infoHashes[0];
             return _scrapeCache.GetOrCreate(infoHash, () =>
             {
                 var stats = _peerDatabase.GetStats(infoHash) ?? new ScrapeStats();
@@ -710,78 +756,62 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             });
         }
 
-        _peerDatabase.IncrementScrapes();
-
-        return _scrapeCache.GetOrCreateFullScrape(() =>
-        {
-            var allStats = _peerDatabase.GetAllStats();
-            return BuildFullScrapeResponse(allStats);
-        });
+        var cacheKey = "multi:" + string.Join(",", infoHashes.Distinct(StringComparer.OrdinalIgnoreCase));
+        return _scrapeCache.GetOrCreate(cacheKey, () => BuildMultiScrapeResponse(infoHashes));
     }
 
     private byte[] BuildSingleScrapeResponse(string infoHash, ScrapeStats stats)
     {
-        var scrapeInterval = _configService.ScrapeIntervalSeconds;
-
-        var fileDict = new BDictionary
-        {
-            ["complete"] = new BNumber(stats?.Complete ?? 0),
-            ["downloaded"] = new BNumber(stats?.Downloaded ?? 0),
-            ["incomplete"] = new BNumber(stats?.Incomplete ?? 0),
-        };
-
-        var files = new BDictionary();
-        byte[] hashKeyBytes;
-        try
-        {
-            hashKeyBytes = Convert.FromHexString(infoHash);
-        }
-        catch (FormatException)
-        {
-            hashKeyBytes = Encoding.Latin1.GetBytes(infoHash);
-        }
-
-        files.Add(new BString(hashKeyBytes), fileDict);
-
-        var response = new BDictionary
-        {
-            ["files"] = files,
-            ["min_request_interval"] = new BNumber(scrapeInterval),
-        };
-
-        return response.EncodeAsBytes();
+        var files = BuildFilesDictionary(new[] { new KeyValuePair<string, ScrapeStats>(infoHash, stats) });
+        return BuildScrapeResponse(files);
     }
 
     private byte[] BuildFullScrapeResponse(Dictionary<string, ScrapeStats> allStats)
     {
-        var scrapeInterval = _configService.ScrapeIntervalSeconds;
+        var files = BuildFilesDictionary(allStats ?? Enumerable.Empty<KeyValuePair<string, ScrapeStats>>());
+        return BuildScrapeResponse(files);
+    }
+
+    private byte[] BuildMultiScrapeResponse(IEnumerable<string> infoHashes)
+    {
+        var entries = infoHashes
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(hash => new KeyValuePair<string, ScrapeStats>(hash, _peerDatabase.GetStats(hash) ?? new ScrapeStats()));
+        var files = BuildFilesDictionary(entries);
+        return BuildScrapeResponse(files);
+    }
+
+    private static BDictionary BuildFilesDictionary(IEnumerable<KeyValuePair<string, ScrapeStats>> statsEntries)
+    {
         var files = new BDictionary();
-
-        if (allStats != null)
+        foreach (var (infoHash, stats) in statsEntries)
         {
-            foreach (var (infoHash, stats) in allStats)
+            var fileDict = new BDictionary
             {
-                var fileDict = new BDictionary
-                {
-                    ["complete"] = new BNumber(stats?.Complete ?? 0),
-                    ["downloaded"] = new BNumber(stats?.Downloaded ?? 0),
-                    ["incomplete"] = new BNumber(stats?.Incomplete ?? 0),
-                };
+                ["complete"] = new BNumber(stats?.Complete ?? 0),
+                ["downloaded"] = new BNumber(stats?.Downloaded ?? 0),
+                ["incomplete"] = new BNumber(stats?.Incomplete ?? 0),
+            };
 
-                byte[] hashKeyBytes;
-                try
-                {
-                    hashKeyBytes = Convert.FromHexString(infoHash);
-                }
-                catch (FormatException)
-                {
-                    hashKeyBytes = Encoding.Latin1.GetBytes(infoHash);
-                }
-
-                files.Add(new BString(hashKeyBytes), fileDict);
+            byte[] hashKeyBytes;
+            try
+            {
+                hashKeyBytes = Convert.FromHexString(infoHash);
             }
+            catch (FormatException)
+            {
+                hashKeyBytes = Encoding.Latin1.GetBytes(infoHash);
+            }
+
+            files[new BString(hashKeyBytes)] = fileDict;
         }
 
+        return files;
+    }
+
+    private byte[] BuildScrapeResponse(BDictionary files)
+    {
+        var scrapeInterval = _configService.ScrapeIntervalSeconds;
         var response = new BDictionary
         {
             ["files"] = files,

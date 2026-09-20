@@ -105,6 +105,22 @@ public class TrackerServerTest
         return Encoding.Latin1.GetString(bytes);
     }
 
+    private byte[] InvokeHandleScrapeBytes(string path)
+    {
+        var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
+            "HandleScrape",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        return (byte[])method.Invoke(_trackerServer, new object[] { path });
+    }
+
+    private static List<string> InvokeParseInfoHashes(string query)
+    {
+        var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
+            "ParseInfoHashes",
+            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+        return (List<string>)method.Invoke(null, new object[] { query });
+    }
+
     private bool InvokeIsRateLimited(string ip)
     {
         var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
@@ -1222,11 +1238,171 @@ public class TrackerServerTest
     }
 
     [Test]
-    public void HandleScrape_should_return_error_when_missing_info_hash()
+    public void HandleScrape_should_return_full_scrape_when_query_has_no_info_hash()
     {
+        var hashHex = Convert.ToHexString(Encoding.Latin1.GetBytes("abcdefghijklmnopqrst")).ToLowerInvariant();
+        _peerDatabase.GetAllStats().Returns(new Dictionary<string, ScrapeStats>
+        {
+            [hashHex] = new ScrapeStats { Complete = 5, Incomplete = 2, Downloaded = 10 }
+        });
+
         var result = InvokeHandleScrape("/scrape?port=6881");
 
-        Assert.That(result, Does.Contain("Missing info_hash"));
+        Assert.That(result, Does.Contain("5:files"));
+        Assert.That(result, Does.Contain("8:completei5e"));
+        Assert.That(result, Does.Contain("20:min_request_intervali900e"));
+    }
+
+    [Test]
+    public void HandleScrape_should_return_full_scrape_when_query_has_passkey_but_no_info_hash()
+    {
+        var hashHex = Convert.ToHexString(Encoding.Latin1.GetBytes("abcdefghijklmnopqrst")).ToLowerInvariant();
+        _peerDatabase.GetAllStats().Returns(new Dictionary<string, ScrapeStats>
+        {
+            [hashHex] = new ScrapeStats { Complete = 5, Incomplete = 2, Downloaded = 10 }
+        });
+
+        var result = InvokeHandleScrape("/scrape?passkey=secret123");
+
+        Assert.That(result, Does.Contain("5:files"));
+        Assert.That(result, Does.Contain("8:completei5e"));
+    }
+
+    [Test]
+    public void HandleScrape_should_return_all_requested_swarms_for_multi_infohash_scrape_under_bep_48()
+    {
+        var hash1Hex = "0123456789abcdef0123456789abcdef01234567";
+        var hash2Hex = "fedcba9876543210fedcba9876543210fedcba98";
+
+        _peerDatabase.GetStats(hash1Hex).Returns(new ScrapeStats { Complete = 10, Incomplete = 2, Downloaded = 50 });
+        _peerDatabase.GetStats(hash2Hex).Returns(new ScrapeStats { Complete = 3, Incomplete = 1, Downloaded = 15 });
+
+        var bytes = InvokeHandleScrapeBytes($"/scrape?info_hash={hash1Hex}&info_hash={hash2Hex}");
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(bytes);
+
+        Assert.That(response.ContainsKey("files"), Is.True);
+        var files = (BDictionary)response["files"];
+        Assert.That(files.Count, Is.EqualTo(2));
+
+        var key1 = new BString(Convert.FromHexString(hash1Hex));
+        var key2 = new BString(Convert.FromHexString(hash2Hex));
+        Assert.That(files.ContainsKey(key1), Is.True);
+        Assert.That(files.ContainsKey(key2), Is.True);
+
+        var file1 = (BDictionary)files[key1];
+        Assert.That(((BNumber)file1["complete"]).Value, Is.EqualTo(10));
+        Assert.That(((BNumber)file1["incomplete"]).Value, Is.EqualTo(2));
+        Assert.That(((BNumber)file1["downloaded"]).Value, Is.EqualTo(50));
+
+        var file2 = (BDictionary)files[key2];
+        Assert.That(((BNumber)file2["complete"]).Value, Is.EqualTo(3));
+        Assert.That(((BNumber)file2["incomplete"]).Value, Is.EqualTo(1));
+        Assert.That(((BNumber)file2["downloaded"]).Value, Is.EqualTo(15));
+    }
+
+    [Test]
+    public void HandleScrape_should_support_multi_infohash_scrape_with_percent_encoded_binary_hashes()
+    {
+        var raw1 = new byte[] { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90, 0xA0, 0xB0, 0xC0, 0xD0, 0xE0, 0xF0, 0x01, 0x02, 0x03, 0x04, 0x05 };
+        var raw2 = new byte[] { 0x05, 0x04, 0x03, 0x02, 0x01, 0xF0, 0xE0, 0xD0, 0xC0, 0xB0, 0xA0, 0x90, 0x80, 0x70, 0x60, 0x50, 0x40, 0x30, 0x20, 0x10 };
+
+        var encoded1 = string.Concat(raw1.Select(b => $"%{b:X2}"));
+        var encoded2 = string.Concat(raw2.Select(b => $"%{b:X2}"));
+
+        var hex1 = Convert.ToHexString(raw1).ToLowerInvariant();
+        var hex2 = Convert.ToHexString(raw2).ToLowerInvariant();
+
+        _peerDatabase.GetStats(hex1).Returns(new ScrapeStats { Complete = 7, Incomplete = 4, Downloaded = 12 });
+        _peerDatabase.GetStats(hex2).Returns(new ScrapeStats { Complete = 1, Incomplete = 0, Downloaded = 9 });
+
+        var bytes = InvokeHandleScrapeBytes($"/scrape?info_hash={encoded1}&info_hash={encoded2}");
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(bytes);
+
+        var files = (BDictionary)response["files"];
+        Assert.That(files.Count, Is.EqualTo(2));
+        Assert.That(files.ContainsKey(new BString(raw1)), Is.True);
+        Assert.That(files.ContainsKey(new BString(raw2)), Is.True);
+    }
+
+    [Test]
+    public void HandleScrape_should_return_single_requested_swarm_in_files()
+    {
+        var hashHex = "0123456789abcdef0123456789abcdef01234567";
+        _peerDatabase.GetStats(hashHex).Returns(new ScrapeStats { Complete = 8, Incomplete = 3, Downloaded = 40 });
+
+        var bytes = InvokeHandleScrapeBytes($"/scrape?info_hash={hashHex}");
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(bytes);
+
+        Assert.That(response.ContainsKey("files"), Is.True);
+        var files = (BDictionary)response["files"];
+        Assert.That(files.Count, Is.EqualTo(1));
+
+        var key = new BString(Convert.FromHexString(hashHex));
+        Assert.That(files.ContainsKey(key), Is.True);
+
+        var file = (BDictionary)files[key];
+        Assert.That(((BNumber)file["complete"]).Value, Is.EqualTo(8));
+        Assert.That(((BNumber)file["incomplete"]).Value, Is.EqualTo(3));
+        Assert.That(((BNumber)file["downloaded"]).Value, Is.EqualTo(40));
+    }
+
+    [Test]
+    public void HandleScrape_should_return_all_active_swarms_in_files_for_full_scrape()
+    {
+        var hash1Hex = "0123456789abcdef0123456789abcdef01234567";
+        var hash2Hex = "fedcba9876543210fedcba9876543210fedcba98";
+
+        _peerDatabase.GetAllStats().Returns(new Dictionary<string, ScrapeStats>
+        {
+            [hash1Hex] = new ScrapeStats { Complete = 12, Incomplete = 4, Downloaded = 60 },
+            [hash2Hex] = new ScrapeStats { Complete = 5, Incomplete = 1, Downloaded = 25 }
+        });
+
+        var bytes = InvokeHandleScrapeBytes("/scrape");
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(bytes);
+
+        Assert.That(response.ContainsKey("files"), Is.True);
+        var files = (BDictionary)response["files"];
+        Assert.That(files.Count, Is.EqualTo(2));
+
+        var key1 = new BString(Convert.FromHexString(hash1Hex));
+        var key2 = new BString(Convert.FromHexString(hash2Hex));
+        Assert.That(files.ContainsKey(key1), Is.True);
+        Assert.That(files.ContainsKey(key2), Is.True);
+
+        var file1 = (BDictionary)files[key1];
+        Assert.That(((BNumber)file1["complete"]).Value, Is.EqualTo(12));
+        Assert.That(((BNumber)file1["incomplete"]).Value, Is.EqualTo(4));
+        Assert.That(((BNumber)file1["downloaded"]).Value, Is.EqualTo(60));
+
+        var file2 = (BDictionary)files[key2];
+        Assert.That(((BNumber)file2["complete"]).Value, Is.EqualTo(5));
+        Assert.That(((BNumber)file2["incomplete"]).Value, Is.EqualTo(1));
+        Assert.That(((BNumber)file2["downloaded"]).Value, Is.EqualTo(25));
+    }
+
+    [Test]
+    public void ParseInfoHashes_should_preserve_multiple_info_hashes()
+    {
+        var hash1 = "0123456789abcdef0123456789abcdef01234567";
+        var hash2 = "fedcba9876543210fedcba9876543210fedcba98";
+        var result = InvokeParseInfoHashes($"info_hash={hash1}&info_hash={hash2}");
+
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result[0], Is.EqualTo(hash1));
+        Assert.That(result[1], Is.EqualTo(hash2));
+    }
+
+    [Test]
+    public void ParseInfoHashes_should_return_empty_when_no_info_hash_in_query()
+    {
+        var result = InvokeParseInfoHashes("port=6881&passkey=test");
+
+        Assert.That(result, Is.Empty);
     }
 
     [Test]
