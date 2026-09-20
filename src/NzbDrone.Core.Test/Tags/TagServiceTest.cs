@@ -147,6 +147,38 @@ public class TagServiceTest
     }
 
     [Test]
+    public void Update_should_reject_duplicate_tag_labels_case_insensitively()
+    {
+        _repo.All().Returns(new List<Tag>
+        {
+            new() { Id = 1, Label = "Action" },
+            new() { Id = 2, Label = "Comedy" }
+        });
+
+        Assert.Throws<DuplicateTagException>(() => _subject.Update(new Tag { Id = 2, Label = "action" }));
+        Assert.Throws<DuplicateTagException>(() => _subject.Update(new Tag { Id = 2, Label = "ACTION" }));
+        Assert.Throws<DuplicateTagException>(() => _subject.Update(new Tag { Id = 2, Label = "  Action  " }));
+        _repo.DidNotReceive().Update(Arg.Is<Tag>(t => t.Id == 2));
+    }
+
+    [Test]
+    public void Update_should_allow_same_tag_to_keep_or_change_case_of_its_own_label()
+    {
+        var tag = new Tag { Id = 1, Label = "action" };
+        _repo.All().Returns(new List<Tag>
+        {
+            new() { Id = 1, Label = "Action" },
+            new() { Id = 2, Label = "Comedy" }
+        });
+        _repo.Update(tag).Returns(tag);
+
+        var result = _subject.Update(tag);
+
+        Assert.That(result.Label, Is.EqualTo("action"));
+        _repo.Received(1).Update(tag);
+    }
+
+    [Test]
     public void Delete_should_call_repo_delete()
     {
         _subject.Delete(5);
