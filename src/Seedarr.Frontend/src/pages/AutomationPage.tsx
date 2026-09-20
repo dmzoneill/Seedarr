@@ -1271,6 +1271,32 @@ if (torrent) {
 
   function handleInstallTemplate() {
     if (!selectedTemplate) return;
+
+    for (const field of selectedTemplate.inputFields || []) {
+      const val = templateInputs[field.key] !== undefined ? templateInputs[field.key] : field.defaultValue;
+      if (field.required && (!val || !val.trim())) {
+        alert(`Field "${field.label}" is required.`);
+        return;
+      }
+      if (val && field.type === "number" && isNaN(Number(val))) {
+        alert(`Field "${field.label}" must be a valid number.`);
+        return;
+      }
+      if (val && field.type === "url") {
+        try {
+          const u = new URL(val);
+          if (u.protocol !== "http:" && u.protocol !== "https:") throw new Error();
+        } catch {
+          alert(`Field "${field.label}" must be a valid HTTP or HTTPS URL.`);
+          return;
+        }
+      }
+      if (val && field.maxLength && val.length > field.maxLength) {
+        alert(`Field "${field.label}" exceeds maximum length of ${field.maxLength} characters.`);
+        return;
+      }
+    }
+
     installTemplate.mutate(
       {
         templateId: selectedTemplate.id,
@@ -1646,9 +1672,24 @@ if (torrent) {
                       <span className="badge" style={{ fontSize: "0.7rem" }}>{template.category}</span>
                     </div>
 
-                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 1rem 0" }}>
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 0.75rem 0" }}>
                       {template.description}
                     </p>
+
+                    {template.isVerified && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.5rem", fontSize: "0.75rem", color: "#10b981", fontWeight: 600 }}>
+                        <span>🛡️ Verified Official Template</span>
+                      </div>
+                    )}
+                    {template.capabilities && template.capabilities.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.75rem" }}>
+                        {template.capabilities.map((cap) => (
+                          <span key={cap} className="badge" style={{ fontSize: "0.7rem", backgroundColor: "rgba(255, 255, 255, 0.05)", border: "1px solid var(--border-light)" }}>
+                            {cap}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <button
@@ -1656,7 +1697,15 @@ if (torrent) {
                     style={{ width: "100%" }}
                     onClick={() => {
                       setSelectedTemplate(template);
-                      setTemplateInputs({ ...template.defaultInputs });
+                      const initialInputs: Record<string, string> = { ...(template.defaultInputs || {}) };
+                      if (template.inputFields) {
+                        template.inputFields.forEach((f) => {
+                          if (f.defaultValue && !initialInputs[f.key]) {
+                            initialInputs[f.key] = f.defaultValue;
+                          }
+                        });
+                      }
+                      setTemplateInputs(initialInputs);
                       setCustomInstallName(template.name);
                       setInstallModalOpen(true);
                     }}
@@ -2950,11 +2999,41 @@ if (torrent) {
       {/* TEMPLATE INSTALL MODAL */}
       {installModalOpen && selectedTemplate && (
         <div className="modal-overlay">
-          <div className="modal panel" style={{ width: "100%", maxWidth: "600px", padding: "1.75rem", backgroundColor: "var(--bg-secondary)" }}>
-            <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.25rem", fontWeight: 700 }}>{t("automation.ui.installCommunityPipeline")}</h3>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "1.25rem", lineHeight: "1.4" }}>
+          <div className="modal panel" style={{ width: "100%", maxWidth: "620px", padding: "1.75rem", backgroundColor: "var(--bg-secondary)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
+              <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700 }}>{t("automation.ui.installCommunityPipeline")}</h3>
+              <span className="badge" style={{ backgroundColor: selectedTemplate.isVerified ? "rgba(16, 185, 129, 0.15)" : "rgba(234, 179, 8, 0.15)", color: selectedTemplate.isVerified ? "#34d399" : "#facc15" }}>
+                {selectedTemplate.isVerified ? "🛡️ Verified Publisher" : "Community"}
+              </span>
+            </div>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "1rem", lineHeight: "1.4" }}>
               {selectedTemplate.description}
             </p>
+
+            {/* Security Callout: Disabled by default */}
+            <div style={{ padding: "0.75rem 1rem", backgroundColor: "rgba(59, 130, 246, 0.08)", border: "1px solid rgba(59, 130, 246, 0.25)", borderRadius: "6px", marginBottom: "1.25rem", fontSize: "0.8rem", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+              <strong style={{ color: "#60a5fa" }}>🔒 Disabled by Default:</strong> For security, this workflow will be installed in an inactive state. You must review the configuration and explicitly enable it before it executes.
+              {selectedTemplate.sha256 && (
+                <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", fontFamily: "monospace", color: "var(--text-muted)" }}>
+                  SHA-256: {selectedTemplate.sha256.substring(0, 16)}...{selectedTemplate.sha256.substring(selectedTemplate.sha256.length - 8)}
+                </div>
+              )}
+            </div>
+
+            {/* Permissions & Capabilities Summary */}
+            <div style={{ marginBottom: "1.25rem" }}>
+              <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "0.4rem" }}>
+                Capabilities & Permissions Required:
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                {(selectedTemplate.capabilities && selectedTemplate.capabilities.length > 0 ? selectedTemplate.capabilities : ["Read-only workflow"]).map((cap) => (
+                  <span key={cap} className="badge" style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", backgroundColor: "var(--bg-primary)", border: "1px solid var(--border)" }}>
+                    {cap.includes("HTTP") ? "🌐 " : cap.includes("torrent") || cap.includes("Torrent") ? "⚡ " : cap.includes("command") ? "🖥️ " : "📋 "}
+                    {cap}
+                  </span>
+                ))}
+              </div>
+            </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "1rem" }}>
               <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>{t("automation.ui.pipelineCustomName")}</label>
@@ -2971,19 +3050,38 @@ if (torrent) {
                 <h4 style={{ fontSize: "0.95rem", margin: "0 0 0.75rem 0", fontWeight: 600 }}>{t("automation.ui.pipelineConfigurationParameter")}</h4>
                 {selectedTemplate.inputFields.map((field) => (
                   <div key={field.key} style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.85rem" }}>
-                    <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>{field.label}</label>
-                    <input
-                      type={field.type === "password" ? "password" : "text"}
-                      className="form-control"
-                      value={templateInputs[field.key] || ""}
-                      onChange={(e) =>
-                        setTemplateInputs({
-                          ...templateInputs,
-                          [field.key]: e.target.value,
-                        })
-                      }
-                      placeholder={field.description}
-                    />
+                    <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                      {field.label} {field.required && <span style={{ color: "var(--danger, #ef4444)" }}>*</span>}
+                    </label>
+                    {field.type === "select" && field.allowedValues && field.allowedValues.length > 0 ? (
+                      <select
+                        className="form-control"
+                        value={templateInputs[field.key] ?? field.defaultValue}
+                        onChange={(e) =>
+                          setTemplateInputs({
+                            ...templateInputs,
+                            [field.key]: e.target.value,
+                          })
+                        }
+                      >
+                        {field.allowedValues.map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type={field.type === "password" ? "password" : field.type === "number" ? "number" : "text"}
+                        className="form-control"
+                        value={templateInputs[field.key] ?? ""}
+                        onChange={(e) =>
+                          setTemplateInputs({
+                            ...templateInputs,
+                            [field.key]: e.target.value,
+                          })
+                        }
+                        placeholder={field.description}
+                      />
+                    )}
                     <span style={{ fontSize: "0.775rem", color: "var(--text-muted)" }}>{field.description}</span>
                   </div>
                 ))}

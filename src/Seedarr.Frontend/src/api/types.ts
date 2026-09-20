@@ -1238,10 +1238,13 @@ export interface AutomationExecutionResult {
 export interface TemplateInputField {
   key: string;
   label: string;
-  type: "text" | "password" | "number" | "select" | string;
+  type: "text" | "password" | "number" | "select" | "boolean" | "url" | string;
   defaultValue: string;
   description: string;
   required: boolean;
+  regexPattern?: string | null;
+  allowedValues?: string[] | null;
+  maxLength?: number;
 }
 
 export interface AutomationMarketplaceTemplate {
@@ -1256,6 +1259,11 @@ export interface AutomationMarketplaceTemplate {
   code: string;
   defaultInputs: Record<string, string>;
   inputFields: TemplateInputField[];
+  sha256?: string;
+  signature?: string;
+  publisher?: string;
+  isVerified?: boolean;
+  capabilities?: string[];
 }
 
 export interface AutomationTestRequest {
