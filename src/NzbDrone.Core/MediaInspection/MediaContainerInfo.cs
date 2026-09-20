@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace NzbDrone.Core.MediaInspection;
@@ -26,6 +27,8 @@ public class MediaContainerInfo
 
     public List<string> SubtitleTracks { get; set; } = new();
 
+    public List<NzbDrone.Core.Subtitles.SubtitleTrackInfo> SubtitleTrackDetails { get; set; } = new();
+
     public double DurationSeconds { get; set; }
 
     public double FrameRate { get; set; }
@@ -45,10 +48,14 @@ public interface IMediaContainerInspector
 public class MediaContainerInspector : IMediaContainerInspector
 {
     private readonly IFFprobeMediaInspector _ffprobeInspector;
+    private readonly NzbDrone.Core.Subtitles.ISubtitleDiscoveryService _subtitleDiscoveryService;
 
-    public MediaContainerInspector(IFFprobeMediaInspector ffprobeInspector = null)
+    public MediaContainerInspector(
+        IFFprobeMediaInspector ffprobeInspector = null,
+        NzbDrone.Core.Subtitles.ISubtitleDiscoveryService subtitleDiscoveryService = null)
     {
         _ffprobeInspector = ffprobeInspector ?? new FFprobeMediaInspector();
+        _subtitleDiscoveryService = subtitleDiscoveryService ?? new NzbDrone.Core.Subtitles.SubtitleDiscoveryService();
     }
 
     public MediaContainerInfo Inspect(System.IO.Stream stream, string fileName = "")
@@ -63,15 +70,13 @@ public class MediaContainerInspector : IMediaContainerInspector
             return null;
         }
 
+        MediaContainerInfo info = null;
+
         if (System.IO.File.Exists(filePath) && _ffprobeInspector != null)
         {
             try
             {
-                var probed = _ffprobeInspector.Inspect(filePath);
-                if (probed != null)
-                {
-                    return probed;
-                }
+                info = _ffprobeInspector.Inspect(filePath);
             }
             catch
             {
@@ -79,8 +84,40 @@ public class MediaContainerInspector : IMediaContainerInspector
             }
         }
 
-        var fileName = System.IO.Path.GetFileName(filePath);
-        return InspectFileName(fileName);
+        if (info == null)
+        {
+            var fileName = System.IO.Path.GetFileName(filePath);
+            info = InspectFileName(fileName);
+        }
+
+        if (info != null && System.IO.File.Exists(filePath) && _subtitleDiscoveryService != null)
+        {
+            try
+            {
+                var externalSubs = _subtitleDiscoveryService.DiscoverSubtitles(filePath);
+                if (externalSubs != null && externalSubs.Count > 0)
+                {
+                    info.SubtitleTrackDetails = externalSubs;
+                    foreach (var sub in externalSubs)
+                    {
+                        var display = !string.IsNullOrEmpty(sub.Language) && sub.Language != "und"
+                            ? sub.Language
+                            : sub.Title;
+
+                        if (!info.SubtitleTracks.Exists(t => string.Equals(t, display, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            info.SubtitleTracks.Add(display);
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Non-critical subtitle discovery failure
+            }
+        }
+
+        return info;
     }
 
     public static MediaContainerInfo InspectFileName(string fileName)

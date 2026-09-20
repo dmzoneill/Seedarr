@@ -14,11 +14,13 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Subtitles;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerBoost;
 using NzbDrone.Core.Trackers;
 using NzbDrone.SignalR;
 using Seedarr.Api.V1.MediaCover;
+using Seedarr.Api.V1.Subtitles;
 using Seedarr.Http;
 using Seedarr.Http.REST;
 
@@ -44,6 +46,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly IPieceStorage _pieceStorage;
     private readonly NzbDrone.Core.Torrents.IPiecePicker _piecePicker;
     private readonly ITorrentStreamService _torrentStreamService;
+    private readonly ISubtitleDiscoveryService _subtitleDiscoveryService;
+    private readonly ISubtitleConversionService _subtitleConversionService;
+    private readonly ISubtitleEncodingDetector _subtitleEncodingDetector;
 
     private readonly ConcurrentDictionary<int, (List<TrackerEntry> Trackers, DateTime Expiry)> _broadcastTrackersCache = new();
     private readonly ConcurrentDictionary<int, (TorrentMediaMetadata Metadata, DateTime Expiry)> _broadcastMediaMetaCache = new();
@@ -68,7 +73,10 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         TimeSpan? coalesceWindow = null,
         IPieceStorage pieceStorage = null,
         NzbDrone.Core.Torrents.IPiecePicker piecePicker = null,
-        ITorrentStreamService torrentStreamService = null)
+        ITorrentStreamService torrentStreamService = null,
+        ISubtitleDiscoveryService subtitleDiscoveryService = null,
+        ISubtitleConversionService subtitleConversionService = null,
+        ISubtitleEncodingDetector subtitleEncodingDetector = null)
         : base(signalRBroadcaster, null, coalesceWindow)
     {
         _torrentService = torrentService;
@@ -87,6 +95,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _pieceStorage = pieceStorage;
         _piecePicker = piecePicker;
         _torrentStreamService = torrentStreamService;
+        _subtitleDiscoveryService = subtitleDiscoveryService ?? new SubtitleDiscoveryService();
+        _subtitleConversionService = subtitleConversionService ?? new SubtitleConversionService();
+        _subtitleEncodingDetector = subtitleEncodingDetector ?? new SubtitleEncodingDetector();
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -608,6 +619,185 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return File(stream, contentType, fileDownloadName: downloadName, enableRangeProcessing: true);
     }
 
+    [HttpGet("{torrentId:int}/files/{fileId:int}/subtitles")]
+    public ActionResult<List<SubtitleTrackResource>> GetFileSubtitles(int torrentId, int fileId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound("Torrent not found.");
+        }
+
+        var files = _torrentFileService.GetByTorrentId(torrentId);
+        var targetFile = files.FirstOrDefault(f => f.Id == fileId);
+        if (targetFile == null)
+        {
+            return NotFound("File not found in torrent.");
+        }
+
+        var subtitles = _subtitleDiscoveryService.DiscoverSubtitles(targetFile, files);
+        var resources = subtitles.Select(s => new SubtitleTrackResource
+        {
+            TrackId = s.TrackId,
+            FileId = s.FileId,
+            Title = s.Title,
+            Language = s.Language,
+            TwoLetterCode = s.TwoLetterCode,
+            Format = s.Format,
+            Path = s.Path,
+            IsExternal = s.IsExternal,
+            IsForced = s.IsForced,
+            IsHearingImpaired = s.IsHearingImpaired,
+            IsDefault = s.IsDefault,
+            Url = $"/api/v1/torrent/{torrentId}/files/{fileId}/subtitles/{s.TrackId}.vtt"
+        }).ToList();
+
+        return Ok(resources);
+    }
+
+    [HttpGet("{torrentId:int}/files/{fileId:int}/subtitles/{trackId}.vtt")]
+    [HttpGet("{torrentId:int}/files/{fileId:int}/subtitles/{trackId}")]
+    [HttpGet("/api/v1/torrents/{torrentId:int}/files/{fileId:int}/subtitles/{trackId}.vtt")]
+    [HttpGet("/api/v1/torrents/{torrentId:int}/files/{fileId:int}/subtitles/{trackId}")]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is validated against torrent save directory")]
+    public ActionResult GetSubtitleTrack(int torrentId, int fileId, string trackId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound("Torrent not found.");
+        }
+
+        var files = _torrentFileService.GetByTorrentId(torrentId);
+        var targetFile = files.FirstOrDefault(f => f.Id == fileId);
+        if (targetFile == null)
+        {
+            return NotFound("File not found in torrent.");
+        }
+
+        var subtitles = _subtitleDiscoveryService.DiscoverSubtitles(targetFile, files);
+        SubtitleTrackInfo matchedTrack = null;
+
+        var cleanTrackId = trackId?.Trim() ?? string.Empty;
+        if (cleanTrackId.EndsWith(".vtt", StringComparison.OrdinalIgnoreCase))
+        {
+            cleanTrackId = cleanTrackId.Substring(0, cleanTrackId.Length - 4);
+        }
+
+        if (int.TryParse(cleanTrackId, out var parsedTrackId))
+        {
+            matchedTrack = subtitles.FirstOrDefault(s => s.TrackId == parsedTrackId || s.FileId == parsedTrackId);
+        }
+
+        matchedTrack ??= subtitles.FirstOrDefault(s =>
+            string.Equals(s.Language, cleanTrackId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(s.TwoLetterCode, cleanTrackId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(s.Title, cleanTrackId, StringComparison.OrdinalIgnoreCase));
+
+        if (matchedTrack == null)
+        {
+            return NotFound("Subtitle track not found.");
+        }
+
+        TorrentFile subFile = null;
+        if (matchedTrack.FileId.HasValue)
+        {
+            subFile = files.FirstOrDefault(f => f.Id == matchedTrack.FileId.Value);
+        }
+
+        subFile ??= files.FirstOrDefault(f => string.Equals(f.Path, matchedTrack.Path, StringComparison.OrdinalIgnoreCase));
+
+        var relativePath = subFile?.Path ?? matchedTrack.Path;
+        var basePath = torrent.SavePath;
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            basePath = _configService?.DefaultSavePath ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(basePath) || string.IsNullOrWhiteSpace(relativePath))
+        {
+            return NotFound("Subtitle path not configured.");
+        }
+
+        var fullBasePath = Path.GetFullPath(basePath);
+        var baseDirWithSep = fullBasePath.EndsWith(Path.DirectorySeparatorChar)
+            ? fullBasePath
+            : fullBasePath + Path.DirectorySeparatorChar;
+
+        var fullPath = Path.GetFullPath(Path.Combine(fullBasePath, relativePath));
+        if (!fullPath.StartsWith(baseDirWithSep, StringComparison.OrdinalIgnoreCase) && !string.Equals(fullPath, fullBasePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("Invalid subtitle file path.");
+        }
+
+        if (!global::System.IO.File.Exists(fullPath))
+        {
+            return NotFound("Subtitle file not found on disk.");
+        }
+
+        try
+        {
+            var rawBytes = global::System.IO.File.ReadAllBytes(fullPath);
+            var vtt = _subtitleConversionService.ConvertToWebVtt(rawBytes, matchedTrack.Format);
+            return Content(vtt, "text/vtt; charset=utf-8");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Error converting subtitle track {0} to WebVTT for torrent {1}", trackId, torrentId);
+            return StatusCode(500, "Error converting subtitle to WebVTT.");
+        }
+    }
+
+    [HttpGet("{torrentId:int}/subtitles")]
+    [HttpGet("/api/v1/torrents/{torrentId:int}/subtitles")]
+    public ActionResult<List<SubtitleTrackResource>> GetTorrentSubtitles(int torrentId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound("Torrent not found.");
+        }
+
+        var files = _torrentFileService.GetByTorrentId(torrentId)
+            .Where(f => !f.IsPaddingFile)
+            .ToList();
+
+        var mediaFiles = files.Where(f => _subtitleDiscoveryService.IsMediaFile(f.Path)).ToList();
+        var primaryFile = mediaFiles.OrderByDescending(f => f.Size).FirstOrDefault() ?? files.FirstOrDefault();
+        if (primaryFile == null)
+        {
+            return NotFound("No media files found in torrent.");
+        }
+
+        return GetFileSubtitles(torrentId, primaryFile.Id);
+    }
+
+    [HttpGet("{torrentId:int}/subtitles/{trackId}.vtt")]
+    [HttpGet("{torrentId:int}/subtitles/{trackId}")]
+    [HttpGet("/api/v1/torrents/{torrentId:int}/subtitles/{trackId}.vtt")]
+    [HttpGet("/api/v1/torrents/{torrentId:int}/subtitles/{trackId}")]
+    public ActionResult GetTorrentSubtitleTrack(int torrentId, string trackId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound("Torrent not found.");
+        }
+
+        var files = _torrentFileService.GetByTorrentId(torrentId)
+            .Where(f => !f.IsPaddingFile)
+            .ToList();
+
+        var mediaFiles = files.Where(f => _subtitleDiscoveryService.IsMediaFile(f.Path)).ToList();
+        var primaryFile = mediaFiles.OrderByDescending(f => f.Size).FirstOrDefault() ?? files.FirstOrDefault();
+        if (primaryFile == null)
+        {
+            return NotFound("No media files found in torrent.");
+        }
+
+        return GetSubtitleTrack(torrentId, primaryFile.Id, trackId);
+    }
+
     private long ParseRangeStart()
     {
         var rangeHeader = Request?.Headers["Range"].ToString();
@@ -639,6 +829,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             ".aac" => "audio/aac",
             ".ogg" => "audio/ogg",
             ".wav" => "audio/wav",
+            ".vtt" => "text/vtt; charset=utf-8",
+            ".srt" => "text/plain; charset=utf-8",
+            ".sub" => "text/plain; charset=utf-8",
             _ => "application/octet-stream"
         };
     }
