@@ -122,11 +122,14 @@ function getSortValue(
 }
 
 export interface TorrentTableProps {
+  torrents?: Torrent[];
   filter?: string;
   stateFilter?: string;
   trackerFilter?: string;
   categoryFilter?: string;
   tagFilter?: string;
+  selectedTagIds?: number[] | Set<number>;
+  tagMatchMode?: "AND" | "OR";
   selectedTorrentId?: number | null;
   onSelectTorrent?: (id: number | null) => void;
   selectedIds?: Set<number>;
@@ -145,11 +148,14 @@ export interface TorrentTableProps {
 }
 
 function TorrentTable({
+  torrents: propTorrents,
   filter,
   stateFilter,
   trackerFilter,
   categoryFilter,
   tagFilter,
+  selectedTagIds,
+  tagMatchMode,
   selectedTorrentId,
   onSelectTorrent,
   selectedIds,
@@ -167,7 +173,8 @@ function TorrentTable({
   onResetSort: propOnResetSort,
 }: TorrentTableProps) {
   const { t } = useTranslation();
-  const { data: torrents, isLoading, isError } = useTorrents();
+  const { data: fetchedTorrents, isLoading, isError } = useTorrents();
+  const torrents = propTorrents ?? fetchedTorrents;
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
   const deleteTorrent = useDeleteTorrent();
@@ -213,13 +220,17 @@ function TorrentTable({
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
-  const filtered = filterTorrents(torrents, {
-    filter,
-    stateFilter,
-    trackerFilter,
-    categoryFilter,
-    tagFilter,
-  });
+  const filtered = propTorrents
+    ? propTorrents
+    : filterTorrents(torrents, {
+        filter,
+        stateFilter,
+        trackerFilter,
+        categoryFilter,
+        tagFilter,
+        selectedTagIds,
+        tagMatchMode,
+      });
 
   const sorted = useMemo(() => {
     if (!sortKey) {

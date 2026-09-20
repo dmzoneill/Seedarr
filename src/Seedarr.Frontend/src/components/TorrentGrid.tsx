@@ -29,11 +29,14 @@ import MediaArtwork from "./MediaArtwork";
 import type { Torrent } from "../api/types";
 
 export interface TorrentGridProps {
+  torrents?: Torrent[];
   filter?: string;
   stateFilter?: string;
   trackerFilter?: string;
   categoryFilter?: string;
   tagFilter?: string;
+  selectedTagIds?: number[] | Set<number>;
+  tagMatchMode?: "AND" | "OR";
   selectedIds?: Set<number>;
   onToggleSelect?: (id: number) => void;
   onSelectAll?: () => void;
@@ -42,11 +45,14 @@ export interface TorrentGridProps {
 }
 
 function TorrentGrid({
+  torrents: propTorrents,
   filter,
   stateFilter,
   trackerFilter,
   categoryFilter,
   tagFilter,
+  selectedTagIds,
+  tagMatchMode,
   selectedIds,
   onToggleSelect,
   onSelectAll,
@@ -54,7 +60,8 @@ function TorrentGrid({
   onSelectTorrent,
 }: TorrentGridProps) {
   const { t } = useTranslation();
-  const { data: torrents, isLoading } = useTorrents();
+  const { data: fetchedTorrents, isLoading } = useTorrents();
+  const torrents = propTorrents ?? fetchedTorrents;
   const { data: arrConnections } = useArrConnections();
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
@@ -141,13 +148,17 @@ function TorrentGrid({
     );
   }
 
-  const filtered = filterTorrents(torrents, {
-    filter,
-    stateFilter,
-    trackerFilter,
-    categoryFilter,
-    tagFilter,
-  });
+  const filtered = propTorrents
+    ? propTorrents
+    : filterTorrents(torrents, {
+        filter,
+        stateFilter,
+        trackerFilter,
+        categoryFilter,
+        tagFilter,
+        selectedTagIds,
+        tagMatchMode,
+      });
 
   if (filtered.length === 0) {
     return <div className="torrent-grid-empty">{t("torrents.noTorrents", undefined, "No torrents found")}</div>;
