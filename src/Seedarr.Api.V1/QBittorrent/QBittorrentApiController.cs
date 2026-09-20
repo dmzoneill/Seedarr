@@ -17,6 +17,7 @@ using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.RemotePathMappings;
+using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
@@ -50,6 +51,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     private readonly IPieceStorage _pieceStorage;
     private readonly IPiecePicker _piecePicker;
     private readonly ITorrentRelocationService _relocationService;
+    private readonly IStopPolicy _stopPolicy;
     private readonly Logger _logger;
 
     public QBittorrentApiController(
@@ -69,7 +71,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         ICategoryService categoryService = null,
         IPieceStorage pieceStorage = null,
         IPiecePicker piecePicker = null,
-        ITorrentRelocationService relocationService = null)
+        ITorrentRelocationService relocationService = null,
+        IStopPolicy stopPolicy = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -87,6 +90,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         _pieceStorage = pieceStorage;
         _piecePicker = piecePicker;
         _relocationService = relocationService;
+        _stopPolicy = stopPolicy;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -960,10 +964,51 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         foreach (var torrent in ResolveTorrents(hashes))
         {
+            if (ShouldPreserveTorrent(torrent))
+            {
+                _logger.Info("Preserving active seeding torrent '{0}' ({1}) during Arr deletion request", torrent.Name, torrent.InfoHash);
+                continue;
+            }
+
             _torrentService.Delete(torrent.Id, deleteFiles);
         }
 
         return Content("Ok.", "text/plain");
+    }
+
+    private bool ShouldPreserveTorrent(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return false;
+        }
+
+        var preserveSeeding = _configService == null || _configService.PreserveSeedingOnArrDelete;
+        if (!preserveSeeding)
+        {
+            return false;
+        }
+
+        var isActivelySeeding = torrent.Status == TorrentStatus.Seeding ||
+            (torrent.Progress >= 1.0 && (torrent.Active || (torrent.Status != TorrentStatus.Stopped && torrent.Status != TorrentStatus.Paused && torrent.Status != TorrentStatus.Error && torrent.Status != TorrentStatus.Downloading)));
+
+        if (!isActivelySeeding)
+        {
+            return false;
+        }
+
+        return !IsSeedingGoalSatisfied(torrent);
+    }
+
+    private bool IsSeedingGoalSatisfied(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return true;
+        }
+
+        var stopPolicy = _stopPolicy ?? new StopPolicy(_configService, tagService: _tagService);
+        return stopPolicy.ShouldStop(torrent);
     }
 
     [HttpGet("torrents/files")]

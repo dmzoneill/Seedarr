@@ -194,6 +194,116 @@ public class QBittorrentApiControllerTest
     }
 
     [Test]
+    public void DeleteTorrents_Preserves_Active_Seeding_Torrent_When_Seeding_Goals_Unmet()
+    {
+        var torrent = new Torrent
+        {
+            Id = 43,
+            InfoHash = "seedinghash",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 0.5,
+            RatioLimit = 2.0
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.DeleteTorrents("seedinghash", deleteFiles: true);
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.Content, Is.EqualTo("Ok."));
+
+        _torrentService.DidNotReceive().Delete(43, Arg.Any<bool>());
+    }
+
+    [Test]
+    public void DeleteTorrents_Deletes_Seeding_Torrent_When_Seeding_Goals_Satisfied()
+    {
+        var torrent = new Torrent
+        {
+            Id = 44,
+            InfoHash = "satisfiedhash",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 2.5,
+            RatioLimit = 2.0
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.DeleteTorrents("satisfiedhash", deleteFiles: true);
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _torrentService.Received(1).Delete(44, true);
+    }
+
+    [Test]
+    public void DeleteTorrents_Deletes_Seeding_Torrent_When_PreserveSeeding_Disabled()
+    {
+        var torrent = new Torrent
+        {
+            Id = 45,
+            InfoHash = "disabledguardhash",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 0.5,
+            RatioLimit = 2.0
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(false);
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.DeleteTorrents("disabledguardhash", deleteFiles: true);
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _torrentService.Received(1).Delete(45, true);
+    }
+
+    [Test]
+    public void DeleteTorrents_Deletes_Torrent_When_Not_Actively_Seeding()
+    {
+        var downloadingTorrent = new Torrent
+        {
+            Id = 46,
+            InfoHash = "downloadinghash",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.5
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        _torrentService.GetAll().Returns(new List<Torrent> { downloadingTorrent });
+
+        var result = _controller.DeleteTorrents("downloadinghash", deleteFiles: true);
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _torrentService.Received(1).Delete(46, true);
+    }
+
+    [Test]
+    public void DeleteTorrents_Preserves_Active_Seeding_Torrent_With_Tag_Seed_Time_Unmet()
+    {
+        var torrent = new Torrent
+        {
+            Id = 47,
+            InfoHash = "tagtimehash",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SeedingTime = 1000,
+            TagIds = new List<int> { 10 }
+        };
+
+        var tag = new Tag { Id = 10, MinSeedTimeSeconds = 86400 };
+        _tagService.GetAll().Returns(new List<Tag> { tag });
+        _tagService.Get(10).Returns(tag);
+
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.DeleteTorrents("tagtimehash", deleteFiles: true);
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _torrentService.DidNotReceive().Delete(47, Arg.Any<bool>());
+    }
+
+    [Test]
     public void GetMainData_Returns_Full_Update_When_Rid_Is_0()
     {
         var torrent = new Torrent

@@ -676,6 +676,26 @@ namespace NzbDrone.Core.Test.Configuration
             Assert.That(_subject.WatchFolderDeleteAddedTorrents, Is.False);
         }
 
+        [Test]
+        public void PreserveSeedingOnArrDelete_should_default_to_true()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.PreserveSeedingOnArrDelete, Is.True);
+        }
+
+        [Test]
+        public void PreserveSeedingOnArrDelete_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "PreserveSeedingOnArrDelete", Value = "false" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.PreserveSeedingOnArrDelete, Is.False);
+        }
+
         // ---- Property defaults (Connection) ----
 
         [Test]

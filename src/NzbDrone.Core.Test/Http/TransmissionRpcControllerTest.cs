@@ -483,6 +483,144 @@ public class TransmissionRpcControllerTest
     }
 
     [Test]
+    public async Task HandleRpc_TorrentRemove_Preserves_Active_Seeding_Torrent_When_Seeding_Goals_Unmet()
+    {
+        var torrent = new Torrent
+        {
+            Id = 10,
+            Name = "ActiveSeed",
+            InfoHash = "aabbcc11223344556677889900aabbcc11223344",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 0.5,
+            RatioLimit = 2.0
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        _torrentService.Get(10).Returns(torrent);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-remove",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[10]").RootElement,
+                ["delete-local-data"] = JsonDocument.Parse("true").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var resp = (TransmissionRpcResponse)ok.Value;
+        Assert.That(resp.Result, Is.EqualTo("success"));
+
+        _torrentService.DidNotReceive().Delete(10, Arg.Any<bool>());
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentRemove_Deletes_Seeding_Torrent_When_Seeding_Goals_Satisfied()
+    {
+        var torrent = new Torrent
+        {
+            Id = 11,
+            Name = "GoalSatisfiedSeed",
+            InfoHash = "11223344556677889900aabbcc11223344556677",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 2.5,
+            RatioLimit = 2.0
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        _torrentService.Get(11).Returns(torrent);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-remove",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[11]").RootElement,
+                ["delete-local-data"] = JsonDocument.Parse("true").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var resp = (TransmissionRpcResponse)ok.Value;
+        Assert.That(resp.Result, Is.EqualTo("success"));
+
+        _torrentService.Received(1).Delete(11, true);
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentRemove_Deletes_Seeding_Torrent_When_PreserveSeeding_Disabled()
+    {
+        var torrent = new Torrent
+        {
+            Id = 12,
+            Name = "UnprotectedSeed",
+            InfoHash = "223344556677889900aabbcc1122334455667788",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 0.5,
+            RatioLimit = 2.0
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(false);
+        _torrentService.Get(12).Returns(torrent);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-remove",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[12]").RootElement,
+                ["delete-local-data"] = JsonDocument.Parse("true").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _torrentService.Received(1).Delete(12, true);
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentRemove_Deletes_Torrent_When_Not_Actively_Seeding()
+    {
+        var torrent = new Torrent
+        {
+            Id = 13,
+            Name = "DownloadingTorrent",
+            InfoHash = "3344556677889900aabbcc112233445566778899",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.4
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        _torrentService.Get(13).Returns(torrent);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-remove",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[13]").RootElement,
+                ["delete-local-data"] = JsonDocument.Parse("true").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _torrentService.Received(1).Delete(13, true);
+    }
+
+    [Test]
     public async Task HandleRpc_TorrentStop_And_Start_Without_Ids_Does_Not_Affect_Any_Torrents()
     {
         var torrents = new List<Torrent>

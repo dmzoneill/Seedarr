@@ -394,4 +394,116 @@ public class QBittorrentApiControllerTest
         var resultNoId = _controller.SetFilePriority(hash: "somehash", id: null, priority: 1);
         Assert.That(resultNoId, Is.InstanceOf<BadRequestResult>());
     }
+
+    [Test]
+    public void EditCategory_Persists_Changes_To_CategoryService()
+    {
+        var existing = new Category { Id = 5, Name = "movies", SavePath = "/old/movies" };
+        _categoryService.GetByName("movies").Returns(existing);
+
+        var result = _controller.EditCategory("movies", "/new/movies");
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.Content, Is.EqualTo("Ok."));
+        _categoryService.Received(1).Update(Arg.Is<Category>(c => c.Id == 5 && c.Name == "movies" && c.SavePath == "/new/movies"));
+    }
+
+    [Test]
+    public void RemoveCategories_Deletes_From_CategoryService()
+    {
+        var cat = new Category { Id = 7, Name = "anime" };
+        _categoryService.GetByName("anime").Returns(cat);
+
+        var result = _controller.RemoveCategories("anime");
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.Content, Is.EqualTo("Ok."));
+        _categoryService.Received(1).Delete(7);
+    }
+
+    [Test]
+    public void GetCategories_Returns_Categories_From_CategoryService()
+    {
+        var cat = new Category { Id = 1, Name = "series", SavePath = "/media/series" };
+        _categoryService.GetAll().Returns(new List<Category> { cat });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var result = _controller.GetCategories();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result.Result;
+        var dict = ok.Value as Dictionary<string, object>;
+        Assert.That(dict, Is.Not.Null);
+        Assert.That(dict.ContainsKey("series"), Is.True);
+    }
+
+    [Test]
+    public void DeleteTorrents_Preserves_Active_Seeding_Torrent_When_Goals_Unmet()
+    {
+        var torrent = new Torrent
+        {
+            Id = 99,
+            InfoHash = "seedgoalunmethash",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 0.8,
+            RatioLimit = 2.0
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.DeleteTorrents("seedgoalunmethash", deleteFiles: true);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.Content, Is.EqualTo("Ok."));
+        _torrentService.DidNotReceive().Delete(99, Arg.Any<bool>());
+    }
+
+    [Test]
+    public void DeleteTorrents_Deletes_Seeding_Torrent_When_Goals_Met()
+    {
+        var torrent = new Torrent
+        {
+            Id = 100,
+            InfoHash = "seedgoalmethash",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 2.5,
+            RatioLimit = 2.0
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.DeleteTorrents("seedgoalmethash", deleteFiles: true);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _torrentService.Received(1).Delete(100, true);
+    }
+
+    [Test]
+    public void DeleteTorrents_Deletes_When_PreserveSeeding_Disabled()
+    {
+        var torrent = new Torrent
+        {
+            Id = 101,
+            InfoHash = "guarddisabledhash",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 0.5,
+            RatioLimit = 2.0
+        };
+
+        _configService.PreserveSeedingOnArrDelete.Returns(false);
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.DeleteTorrents("guarddisabledhash", deleteFiles: true);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _torrentService.Received(1).Delete(101, true);
+    }
 }

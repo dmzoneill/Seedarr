@@ -26,6 +26,7 @@ public class SeedingConfigResource : RestResource
     public double SpeedVariationMin { get; set; }
     public double SpeedVariationMax { get; set; }
     public string SeedGoalReachedAction { get; set; } = "Stop";
+    public bool PreserveSeedingOnArrDelete { get; set; } = true;
 }
 
 public static class SeedingConfigResourceMapper
@@ -54,7 +55,8 @@ public static class SeedingConfigResourceMapper
             DownloadStoppedMaxPercentage = model.DownloadStoppedMaxPercentage,
             SpeedVariationMin = model.SpeedVariationMin,
             SpeedVariationMax = model.SpeedVariationMax,
-            SeedGoalReachedAction = model.SeedGoalReachedAction ?? "Stop"
+            SeedGoalReachedAction = model.SeedGoalReachedAction ?? "Stop",
+            PreserveSeedingOnArrDelete = model.PreserveSeedingOnArrDelete
         };
     }
 }
