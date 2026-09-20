@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -461,6 +462,156 @@ public class TorrentControllerTest
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         Assert.That(torrent.Category, Is.EqualTo("CustomCategory"));
         _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public void BulkAction_addtags_adds_tags_to_selected_torrents()
+    {
+        var torrent1 = new Torrent { Id = 1, Name = "Torrent 1", TagIds = new List<int> { 1 } };
+        var torrent2 = new Torrent { Id = 2, Name = "Torrent 2", TagIds = new List<int> { 2 } };
+
+        _torrentService.Get(1).Returns(torrent1);
+        _torrentService.Get(2).Returns(torrent2);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "addtags",
+            TagIds = new List<int> { 2, 3 },
+            TorrentIds = new List<int> { 1, 2 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var bulkResult = (BulkActionResult)((OkObjectResult)result.Result).Value;
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(2));
+        Assert.That(bulkResult.FailedCount, Is.EqualTo(0));
+
+        Assert.That(torrent1.TagIds, Is.EquivalentTo(new[] { 1, 2, 3 }));
+        Assert.That(torrent2.TagIds, Is.EquivalentTo(new[] { 2, 3 }));
+        _torrentService.Received(1).Update(torrent1);
+        _torrentService.Received(1).Update(torrent2);
+    }
+
+    [Test]
+    public void BulkAction_removetags_removes_tags_from_selected_torrents()
+    {
+        var torrent1 = new Torrent { Id = 1, Name = "Torrent 1", TagIds = new List<int> { 1, 2, 3 } };
+        var torrent2 = new Torrent { Id = 2, Name = "Torrent 2", TagIds = new List<int> { 2, 4 } };
+
+        _torrentService.Get(1).Returns(torrent1);
+        _torrentService.Get(2).Returns(torrent2);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "removetags",
+            TagIds = new List<int> { 2, 3 },
+            TorrentIds = new List<int> { 1, 2 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var bulkResult = (BulkActionResult)((OkObjectResult)result.Result).Value;
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(2));
+        Assert.That(bulkResult.FailedCount, Is.EqualTo(0));
+
+        Assert.That(torrent1.TagIds, Is.EquivalentTo(new[] { 1 }));
+        Assert.That(torrent2.TagIds, Is.EquivalentTo(new[] { 4 }));
+        _torrentService.Received(1).Update(torrent1);
+        _torrentService.Received(1).Update(torrent2);
+    }
+
+    [Test]
+    public void BulkAction_wraps_in_transaction_and_commits_on_success()
+    {
+        var mainDatabase = Substitute.For<IMainDatabase>();
+        var connection = Substitute.For<IDbConnection>();
+        var tx = Substitute.For<IDbTransaction>();
+        mainDatabase.OpenConnection().Returns(connection);
+        connection.BeginTransaction().Returns(tx);
+
+        var controller = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            new TorrentResourceValidator(),
+            categoryService: _categoryService,
+            mainDatabase: mainDatabase);
+
+        var torrent = new Torrent { Id = 1, Name = "Torrent 1", TagIds = new List<int>() };
+        _torrentService.Get(1).Returns(torrent);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "addtags",
+            TagIds = new List<int> { 5 },
+            TorrentIds = new List<int> { 1 },
+        };
+
+        var result = controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var bulkResult = (BulkActionResult)((OkObjectResult)result.Result).Value;
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(1));
+        Assert.That(bulkResult.FailedCount, Is.EqualTo(0));
+
+        mainDatabase.Received(1).OpenConnection();
+        connection.Received(1).BeginTransaction();
+        tx.Received(1).Commit();
+        tx.DidNotReceive().Rollback();
+    }
+
+    [Test]
+    public void BulkAction_rolls_back_transaction_on_failure()
+    {
+        var mainDatabase = Substitute.For<IMainDatabase>();
+        var connection = Substitute.For<IDbConnection>();
+        var tx = Substitute.For<IDbTransaction>();
+        mainDatabase.OpenConnection().Returns(connection);
+        connection.BeginTransaction().Returns(tx);
+
+        var controller = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            new TorrentResourceValidator(),
+            categoryService: _categoryService,
+            mainDatabase: mainDatabase);
+
+        var torrent1 = new Torrent { Id = 1, Name = "Torrent 1", TagIds = new List<int>() };
+        _torrentService.Get(1).Returns(torrent1);
+        _torrentService.Get(2).Returns((Torrent)null);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "addtags",
+            TagIds = new List<int> { 5 },
+            TorrentIds = new List<int> { 1, 2 },
+        };
+
+        var result = controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var bulkResult = (BulkActionResult)((OkObjectResult)result.Result).Value;
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(0));
+        Assert.That(bulkResult.FailedCount, Is.EqualTo(1));
+
+        mainDatabase.Received(1).OpenConnection();
+        connection.Received(1).BeginTransaction();
+        tx.Received(1).Rollback();
+        tx.DidNotReceive().Commit();
+        Assert.That(bulkResult.Errors, Does.Contain("Bulk action rolled back due to failures."));
     }
 
     [Test]
