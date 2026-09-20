@@ -18,6 +18,8 @@ public class PortMapping
     public string Description { get; set; }
     public bool IsActive { get; set; }
     public string ErrorMessage { get; set; }
+    public int LeaseSeconds { get; set; }
+    public DateTime? ExpiryUtc { get; set; }
 }
 
 public class UpnpMappingCreatedEvent : IEvent
@@ -56,6 +58,10 @@ public interface IUpnpService
     List<PortMapping> GetMappings();
     bool IsAvailable { get; }
     string ExternalIp { get; }
+    DateTime? LastRenewalUtc { get; }
+    DateTime? NextRenewalUtc { get; }
+    string RouterModel { get; }
+    Task CreateMappings(CancellationToken stoppingToken);
 }
 
 public class UpnpService : BackgroundService, IUpnpService
@@ -71,6 +77,9 @@ public class UpnpService : BackgroundService, IUpnpService
 
     public bool IsAvailable { get; private set; }
     public string ExternalIp { get; private set; } = "";
+    public DateTime? LastRenewalUtc { get; private set; }
+    public DateTime? NextRenewalUtc { get; private set; }
+    public string RouterModel { get; set; } = "";
 
     public UpnpService(
         IConfigService configService,
@@ -135,6 +144,13 @@ public class UpnpService : BackgroundService, IUpnpService
             _discoveredDevice = device;
 
             IsAvailable = true;
+            LastRenewalUtc = DateTime.UtcNow;
+            NextRenewalUtc = DateTime.UtcNow.AddSeconds(LifetimeSeconds / 2);
+            if (string.IsNullOrEmpty(RouterModel))
+            {
+                RouterModel = "UPnP-IGD Gateway";
+            }
+
             try
             {
                 var externalIp = await device.GetExternalIPAsync().WaitAsync(TimeSpan.FromSeconds(10), stoppingToken);
@@ -186,7 +202,7 @@ public class UpnpService : BackgroundService, IUpnpService
             var mapping = new Mapping(protocol, port, port, LifetimeSeconds, description);
             await device.CreatePortMapAsync(mapping).WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
-            UpdateMappingStatus(port, protocolName, description, true, null);
+            UpdateMappingStatus(port, protocolName, description, true, null, LifetimeSeconds, DateTime.UtcNow.AddSeconds(LifetimeSeconds));
             _logger.Info("UPnP: mapped {0} port {1} ({2})", protocolName, port, description);
             return true;
         }
@@ -202,7 +218,7 @@ public class UpnpService : BackgroundService, IUpnpService
                 _logger.Warn(ex, "UPnP: failed to map {0} port {1}: {2}", protocolName, port, ex.Message);
             }
 
-            UpdateMappingStatus(port, protocolName, description, false, errorMsg);
+            UpdateMappingStatus(port, protocolName, description, false, errorMsg, 0, null);
             return false;
         }
     }
@@ -239,6 +255,8 @@ public class UpnpService : BackgroundService, IUpnpService
                     var natMapping = new Mapping(protocol, portMapping.InternalPort, portMapping.ExternalPort, 0, portMapping.Description);
                     await device.DeletePortMapAsync(natMapping).WaitAsync(cts.Token);
                     portMapping.IsActive = false;
+                    portMapping.LeaseSeconds = 0;
+                    portMapping.ExpiryUtc = null;
                     portMapping.ErrorMessage = "Mapping removed";
                     _logger.Info("UPnP: removed {0} port {1}", portMapping.Protocol, portMapping.InternalPort);
                 }
@@ -283,7 +301,7 @@ public class UpnpService : BackgroundService, IUpnpService
         return (false, ex.Message);
     }
 
-    private void UpdateMappingStatus(int port, string protocolName, string description, bool isActive, string errorMessage = null)
+    private void UpdateMappingStatus(int port, string protocolName, string description, bool isActive, string errorMessage = null, int leaseSeconds = 0, DateTime? expiryUtc = null)
     {
         lock (_mappings)
         {
@@ -294,6 +312,8 @@ public class UpnpService : BackgroundService, IUpnpService
                 existing.ErrorMessage = errorMessage;
                 existing.ExternalPort = port;
                 existing.Description = description;
+                existing.LeaseSeconds = leaseSeconds;
+                existing.ExpiryUtc = expiryUtc;
             }
             else
             {
@@ -304,7 +324,9 @@ public class UpnpService : BackgroundService, IUpnpService
                     Protocol = protocolName,
                     Description = description,
                     IsActive = isActive,
-                    ErrorMessage = errorMessage
+                    ErrorMessage = errorMessage,
+                    LeaseSeconds = leaseSeconds,
+                    ExpiryUtc = expiryUtc
                 });
             }
         }
@@ -317,6 +339,8 @@ public class UpnpService : BackgroundService, IUpnpService
             foreach (var m in _mappings)
             {
                 m.IsActive = false;
+                m.LeaseSeconds = 0;
+                m.ExpiryUtc = null;
                 if (!string.IsNullOrEmpty(errorMessage))
                 {
                     m.ErrorMessage = errorMessage;

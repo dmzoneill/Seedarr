@@ -9,4 +9,6 @@ public interface IPortMappingEngine
     Task<PortMappingProtocol> DetectProtocolAsync(CancellationToken cancellationToken = default);
     Task<PortMappingProtocol> ProbeAsync(CancellationToken cancellationToken = default);
     PortMappingProtocol DetectProtocol();
+    Task<PortMappingStatus> GetStatusAsync(CancellationToken cancellationToken = default);
+    Task<PortMappingStatus> RefreshAsync(CancellationToken cancellationToken = default);
 }

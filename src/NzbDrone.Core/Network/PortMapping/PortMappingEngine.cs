@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -210,5 +211,110 @@ public class PortMappingEngine : IPortMappingEngine
         }
 
         return PortMappingProtocol.None;
+    }
+
+    public async Task<PortMappingStatus> GetStatusAsync(CancellationToken cancellationToken = default)
+    {
+        var gatewayIp = string.Empty;
+        try
+        {
+            var gw = await _gatewayDiscoveryService.GetDefaultGatewayAsync();
+            if (gw != null)
+            {
+                gatewayIp = gw.ToString();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to resolve default gateway for status");
+        }
+
+        var protocol = CurrentProtocol;
+        if (protocol == PortMappingProtocol.None && _upnpService != null && _upnpService.IsAvailable)
+        {
+            protocol = PortMappingProtocol.Upnp;
+        }
+
+        var protocolStr = protocol switch
+        {
+            PortMappingProtocol.Pcp => "PCP",
+            PortMappingProtocol.NatPmp => "NAT-PMP",
+            PortMappingProtocol.Upnp => "UPnP",
+            _ => "None"
+        };
+
+        var externalIp = _upnpService?.ExternalIp ?? string.Empty;
+        var routerModel = _upnpService?.RouterModel;
+        if (string.IsNullOrWhiteSpace(routerModel))
+        {
+            routerModel = protocol switch
+            {
+                PortMappingProtocol.Upnp => "UPnP-IGD Gateway",
+                PortMappingProtocol.NatPmp => "NAT-PMP Gateway",
+                PortMappingProtocol.Pcp => "PCP Gateway",
+                _ => string.Empty
+            };
+        }
+
+        var mappings = new List<EnrichedPortMapping>();
+        if (_upnpService != null)
+        {
+            var rawMappings = _upnpService.GetMappings();
+            if (rawMappings != null)
+            {
+                foreach (var m in rawMappings)
+                {
+                    mappings.Add(new EnrichedPortMapping
+                    {
+                        InternalPort = m.InternalPort,
+                        ExternalPort = m.ExternalPort,
+                        Protocol = m.Protocol,
+                        Description = m.Description,
+                        LeaseSeconds = m.LeaseSeconds,
+                        ExpiryUtc = m.ExpiryUtc,
+                        IsActive = m.IsActive,
+                        Status = m.IsActive ? "Active" : "Inactive",
+                        ErrorMessage = m.ErrorMessage
+                    });
+                }
+            }
+        }
+
+        return new PortMappingStatus
+        {
+            Protocol = protocolStr,
+            GatewayIp = gatewayIp,
+            ExternalIp = externalIp,
+            RouterModel = routerModel,
+            Mappings = mappings,
+            LastRenewalUtc = _upnpService?.LastRenewalUtc,
+            NextRenewalUtc = _upnpService?.NextRenewalUtc
+        };
+    }
+
+    public async Task<PortMappingStatus> RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await DetectProtocolAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "PortMappingEngine: Protocol detection failed during refresh");
+        }
+
+        if (_upnpService != null)
+        {
+            try
+            {
+                await _upnpService.CreateMappings(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "PortMappingEngine: UPnP mapping refresh failed");
+            }
+        }
+
+        return await GetStatusAsync(cancellationToken);
     }
 }
