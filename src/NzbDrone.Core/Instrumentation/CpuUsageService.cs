@@ -8,7 +8,7 @@ namespace NzbDrone.Core.Instrumentation;
 /// <summary>
 /// Delegate for retrieving worker and I/O completion thread counts.
 /// </summary>
-public delegate void ThreadPoolStatsAccessor(out int workerThreads, out int completionPortThreads);
+internal delegate void ThreadPoolStatsAccessor(out int workerThreads, out int completionPortThreads);
 
 /// <summary>
 /// Real-time CPU telemetry service calculating process CPU percentage from elapsed CPU time deltas
@@ -44,7 +44,7 @@ public class CpuUsageService : ICpuUsageService
     {
     }
 
-    public CpuUsageService(
+    internal CpuUsageService(
         Func<TimeSpan> cpuTimeAccessor = null,
         Func<long> timestampAccessor = null,
         long? frequency = null,
