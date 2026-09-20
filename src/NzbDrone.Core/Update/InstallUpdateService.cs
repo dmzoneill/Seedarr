@@ -274,12 +274,12 @@ public class InstallUpdateService : IInstallUpdateService
         if (!string.IsNullOrWhiteSpace(version))
         {
             matchedRelease = releases.FirstOrDefault(r => string.Equals(r.Version, version, StringComparison.OrdinalIgnoreCase) ||
-                                                           string.Equals(r.Version?.TrimStart('v', 'V'), version.TrimStart('v', 'V'), StringComparison.OrdinalIgnoreCase));
+                string.Equals(r.Version?.TrimStart('v', 'V'), version.TrimStart('v', 'V'), StringComparison.OrdinalIgnoreCase));
         }
         else
         {
             matchedRelease = releases.FirstOrDefault(r => string.Equals(r.Version, updateInfo.LatestVersion, StringComparison.OrdinalIgnoreCase)) ??
-                             releases.FirstOrDefault();
+                releases.FirstOrDefault();
         }
 
         var targetVer = matchedRelease?.Version ?? version ?? updateInfo.LatestVersion ?? "latest";
