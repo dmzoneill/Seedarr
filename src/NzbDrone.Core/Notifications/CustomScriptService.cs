@@ -85,17 +85,23 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
     internal static (string FileName, string Arguments) ResolveInterpreter(string scriptPath, string arguments)
     {
+        return ResolveInterpreter(scriptPath, arguments, null);
+    }
+
+    internal static (string FileName, string Arguments) ResolveInterpreter(string scriptPath, string arguments, bool? isWindows)
+    {
         var cleanPath = CleanScriptPath(scriptPath);
         var ext = Path.GetExtension(cleanPath).ToLowerInvariant();
         var args = arguments?.Trim() ?? string.Empty;
+        var onWindows = isWindows ?? OperatingSystem.IsWindows();
 
-        if (OperatingSystem.IsWindows())
+        if (onWindows)
         {
             switch (ext)
             {
                 case ".bat":
                 case ".cmd":
-                    return ("cmd.exe", $"/c \"{cleanPath}\" {(string.IsNullOrWhiteSpace(args) ? string.Empty : args)}".TrimEnd());
+                    return ("cmd.exe", $"/c \"\"{cleanPath}\"{(string.IsNullOrWhiteSpace(args) ? string.Empty : $" {args}")}\"");
                 case ".py":
                 case ".pyw":
                     return ("python", $"\"{cleanPath}\" {(string.IsNullOrWhiteSpace(args) ? string.Empty : args)}".TrimEnd());
@@ -129,6 +135,193 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 default:
                     return (cleanPath, args);
             }
+        }
+    }
+
+    public static List<string> SplitArguments(string arguments)
+    {
+        var results = new List<string>();
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            return results;
+        }
+
+        var current = new System.Text.StringBuilder();
+        var inQuotes = false;
+        var quoteChar = '\0';
+        var isEscaped = false;
+        var hasToken = false;
+
+        for (var i = 0; i < arguments.Length; i++)
+        {
+            var c = arguments[i];
+
+            if (isEscaped)
+            {
+                current.Append(c);
+                hasToken = true;
+                isEscaped = false;
+                continue;
+            }
+
+            if (c == '\\')
+            {
+                if (i + 1 < arguments.Length)
+                {
+                    var next = arguments[i + 1];
+                    if (next == '"' || next == '\'' || next == '\\')
+                    {
+                        isEscaped = true;
+                        continue;
+                    }
+                }
+
+                current.Append(c);
+                hasToken = true;
+                continue;
+            }
+
+            if (inQuotes)
+            {
+                if (c == quoteChar)
+                {
+                    inQuotes = false;
+                    quoteChar = '\0';
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            else
+            {
+                if (c == '"' || c == '\'')
+                {
+                    inQuotes = true;
+                    quoteChar = c;
+                    hasToken = true;
+                }
+                else if (char.IsWhiteSpace(c))
+                {
+                    if (hasToken)
+                    {
+                        results.Add(current.ToString());
+                        current.Clear();
+                        hasToken = false;
+                    }
+                }
+                else
+                {
+                    current.Append(c);
+                    hasToken = true;
+                }
+            }
+        }
+
+        if (hasToken)
+        {
+            results.Add(current.ToString());
+        }
+
+        return results;
+    }
+
+    internal static ProcessStartInfo BuildProcessStartInfo(string scriptPath, string arguments = null, string workingDirectory = null, bool? isWindows = null)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            WorkingDirectory = workingDirectory ?? string.Empty,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+
+        ConfigureProcessStartInfo(startInfo, scriptPath, arguments, isWindows);
+        return startInfo;
+    }
+
+    internal static void ConfigureProcessStartInfo(ProcessStartInfo startInfo, string scriptPath, string arguments = null, bool? isWindows = null)
+    {
+        var cleanPath = CleanScriptPath(scriptPath);
+        var ext = Path.GetExtension(cleanPath).ToLowerInvariant();
+        var parsedArgs = SplitArguments(arguments);
+        var onWindows = isWindows ?? OperatingSystem.IsWindows();
+
+        if (onWindows)
+        {
+            switch (ext)
+            {
+                case ".bat":
+                case ".cmd":
+                    startInfo.FileName = "cmd.exe";
+                    startInfo.ArgumentList.Add("/c");
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                case ".py":
+                case ".pyw":
+                    startInfo.FileName = "python";
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                case ".ps1":
+                    startInfo.FileName = "powershell.exe";
+                    startInfo.ArgumentList.Add("-ExecutionPolicy");
+                    startInfo.ArgumentList.Add("Bypass");
+                    startInfo.ArgumentList.Add("-File");
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                case ".rb":
+                    startInfo.FileName = "ruby";
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                case ".js":
+                    startInfo.FileName = "node";
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                default:
+                    startInfo.FileName = cleanPath;
+                    break;
+            }
+        }
+        else
+        {
+            switch (ext)
+            {
+                case ".sh":
+                    startInfo.FileName = "/bin/sh";
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                case ".bash":
+                    startInfo.FileName = "/bin/bash";
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                case ".py":
+                case ".pyw":
+                    startInfo.FileName = "python3";
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                case ".ps1":
+                    startInfo.FileName = "pwsh";
+                    startInfo.ArgumentList.Add("-File");
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                case ".rb":
+                    startInfo.FileName = "ruby";
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                case ".js":
+                    startInfo.FileName = "node";
+                    startInfo.ArgumentList.Add(cleanPath);
+                    break;
+                default:
+                    startInfo.FileName = cleanPath;
+                    break;
+            }
+        }
+
+        foreach (var arg in parsedArgs)
+        {
+            startInfo.ArgumentList.Add(arg);
         }
     }
 
@@ -580,18 +773,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 ? torrent.SavePath
                 : (Path.GetDirectoryName(resolvedScriptPath) ?? Environment.CurrentDirectory);
 
-            var (resolvedFileName, resolvedArgs) = ResolveInterpreter(resolvedScriptPath, resolvedArguments);
-
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = resolvedFileName,
-                Arguments = resolvedArgs,
-                WorkingDirectory = workingDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
+            var startInfo = BuildProcessStartInfo(resolvedScriptPath, resolvedArguments, workingDir);
 
             // Sanitize inherited environment variables
             SanitizeEnvironment(startInfo.EnvironmentVariables);
@@ -790,22 +972,12 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 };
             }
 
-            var (resolvedFileName, resolvedArgs) = ResolveInterpreter(resolvedScriptPath, resolvedArguments);
+            var startInfo = BuildProcessStartInfo(resolvedScriptPath, resolvedArguments, workingDir);
+            var resolvedFileName = startInfo.FileName;
 
             var stopwatch = Stopwatch.StartNew();
             try
             {
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = resolvedFileName,
-                    Arguments = resolvedArgs,
-                    WorkingDirectory = workingDir,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                };
-
                 // Sanitize inherited environment variables
                 SanitizeEnvironment(startInfo.EnvironmentVariables);
 
