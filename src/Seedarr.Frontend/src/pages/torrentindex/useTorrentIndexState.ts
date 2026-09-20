@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 import {
   useTorrents,
+  useTags,
   useStartSeeding,
   useStopSeeding,
   useDeleteTorrent,
@@ -13,7 +14,14 @@ import {
 import { extractTrackerDomain } from "../../utils/formatters";
 import { filterTorrents } from "../../utils/filterUtils";
 import { ViewMode } from "./types";
-import type { Torrent } from "../../api/types";
+import type { Torrent, Tag } from "../../api/types";
+
+export interface TagGroupItem {
+  id: number;
+  label: string;
+  color?: string;
+  count: number;
+}
 
 function getInitialViewMode(): ViewMode {
   const stored = localStorage.getItem("seedarr-view-mode");
@@ -23,6 +31,7 @@ function getInitialViewMode(): ViewMode {
 export function useTorrentIndexState() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: torrents } = useTorrents();
+  const { data: tags } = useTags();
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
   const deleteTorrent = useDeleteTorrent();
@@ -46,6 +55,26 @@ export function useTorrentIndexState() {
   const [selectedTracker, setSelectedTracker] = useState<string>("All");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [selectedTag, setSelectedTag] = useState<string>("All");
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
+  const [tagMatchMode, setTagMatchMode] = useState<"AND" | "OR">("OR");
+
+  const toggleTag = useCallback((id: number) => {
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    setSelectedTag("All");
+  }, []);
+
+  const clearTags = useCallback(() => {
+    setSelectedTagIds(new Set());
+    setSelectedTag("All");
+  }, []);
   const [selectedTorrentId, setSelectedTorrentId] = useState<number | null>(
     () => {
       const select = searchParams.get("select");
@@ -102,6 +131,15 @@ export function useTorrentIndexState() {
       if (current === "All") return current;
       const tag = target.label?.trim() || "Untagged";
       return tag === current ? current : "All";
+    });
+    setSelectedTagIds((current) => {
+      if (current.size === 0) return current;
+      const tTags = target.tagIds ?? [];
+      const match =
+        tagMatchMode === "AND"
+          ? Array.from(current).every((id) => tTags.includes(id))
+          : Array.from(current).some((id) => tTags.includes(id));
+      return match ? current : new Set();
     });
     setFilter((current) => {
       if (!current) return current;
@@ -244,14 +282,31 @@ export function useTorrentIndexState() {
     return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
   }, [torrents]);
 
-  const tagGroups = useMemo(() => {
-    const groups: Record<string, number> = {};
+  const untaggedCount = useMemo(() => {
+    let count = 0;
     for (const t of torrents ?? []) {
-      const tag = t.label?.trim() || "Untagged";
-      groups[tag] = (groups[tag] || 0) + 1;
+      if (t.tagIds == null || t.tagIds.length === 0) {
+        count++;
+      }
     }
-    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+    return count;
   }, [torrents]);
+
+  const tagGroups = useMemo<TagGroupItem[]>(() => {
+    return (tags ?? [])
+      .map((tag) => {
+        const count = (torrents ?? []).reduce((acc, t) => {
+          return t.tagIds?.includes(tag.id) ? acc + 1 : acc;
+        }, 0);
+        return {
+          id: tag.id,
+          label: tag.label,
+          color: tag.color,
+          count,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [tags, torrents]);
 
   const filteredTorrents = useMemo(() => {
     return filterTorrents(torrents, {
@@ -260,6 +315,8 @@ export function useTorrentIndexState() {
       trackerFilter: selectedTracker,
       categoryFilter: selectedCategory,
       tagFilter: selectedTag,
+      selectedTagIds,
+      tagMatchMode,
     });
   }, [
     torrents,
@@ -268,6 +325,8 @@ export function useTorrentIndexState() {
     selectedTracker,
     selectedCategory,
     selectedTag,
+    selectedTagIds,
+    tagMatchMode,
   ]);
 
   const { totalUploadSpeed, totalDownloadSpeed } = useMemo(() => {
@@ -332,6 +391,14 @@ export function useTorrentIndexState() {
     setSelectedCategory,
     selectedTag,
     setSelectedTag,
+    tags,
+    selectedTagIds,
+    setSelectedTagIds,
+    toggleTag,
+    clearTags,
+    tagMatchMode,
+    setTagMatchMode,
+    untaggedCount,
     selectedTorrentId,
     setSelectedTorrentId,
     adjustSpeed,

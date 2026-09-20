@@ -59,6 +59,12 @@ function TorrentIndex() {
     setSelectedCategory,
     selectedTag,
     setSelectedTag,
+    selectedTagIds,
+    toggleTag,
+    clearTags,
+    tagMatchMode,
+    setTagMatchMode,
+    untaggedCount,
     selectedTorrentId,
     setSelectedTorrentId,
     adjustSpeed,
@@ -491,6 +497,12 @@ function TorrentIndex() {
           onSelectCategory={setSelectedCategory}
           selectedTag={selectedTag}
           onSelectTag={setSelectedTag}
+          selectedTagIds={selectedTagIds}
+          onToggleTag={toggleTag}
+          tagMatchMode={tagMatchMode}
+          onTagMatchModeChange={setTagMatchMode}
+          onClearTags={clearTags}
+          untaggedCount={untaggedCount}
           stateCounts={stateCounts}
           trackerGroups={trackerGroups}
           categoryGroups={categoryGroups}
@@ -504,11 +516,14 @@ function TorrentIndex() {
             <div className="torrent-split-top">
               {viewMode === "table" ? (
                 <TorrentTable
+                  torrents={filteredTorrents}
                   filter={filter}
                   stateFilter={selectedState}
                   trackerFilter={selectedTracker}
                   categoryFilter={selectedCategory}
                   tagFilter={selectedTag}
+                  selectedTagIds={selectedTagIds}
+                  tagMatchMode={tagMatchMode}
                   selectedTorrentId={selectedTorrentId}
                   onSelectTorrent={setSelectedTorrentId}
                   selectedIds={selectedIds}
@@ -523,11 +538,14 @@ function TorrentIndex() {
                 />
               ) : (
                 <TorrentGrid
+                  torrents={filteredTorrents}
                   filter={filter}
                   stateFilter={selectedState}
                   trackerFilter={selectedTracker}
                   categoryFilter={selectedCategory}
                   tagFilter={selectedTag}
+                  selectedTagIds={selectedTagIds}
+                  tagMatchMode={tagMatchMode}
                   selectedTorrentId={selectedTorrentId}
                   onSelectTorrent={setSelectedTorrentId}
                   selectedIds={selectedIds}
