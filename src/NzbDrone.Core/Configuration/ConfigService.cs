@@ -114,6 +114,7 @@ public interface IConfigService
     bool SeedRatioLimited { get; }
     bool GlobalSeedRatioLimited { get; }
     string SeedGoalReachedAction { get; }
+    bool PreserveSeedingOnArrDelete { get; }
 
     // Speed Distribution
     string UploadDistributionAlgorithm { get; }
@@ -527,6 +528,7 @@ public class ConfigService : IConfigService
     public bool SeedRatioLimited => GlobalSeedRatioLimited;
     public bool GlobalSeedRatioLimited => GetValueBoolean("GlobalSeedRatioLimited", false) || GetValueBoolean("SeedRatioLimited", false);
     public string SeedGoalReachedAction => GetValue("SeedGoalReachedAction", "Stop");
+    public bool PreserveSeedingOnArrDelete => GetValueBoolean("PreserveSeedingOnArrDelete", true);
 
     // Speed Distribution
     public string UploadDistributionAlgorithm => GetValue("UploadDistributionAlgorithm", "Equal");

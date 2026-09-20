@@ -19,6 +19,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.RemotePathMappings;
+using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
@@ -81,6 +82,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
     private readonly ICallerHostResolver _callerHostResolver;
     private readonly ICategoryService _categoryService;
     private readonly ITorrentRelocationService _relocationService;
+    private readonly IStopPolicy _stopPolicy;
     private readonly Logger _logger;
 
     public static void RecordRemovedId(int id)
@@ -190,7 +192,8 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         IRemotePathMappingService remotePathMappingService = null,
         ICallerHostResolver callerHostResolver = null,
         ICategoryService categoryService = null,
-        ITorrentRelocationService relocationService = null)
+        ITorrentRelocationService relocationService = null,
+        IStopPolicy stopPolicy = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -205,6 +208,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         _callerHostResolver = callerHostResolver;
         _categoryService = categoryService;
         _relocationService = relocationService;
+        _stopPolicy = stopPolicy;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -1307,11 +1311,53 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
         foreach (var id in ids)
         {
+            var torrent = _torrentService.Get(id);
+            if (torrent != null && ShouldPreserveTorrent(torrent))
+            {
+                _logger.Info("Preserving active seeding torrent '{0}' ({1}) during Arr deletion request", torrent.Name, torrent.InfoHash);
+                continue;
+            }
+
             RecordRemovedId(id);
             _torrentService.Delete(id, deleteData);
         }
 
         return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+    }
+
+    private bool ShouldPreserveTorrent(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return false;
+        }
+
+        var preserveSeeding = _configService == null || _configService.PreserveSeedingOnArrDelete;
+        if (!preserveSeeding)
+        {
+            return false;
+        }
+
+        var isActivelySeeding = torrent.Status == TorrentStatus.Seeding ||
+            (torrent.Progress >= 1.0 && (torrent.Active || (torrent.Status != TorrentStatus.Stopped && torrent.Status != TorrentStatus.Paused && torrent.Status != TorrentStatus.Error && torrent.Status != TorrentStatus.Downloading)));
+
+        if (!isActivelySeeding)
+        {
+            return false;
+        }
+
+        return !IsSeedingGoalSatisfied(torrent);
+    }
+
+    private bool IsSeedingGoalSatisfied(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return true;
+        }
+
+        var stopPolicy = _stopPolicy ?? new StopPolicy(_configService, tagService: _tagService);
+        return stopPolicy.ShouldStop(torrent);
     }
 
     private IActionResult HandleTorrentRenamePath(TransmissionRpcRequest request, object tag)
