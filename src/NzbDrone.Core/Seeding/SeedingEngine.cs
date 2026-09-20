@@ -10,6 +10,7 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Dht;
+using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding.Distribution;
@@ -24,7 +25,7 @@ using NzbDrone.Core.TrackerServer;
 
 namespace NzbDrone.Core.Seeding;
 
-public class SeedingEngine : BackgroundService
+public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownRequested>
 {
     private const int LocalPeerPort = 6881;
 
@@ -66,6 +67,8 @@ public class SeedingEngine : BackgroundService
     private readonly Peers.IPeerServer _peerServer;
     private bool _speedThresholdExceededState;
     private long _lastTickTimestamp;
+    private readonly CancellationTokenSource _shutdownCts = new();
+    private volatile bool _shutdownRequested;
 
     private string _localPeerId;
 
@@ -166,7 +169,10 @@ public class SeedingEngine : BackgroundService
 
         _logger.Info("Seeding engine started, local peer ID: {0}", _localPeerId);
 
-        while (!stoppingToken.IsCancellationRequested)
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _shutdownCts.Token);
+        var token = linkedCts.Token;
+
+        while (!token.IsCancellationRequested && !_shutdownRequested)
         {
             var tickStart = Stopwatch.GetTimestamp();
 
@@ -184,14 +190,49 @@ public class SeedingEngine : BackgroundService
 
             if (remainingDelay > 0)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(remainingDelay), stoppingToken);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(remainingDelay), token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         }
+    }
+
+    public void Handle(ApplicationShutdownRequested message)
+    {
+        _logger.Info("Shutdown requested: signaling SeedingEngine to stop");
+        _shutdownRequested = true;
+        try
+        {
+            _shutdownCts.Cancel();
+        }
+        catch
+        {
+        }
+    }
+
+    public override void Dispose()
+    {
+        _shutdownCts.Dispose();
+        base.Dispose();
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.Info("Seeding engine stopping");
+        _shutdownRequested = true;
+        try
+        {
+            _shutdownCts.Cancel();
+        }
+        catch
+        {
+        }
+
         try
         {
             if (_connectionManager != null)
