@@ -12,15 +12,17 @@ namespace NzbDrone.Core.Torrents;
 
 public class FastResumeService : IFastResumeService
 {
-    private readonly ITorrentService _torrentService;
+    private readonly Lazy<ITorrentService> _torrentService;
     private readonly IPieceStorage _pieceStorage;
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly ITorrentFileService _torrentFileService;
     private readonly IFastResumeBencodeSerializer _bencodeSerializer;
     private readonly Logger _logger;
 
+    private ITorrentService TorrentService => _torrentService?.Value;
+
     public FastResumeService(
-        ITorrentService torrentService,
+        Lazy<ITorrentService> torrentService = null,
         IPieceStorage pieceStorage = null,
         IAppFolderInfo appFolderInfo = null,
         ITorrentFileService torrentFileService = null,
@@ -36,7 +38,7 @@ public class FastResumeService : IFastResumeService
 
     public void SaveAll()
     {
-        var torrents = _torrentService?.GetAll();
+        var torrents = TorrentService?.GetAll();
         if (torrents == null)
         {
             return;
@@ -57,7 +59,7 @@ public class FastResumeService : IFastResumeService
 
     public void LoadAll()
     {
-        var torrents = _torrentService?.GetAll();
+        var torrents = TorrentService?.GetAll();
         if (torrents == null)
         {
             return;
@@ -258,7 +260,7 @@ public class FastResumeService : IFastResumeService
             return null;
         }
 
-        var torrent = _torrentService?.GetByInfoHash(infoHash) ?? _torrentService?.FindByInfoHash(infoHash);
+        var torrent = TorrentService?.GetByInfoHash(infoHash) ?? TorrentService?.FindByInfoHash(infoHash);
         return LoadFastResumeInternal(infoHash, torrent);
     }
 
@@ -493,7 +495,7 @@ public class FastResumeService : IFastResumeService
 
     private void TriggerRecheckFallback(string infoHash, Torrent torrent, FastResumeData data)
     {
-        torrent ??= _torrentService?.GetByInfoHash(infoHash) ?? _torrentService?.FindByInfoHash(infoHash);
+        torrent ??= TorrentService?.GetByInfoHash(infoHash) ?? TorrentService?.FindByInfoHash(infoHash);
         if (torrent == null)
         {
             return;
@@ -502,7 +504,7 @@ public class FastResumeService : IFastResumeService
         torrent.Status = TorrentStatus.QueuedForChecking;
         try
         {
-            _torrentService?.Update(torrent);
+            TorrentService?.Update(torrent);
         }
         catch (Exception ex)
         {
@@ -511,14 +513,14 @@ public class FastResumeService : IFastResumeService
 
         try
         {
-            _torrentService?.Recheck(torrent.Id);
+            TorrentService?.Recheck(torrent.Id);
         }
         catch (Exception ex)
         {
             _logger.Debug(ex, "Recheck call on torrent {0} caught exception", torrent.Id);
         }
 
-        if (_torrentService == null)
+        if (TorrentService == null)
         {
             _ = ScheduleBackgroundRecheck(torrent, data);
         }
@@ -549,7 +551,7 @@ public class FastResumeService : IFastResumeService
         torrent.Status = TorrentStatus.Checking;
         try
         {
-            _torrentService?.Update(torrent);
+            TorrentService?.Update(torrent);
         }
         catch (Exception ex)
         {
@@ -651,7 +653,7 @@ public class FastResumeService : IFastResumeService
 
         try
         {
-            _torrentService?.Update(torrent);
+            TorrentService?.Update(torrent);
         }
         catch (Exception ex)
         {

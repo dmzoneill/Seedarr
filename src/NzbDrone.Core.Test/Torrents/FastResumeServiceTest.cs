@@ -32,7 +32,7 @@ public class FastResumeServiceTest
         Directory.CreateDirectory(_tempAppDataFolder);
         _appFolderInfo.AppDataFolder.Returns(_tempAppDataFolder);
 
-        _service = new FastResumeService(_torrentService, _pieceStorage, _appFolderInfo);
+        _service = new FastResumeService(new Lazy<ITorrentService>(() => _torrentService), _pieceStorage, _appFolderInfo);
     }
 
     [TearDown]
