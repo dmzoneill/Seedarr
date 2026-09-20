@@ -9,6 +9,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Prowlarr;
+using NzbDrone.Core.Network;
 
 namespace NzbDrone.Core.Test.Indexers.Prowlarr
 {
@@ -447,6 +448,111 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
 
             Assert.That(results[1].DownloadVolumeFactor, Is.Null);
             Assert.That(results[1].UploadVolumeFactor, Is.Null);
+        }
+
+        [Test]
+        public void When_proxy_is_enabled_creates_and_uses_proxy_handler()
+        {
+            var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+            proxySettingsProvider.IsEnabled.Returns(true);
+            proxySettingsProvider.Type.Returns(ProxyType.Http);
+            proxySettingsProvider.Host.Returns("127.0.0.1");
+            proxySettingsProvider.Port.Returns(8080);
+
+            var proxyHandler = new SocketsHttpHandler();
+            proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+            var indexer = new ProwlarrIndexer(proxySettingsProvider: proxySettingsProvider);
+
+            Assert.That(indexer.Handler, Is.SameAs(proxyHandler));
+            Assert.That(indexer.Client, Is.Not.Null);
+            proxySettingsProvider.Received(1).CreateHandler();
+        }
+
+        [Test]
+        public void When_proxy_is_disabled_falls_back_to_direct_client()
+        {
+            var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+            proxySettingsProvider.IsEnabled.Returns(false);
+
+            var indexer = new ProwlarrIndexer(proxySettingsProvider: proxySettingsProvider);
+
+            Assert.That(indexer.Handler, Is.Null);
+            Assert.That(indexer.Client, Is.Not.Null);
+            proxySettingsProvider.DidNotReceive().CreateHandler();
+        }
+
+        [Test]
+        public void TestConnectionDetailed_when_proxy_is_enabled_routes_query_through_proxy()
+        {
+            var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+            proxySettingsProvider.IsEnabled.Returns(true);
+            proxySettingsProvider.Type.Returns(ProxyType.Http);
+            proxySettingsProvider.Host.Returns("127.0.0.1");
+            proxySettingsProvider.Port.Returns(8080);
+
+            var proxyHandler = new SocketsHttpHandler();
+            proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+            var indexer = new ProwlarrIndexer(proxySettingsProvider: proxySettingsProvider);
+            var definition = new IndexerDefinition { Url = "http://prowlarr.proxy.test", ApiKey = "testkey" };
+
+            indexer.TestConnectionDetailed(definition);
+
+            proxySettingsProvider.Received(1).CreateHandler();
+        }
+
+        [Test]
+        public void Search_when_proxy_is_enabled_routes_query_through_proxy()
+        {
+            var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+            proxySettingsProvider.IsEnabled.Returns(true);
+            proxySettingsProvider.Type.Returns(ProxyType.Http);
+            proxySettingsProvider.Host.Returns("127.0.0.1");
+            proxySettingsProvider.Port.Returns(8080);
+
+            var proxyHandler = new SocketsHttpHandler();
+            proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+            var indexer = new ProwlarrIndexer(proxySettingsProvider: proxySettingsProvider);
+            var definition = new IndexerDefinition { Url = "http://prowlarr.proxy.test", ApiKey = "testkey" };
+
+            try
+            {
+                indexer.Search(definition, "query");
+            }
+            catch
+            {
+                // Real connection fails with fake SocketsHttpHandler, which is expected
+            }
+
+            proxySettingsProvider.Received(1).CreateHandler();
+        }
+
+        [Test]
+        public void When_proxy_host_or_port_changes_updates_handler_and_client()
+        {
+            var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+            proxySettingsProvider.IsEnabled.Returns(true);
+            proxySettingsProvider.Type.Returns(ProxyType.Http);
+            proxySettingsProvider.Host.Returns("proxy1.local");
+            proxySettingsProvider.Port.Returns(8080);
+
+            var proxyHandler1 = new SocketsHttpHandler();
+            proxySettingsProvider.CreateHandler().Returns(proxyHandler1);
+
+            var indexer = new ProwlarrIndexer(proxySettingsProvider: proxySettingsProvider);
+            var initialClient = indexer.Client;
+
+            Assert.That(indexer.Handler, Is.SameAs(proxyHandler1));
+
+            var proxyHandler2 = new SocketsHttpHandler();
+            proxySettingsProvider.Host.Returns("proxy2.local");
+            proxySettingsProvider.Port.Returns(9090);
+            proxySettingsProvider.CreateHandler().Returns(proxyHandler2);
+
+            Assert.That(indexer.Handler, Is.SameAs(proxyHandler2));
+            Assert.That(indexer.Client, Is.Not.SameAs(initialClient));
         }
 
         private class ProwlarrTestHttpMessageHandler : HttpMessageHandler

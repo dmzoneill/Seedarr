@@ -943,6 +943,127 @@ public class IndexerControllerTest
             indexerName: "IPTorrents");
     }
 
+    [Test]
+    public void TestDirect_routes_Torznab_indexer_through_proxy_when_proxy_is_enabled()
+    {
+        _proxySettingsProvider.IsEnabled.Returns(true);
+        _proxySettingsProvider.Type.Returns(ProxyType.Http);
+        _proxySettingsProvider.Host.Returns("127.0.0.1");
+        _proxySettingsProvider.Port.Returns(8080);
+        var proxyHandler = new SocketsHttpHandler();
+        _proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+        var definition = new IndexerDefinition
+        {
+            Name = "Torznab Proxy Test",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "testkey"
+        };
+
+        _controller.TestDirect(definition);
+
+        _proxySettingsProvider.Received(1).CreateHandler();
+    }
+
+    [Test]
+    public void TestDirect_routes_Prowlarr_indexer_through_proxy_when_proxy_is_enabled()
+    {
+        _proxySettingsProvider.IsEnabled.Returns(true);
+        _proxySettingsProvider.Type.Returns(ProxyType.Http);
+        _proxySettingsProvider.Host.Returns("127.0.0.1");
+        _proxySettingsProvider.Port.Returns(8080);
+        var proxyHandler = new SocketsHttpHandler();
+        _proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+        var definition = new IndexerDefinition
+        {
+            Name = "Prowlarr Proxy Test",
+            IndexerType = "Prowlarr",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "testkey"
+        };
+
+        _controller.TestDirect(definition);
+
+        _proxySettingsProvider.Received(1).CreateHandler();
+    }
+
+    [Test]
+    public void TestDirect_routes_Newznab_indexer_through_proxy_when_proxy_is_enabled()
+    {
+        _proxySettingsProvider.IsEnabled.Returns(true);
+        _proxySettingsProvider.Type.Returns(ProxyType.Http);
+        _proxySettingsProvider.Host.Returns("127.0.0.1");
+        _proxySettingsProvider.Port.Returns(8080);
+        var proxyHandler = new SocketsHttpHandler();
+        _proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+        var definition = new IndexerDefinition
+        {
+            Name = "Newznab Proxy Test",
+            IndexerType = "Newznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "testkey"
+        };
+
+        _controller.TestDirect(definition);
+
+        _proxySettingsProvider.Received(1).CreateHandler();
+    }
+
+    [Test]
+    public void TestDirect_does_not_route_through_proxy_when_proxy_is_disabled()
+    {
+        _proxySettingsProvider.IsEnabled.Returns(false);
+
+        var definition = new IndexerDefinition
+        {
+            Name = "Direct Test",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "testkey"
+        };
+
+        _controller.TestDirect(definition);
+
+        _proxySettingsProvider.DidNotReceive().CreateHandler();
+    }
+
+    [Test]
+    public async Task Search_routes_through_proxy_when_proxy_is_enabled()
+    {
+        _proxySettingsProvider.IsEnabled.Returns(true);
+        _proxySettingsProvider.Type.Returns(ProxyType.Http);
+        _proxySettingsProvider.Host.Returns("127.0.0.1");
+        _proxySettingsProvider.Port.Returns(8080);
+        var proxyHandler = new SocketsHttpHandler();
+        _proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Proxy Torznab",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "testkey",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
+
+        try
+        {
+            await _controller.Search(new TorrentSearchCriteria { Query = "Ubuntu" });
+        }
+        catch
+        {
+            // Real connection fails with SocketsHttpHandler, which is expected
+        }
+
+        _proxySettingsProvider.Received(1).CreateHandler();
+    }
+
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
         public HttpRequestMessage SentRequest { get; private set; }
