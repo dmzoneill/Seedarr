@@ -393,7 +393,7 @@ public class SpeedPolicyTest
     }
 
     [Test]
-    public void ProcessSeeding_when_leech_count_is_zero_allocates_zero_bytes()
+    public void ProcessSeeding_when_leech_count_is_zero_simulates_upload_in_simulator()
     {
         var swarmAnalyzer = Substitute.For<ISwarmAnalyzer>();
         _configService.SwarmIntelligenceEnabled.Returns(true);
@@ -424,7 +424,8 @@ public class SpeedPolicyTest
             TotalSize = 10_000_000,
             Progress = 1.0,
             Seeders = 5,
-            Leechers = 0
+            Leechers = 0,
+            SeedingTime = 300
         };
         var torrents = new List<Torrent> { torrent };
 
@@ -434,7 +435,7 @@ public class SpeedPolicyTest
 
         subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
 
-        Assert.That(torrent.Uploaded, Is.EqualTo(0));
+        Assert.That(torrent.Uploaded, Is.GreaterThan(0));
     }
 
     [Test]
