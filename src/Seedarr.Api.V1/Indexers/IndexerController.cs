@@ -401,7 +401,8 @@ public class IndexerController : Controller
                 return BadRequest(ex.Message);
             }
 
-            if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
+            var primaryHash = parsed.InfoHash ?? parsed.InfoHashV2;
+            if (_torrentService.ExistsByInfoHash(primaryHash))
             {
                 return Conflict(new { message = "Torrent with this info hash already exists in active library" });
             }
@@ -409,7 +410,8 @@ public class IndexerController : Controller
             var torrent = new Torrent
             {
                 Name = !string.IsNullOrWhiteSpace(request.Title) ? request.Title : parsed.Name,
-                InfoHash = parsed.InfoHash,
+                InfoHash = parsed.InfoHash ?? parsed.InfoHashV2,
+                InfoHashV2 = parsed.InfoHashV2,
                 TrackerUrl = parsed.Trackers.Length > 0 ? parsed.Trackers[0] : null,
                 Status = TorrentStatus.Queued,
                 DateAdded = DateTime.UtcNow

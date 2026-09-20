@@ -1707,4 +1707,116 @@ public class PeerConnectionTest
         Assert.That(pacedChunks, Is.Empty);
         Assert.That(stream.Length, Is.EqualTo(5));
     }
+
+    [Test]
+    public void BuildHandshake_should_build_80_byte_handshake_for_32_byte_v2_infohash()
+    {
+        const string v2InfoHash = "0102030405060708091011121314151617181920212223242526272829303132";
+        const string peerId = "-SD0001-012345678901";
+
+        var handshake = PeerConnection.BuildHandshake(v2InfoHash, peerId);
+
+        Assert.That(handshake.Length, Is.EqualTo(80));
+        Assert.That(handshake[0], Is.EqualTo(19));
+        Assert.That(Encoding.ASCII.GetString(handshake, 1, 19), Is.EqualTo("BitTorrent protocol"));
+        Assert.That(handshake[27] & 0x10, Is.EqualTo(0x10)); // BEP 52 capability bit
+
+        var expectedHashBytes = Convert.FromHexString(v2InfoHash);
+        var actualHashBytes = new byte[32];
+        Array.Copy(handshake, 28, actualHashBytes, 0, 32);
+        Assert.That(actualHashBytes, Is.EqualTo(expectedHashBytes));
+
+        var actualPeerId = Encoding.ASCII.GetString(handshake, 60, 20);
+        Assert.That(actualPeerId, Is.EqualTo(peerId));
+    }
+
+    [Test]
+    public void BuildHandshake_should_set_bep52_capability_bit_for_hybrid_handshake()
+    {
+        const string v1InfoHash = "0102030405060708091011121314151617181920";
+        const string peerId = "-SD0001-012345678901";
+
+        var handshake = PeerConnection.BuildHandshake(v1InfoHash, peerId, supportsV2: true);
+
+        Assert.That(handshake.Length, Is.EqualTo(68));
+        Assert.That(handshake[27] & 0x10, Is.EqualTo(0x10));
+    }
+
+    [Test]
+    public void BuildHandshake_should_throw_when_infohash_has_invalid_length()
+    {
+        const string invalidHash = "01020304050607080910111213141516171819";
+        const string peerId = "-SD0001-012345678901";
+
+        Assert.Throws<ArgumentException>(() => PeerConnection.BuildHandshake(invalidHash, peerId));
+    }
+
+    [Test]
+    public void SendHandshake_and_ReceiveHandshake_should_roundtrip_80_byte_v2_handshake_without_stream_desync()
+    {
+        var (client, server) = CreateTestPair();
+        const string v2InfoHash = "0102030405060708091011121314151617181920212223242526272829303132";
+        const string clientPeerId = "-SD0001-012345678901";
+
+        var sent = client.SendHandshake(v2InfoHash, clientPeerId);
+        Assert.That(sent, Is.True);
+        Assert.That(client.InfoHash, Is.EqualTo(v2InfoHash));
+        Assert.That(client.InfoHashV2, Is.EqualTo(v2InfoHash));
+
+        var received = server.ReceiveHandshake();
+        Assert.That(received, Is.True);
+        Assert.That(server.InfoHash, Is.EqualTo(v2InfoHash));
+        Assert.That(server.InfoHashV2, Is.EqualTo(v2InfoHash));
+        Assert.That(server.PeerId, Is.EqualTo(clientPeerId));
+        Assert.That(server.SupportsV2, Is.True);
+        Assert.That(server.SupportsBep52, Is.True);
+
+        // Verify message stream framing is intact after 80-byte handshake (no desync)
+        client.SendMessage(new PeerMessage { Type = PeerMessageType.Choke });
+        var message = server.ReceiveMessage();
+
+        Assert.That(message, Is.Not.Null);
+        Assert.That(message.Type, Is.EqualTo(PeerMessageType.Choke));
+    }
+
+    [Test]
+    public void SendHandshake_and_ReceiveHandshake_should_roundtrip_hybrid_handshake_with_bep52_capability()
+    {
+        var (client, server) = CreateTestPair();
+        const string v1InfoHash = "0102030405060708091011121314151617181920";
+        const string clientPeerId = "-SD0001-012345678901";
+
+        var sent = client.SendHandshake(v1InfoHash, clientPeerId, supportsV2: true);
+        Assert.That(sent, Is.True);
+
+        var received = server.ReceiveHandshake();
+        Assert.That(received, Is.True);
+        Assert.That(server.InfoHash, Is.EqualTo(v1InfoHash));
+        Assert.That(server.InfoHashV2, Is.Null);
+        Assert.That(server.PeerId, Is.EqualTo(clientPeerId));
+        Assert.That(server.SupportsV2, Is.True);
+        Assert.That(server.ReservedBytes[7] & 0x10, Is.EqualTo(0x10));
+
+        // Verify message stream framing is intact after 68-byte hybrid handshake
+        client.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+        var message = server.ReceiveMessage();
+
+        Assert.That(message, Is.Not.Null);
+        Assert.That(message.Type, Is.EqualTo(PeerMessageType.Unchoke));
+    }
+
+    [Test]
+    public void ReceiveHandshake_should_support_explicit_expected_v2_hash_length()
+    {
+        var (client, server) = CreateTestPair();
+        const string v2InfoHash = "0102030405060708091011121314151617181920212223242526272829303132";
+        const string clientPeerId = "-SD0001-012345678901";
+
+        client.SendHandshake(v2InfoHash, clientPeerId);
+        var received = server.ReceiveHandshake(expectedHashLength: 32);
+
+        Assert.That(received, Is.True);
+        Assert.That(server.InfoHash, Is.EqualTo(v2InfoHash));
+        Assert.That(server.InfoHashV2, Is.EqualTo(v2InfoHash));
+    }
 }

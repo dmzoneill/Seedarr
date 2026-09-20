@@ -34,7 +34,9 @@ public class PeerConnection : IDisposable
     public string RemoteIp { get; }
     public int RemotePort { get; }
     public string InfoHash { get; set; }
+    public string InfoHashV2 { get; set; }
     public Torrent MatchedTorrent { get; set; }
+    public int? ExpectedInfoHashLength { get; set; }
     public string PeerId { get; set; }
     public bool IsInbound { get; set; }
     public string DiscoverySource { get; set; }
@@ -96,6 +98,8 @@ public class PeerConnection : IDisposable
     public bool SupportsExtensionProtocol { get; private set; }
     public bool SupportsFastExtension { get; set; }
     public bool SupportsDht { get; private set; }
+    public bool SupportsV2 { get; private set; }
+    public bool SupportsBep52 => SupportsV2;
     public ConcurrentDictionary<string, int> RemoteExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public int? RemoteUtPexId
@@ -754,7 +758,8 @@ public class PeerConnection : IDisposable
         IClientProfile clientProfile = null,
         bool supportsExtensions = true,
         bool supportsFast = true,
-        bool supportsDht = true)
+        bool supportsDht = true,
+        bool supportsV2 = false)
     {
         try
         {
@@ -765,10 +770,15 @@ public class PeerConnection : IDisposable
                 return true;
             }
 
-            var handshake = BuildHandshake(infoHash, peerId, isPrivate, clientProfile, supportsExtensions, supportsFast, supportsDht);
+            var handshake = BuildHandshake(infoHash, peerId, isPrivate, clientProfile, supportsExtensions, supportsFast, supportsDht, supportsV2);
             _activeStream.Write(handshake, 0, handshake.Length);
             _activeStream.Flush();
             InfoHash = infoHash;
+            if (infoHash.Length == 64)
+            {
+                InfoHashV2 = infoHash.ToLowerInvariant();
+            }
+
             PeerId = peerId;
             HandshakeSent = true;
             LastActivity = DateTime.UtcNow;
@@ -781,7 +791,7 @@ public class PeerConnection : IDisposable
         }
     }
 
-    public bool ReceiveHandshake()
+    public bool ReceiveHandshake(int? expectedHashLength = null)
     {
         try
         {
@@ -797,20 +807,20 @@ public class PeerConnection : IDisposable
                 }
             }
 
-            var buffer = new byte[68];
-            var read = ReadExact(buffer, 68);
+            var headerBuffer = new byte[28];
+            var read = ReadExact(headerBuffer, 28);
             if (!read)
             {
                 return false;
             }
 
-            var pstrlen = buffer[0];
+            var pstrlen = headerBuffer[0];
             if (pstrlen != 19)
             {
                 return false;
             }
 
-            var pstr = Encoding.ASCII.GetString(buffer, 1, 19);
+            var pstr = Encoding.ASCII.GetString(headerBuffer, 1, 19);
             if (pstr != ProtocolString)
             {
                 return false;
@@ -818,13 +828,98 @@ public class PeerConnection : IDisposable
 
             // reserved bytes at 20-27
             ReservedBytes = new byte[8];
-            Array.Copy(buffer, 20, ReservedBytes, 0, 8);
-            SupportsExtensionProtocol = (buffer[25] & 0x10) != 0;
-            SupportsFastExtension = (buffer[27] & 0x04) != 0;
-            SupportsDht = (buffer[27] & 0x01) != 0;
+            Array.Copy(headerBuffer, 20, ReservedBytes, 0, 8);
+            SupportsExtensionProtocol = (headerBuffer[25] & 0x10) != 0;
+            SupportsFastExtension = (headerBuffer[27] & 0x04) != 0;
+            SupportsDht = (headerBuffer[27] & 0x01) != 0;
+            SupportsV2 = (headerBuffer[27] & 0x10) != 0;
 
-            InfoHash = Convert.ToHexString(buffer, 28, 20).ToLowerInvariant();
-            PeerId = Encoding.ASCII.GetString(buffer, 48, 20);
+            var hashLength = 20;
+            if (expectedHashLength.HasValue && (expectedHashLength.Value == 20 || expectedHashLength.Value == 32))
+            {
+                hashLength = expectedHashLength.Value;
+            }
+            else if (ExpectedInfoHashLength.HasValue && (ExpectedInfoHashLength.Value == 20 || ExpectedInfoHashLength.Value == 32))
+            {
+                hashLength = ExpectedInfoHashLength.Value;
+            }
+            else if (!string.IsNullOrEmpty(InfoHash))
+            {
+                hashLength = InfoHash.Length == 64 ? 32 : 20;
+            }
+            else if (MatchedTorrent != null)
+            {
+                if (!string.IsNullOrEmpty(MatchedTorrent.InfoHashV2) && (string.IsNullOrEmpty(MatchedTorrent.InfoHash) || MatchedTorrent.InfoHash.Length == 64))
+                {
+                    hashLength = 32;
+                }
+                else
+                {
+                    hashLength = 20;
+                }
+            }
+            else if (_activeStream.CanSeek && (_activeStream.Length - _activeStream.Position) == 52)
+            {
+                hashLength = 32;
+            }
+            else if (_activeStream.CanSeek && (_activeStream.Length - _activeStream.Position) == 40)
+            {
+                hashLength = 20;
+            }
+            else
+            {
+                if (_client?.Client != null && _client.Client.Available == 0 && _activeStream.CanRead)
+                {
+                    try
+                    {
+                        _client.Client.Poll(200_000, SelectMode.SelectRead);
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                if (_client?.Client != null)
+                {
+                    if (_client.Client.Available == 52)
+                    {
+                        hashLength = 32;
+                    }
+                    else if (_client.Client.Available == 40)
+                    {
+                        hashLength = 20;
+                    }
+                    else if (_client.Client.Available >= 52 && SupportsV2)
+                    {
+                        hashLength = 32;
+                    }
+                }
+            }
+
+            var hashBuffer = new byte[hashLength];
+            if (!ReadExact(hashBuffer, hashLength))
+            {
+                return false;
+            }
+
+            var peerIdBuffer = new byte[20];
+            if (!ReadExact(peerIdBuffer, 20))
+            {
+                return false;
+            }
+
+            var hexHash = Convert.ToHexString(hashBuffer).ToLowerInvariant();
+            if (hashLength == 32)
+            {
+                InfoHashV2 = hexHash;
+                InfoHash = hexHash;
+            }
+            else
+            {
+                InfoHash = hexHash;
+            }
+
+            PeerId = Encoding.ASCII.GetString(peerIdBuffer);
             LastActivity = DateTime.UtcNow;
             return true;
         }
@@ -1092,13 +1187,22 @@ public class PeerConnection : IDisposable
         IClientProfile clientProfile = null,
         bool supportsExtensions = true,
         bool supportsFast = true,
-        bool supportsDht = true)
+        bool supportsDht = true,
+        bool supportsV2 = false)
     {
-        var buffer = new byte[68];
+        var hashBytes = Convert.FromHexString(infoHash);
+        if (hashBytes.Length != 20 && hashBytes.Length != 32)
+        {
+            throw new ArgumentException("InfoHash must be either 20 bytes (v1) or 32 bytes (v2)", nameof(infoHash));
+        }
+
+        var isV2Hash = hashBytes.Length == 32;
+        var bufferSize = isV2Hash ? 80 : 68;
+        var buffer = new byte[bufferSize];
         buffer[0] = 19;
         Encoding.ASCII.GetBytes(ProtocolString, 0, 19, buffer, 1);
 
-        // Advertise BEP 10 (Extension Protocol), BEP 6 (Fast Extension), BEP 5 (DHT)
+        // Advertise BEP 10 (Extension Protocol), BEP 6 (Fast Extension), BEP 5 (DHT), BEP 52 (v2)
         if (supportsExtensions)
         {
             buffer[25] |= 0x10; // BEP 10
@@ -1115,9 +1219,14 @@ public class PeerConnection : IDisposable
             buffer[27] |= 0x01; // BEP 5
         }
 
-        var hashBytes = Convert.FromHexString(infoHash);
-        Array.Copy(hashBytes, 0, buffer, 28, 20);
-        Encoding.ASCII.GetBytes(peerId.PadRight(20)[..20], 0, 20, buffer, 48);
+        if (supportsV2 || isV2Hash)
+        {
+            buffer[27] |= 0x10; // BEP 52
+        }
+
+        Array.Copy(hashBytes, 0, buffer, 28, hashBytes.Length);
+        var peerIdOffset = 28 + hashBytes.Length;
+        Encoding.ASCII.GetBytes(peerId.PadRight(20)[..20], 0, 20, buffer, peerIdOffset);
         return buffer;
     }
 

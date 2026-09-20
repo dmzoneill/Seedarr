@@ -100,4 +100,84 @@ public class MagnetLinkParserTest
     {
         Assert.Throws<ArgumentException>(() => MagnetLinkParser.Parse("magnet:?dn=Test"));
     }
+
+    [Test]
+    public void Parse_should_parse_pure_v2_btmh_magnet_link()
+    {
+        const string v2Hash = "2b8c52d38b5ae5548fc986b19ffe2121960e4c2626e9511075fc817a0c3b1d92";
+        var magnetUri = $"magnet:?xt=urn:btmh:1220{v2Hash}&dn=PureV2Torrent";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.InfoHashV2, Is.EqualTo(v2Hash));
+        Assert.That(result.InfoHash, Is.Null);
+        Assert.That(result.Name, Is.EqualTo("PureV2Torrent"));
+    }
+
+    [Test]
+    public void Parse_should_fall_back_to_v2_infohash_when_dn_is_missing()
+    {
+        const string v2Hash = "2b8c52d38b5ae5548fc986b19ffe2121960e4c2626e9511075fc817a0c3b1d92";
+        var magnetUri = $"magnet:?xt=urn:btmh:1220{v2Hash}";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.Name, Is.EqualTo(v2Hash));
+        Assert.That(result.InfoHashV2, Is.EqualTo(v2Hash));
+    }
+
+    [Test]
+    public void Parse_should_parse_hybrid_magnet_link()
+    {
+        const string v2Hash = "2b8c52d38b5ae5548fc986b19ffe2121960e4c2626e9511075fc817a0c3b1d92";
+        var magnetUri = $"magnet:?xt=urn:btih:{ValidInfoHash}&xt=urn:btmh:1220{v2Hash}&dn=HybridTorrent";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.InfoHash, Is.EqualTo(ValidInfoHash.ToLowerInvariant()));
+        Assert.That(result.InfoHashV2, Is.EqualTo(v2Hash));
+        Assert.That(result.Name, Is.EqualTo("HybridTorrent"));
+    }
+
+    [Test]
+    public void Parse_should_parse_hybrid_magnet_link_with_v2_first()
+    {
+        const string v2Hash = "2b8c52d38b5ae5548fc986b19ffe2121960e4c2626e9511075fc817a0c3b1d92";
+        var magnetUri = $"magnet:?xt=urn:btmh:1220{v2Hash}&xt=urn:btih:{ValidInfoHash}&dn=HybridTorrent";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.InfoHash, Is.EqualTo(ValidInfoHash.ToLowerInvariant()));
+        Assert.That(result.InfoHashV2, Is.EqualTo(v2Hash));
+        Assert.That(result.Name, Is.EqualTo("HybridTorrent"));
+    }
+
+    [Test]
+    public void Parse_should_normalize_uppercase_v2_infohash_to_lowercase()
+    {
+        const string v2Hash = "2b8c52d38b5ae5548fc986b19ffe2121960e4c2626e9511075fc817a0c3b1d92";
+        var magnetUri = $"magnet:?xt=urn:btmh:1220{v2Hash.ToUpperInvariant()}&dn=UpperV2";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.InfoHashV2, Is.EqualTo(v2Hash));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_btmh_prefix_is_invalid()
+    {
+        var magnetUri = "magnet:?xt=urn:btmh:99992b8c52d38b5ae5548fc986b19ffe2121960e4c2626e9511075fc817a0c3b1d92";
+
+        var ex = Assert.Throws<ArgumentException>(() => MagnetLinkParser.Parse(magnetUri));
+        Assert.That(ex.Message, Does.Contain("unsupported multihash prefix"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_btmh_hex_is_invalid()
+    {
+        var magnetUri = "magnet:?xt=urn:btmh:1220notvalidhexcharacters";
+
+        var ex = Assert.Throws<ArgumentException>(() => MagnetLinkParser.Parse(magnetUri));
+        Assert.That(ex.Message, Does.Contain("v2 info hash must be 64 valid hexadecimal characters"));
+    }
 }

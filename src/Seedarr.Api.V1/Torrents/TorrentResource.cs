@@ -8,6 +8,7 @@ public class TorrentResource : RestResource
 {
     public string Name { get; set; }
     public string InfoHash { get; set; }
+    public string InfoHashV2 { get; set; }
     public long TotalSize { get; set; }
     public int PieceCount { get; set; }
     public int PieceLength { get; set; }
