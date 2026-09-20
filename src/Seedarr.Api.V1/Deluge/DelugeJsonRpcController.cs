@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DiskSpace;
@@ -1835,6 +1836,7 @@ public class DelugeJsonRpcController : ControllerBase
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is sanitized against directory traversal")]
     private IActionResult HandleCoreRenameFiles(JsonElement paramsElem, object id)
     {
         if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() >= 2)
@@ -1847,6 +1849,7 @@ public class DelugeJsonRpcController : ControllerBase
                 if (renames.ValueKind == JsonValueKind.Array)
                 {
                     var files = _torrentFileService.GetByTorrentId(torrent.Id);
+                    var anyUpdated = false;
                     foreach (var item in renames.EnumerateArray())
                     {
                         if (item.ValueKind == JsonValueKind.Array && item.GetArrayLength() >= 2)
@@ -1855,11 +1858,41 @@ public class DelugeJsonRpcController : ControllerBase
                             var newPath = item[1].GetString();
                             if (index >= 0 && index < files.Count && !string.IsNullOrWhiteSpace(newPath))
                             {
+                                if (PathSanitizer.ContainsPathTraversal(newPath))
+                                {
+                                    return DelugeResult(new { result = (object)null, error = CreateDelugeError("Directory traversal not allowed"), id });
+                                }
+
+                                var sanitized = PathSanitizer.SanitizeRelativePath(newPath);
+                                if (string.IsNullOrWhiteSpace(sanitized) || !PathSanitizer.IsValidPath(sanitized))
+                                {
+                                    return DelugeResult(new { result = (object)null, error = CreateDelugeError("Invalid file path"), id });
+                                }
+
+                                var savePath = !string.IsNullOrWhiteSpace(torrent.SavePath)
+                                    ? torrent.SavePath
+                                    : (!string.IsNullOrWhiteSpace(torrent.SourcePath) ? torrent.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"));
+
+                                var torrentRootDir = !string.IsNullOrWhiteSpace(torrent.Name) && !string.IsNullOrWhiteSpace(savePath)
+                                    ? Path.Combine(savePath, torrent.Name)
+                                    : savePath;
+
+                                if (!string.IsNullOrWhiteSpace(torrentRootDir) && !PathSanitizer.IsPathUnderRoot(torrentRootDir, sanitized))
+                                {
+                                    return DelugeResult(new { result = (object)null, error = CreateDelugeError("Path must stay within torrent directory"), id });
+                                }
+
                                 var file = files[index];
-                                file.Path = newPath;
+                                file.Path = sanitized;
                                 _torrentFileService.Update(file);
+                                anyUpdated = true;
                             }
                         }
+                    }
+
+                    if (anyUpdated)
+                    {
+                        _torrentService.Recheck(torrent.Id);
                     }
                 }
             }
