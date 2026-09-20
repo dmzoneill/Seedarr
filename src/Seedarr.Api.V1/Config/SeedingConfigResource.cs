@@ -27,6 +27,11 @@ public class SeedingConfigResource : RestResource
     public double SpeedVariationMax { get; set; }
     public string SeedGoalReachedAction { get; set; } = "Stop";
     public bool PreserveSeedingOnArrDelete { get; set; } = true;
+    public int MaxActiveDownloads { get; set; } = 5;
+    public int MaxActiveSeeds { get; set; } = 10;
+    public int MaxActiveTorrents { get; set; } = 0;
+    public bool IgnoreSlowTorrents { get; set; } = true;
+    public int SlowTorrentThresholdKbps { get; set; } = 10;
 }
 
 public static class SeedingConfigResourceMapper
@@ -56,7 +61,12 @@ public static class SeedingConfigResourceMapper
             SpeedVariationMin = model.SpeedVariationMin,
             SpeedVariationMax = model.SpeedVariationMax,
             SeedGoalReachedAction = model.SeedGoalReachedAction ?? "Stop",
-            PreserveSeedingOnArrDelete = model.PreserveSeedingOnArrDelete
+            PreserveSeedingOnArrDelete = model.PreserveSeedingOnArrDelete,
+            MaxActiveDownloads = model.MaxActiveDownloads,
+            MaxActiveSeeds = model.MaxActiveSeeds,
+            MaxActiveTorrents = model.MaxActiveTorrents,
+            IgnoreSlowTorrents = model.IgnoreSlowTorrents,
+            SlowTorrentThresholdKbps = model.SlowTorrentThresholdKbps
         };
     }
 }

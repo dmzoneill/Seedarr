@@ -59,6 +59,8 @@ public interface IConfigService
     int MaxActiveUploads { get; }
     int MaxActiveSeeds { get; }
     int MaxActiveTorrents { get; }
+    bool IgnoreSlowTorrents { get; }
+    int SlowTorrentThresholdKbps { get; }
     int MaxConnectionsPerIp { get; }
     int MaximumHalfOpenConnections { get; }
     bool AnonymousMode { get; }
@@ -470,14 +472,19 @@ public class ConfigService : IConfigService
     public int MaxGlobalConnections => GetValueInt("MaxGlobalConnections", 200);
     public int MaxPerTorrentConnections => GetValueInt("MaxPerTorrentConnections", 50);
     public int MaxUploadSlots => GetValueInt("MaxUploadSlots", 4);
-    public int MaxActiveDownloads => GetValueInt("MaxActiveDownloads", 0);
+    public int MaxActiveDownloads => GetValueInt("MaxActiveDownloads", 5);
     public int MaxActiveUploads => GetValueInt("MaxActiveUploads", 0);
     public int MaxActiveSeeds
     {
         get
         {
-            var val = GetValueInt("MaxActiveSeeds", 0);
-            return val > 0 ? val : MaxActiveUploads;
+            var val = GetValueInt("MaxActiveSeeds", -1);
+            if (val >= 0)
+            {
+                return val;
+            }
+
+            return MaxActiveUploads > 0 ? MaxActiveUploads : 10;
         }
     }
 
@@ -494,6 +501,9 @@ public class ConfigService : IConfigService
             return GetValueInt("MaxActiveLimit", 0);
         }
     }
+
+    public bool IgnoreSlowTorrents => GetValueBoolean("IgnoreSlowTorrents", true);
+    public int SlowTorrentThresholdKbps => GetValueInt("SlowTorrentThresholdKbps", 10);
 
     public int MaxConnectionsPerIp => GetValueInt("MaxConnectionsPerIp", 5);
     public int MaximumHalfOpenConnections => GetValueInt("MaximumHalfOpenConnections", 50);

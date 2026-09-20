@@ -302,6 +302,18 @@ public class SeedingConfigController : ConfigController<SeedingConfigResource>
         SharedValidator.RuleFor(c => c.SeedGoalReachedAction)
             .Must(action => string.IsNullOrWhiteSpace(action) || AllowedSeedGoalReachedActions.Contains(action))
             .WithMessage("SeedGoalReachedAction must be one of: Stop, Pause, RemoveTorrent, RemoveTorrentAndData.");
+
+        SharedValidator.RuleFor(c => c.MaxActiveDownloads)
+            .GreaterThanOrEqualTo(0);
+
+        SharedValidator.RuleFor(c => c.MaxActiveSeeds)
+            .GreaterThanOrEqualTo(0);
+
+        SharedValidator.RuleFor(c => c.MaxActiveTorrents)
+            .GreaterThanOrEqualTo(0);
+
+        SharedValidator.RuleFor(c => c.SlowTorrentThresholdKbps)
+            .GreaterThanOrEqualTo(0);
     }
 
     private static readonly HashSet<string> AllowedSeedGoalReachedActions = new(StringComparer.OrdinalIgnoreCase)

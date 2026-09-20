@@ -2081,5 +2081,152 @@ namespace NzbDrone.Core.Test.Configuration
 
             _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "MaxBackups" && c.Value == "15"));
         }
+
+        [Test]
+        public void MaxActiveDownloads_should_return_default_5_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.MaxActiveDownloads, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void MaxActiveDownloads_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "MaxActiveDownloads", Value = "8" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.MaxActiveDownloads, Is.EqualTo(8));
+        }
+
+        [Test]
+        public void MaxActiveDownloads_should_return_0_when_set_to_0()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "MaxActiveDownloads", Value = "0" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.MaxActiveDownloads, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void MaxActiveSeeds_should_return_default_10_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.MaxActiveSeeds, Is.EqualTo(10));
+        }
+
+        [Test]
+        public void MaxActiveSeeds_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "MaxActiveSeeds", Value = "20" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.MaxActiveSeeds, Is.EqualTo(20));
+        }
+
+        [Test]
+        public void MaxActiveSeeds_should_return_0_when_set_to_0()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "MaxActiveSeeds", Value = "0" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.MaxActiveSeeds, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void MaxActiveTorrents_should_return_default_0_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.MaxActiveTorrents, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void MaxActiveTorrents_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "MaxActiveTorrents", Value = "15" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.MaxActiveTorrents, Is.EqualTo(15));
+        }
+
+        [Test]
+        public void IgnoreSlowTorrents_should_return_default_true_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.IgnoreSlowTorrents, Is.True);
+        }
+
+        [Test]
+        public void IgnoreSlowTorrents_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "IgnoreSlowTorrents", Value = "false" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.IgnoreSlowTorrents, Is.False);
+        }
+
+        [Test]
+        public void SlowTorrentThresholdKbps_should_return_default_10_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.SlowTorrentThresholdKbps, Is.EqualTo(10));
+        }
+
+        [Test]
+        public void SlowTorrentThresholdKbps_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "SlowTorrentThresholdKbps", Value = "25" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.SlowTorrentThresholdKbps, Is.EqualTo(25));
+        }
+
+        [Test]
+        public void SaveConfigDictionary_should_persist_queue_concurrency_settings()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            var values = new Dictionary<string, object>
+            {
+                { "MaxActiveDownloads", 8 },
+                { "MaxActiveSeeds", 12 },
+                { "MaxActiveTorrents", 20 },
+                { "IgnoreSlowTorrents", false },
+                { "SlowTorrentThresholdKbps", 15 }
+            };
+
+            _subject.SaveConfigDictionary(values);
+
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "MaxActiveDownloads" && c.Value == "8"));
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "MaxActiveSeeds" && c.Value == "12"));
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "MaxActiveTorrents" && c.Value == "20"));
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "IgnoreSlowTorrents" && c.Value == "False"));
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "SlowTorrentThresholdKbps" && c.Value == "15"));
+        }
     }
 }

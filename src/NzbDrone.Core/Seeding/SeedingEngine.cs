@@ -416,7 +416,7 @@ public class SeedingEngine : BackgroundService
                         ? (maxActiveTorrents > 0 ? (int?)Math.Min(maxActiveDownloads, currentNonForcedDl + availableDlSlots) : maxActiveDownloads)
                         : (maxActiveTorrents > 0 ? (int?)(currentNonForcedDl + availableDlSlots) : (int?)null);
 
-                    toPromoteDl = _categoryService.EvaluateDownloadQueue(queuedDownloads, downloadingTorrents, effectiveDlLimit);
+                    toPromoteDl = _categoryService.EvaluateDownloadQueue(queuedDownloads, downloadingTorrents, effectiveDlLimit, _configService.IgnoreSlowTorrents);
                     if (toPromoteDl.Count > availableDlSlots)
                     {
                         toPromoteDl = toPromoteDl.Take(availableDlSlots).ToList();
