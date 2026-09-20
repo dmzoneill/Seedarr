@@ -164,6 +164,9 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
         queryClient.invalidateQueries({ queryKey: ["categories"] });
       } else if (name.includes("tag")) {
         queryClient.invalidateQueries({ queryKey: ["tags"] });
+      } else if (name.includes("seeding")) {
+        queryClient.invalidateQueries({ queryKey: ["seeding", "stats"] });
+        // Do NOT invalidate ["torrents"] on 1-second ticks; torrents are invalidated on TorrentUpdated
       }
     };
 
