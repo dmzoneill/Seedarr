@@ -176,6 +176,83 @@ public class DhtServiceTest
         Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(0));
     }
 
+    // ── ParseCompactNodes6 (BEP 32) ──────────────────────────────────
+
+    [Test]
+    public void ParseCompactNodes6_should_add_ipv6_nodes_to_routing_table()
+    {
+        var compactData = new byte[38];
+        var nodeId = new byte[20];
+        nodeId[0] = 0xBB;
+        Array.Copy(nodeId, 0, compactData, 0, 20);
+
+        var ip = IPAddress.Parse("fc00::1");
+        Array.Copy(ip.GetAddressBytes(), 0, compactData, 20, 16);
+        compactData[36] = (byte)(6881 >> 8);
+        compactData[37] = (byte)(6881 & 0xFF);
+
+        CallParseCompactNodes6(_service, compactData);
+
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(1));
+        var added = _service.RoutingTable.GetAllNodes().Single();
+        Assert.That(added.NodeId[0], Is.EqualTo(0xBB));
+        Assert.That(added.EndPoint.Address, Is.EqualTo(ip));
+        Assert.That(added.EndPoint.Port, Is.EqualTo(6881));
+    }
+
+    [Test]
+    public void ParseCompactNodes6_should_parse_multiple_ipv6_nodes()
+    {
+        var compactData = new byte[76];
+
+        for (var i = 0; i < 2; i++)
+        {
+            var offset = i * 38;
+            compactData[offset] = (byte)(0x20 * (i + 1));
+            var ip = IPAddress.Parse($"fc00::{i + 1}");
+            Array.Copy(ip.GetAddressBytes(), 0, compactData, offset + 20, 16);
+            compactData[offset + 36] = (byte)(6881 >> 8);
+            compactData[offset + 37] = (byte)(6881 & 0xFF);
+        }
+
+        CallParseCompactNodes6(_service, compactData);
+
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void ParseCompactNodes6_should_ignore_short_data()
+    {
+        var compactData = new byte[20];
+
+        CallParseCompactNodes6(_service, compactData);
+
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ParseCompactNodes6_should_ignore_trailing_partial_node()
+    {
+        var compactData = new byte[50]; // 38 bytes for 1 node + 12 trailing bytes
+        compactData[0] = 0xBB;
+        var ip = IPAddress.Parse("fc00::1");
+        Array.Copy(ip.GetAddressBytes(), 0, compactData, 20, 16);
+        compactData[36] = (byte)(6881 >> 8);
+        compactData[37] = (byte)(6881 & 0xFF);
+
+        CallParseCompactNodes6(_service, compactData);
+
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ParseCompactNodes6_should_handle_empty_data()
+    {
+        CallParseCompactNodes6(_service, ReadOnlySpan<byte>.Empty);
+
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(0));
+    }
+
     // ── EncodeCompactNodes ───────────────────────────────────────────
 
     [Test]
@@ -256,6 +333,120 @@ public class DhtServiceTest
 
         Assert.That(result[24], Is.EqualTo(0x12));
         Assert.That(result[25], Is.EqualTo(0x34));
+    }
+
+    [Test]
+    public void EncodeCompactNodes_should_filter_out_ipv6_nodes()
+    {
+        var nodes = new List<DhtNode>
+        {
+            new DhtNode
+            {
+                NodeId = CreateNodeId(0x01),
+                EndPoint = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881),
+                LastSeen = DateTime.UtcNow
+            },
+            new DhtNode
+            {
+                NodeId = CreateNodeId(0x02),
+                EndPoint = new IPEndPoint(IPAddress.Parse("fc00::1"), 6882),
+                LastSeen = DateTime.UtcNow
+            }
+        };
+
+        var result = InvokeEncodeCompactNodes(nodes);
+
+        Assert.That(result.Length, Is.EqualTo(26));
+        Assert.That(result[0], Is.EqualTo(0x01));
+    }
+
+    // ── EncodeCompactNodes6 (BEP 32) ─────────────────────────────────
+
+    [Test]
+    public void EncodeCompactNodes6_should_produce_correct_38_byte_array()
+    {
+        var ip = IPAddress.Parse("2001:db8::1");
+        var nodes = new List<DhtNode>
+        {
+            new DhtNode
+            {
+                NodeId = CreateNodeId(0xCC),
+                EndPoint = new IPEndPoint(ip, 6881),
+                LastSeen = DateTime.UtcNow
+            }
+        };
+
+        var result = InvokeEncodeCompactNodes6(nodes);
+
+        Assert.That(result.Length, Is.EqualTo(38));
+        Assert.That(result[0], Is.EqualTo(0xCC));
+        for (var i = 0; i < 16; i++)
+        {
+            Assert.That(result[20 + i], Is.EqualTo(ip.GetAddressBytes()[i]));
+        }
+        Assert.That(result[36], Is.EqualTo((byte)(6881 >> 8)));
+        Assert.That(result[37], Is.EqualTo((byte)(6881 & 0xFF)));
+    }
+
+    [Test]
+    public void EncodeCompactNodes6_should_handle_empty_list()
+    {
+        var nodes = new List<DhtNode>();
+
+        var result = InvokeEncodeCompactNodes6(nodes);
+
+        Assert.That(result.Length, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void EncodeCompactNodes6_should_handle_multiple_nodes()
+    {
+        var nodes = new List<DhtNode>
+        {
+            new DhtNode
+            {
+                NodeId = CreateNodeId(0x01),
+                EndPoint = new IPEndPoint(IPAddress.Parse("fc00::1"), 6881),
+                LastSeen = DateTime.UtcNow
+            },
+            new DhtNode
+            {
+                NodeId = CreateNodeId(0x02),
+                EndPoint = new IPEndPoint(IPAddress.Parse("fc00::2"), 6882),
+                LastSeen = DateTime.UtcNow
+            }
+        };
+
+        var result = InvokeEncodeCompactNodes6(nodes);
+
+        Assert.That(result.Length, Is.EqualTo(76));
+        Assert.That(result[0], Is.EqualTo(0x01));
+        Assert.That(result[38], Is.EqualTo(0x02));
+    }
+
+    [Test]
+    public void EncodeCompactNodes6_should_filter_out_ipv4_nodes()
+    {
+        var nodes = new List<DhtNode>
+        {
+            new DhtNode
+            {
+                NodeId = CreateNodeId(0x01),
+                EndPoint = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881),
+                LastSeen = DateTime.UtcNow
+            },
+            new DhtNode
+            {
+                NodeId = CreateNodeId(0x02),
+                EndPoint = new IPEndPoint(IPAddress.Parse("fc00::1"), 6882),
+                LastSeen = DateTime.UtcNow
+            }
+        };
+
+        var result = InvokeEncodeCompactNodes6(nodes);
+
+        Assert.That(result.Length, Is.EqualTo(38));
+        Assert.That(result[0], Is.EqualTo(0x02));
     }
 
     // ── GenerateToken / ValidateToken ────────────────────────────────
@@ -2137,6 +2328,35 @@ public class DhtServiceTest
         Assert.That(freshService.RoutingTable.NodeCount, Is.EqualTo(2));
     }
 
+    [Test]
+    public void Encode_and_parse_compact_nodes6_roundtrip_should_preserve_node_info()
+    {
+        var nodes = new List<DhtNode>
+        {
+            new DhtNode
+            {
+                NodeId = CreateNodeId(0xAA),
+                EndPoint = new IPEndPoint(IPAddress.Parse("fc00::1"), 6881),
+                LastSeen = DateTime.UtcNow
+            },
+            new DhtNode
+            {
+                NodeId = CreateNodeId(0xBB),
+                EndPoint = new IPEndPoint(IPAddress.Parse("fc00::2"), 8080),
+                LastSeen = DateTime.UtcNow
+            }
+        };
+
+        var encoded = InvokeEncodeCompactNodes6(nodes);
+
+        _configService.DhtConcurrentQueries.Returns(3);
+        using var freshService = new DhtService(_configService);
+        freshService.RoutingTable.AllowLocal = true;
+        CallParseCompactNodes6(freshService, encoded);
+
+        Assert.That(freshService.RoutingTable.NodeCount, Is.EqualTo(2));
+    }
+
     // ── ExecuteAsync: rate limiting paths ────────────────────────────
 
     [Test]
@@ -2824,6 +3044,322 @@ public class DhtServiceTest
         Assert.That(service.PeerStore.HasPeers(privateHash), Is.False);
     }
 
+    // ── BEP 32 Dual-Stack Routing Table & Query Handling ───────────────
+
+    [Test]
+    public void GetClosestNodes_with_mixed_nodes_should_filter_by_address_family()
+    {
+        var v4Node1 = new DhtNode
+        {
+            NodeId = CreateNodeId(0x10),
+            EndPoint = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881),
+            LastSeen = DateTime.UtcNow
+        };
+        var v4Node2 = new DhtNode
+        {
+            NodeId = CreateNodeId(0x20),
+            EndPoint = new IPEndPoint(IPAddress.Parse("10.0.0.2"), 6881),
+            LastSeen = DateTime.UtcNow
+        };
+        var v6Node1 = new DhtNode
+        {
+            NodeId = CreateNodeId(0x15),
+            EndPoint = new IPEndPoint(IPAddress.Parse("fc00::1"), 6881),
+            LastSeen = DateTime.UtcNow
+        };
+        var v6Node2 = new DhtNode
+        {
+            NodeId = CreateNodeId(0x30),
+            EndPoint = new IPEndPoint(IPAddress.Parse("fc00::2"), 6881),
+            LastSeen = DateTime.UtcNow
+        };
+
+        _service.RoutingTable.AddNode(v4Node1);
+        _service.RoutingTable.AddNode(v4Node2);
+        _service.RoutingTable.AddNode(v6Node1);
+        _service.RoutingTable.AddNode(v6Node2);
+
+        var targetId = CreateNodeId(0x00);
+
+        var v4Only = _service.GetClosestNodes(targetId, AddressFamily.InterNetwork);
+        var v6Only = _service.GetClosestNodes(targetId, AddressFamily.InterNetworkV6);
+        var all = _service.GetClosestNodes(targetId, null);
+
+        Assert.That(v4Only.Count, Is.EqualTo(2));
+        Assert.That(v4Only.All(n => n.EndPoint.AddressFamily == AddressFamily.InterNetwork), Is.True);
+
+        Assert.That(v6Only.Count, Is.EqualTo(2));
+        Assert.That(v6Only.All(n => n.EndPoint.AddressFamily == AddressFamily.InterNetworkV6), Is.True);
+
+        Assert.That(all.Count, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void GetClosestNodes_when_family_has_no_nodes_should_return_empty()
+    {
+        var v4Node = new DhtNode
+        {
+            NodeId = CreateNodeId(0x10),
+            EndPoint = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881),
+            LastSeen = DateTime.UtcNow
+        };
+        _service.RoutingTable.AddNode(v4Node);
+
+        var targetId = CreateNodeId(0x00);
+        var v6Only = _service.GetClosestNodes(targetId, AddressFamily.InterNetworkV6);
+
+        Assert.That(v6Only, Is.Empty);
+    }
+
+    [Test]
+    public void GetClosestNodes_should_respect_count_limit_per_family()
+    {
+        for (var i = 1; i <= 5; i++)
+        {
+            _service.RoutingTable.AddNode(new DhtNode
+            {
+                NodeId = CreateNodeId((byte)(0x10 * i)),
+                EndPoint = new IPEndPoint(IPAddress.Parse($"fc00::{i}"), 6881),
+                LastSeen = DateTime.UtcNow
+            });
+        }
+
+        var closest = _service.GetClosestNodes(CreateNodeId(0x00), AddressFamily.InterNetworkV6, count: 2);
+        Assert.That(closest.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task HandleQuery_find_node_from_ipv4_without_want_should_return_nodes_only()
+    {
+        SetUdpClient();
+        using var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var listenerEp = (IPEndPoint)listener.Client.LocalEndPoint;
+
+        _service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x10),
+            EndPoint = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+        _service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x20),
+            EndPoint = new IPEndPoint(IPAddress.Parse("fc00::1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        var message = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("find_node"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(CreateNodeId(0x42)),
+                ["target"] = new BString(CreateNodeId(0x00))
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), listenerEp);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await listener.ReceiveAsync(cts.Token);
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(result.Buffer);
+        var r = (BDictionary)response["r"];
+
+        Assert.That(r.ContainsKey("nodes"), Is.True);
+        Assert.That(r.ContainsKey("nodes6"), Is.False);
+        var nodesData = ((BString)r["nodes"]).Value;
+        Assert.That(nodesData.Length, Is.EqualTo(26));
+    }
+
+    [Test]
+    public async Task HandleQuery_find_node_with_want_n6_should_return_nodes6()
+    {
+        SetUdpClient();
+        using var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var listenerEp = (IPEndPoint)listener.Client.LocalEndPoint;
+
+        _service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x10),
+            EndPoint = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+        _service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x20),
+            EndPoint = new IPEndPoint(IPAddress.Parse("fc00::1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        var message = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("find_node"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(CreateNodeId(0x42)),
+                ["target"] = new BString(CreateNodeId(0x00)),
+                ["want"] = new BList { new BString("n6") }
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), listenerEp);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await listener.ReceiveAsync(cts.Token);
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(result.Buffer);
+        var r = (BDictionary)response["r"];
+
+        Assert.That(r.ContainsKey("nodes6"), Is.True);
+        Assert.That(r.ContainsKey("nodes"), Is.False);
+        var nodes6Data = ((BString)r["nodes6"]).Value;
+        Assert.That(nodes6Data.Length, Is.EqualTo(38));
+    }
+
+    [Test]
+    public async Task HandleQuery_find_node_with_want_n4_and_n6_should_return_both_nodes_and_nodes6()
+    {
+        SetUdpClient();
+        using var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var listenerEp = (IPEndPoint)listener.Client.LocalEndPoint;
+
+        _service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x10),
+            EndPoint = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+        _service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x20),
+            EndPoint = new IPEndPoint(IPAddress.Parse("fc00::1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        var message = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("find_node"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(CreateNodeId(0x42)),
+                ["target"] = new BString(CreateNodeId(0x00)),
+                ["want"] = new BList { new BString("n4"), new BString("n6") }
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), listenerEp);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await listener.ReceiveAsync(cts.Token);
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(result.Buffer);
+        var r = (BDictionary)response["r"];
+
+        Assert.That(r.ContainsKey("nodes"), Is.True);
+        Assert.That(r.ContainsKey("nodes6"), Is.True);
+        Assert.That(((BString)r["nodes"]).Value.Length, Is.EqualTo(26));
+        Assert.That(((BString)r["nodes6"]).Value.Length, Is.EqualTo(38));
+    }
+
+    [Test]
+    public async Task HandleQuery_get_peers_no_peers_with_want_n6_should_return_nodes6()
+    {
+        SetUdpClient();
+        using var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var listenerEp = (IPEndPoint)listener.Client.LocalEndPoint;
+
+        _service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x20),
+            EndPoint = new IPEndPoint(IPAddress.Parse("fc00::1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+        var message = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("get_peers"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(CreateNodeId(0x42)),
+                ["info_hash"] = new BString(infoHash),
+                ["want"] = new BList { new BString("n6") }
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), listenerEp);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await listener.ReceiveAsync(cts.Token);
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(result.Buffer);
+        var r = (BDictionary)response["r"];
+
+        Assert.That(r.ContainsKey("nodes6"), Is.True);
+        Assert.That(r.ContainsKey("nodes"), Is.False);
+        Assert.That(((BString)r["nodes6"]).Value.Length, Is.EqualTo(38));
+    }
+
+    [Test]
+    public void HandleResponse_with_both_nodes_and_nodes6_should_populate_routing_table()
+    {
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, target);
+
+        var v4Data = new byte[26];
+        v4Data[0] = 0xAA;
+        Array.Copy(IPAddress.Parse("10.0.0.1").GetAddressBytes(), 0, v4Data, 20, 4);
+        v4Data[24] = (byte)(6881 >> 8);
+        v4Data[25] = (byte)(6881 & 0xFF);
+
+        var v6Data = new byte[38];
+        v6Data[0] = 0xBB;
+        Array.Copy(IPAddress.Parse("fc00::1").GetAddressBytes(), 0, v6Data, 20, 16);
+        v6Data[36] = (byte)(6881 >> 8);
+        v6Data[37] = (byte)(6881 & 0xFF);
+
+        var message = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("r"),
+            ["r"] = new BDictionary
+            {
+                ["id"] = new BString(CreateNodeId(0x01)),
+                ["nodes"] = new BString(v4Data),
+                ["nodes6"] = new BString(v6Data)
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), target);
+
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(3)); // 1 sender + 1 v4 node + 1 v6 node
+    }
+
+    [Test]
+    public async Task StartDht_when_IPv6_enabled_should_start_successfully()
+    {
+        _configService.EnableIPv6.Returns(true);
+        using var service = new DhtService(_configService, port: 0);
+        using var cts = new CancellationTokenSource(1000);
+        await service.StartAsync(cts.Token);
+
+        Assert.That(service.IsRunning, Is.True);
+        Assert.That(service.BoundPort, Is.GreaterThan(0));
+        if (Socket.OSSupportsIPv6)
+        {
+            Assert.That(service.LocalEndPoint?.AddressFamily, Is.EqualTo(AddressFamily.InterNetworkV6));
+        }
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
 
     private void InvokeHandleMessage(byte[] data, IPEndPoint sender)
@@ -2836,6 +3372,9 @@ public class DhtServiceTest
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ParseCompactNodes")]
     private static extern void CallParseCompactNodes(DhtService service, ReadOnlySpan<byte> data);
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ParseCompactNodes6")]
+    private static extern void CallParseCompactNodes6(DhtService service, ReadOnlySpan<byte> data);
 
     private static byte[] CreateNodeId(byte firstByte)
     {
@@ -2850,6 +3389,12 @@ public class DhtServiceTest
         return (byte[])method.Invoke(_service, new object[] { nodes });
     }
 
+    private byte[] InvokeEncodeCompactNodes6(List<DhtNode> nodes)
+    {
+        var method = typeof(DhtService).GetMethod("EncodeCompactNodes6", BindingFlags.NonPublic | BindingFlags.Instance);
+        return (byte[])method.Invoke(_service, new object[] { nodes });
+    }
+
     /// <summary>
     /// Creates a real UdpClient on an ephemeral port and injects it into the service.
     /// The UdpClient is needed for methods that call _udpClient.Send().
@@ -2858,6 +3403,16 @@ public class DhtServiceTest
     {
         var target = svc ?? _service;
         var udpClient = new UdpClient(0); // bind to any available port
+        var field = typeof(DhtService).GetField("_udpClient", BindingFlags.NonPublic | BindingFlags.Instance);
+        field.SetValue(target, udpClient);
+    }
+
+    private void SetDualStackUdpClient(DhtService svc = null)
+    {
+        var target = svc ?? _service;
+        var udpClient = new UdpClient(AddressFamily.InterNetworkV6);
+        udpClient.Client.DualMode = true;
+        udpClient.Client.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
         var field = typeof(DhtService).GetField("_udpClient", BindingFlags.NonPublic | BindingFlags.Instance);
         field.SetValue(target, udpClient);
     }

@@ -7,10 +7,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using BencodeNET.Objects;
-using BencodeNET.Parsing;
 using Microsoft.Extensions.Hosting;
-using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
@@ -303,8 +300,27 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             var portToBind = _customPort ?? DhtPort;
             try
             {
-                _udpClient = new UdpClient(portToBind);
-                _boundPort = ((IPEndPoint)_udpClient.Client.LocalEndPoint).Port;
+                if (_configService.EnableIPv6)
+                {
+                    try
+                    {
+                        _udpClient = new UdpClient(AddressFamily.InterNetworkV6);
+                        _udpClient.Client.DualMode = true;
+                        _udpClient.Client.Bind(new IPEndPoint(IPAddress.IPv6Any, portToBind));
+                        _boundPort = ((IPEndPoint)_udpClient.Client.LocalEndPoint).Port;
+                    }
+                    catch (SocketException ex)
+                    {
+                        _logger.Warn(ex, "Failed to bind dual-stack DHT socket on port {0}, falling back to IPv4", portToBind);
+                        _udpClient = new UdpClient(portToBind);
+                        _boundPort = ((IPEndPoint)_udpClient.Client.LocalEndPoint).Port;
+                    }
+                }
+                else
+                {
+                    _udpClient = new UdpClient(portToBind);
+                    _boundPort = ((IPEndPoint)_udpClient.Client.LocalEndPoint).Port;
+                }
             }
             catch (SocketException ex)
             {
@@ -653,6 +669,11 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     {
         try
         {
+            if (sender?.Address != null && sender.Address.IsIPv4MappedToIPv6)
+            {
+                sender = new IPEndPoint(sender.Address.MapToIPv4(), sender.Port);
+            }
+
             var parser = new BencodeParser();
             var message = parser.Parse<BDictionary>(data);
 
@@ -811,10 +832,16 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         }
 
         // Parse compact node info from find_node / get_peers responses
-        if (response.ContainsKey("nodes"))
+        if (response.ContainsKey("nodes") && response["nodes"] is BString nodesBStr)
         {
-            var nodesData = ((BString)response["nodes"]).Value;
+            var nodesData = nodesBStr.Value;
             ParseCompactNodes(nodesData.Span);
+        }
+
+        if (response.ContainsKey("nodes6") && response["nodes6"] is BString nodes6BStr)
+        {
+            var nodes6Data = nodes6BStr.Value;
+            ParseCompactNodes6(nodes6Data.Span);
         }
 
         if (pending.InfoHash != null && IsPrivateTorrent(pending.InfoHash))
@@ -907,8 +934,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         if (IsPrivateTorrent(infoHash))
         {
             _logger.Debug("DHT get_peers rejected for private torrent {0} from {1}", Convert.ToHexString(infoHash), sender);
-            var closest = _routingTable.GetClosestNodes(infoHash);
-            responseDict["nodes"] = new BString(EncodeCompactNodes(closest));
+            PopulateClosestNodes(responseDict, infoHash, args, sender);
         }
         else
         {
@@ -942,9 +968,8 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             }
             else
             {
-                var closest = _routingTable.GetClosestNodes(infoHash);
-                responseDict["nodes"] = new BString(EncodeCompactNodes(closest));
-                _logger.Debug("DHT get_peers from {0}: no peers for {1}, returning {2} closest nodes", sender, Convert.ToHexString(infoHash), closest.Count);
+                PopulateClosestNodes(responseDict, infoHash, args, sender);
+                _logger.Debug("DHT get_peers from {0}: no peers for {1}, returning closest nodes", sender, Convert.ToHexString(infoHash));
             }
         }
 
@@ -1040,6 +1065,125 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         SendPingResponse(sender, transactionId);
     }
 
+    public List<DhtNode> GetClosestNodes(byte[] targetId, AddressFamily? family = null, int count = 0)
+    {
+        var take = count > 0 ? count : (_configService.DhtBucketSize > 0 ? _configService.DhtBucketSize : 8);
+        var allNodes = _routingTable.GetAllNodes();
+        var matching = new List<DhtNode>();
+
+        for (var i = 0; i < allNodes.Count; i++)
+        {
+            var node = allNodes[i];
+            if (node != null && !node.IsBad && node.NodeId != null && node.NodeId.Length == 20 && node.EndPoint?.Address != null)
+            {
+                if (family == null)
+                {
+                    matching.Add(node);
+                }
+                else
+                {
+                    var addr = node.EndPoint.Address;
+                    var effectiveFamily = addr.IsIPv4MappedToIPv6 ? AddressFamily.InterNetwork : addr.AddressFamily;
+                    if (effectiveFamily == family.Value)
+                    {
+                        matching.Add(node);
+                    }
+                }
+            }
+        }
+
+        if (matching.Count == 0)
+        {
+            return matching;
+        }
+
+        var effectiveTarget = targetId ?? _nodeId;
+        matching.Sort((a, b) => RoutingTable.CompareDistance(a.NodeId, b.NodeId, effectiveTarget));
+
+        if (matching.Count > take)
+        {
+            matching.RemoveRange(take, matching.Count - take);
+        }
+
+        return matching;
+    }
+
+    private static (bool WantV4, bool WantV6) DetermineWantedNodeFamilies(BDictionary args, IPEndPoint sender)
+    {
+        var wantV4 = false;
+        var wantV6 = false;
+
+        if (args != null && args.ContainsKey("want"))
+        {
+            var wantObj = args["want"];
+            if (wantObj is BList wantList)
+            {
+                foreach (var item in wantList)
+                {
+                    if (item is BString bStr)
+                    {
+                        var str = bStr.ToString();
+                        if (string.Equals(str, "n4", StringComparison.OrdinalIgnoreCase))
+                        {
+                            wantV4 = true;
+                        }
+                        else if (string.Equals(str, "n6", StringComparison.OrdinalIgnoreCase))
+                        {
+                            wantV6 = true;
+                        }
+                    }
+                }
+            }
+            else if (wantObj is BString bStr)
+            {
+                var str = bStr.ToString();
+                if (string.Equals(str, "n4", StringComparison.OrdinalIgnoreCase))
+                {
+                    wantV4 = true;
+                }
+                else if (string.Equals(str, "n6", StringComparison.OrdinalIgnoreCase))
+                {
+                    wantV6 = true;
+                }
+            }
+        }
+        else
+        {
+            var isIPv6Sender = sender?.Address != null &&
+                               sender.AddressFamily == AddressFamily.InterNetworkV6 &&
+                               !sender.Address.IsIPv4MappedToIPv6;
+
+            if (isIPv6Sender)
+            {
+                wantV6 = true;
+            }
+            else
+            {
+                wantV4 = true;
+            }
+        }
+
+        return (wantV4, wantV6);
+    }
+
+    private void PopulateClosestNodes(BDictionary responseDict, byte[] targetId, BDictionary args, IPEndPoint sender)
+    {
+        var (wantV4, wantV6) = DetermineWantedNodeFamilies(args, sender);
+        var count = _configService.DhtBucketSize > 0 ? _configService.DhtBucketSize : 8;
+
+        if (wantV4)
+        {
+            var closestV4 = GetClosestNodes(targetId, AddressFamily.InterNetwork, count);
+            responseDict["nodes"] = new BString(EncodeCompactNodes(closestV4));
+        }
+
+        if (wantV6)
+        {
+            var closestV6 = GetClosestNodes(targetId, AddressFamily.InterNetworkV6, count);
+            responseDict["nodes6"] = new BString(EncodeCompactNodes6(closestV6));
+        }
+    }
+
     private void ParseCompactNodes(ReadOnlySpan<byte> data)
     {
         // 26 bytes per node: 20 bytes node ID + 4 bytes IP + 2 bytes port
@@ -1062,17 +1206,98 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         }
     }
 
+    private void ParseCompactNodes6(ReadOnlySpan<byte> data)
+    {
+        // 38 bytes per node: 20 bytes node ID + 16 bytes IPv6 + 2 bytes port
+        for (var i = 0; i + 37 < data.Length; i += 38)
+        {
+            var nodeId = data.Slice(i, 20).ToArray();
+            var ip = new IPAddress(data.Slice(i + 20, 16));
+            var port = (data[i + 36] << 8) | data[i + 37];
+            var ep = new IPEndPoint(ip, port);
+
+            if (IsNodeIdValidForEndpoint(nodeId, ep))
+            {
+                _routingTable.AddNode(new DhtNode
+                {
+                    NodeId = nodeId,
+                    EndPoint = ep,
+                    LastSeen = DateTime.UtcNow
+                });
+            }
+        }
+    }
+
     private byte[] EncodeCompactNodes(List<DhtNode> nodes)
     {
-        var compactNodes = new byte[nodes.Count * 26];
+        if (nodes == null || nodes.Count == 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        var v4Nodes = new List<DhtNode>();
         for (var i = 0; i < nodes.Count; i++)
         {
             var node = nodes[i];
-            Array.Copy(node.NodeId, 0, compactNodes, i * 26, 20);
-            var ipBytes = node.EndPoint.Address.GetAddressBytes();
+            if (node?.EndPoint?.Address != null)
+            {
+                var addr = node.EndPoint.Address;
+                if (addr.AddressFamily == AddressFamily.InterNetwork || addr.IsIPv4MappedToIPv6)
+                {
+                    v4Nodes.Add(node);
+                }
+            }
+        }
+
+        var compactNodes = new byte[v4Nodes.Count * 26];
+        for (var i = 0; i < v4Nodes.Count; i++)
+        {
+            var node = v4Nodes[i];
+            var idLen = Math.Min(node.NodeId.Length, 20);
+            Array.Copy(node.NodeId, 0, compactNodes, i * 26, idLen);
+            var addr = node.EndPoint.Address.IsIPv4MappedToIPv6
+                ? node.EndPoint.Address.MapToIPv4()
+                : node.EndPoint.Address;
+            var ipBytes = addr.GetAddressBytes();
             Array.Copy(ipBytes, 0, compactNodes, (i * 26) + 20, 4);
             compactNodes[(i * 26) + 24] = (byte)(node.EndPoint.Port >> 8);
-            compactNodes[(i * 26) + 25] = (byte)node.EndPoint.Port;
+            compactNodes[(i * 26) + 25] = (byte)(node.EndPoint.Port & 0xFF);
+        }
+
+        return compactNodes;
+    }
+
+    private byte[] EncodeCompactNodes6(List<DhtNode> nodes)
+    {
+        if (nodes == null || nodes.Count == 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        var v6Nodes = new List<DhtNode>();
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            var node = nodes[i];
+            if (node?.EndPoint?.Address != null)
+            {
+                var addr = node.EndPoint.Address;
+                if (addr.AddressFamily == AddressFamily.InterNetworkV6 && !addr.IsIPv4MappedToIPv6)
+                {
+                    v6Nodes.Add(node);
+                }
+            }
+        }
+
+        var compactNodes = new byte[v6Nodes.Count * 38];
+        for (var i = 0; i < v6Nodes.Count; i++)
+        {
+            var node = v6Nodes[i];
+            var idLen = Math.Min(node.NodeId.Length, 20);
+            Array.Copy(node.NodeId, 0, compactNodes, i * 38, idLen);
+            var ipBytes = node.EndPoint.Address.GetAddressBytes();
+            Array.Copy(ipBytes, 0, compactNodes, (i * 38) + 20, 16);
+            compactNodes[(i * 38) + 36] = (byte)(node.EndPoint.Port >> 8);
+            compactNodes[(i * 38) + 37] = (byte)(node.EndPoint.Port & 0xFF);
         }
 
         return compactNodes;
@@ -1080,12 +1305,13 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     private static byte[] EncodeCompactAddress(IPEndPoint endpoint)
     {
-        if (endpoint == null)
+        if (endpoint?.Address == null)
         {
             return Array.Empty<byte>();
         }
 
-        var ipBytes = endpoint.Address.GetAddressBytes();
+        var addr = endpoint.Address.IsIPv4MappedToIPv6 ? endpoint.Address.MapToIPv4() : endpoint.Address;
+        var ipBytes = addr.GetAddressBytes();
         var result = new byte[ipBytes.Length + 2];
         Array.Copy(ipBytes, 0, result, 0, ipBytes.Length);
         result[ipBytes.Length] = (byte)(endpoint.Port >> 8);
@@ -1112,21 +1338,22 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     private void HandleFindNodeQuery(BDictionary args, IPEndPoint sender, BString transactionId)
     {
-        var targetId = args.ContainsKey("target") && args["target"] is BString targetStr
+        var targetId = args.ContainsKey("target") && args["target"] is BString targetStr && targetStr.Value.Length == 20
             ? targetStr.Value.ToArray()
             : _nodeId;
 
-        var closest = _routingTable.GetClosestNodes(targetId);
+        var r = new BDictionary
+        {
+            ["id"] = new BString(_nodeId)
+        };
+
+        PopulateClosestNodes(r, targetId, args, sender);
 
         var response = new BDictionary
         {
             ["t"] = transactionId,
             ["y"] = new BString("r"),
-            ["r"] = new BDictionary
-            {
-                ["id"] = new BString(_nodeId),
-                ["nodes"] = new BString(EncodeCompactNodes(closest))
-            },
+            ["r"] = r,
             ["ip"] = new BString(EncodeCompactAddress(sender))
         };
 
@@ -1364,16 +1591,23 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                 SentAt = DateTime.UtcNow
             };
 
+            var queryArgs = new BDictionary
+            {
+                ["id"] = new BString(_nodeId),
+                ["target"] = new BString(targetId)
+            };
+
+            if (_configService.EnableIPv6)
+            {
+                queryArgs["want"] = new BList { new BString("n4"), new BString("n6") };
+            }
+
             var query = new BDictionary
             {
                 ["t"] = new BString(transactionId),
                 ["y"] = new BString("q"),
                 ["q"] = new BString("find_node"),
-                ["a"] = new BDictionary
-                {
-                    ["id"] = new BString(_nodeId),
-                    ["target"] = new BString(targetId)
-                }
+                ["a"] = queryArgs
             };
 
             var bytes = query.EncodeAsBytes();
@@ -1445,16 +1679,23 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                 SentAt = DateTime.UtcNow
             };
 
+            var queryArgs = new BDictionary
+            {
+                ["id"] = new BString(_nodeId),
+                ["info_hash"] = new BString(infoHash)
+            };
+
+            if (_configService.EnableIPv6)
+            {
+                queryArgs["want"] = new BList { new BString("n4"), new BString("n6") };
+            }
+
             var query = new BDictionary
             {
                 ["t"] = new BString(transactionId),
                 ["y"] = new BString("q"),
                 ["q"] = new BString("get_peers"),
-                ["a"] = new BDictionary
-                {
-                    ["id"] = new BString(_nodeId),
-                    ["info_hash"] = new BString(infoHash)
-                }
+                ["a"] = queryArgs
             };
 
             var bytes = query.EncodeAsBytes();
