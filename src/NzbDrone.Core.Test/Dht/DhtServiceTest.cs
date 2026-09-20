@@ -2625,6 +2625,205 @@ public class DhtServiceTest
         Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(target, infoHash, 51413, token));
     }
 
+    // ── Private Torrent Safeguards (BEP 27) ──────────────────────────
+
+    [Test]
+    public async Task AnnounceTorrent_string_should_prohibit_announcing_private_torrent()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var privateHash = RandomNumberGenerator.GetBytes(20);
+        var privateHashHex = Convert.ToHexString(privateHash);
+
+        torrentService.GetByInfoHash(privateHashHex).Returns(new Torrent
+        {
+            InfoHash = privateHashHex,
+            IsPrivate = true,
+            Status = TorrentStatus.Seeding
+        });
+
+        using var service = new DhtService(_configService, null, torrentService);
+        SetUdpClient(service);
+        service.RoutingTable.AllowLocal = true;
+        service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x33),
+            EndPoint = new IPEndPoint(IPAddress.Loopback, 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        await service.AnnounceTorrent(privateHashHex, 6881);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pendingDict.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task AnnounceTorrent_byteArray_should_prohibit_announcing_private_torrent()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var privateHash = RandomNumberGenerator.GetBytes(20);
+        var privateHashHex = Convert.ToHexString(privateHash);
+
+        torrentService.GetByInfoHash(privateHashHex).Returns(new Torrent
+        {
+            InfoHash = privateHashHex,
+            IsPrivate = true,
+            Status = TorrentStatus.Seeding
+        });
+
+        using var service = new DhtService(_configService, null, torrentService);
+        SetUdpClient(service);
+        service.RoutingTable.AllowLocal = true;
+        service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x33),
+            EndPoint = new IPEndPoint(IPAddress.Loopback, 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        await service.AnnounceTorrent(privateHash, 6881);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pendingDict.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task SendGetPeers_byteArray_should_prohibit_querying_private_torrent()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var privateHash = RandomNumberGenerator.GetBytes(20);
+        var privateHashHex = Convert.ToHexString(privateHash);
+
+        torrentService.GetByInfoHash(privateHashHex).Returns(new Torrent
+        {
+            InfoHash = privateHashHex,
+            IsPrivate = true
+        });
+
+        using var service = new DhtService(_configService, null, torrentService);
+        SetUdpClient(service);
+
+        await service.SendGetPeers(new IPEndPoint(IPAddress.Loopback, 6881), privateHash);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pendingDict.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task SendGetPeers_string_should_prohibit_querying_private_torrent()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var privateHash = RandomNumberGenerator.GetBytes(20);
+        var privateHashHex = Convert.ToHexString(privateHash);
+
+        torrentService.GetByInfoHash(privateHashHex).Returns(new Torrent
+        {
+            InfoHash = privateHashHex,
+            IsPrivate = true
+        });
+
+        using var service = new DhtService(_configService, null, torrentService);
+        SetUdpClient(service);
+
+        await service.SendGetPeers(new IPEndPoint(IPAddress.Loopback, 6881), privateHashHex);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pendingDict.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task SendAnnouncePeer_should_prohibit_announcing_private_torrent()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var privateHash = RandomNumberGenerator.GetBytes(20);
+        var privateHashHex = Convert.ToHexString(privateHash);
+
+        torrentService.GetByInfoHash(privateHashHex).Returns(new Torrent
+        {
+            InfoHash = privateHashHex,
+            IsPrivate = true
+        });
+
+        using var service = new DhtService(_configService, null, torrentService);
+        SetUdpClient(service);
+
+        await service.SendAnnouncePeer(new IPEndPoint(IPAddress.Loopback, 6881), privateHash, 6881, new byte[20]);
+        await service.SendAnnouncePeer(new IPEndPoint(IPAddress.Loopback, 6881), privateHashHex, 6881, new byte[20]);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pendingDict.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleGetPeersQuery_should_not_return_peers_when_torrent_is_private()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var privateHash = RandomNumberGenerator.GetBytes(20);
+        var privateHashHex = Convert.ToHexString(privateHash);
+
+        torrentService.GetByInfoHash(privateHashHex).Returns(new Torrent
+        {
+            InfoHash = privateHashHex,
+            IsPrivate = true
+        });
+
+        using var service = new DhtService(_configService, null, torrentService);
+        SetUdpClient(service);
+
+        // Pre-populate peer store to verify it is bypassed for private torrents
+        service.PeerStore.AddPeer(privateHash, IPAddress.Parse("1.2.3.4"), 6881);
+
+        var args = new BDictionary
+        {
+            ["id"] = new BString(CreateNodeId(0x42)),
+            ["info_hash"] = new BString(privateHash)
+        };
+        var transactionId = new BString(new byte[] { 0x01, 0x02 });
+        var sender = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881);
+
+        var method = typeof(DhtService).GetMethod("HandleGetPeersQuery", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.DoesNotThrow(() =>
+            method.Invoke(service, new object[] { args, sender, transactionId }));
+    }
+
+    [Test]
+    public void HandleAnnouncePeerQuery_should_reject_and_not_store_peer_when_torrent_is_private()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var privateHash = RandomNumberGenerator.GetBytes(20);
+        var privateHashHex = Convert.ToHexString(privateHash);
+
+        torrentService.GetByInfoHash(privateHashHex).Returns(new Torrent
+        {
+            InfoHash = privateHashHex,
+            IsPrivate = true
+        });
+
+        using var service = new DhtService(_configService, null, torrentService);
+        SetUdpClient(service);
+
+        var args = new BDictionary
+        {
+            ["id"] = new BString(CreateNodeId(0x42)),
+            ["info_hash"] = new BString(privateHash),
+            ["token"] = new BString(new byte[20]),
+            ["port"] = new BNumber(6881)
+        };
+        var transactionId = new BString(new byte[] { 0x01, 0x02 });
+        var sender = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881);
+
+        var method = typeof(DhtService).GetMethod("HandleAnnouncePeerQuery", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.DoesNotThrow(() =>
+            method.Invoke(service, new object[] { args, sender, transactionId }));
+
+        Assert.That(service.PeerStore.HasPeers(privateHash), Is.False);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
 
     private void InvokeHandleMessage(byte[] data, IPEndPoint sender)
