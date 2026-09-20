@@ -121,4 +121,84 @@ public class DatabaseMaintenanceServiceTest
         _mainDatabase.GetAutoVacuumStatus().Returns(1);
         Assert.That(_subject.IsIncrementalAutoVacuumEnabled(), Is.False);
     }
+
+    [Test]
+    public void CheckpointWal_should_delegate_to_mainDatabase_with_specified_mode()
+    {
+        _mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);
+        var expectedResult = new DatabaseMaintenanceResult
+        {
+            Success = true,
+            DatabaseType = "SQLite",
+            Busy = 0,
+            WalLogPages = 150,
+            WalCheckpointedPages = 150,
+            CheckpointMode = WalCheckpointMode.Restart
+        };
+        _mainDatabase.Checkpoint(WalCheckpointMode.Restart).Returns(expectedResult);
+
+        var result = _subject.CheckpointWal(WalCheckpointMode.Restart);
+
+        Assert.That(result, Is.SameAs(expectedResult));
+        _mainDatabase.Received(1).Checkpoint(WalCheckpointMode.Restart);
+    }
+
+    [Test]
+    public void CheckpointWal_should_default_to_passive_mode()
+    {
+        _mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);
+        var expectedResult = new DatabaseMaintenanceResult
+        {
+            Success = true,
+            DatabaseType = "SQLite",
+            Busy = 0,
+            WalLogPages = 40,
+            WalCheckpointedPages = 40,
+            CheckpointMode = WalCheckpointMode.Passive
+        };
+        _mainDatabase.Checkpoint(WalCheckpointMode.Passive).Returns(expectedResult);
+
+        var result = _subject.CheckpointWal();
+
+        Assert.That(result, Is.SameAs(expectedResult));
+        _mainDatabase.Received(1).Checkpoint(WalCheckpointMode.Passive);
+    }
+
+    [Test]
+    public void CheckpointWal_should_handle_null_mainDatabase_gracefully()
+    {
+        var subject = new DatabaseMaintenanceService(null);
+
+        var result = subject.CheckpointWal(WalCheckpointMode.Truncate);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Message, Does.Contain("Database is unavailable"));
+        Assert.That(result.CheckpointMode, Is.EqualTo(WalCheckpointMode.Truncate));
+    }
+
+    [Test]
+    public void CheckpointWal_should_return_success_without_calling_checkpoint_for_non_sqlite()
+    {
+        _mainDatabase.DatabaseType.Returns(DatabaseType.PostgreSQL);
+
+        var result = _subject.CheckpointWal(WalCheckpointMode.Passive);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.DatabaseType, Is.EqualTo("PostgreSQL"));
+        Assert.That(result.Message, Does.Contain("does not use WAL mode"));
+        _mainDatabase.DidNotReceive().Checkpoint(Arg.Any<WalCheckpointMode>());
+    }
+
+    [Test]
+    public void CheckpointWal_should_return_failure_when_exception_is_thrown()
+    {
+        _mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);
+        _mainDatabase.When(x => x.Checkpoint(Arg.Any<WalCheckpointMode>())).Do(_ => throw new InvalidOperationException("database is locked"));
+
+        var result = _subject.CheckpointWal(WalCheckpointMode.Truncate);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Message, Does.Contain("database is locked"));
+        Assert.That(result.CheckpointMode, Is.EqualTo(WalCheckpointMode.Truncate));
+    }
 }

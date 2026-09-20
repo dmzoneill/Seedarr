@@ -10,6 +10,8 @@ public interface IMainDatabase : IDatabase
 {
     void Checkpoint();
 
+    DatabaseMaintenanceResult Checkpoint(WalCheckpointMode mode);
+
     void Vacuum();
 
     long GetFreelistCount();
@@ -79,19 +81,74 @@ public class MainDatabase : IMainDatabase
 
     public void Checkpoint()
     {
-        if (DatabaseType == DatabaseType.SQLite)
+        Checkpoint(WalCheckpointMode.Truncate);
+    }
+
+    public DatabaseMaintenanceResult Checkpoint(WalCheckpointMode mode)
+    {
+        var dbTypeStr = DatabaseType.ToString();
+        if (DatabaseType != DatabaseType.SQLite)
         {
-            try
+            return new DatabaseMaintenanceResult
             {
-                using var conn = _database.OpenConnection();
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception ex)
+                Success = true,
+                DatabaseType = dbTypeStr,
+                CheckpointMode = mode,
+                Message = $"{dbTypeStr} database does not use WAL mode."
+            };
+        }
+
+        try
+        {
+            using var conn = _database.OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"PRAGMA wal_checkpoint({mode.ToString().ToUpperInvariant()});";
+            using var reader = cmd.ExecuteReader();
+            var busy = 0;
+            var log = 0;
+            var checkpointed = 0;
+            if (reader.Read())
             {
-                _logger.Warn(ex, "Failed to execute SQLite WAL checkpoint");
+                busy = reader.IsDBNull(0) ? 0 : Convert.ToInt32(reader.GetValue(0));
+                log = reader.IsDBNull(1) ? 0 : Convert.ToInt32(reader.GetValue(1));
+                checkpointed = reader.IsDBNull(2) ? 0 : Convert.ToInt32(reader.GetValue(2));
             }
+
+            var success = busy == 0;
+            var message = success
+                ? $"WAL checkpoint ({mode}) succeeded. Log pages: {log}, Checkpointed: {checkpointed}."
+                : $"WAL checkpoint ({mode}) busy. Log pages: {log}, Checkpointed: {checkpointed}.";
+
+            if (success)
+            {
+                _logger.Debug(message);
+            }
+            else
+            {
+                _logger.Warn(message);
+            }
+
+            return new DatabaseMaintenanceResult
+            {
+                Success = success,
+                DatabaseType = dbTypeStr,
+                Busy = busy,
+                WalLogPages = log,
+                WalCheckpointedPages = checkpointed,
+                CheckpointMode = mode,
+                Message = message
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to execute SQLite WAL checkpoint ({0})", mode);
+            return new DatabaseMaintenanceResult
+            {
+                Success = false,
+                DatabaseType = dbTypeStr,
+                CheckpointMode = mode,
+                Message = ex.Message
+            };
         }
     }
 

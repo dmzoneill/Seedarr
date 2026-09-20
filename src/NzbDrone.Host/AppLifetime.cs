@@ -246,7 +246,15 @@ public class AppLifetime : IHostedService, IDisposable
 
             try
             {
-                _mainDatabase.Checkpoint();
+                var checkpointResult = _mainDatabase.Checkpoint(WalCheckpointMode.Truncate);
+                if (checkpointResult != null && !checkpointResult.Success)
+                {
+                    _logger.Warn(
+                        "Shutdown WAL checkpoint did not fully complete (Busy: {0}, Log: {1}, Checkpointed: {2})",
+                        checkpointResult.Busy,
+                        checkpointResult.WalLogPages,
+                        checkpointResult.WalCheckpointedPages);
+                }
             }
             catch (Exception ex)
             {

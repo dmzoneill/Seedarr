@@ -178,4 +178,96 @@ public class MainDatabaseVacuumTest
             }
         }
     }
+
+    [Test]
+    public void Checkpoint_should_execute_wal_checkpoint_and_return_metrics()
+    {
+        var mockDb = Substitute.For<IDatabase>();
+        mockDb.DatabaseType.Returns(DatabaseType.SQLite);
+        var mockConn = Substitute.For<IDbConnection>();
+        var mockCmd = Substitute.For<IDbCommand>();
+        var mockReader = Substitute.For<IDataReader>();
+
+        mockReader.Read().Returns(true);
+        mockReader.IsDBNull(0).Returns(false);
+        mockReader.GetValue(0).Returns(0); // busy = 0
+        mockReader.IsDBNull(1).Returns(false);
+        mockReader.GetValue(1).Returns(123); // log = 123
+        mockReader.IsDBNull(2).Returns(false);
+        mockReader.GetValue(2).Returns(123); // checkpointed = 123
+
+        mockCmd.ExecuteReader().Returns(mockReader);
+        mockConn.CreateCommand().Returns(mockCmd);
+        mockDb.OpenConnection().Returns(mockConn);
+        _dbFactory.Create(Arg.Any<DatabaseType>(), Arg.Any<string>()).Returns(mockDb);
+
+        var mainDb = new MainDatabase(_dbFactory, _connectionStringFactory, _appFolderInfo);
+        var result = mainDb.Checkpoint(WalCheckpointMode.Passive);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Busy, Is.EqualTo(0));
+        Assert.That(result.WalLogPages, Is.EqualTo(123));
+        Assert.That(result.WalCheckpointedPages, Is.EqualTo(123));
+        Assert.That(result.CheckpointMode, Is.EqualTo(WalCheckpointMode.Passive));
+        Assert.That(mockCmd.CommandText, Does.Contain("PRAGMA wal_checkpoint(PASSIVE);"));
+    }
+
+    [Test]
+    public void Checkpoint_should_return_safe_result_for_non_sqlite()
+    {
+        var mockDb = Substitute.For<IDatabase>();
+        mockDb.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        _dbFactory.Create(Arg.Any<DatabaseType>(), Arg.Any<string>()).Returns(mockDb);
+
+        var mainDb = new MainDatabase(_dbFactory, _connectionStringFactory, _appFolderInfo);
+        var result = mainDb.Checkpoint(WalCheckpointMode.Restart);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.DatabaseType, Is.EqualTo("PostgreSQL"));
+        Assert.That(result.Message, Does.Contain("does not use WAL mode"));
+        mockDb.DidNotReceive().OpenConnection();
+    }
+
+    [Test]
+    public void RealSqlite_should_create_wal_file_and_truncate_on_checkpoint()
+    {
+        var dbPath = Path.Combine(_tempDir, "real_wal.db");
+        var connStr = $"Data Source={dbPath};";
+
+        var dbFactory = new DbFactory();
+        var database = dbFactory.Create(DatabaseType.SQLite, connStr);
+
+        var mockDbFactory = Substitute.For<IDbFactory>();
+        mockDbFactory.Create(Arg.Any<DatabaseType>(), Arg.Any<string>()).Returns(database);
+
+        var mainDb = new MainDatabase(mockDbFactory, _connectionStringFactory, _appFolderInfo);
+
+        using (var conn = database.OpenConnection())
+        {
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "CREATE TABLE TestWal (id INTEGER PRIMARY KEY, payload TEXT);";
+                cmd.ExecuteNonQuery();
+
+                for (var i = 0; i < 50; i++)
+                {
+                    cmd.CommandText = $"INSERT INTO TestWal VALUES ({i}, '{new string('z', 1000)}');";
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        var walPath = $"{dbPath}-wal";
+        var result = mainDb.Checkpoint(WalCheckpointMode.Truncate);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Busy, Is.EqualTo(0));
+        Assert.That(result.CheckpointMode, Is.EqualTo(WalCheckpointMode.Truncate));
+
+        if (File.Exists(walPath))
+        {
+            var walFileInfo = new FileInfo(walPath);
+            Assert.That(walFileInfo.Length, Is.EqualTo(0), "WAL file should be truncated to 0 bytes after TRUNCATE checkpoint");
+        }
+    }
 }
