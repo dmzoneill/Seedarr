@@ -842,6 +842,11 @@ public class SeedingEngine : BackgroundService
 
     public static bool LocalHasPiece(Torrent torrent, bool[] verified, int pieceIndex)
     {
+        if (torrent == null || torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking)
+        {
+            return false;
+        }
+
         if (verified != null && pieceIndex >= 0 && pieceIndex < verified.Length)
         {
             return verified[pieceIndex];
