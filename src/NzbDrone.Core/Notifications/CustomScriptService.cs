@@ -83,6 +83,108 @@ public class CustomScriptService : ICustomScriptService, IDisposable
         return cleaned;
     }
 
+    public static bool TryReadShebang(string filePath, out string interpreter, out string shebangArgs)
+    {
+        interpreter = null;
+        shebangArgs = null;
+
+        var cleanPath = CleanScriptPath(filePath);
+        if (string.IsNullOrWhiteSpace(cleanPath) || !File.Exists(cleanPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var stream = new FileStream(cleanPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
+            var firstLine = reader.ReadLine();
+            if (string.IsNullOrWhiteSpace(firstLine) || !firstLine.StartsWith("#!"))
+            {
+                return false;
+            }
+
+            var line = firstLine.Substring(2).Trim();
+            if (string.IsNullOrEmpty(line))
+            {
+                return false;
+            }
+
+            string remainder = null;
+            if (line.StartsWith("/usr/bin/env ") || line.StartsWith("/bin/env "))
+            {
+                remainder = line.StartsWith("/usr/bin/env ")
+                    ? line.Substring("/usr/bin/env ".Length).Trim()
+                    : line.Substring("/bin/env ".Length).Trim();
+            }
+            else if (line == "/usr/bin/env" || line == "/bin/env")
+            {
+                return false;
+            }
+
+            if (remainder != null)
+            {
+                if (remainder.StartsWith("-S ") || remainder.StartsWith("-S	"))
+                {
+                    remainder = remainder.Substring(3).Trim();
+                }
+
+                var parts = remainder.Split(new[] { ' ', '	' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    interpreter = parts[0];
+                    shebangArgs = parts.Length > 1 ? parts[1].Trim() : string.Empty;
+                    return true;
+                }
+            }
+            else
+            {
+                var parts = line.Split(new[] { ' ', '	' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    interpreter = parts[0];
+                    shebangArgs = parts.Length > 1 ? parts[1].Trim() : string.Empty;
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+            // File read errors ignore shebang parsing
+        }
+
+        return false;
+    }
+
+    public static void EnsureExecutablePermissions(string scriptPath, Logger logger = null)
+    {
+        if (OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(scriptPath) || !File.Exists(scriptPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var mode = File.GetUnixFileMode(scriptPath);
+            if (!mode.HasFlag(UnixFileMode.UserExecute))
+            {
+                try
+                {
+                    File.SetUnixFileMode(scriptPath, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute);
+                    logger?.Info("Added execute permission to script: {0}", scriptPath);
+                }
+                catch (Exception ex)
+                {
+                    logger?.Warn(ex, "Script '{0}' is not executable. Please run: chmod +x '{0}'", scriptPath);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.Debug(ex, "Failed to inspect Unix file mode for script: {0}", scriptPath);
+        }
+    }
+
     internal static (string FileName, string Arguments) ResolveInterpreter(string scriptPath, string arguments)
     {
         return ResolveInterpreter(scriptPath, arguments, null);
@@ -112,6 +214,12 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 case ".js":
                     return ("node", $"\"{cleanPath}\" {(string.IsNullOrWhiteSpace(args) ? string.Empty : args)}".TrimEnd());
                 default:
+                    if (TryReadShebang(cleanPath, out var shebangInterp, out var shebangArgs))
+                    {
+                        var argPrefix = string.IsNullOrEmpty(shebangArgs) ? string.Empty : $"{shebangArgs} ";
+                        return (shebangInterp, $"{argPrefix}\"{cleanPath}\" {(string.IsNullOrWhiteSpace(args) ? string.Empty : args)}".TrimEnd());
+                    }
+
                     return (cleanPath, args);
             }
         }
@@ -133,6 +241,12 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 case ".js":
                     return ("node", $"\"{cleanPath}\" {(string.IsNullOrWhiteSpace(args) ? string.Empty : args)}".TrimEnd());
                 default:
+                    if (TryReadShebang(cleanPath, out var shebangInterp, out var shebangArgs))
+                    {
+                        var argPrefix = string.IsNullOrEmpty(shebangArgs) ? string.Empty : $"{shebangArgs} ";
+                        return (shebangInterp, $"{argPrefix}\"{cleanPath}\" {(string.IsNullOrWhiteSpace(args) ? string.Empty : args)}".TrimEnd());
+                    }
+
                     return (cleanPath, args);
             }
         }
@@ -279,7 +393,24 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     startInfo.ArgumentList.Add(cleanPath);
                     break;
                 default:
-                    startInfo.FileName = cleanPath;
+                    if (TryReadShebang(cleanPath, out var shebangInterp, out var shebangArgs))
+                    {
+                        startInfo.FileName = shebangInterp;
+                        if (!string.IsNullOrEmpty(shebangArgs))
+                        {
+                            foreach (var sArg in SplitArguments(shebangArgs))
+                            {
+                                startInfo.ArgumentList.Add(sArg);
+                            }
+                        }
+
+                        startInfo.ArgumentList.Add(cleanPath);
+                    }
+                    else
+                    {
+                        startInfo.FileName = cleanPath;
+                    }
+
                     break;
             }
         }
@@ -314,7 +445,24 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     startInfo.ArgumentList.Add(cleanPath);
                     break;
                 default:
-                    startInfo.FileName = cleanPath;
+                    if (TryReadShebang(cleanPath, out var shebangInterp, out var shebangArgs))
+                    {
+                        startInfo.FileName = shebangInterp;
+                        if (!string.IsNullOrEmpty(shebangArgs))
+                        {
+                            foreach (var sArg in SplitArguments(shebangArgs))
+                            {
+                                startInfo.ArgumentList.Add(sArg);
+                            }
+                        }
+
+                        startInfo.ArgumentList.Add(cleanPath);
+                    }
+                    else
+                    {
+                        startInfo.FileName = cleanPath;
+                    }
+
                     break;
             }
         }
@@ -773,6 +921,8 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 ? torrent.SavePath
                 : (Path.GetDirectoryName(resolvedScriptPath) ?? Environment.CurrentDirectory);
 
+            EnsureExecutablePermissions(resolvedScriptPath, _logger);
+
             var startInfo = BuildProcessStartInfo(resolvedScriptPath, resolvedArguments, workingDir);
 
             // Sanitize inherited environment variables
@@ -880,6 +1030,11 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 }
             }
         }
+        catch (System.ComponentModel.Win32Exception win32Ex) when (win32Ex.NativeErrorCode == 13)
+        {
+            _logger.Error(win32Ex, "Failed to execute custom script '{0}': Permission denied (EACCES). Script lacks execute permissions (chmod +x '{0}') or filesystem is mounted with noexec.", resolvedScriptPath);
+            return false;
+        }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to execute custom script: {0}", resolvedScriptPath);
@@ -971,6 +1126,8 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     WorkingDirectory = workingDir,
                 };
             }
+
+            EnsureExecutablePermissions(resolvedScriptPath, _logger);
 
             var startInfo = BuildProcessStartInfo(resolvedScriptPath, resolvedArguments, workingDir);
             var resolvedFileName = startInfo.FileName;
@@ -1102,6 +1259,24 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                         _processSupervisor?.UnregisterProcess(pid);
                     }
                 }
+            }
+            catch (System.ComponentModel.Win32Exception win32Ex) when (win32Ex.NativeErrorCode == 13)
+            {
+                stopwatch.Stop();
+                var elapsedMs = stopwatch.ElapsedMilliseconds > 0 ? stopwatch.ElapsedMilliseconds : (stopwatch.Elapsed.TotalMilliseconds > 0 ? 1L : 0L);
+                var errorMsg = $"Permission denied (EACCES) executing script '{resolvedScriptPath}'. Script lacks execute permissions (chmod +x '{resolvedScriptPath}') or filesystem is mounted with noexec.";
+                _logger.Error(win32Ex, "Failed to execute custom script test '{0}': {1}", resolvedScriptPath, errorMsg);
+                return new CustomScriptTestResult
+                {
+                    Success = false,
+                    ExitCode = 13,
+                    Stdout = string.Empty,
+                    Stderr = errorMsg,
+                    ExecutionTimeMs = elapsedMs,
+                    TimedOut = false,
+                    ResolvedInterpreter = resolvedFileName,
+                    WorkingDirectory = workingDir,
+                };
             }
             catch (Exception ex)
             {
