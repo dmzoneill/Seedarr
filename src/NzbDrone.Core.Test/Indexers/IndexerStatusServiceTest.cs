@@ -428,4 +428,40 @@ public class IndexerStatusServiceTest
         Assert.That(backoff.TotalSeconds, Is.GreaterThanOrEqualTo(510.0));
         Assert.That(backoff.TotalSeconds, Is.LessThanOrEqualTo(690.0));
     }
+
+    [Test]
+    public void RecordFailure_HTTP_429_with_short_retry_after_should_clamp_to_minimum_10_seconds()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime, () => 0.5);
+
+        service.RecordFailure(1, HttpStatusCode.TooManyRequests, "Retry-After: 3");
+
+        Assert.That(service.IsDisabled(1), Is.True);
+        Assert.That(service.IsRateLimited(1), Is.True);
+
+        var status = service.GetStatus(1);
+        Assert.That(status.DisabledTill, Is.Not.Null);
+
+        var backoff = status.DisabledTill.Value - currentTime;
+        Assert.That(backoff.TotalSeconds, Is.EqualTo(10.0));
+    }
+
+    [Test]
+    public void RecordFailure_HTTP_429_with_long_retry_after_should_clamp_to_maximum_10_minutes()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime, () => 0.5);
+
+        service.RecordFailure(1, HttpStatusCode.TooManyRequests, "Retry-After: 3600");
+
+        Assert.That(service.IsDisabled(1), Is.True);
+        Assert.That(service.IsRateLimited(1), Is.True);
+
+        var status = service.GetStatus(1);
+        Assert.That(status.DisabledTill, Is.Not.Null);
+
+        var backoff = status.DisabledTill.Value - currentTime;
+        Assert.That(backoff.TotalSeconds, Is.EqualTo(600.0));
+    }
 }

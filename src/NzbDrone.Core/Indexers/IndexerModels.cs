@@ -20,5 +20,8 @@ public class IndexerDefinition : ProviderDefinition
     [Ignore]
     public int? ProwlarrIndexerId => ProwlarrSyncMetadata.GetProwlarrIndexerId(this);
 
+    [Ignore]
+    public Torznab.TorznabCapabilities Capabilities { get; set; }
+
     public IndexerDefinition Clone() => (IndexerDefinition)MemberwiseClone();
 }

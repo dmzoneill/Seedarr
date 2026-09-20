@@ -1130,6 +1130,76 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             statusService.Received(1).RecordFailure(42, 429, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Is<TimeSpan?>(t => t.HasValue && t.Value.TotalSeconds >= 280.0));
         }
 
+        [Test]
+        public void TestConnectionDetailed_should_parse_capabilities_xml_and_attach_to_result()
+        {
+            var handler = new TorznabTestHttpMessageHandler();
+            var httpClient = new HttpClient(handler);
+            var indexer = new TorznabIndexer(httpClient);
+
+            var definition = new IndexerDefinition
+            {
+                Id = 10,
+                Url = "http://torznab.test",
+                ApiKey = "api-key",
+                ApiPath = "/api"
+            };
+
+            const string capsXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<caps>
+  <server version=""1.0"" title=""TestTracker"" />
+  <searching>
+    <tv-search available=""yes"" supportedParams=""q,season,ep"" />
+    <movie-search available=""yes"" supportedParams=""q,imdbid"" />
+  </searching>
+  <categories>
+    <category id=""2000"" name=""Movies"">
+      <subcat id=""2040"" name=""HD"" />
+    </category>
+    <category id=""100000"" name=""Anime"">
+      <subcat id=""100001"" name=""Anime-Sub"" />
+    </category>
+  </categories>
+</caps>";
+
+            handler.Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(capsXml, System.Text.Encoding.UTF8, "application/xml")
+            };
+
+            var result = indexer.TestConnectionDetailed(definition);
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Capabilities, Is.Not.Null);
+            Assert.That(result.Capabilities.ServerTitle, Is.EqualTo("TestTracker"));
+            Assert.That(result.Capabilities.SupportsTvSearch, Is.True);
+            Assert.That(result.Capabilities.Categories.Count, Is.EqualTo(2));
+            Assert.That(definition.Capabilities, Is.Not.Null);
+            Assert.That(definition.Capabilities.ServerTitle, Is.EqualTo("TestTracker"));
+        }
+
+        [Test]
+        public void MapFriendlyCategory_with_capabilities_should_expand_custom_categories()
+        {
+            var caps = new TorznabCapabilities();
+            caps.Categories.Add(new TorznabCategory
+            {
+                Id = 100000,
+                Name = "SpecialMedia",
+                Subcategories = new List<TorznabSubcategory>
+                {
+                    new() { Id = 100001, Name = "SubMedia1" },
+                    new() { Id = 100002, Name = "SubMedia2" }
+                }
+            });
+
+            var mappedRoot = TorznabIndexer.MapFriendlyCategory("100000", caps);
+            Assert.That(mappedRoot, Is.EqualTo("100000,100001,100002"));
+
+            var mappedNamed = TorznabIndexer.MapFriendlyCategory("SpecialMedia", caps);
+            Assert.That(mappedNamed, Is.EqualTo("100000,100001,100002"));
+        }
+
         private class TorznabTestHttpMessageHandler : HttpMessageHandler
         {
             public List<HttpRequestMessage> SentRequests { get; } = new();

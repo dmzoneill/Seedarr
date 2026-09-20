@@ -17,8 +17,9 @@ import {
   useTags,
   useRssGrabHistory,
   useClearRssGrabHistory,
+  useIndexerCaps,
 } from "../../api/hooks";
-import type { IndexerDefinition, IndexerTestResult, RssRule, RssGrabHistory } from "../../api/types";
+import type { IndexerDefinition, IndexerTestResult, RssRule, RssGrabHistory, TorznabCapabilities } from "../../api/types";
 import { formatBytes, formatDate } from "../../utils/formatters";
 import { TextInput, SelectInput, Toggle, NumberInput, SectionCard } from "./shared";
 import { useToast } from "../../context/ToastContext";
@@ -40,6 +41,9 @@ export function IndexersTab() {
   const [editing, setEditing] = useState<Partial<IndexerDefinition> | null>(null);
   const [testResults, setTestResults] = useState<Record<number, boolean | null>>({});
   const [modalTestResult, setModalTestResult] = useState<IndexerTestResult | null>(null);
+  const [capsFilter, setCapsFilter] = useState<string>("");
+  const { data: indexerCaps } = useIndexerCaps(editing?.id);
+  const activeCaps = modalTestResult?.capabilities || editing?.capabilities || indexerCaps;
 
   // RSS Rules, Categories, Tags
   const { data: rssRules, isLoading: isRssRulesLoading } = useRssRules();
@@ -168,6 +172,9 @@ export function IndexersTab() {
     testDirectMutation.mutate(editing, {
       onSuccess: (res) => {
         setModalTestResult(res);
+        if (res.capabilities) {
+          setEditing((prev) => (prev ? { ...prev, capabilities: res.capabilities } : prev));
+        }
         if (res.success) {
           showToast("Indexer connection successful", "success");
         } else {
@@ -373,6 +380,11 @@ export function IndexersTab() {
                 {idx.enableSearch && (
                   <span className="provider-card-badge provider-card-badge-blue">
                     Search
+                  </span>
+                )}
+                {idx.capabilities?.categories && idx.capabilities.categories.length > 0 && (
+                  <span className="provider-card-badge provider-card-badge-gold">
+                    {idx.capabilities.categories.length} Discovered Categories
                   </span>
                 )}
               </div>
@@ -930,6 +942,160 @@ export function IndexersTab() {
                 </div>
               )}
             </div>
+            {activeCaps?.categories && activeCaps.categories.length > 0 && (
+              <div style={{ marginBottom: "1.25rem", padding: "0.75rem", background: "rgba(255, 255, 255, 0.03)", borderRadius: "6px", border: "1px solid var(--border, rgba(255,255,255,0.1))" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <label style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                    Discovered Tracker Categories ({activeCaps.categories.length})
+                  </label>
+                  {activeCaps.serverTitle && (
+                    <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>
+                      {activeCaps.serverTitle} {activeCaps.serverVersion ? `v${activeCaps.serverVersion}` : ""}
+                    </span>
+                  )}
+                </div>
+
+                {activeCaps.searching && Object.keys(activeCaps.searching).length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.6rem" }}>
+                    {Object.entries(activeCaps.searching).map(([mode, s]) => (
+                      <span
+                        key={mode}
+                        className={`provider-card-badge ${s.available ? "provider-card-badge-green" : "provider-card-badge-gray"}`}
+                        title={s.supportedParams?.length ? `Supported params: ${s.supportedParams.join(", ")}` : undefined}
+                      >
+                        {mode} {s.available ? "✓" : "✕"}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <input
+                  type="text"
+                  placeholder="Search discovered categories..."
+                  value={capsFilter}
+                  onChange={(e) => setCapsFilter(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.35rem 0.6rem",
+                    borderRadius: "4px",
+                    border: "1px solid var(--border, rgba(255,255,255,0.15))",
+                    background: "var(--input-bg, rgba(0,0,0,0.2))",
+                    color: "inherit",
+                    fontSize: "0.8rem",
+                    marginBottom: "0.5rem",
+                    boxSizing: "border-box",
+                  }}
+                />
+
+                <div
+                  style={{
+                    maxHeight: "180px",
+                    overflowY: "auto",
+                    border: "1px solid var(--border, rgba(255,255,255,0.1))",
+                    borderRadius: "4px",
+                    padding: "0.5rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.4rem",
+                    background: "var(--card-bg, rgba(0,0,0,0.15))",
+                  }}
+                >
+                  {activeCaps.categories
+                    .filter((cat) => {
+                      if (!capsFilter.trim()) return true;
+                      const q = capsFilter.toLowerCase();
+                      return (
+                        cat.name.toLowerCase().includes(q) ||
+                        String(cat.id).includes(q) ||
+                        cat.subcategories?.some((s) => s.name.toLowerCase().includes(q) || String(s.id).includes(q))
+                      );
+                    })
+                    .map((cat) => {
+                      const selectedIds = (
+                        typeof editing.categories === "string"
+                          ? editing.categories.split(",")
+                          : []
+                      )
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+
+                      const isCatSelected = selectedIds.includes(String(cat.id));
+
+                      const toggleId = (id: number) => {
+                        const strId = String(id);
+                        let nextIds: string[];
+                        if (selectedIds.includes(strId)) {
+                          nextIds = selectedIds.filter((x) => x !== strId);
+                        } else {
+                          nextIds = [...selectedIds, strId];
+                        }
+                        setEditing({ ...editing, categories: nextIds.join(",") });
+                        setModalTestResult(null);
+                      };
+
+                      return (
+                        <div key={cat.id} style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                          <div
+                            onClick={() => toggleId(cat.id)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                              cursor: "pointer",
+                              padding: "0.2rem 0.4rem",
+                              borderRadius: "3px",
+                              backgroundColor: isCatSelected ? "rgba(40, 167, 69, 0.2)" : "transparent",
+                              fontWeight: 600,
+                              fontSize: "0.8rem",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isCatSelected}
+                              onChange={() => toggleId(cat.id)}
+                              style={{ cursor: "pointer" }}
+                            />
+                            <span>{cat.name} ({cat.id})</span>
+                          </div>
+
+                          {cat.subcategories && cat.subcategories.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", paddingLeft: "1.5rem" }}>
+                              {cat.subcategories
+                                .filter((sub) => {
+                                  if (!capsFilter.trim()) return true;
+                                  const q = capsFilter.toLowerCase();
+                                  return sub.name.toLowerCase().includes(q) || String(sub.id).includes(q);
+                                })
+                                .map((sub) => {
+                                  const isSubSelected = selectedIds.includes(String(sub.id));
+                                  return (
+                                    <span
+                                      key={sub.id}
+                                      onClick={() => toggleId(sub.id)}
+                                      style={{
+                                        cursor: "pointer",
+                                        fontSize: "0.72rem",
+                                        padding: "0.15rem 0.4rem",
+                                        borderRadius: "3px",
+                                        border: "1px solid",
+                                        borderColor: isSubSelected ? "var(--success, #28a745)" : "var(--border, rgba(255,255,255,0.2))",
+                                        backgroundColor: isSubSelected ? "rgba(40, 167, 69, 0.25)" : "transparent",
+                                        color: isSubSelected ? "var(--success, #28a745)" : "inherit",
+                                        userSelect: "none",
+                                      }}
+                                    >
+                                      {sub.name} ({sub.id})
+                                    </span>
+                                  );
+                                })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
             <TextInput
               label="Categories"
               value={

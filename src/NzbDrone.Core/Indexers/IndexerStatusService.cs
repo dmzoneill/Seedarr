@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Net;
 using System.Text.RegularExpressions;
 using NLog;
 
@@ -56,6 +57,18 @@ public class IndexerStatusService : IIndexerStatusService
                 status.NextRssSyncTimeUtc = null;
             }
         }
+    }
+
+    public void RecordFailure(int indexerId, HttpStatusCode? statusCode = null, string retryAfterHeader = null)
+    {
+        TimeSpan? retryAfter = null;
+        if (!string.IsNullOrWhiteSpace(retryAfterHeader))
+        {
+            var now = _nowProvider();
+            retryAfter = ParseRetryAfter(retryAfterHeader, now);
+        }
+
+        RecordFailure(indexerId, (int?)statusCode, errorMessage: retryAfterHeader, retryAfter: retryAfter);
     }
 
     public void RecordFailure(int indexerId, int? statusCode = null, string errorMessage = null, Exception ex = null, TimeSpan? retryAfter = null)
@@ -289,7 +302,8 @@ public class IndexerStatusService : IIndexerStatusService
         {
             if (retryAfter.HasValue && retryAfter.Value > TimeSpan.Zero)
             {
-                baseBackoff = retryAfter.Value;
+                var clampedSeconds = Math.Clamp(retryAfter.Value.TotalSeconds, 10.0, 600.0);
+                baseBackoff = TimeSpan.FromSeconds(clampedSeconds);
             }
             else
             {
