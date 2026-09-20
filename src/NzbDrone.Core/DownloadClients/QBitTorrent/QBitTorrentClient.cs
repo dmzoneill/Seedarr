@@ -115,7 +115,10 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 CheckCertificateRevocationList = true,
             };
 
-            _client = new HttpClient(handler);
+            _client = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(10),
+            };
         }
     }
 
@@ -149,18 +152,37 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             });
 
             using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/auth/login") { Content = content };
-            using var response = _client.Send(request);
-            using var reader = new StreamReader(response.Content.ReadAsStream());
-            var body = reader.ReadToEnd();
-            var success = response.IsSuccessStatusCode && body.Contains("Ok");
-            _isAuthenticated = success;
-            return success;
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "qBittorrent auth failed");
-            _isAuthenticated = false;
-            return false;
+            HttpResponseMessage response;
+            try
+            {
+                response = _client.Send(request);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new DownloadClientUnavailableException($"Unable to connect to qBittorrent at {BaseUrl}: {ex.Message}", ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                throw new DownloadClientUnavailableException($"Connection to qBittorrent at {BaseUrl} timed out: {ex.Message}", ex);
+            }
+
+            using (response)
+            {
+                if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    throw new DownloadClientAuthenticationException($"qBittorrent authentication failed (HTTP {(int)response.StatusCode} {response.ReasonPhrase}). Please check username and password.");
+                }
+
+                using var reader = new StreamReader(response.Content.ReadAsStream());
+                var body = reader.ReadToEnd();
+                if (!response.IsSuccessStatusCode || !body.Contains("Ok"))
+                {
+                    throw new DownloadClientAuthenticationException("qBittorrent authentication failed. Invalid username or password.");
+                }
+
+                _isAuthenticated = true;
+                return true;
+            }
         }
         finally
         {
@@ -191,19 +213,38 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             });
 
             using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/auth/login") { Content = content };
-            using var response = await _client.SendAsync(request, cancellationToken);
-            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var reader = new StreamReader(stream);
-            var body = await reader.ReadToEndAsync(cancellationToken);
-            var success = response.IsSuccessStatusCode && body.Contains("Ok");
-            _isAuthenticated = success;
-            return success;
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "qBittorrent auth failed");
-            _isAuthenticated = false;
-            return false;
+            HttpResponseMessage response;
+            try
+            {
+                response = await _client.SendAsync(request, cancellationToken);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new DownloadClientUnavailableException($"Unable to connect to qBittorrent at {BaseUrl}: {ex.Message}", ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                throw new DownloadClientUnavailableException($"Connection to qBittorrent at {BaseUrl} timed out: {ex.Message}", ex);
+            }
+
+            using (response)
+            {
+                if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    throw new DownloadClientAuthenticationException($"qBittorrent authentication failed (HTTP {(int)response.StatusCode} {response.ReasonPhrase}). Please check username and password.");
+                }
+
+                using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                using var reader = new StreamReader(stream);
+                var body = await reader.ReadToEndAsync(cancellationToken);
+                if (!response.IsSuccessStatusCode || !body.Contains("Ok"))
+                {
+                    throw new DownloadClientAuthenticationException("qBittorrent authentication failed. Invalid username or password.");
+                }
+
+                _isAuthenticated = true;
+                return true;
+            }
         }
         finally
         {
@@ -213,21 +254,45 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
     private HttpResponseMessage SendWithAuth(Func<HttpRequestMessage> requestFactory)
     {
-        if (!EnsureAuthenticated())
+        EnsureAuthenticated();
+
+        HttpResponseMessage response;
+        try
         {
-            return null;
+            response = _client.Send(requestFactory());
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new DownloadClientUnavailableException($"Unable to connect to qBittorrent at {BaseUrl}: {ex.Message}", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new DownloadClientUnavailableException($"Connection to qBittorrent at {BaseUrl} timed out: {ex.Message}", ex);
         }
 
-        var response = _client.Send(requestFactory());
-        if (response.StatusCode == HttpStatusCode.Forbidden)
+        if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
         {
             response.Dispose();
-            if (EnsureAuthenticated(force: true))
+            EnsureAuthenticated(force: true);
+
+            try
             {
-                return _client.Send(requestFactory());
+                response = _client.Send(requestFactory());
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new DownloadClientUnavailableException($"Unable to connect to qBittorrent at {BaseUrl}: {ex.Message}", ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                throw new DownloadClientUnavailableException($"Connection to qBittorrent at {BaseUrl} timed out: {ex.Message}", ex);
             }
 
-            return null;
+            if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                response.Dispose();
+                throw new DownloadClientAuthenticationException("qBittorrent authentication failed after session renewal.");
+            }
         }
 
         return response;
@@ -235,21 +300,45 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
     private async Task<HttpResponseMessage> SendWithAuthAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken = default)
     {
-        if (!await EnsureAuthenticatedAsync(cancellationToken: cancellationToken))
+        await EnsureAuthenticatedAsync(cancellationToken: cancellationToken);
+
+        HttpResponseMessage response;
+        try
         {
-            return null;
+            response = await _client.SendAsync(requestFactory(), cancellationToken);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new DownloadClientUnavailableException($"Unable to connect to qBittorrent at {BaseUrl}: {ex.Message}", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new DownloadClientUnavailableException($"Connection to qBittorrent at {BaseUrl} timed out: {ex.Message}", ex);
         }
 
-        var response = await _client.SendAsync(requestFactory(), cancellationToken);
-        if (response.StatusCode == HttpStatusCode.Forbidden)
+        if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
         {
             response.Dispose();
-            if (await EnsureAuthenticatedAsync(force: true, cancellationToken: cancellationToken))
+            await EnsureAuthenticatedAsync(force: true, cancellationToken: cancellationToken);
+
+            try
             {
-                return await _client.SendAsync(requestFactory(), cancellationToken);
+                response = await _client.SendAsync(requestFactory(), cancellationToken);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new DownloadClientUnavailableException($"Unable to connect to qBittorrent at {BaseUrl}: {ex.Message}", ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                throw new DownloadClientUnavailableException($"Connection to qBittorrent at {BaseUrl} timed out: {ex.Message}", ex);
             }
 
-            return null;
+            if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                response.Dispose();
+                throw new DownloadClientAuthenticationException("qBittorrent authentication failed after session renewal.");
+            }
         }
 
         return response;
@@ -259,23 +348,42 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
     {
         var items = new List<DownloadClientItem>();
 
+        var url = $"{BaseUrl}/api/v2/torrents/info";
+        if (!string.IsNullOrEmpty(Category))
+        {
+            url += $"?category={Uri.EscapeDataString(Category)}";
+        }
+
+        using var response = SendWithAuth(() => new HttpRequestMessage(HttpMethod.Get, url));
+        if (response == null)
+        {
+            return items;
+        }
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            throw new DownloadClientAuthenticationException($"qBittorrent returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new DownloadClientUnavailableException($"qBittorrent returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+
+        using var stream = response.Content.ReadAsStream();
+        JsonDocument torrents;
         try
         {
-            var url = $"{BaseUrl}/api/v2/torrents/info";
-            if (!string.IsNullOrEmpty(Category))
-            {
-                url += $"?category={Uri.EscapeDataString(Category)}";
-            }
+            torrents = JsonDocument.Parse(stream);
+        }
+        catch (JsonException ex)
+        {
+            _logger.Error(ex, "Failed to parse qBittorrent items JSON");
+            return items;
+        }
 
-            using var response = SendWithAuth(() => new HttpRequestMessage(HttpMethod.Get, url));
-            if (response == null || !response.IsSuccessStatusCode)
-            {
-                return items;
-            }
-
-            using var stream = response.Content.ReadAsStream();
-            using var torrents = JsonDocument.Parse(stream);
-
+        using (torrents)
+        {
             foreach (var t in torrents.RootElement.EnumerateArray())
             {
                 var state = t.TryGetProperty("state", out var s) ? s.GetString() : "unknown";
@@ -301,10 +409,6 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             }
 
             _logger.Debug("Fetched {0} items from qBittorrent", items.Count);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Failed to fetch qBittorrent items");
         }
 
         return items;

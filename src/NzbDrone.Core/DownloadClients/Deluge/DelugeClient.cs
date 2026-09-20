@@ -46,7 +46,10 @@ public class DelugeClient : IDownloadClient, IDisposable
                 CheckCertificateRevocationList = true,
             };
 
-            _client = new HttpClient(handler);
+            _client = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(10),
+            };
         }
     }
 
@@ -64,11 +67,35 @@ public class DelugeClient : IDownloadClient, IDisposable
         var json = JsonSerializer.Serialize(payload);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Post, JsonUrl) { Content = content };
-        using var response = _client.Send(request);
-        response.EnsureSuccessStatusCode();
+        HttpResponseMessage response;
+        try
+        {
+            response = _client.Send(request);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new DownloadClientUnavailableException($"Unable to connect to Deluge at {JsonUrl}: {ex.Message}", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new DownloadClientUnavailableException($"Connection to Deluge at {JsonUrl} timed out: {ex.Message}", ex);
+        }
 
-        using var stream = response.Content.ReadAsStream();
-        return JsonDocument.Parse(stream);
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                throw new DownloadClientAuthenticationException($"Deluge authentication failed (HTTP {(int)response.StatusCode}). Check password.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new DownloadClientUnavailableException($"Deluge request failed: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+            }
+
+            using var stream = response.Content.ReadAsStream();
+            return JsonDocument.Parse(stream);
+        }
     }
 
     private async Task<JsonDocument> SendRequestAsync(string method, object[] parameters, CancellationToken cancellationToken = default)
@@ -83,49 +110,67 @@ public class DelugeClient : IDownloadClient, IDisposable
         var json = JsonSerializer.Serialize(payload);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
         using var request = new HttpRequestMessage(HttpMethod.Post, JsonUrl) { Content = content };
-        using var response = await _client.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        HttpResponseMessage response;
+        try
+        {
+            response = await _client.SendAsync(request, cancellationToken);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new DownloadClientUnavailableException($"Unable to connect to Deluge at {JsonUrl}: {ex.Message}", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new DownloadClientUnavailableException($"Connection to Deluge at {JsonUrl} timed out: {ex.Message}", ex);
+        }
 
-        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                throw new DownloadClientAuthenticationException($"Deluge authentication failed (HTTP {(int)response.StatusCode}). Check password.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new DownloadClientUnavailableException($"Deluge request failed: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+            }
+
+            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        }
     }
 
     private bool Authenticate()
     {
-        try
+        using var doc = SendRequest("auth.login", new object[] { Password });
+        if (!doc.RootElement.TryGetProperty("result", out var result) || !result.GetBoolean())
         {
-            using var doc = SendRequest("auth.login", new object[] { Password });
-            if (!doc.RootElement.TryGetProperty("result", out var result) || !result.GetBoolean())
-            {
-                return false;
-            }
+            throw new DownloadClientAuthenticationException("Deluge authentication failed. Invalid password.");
+        }
 
-            return EnsureDaemonConnected();
-        }
-        catch (Exception ex)
+        if (!EnsureDaemonConnected())
         {
-            _logger.Error(ex, "Deluge auth failed");
-            return false;
+            throw new DownloadClientUnavailableException("Deluge web is not connected to a daemon.");
         }
+
+        return true;
     }
 
     private async Task<bool> AuthenticateAsync(CancellationToken cancellationToken = default)
     {
-        try
+        using var doc = await SendRequestAsync("auth.login", new object[] { Password }, cancellationToken);
+        if (!doc.RootElement.TryGetProperty("result", out var result) || !result.GetBoolean())
         {
-            using var doc = await SendRequestAsync("auth.login", new object[] { Password }, cancellationToken);
-            if (!doc.RootElement.TryGetProperty("result", out var result) || !result.GetBoolean())
-            {
-                return false;
-            }
+            throw new DownloadClientAuthenticationException("Deluge authentication failed. Invalid password.");
+        }
 
-            return await EnsureDaemonConnectedAsync(cancellationToken);
-        }
-        catch (Exception ex)
+        if (!await EnsureDaemonConnectedAsync(cancellationToken))
         {
-            _logger.Error(ex, "Deluge auth failed");
-            return false;
+            throw new DownloadClientUnavailableException("Deluge web is not connected to a daemon.");
         }
+
+        return true;
     }
 
     private bool EnsureDaemonConnected()
@@ -266,64 +311,53 @@ public class DelugeClient : IDownloadClient, IDisposable
     {
         var items = new List<DownloadClientItem>();
 
-        if (!Authenticate())
+        Authenticate();
+
+        var fields = new[] { "hash", "name", "total_size", "total_remaining", "state", "save_path", "label", "private", "download_payload_rate", "upload_payload_rate" };
+        var filters = new Dictionary<string, object>();
+
+        if (!string.IsNullOrEmpty(Category))
+        {
+            filters["label"] = Category;
+        }
+
+        using var doc = SendRequest("web.update_ui", new object[] { fields, filters });
+
+        if (!doc.RootElement.TryGetProperty("result", out var result))
         {
             return items;
         }
 
-        try
+        if (!result.TryGetProperty("torrents", out var torrents))
         {
-            var fields = new[] { "hash", "name", "total_size", "total_remaining", "state", "save_path", "label", "private", "download_payload_rate", "upload_payload_rate" };
-            var filters = new Dictionary<string, object>();
-
-            if (!string.IsNullOrEmpty(Category))
-            {
-                filters["label"] = Category;
-            }
-
-            using var doc = SendRequest("web.update_ui", new object[] { fields, filters });
-
-            if (!doc.RootElement.TryGetProperty("result", out var result))
-            {
-                return items;
-            }
-
-            if (!result.TryGetProperty("torrents", out var torrents))
-            {
-                return items;
-            }
-
-            foreach (var prop in torrents.EnumerateObject())
-            {
-                var t = prop.Value;
-                var state = t.TryGetProperty("state", out var s) ? s.GetString() : "unknown";
-                var isPrivate = t.TryGetProperty("private", out var ip) &&
-                    (ip.ValueKind == JsonValueKind.True ||
-                     (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
-                     (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
-
-                items.Add(new DownloadClientItem
-                {
-                    InfoHash = prop.Name,
-                    Title = t.TryGetProperty("name", out var n) ? n.GetString() : "",
-                    TotalSize = t.TryGetProperty("total_size", out var ts) ? ts.GetInt64() : 0,
-                    RemainingSize = t.TryGetProperty("total_remaining", out var tr) ? tr.GetInt64() : 0,
-                    Status = MapState(state),
-                    OutputPath = t.TryGetProperty("save_path", out var sp) ? sp.GetString() : "",
-                    Category = t.TryGetProperty("label", out var l) ? l.GetString() : "",
-                    IsPrivate = isPrivate,
-                    DownloadSpeed = t.TryGetProperty("download_payload_rate", out var ds) ? ds.GetInt64() : null,
-                    UploadSpeed = t.TryGetProperty("upload_payload_rate", out var us) ? us.GetInt64() : null,
-                });
-            }
-
-            _logger.Debug("Fetched {0} items from Deluge", items.Count);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Failed to fetch Deluge items");
+            return items;
         }
 
+        foreach (var prop in torrents.EnumerateObject())
+        {
+            var t = prop.Value;
+            var state = t.TryGetProperty("state", out var s) ? s.GetString() : "unknown";
+            var isPrivate = t.TryGetProperty("private", out var ip) &&
+                (ip.ValueKind == JsonValueKind.True ||
+                 (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
+                 (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
+
+            items.Add(new DownloadClientItem
+            {
+                InfoHash = prop.Name,
+                Title = t.TryGetProperty("name", out var n) ? n.GetString() : "",
+                TotalSize = t.TryGetProperty("total_size", out var ts) ? ts.GetInt64() : 0,
+                RemainingSize = t.TryGetProperty("total_remaining", out var tr) ? tr.GetInt64() : 0,
+                Status = MapState(state),
+                OutputPath = t.TryGetProperty("save_path", out var sp) ? sp.GetString() : "",
+                Category = t.TryGetProperty("label", out var l) ? l.GetString() : "",
+                IsPrivate = isPrivate,
+                DownloadSpeed = t.TryGetProperty("download_payload_rate", out var ds) ? ds.GetInt64() : null,
+                UploadSpeed = t.TryGetProperty("upload_payload_rate", out var us) ? us.GetInt64() : null,
+            });
+        }
+
+        _logger.Debug("Fetched {0} items from Deluge", items.Count);
         return items;
     }
 

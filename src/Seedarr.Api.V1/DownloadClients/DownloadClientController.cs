@@ -29,7 +29,7 @@ public class DownloadClientController : Controller
     public ActionResult<List<DownloadClientDefinition>> GetAll()
     {
         var definitions = _downloadClientFactory.All();
-        return Ok(definitions.Select(MaskPassword).ToList());
+        return Ok(definitions.Select(d => MaskPassword(EnrichWithStatus(d))).ToList());
     }
 
     [HttpGet("{id}")]
@@ -41,7 +41,7 @@ public class DownloadClientController : Controller
             return NotFound();
         }
 
-        return Ok(MaskPassword(definition));
+        return Ok(MaskPassword(EnrichWithStatus(definition)));
     }
 
     [HttpPost]
@@ -215,9 +215,21 @@ public class DownloadClientController : Controller
         {
             return NotFound(new { message = ex.Message });
         }
+        catch (DownloadClientAuthenticationException ex)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status401Unauthorized, new { message = ex.Message });
+        }
+        catch (DownloadClientUnavailableException ex)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
+        }
+        catch (global::System.Net.Http.HttpRequestException ex)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
+        }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = $"Failed to fetch items from download client: {ex.Message}" });
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status500InternalServerError, new { message = $"Failed to fetch items from download client: {ex.Message}" });
         }
     }
 
@@ -260,6 +272,27 @@ public class DownloadClientController : Controller
         {
             return StatusCode(500, new { message = $"Failed to import torrents: {ex.Message}" });
         }
+    }
+
+    private DownloadClientDefinition EnrichWithStatus(DownloadClientDefinition definition)
+    {
+        if (definition == null)
+        {
+            return null;
+        }
+
+        var status = _syncService.GetClientStatus(definition.Id);
+        if (status != null)
+        {
+            definition.IsOnline = status.IsOnline;
+            definition.Version = status.Version;
+            definition.LastSyncTime = status.LastSyncTime;
+            definition.LastErrorMessage = status.LastErrorMessage;
+            definition.ConsecutiveFailures = status.ConsecutiveFailures;
+            definition.BackoffUntil = status.BackoffUntil;
+        }
+
+        return definition;
     }
 
     private static DownloadClientDefinition MaskPassword(DownloadClientDefinition definition)

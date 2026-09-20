@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -476,5 +477,124 @@ public class DownloadClientControllerTest
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _downloadClientFactory.Received(1).CreateClient(Arg.Is<DownloadClientDefinition>(d => d.ClientType == clientType));
+    }
+
+    [Test]
+    public void GetItems_returns_not_found_when_client_does_not_exist()
+    {
+        _syncService.GetClientItems(99).Returns(x => throw new System.ArgumentException("Client not found"));
+
+        var result = _controller.GetItems(99);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public void GetItems_returns_ok_when_sync_service_returns_items()
+    {
+        _syncService.GetClientItems(1).Returns(new List<DownloadClientRemoteItem>
+        {
+            new() { Title = "Torrent 1", InfoHash = "HASH1" },
+            new() { Title = "Torrent 2", InfoHash = "HASH2" }
+        });
+
+        var result = _controller.GetItems(1);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var items = (List<DownloadClientRemoteItem>)okResult.Value;
+        Assert.That(items, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public void GetItems_returns_unauthorized_when_auth_fails()
+    {
+        _syncService.GetClientItems(1).Returns(x => throw new DownloadClientAuthenticationException("Invalid credentials"));
+
+        var result = _controller.GetItems(1);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result.Result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(401));
+    }
+
+    [Test]
+    public void GetItems_returns_service_unavailable_when_client_unavailable()
+    {
+        _syncService.GetClientItems(1).Returns(x => throw new DownloadClientUnavailableException("Connection refused"));
+
+        var result = _controller.GetItems(1);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result.Result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(503));
+    }
+
+    [Test]
+    public void GetItems_returns_service_unavailable_when_http_request_exception_thrown()
+    {
+        _syncService.GetClientItems(1).Returns(x => throw new System.Net.Http.HttpRequestException("Network timeout"));
+
+        var result = _controller.GetItems(1);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result.Result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(503));
+    }
+
+    [Test]
+    public void GetAll_enriches_clients_with_sync_status()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { def });
+
+        var status = new DownloadClientStatus
+        {
+            IsOnline = true,
+            Version = "4.6.0",
+            LastSyncTime = new System.DateTime(2026, 1, 1, 12, 0, 0, System.DateTimeKind.Utc),
+            LastErrorMessage = null,
+            ConsecutiveFailures = 0,
+            BackoffUntil = null
+        };
+        _syncService.GetClientStatus(1).Returns(status);
+
+        var result = _controller.GetAll();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var clients = (List<DownloadClientDefinition>)okResult.Value;
+        Assert.That(clients, Has.Count.EqualTo(1));
+        Assert.That(clients[0].IsOnline, Is.True);
+        Assert.That(clients[0].Version, Is.EqualTo("4.6.0"));
+        Assert.That(clients[0].ConsecutiveFailures, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Get_enriches_client_with_sync_status()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+
+        var status = new DownloadClientStatus
+        {
+            IsOnline = false,
+            Version = null,
+            LastSyncTime = null,
+            LastErrorMessage = "Connection timed out",
+            ConsecutiveFailures = 2,
+            BackoffUntil = new System.DateTime(2026, 1, 1, 12, 5, 0, System.DateTimeKind.Utc)
+        };
+        _syncService.GetClientStatus(1).Returns(status);
+
+        var result = _controller.Get(1);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var client = (DownloadClientDefinition)okResult.Value;
+        Assert.That(client.IsOnline, Is.False);
+        Assert.That(client.LastErrorMessage, Is.EqualTo("Connection timed out"));
+        Assert.That(client.ConsecutiveFailures, Is.EqualTo(2));
+        Assert.That(client.BackoffUntil, Is.Not.Null);
     }
 }

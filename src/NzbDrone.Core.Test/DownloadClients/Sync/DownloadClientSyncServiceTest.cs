@@ -1373,4 +1373,116 @@ public class DownloadClientSyncServiceTest
         Assert.That(items[2].IsInLibrary, Is.True);
         Assert.That(items[2].LibraryTorrentId, Is.EqualTo(103));
     }
+
+    [Test]
+    public void Sync_should_record_failure_and_skip_client_when_in_backoff()
+    {
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(x => throw new DownloadClientUnavailableException("Connection refused"));
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        var clientDef = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Unreachable qBit",
+            ClientType = "QBitTorrent",
+            Enable = true
+        };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        // First sync -> throws and sets failure status
+        var result1 = _service.Sync();
+        Assert.That(result1.Failed, Is.EqualTo(1));
+
+        var status = _service.GetClientStatus(1);
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.IsOnline, Is.False);
+        Assert.That(status.ConsecutiveFailures, Is.EqualTo(1));
+        Assert.That(status.BackoffUntil, Is.Not.Null);
+        Assert.That(status.BackoffUntil.Value, Is.GreaterThan(DateTime.UtcNow));
+
+        // Clear mock calls
+        mockClient.ClearReceivedCalls();
+
+        // Second sync -> client is in backoff, so GetItems should NOT be called
+        var result2 = _service.Sync();
+        mockClient.DidNotReceive().GetItems();
+        Assert.That(result2.Failed, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Sync_should_reset_circuit_breaker_on_successful_sync()
+    {
+        var mockFailingClient = Substitute.For<IDownloadClient>();
+        mockFailingClient.GetItems().Returns(x => throw new DownloadClientUnavailableException("Temporary glitch"));
+
+        _service.InjectedClient = mockFailingClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        var clientDef = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Glitchy qBit",
+            ClientType = "QBitTorrent",
+            Enable = true
+        };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        // Trigger failure
+        _service.Sync();
+        var failedStatus = _service.GetClientStatus(1);
+        Assert.That(failedStatus.ConsecutiveFailures, Is.EqualTo(1));
+
+        // Reset backoff explicitly so it can try again
+        _service.ResetClientStatus(1);
+
+        // Client recovers
+        var mockHealthyClient = Substitute.For<IDownloadClient>();
+        mockHealthyClient.GetItems().Returns(new List<DownloadClientItem>());
+        _service.InjectedClient = mockHealthyClient;
+        _service.Sync();
+
+        var recoveredStatus = _service.GetClientStatus(1);
+        Assert.That(recoveredStatus.IsOnline, Is.True);
+        Assert.That(recoveredStatus.ConsecutiveFailures, Is.EqualTo(0));
+        Assert.That(recoveredStatus.BackoffUntil, Is.Null);
+    }
+
+    [Test]
+    public void GetClientItems_should_record_failure_when_client_throws()
+    {
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(x => throw new DownloadClientAuthenticationException("Invalid password"));
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(2).Returns(new DownloadClientDefinition
+        {
+            Id = 2,
+            Name = "Auth Fail qBit",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        Assert.Throws<DownloadClientAuthenticationException>(() => _service.GetClientItems(2));
+
+        var status = _service.GetClientStatus(2);
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.IsOnline, Is.False);
+        Assert.That(status.ConsecutiveFailures, Is.EqualTo(1));
+        Assert.That(status.LastErrorMessage, Does.Contain("Invalid password"));
+    }
+
+    [TestCase(1, 30)]
+    [TestCase(2, 60)]
+    [TestCase(3, 120)]
+    [TestCase(4, 240)]
+    [TestCase(5, 480)]
+    [TestCase(6, 600)]
+    [TestCase(10, 600)]
+    public void CalculateBackoff_should_scale_exponentially_and_cap_at_max_backoff(int failures, int expectedSeconds)
+    {
+        var backoff = DownloadClientSyncService.CalculateBackoff(failures);
+        Assert.That(backoff.TotalSeconds, Is.EqualTo(expectedSeconds));
+    }
 }

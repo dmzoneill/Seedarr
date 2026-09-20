@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using NUnit.Framework;
+using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.DownloadClients.QBitTorrent;
 using NzbDrone.Core.Test.TestHelpers;
 
@@ -163,15 +164,12 @@ public class QBitTorrentClientTest
     }
 
     [Test]
-    public void GetItems_should_return_empty_list_when_connection_fails()
+    public void GetItems_should_throw_when_connection_fails()
     {
         _client.Host = "nonexistent.invalid";
         _client.Port = 1;
 
-        var result = _client.GetItems();
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+        Assert.Throws<DownloadClientUnavailableException>(() => _client.GetItems());
     }
 
     [Test]
@@ -246,7 +244,7 @@ public class QBitTorrentClientTest
     }
 
     [Test]
-    public void GetItems_should_return_empty_when_auth_fails()
+    public void GetItems_should_throw_when_auth_fails()
     {
         var handler = new MockHttpMessageHandler();
 
@@ -255,27 +253,21 @@ public class QBitTorrentClientTest
 
         InjectMockClient(handler);
 
-        var result = _client.GetItems();
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+        Assert.Throws<DownloadClientAuthenticationException>(() => _client.GetItems());
     }
 
     [Test]
-    public void GetItems_should_return_empty_when_auth_returns_error_status()
+    public void GetItems_should_throw_when_auth_returns_error_status()
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.Forbidden, "Forbidden");
         InjectMockClient(handler);
 
-        var result = _client.GetItems();
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+        Assert.Throws<DownloadClientAuthenticationException>(() => _client.GetItems());
     }
 
     [Test]
-    public void GetItems_should_return_empty_when_torrents_response_not_success()
+    public void GetItems_should_throw_when_torrents_response_not_success()
     {
         var handler = new MockHttpMessageHandler();
 
@@ -287,10 +279,7 @@ public class QBitTorrentClientTest
 
         InjectMockClient(handler);
 
-        var result = _client.GetItems();
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+        Assert.Throws<DownloadClientUnavailableException>(() => _client.GetItems());
     }
 
     [Test]
