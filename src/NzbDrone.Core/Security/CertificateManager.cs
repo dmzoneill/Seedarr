@@ -820,6 +820,10 @@ public class CertificateManager : ICertificateManager, IDisposable
 
         public string TrustedProxies => string.Empty;
 
+        public string AllowedOrigins => string.Empty;
+
+        public List<string> AllowedOriginsList => new();
+
         public void SaveConfigDictionary(Dictionary<string, object> configValues)
         {
         }

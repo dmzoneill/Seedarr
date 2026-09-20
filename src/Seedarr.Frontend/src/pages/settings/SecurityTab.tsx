@@ -112,6 +112,7 @@ export function SecurityTab() {
     csrfProtectionEnabled: true,
     hostHeaderValidationEnabled: false,
     allowedHosts: "",
+    allowedOrigins: "",
     terminalAccessEnabled: true,
   });
 
@@ -239,6 +240,7 @@ export function SecurityTab() {
         hostHeaderValidationEnabled:
           config.hostHeaderValidationEnabled ?? false,
         allowedHosts: config.allowedHosts ?? "",
+        allowedOrigins: config.allowedOrigins ?? "",
         terminalAccessEnabled: config.terminalAccessEnabled ?? true,
       });
 
@@ -372,6 +374,7 @@ export function SecurityTab() {
         csrfProtectionEnabled: form.csrfProtectionEnabled,
         hostHeaderValidationEnabled: form.hostHeaderValidationEnabled,
         allowedHosts: form.allowedHosts,
+        allowedOrigins: form.allowedOrigins,
         terminalAccessEnabled: form.terminalAccessEnabled,
       } as GeneralConfig,
       {
@@ -563,6 +566,14 @@ export function SecurityTab() {
               hint="Comma-separated list of allowed hostnames or IP addresses (e.g. localhost, seedarr.local, 192.168.1.100)"
             />
           )}
+
+          <TextInput
+            label="Allowed CORS Origins"
+            value={form.allowedOrigins}
+            onChange={(v) => update("allowedOrigins", v)}
+            placeholder="https://app.example.com, http://dashboard.local:3000"
+            hint="Comma-separated list of allowed CORS origins (e.g. https://app.example.com)"
+          />
         </div>
       </SectionCard>
 
