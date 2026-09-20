@@ -33,6 +33,7 @@ import type {
   ArrTestResult,
   DownloadClientTestResult,
   IndexerTestResult,
+  ProwlarrSyncResult,
   SyncResult,
   BatchImportResponse,
   IndexerDefinition,
@@ -941,6 +942,14 @@ export function useTestIndexer() {
 export function useTestDirectIndexer() {
   return useMutation<IndexerTestResult, Error, Partial<IndexerDefinition>>({
     mutationFn: (indexer) => apiClient.post("/indexers/test", indexer),
+  });
+}
+
+export function useSyncProwlarrIndexers() {
+  const queryClient = useQueryClient();
+  return useMutation<ProwlarrSyncResult, Error, { prowlarrIndexerId?: number } | undefined>({
+    mutationFn: (req) => apiClient.post("/indexer/prowlarr/sync", req ?? {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["indexers"] }),
   });
 }
 

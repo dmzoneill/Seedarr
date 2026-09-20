@@ -6,6 +6,7 @@ import {
   useDeleteIndexer,
   useTestIndexer,
   useTestDirectIndexer,
+  useSyncProwlarrIndexers,
   useRssRules,
   useCreateRssRule,
   useUpdateRssRule,
@@ -35,6 +36,7 @@ export function IndexersTab() {
   const deleteMutation = useDeleteIndexer();
   const testMutation = useTestIndexer();
   const testDirectMutation = useTestDirectIndexer();
+  const syncProwlarrMutation = useSyncProwlarrIndexers();
   const [editing, setEditing] = useState<Partial<IndexerDefinition> | null>(null);
   const [testResults, setTestResults] = useState<Record<number, boolean | null>>({});
   const [modalTestResult, setModalTestResult] = useState<IndexerTestResult | null>(null);
@@ -248,6 +250,22 @@ export function IndexersTab() {
     }
   };
 
+  const handleSyncProwlarrNow = () => {
+    if (syncProwlarrMutation.isPending) return;
+    syncProwlarrMutation.mutate(undefined, {
+      onSuccess: (res) => {
+        showToast(
+          res.message ||
+            `Prowlarr sync complete (${res.added} added, ${res.updated} updated, ${res.removed} removed)`,
+          res.success ? "success" : "warning"
+        );
+      },
+      onError: (err: any) => {
+        showToast(err?.message || "Prowlarr sync failed", "error");
+      },
+    });
+  };
+
   const handleSyncRssNow = () => {
     if (syncCooldownRemaining > 0 || syncRssMutation.isPending) return;
     syncRssMutation.mutate(undefined, {
@@ -270,6 +288,23 @@ export function IndexersTab() {
         title="Torznab & Newznab Indexers"
         description="Configure Prowlarr, Jackett, or standalone Torznab/Newznab indexers for automated releases"
       >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginBottom: "1rem",
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-outline btn-small"
+            onClick={handleSyncProwlarrNow}
+            disabled={syncProwlarrMutation.isPending}
+          >
+            {syncProwlarrMutation.isPending ? "Syncing from Prowlarr..." : "🔄 Sync from Prowlarr"}
+          </button>
+        </div>
+
         <div className="provider-cards">
           {indexers?.map((idx) => (
             <div

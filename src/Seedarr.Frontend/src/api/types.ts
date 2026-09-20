@@ -698,6 +698,18 @@ export interface IndexerDefinition {
   implementation: string;
   configContract: string;
   enable: boolean;
+  prowlarrIndexerId?: number | null;
+}
+
+export interface ProwlarrSyncResult {
+  success: boolean;
+  message?: string;
+  added: number;
+  updated: number;
+  removed: number;
+  totalFound: number;
+  syncedIndexers?: string[];
+  errors?: string[];
 }
 
 export interface IndexerTestResult {
