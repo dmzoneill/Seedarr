@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using BencodeNET.Objects;
@@ -80,6 +81,24 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     public PiecePicker.IPiecePicker SequentialPicker => _piecePicker?.SequentialPicker ?? _sequentialPicker;
     public PiecePicker.IPiecePicker RarestFirstPicker => _piecePicker?.RarestFirstPicker ?? _rarestFirstPicker;
     public bool IsListening { get; private set; }
+
+    private IPieceCache _pieceCache;
+    private IMultiFilePieceStorage _multiFilePieceStorage;
+    private readonly ITorrentFileService _torrentFileService;
+
+    public IPieceCache PieceCache
+    {
+        get => _pieceCache;
+        set => _pieceCache = value;
+    }
+
+    public IMultiFilePieceStorage MultiFilePieceStorage
+    {
+        get => _multiFilePieceStorage;
+        set => _multiFilePieceStorage = value;
+    }
+
+    public int CorruptionThreshold { get; set; } = 3;
 
     public SwarmPieceHistogram GetSwarmPieceHistogram(string infoHash)
     {
@@ -327,7 +346,10 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         IPieceStorage pieceStorage = null,
         Extensions.IPexService pexService = null,
         ISuperSeedingTracker superSeedingTracker = null,
-        IPeerBlocklistSyncService blocklistService = null)
+        IPeerBlocklistSyncService blocklistService = null,
+        IPieceCache pieceCache = null,
+        IMultiFilePieceStorage multiFilePieceStorage = null,
+        ITorrentFileService torrentFileService = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -353,6 +375,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _sequentialPicker = new PiecePicker.SequentialPiecePicker(_rarestFirstPicker, _random);
         _piecePicker = piecePicker ?? new PiecePicker.PiecePicker(_sequentialPicker, _rarestFirstPicker);
         _pieceStorage = pieceStorage;
+        _pieceCache = pieceCache;
+        _multiFilePieceStorage = multiFilePieceStorage ?? new MultiFilePieceStorage();
+        _torrentFileService = torrentFileService;
         _superSeedingTracker = superSeedingTracker;
         _blocklistService = blocklistService;
         _trackerAnnounceService = trackerAnnounceService ??
@@ -3012,6 +3037,111 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                         connection.RemoteIp,
                         connection.RemotePort);
                     break;
+                }
+
+                if (message.Payload == null || message.Payload.Length < 8)
+                {
+                    break;
+                }
+
+                var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
+                var pieceBegin = (int)(((uint)message.Payload[4] << 24) | ((uint)message.Payload[5] << 16) | ((uint)message.Payload[6] << 8) | message.Payload[7]);
+                var blockData = message.Payload[8..];
+
+                if (torrent != null)
+                {
+                    var pieceLength = (torrent.TotalSize > 0 && torrent.PieceCount > 0 && pieceIndex == torrent.PieceCount - 1)
+                        ? (int)(torrent.TotalSize - ((long)pieceIndex * torrent.PieceLength))
+                        : torrent.PieceLength;
+
+                    if (pieceLength <= 0)
+                    {
+                        pieceLength = torrent.PieceLength > 0 ? torrent.PieceLength : 16384;
+                    }
+
+                    if (_pieceCache != null)
+                    {
+                        var isComplete = _pieceCache.AddBlock(torrent.Id, pieceIndex, pieceBegin, blockData, pieceLength);
+                        if (isComplete)
+                        {
+                            if (torrent.PieceHashes == null && _torrentService != null && !string.IsNullOrEmpty(torrent.InfoHash))
+                            {
+                                var fetched = _torrentService.GetByInfoHash(torrent.InfoHash);
+                                if (fetched?.PieceHashes != null)
+                                {
+                                    torrent.PieceHashes = fetched.PieceHashes;
+                                }
+                            }
+
+                            byte[] expectedHash = null;
+                            if (torrent.PieceHashes != null && torrent.PieceHashes.Length >= (pieceIndex + 1) * 20 && pieceIndex >= 0)
+                            {
+                                expectedHash = new byte[20];
+                                Buffer.BlockCopy(torrent.PieceHashes, pieceIndex * 20, expectedHash, 0, 20);
+                            }
+
+                            var pieceData = _pieceCache.GetPieceData(torrent.Id, pieceIndex);
+                            var hashMatches = false;
+
+                            if (pieceData != null && expectedHash != null && expectedHash.Length == 20)
+                            {
+                                Span<byte> computedHash = stackalloc byte[20];
+                                if (SHA1.TryHashData(pieceData, computedHash, out var bytesWritten) && bytesWritten == 20)
+                                {
+                                    hashMatches = CryptographicOperations.FixedTimeEquals(computedHash, expectedHash);
+                                }
+                            }
+
+                            if (hashMatches)
+                            {
+                                var storage = _multiFilePieceStorage ?? new MultiFilePieceStorage();
+                                var files = torrent.Files ?? _torrentFileService?.GetByTorrentId(torrent.Id) ?? new List<TorrentFile>();
+                                _pieceCache.VerifyAndFlushPiece(
+                                    torrent.Id,
+                                    pieceIndex,
+                                    expectedHash,
+                                    storage,
+                                    torrent,
+                                    files,
+                                    torrent.SavePath);
+
+                                _pieceStorage?.MarkPieceVerified(torrent.InfoHash, pieceIndex, pieceLength);
+                                _piecePicker?.RemoveActivePiece(pieceIndex);
+                                _logger.Debug("Piece {0} for torrent {1} verified and flushed successfully", pieceIndex, torrent.Name);
+                            }
+                            else
+                            {
+                                _pieceCache.DiscardPiece(torrent.Id, pieceIndex);
+                                _pieceStorage?.MarkPieceCorrupted(torrent.InfoHash, pieceIndex);
+                                _piecePicker?.RemoveActivePiece(pieceIndex);
+
+                                if (connection != null)
+                                {
+                                    connection.CorruptionCount++;
+                                    _logger.Warn(
+                                        "Corrupted piece {0} received from peer {1}:{2} for torrent {3} (corruption count: {4})",
+                                        pieceIndex,
+                                        connection.RemoteIp,
+                                        connection.RemotePort,
+                                        torrent.Name,
+                                        connection.CorruptionCount);
+
+                                    if (connection.CorruptionCount >= CorruptionThreshold)
+                                    {
+                                        _logger.Error(
+                                            "Disconnecting peer {0}:{1} after exceeding corruption threshold ({2}/{3})",
+                                            connection.RemoteIp,
+                                            connection.RemotePort,
+                                            connection.CorruptionCount,
+                                            CorruptionThreshold);
+
+                                        _connectionManager?.Remove(connection);
+                                        connection.Dispose();
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 break;

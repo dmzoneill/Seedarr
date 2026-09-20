@@ -461,6 +461,7 @@ public class PeerConnection : IDisposable
     public DateTime? LastUnchokedAt { get; set; }
     public DateTime LastPexReceived { get; set; } = DateTime.MinValue;
     public int PexRateLimitViolations { get; set; }
+    public int CorruptionCount { get; set; }
     public PeerPexTracker PexTracker { get; } = new();
     public bool SupportsPex => RemoteExtensions.TryGetValue("ut_pex", out var id) && id > 0;
 

@@ -415,6 +415,7 @@ public class WatchFolderService : BackgroundService
                 TotalSize = parsed.TotalSize,
                 PieceCount = parsed.PieceCount,
                 PieceLength = parsed.PieceLength,
+                PieceHashes = parsed.PieceHashes,
                 Comment = parsed.Comment,
                 CreatedBy = parsed.CreatedBy,
                 CreationDate = parsed.CreationDate,

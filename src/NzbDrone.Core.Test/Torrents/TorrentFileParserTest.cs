@@ -1957,4 +1957,29 @@ public class TorrentFileParserTest
         var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
         Assert.That(ex.Message, Does.Contain("Invalid piece length"));
     }
+
+    [Test]
+    public void Parse_should_populate_PieceHashes_with_raw_20_byte_multiples_from_pieces_bencode_string()
+    {
+        var rawPieces = new byte[60];
+        new Random(42).NextBytes(rawPieces);
+
+        var info = new BDictionary
+        {
+            { "name", new BString("multi-piece.iso") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(rawPieces) },
+            { "length", new BNumber(16384 * 3) }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.PieceHashes, Is.Not.Null);
+        Assert.That(result.PieceHashes.Length, Is.EqualTo(60));
+        Assert.That(result.PieceHashes, Is.EqualTo(rawPieces));
+        Assert.That(result.PieceCount, Is.EqualTo(3));
+    }
 }
