@@ -7,8 +7,19 @@ import {
   DEFAULT_VISIBLE,
   COMPACT_VISIBLE,
   STORAGE_KEY,
+  LEGACY_STORAGE_KEY,
+  SORT_KEY_STORAGE,
+  SORT_ASC_STORAGE,
+  PAGE_SIZE_STORAGE,
+  DEFAULT_PAGE_SIZE,
   loadVisibleColumns,
   saveVisibleColumns,
+  loadTableSortPreferences,
+  saveTableSortPreferences,
+  resetTableSortPreferences,
+  loadTablePageSize,
+  saveTablePageSize,
+  resetTablePageSize,
   type ColumnKey,
   type ColumnCategory,
 } from "./columnPreferences";
@@ -132,6 +143,156 @@ describe("ColumnCustomizer: Storage Persistence", () => {
     mockStorage[STORAGE_KEY] = "{not valid json]";
     const loaded = loadVisibleColumns();
     assert.strictEqual(loaded.size, DEFAULT_VISIBLE.size);
+  });
+
+  it("should fall back to default visible columns when all stored keys are obsolete", () => {
+    mockStorage[STORAGE_KEY] = JSON.stringify([
+      "legacy_col_1",
+      "removed_metric_x",
+      "obsolete_tag",
+    ]);
+
+    const loaded = loadVisibleColumns();
+    assert.strictEqual(loaded.size, DEFAULT_VISIBLE.size);
+    for (const key of DEFAULT_VISIBLE) {
+      assert.ok(loaded.has(key));
+    }
+  });
+
+  it("should fall back to default visible columns when stored array is empty", () => {
+    mockStorage[STORAGE_KEY] = JSON.stringify([]);
+    const loaded = loadVisibleColumns();
+    assert.strictEqual(loaded.size, DEFAULT_VISIBLE.size);
+    for (const key of DEFAULT_VISIBLE) {
+      assert.ok(loaded.has(key));
+    }
+  });
+
+  it("should migrate columns from LEGACY_STORAGE_KEY when STORAGE_KEY is absent", () => {
+    mockStorage[LEGACY_STORAGE_KEY] = JSON.stringify(["name", "status", "ratio"]);
+    assert.strictEqual(mockStorage[STORAGE_KEY], undefined);
+
+    const loaded = loadVisibleColumns();
+    assert.strictEqual(loaded.size, 3);
+    assert.ok(loaded.has("name"));
+    assert.ok(loaded.has("status"));
+    assert.ok(loaded.has("ratio"));
+
+    // Verify it migrated to the new v2 storage key
+    assert.ok(mockStorage[STORAGE_KEY] !== undefined);
+    const parsedV2 = JSON.parse(mockStorage[STORAGE_KEY]);
+    assert.deepStrictEqual(parsedV2, ["name", "status", "ratio"]);
+  });
+
+  it("should fall back to default when saving empty or wholly invalid column sets", () => {
+    saveVisibleColumns(new Set(["completely_invalid_key_xyz"]));
+    const loaded = loadVisibleColumns();
+    assert.strictEqual(loaded.size, DEFAULT_VISIBLE.size);
+  });
+});
+
+describe("TableSortPreferences: Persistence & Migration", () => {
+  beforeEach(() => {
+    global.localStorage.clear();
+  });
+
+  it("should return default sort state when localStorage is empty", () => {
+    const prefs = loadTableSortPreferences();
+    assert.strictEqual(prefs.sortKey, null);
+    assert.strictEqual(prefs.sortAsc, true);
+  });
+
+  it("should persist and load sort column and direction", () => {
+    saveTableSortPreferences("name", false);
+    assert.strictEqual(mockStorage[SORT_KEY_STORAGE], "name");
+    assert.strictEqual(mockStorage[SORT_ASC_STORAGE], "false");
+
+    const loaded = loadTableSortPreferences();
+    assert.strictEqual(loaded.sortKey, "name");
+    assert.strictEqual(loaded.sortAsc, false);
+  });
+
+  it("should persist ascending sort correctly", () => {
+    saveTableSortPreferences("totalSize", true);
+    assert.strictEqual(mockStorage[SORT_KEY_STORAGE], "totalSize");
+    assert.strictEqual(mockStorage[SORT_ASC_STORAGE], "true");
+
+    const loaded = loadTableSortPreferences();
+    assert.strictEqual(loaded.sortKey, "totalSize");
+    assert.strictEqual(loaded.sortAsc, true);
+  });
+
+  it("should remove sortKey storage when sortKey is set to null (reset state)", () => {
+    saveTableSortPreferences("uploadSpeed", false);
+    assert.strictEqual(mockStorage[SORT_KEY_STORAGE], "uploadSpeed");
+
+    saveTableSortPreferences(null, true);
+    assert.strictEqual(mockStorage[SORT_KEY_STORAGE], undefined);
+    assert.strictEqual(mockStorage[SORT_ASC_STORAGE], "true");
+
+    const loaded = loadTableSortPreferences();
+    assert.strictEqual(loaded.sortKey, null);
+    assert.strictEqual(loaded.sortAsc, true);
+  });
+
+  it("should completely clear storage on resetTableSortPreferences", () => {
+    saveTableSortPreferences("downloadSpeed", false);
+    resetTableSortPreferences();
+
+    assert.strictEqual(mockStorage[SORT_KEY_STORAGE], undefined);
+    assert.strictEqual(mockStorage[SORT_ASC_STORAGE], undefined);
+
+    const loaded = loadTableSortPreferences();
+    assert.strictEqual(loaded.sortKey, null);
+    assert.strictEqual(loaded.sortAsc, true);
+  });
+
+  it("should safely fall back to null when stored sort key is obsolete or invalid", () => {
+    mockStorage[SORT_KEY_STORAGE] = "obsolete_non_existent_column";
+    mockStorage[SORT_ASC_STORAGE] = "false";
+
+    const loaded = loadTableSortPreferences();
+    assert.strictEqual(loaded.sortKey, null);
+    assert.strictEqual(loaded.sortAsc, false);
+    // Should have cleaned up the invalid key
+    assert.strictEqual(mockStorage[SORT_KEY_STORAGE], undefined);
+  });
+});
+
+describe("TablePageSizePreferences: Persistence", () => {
+  beforeEach(() => {
+    global.localStorage.clear();
+  });
+
+  it("should return default page size (50) when localStorage is empty", () => {
+    const size = loadTablePageSize();
+    assert.strictEqual(size, DEFAULT_PAGE_SIZE);
+  });
+
+  it("should persist and load custom page size", () => {
+    saveTablePageSize(100);
+    assert.strictEqual(mockStorage[PAGE_SIZE_STORAGE], "100");
+
+    const loaded = loadTablePageSize();
+    assert.strictEqual(loaded, 100);
+  });
+
+  it("should fall back to default page size for invalid values in storage", () => {
+    mockStorage[PAGE_SIZE_STORAGE] = "not_a_number";
+    assert.strictEqual(loadTablePageSize(), DEFAULT_PAGE_SIZE);
+
+    mockStorage[PAGE_SIZE_STORAGE] = "-5";
+    assert.strictEqual(loadTablePageSize(), DEFAULT_PAGE_SIZE);
+
+    mockStorage[PAGE_SIZE_STORAGE] = "0";
+    assert.strictEqual(loadTablePageSize(), DEFAULT_PAGE_SIZE);
+  });
+
+  it("should reset page size preference", () => {
+    saveTablePageSize(250);
+    resetTablePageSize();
+    assert.strictEqual(mockStorage[PAGE_SIZE_STORAGE], undefined);
+    assert.strictEqual(loadTablePageSize(), DEFAULT_PAGE_SIZE);
   });
 });
 

@@ -30,6 +30,7 @@ function TorrentIndex() {
     visibleColumns,
     toggleColumn,
     resetToDefaults: resetColumns,
+    resetSort,
     selectAll: selectAllColumns,
     deselectAll: deselectAllColumns,
     applyPreset: applyColumnPreset,
@@ -470,6 +471,7 @@ function TorrentIndex() {
         visibleColumns={visibleColumns}
         onToggleColumn={toggleColumn}
         onResetColumns={resetColumns}
+        onResetSort={resetSort}
         onSelectAllColumns={selectAllColumns}
         onDeselectAllColumns={deselectAllColumns}
         onApplyColumnPreset={applyColumnPreset}

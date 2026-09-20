@@ -16,6 +16,7 @@ export interface ColumnCustomizerModalProps {
   visibleColumns: Set<string>;
   onToggleColumn: (key: string) => void;
   onResetToDefaults?: () => void;
+  onResetSort?: () => void;
   onSelectAll?: () => void;
   onDeselectAll?: () => void;
   onApplyPreset?: (preset: PresetName) => void;
@@ -29,6 +30,7 @@ export function ColumnCustomizerModal({
   visibleColumns,
   onToggleColumn,
   onResetToDefaults,
+  onResetSort,
   onSelectAll,
   onDeselectAll,
   onApplyPreset,
@@ -342,6 +344,20 @@ export function ColumnCustomizerModal({
                   "torrents.columnCustomizer.resetDefaults",
                   undefined,
                   "Reset to Defaults",
+                )}
+              </button>
+            )}
+            {onResetSort && (
+              <button
+                type="button"
+                className="btn btn-small btn-outline"
+                onClick={onResetSort}
+                title="Reset table sort order"
+              >
+                {t(
+                  "torrents.columnCustomizer.resetSort",
+                  undefined,
+                  "Reset Sort",
                 )}
               </button>
             )}

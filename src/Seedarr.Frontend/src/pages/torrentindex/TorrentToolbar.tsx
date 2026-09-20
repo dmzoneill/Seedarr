@@ -51,6 +51,7 @@ interface TorrentToolbarProps {
   visibleColumns?: Set<string>;
   onToggleColumn?: (key: string) => void;
   onResetColumns?: () => void;
+  onResetSort?: () => void;
   onSelectAllColumns?: () => void;
   onDeselectAllColumns?: () => void;
   onApplyColumnPreset?: (preset: PresetName) => void;
@@ -87,6 +88,7 @@ export function TorrentToolbar({
   visibleColumns,
   onToggleColumn,
   onResetColumns,
+  onResetSort,
   onSelectAllColumns,
   onDeselectAllColumns,
   onApplyColumnPreset,
@@ -121,6 +123,7 @@ export function TorrentToolbar({
   const activeVisibleColumns = visibleColumns ?? defaultPrefs.visibleColumns;
   const handleToggleColumn = onToggleColumn ?? defaultPrefs.toggleColumn;
   const handleResetDefaults = onResetColumns ?? defaultPrefs.resetToDefaults;
+  const handleResetSort = onResetSort ?? defaultPrefs.resetSort;
   const handleSelectAll = onSelectAllColumns ?? defaultPrefs.selectAll;
   const handleDeselectAll = onDeselectAllColumns ?? defaultPrefs.deselectAll;
   const handleApplyPreset = onApplyColumnPreset ?? defaultPrefs.applyPreset;
@@ -413,6 +416,7 @@ export function TorrentToolbar({
         visibleColumns={activeVisibleColumns}
         onToggleColumn={handleToggleColumn}
         onResetToDefaults={handleResetDefaults}
+        onResetSort={handleResetSort}
         onSelectAll={handleSelectAll}
         onDeselectAll={handleDeselectAll}
         onApplyPreset={handleApplyPreset}

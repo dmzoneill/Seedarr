@@ -195,6 +195,7 @@ const en = {
       tags: "Tags",
       actions: "Actions",
       savePath: "Save Path",
+      resetSort: "Reset Sort Order",
     },
     columnCustomizer: {
       title: "Customize Columns",
@@ -205,6 +206,7 @@ const en = {
       presetCompact: "Compact",
       presetAll: "All",
       resetDefaults: "Reset to Defaults",
+      resetSort: "Reset Sort",
       minOneColumn: "At least one column must remain visible",
       noMatches: "No columns match \"{query}\"",
       categories: {

@@ -183,6 +183,11 @@ export const ALL_COLUMNS: ColumnDef[] = [
 ];
 
 export const STORAGE_KEY = "seedarr-visible-columns-v2";
+export const LEGACY_STORAGE_KEY = "seedarr-visible-columns";
+export const SORT_KEY_STORAGE = "seedarr-table-sort-key";
+export const SORT_ASC_STORAGE = "seedarr-table-sort-asc";
+export const PAGE_SIZE_STORAGE = "seedarr-table-page-size";
+export const DEFAULT_PAGE_SIZE = 50;
 
 export const DEFAULT_VISIBLE: ReadonlySet<string> = new Set([
   "#",
@@ -211,13 +216,24 @@ export const COMPACT_VISIBLE: ReadonlySet<string> = new Set([
 export function loadVisibleColumns(): Set<string> {
   try {
     if (typeof localStorage !== "undefined") {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      let stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) {
+        const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (legacy) {
+          stored = legacy;
+        }
+      }
       if (stored) {
         const parsed = JSON.parse(stored) as string[];
         if (Array.isArray(parsed) && parsed.length > 0) {
           const known = new Set(ALL_COLUMNS.map((c) => c.key));
           const valid = parsed.filter((key) => known.has(key as ColumnKey));
-          if (valid.length > 0) return new Set(valid);
+          if (valid.length > 0) {
+            if (!localStorage.getItem(STORAGE_KEY)) {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(valid));
+            }
+            return new Set(valid);
+          }
         }
       }
     }
@@ -230,10 +246,107 @@ export function loadVisibleColumns(): Set<string> {
 export function saveVisibleColumns(cols: Set<string>): void {
   try {
     if (typeof localStorage !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...cols]));
+      const known = new Set(ALL_COLUMNS.map((c) => c.key));
+      const valid = [...cols].filter((key) => known.has(key as ColumnKey));
+      const finalCols = valid.length > 0 ? valid : [...DEFAULT_VISIBLE];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(finalCols));
     }
   } catch (err) {
     console.warn("Failed to save column preferences to localStorage:", err);
+  }
+}
+
+export function loadTableSortPreferences(): {
+  sortKey: ColumnKey | null;
+  sortAsc: boolean;
+} {
+  try {
+    if (typeof localStorage !== "undefined") {
+      const storedKey = localStorage.getItem(SORT_KEY_STORAGE);
+      const storedAsc = localStorage.getItem(SORT_ASC_STORAGE);
+
+      let sortKey: ColumnKey | null = null;
+      if (storedKey) {
+        const knownSortable = new Set(
+          ALL_COLUMNS.filter((c) => c.sortable).map((c) => c.key),
+        );
+        if (knownSortable.has(storedKey as ColumnKey)) {
+          sortKey = storedKey as ColumnKey;
+        } else {
+          localStorage.removeItem(SORT_KEY_STORAGE);
+        }
+      }
+
+      const sortAsc = storedAsc !== null ? storedAsc !== "false" : true;
+      return { sortKey, sortAsc };
+    }
+  } catch (err) {
+    console.warn("Failed to load sort preferences from localStorage:", err);
+  }
+  return { sortKey: null, sortAsc: true };
+}
+
+export function saveTableSortPreferences(
+  sortKey: ColumnKey | null,
+  sortAsc: boolean,
+): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      if (sortKey === null) {
+        localStorage.removeItem(SORT_KEY_STORAGE);
+      } else {
+        localStorage.setItem(SORT_KEY_STORAGE, sortKey);
+      }
+      localStorage.setItem(SORT_ASC_STORAGE, String(sortAsc));
+    }
+  } catch (err) {
+    console.warn("Failed to save sort preferences to localStorage:", err);
+  }
+}
+
+export function resetTableSortPreferences(): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(SORT_KEY_STORAGE);
+      localStorage.removeItem(SORT_ASC_STORAGE);
+    }
+  } catch (err) {
+    console.warn("Failed to reset sort preferences from localStorage:", err);
+  }
+}
+
+export function loadTablePageSize(): number {
+  try {
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem(PAGE_SIZE_STORAGE);
+      if (stored) {
+        const parsed = parseInt(stored, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to load table page size preference:", err);
+  }
+  return DEFAULT_PAGE_SIZE;
+}
+
+export function saveTablePageSize(pageSize: number): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(PAGE_SIZE_STORAGE, String(pageSize));
+    }
+  } catch (err) {
+    console.warn("Failed to save table page size preference:", err);
+  }
+}
+
+export function resetTablePageSize(): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(PAGE_SIZE_STORAGE);
+    }
+  } catch (err) {
+    console.warn("Failed to reset table page size preference:", err);
   }
 }
 
@@ -250,10 +363,28 @@ export interface ColumnPreferencesHook {
   applyPreset: (preset: PresetName) => void;
   toggleCategory: (category: ColumnCategory, enable?: boolean) => void;
   isDefault: boolean;
+  sortKey: ColumnKey | null;
+  sortAsc: boolean;
+  setSort: (key: ColumnKey | null, asc?: boolean) => void;
+  resetSort: () => void;
 }
 
 export function useColumnPreferences(): ColumnPreferencesHook {
   const [visibleColumns, setVisibleColumnsState] = useState<Set<string>>(loadVisibleColumns);
+  const [sortState, setSortState] = useState<{
+    sortKey: ColumnKey | null;
+    sortAsc: boolean;
+  }>(loadTableSortPreferences);
+
+  const setSort = useCallback((key: ColumnKey | null, asc = true) => {
+    setSortState({ sortKey: key, sortAsc: asc });
+    saveTableSortPreferences(key, asc);
+  }, []);
+
+  const resetSort = useCallback(() => {
+    setSortState({ sortKey: null, sortAsc: true });
+    resetTableSortPreferences();
+  }, []);
 
   const setVisibleColumns = useCallback((cols: Set<string>) => {
     let nextCols = cols;
@@ -296,7 +427,8 @@ export function useColumnPreferences(): ColumnPreferencesHook {
     const defaults = new Set(DEFAULT_VISIBLE);
     setVisibleColumnsState(defaults);
     saveVisibleColumns(defaults);
-  }, []);
+    resetSort();
+  }, [resetSort]);
 
   const selectAll = useCallback(() => {
     const all = new Set(ALL_COLUMNS.map((c) => c.key));
@@ -355,11 +487,19 @@ export function useColumnPreferences(): ColumnPreferencesHook {
         try {
           const parsed = JSON.parse(e.newValue) as string[];
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setVisibleColumnsState(new Set(parsed));
+            const known = new Set(ALL_COLUMNS.map((c) => c.key));
+            const valid = parsed.filter((key) => known.has(key as ColumnKey));
+            if (valid.length > 0) {
+              setVisibleColumnsState(new Set(valid));
+            } else {
+              setVisibleColumnsState(new Set(DEFAULT_VISIBLE));
+            }
           }
         } catch {
           // Ignore invalid parse
         }
+      } else if (e.key === SORT_KEY_STORAGE || e.key === SORT_ASC_STORAGE) {
+        setSortState(loadTableSortPreferences());
       }
     }
     window.addEventListener("storage", handleStorage);
@@ -368,7 +508,9 @@ export function useColumnPreferences(): ColumnPreferencesHook {
 
   const isDefault =
     visibleColumns.size === DEFAULT_VISIBLE.size &&
-    [...visibleColumns].every((k) => DEFAULT_VISIBLE.has(k));
+    [...visibleColumns].every((k) => DEFAULT_VISIBLE.has(k)) &&
+    sortState.sortKey === null &&
+    sortState.sortAsc === true;
 
   return {
     visibleColumns,
@@ -381,5 +523,9 @@ export function useColumnPreferences(): ColumnPreferencesHook {
     applyPreset,
     toggleCategory,
     isDefault,
+    sortKey: sortState.sortKey,
+    sortAsc: sortState.sortAsc,
+    setSort,
+    resetSort,
   };
 }
