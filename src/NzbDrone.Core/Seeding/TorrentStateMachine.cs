@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using NLog;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 
@@ -11,13 +12,19 @@ public class TorrentStateMachine : ITorrentStateMachine
     private readonly ITorrentEventLogService _eventLogService;
     private readonly IEventAggregator _eventAggregator;
     private readonly ITorrentService _torrentService;
+    private readonly ICategoryService _categoryService;
     private readonly Logger _logger;
 
-    public TorrentStateMachine(ITorrentEventLogService eventLogService, IEventAggregator eventAggregator = null, ITorrentService torrentService = null)
+    public TorrentStateMachine(
+        ITorrentEventLogService eventLogService,
+        IEventAggregator eventAggregator = null,
+        ITorrentService torrentService = null,
+        ICategoryService categoryService = null)
     {
         _eventLogService = eventLogService;
         _eventAggregator = eventAggregator;
         _torrentService = torrentService;
+        _categoryService = categoryService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -73,7 +80,7 @@ public class TorrentStateMachine : ITorrentStateMachine
     {
         var stoppedTorrents = new List<Torrent>();
 
-        if (seedingTorrents == null || seedingTorrents.Count == 0 || globalRatioLimit <= 0)
+        if (seedingTorrents == null || seedingTorrents.Count == 0)
         {
             return stoppedTorrents;
         }
@@ -81,11 +88,52 @@ public class TorrentStateMachine : ITorrentStateMachine
         for (var i = seedingTorrents.Count - 1; i >= 0; i--)
         {
             var torrent = seedingTorrents[i];
-            if (torrent.Ratio >= globalRatioLimit)
+
+            Category category = null;
+            if (_categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
+            {
+                category = _categoryService.GetByName(torrent.Category);
+            }
+
+            double? effectiveRatioLimit = null;
+            if (torrent.RatioLimit.HasValue && torrent.RatioLimit.Value > 0)
+            {
+                effectiveRatioLimit = torrent.RatioLimit.Value;
+            }
+            else if (category != null && category.TargetRatio > 0)
+            {
+                effectiveRatioLimit = category.TargetRatio;
+            }
+            else if (globalRatioLimit > 0)
+            {
+                effectiveRatioLimit = globalRatioLimit;
+            }
+
+            long? effectiveTimeLimitSeconds = null;
+            if (torrent.SeedingTimeLimit.HasValue && torrent.SeedingTimeLimit.Value > 0)
+            {
+                effectiveTimeLimitSeconds = torrent.SeedingTimeLimit.Value;
+            }
+            else if (category != null && category.TargetSeedTimeMinutes > 0)
+            {
+                effectiveTimeLimitSeconds = category.TargetSeedTimeMinutes * 60L;
+            }
+
+            var ratioReached = effectiveRatioLimit.HasValue && torrent.Ratio >= effectiveRatioLimit.Value;
+            var timeReached = effectiveTimeLimitSeconds.HasValue && torrent.SeedingTime >= effectiveTimeLimitSeconds.Value;
+
+            if (ratioReached || timeReached)
             {
                 var effectiveAction = string.IsNullOrWhiteSpace(action) ? "Stop" : action;
-                _logger.Info("Torrent {0} reached global seed ratio limit ({1:F2}), action: {2}", torrent.Name, globalRatioLimit, effectiveAction);
-                _eventLogService.Info(torrent.Id, "Seeding", $"Global seed ratio limit reached ({globalRatioLimit:F2}), action: {effectiveAction}");
+                var reason = ratioReached && timeReached
+                    ? $"Seed limit reached (ratio: {torrent.Ratio:F2} >= {effectiveRatioLimit:F2}, time: {torrent.SeedingTime}s >= {effectiveTimeLimitSeconds}s)"
+                    : ratioReached
+                        ? $"Seed ratio limit reached ({torrent.Ratio:F2} >= {effectiveRatioLimit:F2})"
+                        : $"Seed time limit reached ({torrent.SeedingTime}s >= {effectiveTimeLimitSeconds}s)";
+
+                _logger.Info("Torrent {0} reached {1}, action: {2}", torrent.Name, reason, effectiveAction);
+                _eventLogService?.Info(torrent.Id, "Seeding", $"{reason}, action: {effectiveAction}");
+
                 var oldStatus = torrent.Status;
                 var newStatus = string.Equals(effectiveAction, "Pause", StringComparison.OrdinalIgnoreCase)
                     ? TorrentStatus.Paused
@@ -96,8 +144,18 @@ public class TorrentStateMachine : ITorrentStateMachine
                 torrent.DownloadSpeed = 0;
                 torrent.Active = false;
                 seedingTorrents.RemoveAt(i);
+
                 _eventAggregator?.PublishEvent(new TorrentSeedGoalReachedEvent(torrent));
-                _eventAggregator?.PublishEvent(new TorrentRatioReachedEvent(torrent, torrent.Ratio));
+                if (ratioReached)
+                {
+                    _eventAggregator?.PublishEvent(new TorrentRatioReachedEvent(torrent, torrent.Ratio));
+                }
+
+                if (timeReached)
+                {
+                    _eventAggregator?.PublishEvent(new TorrentSeedingTimeReachedEvent(torrent, TimeSpan.FromSeconds(torrent.SeedingTime)));
+                }
+
                 _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, newStatus));
 
                 if (string.Equals(effectiveAction, "RemoveTorrent", StringComparison.OrdinalIgnoreCase))

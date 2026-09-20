@@ -107,7 +107,7 @@ public class SeedingEngine : BackgroundService
         _eventLogService = eventLogService;
         _clock = clock ?? new SystemClock();
         _random = random ?? new NzbDrone.Common.EnvironmentInfo.RandomNumberGenerator();
-        _stateMachine = stateMachine ?? new TorrentStateMachine(eventLogService, eventAggregator, torrentService);
+        _stateMachine = stateMachine ?? new TorrentStateMachine(eventLogService, eventAggregator, torrentService, categoryService);
         _stopPolicy = stopPolicy ?? new StopPolicy(configService, _random, tagService);
         _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
         _trafficPatternSimulator = trafficPatternSimulator ?? new TrafficPatternSimulator(configService, _random, _clock);
@@ -384,7 +384,7 @@ public class SeedingEngine : BackgroundService
 
         var globalRatioLimit = _configService.GlobalSeedRatioLimit;
         List<Torrent> stoppedByRatio = null;
-        if (globalRatioLimit > 0)
+        if (seedingTorrents.Count > 0)
         {
             stoppedByRatio = _stateMachine.ApplyRatioLimit(seedingTorrents, globalRatioLimit, _configService.SeedGoalReachedAction);
         }

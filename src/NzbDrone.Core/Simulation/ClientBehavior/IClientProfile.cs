@@ -12,6 +12,8 @@ public interface IClientProfile : IProvider
     bool SupportsEncryption { get; }
     bool SupportsDht { get; }
     bool SupportsPex { get; }
+    bool SupportsExtensionProtocol => true;
+    bool SupportsFastExtension => true;
     string GeneratePeerId();
 
     IReadOnlyList<string> AnnounceParameterOrder { get; }

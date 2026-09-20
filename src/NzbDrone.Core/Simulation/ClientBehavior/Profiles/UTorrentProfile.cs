@@ -14,6 +14,8 @@ public class UTorrentProfile : IClientProfile
     public bool SupportsEncryption => true;
     public bool SupportsDht => true;
     public bool SupportsPex => true;
+    public bool SupportsExtensionProtocol => true;
+    public bool SupportsFastExtension => true;
 
     public IReadOnlyList<string> AnnounceParameterOrder => new[]
     {
