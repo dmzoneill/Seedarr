@@ -42,6 +42,7 @@ public class TrackerAnnounceResult
     public string FailureReason { get; set; }
     public string WarningMessage { get; set; }
     public long LastAnnouncedUploaded { get; set; }
+    public int RetryAfterSeconds { get; set; }
 }
 
 public class TrackerAnnounceService : ITrackerAnnounceService,
@@ -128,6 +129,23 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         }
     }
 
+    private static bool IsRateLimited(TrackerEntry entry, bool isFirstAnnounce, out int minIntervalSeconds, out int retryAfter)
+    {
+        minIntervalSeconds = entry.MinAnnounceInterval > 0
+            ? entry.MinAnnounceInterval
+            : Math.Min(entry.AnnounceInterval > 0 ? entry.AnnounceInterval / 2 : 60, 60);
+
+        var earliestAllowed = (entry.LastAnnounce ?? DateTime.MinValue).AddSeconds(minIntervalSeconds);
+        if (!isFirstAnnounce && DateTime.UtcNow < earliestAllowed)
+        {
+            retryAfter = Math.Max(1, (int)Math.Ceiling((earliestAllowed - DateTime.UtcNow).TotalSeconds));
+            return true;
+        }
+
+        retryAfter = 0;
+        return false;
+    }
+
     public List<TrackerAnnounceResult> AnnounceTorrent(Torrent torrent, bool force = false, AnnounceEvent eventType = AnnounceEvent.None)
     {
         var results = new List<TrackerAnnounceResult>();
@@ -193,6 +211,19 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 continue;
             }
 
+            if (IsRateLimited(entry, isFirstAnnounce, out var minIntervalSeconds, out var retryAfter))
+            {
+                results.Add(new TrackerAnnounceResult
+                {
+                    TrackerId = entry.Id,
+                    Url = entry.Url,
+                    Success = false,
+                    FailureReason = $"Rate limited: minimum announce interval of {minIntervalSeconds}s not elapsed (retry in {retryAfter}s)",
+                    RetryAfterSeconds = retryAfter
+                });
+                continue;
+            }
+
             var result = ExecuteAnnounce(torrent, entry, isFirstAnnounce, eventType);
             results.Add(result);
 
@@ -237,6 +268,18 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         if (!force && !isFirstAnnounce && entry.NextAnnounce.HasValue && entry.NextAnnounce.Value > DateTime.UtcNow)
         {
             return new TrackerAnnounceResult { Success = false, FailureReason = "Tracker not due for announce yet" };
+        }
+
+        if (IsRateLimited(entry, isFirstAnnounce, out var minIntervalSeconds, out var retryAfter))
+        {
+            return new TrackerAnnounceResult
+            {
+                TrackerId = entry.Id,
+                Url = entry.Url,
+                Success = false,
+                FailureReason = $"Rate limited: minimum announce interval of {minIntervalSeconds}s not elapsed (retry in {retryAfter}s)",
+                RetryAfterSeconds = retryAfter
+            };
         }
 
         return ExecuteAnnounce(torrent, entry, isFirstAnnounce, eventType);

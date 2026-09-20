@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Torrent } from "../../api/types";
 import {
   useTorrentTrackers,
@@ -17,6 +17,26 @@ import TrackerFavicon from "../../components/TrackerFavicon";
 import TrackerMultiSelectModal, {
   TrackerPickerItem,
 } from "../../components/TrackerMultiSelectModal";
+
+function getReannounceCountdown(tracker: {
+  lastAnnounce?: string | null;
+  totalAnnounces?: number;
+  minAnnounceInterval?: number;
+  announceInterval?: number;
+}): number {
+  if (!tracker.lastAnnounce || !tracker.totalAnnounces || tracker.totalAnnounces === 0) {
+    return 0;
+  }
+  const minInterval = (tracker.minAnnounceInterval ?? 0) > 0
+    ? tracker.minAnnounceInterval!
+    : Math.min((tracker.announceInterval ?? 0) > 0 ? Math.floor(tracker.announceInterval! / 2) : 60, 60);
+
+  const lastAnnounceTime = new Date(tracker.lastAnnounce).getTime();
+  if (isNaN(lastAnnounceTime)) return 0;
+  const earliestAllowed = lastAnnounceTime + minInterval * 1000;
+  const remainingSeconds = Math.ceil((earliestAllowed - Date.now()) / 1000);
+  return remainingSeconds > 0 ? remainingSeconds : 0;
+}
 
 function formatTrackerStatus(status: string | number | unknown): string {
   const s = String(status ?? "");
@@ -103,6 +123,19 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
   const [showPickerModal, setShowPickerModal] = useState(false);
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
   const [isAddingBatch, setIsAddingBatch] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  const hasActiveCountdown = useMemo(() => {
+    return (trackers ?? []).some((t) => getReannounceCountdown(t) > 0);
+  }, [trackers, currentTime]);
+
+  useEffect(() => {
+    if (!hasActiveCountdown) return;
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [hasActiveCountdown]);
 
   const attachedUrls = useMemo(() => {
     return new Set(
@@ -312,6 +345,8 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                   (tracker.url ?? "").trim().toLowerCase(),
                 );
                 const ind = getAttachedTrackerIndicator(tracker.status, det);
+                const countdown = getReannounceCountdown(tracker);
+                const isRateLimited = countdown > 0;
                 return (
                   <tr key={tracker.id} className="torrent-table-row">
                     <td className="mono" style={{ wordBreak: "break-all" }}>
@@ -425,20 +460,43 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                                     data.message || "Announce queued",
                                     "success",
                                   );
+                                  refetch();
                                 },
                                 onError: (err) => {
-                                  showToast(
-                                    `Announce failed: ${err.message}`,
-                                    "error",
-                                  );
+                                  const isRateLimit =
+                                    err.message?.includes("Rate limited") ||
+                                    err.message?.includes("429") ||
+                                    err.message?.includes("Too Many Requests");
+                                  if (isRateLimit) {
+                                    showToast(
+                                      err.message.includes("Rate limited")
+                                        ? err.message
+                                        : "Tracker is rate limited. Please wait before announcing again.",
+                                      "warning",
+                                    );
+                                  } else {
+                                    showToast(
+                                      `Announce failed: ${err.message}`,
+                                      "error",
+                                    );
+                                  }
+                                  refetch();
                                 },
                               },
                             );
                           }}
-                          disabled={announceTracker.isPending}
-                          title="Trigger immediate tracker announce"
+                          disabled={announceTracker.isPending || isRateLimited}
+                          title={
+                            isRateLimited
+                              ? `Rate limited: minimum announce interval not elapsed (retry in ${countdown}s)`
+                              : "Trigger immediate tracker announce"
+                          }
                         >
-                          {announceTracker.isPending ? "..." : "Announce"}
+                          {announceTracker.isPending
+                            ? "..."
+                            : isRateLimited
+                              ? `${countdown}s`
+                              : "Announce"}
                         </button>
                         <button
                           className="btn btn-sm btn-danger"
