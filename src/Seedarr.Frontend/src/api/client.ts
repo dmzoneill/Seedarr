@@ -86,6 +86,13 @@ class ApiClient {
     if (!response.ok) {
       if (response.status === 401 && !endpoint.includes("/auth/login")) {
         broadcastSessionExpired();
+        if (
+          typeof window !== "undefined" &&
+          window.location.pathname !== "/login"
+        ) {
+          const returnUrl = window.location.pathname + window.location.search;
+          window.location.href = `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+        }
       }
       const errorMsg = await this.parseError(response);
       throw new Error(errorMsg);
@@ -209,8 +216,11 @@ class ApiClient {
     return this.get<FileSystemResource>(`/filesystem${query ? `?${query}` : ""}`);
   }
 
-  getAuthProviders(): Promise<AuthProvider[]> {
-    return this.get<AuthProvider[]>("/auth/providers");
+  getAuthProviders(returnUrl?: string): Promise<AuthProvider[]> {
+    const query = returnUrl
+      ? `?returnUrl=${encodeURIComponent(returnUrl)}`
+      : "";
+    return this.get<AuthProvider[]>(`/auth/providers${query}`);
   }
 
   getCurrentUser(): Promise<CurrentUser> {
@@ -308,6 +318,13 @@ class ApiClient {
     if (!response.ok) {
       if (response.status === 401 && !endpoint.includes("/auth/login")) {
         broadcastSessionExpired();
+        if (
+          typeof window !== "undefined" &&
+          window.location.pathname !== "/login"
+        ) {
+          const returnUrl = window.location.pathname + window.location.search;
+          window.location.href = `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+        }
       }
       const errorMsg = await this.parseError(response);
       throw new Error(errorMsg);

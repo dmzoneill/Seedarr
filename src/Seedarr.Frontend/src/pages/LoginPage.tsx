@@ -1,16 +1,35 @@
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import { api } from "../api/client";
 import { broadcastLogin } from "../utils/authChannel";
 import { AuthProvider } from "../api/types";
 import SeedarrLogo from "../components/icons/SeedarrLogo";
 import { useTranslation } from "../i18n";
 
+function sanitizeReturnUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith("/") &&
+    !trimmed.startsWith("//") &&
+    !trimmed.startsWith("/\\") &&
+    !trimmed.includes("\\")
+  ) {
+    return trimmed;
+  }
+  return null;
+}
+
 interface LoginPageProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (returnUrl?: string) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const rawReturnUrl = searchParams.get("returnUrl");
+  const returnUrl = sanitizeReturnUrl(rawReturnUrl) || undefined;
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -20,13 +39,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [loadingProviders, setLoadingProviders] = useState(true);
 
   useEffect(() => {
-    loadProviders();
-  }, []);
+    loadProviders(returnUrl);
+  }, [returnUrl]);
 
-  const loadProviders = async () => {
+  const loadProviders = async (redirectUrl?: string) => {
     try {
       setLoadingProviders(true);
-      const data = await api.getAuthProviders();
+      const data = await api.getAuthProviders(redirectUrl);
       setProviders(data || []);
     } catch {
       // Ignore if providers cannot be loaded
@@ -48,9 +67,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     try {
       setLoading(true);
       setError(null);
-      const user = await api.login({ username: username.trim(), password, rememberMe });
+      const user = await api.login({
+        username: username.trim(),
+        password,
+        rememberMe,
+        returnUrl,
+      });
       broadcastLogin(user);
-      onLoginSuccess();
+      onLoginSuccess(returnUrl);
     } catch (err: any) {
       setError(
         err?.message ||

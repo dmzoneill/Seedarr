@@ -23,26 +23,40 @@ public class AuthController : ControllerBase
 {
     private readonly IIdentityProviderService _identityProviderService;
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly ISessionRevocationService _sessionRevocationService;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public AuthController(
         IIdentityProviderService identityProviderService,
-        IConfigFileProvider configFileProvider)
+        IConfigFileProvider configFileProvider,
+        ISessionRevocationService sessionRevocationService = null)
     {
         _identityProviderService = identityProviderService;
         _configFileProvider = configFileProvider;
+        _sessionRevocationService = sessionRevocationService;
     }
 
     [HttpGet("providers")]
     [AllowAnonymous]
-    public ActionResult<List<AuthProviderResource>> GetProviders()
+    public ActionResult<List<AuthProviderResource>> GetProviders([FromQuery] string returnUrl = null)
     {
         var providers = new List<AuthProviderResource>();
         var basePath = GetEffectivePathBase();
+        string safeReturnUrl = null;
+        if (!string.IsNullOrWhiteSpace(returnUrl))
+        {
+            safeReturnUrl = SanitizeRedirectUrl(returnUrl, basePath);
+        }
 
         var enabledProviders = _identityProviderService.GetEnabled();
         foreach (var p in enabledProviders)
         {
+            var loginUrl = $"{basePath}/api/v1/auth/login/{p.ProviderId}";
+            if (!string.IsNullOrWhiteSpace(safeReturnUrl))
+            {
+                loginUrl += $"?returnUrl={Uri.EscapeDataString(safeReturnUrl)}";
+            }
+
             providers.Add(new AuthProviderResource
             {
                 Id = p.Id,
@@ -51,7 +65,7 @@ public class AuthController : ControllerBase
                 ProviderType = p.ProviderType,
                 IconUrl = p.IconUrl,
                 ButtonText = p.ButtonText ?? $"Sign in with {p.Name}",
-                LoginUrl = $"{basePath}/api/v1/auth/login/{p.ProviderId}",
+                LoginUrl = loginUrl,
             });
         }
 
@@ -86,21 +100,25 @@ public class AuthController : ControllerBase
                        (!string.IsNullOrWhiteSpace(masterApiKey) && FixedTimeEquals(enteredUser, masterApiKey))
                        ? "admin"
                        : enteredUser;
+        var sessionId = Guid.NewGuid().ToString("N");
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, "1"),
             new(ClaimTypes.Name, username),
             new("DisplayName", username == "admin" ? "Administrator" : username),
             new(ClaimTypes.Role, "Admin"),
+            new("SessionId", sessionId),
         };
 
         var identity = new ClaimsIdentity(claims, "Cookies");
         var principal = new ClaimsPrincipal(identity);
 
+        var now = DateTimeOffset.UtcNow;
         var authProps = new AuthenticationProperties
         {
             IsPersistent = request.RememberMe,
-            ExpiresUtc = request.RememberMe ? DateTimeOffset.UtcNow.AddDays(30) : DateTimeOffset.UtcNow.AddHours(8),
+            IssuedUtc = now,
+            ExpiresUtc = request.RememberMe ? now.AddDays(30) : now.AddHours(8),
         };
 
         await HttpContext.SignInAsync("Cookies", principal, authProps);
@@ -124,6 +142,28 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult> Logout()
     {
+        var user = User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            var authResult = await HttpContext.AuthenticateAsync("Cookies");
+            if (authResult?.Succeeded == true && authResult.Principal != null)
+            {
+                user = authResult.Principal;
+            }
+        }
+
+        var sessionId = user?.FindFirst("SessionId")?.Value;
+        var username = user?.Identity?.Name;
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            _sessionRevocationService?.RevokeSession(sessionId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            _sessionRevocationService?.RevokeSession(username);
+        }
+
         await HttpContext.SignOutAsync("Cookies");
         return Ok(new { message = "Logged out successfully" });
     }

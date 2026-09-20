@@ -596,9 +596,9 @@ function App() {
     return (
       <ErrorBoundary>
         <LoginPage
-          onLoginSuccess={() => {
+          onLoginSuccess={(returnUrl) => {
             loadUser();
-            navigate("/");
+            navigate(returnUrl || "/");
           }}
         />
       </ErrorBoundary>
@@ -1362,9 +1362,9 @@ function App() {
                 path="/login"
                 element={
                   <LoginPage
-                    onLoginSuccess={() => {
+                    onLoginSuccess={(returnUrl) => {
                       loadUser();
-                      navigate("/");
+                      navigate(returnUrl || "/");
                     }}
                   />
                 }
