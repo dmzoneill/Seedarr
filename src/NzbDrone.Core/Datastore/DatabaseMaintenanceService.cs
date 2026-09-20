@@ -44,6 +44,49 @@ public class DatabaseMaintenanceService : IDatabaseMaintenanceService
         return PerformMaintenance(maxPages);
     }
 
+    public DatabaseMaintenanceResult CheckpointWal(WalCheckpointMode mode = WalCheckpointMode.Passive)
+    {
+        var dbTypeStr = _mainDatabase?.DatabaseType.ToString() ?? "Unknown";
+
+        if (_mainDatabase == null)
+        {
+            return new DatabaseMaintenanceResult
+            {
+                Success = false,
+                DatabaseType = dbTypeStr,
+                CheckpointMode = mode,
+                Message = "Database is unavailable."
+            };
+        }
+
+        if (_mainDatabase.DatabaseType != DatabaseType.SQLite)
+        {
+            return new DatabaseMaintenanceResult
+            {
+                Success = true,
+                DatabaseType = dbTypeStr,
+                CheckpointMode = mode,
+                Message = $"{dbTypeStr} database does not use WAL mode."
+            };
+        }
+
+        try
+        {
+            return _mainDatabase.Checkpoint(mode);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to perform SQLite WAL checkpoint ({0})", mode);
+            return new DatabaseMaintenanceResult
+            {
+                Success = false,
+                DatabaseType = dbTypeStr,
+                CheckpointMode = mode,
+                Message = ex.Message
+            };
+        }
+    }
+
     public DatabaseMaintenanceResult PerformMaintenance(int? maxPages = null)
     {
         var dbTypeStr = _mainDatabase?.DatabaseType.ToString() ?? "Unknown";

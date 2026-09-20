@@ -290,7 +290,7 @@ public class AppLifetimeTest
         // Phase 3: Connection teardown and database checkpoint
         await _connectionManager.Received(1).DisconnectAllAsync();
         _mainDatabase.Received(1).Optimize();
-        _mainDatabase.Received(1).Checkpoint();
+        _mainDatabase.Received(1).Checkpoint(WalCheckpointMode.Truncate);
     }
 
     [Test]
@@ -365,7 +365,7 @@ public class AppLifetimeTest
         _fastResumeService.Received(1).SaveAll();
         _pieceStorage.Received(1).Flush();
         await _connectionManager.Received(1).DisconnectAllAsync();
-        _mainDatabase.Received(1).Checkpoint();
+        _mainDatabase.Received(1).Checkpoint(WalCheckpointMode.Truncate);
     }
 
     [Test]
@@ -384,6 +384,6 @@ public class AppLifetimeTest
 
         Assert.DoesNotThrowAsync(async () => await _subject.StopAsync(CancellationToken.None));
 
-        _mainDatabase.Received(1).Checkpoint();
+        _mainDatabase.Received(1).Checkpoint(WalCheckpointMode.Truncate);
     }
 }
