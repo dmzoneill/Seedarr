@@ -94,11 +94,16 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
   );
   const totalPeers = totalSeeders + totalLeechers;
 
+  const isWarningOrError = (type?: string) => {
+    const t = type?.toLowerCase();
+    return t === "warning" || t === "error";
+  };
+
   const hasIssues =
     healthChecks &&
-    healthChecks.some((c) => c.type === "Warning" || c.type === "Error");
+    healthChecks.some((c) => isWarningOrError(c.type));
   const issuesCount = hasIssues
-    ? healthChecks.filter((c) => c.type === "Warning" || c.type === "Error")
+    ? healthChecks.filter((c) => isWarningOrError(c.type))
         .length
     : 0;
 

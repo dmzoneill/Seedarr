@@ -7,9 +7,11 @@ using NLog.Config;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.Instrumentation;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.HealthCheck;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
+using NzbDrone.SignalR;
 
 namespace NzbDrone.Core.Test.HealthCheck;
 
@@ -313,5 +315,63 @@ public class HealthCheckServiceTest
         Assert.That(results, Has.Count.EqualTo(1));
         Assert.That(results.First().Type, Is.EqualTo(HealthCheckResultType.Error));
         Assert.That(results.First().Message, Does.Contain("timed out"));
+    }
+
+    [Test]
+    public void PerformChecks_should_broadcast_SignalR_message_on_completion()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var check = Substitute.For<IHealthCheck>();
+        check.Check().Returns(HealthCheckResult.Ok("OkCheck"));
+
+        _subject = new HealthCheckService(new List<IHealthCheck> { check }, null, broadcaster);
+
+        _subject.PerformChecks();
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "HealthCheckCompleted" &&
+            m.Action == ModelAction.Updated &&
+            m.Body != null));
+    }
+
+    [Test]
+    public void PerformChecks_should_not_broadcast_SignalR_message_on_cache_hit()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var check = Substitute.For<IHealthCheck>();
+        check.Check().Returns(HealthCheckResult.Ok("OkCheck"));
+
+        _subject = new HealthCheckService(new List<IHealthCheck> { check }, null, broadcaster)
+        {
+            CacheDuration = TimeSpan.FromSeconds(30)
+        };
+
+        _subject.PerformChecks();
+        broadcaster.ClearReceivedCalls();
+
+        _subject.PerformChecks();
+        broadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void PerformChecks_should_broadcast_SignalR_message_after_cache_expired()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var check = Substitute.For<IHealthCheck>();
+        check.Check().Returns(HealthCheckResult.Ok("OkCheck"));
+
+        _subject = new HealthCheckService(new List<IHealthCheck> { check }, null, broadcaster)
+        {
+            CacheDuration = TimeSpan.FromMilliseconds(10)
+        };
+
+        _subject.PerformChecks();
+        broadcaster.ClearReceivedCalls();
+
+        _subject.ExpireCache();
+        _subject.PerformChecks();
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "HealthCheckCompleted"));
     }
 }
