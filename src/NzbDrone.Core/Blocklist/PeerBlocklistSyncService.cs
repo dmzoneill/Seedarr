@@ -23,6 +23,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
     private readonly IConfigService _configService;
     private readonly Func<DateTime> _nowProvider;
     private readonly Logger _logger;
+    private readonly IBlocklistArchiveStreamProvider _streamProvider;
     private readonly object _syncLock = new();
 
     private readonly BlocklistSyncMetadata _metadata = new();
@@ -32,12 +33,14 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         HttpClient httpClient = null,
         IConfigService configService = null,
         Func<DateTime> nowProvider = null,
-        Logger logger = null)
+        Logger logger = null,
+        IBlocklistArchiveStreamProvider streamProvider = null)
     {
         _httpClient = httpClient ?? DefaultClient;
         _configService = configService;
         _nowProvider = nowProvider ?? (() => DateTime.UtcNow);
         _logger = logger ?? LogManager.GetCurrentClassLogger();
+        _streamProvider = streamProvider ?? new BlocklistArchiveStreamProvider(logger: _logger);
 
         if (_configService != null)
         {
@@ -359,8 +362,38 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             }
         }
 
-        var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        var parsedRules = ParseRules(content);
+        List<string> parsedRules;
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            parsedRules = await _streamProvider.ExtractRulesAsync(
+                stream,
+                effectiveUrl,
+                response.Content.Headers.ContentType?.MediaType,
+                response.Content.Headers.ContentEncoding?.FirstOrDefault(),
+                leaveOpen: false,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            now = _nowProvider();
+            lock (_syncLock)
+            {
+                _metadata.ConsecutiveFailures++;
+                _metadata.LastCheckedUtc = now;
+                _metadata.LastSyncStatus = $"Failed: {ex.Message}";
+                _metadata.LastFailureMessage = ex.Message;
+            }
+
+            _logger.Warn(ex, "Failed to decompress or parse blocklist from {0}: {1}", effectiveUrl, ex.Message);
+            return new BlocklistSyncResult
+            {
+                Success = false,
+                Status = $"Failed: {ex.Message}",
+                Message = ex.Message,
+                RuleCount = RuleCount
+            };
+        }
 
         lock (_syncLock)
         {
