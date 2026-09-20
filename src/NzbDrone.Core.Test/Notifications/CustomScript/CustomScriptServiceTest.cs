@@ -567,4 +567,196 @@ public class CustomScriptServiceTest
             Directory.Delete(tempDir, true);
         }
     }
+
+    [Test]
+    public void SplitArguments_should_split_plain_arguments_and_handle_empty()
+    {
+        Assert.That(CustomScriptService.SplitArguments(null), Is.Empty);
+        Assert.That(CustomScriptService.SplitArguments(string.Empty), Is.Empty);
+        Assert.That(CustomScriptService.SplitArguments("    "), Is.Empty);
+
+        var result = CustomScriptService.SplitArguments("--foo bar -v 1");
+        Assert.That(result, Is.EqualTo(new[] { "--foo", "bar", "-v", "1" }));
+    }
+
+    [Test]
+    public void SplitArguments_should_handle_quotes_spaces_and_empty_tokens()
+    {
+        var input = "--name \"My Cool Movie\" --category 'sci-fi & action' --flag \"\"";
+        var result = CustomScriptService.SplitArguments(input);
+
+        Assert.That(result, Is.EqualTo(new[] { "--name", "My Cool Movie", "--category", "sci-fi & action", "--flag", string.Empty }));
+    }
+
+    [Test]
+    public void SplitArguments_should_preserve_shell_metacharacters_as_literal_tokens()
+    {
+        var input = "--filter \"a&b|c;d$e\" --redirect \">out.txt\" --pipe \"x|y\"";
+        var result = CustomScriptService.SplitArguments(input);
+
+        Assert.That(result, Is.EqualTo(new[] { "--filter", "a&b|c;d$e", "--redirect", ">out.txt", "--pipe", "x|y" }));
+    }
+
+    [Test]
+    public void BuildProcessStartInfo_should_populate_ArgumentList_for_all_interpreters_on_windows()
+    {
+        var py = CustomScriptService.BuildProcessStartInfo("C:\\scripts\\test.py", "--name \"My Test\"", isWindows: true);
+        Assert.That(py.FileName, Is.EqualTo("python"));
+        Assert.That(py.ArgumentList, Is.EqualTo(new[] { "C:\\scripts\\test.py", "--name", "My Test" }));
+        Assert.That(py.Arguments, Is.Empty);
+
+        var ps = CustomScriptService.BuildProcessStartInfo("C:\\scripts\\test.ps1", "--foo bar", isWindows: true);
+        Assert.That(ps.FileName, Is.EqualTo("powershell.exe"));
+        Assert.That(ps.ArgumentList, Is.EqualTo(new[] { "-ExecutionPolicy", "Bypass", "-File", "C:\\scripts\\test.ps1", "--foo", "bar" }));
+        Assert.That(ps.Arguments, Is.Empty);
+
+        var rb = CustomScriptService.BuildProcessStartInfo("C:\\scripts\\test.rb", "arg1", isWindows: true);
+        Assert.That(rb.FileName, Is.EqualTo("ruby"));
+        Assert.That(rb.ArgumentList, Is.EqualTo(new[] { "C:\\scripts\\test.rb", "arg1" }));
+        Assert.That(rb.Arguments, Is.Empty);
+
+        var js = CustomScriptService.BuildProcessStartInfo("C:\\scripts\\test.js", "arg1", isWindows: true);
+        Assert.That(js.FileName, Is.EqualTo("node"));
+        Assert.That(js.ArgumentList, Is.EqualTo(new[] { "C:\\scripts\\test.js", "arg1" }));
+        Assert.That(js.Arguments, Is.Empty);
+
+        var exe = CustomScriptService.BuildProcessStartInfo("C:\\scripts\\tool.exe", "--run now", isWindows: true);
+        Assert.That(exe.FileName, Is.EqualTo("C:\\scripts\\tool.exe"));
+        Assert.That(exe.ArgumentList, Is.EqualTo(new[] { "--run", "now" }));
+        Assert.That(exe.Arguments, Is.Empty);
+    }
+
+    [Test]
+    public void BuildProcessStartInfo_should_populate_ArgumentList_for_all_interpreters_on_non_windows()
+    {
+        var sh = CustomScriptService.BuildProcessStartInfo("/scripts/test.sh", "--foo \"bar baz\"", isWindows: false);
+        Assert.That(sh.FileName, Is.EqualTo("/bin/sh"));
+        Assert.That(sh.ArgumentList, Is.EqualTo(new[] { "/scripts/test.sh", "--foo", "bar baz" }));
+        Assert.That(sh.Arguments, Is.Empty);
+
+        var bash = CustomScriptService.BuildProcessStartInfo("/scripts/test.bash", "arg1", isWindows: false);
+        Assert.That(bash.FileName, Is.EqualTo("/bin/bash"));
+        Assert.That(bash.ArgumentList, Is.EqualTo(new[] { "/scripts/test.bash", "arg1" }));
+        Assert.That(bash.Arguments, Is.Empty);
+
+        var py = CustomScriptService.BuildProcessStartInfo("/scripts/test.py", "arg1", isWindows: false);
+        Assert.That(py.FileName, Is.EqualTo("python3"));
+        Assert.That(py.ArgumentList, Is.EqualTo(new[] { "/scripts/test.py", "arg1" }));
+        Assert.That(py.Arguments, Is.Empty);
+
+        var ps = CustomScriptService.BuildProcessStartInfo("/scripts/test.ps1", "arg1", isWindows: false);
+        Assert.That(ps.FileName, Is.EqualTo("pwsh"));
+        Assert.That(ps.ArgumentList, Is.EqualTo(new[] { "-File", "/scripts/test.ps1", "arg1" }));
+        Assert.That(ps.Arguments, Is.Empty);
+
+        var rb = CustomScriptService.BuildProcessStartInfo("/scripts/test.rb", "arg1", isWindows: false);
+        Assert.That(rb.FileName, Is.EqualTo("ruby"));
+        Assert.That(rb.ArgumentList, Is.EqualTo(new[] { "/scripts/test.rb", "arg1" }));
+        Assert.That(rb.Arguments, Is.Empty);
+
+        var js = CustomScriptService.BuildProcessStartInfo("/scripts/test.js", "arg1", isWindows: false);
+        Assert.That(js.FileName, Is.EqualTo("node"));
+        Assert.That(js.ArgumentList, Is.EqualTo(new[] { "/scripts/test.js", "arg1" }));
+        Assert.That(js.Arguments, Is.Empty);
+
+        var bin = CustomScriptService.BuildProcessStartInfo("/usr/local/bin/custom", "--flag", isWindows: false);
+        Assert.That(bin.FileName, Is.EqualTo("/usr/local/bin/custom"));
+        Assert.That(bin.ArgumentList, Is.EqualTo(new[] { "--flag" }));
+        Assert.That(bin.Arguments, Is.Empty);
+    }
+
+    [Test]
+    public void Windows_cmd_batch_file_invocation_and_resolution_should_prevent_quote_stripping()
+    {
+        var (cmdWithArgs, argsString) = CustomScriptService.ResolveInterpreter("C:\\Program Files\\Seedarr\\script.bat", "\"arg with space\"", isWindows: true);
+        Assert.That(cmdWithArgs, Is.EqualTo("cmd.exe"));
+        Assert.That(argsString, Is.EqualTo("/c \"\"C:\\Program Files\\Seedarr\\script.bat\" \"arg with space\"\""));
+
+        var (cmdNoArgs, noArgsString) = CustomScriptService.ResolveInterpreter("C:\\Program Files\\Seedarr\\script.cmd", null, isWindows: true);
+        Assert.That(cmdNoArgs, Is.EqualTo("cmd.exe"));
+        Assert.That(noArgsString, Is.EqualTo("/c \"\"C:\\Program Files\\Seedarr\\script.cmd\"\""));
+
+        var psi = CustomScriptService.BuildProcessStartInfo("C:\\Program Files\\Seedarr\\script.bat", "arg1 \"arg 2\"", isWindows: true);
+        Assert.That(psi.FileName, Is.EqualTo("cmd.exe"));
+        Assert.That(psi.ArgumentList, Is.EqualTo(new[] { "/c", "C:\\Program Files\\Seedarr\\script.bat", "arg1", "arg 2" }));
+        Assert.That(psi.Arguments, Is.Empty);
+    }
+
+    [Test]
+    public async Task ExecuteScriptAsync_with_arguments_containing_shell_metacharacters_passes_literal_arguments_without_injection()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "argtest.bat" : "argtest.sh");
+            var outputFile = Path.Combine(tempDir, "output.txt");
+            var injectedMarker = Path.Combine(tempDir, "injected.txt");
+
+            var scriptContent = isWindows
+                ? $"@echo off\r\necho %~1 > \"{outputFile}\"\r\nexit /b 0\r\n"
+                : $"#!/bin/sh\necho \"$1\" > \"{outputFile}\"\nexit 0\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            if (!isWindows)
+            {
+                File.SetUnixFileMode(scriptFile, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            var maliciousArg = $"safe-value; touch \"{injectedMarker}\" & echo \"injected\"";
+            var rawArguments = $"\"{maliciousArg}\"";
+
+            var service = new CustomScriptService();
+            var result = await service.ExecuteScriptAsync(scriptFile, null, "Test", rawArguments);
+
+            Assert.That(result, Is.True);
+            Assert.That(File.Exists(injectedMarker), Is.False, "Shell injection marker file should NOT be created");
+            Assert.That(File.Exists(outputFile), Is.True);
+
+            var recorded = await File.ReadAllTextAsync(outputFile);
+            Assert.That(recorded.Trim(), Does.Contain("safe-value"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task TestScriptAsync_should_succeed_when_script_path_contains_whitespace()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "Folder With Spaces");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "script test.bat" : "script test.sh");
+            var scriptContent = isWindows
+                ? "@echo off\r\necho Success from spaced path\r\nexit /b 0\r\n"
+                : "#!/bin/sh\necho \"Success from spaced path\"\nexit 0\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            if (!isWindows)
+            {
+                File.SetUnixFileMode(scriptFile, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            var service = new CustomScriptService();
+            var result = await service.TestScriptAsync(scriptFile);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.ExitCode, Is.EqualTo(0));
+            Assert.That(result.Stdout, Does.Contain("Success from spaced path"));
+        }
+        finally
+        {
+            var parentDir = Path.GetDirectoryName(tempDir);
+            if (Directory.Exists(parentDir))
+            {
+                Directory.Delete(parentDir, true);
+            }
+        }
+    }
 }
