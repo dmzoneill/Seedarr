@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
@@ -316,11 +317,252 @@ public class WebSeedPieceDownloaderTests
         Assert.That(result, Is.EqualTo(pieceData));
     }
 
+    [Test]
+    public void VerifyPiece_returns_true_for_valid_sha1_hash()
+    {
+        var pieceData = new byte[16384];
+        new Random(42).NextBytes(pieceData);
+        var expectedHash = SHA1.HashData(pieceData);
+
+        var downloader = new WebSeedPieceDownloader();
+        var isValid = downloader.VerifyPiece(pieceData, expectedHash);
+
+        Assert.That(isValid, Is.True);
+    }
+
+    [Test]
+    public void VerifyPiece_returns_false_for_corrupted_piece_or_hash()
+    {
+        var pieceData = new byte[16384];
+        new Random(42).NextBytes(pieceData);
+        var expectedHash = SHA1.HashData(pieceData);
+
+        var corruptData = (byte[])pieceData.Clone();
+        corruptData[0] ^= 0xFF;
+
+        var corruptHash = (byte[])expectedHash.Clone();
+        corruptHash[0] ^= 0xFF;
+
+        var downloader = new WebSeedPieceDownloader();
+
+        Assert.That(downloader.VerifyPiece(corruptData, expectedHash), Is.False);
+        Assert.That(downloader.VerifyPiece(pieceData, corruptHash), Is.False);
+    }
+
+    [Test]
+    public void VerifyPiece_returns_false_for_null_or_invalid_hash_length()
+    {
+        var pieceData = new byte[1024];
+        var validHash = SHA1.HashData(pieceData);
+        var invalidLengthHash = new byte[19];
+
+        var downloader = new WebSeedPieceDownloader();
+
+        Assert.That(downloader.VerifyPiece(null, validHash), Is.False);
+        Assert.That(downloader.VerifyPiece(pieceData, null), Is.False);
+        Assert.That(downloader.VerifyPiece(pieceData, invalidLengthHash), Is.False);
+        Assert.That(downloader.VerifyPiece(pieceData, Array.Empty<byte>()), Is.False);
+    }
+
+    [Test]
+    public async Task DownloadAndVerifyPieceAsync_successful_download_and_hash_verification()
+    {
+        const string url = "https://webseed.example.com/files/test.iso";
+        var pieceData = new byte[16384];
+        new Random(77).NextBytes(pieceData);
+        var expectedHash = SHA1.HashData(pieceData);
+
+        var mockHandler = new MockHttpMessageHandler(HttpStatusCode.PartialContent, pieceData);
+        using var httpClient = new HttpClient(mockHandler);
+        var downloader = new WebSeedPieceDownloader(httpClient);
+
+        var result = await downloader.DownloadAndVerifyPieceAsync(
+            url,
+            0,
+            16384,
+            50000,
+            expectedHash);
+
+        Assert.That(result, Is.EqualTo(pieceData));
+        Assert.That(downloader.GetCorruptionCount(url), Is.EqualTo(0));
+        Assert.That(downloader.IsWebSeedBanned(url), Is.False);
+    }
+
+    [Test]
+    public void DownloadAndVerifyPieceAsync_corrupted_piece_detected_throws_and_increments_corruption_count()
+    {
+        const string url = "https://webseed.example.com/files/test.iso";
+        var pieceData = new byte[16384];
+        new Random(88).NextBytes(pieceData);
+
+        var mismatchedHash = new byte[20];
+        Array.Fill(mismatchedHash, (byte)0xAB);
+
+        var mockHandler = new MockHttpMessageHandler(HttpStatusCode.PartialContent, pieceData);
+        using var httpClient = new HttpClient(mockHandler);
+        var downloader = new WebSeedPieceDownloader(httpClient);
+
+        var ex = Assert.ThrowsAsync<WebSeedException>(async () =>
+        {
+            await downloader.DownloadAndVerifyPieceAsync(
+                url,
+                0,
+                16384,
+                50000,
+                mismatchedHash);
+        });
+
+        Assert.That(ex.Message, Does.Contain("failed SHA-1"));
+        Assert.That(downloader.GetCorruptionCount(url), Is.EqualTo(1));
+        Assert.That(downloader.IsWebSeedBanned(url), Is.False);
+    }
+
+    [Test]
+    public void DownloadAndVerifyPieceAsync_bans_web_seed_when_corruption_threshold_is_reached()
+    {
+        const string url = "https://webseed.example.com/files/test.iso";
+        var pieceData = new byte[16384];
+        new Random(99).NextBytes(pieceData);
+
+        var mismatchedHash = new byte[20];
+        Array.Fill(mismatchedHash, (byte)0xCD);
+
+        var mockHandler = new MockHttpMessageHandler(HttpStatusCode.PartialContent, pieceData);
+        using var httpClient = new HttpClient(mockHandler);
+        var downloader = new WebSeedPieceDownloader(httpClient)
+        {
+            CorruptionThreshold = 3
+        };
+
+        // Failure 1
+        Assert.ThrowsAsync<WebSeedException>(async () =>
+            await downloader.DownloadAndVerifyPieceAsync(url, 0, 16384, 50000, mismatchedHash));
+        Assert.That(downloader.GetCorruptionCount(url), Is.EqualTo(1));
+        Assert.That(downloader.IsWebSeedBanned(url), Is.False);
+
+        // Failure 2
+        Assert.ThrowsAsync<WebSeedException>(async () =>
+            await downloader.DownloadAndVerifyPieceAsync(url, 0, 16384, 50000, mismatchedHash));
+        Assert.That(downloader.GetCorruptionCount(url), Is.EqualTo(2));
+        Assert.That(downloader.IsWebSeedBanned(url), Is.False);
+
+        // Failure 3 (reaches threshold)
+        Assert.ThrowsAsync<WebSeedException>(async () =>
+            await downloader.DownloadAndVerifyPieceAsync(url, 0, 16384, 50000, mismatchedHash));
+        Assert.That(downloader.GetCorruptionCount(url), Is.EqualTo(3));
+        Assert.That(downloader.IsWebSeedBanned(url), Is.True);
+        Assert.That(downloader.IsWebSeedBlacklisted(url), Is.True);
+
+        var requestCountBeforeBannedCall = mockHandler.RequestCount;
+
+        // 4th attempt must be rejected immediately without making any HTTP request
+        var bannedEx = Assert.ThrowsAsync<WebSeedException>(async () =>
+            await downloader.DownloadAndVerifyPieceAsync(url, 0, 16384, 50000, mismatchedHash));
+        Assert.That(bannedEx.Message, Does.Contain("banned"));
+        Assert.That(mockHandler.RequestCount, Is.EqualTo(requestCountBeforeBannedCall));
+    }
+
+    [Test]
+    public void DownloadAndVerifyPieceAsync_supports_per_torrent_banning()
+    {
+        const string url = "https://webseed.example.com/files/test.iso";
+        const string torrentA = "urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        const string torrentB = "urn:btih:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+
+        var pieceData = new byte[1024];
+        var mismatchedHash = new byte[20];
+        Array.Fill(mismatchedHash, (byte)0xEE);
+
+        var mockHandler = new MockHttpMessageHandler(HttpStatusCode.PartialContent, pieceData);
+        using var httpClient = new HttpClient(mockHandler);
+        var downloader = new WebSeedPieceDownloader(httpClient)
+        {
+            CorruptionThreshold = 2
+        };
+
+        // Fail twice for torrentA
+        Assert.ThrowsAsync<WebSeedException>(async () =>
+            await downloader.DownloadAndVerifyPieceAsync(url, 0, 1024, 1024, mismatchedHash, torrentA));
+        Assert.ThrowsAsync<WebSeedException>(async () =>
+            await downloader.DownloadAndVerifyPieceAsync(url, 0, 1024, 1024, mismatchedHash, torrentA));
+
+        Assert.That(downloader.IsWebSeedBanned(url, torrentA), Is.True);
+        Assert.That(downloader.IsWebSeedBanned(url, torrentB), Is.False);
+    }
+
+    [Test]
+    public void ShouldUseWebSeeds_returns_true_when_active_peer_count_is_zero_and_has_web_seeds()
+    {
+        var downloader = new WebSeedPieceDownloader();
+
+        Assert.That(downloader.ShouldUseWebSeeds(0, true), Is.True);
+        Assert.That(downloader.ShouldUseWebSeeds(-1, true), Is.True);
+    }
+
+    [Test]
+    public void ShouldUseWebSeeds_returns_true_when_swarm_availability_is_degraded()
+    {
+        var downloader = new WebSeedPieceDownloader();
+
+        // Default threshold is 3 peers, so 1 and 2 active peers are considered degraded
+        Assert.That(downloader.ShouldUseWebSeeds(1, true), Is.True);
+        Assert.That(downloader.ShouldUseWebSeeds(2, true), Is.True);
+    }
+
+    [Test]
+    public void ShouldUseWebSeeds_returns_false_when_swarm_availability_is_healthy()
+    {
+        var downloader = new WebSeedPieceDownloader();
+
+        // 3 or more active peers indicates a healthy swarm, so fallback is not required
+        Assert.That(downloader.ShouldUseWebSeeds(3, true), Is.False);
+        Assert.That(downloader.ShouldUseWebSeeds(10, true), Is.False);
+        Assert.That(downloader.ShouldUseWebSeeds(50, true), Is.False);
+    }
+
+    [Test]
+    public void ShouldUseWebSeeds_returns_false_when_has_web_seeds_is_false()
+    {
+        var downloader = new WebSeedPieceDownloader();
+
+        Assert.That(downloader.ShouldUseWebSeeds(0, false), Is.False);
+        Assert.That(downloader.ShouldUseWebSeeds(1, false), Is.False);
+        Assert.That(downloader.ShouldUseWebSeeds(10, false), Is.False);
+    }
+
+    [Test]
+    public void ShouldUseWebSeeds_supports_custom_degraded_threshold()
+    {
+        var downloader = new WebSeedPieceDownloader();
+
+        Assert.That(downloader.ShouldUseWebSeeds(4, true, degradedPeerThreshold: 5), Is.True);
+        Assert.That(downloader.ShouldUseWebSeeds(5, true, degradedPeerThreshold: 5), Is.False);
+
+        downloader.DegradedPeerThreshold = 5;
+        Assert.That(downloader.ShouldUseWebSeeds(4, true), Is.True);
+        Assert.That(downloader.ShouldUseWebSeeds(5, true), Is.False);
+    }
+
+    [Test]
+    public void ResetCorruption_clears_failures_and_unbans_web_seed()
+    {
+        const string url = "https://webseed.example.com/files/test.iso";
+        var downloader = new WebSeedPieceDownloader();
+
+        downloader.BanWebSeed(url);
+        Assert.That(downloader.IsWebSeedBanned(url), Is.True);
+
+        downloader.ResetCorruption(url);
+        Assert.That(downloader.IsWebSeedBanned(url), Is.False);
+        Assert.That(downloader.GetCorruptionCount(url), Is.EqualTo(0));
+    }
+
     private sealed class MockHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handlerFunc;
 
         public HttpRequestMessage LastRequest { get; private set; }
+        public int RequestCount { get; private set; }
 
         public MockHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handlerFunc)
         {
@@ -346,6 +588,7 @@ public class WebSeedPieceDownloaderTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            RequestCount++;
             LastRequest = request;
             return _handlerFunc(request, cancellationToken);
         }
