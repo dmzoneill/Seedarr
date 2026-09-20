@@ -28,7 +28,8 @@ public class BackupController : Controller
             Id = i + 1,
             Name = b.Name,
             Size = b.Size,
-            Time = b.Time
+            Time = b.Time,
+            IsConfigOnly = b.IsConfigOnly
         }).ToList();
     }
 
@@ -49,7 +50,8 @@ public class BackupController : Controller
                 Id = 1,
                 Name = backup.Name,
                 Size = backup.Size,
-                Time = backup.Time
+                Time = backup.Time,
+                IsConfigOnly = backup.IsConfigOnly
             });
         }
         catch (InvalidOperationException ex)
@@ -145,6 +147,14 @@ public class BackupController : Controller
         try
         {
             _backupService.RestoreBackup(safeFileName);
+
+            var backups = _backupService.GetBackups();
+            var backup = backups?.FirstOrDefault(b => string.Equals(b.Name, safeFileName, StringComparison.OrdinalIgnoreCase));
+            if (backup != null && backup.IsConfigOnly)
+            {
+                return Ok(new { message = "Configuration restored. Restart required. Note: External database tools (pg_restore / pg_dump) are required for PostgreSQL database restoration." });
+            }
+
             return Ok(new { message = "Backup restored. Restart required." });
         }
         catch (FileNotFoundException ex)
@@ -160,6 +170,10 @@ public class BackupController : Controller
             return BadRequest(new { message = ex.Message });
         }
         catch (IOException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
         {
             return BadRequest(new { message = ex.Message });
         }

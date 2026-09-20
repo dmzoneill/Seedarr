@@ -162,7 +162,7 @@ public class MainDatabaseTest
     }
 
     [Test]
-    public void ApplyPendingRestore_should_clean_up_restore_file_when_both_move_and_copy_fail()
+    public void ApplyPendingRestore_should_preserve_restore_file_when_both_move_and_copy_fail()
     {
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
         var dbPath = Path.Combine(_tempDir, "seedarr.db");
@@ -176,7 +176,86 @@ public class MainDatabaseTest
             fileCopy: (src, dst, overwrite) => throw new IOException("Disk full"));
 
         Assert.That(File.Exists(dbPath), Is.False, "Database should not be restored");
-        Assert.That(File.Exists(dbRestorePath), Is.False, "Staged restore file should be cleaned up on total failure");
+        Assert.That(File.Exists(dbRestorePath) || File.Exists(dbRestorePath + ".failed"), Is.True, "Staged restore file should be preserved on total failure");
+    }
+
+    [Test]
+    public void ApplyPendingRestore_should_preserve_wal_and_shm_and_rollback_db_on_move_failure()
+    {
+        var dbPath = Path.Combine(_tempDir, "seedarr.db");
+        var walPath = Path.Combine(_tempDir, "seedarr.db-wal");
+        var shmPath = Path.Combine(_tempDir, "seedarr.db-shm");
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+
+        File.WriteAllText(dbPath, "original-db-content");
+        File.WriteAllText(walPath, "original-wal-content");
+        File.WriteAllText(shmPath, "original-shm-content");
+        File.WriteAllText(dbRestorePath, "new-restored-data");
+
+        var database = new MainDatabase(
+            _dbFactory,
+            _connectionStringFactory,
+            _appFolderInfo,
+            fileMove: (src, dst, overwrite) =>
+            {
+                if (src == dbRestorePath && dst == dbPath)
+                {
+                    throw new IOException("Simulated disk error during db swap");
+                }
+                File.Move(src, dst, overwrite);
+            },
+            fileCopy: (src, dst, overwrite) =>
+            {
+                if (src == dbRestorePath && dst == dbPath)
+                {
+                    throw new IOException("Simulated copy failure during fallback");
+                }
+                File.Copy(src, dst, overwrite);
+            });
+
+        Assert.That(File.Exists(dbPath), Is.True, "Original database file should be restored");
+        Assert.That(File.ReadAllText(dbPath), Is.EqualTo("original-db-content"), "Original database content should be rolled back");
+        Assert.That(File.Exists(walPath), Is.True, "Original WAL file should be preserved and restored");
+        Assert.That(File.ReadAllText(walPath), Is.EqualTo("original-wal-content"));
+        Assert.That(File.Exists(shmPath), Is.True, "Original SHM file should be preserved and restored");
+        Assert.That(File.ReadAllText(shmPath), Is.EqualTo("original-shm-content"));
+
+        var failedRestore = File.Exists(dbRestorePath + ".failed") || File.Exists(dbRestorePath);
+        Assert.That(failedRestore, Is.True, "Restore artifact should be preserved rather than deleted");
+    }
+
+    [Test]
+    public void ApplyPendingRestore_should_clean_up_staging_files_on_successful_restore()
+    {
+        var dbPath = Path.Combine(_tempDir, "seedarr.db");
+        var walPath = Path.Combine(_tempDir, "seedarr.db-wal");
+        var shmPath = Path.Combine(_tempDir, "seedarr.db-shm");
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+
+        File.WriteAllText(dbPath, "old-db-content");
+        File.WriteAllText(walPath, "old-wal-content");
+        File.WriteAllText(shmPath, "old-shm-content");
+        File.WriteAllText(dbRestorePath, "new-db-content");
+
+        var database = new MainDatabase(
+            _dbFactory,
+            _connectionStringFactory,
+            _appFolderInfo);
+
+        Assert.That(File.Exists(dbPath), Is.True);
+        Assert.That(File.ReadAllText(dbPath), Is.EqualTo("new-db-content"));
+        Assert.That(File.Exists(walPath), Is.False, "Old WAL should not be attached to restored DB");
+        Assert.That(File.Exists(shmPath), Is.False, "Old SHM should not be attached to restored DB");
+        Assert.That(File.Exists(dbRestorePath), Is.False, "Restore staging file should be applied and removed");
+
+        var walStagingFiles = Directory.GetFiles(_tempDir, "seedarr.db-wal.bak-*");
+        var shmStagingFiles = Directory.GetFiles(_tempDir, "seedarr.db-shm.bak-*");
+        Assert.That(walStagingFiles.Length, Is.EqualTo(0), "Temporary WAL staging backup should be cleaned up");
+        Assert.That(shmStagingFiles.Length, Is.EqualTo(0), "Temporary SHM staging backup should be cleaned up");
+
+        var dbBackups = Directory.GetFiles(_tempDir, "seedarr.db.bak-*");
+        Assert.That(dbBackups.Length, Is.EqualTo(1), "Original DB backup should be retained");
+        Assert.That(File.ReadAllText(dbBackups[0]), Is.EqualTo("old-db-content"));
     }
 
     [Test]
