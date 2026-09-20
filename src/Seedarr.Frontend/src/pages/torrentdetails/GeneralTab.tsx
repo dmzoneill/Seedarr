@@ -318,7 +318,7 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
         pieceCount={torrent.pieceCount}
         pieceLength={torrent.pieceLength}
         progress={torrent.progress}
-        isSeeding={torrent.status === "Seeding"}
+        isSeeding={torrent.status === "Seeding" && torrent.progress >= 1.0}
       />
 
       <SeedingSimulator
