@@ -113,7 +113,7 @@ public class TorrentEventLogServiceTest
         var date = DateTime.UtcNow.AddDays(-7);
         _subject.Purge(date);
 
-        _repository.Received(1).Purge(date, 1000);
+        _repository.Received(1).Purge(date, 1000, 1000);
     }
 
     [Test]
@@ -122,7 +122,7 @@ public class TorrentEventLogServiceTest
         var date = DateTime.UtcNow.AddDays(-7);
         _subject.Purge(date, 500);
 
-        _repository.Received(1).Purge(date, 500);
+        _repository.Received(1).Purge(date, 500, 1000);
     }
 
     [Test]

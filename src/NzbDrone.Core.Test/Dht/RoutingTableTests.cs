@@ -278,6 +278,7 @@ public class RoutingTableTests
         nodeId[0] = 0x80;
         var staleNode = CreateNode(nodeId);
         staleNode.LastSeen = DateTime.UtcNow.AddMinutes(-20);
+        staleNode.FailCount = 3;
         table.AddNode(staleNode);
 
         var closest = table.GetClosestNodes(new byte[20]);
@@ -672,9 +673,9 @@ public class RoutingTableTests
 
         var node1 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.1"));
         node1.NodeId[19] = 1;
-        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.2"));
+        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.2.2"));
         node2.NodeId[19] = 2;
-        var node3 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.3"));
+        var node3 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.3.3"));
         node3.NodeId[19] = 3;
 
         table.AddNode(node1);
@@ -701,7 +702,7 @@ public class RoutingTableTests
         node1.NodeId[19] = 1;
         node1.LastSeen = DateTime.UtcNow.AddMinutes(-10);
 
-        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.2"));
+        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.2.2"));
         node2.NodeId[19] = 2;
         node2.LastSeen = DateTime.UtcNow.AddMinutes(-5);
 
@@ -716,7 +717,7 @@ public class RoutingTableTests
             pingedNode = node;
         };
 
-        var node3 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.3"));
+        var node3 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.3.3"));
         node3.NodeId[19] = 3;
         table.AddNode(node3);
 
@@ -734,9 +735,9 @@ public class RoutingTableTests
 
         var node1 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.1"));
         node1.NodeId[19] = 1;
-        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.2"));
+        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.2.2"));
         node2.NodeId[19] = 2;
-        var node3 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.3"));
+        var node3 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.3.3"));
         node3.NodeId[19] = 3;
 
         table.AddNode(node1);
@@ -768,9 +769,9 @@ public class RoutingTableTests
 
         var node1 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.1"));
         node1.NodeId[19] = 1;
-        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.2"));
+        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.2.2"));
         node2.NodeId[19] = 2;
-        var replacement = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.3"));
+        var replacement = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.3.3"));
         replacement.NodeId[19] = 3;
 
         table.AddNode(node1);

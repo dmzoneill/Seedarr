@@ -107,7 +107,7 @@ public class SeedingEngine : BackgroundService
         _eventLogService = eventLogService;
         _clock = clock ?? new SystemClock();
         _random = random ?? new NzbDrone.Common.EnvironmentInfo.RandomNumberGenerator();
-        _stateMachine = stateMachine ?? new TorrentStateMachine(eventLogService, eventAggregator, torrentService, categoryService);
+        _stateMachine = stateMachine ?? new TorrentStateMachine(eventLogService, eventAggregator, torrentService != null ? new Lazy<ITorrentService>(() => torrentService) : null, categoryService, _seedingTimeReachedTorrentIds);
         _stopPolicy = stopPolicy ?? new StopPolicy(configService, _random, tagService);
         _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
         _trafficPatternSimulator = trafficPatternSimulator ?? new TrafficPatternSimulator(configService, _random, _clock);

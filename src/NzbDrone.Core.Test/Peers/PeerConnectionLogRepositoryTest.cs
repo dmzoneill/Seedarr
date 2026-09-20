@@ -361,7 +361,7 @@ public class PeerConnectionLogRepositoryTest
     public void GetByTimeRange_should_paginate_with_limit_and_offset()
     {
         var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var end = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 1, 11, 0, 0, 0, DateTimeKind.Utc);
 
         for (var i = 1; i <= 10; i++)
         {
