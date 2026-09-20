@@ -384,6 +384,7 @@ public class DhtServiceTest
         {
             Assert.That(result[20 + i], Is.EqualTo(ip.GetAddressBytes()[i]));
         }
+
         Assert.That(result[36], Is.EqualTo((byte)(6881 >> 8)));
         Assert.That(result[37], Is.EqualTo((byte)(6881 & 0xFF)));
     }
@@ -3351,6 +3352,7 @@ public class DhtServiceTest
         using var service = new DhtService(_configService, port: 0);
         using var cts = new CancellationTokenSource(1000);
         await service.StartAsync(cts.Token);
+        await Task.Delay(200);
 
         Assert.That(service.IsRunning, Is.True);
         Assert.That(service.BoundPort, Is.GreaterThan(0));

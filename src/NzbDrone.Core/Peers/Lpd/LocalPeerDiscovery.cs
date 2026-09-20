@@ -634,6 +634,11 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
             }
         }
 
+        if (!string.IsNullOrEmpty(cookie) && string.Equals(cookie, ClientCookie, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(infoHash) || !InfoHashRegex.IsMatch(infoHash))
         {
             return;

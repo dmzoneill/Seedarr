@@ -284,7 +284,7 @@ public class MediaContainerInspector : IMediaContainerInspector
             }
         }
 
-        if (info == null)
+        if (info == null || string.IsNullOrEmpty(info.ContainerFormat))
         {
             var fileName = System.IO.Path.GetFileName(filePath);
             if (System.IO.File.Exists(filePath))
@@ -292,14 +292,22 @@ public class MediaContainerInspector : IMediaContainerInspector
                 try
                 {
                     using var stream = new System.IO.FileStream(filePath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite);
-                    info = Inspect(stream, fileName);
+                    var streamInfo = Inspect(stream, fileName);
+                    if (streamInfo != null && !string.IsNullOrEmpty(streamInfo.ContainerFormat))
+                    {
+                        info = streamInfo;
+                    }
+                    else if (info == null)
+                    {
+                        info = InspectFileName(fileName);
+                    }
                 }
                 catch
                 {
-                    info = InspectFileName(fileName);
+                    info ??= InspectFileName(fileName);
                 }
             }
-            else
+            else if (info == null)
             {
                 info = InspectFileName(fileName);
             }

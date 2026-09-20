@@ -46,6 +46,7 @@ public class TrackerBoostServiceTest
             _configService);
 
         TrackerBoostService.ResetMetricsAndHistory();
+        _trackerRepository.ClearReceivedCalls();
     }
 
     [TearDown]

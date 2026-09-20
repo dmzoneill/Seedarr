@@ -181,11 +181,12 @@ public class InstallUpdateServiceTest
 
         // Create a zip archive containing the new binary
         var zipPath = Path.Combine(_tempDir, "seedarr-2.0.0.zip");
-        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        await using (var archive = await ZipFile.OpenAsync(zipPath, ZipArchiveMode.Create))
         {
             var entry = archive.CreateEntry("Seedarr");
-            using var writer = new StreamWriter(entry.Open());
-            writer.Write("new-v2-executable-binary-content");
+            await using var entryStream = await entry.OpenAsync();
+            await using var writer = new StreamWriter(entryStream);
+            await writer.WriteAsync("new-v2-executable-binary-content");
         }
 
         // Compute valid SHA-256 for the created zip

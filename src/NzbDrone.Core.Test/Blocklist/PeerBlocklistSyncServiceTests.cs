@@ -400,7 +400,7 @@ public class PeerBlocklistSyncServiceTests
 
         var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
 
-        cts.Cancel();
+        await cts.CancelAsync();
         await reader;
 
         Assert.That(result.Success, Is.True);

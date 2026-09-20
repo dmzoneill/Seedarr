@@ -54,7 +54,6 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ISubtitleDiscoveryService _subtitleDiscoveryService;
     private readonly ISubtitleConversionService _subtitleConversionService;
     private readonly ISubtitleEncodingDetector _subtitleEncodingDetector;
-    private readonly IMainDatabase _mainDatabase;
     private readonly ITorrentRecheckService _torrentRecheckService;
     private readonly ITorrentExporter _torrentExporter;
 
@@ -111,7 +110,6 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _subtitleConversionService = subtitleConversionService ?? new SubtitleConversionService();
         _subtitleEncodingDetector = subtitleEncodingDetector ?? new SubtitleEncodingDetector();
         _trackerScrapeService = trackerScrapeService;
-        _mainDatabase = mainDatabase;
         _torrentRecheckService = torrentRecheckService;
         _torrentExporter = torrentExporter ?? new TorrentExporter(_torrentFileService, _trackerEntryService);
         _logger = LogManager.GetCurrentClassLogger();
@@ -1675,78 +1673,26 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             }
         }
 
-        IDbConnection connection = null;
-        IDbTransaction tx = null;
-        if (_mainDatabase != null)
+        foreach (var id in resource.TorrentIds)
         {
             try
             {
-                connection = _mainDatabase.OpenConnection();
-                tx = connection.BeginTransaction();
+                ExecuteActionForTorrent(id, resource, resolvedCategoryName, resolvedCategory);
+                result.SucceededIds.Add(id);
+                result.SuccessCount++;
             }
             catch (Exception ex)
             {
-                _logger.Warn(ex, "Could not open database transaction for bulk action.");
+                result.FailedIds[id] = ex.Message;
+                result.FailedCount++;
+                result.Errors.Add($"Torrent {id}: {ex.Message}");
+                _logger.Error(ex, "Failed to execute bulk action '{0}' for torrent {1}", resource.Action, id);
             }
         }
 
-        try
+        foreach (var id in result.SucceededIds)
         {
-            foreach (var id in resource.TorrentIds)
-            {
-                try
-                {
-                    ExecuteActionForTorrent(id, resource, resolvedCategoryName, resolvedCategory);
-                    result.SucceededIds.Add(id);
-                    result.SuccessCount++;
-                }
-                catch (Exception ex)
-                {
-                    result.FailedIds[id] = ex.Message;
-                    result.FailedCount++;
-                    result.Errors.Add($"Torrent {id}: {ex.Message}");
-                    _logger.Error(ex, "Failed to execute bulk action '{0}' for torrent {1}", resource.Action, id);
-                }
-            }
-
-            if (tx != null)
-            {
-                if (result.FailedCount > 0)
-                {
-                    tx.Rollback();
-                    result.SucceededIds.Clear();
-                    result.SuccessCount = 0;
-                    result.Errors.Add("Bulk action rolled back due to failures.");
-                }
-                else
-                {
-                    tx.Commit();
-                }
-            }
-
-            foreach (var id in result.SucceededIds)
-            {
-                InvalidateBroadcastCache(id);
-            }
-        }
-        catch (Exception ex)
-        {
-            try
-            {
-                tx?.Rollback();
-            }
-            catch
-            {
-                // best effort
-            }
-
-            _logger.Error(ex, "Failed to execute bulk action '{0}'", resource.Action);
-            throw;
-        }
-        finally
-        {
-            tx?.Dispose();
-            connection?.Dispose();
+            InvalidateBroadcastCache(id);
         }
 
         return Ok(result);

@@ -29,8 +29,8 @@ public class SystemController : ControllerBase
     private static readonly DateTime StartTime = DateTime.UtcNow;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-    internal Action<ProcessStartInfo> ProcessStarter { get; set; } = psi => Process.Start(psi);
-    internal int RestartDelayMs { get; set; } = 500;
+    public Action<ProcessStartInfo> ProcessStarter { get; set; } = psi => Process.Start(psi);
+    public int RestartDelayMs { get; set; } = 500;
 
     private readonly ITaskManager _taskManager;
     private readonly IEnumerable<IScheduledTask> _scheduledTasks;
