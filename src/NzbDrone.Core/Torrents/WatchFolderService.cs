@@ -524,7 +524,8 @@ public class WatchFolderService : BackgroundService
             var autoStart = _configService.WatchFolderAutoStartTorrents;
             var deleteAfterAdd = _configService.WatchFolderDeleteAddedTorrents;
 
-            if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
+            var primaryHash = parsed.InfoHash ?? parsed.InfoHashV2;
+            if (_torrentService.ExistsByInfoHash(primaryHash))
             {
                 _logger.Debug("Torrent already exists, skipping: {0}", fileName);
                 HandlePostImport(filePath, deleteAfterAdd);
@@ -534,7 +535,8 @@ public class WatchFolderService : BackgroundService
             var torrent = new Torrent
             {
                 Name = parsed.Name,
-                InfoHash = parsed.InfoHash,
+                InfoHash = parsed.InfoHash ?? parsed.InfoHashV2,
+                InfoHashV2 = parsed.InfoHashV2,
                 TrackerUrl = parsed.Trackers != null && parsed.Trackers.Length > 0 ? parsed.Trackers[0] : null,
                 MagnetUrl = magnetUri,
                 SourcePath = deleteAfterAdd ? null : filePath,

@@ -223,9 +223,10 @@ public class TorrentImportService : ITorrentImportService
 
         var parsed = MagnetLinkParser.Parse(magnetLink);
 
-        ValidateInfoHash(parsed.InfoHash);
+        var primaryHash = parsed.InfoHash ?? parsed.InfoHashV2;
+        ValidateInfoHash(primaryHash);
 
-        var existing = _torrentService.GetByInfoHash(parsed.InfoHash);
+        var existing = _torrentService.GetByInfoHash(primaryHash);
         if (existing != null)
         {
             var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
@@ -264,7 +265,8 @@ public class TorrentImportService : ITorrentImportService
         var torrent = new Torrent
         {
             Name = parsed.Name,
-            InfoHash = parsed.InfoHash,
+            InfoHash = parsed.InfoHash ?? parsed.InfoHashV2,
+            InfoHashV2 = parsed.InfoHashV2,
             TrackerUrl = parsed.Trackers != null && parsed.Trackers.Length > 0 ? parsed.Trackers[0] : null,
             Status = TorrentStatus.Queued,
             DateAdded = DateTime.UtcNow

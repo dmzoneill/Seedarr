@@ -4,7 +4,7 @@ using System.Web;
 
 namespace NzbDrone.Core.Torrents;
 
-public record ParsedMagnetLink(string InfoHash, string Name, string[] Trackers);
+public record ParsedMagnetLink(string InfoHash, string Name, string[] Trackers, string InfoHashV2 = null);
 
 public static class MagnetLinkParser
 {
@@ -19,38 +19,76 @@ public static class MagnetLinkParser
         var queryString = magnetUri[(queryStart + 1)..];
         var parameters = HttpUtility.ParseQueryString(queryString);
 
-        var xt = parameters["xt"];
-        if (string.IsNullOrEmpty(xt) || !xt.StartsWith("urn:btih:", StringComparison.OrdinalIgnoreCase))
+        var xtValues = parameters.GetValues("xt");
+        if (xtValues == null || xtValues.Length == 0)
         {
-            throw new ArgumentException("Invalid magnet link: missing urn:btih: parameter");
+            throw new ArgumentException("Invalid magnet link: missing xt parameter");
         }
 
-        var infoHash = xt["urn:btih:".Length..];
+        string infoHashV1 = null;
+        string infoHashV2 = null;
 
-        if (infoHash.Length == 32)
+        foreach (var xt in xtValues)
         {
-            var bytes = Base32Decode(infoHash);
-            if (bytes == null || bytes.Length != 20)
+            if (string.IsNullOrWhiteSpace(xt))
             {
-                throw new ArgumentException("Invalid magnet link: could not decode base32 info hash");
+                continue;
             }
 
-            infoHash = Convert.ToHexString(bytes).ToLowerInvariant();
-        }
-        else
-        {
-            infoHash = infoHash.ToLowerInvariant();
+            if (xt.StartsWith("urn:btih:", StringComparison.OrdinalIgnoreCase))
+            {
+                var rawHash = xt["urn:btih:".Length..];
+
+                string decoded;
+                if (rawHash.Length == 32)
+                {
+                    var bytes = Base32Decode(rawHash);
+                    if (bytes == null || bytes.Length != 20)
+                    {
+                        throw new ArgumentException("Invalid magnet link: could not decode base32 info hash");
+                    }
+
+                    decoded = Convert.ToHexString(bytes).ToLowerInvariant();
+                }
+                else
+                {
+                    decoded = rawHash.ToLowerInvariant();
+                }
+
+                if (decoded.Length != 40 || !decoded.All(Uri.IsHexDigit))
+                {
+                    throw new ArgumentException("Invalid magnet link: info hash must be 40 valid hexadecimal characters");
+                }
+
+                infoHashV1 ??= decoded;
+            }
+            else if (xt.StartsWith("urn:btmh:", StringComparison.OrdinalIgnoreCase))
+            {
+                var rawHash = xt["urn:btmh:".Length..];
+                if (!rawHash.StartsWith("1220", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new ArgumentException("Invalid magnet link: unsupported multihash prefix (expected 1220 for SHA2-256)");
+                }
+
+                var hash = rawHash[4..].ToLowerInvariant();
+                if (hash.Length != 64 || !hash.All(Uri.IsHexDigit))
+                {
+                    throw new ArgumentException("Invalid magnet link: v2 info hash must be 64 valid hexadecimal characters");
+                }
+
+                infoHashV2 ??= hash;
+            }
         }
 
-        if (infoHash.Length != 40 || !infoHash.All(Uri.IsHexDigit))
+        if (string.IsNullOrEmpty(infoHashV1) && string.IsNullOrEmpty(infoHashV2))
         {
-            throw new ArgumentException("Invalid magnet link: info hash must be 40 valid hexadecimal characters");
+            throw new ArgumentException("Invalid magnet link: missing urn:btih: or urn:btmh: parameter");
         }
 
         var displayName = parameters["dn"];
         if (string.IsNullOrWhiteSpace(displayName))
         {
-            displayName = infoHash;
+            displayName = infoHashV1 ?? infoHashV2;
         }
 
         var rawTrackers = parameters.GetValues("tr");
@@ -58,7 +96,7 @@ public static class MagnetLinkParser
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .ToArray() ?? Array.Empty<string>();
 
-        return new ParsedMagnetLink(infoHash, displayName, trackers);
+        return new ParsedMagnetLink(infoHashV1, displayName, trackers, infoHashV2);
     }
 
     public static byte[] Base32Decode(string input)

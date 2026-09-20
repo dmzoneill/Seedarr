@@ -15,6 +15,7 @@ public static class TorrentResourceMapper
             Id = model.Id,
             Name = model.Name,
             InfoHash = model.InfoHash,
+            InfoHashV2 = model.InfoHashV2,
             TotalSize = model.TotalSize,
             PieceCount = model.PieceCount,
             PieceLength = model.PieceLength,
