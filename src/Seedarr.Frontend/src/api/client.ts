@@ -1,3 +1,4 @@
+import { broadcastSessionExpired } from "../utils/authChannel";
 import type {
   Category,
   IdentityProviderDefinition,
@@ -83,6 +84,9 @@ class ApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401 && !endpoint.includes("/auth/login")) {
+        broadcastSessionExpired();
+      }
       const errorMsg = await this.parseError(response);
       throw new Error(errorMsg);
     }
@@ -246,6 +250,9 @@ class ApiClient {
       body: formData,
     });
     if (!response.ok) {
+      if (response.status === 401 && !endpoint.includes("/auth/login")) {
+        broadcastSessionExpired();
+      }
       const errorMsg = await this.parseError(response);
       throw new Error(errorMsg);
     }
