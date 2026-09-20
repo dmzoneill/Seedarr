@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -121,6 +122,7 @@ public class PeerConnection : IDisposable
     public int? MetadataSize { get; set; }
     public bool IsSnubbed { get; set; }
     public bool IsOptimisticUnchoked { get; set; }
+    public int? AssignedSuperSeedingPiece { get; set; }
     public const int RateWindowSeconds = 20;
 
     private readonly object _rateLock = new();
@@ -1153,6 +1155,13 @@ public class PeerConnection : IDisposable
     public virtual void SendBitfield(ReadOnlyMemory<byte> bitfield)
     {
         SendBitfield(bitfield.ToArray());
+    }
+
+    public virtual void SendHave(int pieceIndex)
+    {
+        var payload = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(payload, pieceIndex);
+        SendMessage(new PeerMessage { Type = PeerMessageType.Have, Payload = payload });
     }
 
     public void SendBitfield(int pieceCount)

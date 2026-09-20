@@ -1,0 +1,470 @@
+using System;
+using System.Buffers.Binary;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using NSubstitute;
+using NUnit.Framework;
+using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Peers;
+using NzbDrone.Core.Peers.Extensions;
+using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers.MultiTracker;
+
+namespace NzbDrone.Core.Test.Peers;
+
+[TestFixture]
+public class SuperSeedingTests
+{
+    private IConfigService _configService;
+    private ITorrentService _torrentService;
+    private IConnectionManager _connectionManager;
+    private IPeerDiscoveryService _peerDiscovery;
+    private IMultiTrackerManager _multiTracker;
+    private IFastExtensionHandler _fastExtensionHandler;
+    private PeerServer _server;
+    private List<PeerConnection> _connections;
+    private List<TcpListener> _listeners;
+    private List<TcpClient> _clients;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _configService = Substitute.For<IConfigService>();
+        _torrentService = Substitute.For<ITorrentService>();
+        _connectionManager = Substitute.For<IConnectionManager>();
+        _peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        _multiTracker = Substitute.For<IMultiTrackerManager>();
+        _fastExtensionHandler = new FastExtensionHandler();
+
+        _configService.MaxGlobalConnections.Returns(200);
+        _configService.ListeningPort.Returns(0);
+        _configService.EncryptionMode.Returns("enabled");
+        _configService.HandshakeTimeoutSeconds.Returns(30);
+        _configService.MessageReadTimeoutSeconds.Returns(60);
+        _configService.KeepAliveIntervalSeconds.Returns(120);
+        _configService.PeerRequestCount.Returns(200);
+        _configService.PeerIdleChance.Returns(0.0);
+        _configService.PeerContactIntervalSeconds.Returns(300);
+        _configService.PexMaxPeersPerMessage.Returns(50);
+
+        _server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            fastExtensionHandler: _fastExtensionHandler);
+
+        _connections = new List<PeerConnection>();
+        _listeners = new List<TcpListener>();
+        _clients = new List<TcpClient>();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        foreach (var conn in _connections)
+        {
+            try
+            {
+                conn.Dispose();
+            }
+            catch
+            {
+            }
+        }
+
+        foreach (var client in _clients)
+        {
+            try
+            {
+                client.Dispose();
+            }
+            catch
+            {
+            }
+        }
+
+        foreach (var listener in _listeners)
+        {
+            try
+            {
+                listener.Stop();
+            }
+            catch
+            {
+            }
+        }
+
+        _server?.Dispose();
+    }
+
+    private (PeerConnection Client, PeerConnection Server) CreateTestPair()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var clientTcp = new TcpClient();
+        clientTcp.Connect(IPAddress.Loopback, port);
+        var serverTcp = listener.AcceptTcpClient();
+        listener.Stop();
+
+        var clientConn = new PeerConnection(clientTcp);
+        var serverConn = new PeerConnection(serverTcp);
+        _connections.Add(clientConn);
+        _connections.Add(serverConn);
+        return (clientConn, serverConn);
+    }
+
+    private static byte[] BuildRequestPayload(int index, int begin, int length)
+    {
+        var payload = new byte[12];
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), index);
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), begin);
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(8, 4), length);
+        return payload;
+    }
+
+    [Test]
+    public void SendInitialAvailability_when_super_seeding_and_fast_extension_supported_sends_HaveNone()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.SupportsFastExtension = true;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 20,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+
+        _server.SendInitialAvailability(serverConn, torrent);
+
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.HaveNone));
+    }
+
+    [Test]
+    public void SendInitialAvailability_when_super_seeding_and_fast_extension_not_supported_sends_empty_bitfield()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.SupportsFastExtension = false;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 16,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+
+        // Create PeerServer without fast extension handler so it falls back to empty bitfield
+        var serverWithoutFast = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            fastExtensionHandler: null);
+
+        serverWithoutFast.SendInitialAvailability(serverConn, torrent);
+
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Bitfield));
+        Assert.That(received.Payload, Is.Not.Null);
+        Assert.That(received.Payload.Length, Is.EqualTo(2));
+        Assert.That(received.Payload[0], Is.EqualTo(0));
+        Assert.That(received.Payload[1], Is.EqualTo(0));
+
+        serverWithoutFast.Dispose();
+    }
+
+    [Test]
+    public void SendInitialAvailability_when_not_super_seeding_sends_HaveAll()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.SupportsFastExtension = true;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 20,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = false
+        };
+
+        _server.SendInitialAvailability(serverConn, torrent);
+
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.HaveAll));
+    }
+
+    [Test]
+    public void AllocateAndRevealSuperSeedingPiece_allocates_piece_and_sends_Have_to_unchoked_peer()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.AmChoking = false;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { serverConn });
+
+        var allocated = _server.AllocateAndRevealSuperSeedingPiece(serverConn, torrent);
+
+        Assert.That(allocated, Is.True);
+        Assert.That(serverConn.AssignedSuperSeedingPiece, Is.EqualTo(0));
+
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Have));
+        Assert.That(received.Payload, Is.Not.Null);
+        var revealedPiece = BinaryPrimitives.ReadInt32BigEndian(received.Payload);
+        Assert.That(revealedPiece, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void AllocateAndRevealSuperSeedingPiece_allocates_distinct_pieces_to_multiple_unchoked_peers()
+    {
+        var (client1, server1) = CreateTestPair();
+        var (client2, server2) = CreateTestPair();
+        server1.AmChoking = false;
+        server2.AmChoking = false;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { server1, server2 });
+
+        var allocated1 = _server.AllocateAndRevealSuperSeedingPiece(server1, torrent);
+        var allocated2 = _server.AllocateAndRevealSuperSeedingPiece(server2, torrent);
+
+        Assert.That(allocated1, Is.True);
+        Assert.That(allocated2, Is.True);
+        Assert.That(server1.AssignedSuperSeedingPiece, Is.EqualTo(0));
+        Assert.That(server2.AssignedSuperSeedingPiece, Is.EqualTo(1));
+        Assert.That(server1.AssignedSuperSeedingPiece, Is.Not.EqualTo(server2.AssignedSuperSeedingPiece));
+
+        var msg1 = client1.ReceiveMessage();
+        var msg2 = client2.ReceiveMessage();
+
+        Assert.That(msg1?.Type, Is.EqualTo(PeerMessageType.Have));
+        Assert.That(msg2?.Type, Is.EqualTo(PeerMessageType.Have));
+        Assert.That(BinaryPrimitives.ReadInt32BigEndian(msg1.Payload), Is.EqualTo(0));
+        Assert.That(BinaryPrimitives.ReadInt32BigEndian(msg2.Payload), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void AllocateAndRevealSuperSeedingPiece_does_not_allocate_to_choked_peer()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.AmChoking = true;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+
+        var allocated = _server.AllocateAndRevealSuperSeedingPiece(serverConn, torrent);
+
+        Assert.That(allocated, Is.False);
+        Assert.That(serverConn.AssignedSuperSeedingPiece, Is.Null);
+    }
+
+    [Test]
+    public void HandleMessage_request_matching_assigned_piece_is_accepted_and_fulfilled()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.AmChoking = false;
+        serverConn.AssignedSuperSeedingPiece = 2;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+        serverConn.MatchedTorrent = torrent;
+
+        var requestPayload = BuildRequestPayload(2, 0, 16384);
+        var requestMsg = new PeerMessage
+        {
+            Type = PeerMessageType.Request,
+            Payload = requestPayload,
+            PayloadLength = requestPayload.Length
+        };
+
+        _server.HandleMessage(serverConn, requestMsg, torrent);
+
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Piece));
+        Assert.That(received.Payload, Is.Not.Null);
+        var pieceIndex = BinaryPrimitives.ReadInt32BigEndian(received.Payload.AsSpan(0, 4));
+        var begin = BinaryPrimitives.ReadInt32BigEndian(received.Payload.AsSpan(4, 4));
+        Assert.That(pieceIndex, Is.EqualTo(2));
+        Assert.That(begin, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleMessage_request_for_unassigned_piece_is_rejected_with_RejectRequest_when_fast_supported()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.AmChoking = false;
+        serverConn.SupportsFastExtension = true;
+        serverConn.AssignedSuperSeedingPiece = 2;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+        serverConn.MatchedTorrent = torrent;
+
+        // Peer requests piece 5 which was NOT assigned to it
+        var requestPayload = BuildRequestPayload(5, 0, 16384);
+        var requestMsg = new PeerMessage
+        {
+            Type = PeerMessageType.Request,
+            Payload = requestPayload,
+            PayloadLength = requestPayload.Length
+        };
+
+        _server.HandleMessage(serverConn, requestMsg, torrent);
+
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.RejectRequest));
+        Assert.That(received.Payload, Is.Not.Null);
+        var rejectedIndex = BinaryPrimitives.ReadInt32BigEndian(received.Payload.AsSpan(0, 4));
+        Assert.That(rejectedIndex, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void HandleMessage_request_for_unassigned_piece_is_dropped_when_fast_not_supported()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.AmChoking = false;
+        serverConn.SupportsFastExtension = false;
+        serverConn.AssignedSuperSeedingPiece = 2;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+        serverConn.MatchedTorrent = torrent;
+
+        var serverWithoutFast = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            fastExtensionHandler: null);
+
+        var requestPayload = BuildRequestPayload(5, 0, 16384);
+        var requestMsg = new PeerMessage
+        {
+            Type = PeerMessageType.Request,
+            Payload = requestPayload,
+            PayloadLength = requestPayload.Length
+        };
+
+        serverWithoutFast.HandleMessage(serverConn, requestMsg, torrent);
+
+        // Client should not receive anything because request was dropped
+        // Send a NotInterested message from server to prove no earlier Piece or RejectRequest was sent
+        serverConn.SendMessage(new PeerMessage { Type = PeerMessageType.NotInterested });
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.NotInterested));
+
+        serverWithoutFast.Dispose();
+    }
+
+    [Test]
+    public void HandleMessage_have_from_peer_advances_peer_to_next_piece()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.AmChoking = false;
+        serverConn.AssignedSuperSeedingPiece = 0;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+        serverConn.MatchedTorrent = torrent;
+
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { serverConn });
+
+        // Peer announces HAVE(0)
+        var havePayload = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(havePayload, 0);
+        var haveMsg = new PeerMessage
+        {
+            Type = PeerMessageType.Have,
+            Payload = havePayload,
+            PayloadLength = 4
+        };
+
+        _server.HandleMessage(serverConn, haveMsg, torrent);
+
+        // Peer should be advanced to next unseeded piece (piece 1)
+        Assert.That(serverConn.AssignedSuperSeedingPiece, Is.EqualTo(1));
+
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Have));
+        var nextPiece = BinaryPrimitives.ReadInt32BigEndian(received.Payload);
+        Assert.That(nextPiece, Is.EqualTo(1));
+    }
+}

@@ -13,6 +13,7 @@ namespace NzbDrone.Core.Peers;
 
 public interface IChokeManager
 {
+    event Action<PeerConnection> PeerUnchoked;
     void ProcessChoking();
     void ProcessRegularUnchoke();
     void ProcessOptimisticUnchoke();
@@ -30,6 +31,7 @@ public interface IChokeManager
 
 public class ChokeManager : BackgroundService, IChokeManager
 {
+    public event Action<PeerConnection> PeerUnchoked;
     public const int MinUnchokeDurationSeconds = 20;
     public const int MaxUnchokeLeaseSeconds = 60;
     public const double ChokeHysteresisMargin = 0.15;
@@ -883,6 +885,15 @@ public class ChokeManager : BackgroundService, IChokeManager
             catch (Exception ex)
             {
                 _logger.Debug(ex, "Failed to send unchoke to {0}:{1}", connection.RemoteIp, connection.RemotePort);
+            }
+
+            try
+            {
+                PeerUnchoked?.Invoke(connection);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to notify PeerUnchoked for {0}:{1}", connection.RemoteIp, connection.RemotePort);
             }
         }
     }

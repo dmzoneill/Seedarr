@@ -814,6 +814,7 @@ public class SeedingEngine : BackgroundService
                 {
                     if (peer != null)
                     {
+                        peer.AssignedSuperSeedingPiece = null;
                         if (peer.SupportsFastExtension)
                         {
                             peer.SendMessage(new PeerMessage { Type = PeerMessageType.HaveAll });
