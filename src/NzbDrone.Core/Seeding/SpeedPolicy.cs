@@ -22,7 +22,6 @@ public class SpeedPolicy : ISpeedPolicy,
 {
     public const long DefaultMaxUploadPerLeecherBps = 2_500_000;
     public const double WarmUpWindowSeconds = 180.0;
-    private const double SuperSeedingBoost = 1.5;
 
     public const int TcpIpHeaderBytes = 40;
     public const int UdpHeaderBytes = 28;
@@ -307,11 +306,6 @@ public class SpeedPolicy : ISpeedPolicy,
                 {
                     var perTorrentLimitBps = (long)effectiveUlLimit * 1024;
                     bytesPerSecond = Math.Min(bytesPerSecond, perTorrentLimitBps);
-                }
-
-                if (torrent.SuperSeeding)
-                {
-                    bytesPerSecond = (long)(bytesPerSecond * SuperSeedingBoost);
                 }
 
                 if (_swarmAnalyzer != null && _configService.SwarmIntelligenceEnabled)

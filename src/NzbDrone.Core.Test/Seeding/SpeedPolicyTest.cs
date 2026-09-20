@@ -764,7 +764,7 @@ public class SpeedPolicyTest
     }
 
     [Test]
-    public void ProcessSeeding_enforces_aggregate_bandwidth_cap_when_superseeding_boost_applied()
+    public void ProcessSeeding_does_not_apply_artificial_super_seeding_speed_boost()
     {
         var torrent = new Torrent
         {
@@ -783,14 +783,14 @@ public class SpeedPolicyTest
         _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
             .Returns(new long[] { 250_000 });
 
-        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 500_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
 
-        // 250_000 boosted by 1.5x is 375_000, but global cap is 250_000.
+        // SuperSeeding does not artificially boost upload speed; allocated speed is respected without multiplier
         Assert.That(torrent.Uploaded, Is.EqualTo(250_000));
     }
 
     [Test]
-    public void ProcessSeeding_enforces_aggregate_bandwidth_cap_with_multiple_boosted_torrents()
+    public void ProcessSeeding_enforces_aggregate_bandwidth_cap_with_multiple_super_seeding_torrents()
     {
         var torrent1 = new Torrent
         {
@@ -822,7 +822,6 @@ public class SpeedPolicyTest
 
         _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 1_000_000, MaxDownloadSpeed = 2_000_000 }, TimeSpan.FromSeconds(1));
 
-        // Each torrent boosted to 750_000 (sum 1_500_000), clamped to aggregate cap 1_000_000.
         Assert.That(torrent1.Uploaded + torrent2.Uploaded, Is.EqualTo(1_000_000));
     }
 

@@ -424,7 +424,7 @@ public class SeedingEngineTest
     }
 
     [Test]
-    public void Tick_should_boost_super_seeding_speed()
+    public void Tick_should_not_artificially_boost_super_seeding_speed()
     {
         var normalTorrent = new Torrent
         {
@@ -452,7 +452,7 @@ public class SeedingEngineTest
 
         CallTick();
 
-        Assert.That(superTorrent.Uploaded, Is.GreaterThan(normalTorrent.Uploaded));
+        Assert.That(superTorrent.Uploaded, Is.EqualTo(normalTorrent.Uploaded));
     }
 
     [Test]
