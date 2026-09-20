@@ -285,8 +285,19 @@ public class DbFactory : IDbFactory
             using var conn = new SqliteConnection(connectionString);
             conn.Open();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;";
+            cmd.CommandText = "PRAGMA auto_vacuum = INCREMENTAL;";
             cmd.ExecuteNonQuery();
+
+            cmd.CommandText = "PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 30000;";
+            cmd.ExecuteNonQuery();
+
+            cmd.CommandText = "PRAGMA auto_vacuum;";
+            var currentMode = Convert.ToInt32(cmd.ExecuteScalar());
+            if (currentMode != 2)
+            {
+                cmd.CommandText = "PRAGMA auto_vacuum = INCREMENTAL; VACUUM;";
+                cmd.ExecuteNonQuery();
+            }
         }
         catch (Exception ex)
         {
@@ -341,7 +352,7 @@ public class DbFactory : IDbFactory
         {
             try
             {
-                runner.Processor.Execute("PRAGMA busy_timeout = 30000; PRAGMA foreign_keys = ON;");
+                runner.Processor.Execute("PRAGMA auto_vacuum = INCREMENTAL; PRAGMA busy_timeout = 30000; PRAGMA foreign_keys = ON;");
             }
             catch (Exception ex)
             {
