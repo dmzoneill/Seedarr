@@ -87,8 +87,24 @@ public class MainDatabase : IMainDatabase
         }
     }
 
+    public void Optimize()
+    {
+        if (DatabaseType == DatabaseType.SQLite)
+        {
+            try
+            {
+                _database.Optimize();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to execute SQLite PRAGMA optimize");
+            }
+        }
+    }
+
     public void Vacuum()
     {
+        Optimize();
         Checkpoint();
         if (DatabaseType == DatabaseType.SQLite)
         {

@@ -25,10 +25,21 @@ public class Database : IDatabase
         if (DatabaseType == DatabaseType.SQLite)
         {
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "PRAGMA busy_timeout = 30000; PRAGMA cache_size = -64000; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;";
+            cmd.CommandText = "PRAGMA busy_timeout = 30000; PRAGMA cache_size = -64000; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY; PRAGMA mmap_size = 268435456;";
             cmd.ExecuteNonQuery();
         }
 
         return connection;
+    }
+
+    public void Optimize()
+    {
+        if (DatabaseType == DatabaseType.SQLite)
+        {
+            using var connection = OpenConnection();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA optimize;";
+            cmd.ExecuteNonQuery();
+        }
     }
 }

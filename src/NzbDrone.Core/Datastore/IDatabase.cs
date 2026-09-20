@@ -8,4 +8,5 @@ public interface IDatabase
     IDbConnection OpenConnection();
     DatabaseType DatabaseType { get; }
     Version Version { get; }
+    void Optimize();
 }

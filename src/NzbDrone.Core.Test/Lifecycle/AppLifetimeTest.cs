@@ -289,6 +289,7 @@ public class AppLifetimeTest
 
         // Phase 3: Connection teardown and database checkpoint
         await _connectionManager.Received(1).DisconnectAllAsync();
+        _mainDatabase.Received(1).Optimize();
         _mainDatabase.Received(1).Checkpoint();
     }
 
@@ -373,5 +374,16 @@ public class AppLifetimeTest
         await _subject.StartAsync(CancellationToken.None);
 
         _fastResumeService.Received(1).LoadAll();
+    }
+
+    [Test]
+    public async Task StopAsync_should_continue_checkpoint_when_optimize_fails()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _mainDatabase.When(x => x.Optimize()).Do(_ => throw new InvalidOperationException("Optimize failed"));
+
+        Assert.DoesNotThrowAsync(async () => await _subject.StopAsync(CancellationToken.None));
+
+        _mainDatabase.Received(1).Checkpoint();
     }
 }
