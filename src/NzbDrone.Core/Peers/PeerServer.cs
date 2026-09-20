@@ -533,6 +533,53 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _pexService?.BroadcastPex(infoHash);
     }
 
+    public void BroadcastLtDontHave(string infoHash, int pieceIndex)
+    {
+        if (string.IsNullOrEmpty(infoHash) || pieceIndex < 0)
+        {
+            return;
+        }
+
+        if (_configService != null && !_configService.ExtensionLtDontHave)
+        {
+            return;
+        }
+
+        var connections = _connectionManager?.GetConnections(infoHash);
+        if (connections == null || connections.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var conn in connections)
+        {
+            if (conn.SupportsLtDontHave)
+            {
+                try
+                {
+                    conn.SendLtDontHave(pieceIndex);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to broadcast lt_donthave for piece {0} to peer {1}:{2}", pieceIndex, conn.RemoteIp, conn.RemotePort);
+                }
+            }
+        }
+    }
+
+    public void BroadcastLtDontHave(string infoHash, IEnumerable<int> pieceIndices)
+    {
+        if (string.IsNullOrEmpty(infoHash) || pieceIndices == null)
+        {
+            return;
+        }
+
+        foreach (var pieceIndex in pieceIndices)
+        {
+            BroadcastLtDontHave(infoHash, pieceIndex);
+        }
+    }
+
     public byte[] BuildPexMessage(string infoHash)
     {
         if (string.IsNullOrEmpty(infoHash) || (_configService != null && !_configService.EnablePex))
@@ -2799,6 +2846,35 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         return false;
     }
 
+    private bool IsLtDontHaveExtension(PeerConnection connection, byte extId, Torrent torrent)
+    {
+        if (_configService != null && !_configService.ExtensionLtDontHave)
+        {
+            return false;
+        }
+
+        if (_extensionManager != null)
+        {
+            var localExts = _extensionManager.GetSupportedExtensions(torrent?.IsPrivate ?? false);
+            if (localExts.TryGetValue("lt_donthave", out var localId) && extId == localId)
+            {
+                return true;
+            }
+        }
+
+        if (connection.RemoteLtDontHaveId.HasValue && extId == connection.RemoteLtDontHaveId.Value)
+        {
+            return true;
+        }
+
+        if (connection.RemoteExtensions.TryGetValue("lt_donthave", out var remoteId) && extId == remoteId)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     private void SendExtensionHandshake(PeerConnection connection, Torrent torrent, IClientProfile profile)
     {
         if (connection == null || !connection.SupportsExtensionProtocol || _extensionManager == null)
@@ -2912,7 +2988,37 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             return;
         }
 
+        if (IsLtDontHaveExtension(connection, extId, torrent))
+        {
+            HandleLtDontHaveMessage(connection, extendedPayload, torrent);
+            return;
+        }
+
         _logger.Trace("Ignoring unknown extension message ID {0} from {1}", extId, connection.RemoteIp);
+    }
+
+    private void HandleLtDontHaveMessage(PeerConnection connection, byte[] extendedPayload, Torrent torrent)
+    {
+        if (connection == null || extendedPayload == null || extendedPayload.Length != 4)
+        {
+            connection?.HandleLtDontHave(extendedPayload);
+            return;
+        }
+
+        var pieceIndex = (int)(((uint)extendedPayload[0] << 24) | ((uint)extendedPayload[1] << 16) | ((uint)extendedPayload[2] << 8) | extendedPayload[3]);
+
+        if (torrent != null && torrent.PieceCount > 0 && pieceIndex >= 0 && pieceIndex < torrent.PieceCount)
+        {
+            if (connection.PeerPieces != null && pieceIndex < connection.PeerPieces.Length && connection.PeerPieces[pieceIndex])
+            {
+                var histogram = GetOrCreateHistogram(torrent.InfoHash, torrent.PieceCount);
+                histogram?.DecrementPiece(pieceIndex);
+            }
+        }
+
+        connection.HandleLtDontHave(extendedPayload);
+
+        UpdateLocalInterest(connection, torrent);
     }
 
     private void HandleUtPexMessage(PeerConnection connection, byte[] extendedPayload, Torrent torrent)

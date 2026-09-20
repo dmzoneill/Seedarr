@@ -116,6 +116,10 @@ public class PeerConnection : IDisposable
     public Action<HashesMessage> OnHashesReceived { get; set; }
     public Action<HashRejectMessage> OnHashRejectReceived { get; set; }
 
+    public event Action<int> LtDontHaveReceived;
+    public Action<int> OnLtDontHaveReceived { get; set; }
+    public Func<PeerConnection, bool> InterestEvaluator { get; set; }
+
     public ConcurrentDictionary<string, MerkleTree> MerkleTrees { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Func<byte[], MerkleTree> MerkleTreeProvider { get; set; }
 
@@ -163,6 +167,25 @@ public class PeerConnection : IDisposable
             }
         }
     }
+
+    public int? RemoteLtDontHaveId
+    {
+        get => RemoteExtensions.TryGetValue("lt_donthave", out var id) ? id : null;
+        set
+        {
+            if (value.HasValue)
+            {
+                RemoteExtensions["lt_donthave"] = value.Value;
+            }
+            else
+            {
+                RemoteExtensions.TryRemove("lt_donthave", out _);
+            }
+        }
+    }
+
+    public int? LocalLtDontHaveId { get; set; }
+    public bool SupportsLtDontHave => RemoteExtensions.TryGetValue("lt_donthave", out var id) && id > 0;
 
     public int? MetadataSize { get; set; }
     public bool IsSnubbed { get; set; }
@@ -254,7 +277,118 @@ public class PeerConnection : IDisposable
         }
     }
 
+    private byte[] _bitfield;
     private bool[] _peerPieces;
+    private bool _isPartialSeed;
+    private bool _hasMissingWantedPieces = true;
+
+    public virtual bool IsPartialSeed
+    {
+        get => _isPartialSeed || !_hasMissingWantedPieces;
+        set
+        {
+            _isPartialSeed = value;
+            if (value)
+            {
+                _hasMissingWantedPieces = false;
+            }
+        }
+    }
+
+    public virtual bool HasMissingWantedPieces
+    {
+        get => _hasMissingWantedPieces && !_isPartialSeed;
+        set
+        {
+            _hasMissingWantedPieces = value;
+            if (!value)
+            {
+                _isPartialSeed = true;
+            }
+        }
+    }
+
+    public virtual byte[] Bitfield
+    {
+        get
+        {
+            if (_bitfield != null)
+            {
+                return _bitfield;
+            }
+
+            if (_peerPieces != null && _peerPieces.Length > 0)
+            {
+                var byteCount = (_peerPieces.Length + 7) / 8;
+                var bytes = new byte[byteCount];
+                for (var i = 0; i < _peerPieces.Length; i++)
+                {
+                    if (_peerPieces[i])
+                    {
+                        bytes[i / 8] |= (byte)(1 << (7 - (i % 8)));
+                    }
+                }
+
+                return bytes;
+            }
+
+            return null;
+        }
+        set
+        {
+            _bitfield = value;
+            if (value != null)
+            {
+                if (_peerPieces != null)
+                {
+                    var count = 0;
+                    for (var i = 0; i < _peerPieces.Length; i++)
+                    {
+                        var byteIndex = i / 8;
+                        var bitIndex = 7 - (i % 8);
+                        var hasPiece = byteIndex < value.Length && ((value[byteIndex] >> bitIndex) & 1) != 0;
+                        _peerPieces[i] = hasPiece;
+                        if (hasPiece)
+                    {
+                        count++;
+                    }
+                    }
+
+                    HaveCount = count;
+                    if (_peerPieces.Length > 0)
+                    {
+                        Progress = (double)HaveCount / _peerPieces.Length;
+                    }
+                }
+                else
+                {
+                    var pieceCount = value.Length * 8;
+                    _peerPieces = new bool[pieceCount];
+                    var count = 0;
+                    for (var i = 0; i < pieceCount; i++)
+                    {
+                        var byteIndex = i / 8;
+                        var bitIndex = 7 - (i % 8);
+                        var hasPiece = ((value[byteIndex] >> bitIndex) & 1) != 0;
+                        _peerPieces[i] = hasPiece;
+                        if (hasPiece)
+                    {
+                        count++;
+                    }
+                    }
+
+                    HaveCount = count;
+                    Progress = pieceCount > 0 ? (double)count / pieceCount : 0.0;
+                }
+            }
+            else
+            {
+                _peerPieces = null;
+                HaveCount = 0;
+                Progress = 0.0;
+            }
+        }
+    }
 
     public double Progress { get; set; }
     public int HaveCount { get; set; }
@@ -265,6 +399,7 @@ public class PeerConnection : IDisposable
         set
         {
             _peerPieces = value;
+            _bitfield = null;
             if (value != null)
             {
                 var count = 0;
@@ -277,10 +412,12 @@ public class PeerConnection : IDisposable
                 }
 
                 HaveCount = count;
+                Progress = value.Length > 0 ? (double)count / value.Length : 0.0;
             }
             else
             {
                 HaveCount = 0;
+                Progress = 0.0;
             }
         }
     }
@@ -1310,6 +1447,16 @@ public class PeerConnection : IDisposable
                 }
 
                 break;
+
+            case PeerMessageType.Extended:
+                if (message.Payload != null && message.Payload.Length >= 1)
+                {
+                    var extId = message.Payload[0];
+                    var extPayload = message.Payload.Length > 1 ? message.Payload[1..] : Array.Empty<byte>();
+                    HandleExtendedMessage(extId, extPayload);
+                }
+
+                break;
         }
     }
 
@@ -1318,6 +1465,110 @@ public class PeerConnection : IDisposable
         var payload = new byte[4];
         BinaryPrimitives.WriteInt32BigEndian(payload, pieceIndex);
         SendMessage(new PeerMessage { Type = PeerMessageType.Have, Payload = payload });
+    }
+
+    public virtual bool SendLtDontHave(int pieceIndex)
+    {
+        if (!RemoteExtensions.TryGetValue("lt_donthave", out var extId) || extId <= 0)
+        {
+            return false;
+        }
+
+        var payload = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(payload, pieceIndex);
+        SendExtendedMessage((byte)extId, payload);
+        return true;
+    }
+
+    public virtual bool HandleLtDontHave(byte[] payload)
+    {
+        if (payload == null || payload.Length != 4)
+        {
+            _logger.Debug("Ignoring invalid lt_donthave payload length from {0}:{1}", RemoteIp, RemotePort);
+            return false;
+        }
+
+        var pieceIndex = BinaryPrimitives.ReadInt32BigEndian(payload);
+        if (pieceIndex < 0)
+        {
+            _logger.Debug("Ignoring negative lt_donthave piece index {0} from {1}:{2}", pieceIndex, RemoteIp, RemotePort);
+            return false;
+        }
+
+        if (_peerPieces != null && pieceIndex >= _peerPieces.Length)
+        {
+            _logger.Debug("Ignoring out-of-range lt_donthave piece index {0} (total {1}) from {2}:{3}", pieceIndex, _peerPieces.Length, RemoteIp, RemotePort);
+            return false;
+        }
+
+        if (_bitfield != null)
+        {
+            var byteIndex = pieceIndex / 8;
+            var bitIndex = 7 - (pieceIndex % 8);
+            if (byteIndex < _bitfield.Length)
+            {
+                _bitfield[byteIndex] &= (byte)~(1 << bitIndex);
+            }
+        }
+
+        if (_peerPieces != null && pieceIndex < _peerPieces.Length)
+        {
+            if (_peerPieces[pieceIndex])
+            {
+                _peerPieces[pieceIndex] = false;
+                HaveCount = Math.Max(0, HaveCount - 1);
+                if (_peerPieces.Length > 0)
+                {
+                    Progress = (double)HaveCount / _peerPieces.Length;
+                }
+            }
+        }
+
+        if (IsSeed && ((_peerPieces != null && HaveCount < _peerPieces.Length) || Progress < 1.0))
+        {
+            IsSeed = false;
+        }
+
+        if (InterestEvaluator != null)
+        {
+            IsInterested = InterestEvaluator(this);
+        }
+        else if (_peerPieces != null && !Array.Exists(_peerPieces, p => p))
+        {
+            IsInterested = false;
+        }
+
+        LtDontHaveReceived?.Invoke(pieceIndex);
+        OnLtDontHaveReceived?.Invoke(pieceIndex);
+        return true;
+    }
+
+    public virtual void HandleExtendedMessage(byte extensionId, byte[] payload)
+    {
+        if (IsLtDontHaveExtension(extensionId))
+        {
+            HandleLtDontHave(payload);
+        }
+    }
+
+    public virtual bool IsLtDontHaveExtension(byte extensionId)
+    {
+        if (LocalLtDontHaveId.HasValue && extensionId == LocalLtDontHaveId.Value)
+        {
+            return true;
+        }
+
+        if (RemoteLtDontHaveId.HasValue && extensionId == RemoteLtDontHaveId.Value)
+        {
+            return true;
+        }
+
+        if (RemoteExtensions.TryGetValue("lt_donthave", out var rId) && extensionId == rId)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     public void SendBitfield(int pieceCount)

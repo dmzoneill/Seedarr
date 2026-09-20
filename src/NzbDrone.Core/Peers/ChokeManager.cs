@@ -22,6 +22,7 @@ public interface IChokeManager
     void PeerDisconnected(PeerConnection connection);
     void PeerInterestedChanged(PeerConnection connection);
     void PeerBecameSeed(PeerConnection connection);
+    void PeerBecamePartialSeed(PeerConnection connection);
     void UpdatePeerActivity(PeerConnection connection);
     bool CanUnchoke(PeerConnection connection);
     bool CanUnchoke(string infoHash);
@@ -163,10 +164,10 @@ public class ChokeManager : BackgroundService, IChokeManager
                 }
             }
 
-            // Anti-seed choking: choke any unchoked peer that has become a seed
+            // Anti-seed / anti-partial-seed choking: choke any unchoked peer that has become a seed or partial seed without wanted pieces
             foreach (var conn in connections)
             {
-                if (!conn.AmChoking && conn.IsSeed)
+                if (!conn.AmChoking && (conn.IsSeed || conn.IsPartialSeed || !conn.HasMissingWantedPieces))
                 {
                     conn.IsOptimisticUnchoked = false;
                     Choke(conn);
@@ -191,7 +192,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                     .Select(g =>
                     {
                         var isSeeding = IsTorrentSeeding(g.Key);
-                        var eligible = g.Where(c => c.PeerInterested && !c.IsSnubbed && !c.IsSeed);
+                        var eligible = g.Where(c => c.PeerInterested && !c.IsSnubbed && !c.IsSeed && !c.IsPartialSeed && c.HasMissingWantedPieces);
                         var candidates = OrderCandidatesWithHysteresis(eligible, isSeeding, now);
 
                         return new
@@ -421,7 +422,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
         lock (_lock)
         {
-            if (connection.IsSeed)
+            if (connection.IsSeed || connection.IsPartialSeed || !connection.HasMissingWantedPieces)
             {
                 if (!connection.AmChoking)
                 {
@@ -517,6 +518,38 @@ public class ChokeManager : BackgroundService, IChokeManager
         }
     }
 
+    public void PeerBecamePartialSeed(PeerConnection connection)
+    {
+        if (connection == null)
+        {
+            return;
+        }
+
+        connection.IsPartialSeed = true;
+
+        lock (_lock)
+        {
+            if (!connection.AmChoking)
+            {
+                var wasOptimistic = connection.IsOptimisticUnchoked;
+                connection.IsOptimisticUnchoked = false;
+                Choke(connection);
+                if (wasOptimistic)
+                {
+                    if (!string.IsNullOrEmpty(connection.InfoHash))
+                    {
+                        ClearOptimisticSlot(connection.InfoHash, connection);
+                        ProcessOptimisticUnchokeForSwarmInternal(connection.InfoHash, null, advanceRound: false, excludedPeer: connection);
+                    }
+                }
+                else
+                {
+                    PromoteNextEligibleChokedPeer(connection.InfoHash, excludedPeer: connection);
+                }
+            }
+        }
+    }
+
     public void UpdatePeerActivity(PeerConnection connection)
     {
         connection.LastRequestReceived = DateTime.UtcNow;
@@ -530,7 +563,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     public bool CanUnchoke(PeerConnection connection)
     {
-        if (connection == null || connection.IsSeed)
+        if (connection == null || connection.IsSeed || connection.IsPartialSeed || !connection.HasMissingWantedPieces)
         {
             return false;
         }
@@ -641,7 +674,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
             var isSeeding = IsTorrentSeeding(infoHash);
             var eligibleCandidates = torrentConnections
-                .Where(c => !ReferenceEquals(c, excludedPeer) && c.PeerInterested && c.AmChoking && !c.IsSnubbed && !c.IsSeed);
+                .Where(c => !ReferenceEquals(c, excludedPeer) && c.PeerInterested && c.AmChoking && !c.IsSnubbed && !c.IsSeed && !c.IsPartialSeed && c.HasMissingWantedPieces);
 
             var nextPeer = isSeeding
                 ? eligibleCandidates
@@ -729,7 +762,9 @@ public class ChokeManager : BackgroundService, IChokeManager
                 c.IsOptimisticUnchoked &&
                 !c.AmChoking &&
                 c.PeerInterested &&
-                !c.IsSeed);
+                !c.IsSeed &&
+                !c.IsPartialSeed &&
+                c.HasMissingWantedPieces);
 
             if (existingPeer != null)
             {
@@ -749,6 +784,8 @@ public class ChokeManager : BackgroundService, IChokeManager
                           !slot.Peer.AmChoking &&
                           slot.Peer.PeerInterested &&
                           !slot.Peer.IsSeed &&
+                          !slot.Peer.IsPartialSeed &&
+                          slot.Peer.HasMissingWantedPieces &&
                           swarmConnections.Contains(slot.Peer);
 
         PeerConnection previousPeer = null;
@@ -799,6 +836,8 @@ public class ChokeManager : BackgroundService, IChokeManager
                         c.PeerInterested &&
                         c.AmChoking &&
                         !c.IsSeed &&
+                        !c.IsPartialSeed &&
+                        c.HasMissingWantedPieces &&
                         !c.IsOptimisticUnchoked)
             .ToList();
 
