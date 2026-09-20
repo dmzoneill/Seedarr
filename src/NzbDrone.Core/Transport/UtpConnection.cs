@@ -2,6 +2,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -47,10 +48,153 @@ public interface IUtpConnection : IDisposable
     Stream GetStream();
     void Flush();
     void Close();
+
+    long UploadRateLimit { get; set; }
+    long DownloadRateLimit { get; set; }
+    int PacketPacingIntervalMicroseconds { get; set; }
+    int SendBufferSize { get; set; }
+    int ReceiveBufferSize { get; set; }
+    void UpdateSocketBuffers();
 }
 
 public class UtpConnection : IUtpConnection
 {
+    public const int MinThrottledBufferSize = BandwidthPacer.MinThrottledBufferSize;
+    public const int MaxThrottledBufferSize = BandwidthPacer.MaxThrottledBufferSize;
+    public const int DefaultUnthrottledBufferSize = BandwidthPacer.DefaultUnthrottledBufferSize;
+    public const double DefaultEstimatedRttSeconds = BandwidthPacer.DefaultEstimatedRttSeconds;
+    public const int DefaultPacketPacingIntervalMicroseconds = BandwidthPacer.DefaultPacketPacingIntervalMicroseconds;
+
+    public static int CalculateBdpBufferSize(
+        long rateBytesPerSec,
+        double rttSeconds = DefaultEstimatedRttSeconds,
+        int minThrottled = MinThrottledBufferSize,
+        int maxThrottled = MaxThrottledBufferSize,
+        int unthrottled = DefaultUnthrottledBufferSize)
+    {
+        return BandwidthPacer.CalculateBdpBufferSize(rateBytesPerSec, rttSeconds, minThrottled, maxThrottled, unthrottled);
+    }
+
+    private long _uploadRateLimit;
+    private long _downloadRateLimit;
+    private int _packetPacingIntervalMicroseconds = DefaultPacketPacingIntervalMicroseconds;
+
+    public long UploadRateLimit
+    {
+        get => _uploadRateLimit;
+        set
+        {
+            _uploadRateLimit = value;
+            ApplySocketBuffers();
+        }
+    }
+
+    public long DownloadRateLimit
+    {
+        get => _downloadRateLimit;
+        set
+        {
+            _downloadRateLimit = value;
+            ApplySocketBuffers();
+        }
+    }
+
+    public int PacketPacingIntervalMicroseconds
+    {
+        get => _packetPacingIntervalMicroseconds;
+        set => _packetPacingIntervalMicroseconds = Math.Max(0, value);
+    }
+
+    public int SendBufferSize
+    {
+        get => _udpClient?.Client?.SendBufferSize ?? 0;
+        set
+        {
+            if (_udpClient?.Client != null)
+            {
+                try
+                {
+                    _udpClient.Client.SendBufferSize = value;
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+
+    public int ReceiveBufferSize
+    {
+        get => _udpClient?.Client?.ReceiveBufferSize ?? 0;
+        set
+        {
+            if (_udpClient?.Client != null)
+            {
+                try
+                {
+                    _udpClient.Client.ReceiveBufferSize = value;
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+
+    public void UpdateSocketBuffers() => ApplySocketBuffers();
+
+    private void ApplySocketBuffers()
+    {
+        if (_udpClient?.Client == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var rttSeconds = _srtt > 0 ? _srtt / 1000.0 : DefaultEstimatedRttSeconds;
+            _udpClient.Client.SendBufferSize = CalculateBdpBufferSize(_uploadRateLimit, rttSeconds);
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            var rttSeconds = _srtt > 0 ? _srtt / 1000.0 : DefaultEstimatedRttSeconds;
+            _udpClient.Client.ReceiveBufferSize = CalculateBdpBufferSize(_downloadRateLimit, rttSeconds);
+        }
+        catch
+        {
+        }
+    }
+
+    public Action<int, long> OnPacketPaced { get; set; }
+    internal static Action<long, long> PaceWaitHandler { get; set; } = BandwidthPacer.PaceWait;
+
+    public long CalculatePacingIntervalTicks(int payloadSize)
+    {
+        long ticks = 0;
+        if (_uploadRateLimit > 0 && payloadSize > 0)
+        {
+            ticks = (long)((double)payloadSize * Stopwatch.Frequency / _uploadRateLimit);
+        }
+
+        if (_packetPacingIntervalMicroseconds > 0)
+        {
+            var minTicks = (long)((double)_packetPacingIntervalMicroseconds * Stopwatch.Frequency / 1_000_000.0);
+            ticks = Math.Max(ticks, minTicks);
+        }
+
+        return ticks;
+    }
+
+    public long CalculatePacingIntervalMicroseconds(int payloadSize)
+    {
+        var ticks = CalculatePacingIntervalTicks(payloadSize);
+        return ticks > 0 ? (ticks * 1_000_000) / Stopwatch.Frequency : 0;
+    }
+
     public const uint MaxBufferSize = 1024 * 1024;
     public const int MaxOutOfOrderPackets = 64;
     public const int InitialRtoMs = 1000;
@@ -140,6 +284,8 @@ public class UtpConnection : IUtpConnection
             {
                 _logger.Debug(ex, "Failed to set socket timeouts");
             }
+
+            ApplySocketBuffers();
         }
     }
 
@@ -175,6 +321,8 @@ public class UtpConnection : IUtpConnection
             {
                 _logger.Debug(ex, "Failed to set socket timeouts");
             }
+
+            ApplySocketBuffers();
         }
     }
 
@@ -329,10 +477,21 @@ public class UtpConnection : IUtpConnection
                 };
 
                 _inFlightPackets[currentSeq] = inFlight;
+                var sendTimestamp = Stopwatch.GetTimestamp();
                 SendUdpPacket(packet, packet.Length, _remoteEndpoint);
                 totalSent += chunkSize;
 
                 TryReceiveUdpNonBlocking();
+
+                if (totalSent < length && IsConnected && !_isClosing)
+                {
+                    var pacingTicks = CalculatePacingIntervalTicks(chunkSize);
+                    if (pacingTicks > 0)
+                    {
+                        OnPacketPaced?.Invoke(chunkSize, pacingTicks);
+                        PaceWaitHandler(sendTimestamp, pacingTicks);
+                    }
+                }
             }
 
             return totalSent;

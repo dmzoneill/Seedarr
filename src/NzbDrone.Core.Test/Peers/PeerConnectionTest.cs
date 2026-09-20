@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Simulation.ClientBehavior;
@@ -1525,5 +1526,185 @@ public class PeerConnectionTest
 
         Assert.That(conn.UploadRate, Is.EqualTo(0));
         Assert.That(conn.DownloadRate, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void CalculateBdpBufferSize_should_return_unthrottled_size_when_rate_zero_or_negative()
+    {
+        Assert.That(PeerConnection.CalculateBdpBufferSize(0), Is.EqualTo(PeerConnection.DefaultUnthrottledBufferSize));
+        Assert.That(PeerConnection.CalculateBdpBufferSize(-1), Is.EqualTo(PeerConnection.DefaultUnthrottledBufferSize));
+        Assert.That(PeerConnection.CalculateBdpBufferSize(-1000), Is.EqualTo(PeerConnection.DefaultUnthrottledBufferSize));
+    }
+
+    [Test]
+    public void CalculateBdpBufferSize_should_clamp_to_min_throttled_size_when_bdp_is_small()
+    {
+        // 10 KB/s with 100ms RTT => 1,000 bytes BDP => clamped to MinThrottledBufferSize (8KB)
+        var size1 = PeerConnection.CalculateBdpBufferSize(10_000, 0.1);
+        Assert.That(size1, Is.EqualTo(PeerConnection.MinThrottledBufferSize));
+
+        // 50 KB/s with 100ms RTT => 5,000 bytes BDP => clamped to MinThrottledBufferSize (8KB)
+        var size2 = PeerConnection.CalculateBdpBufferSize(50_000, 0.1);
+        Assert.That(size2, Is.EqualTo(PeerConnection.MinThrottledBufferSize));
+    }
+
+    [Test]
+    public void CalculateBdpBufferSize_should_scale_proportionally_when_within_throttled_bounds()
+    {
+        // 200 KB/s with 100ms RTT => 20,000 bytes BDP
+        var size = PeerConnection.CalculateBdpBufferSize(200_000, 0.1);
+        Assert.That(size, Is.EqualTo(20_000));
+
+        // 500 KB/s with 100ms RTT => 50,000 bytes BDP
+        var size2 = PeerConnection.CalculateBdpBufferSize(500_000, 0.1);
+        Assert.That(size2, Is.EqualTo(50_000));
+    }
+
+    [Test]
+    public void CalculateBdpBufferSize_should_clamp_to_max_throttled_size_when_bdp_is_large()
+    {
+        // 1 MB/s with 100ms RTT => 100,000 bytes BDP => clamped to MaxThrottledBufferSize (64KB)
+        var size = PeerConnection.CalculateBdpBufferSize(1_000_000, 0.1);
+        Assert.That(size, Is.EqualTo(PeerConnection.MaxThrottledBufferSize));
+
+        // 10 MB/s with 100ms RTT => 1,000,000 bytes BDP => clamped to MaxThrottledBufferSize (64KB)
+        var size2 = PeerConnection.CalculateBdpBufferSize(10_000_000, 0.1);
+        Assert.That(size2, Is.EqualTo(PeerConnection.MaxThrottledBufferSize));
+    }
+
+    [Test]
+    public void ApplySocketOptions_should_apply_calculated_bdp_buffer_sizes_to_tcp_client()
+    {
+        using var client = new TcpClient();
+        _clients.Add(client);
+
+        PeerConnection.ApplySocketOptions(client, sendRateLimit: 200_000, receiveRateLimit: 500_000, rttSeconds: 0.1);
+
+        // On Linux, socket buffer sizes are doubled by kernel, so SendBufferSize >= 20000
+        Assert.That(client.Client.SendBufferSize, Is.GreaterThanOrEqualTo(20_000));
+        Assert.That(client.Client.ReceiveBufferSize, Is.GreaterThanOrEqualTo(50_000));
+    }
+
+    [Test]
+    public void ApplySocketOptions_should_handle_null_client_safely()
+    {
+        Assert.DoesNotThrow(() => PeerConnection.ApplySocketOptions(null));
+    }
+
+    [Test]
+    public void UploadRateLimit_and_DownloadRateLimit_change_should_dynamically_update_socket_buffers()
+    {
+        var pair = CreateTestPair();
+        var client = pair.Client;
+
+        client.UploadRateLimit = 200_000;
+        client.DownloadRateLimit = 500_000;
+
+        Assert.That(client.SendBufferSize, Is.GreaterThanOrEqualTo(20_000));
+        Assert.That(client.ReceiveBufferSize, Is.GreaterThanOrEqualTo(50_000));
+
+        client.SetRateLimits(10_000, 10_000_000, 0.1);
+        Assert.That(client.SendBufferSize, Is.GreaterThanOrEqualTo(PeerConnection.MinThrottledBufferSize));
+        Assert.That(client.ReceiveBufferSize, Is.GreaterThanOrEqualTo(PeerConnection.MaxThrottledBufferSize));
+    }
+
+    [Test]
+    public void SendMessage_should_slice_large_payload_and_pace_writes_when_rate_limited()
+    {
+        var stream = new MemoryStream();
+        var conn = new PeerConnection(stream, "127.0.0.1", 6881)
+        {
+            UploadRateLimit = 100_000, // 100 KB/s
+            PacingChunkSize = 2048
+        };
+        _connections.Add(conn);
+
+        var pacedChunks = new List<(int Size, long Ticks)>();
+        conn.OnWriteChunkPaced = (size, ticks) => pacedChunks.Add((size, ticks));
+
+        // Replace wait handler with non-blocking recorder for fast testing
+        PeerConnection.PaceWaitHandler = (start, ticks) => { };
+
+        try
+        {
+            var payload = new byte[8192];
+            for (var i = 0; i < payload.Length; i++)
+            {
+                payload[i] = (byte)(i % 256);
+            }
+
+            conn.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = payload,
+                PayloadLength = payload.Length
+            });
+
+            // 4 bytes len + 1 byte type + 8192 bytes payload = 8197 bytes total.
+            // Slices: 2048, 2048, 2048, 2048, 5 (remainder).
+            // Pacing delay is invoked for all slices except the last one (4 paced slices).
+            Assert.That(pacedChunks.Count, Is.EqualTo(4));
+            foreach (var chunk in pacedChunks)
+            {
+                Assert.That(chunk.Size, Is.EqualTo(2048));
+                Assert.That(chunk.Ticks, Is.GreaterThan(0));
+            }
+
+            // Verify entire stream was written correctly
+            Assert.That(stream.Length, Is.EqualTo(8197));
+        }
+        finally
+        {
+            PeerConnection.PaceWaitHandler = BandwidthPacer.PaceWait;
+        }
+    }
+
+    [Test]
+    public void SendMessage_should_not_slice_or_pace_when_unthrottled()
+    {
+        var stream = new MemoryStream();
+        var conn = new PeerConnection(stream, "127.0.0.1", 6881)
+        {
+            UploadRateLimit = 0, // Unthrottled
+            PacingChunkSize = 2048
+        };
+        _connections.Add(conn);
+
+        var pacedChunks = new List<(int Size, long Ticks)>();
+        conn.OnWriteChunkPaced = (size, ticks) => pacedChunks.Add((size, ticks));
+
+        var payload = new byte[8192];
+        conn.SendMessage(new PeerMessage
+        {
+            Type = PeerMessageType.Piece,
+            Payload = payload,
+            PayloadLength = payload.Length
+        });
+
+        Assert.That(pacedChunks, Is.Empty);
+        Assert.That(stream.Length, Is.EqualTo(8197));
+    }
+
+    [Test]
+    public void SendMessage_should_not_pace_for_small_messages_even_when_rate_limited()
+    {
+        var stream = new MemoryStream();
+        var conn = new PeerConnection(stream, "127.0.0.1", 6881)
+        {
+            UploadRateLimit = 50_000,
+            PacingChunkSize = 2048
+        };
+        _connections.Add(conn);
+
+        var pacedChunks = new List<(int Size, long Ticks)>();
+        conn.OnWriteChunkPaced = (size, ticks) => pacedChunks.Add((size, ticks));
+
+        conn.SendMessage(new PeerMessage
+        {
+            Type = PeerMessageType.Choke
+        });
+
+        Assert.That(pacedChunks, Is.Empty);
+        Assert.That(stream.Length, Is.EqualTo(5));
     }
 }
