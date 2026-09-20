@@ -55,6 +55,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ISubtitleConversionService _subtitleConversionService;
     private readonly ISubtitleEncodingDetector _subtitleEncodingDetector;
     private readonly IMainDatabase _mainDatabase;
+    private readonly ITorrentRecheckService _torrentRecheckService;
 
     private readonly ConcurrentDictionary<int, (List<TrackerEntry> Trackers, DateTime Expiry)> _broadcastTrackersCache = new();
     private readonly ConcurrentDictionary<int, (TorrentMediaMetadata Metadata, DateTime Expiry)> _broadcastMediaMetaCache = new();
@@ -84,7 +85,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         ISubtitleConversionService subtitleConversionService = null,
         ISubtitleEncodingDetector subtitleEncodingDetector = null,
         ITrackerScrapeService trackerScrapeService = null,
-        IMainDatabase mainDatabase = null)
+        IMainDatabase mainDatabase = null,
+        ITorrentRecheckService torrentRecheckService = null)
         : base(signalRBroadcaster, null, coalesceWindow)
     {
         _torrentService = torrentService;
@@ -108,6 +110,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _subtitleEncodingDetector = subtitleEncodingDetector ?? new SubtitleEncodingDetector();
         _trackerScrapeService = trackerScrapeService;
         _mainDatabase = mainDatabase;
+        _torrentRecheckService = torrentRecheckService;
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -1570,14 +1573,17 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     [HttpPost("{id:int}/recheck")]
     public ActionResult<TorrentResource> Recheck(int id)
     {
-        var torrent = _torrentService.Recheck(id);
+        var torrent = _torrentRecheckService != null
+            ? _torrentRecheckService.QueueRecheck(id)
+            : _torrentService.Recheck(id);
+
         if (torrent == null)
         {
             return NotFound();
         }
 
-        _eventLogService.Info(id, "Recheck", $"Recheck complete: progress {torrent.Progress:P0}");
-        return TorrentResourceMapper.ToResource(torrent);
+        _eventLogService?.Info(id, "Recheck", $"Recheck queued for {torrent.Name}");
+        return Ok(TorrentResourceMapper.ToResource(torrent));
     }
 
     [HttpPut("{id:int}/queue")]
@@ -1767,13 +1773,16 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             case "recheck":
             case "forcerecheck":
                 {
-                    var torrent = _torrentService.Recheck(id);
+                    var torrent = _torrentRecheckService != null
+                        ? _torrentRecheckService.QueueRecheck(id)
+                        : _torrentService.Recheck(id);
+
                     if (torrent == null)
                     {
                         throw new KeyNotFoundException($"Torrent {id} not found");
                     }
 
-                    _eventLogService?.Info(id, "Recheck", $"Recheck complete: progress {torrent.Progress:P0}");
+                    _eventLogService?.Info(id, "Recheck", $"Recheck queued for {torrent.Name}");
                     break;
                 }
 

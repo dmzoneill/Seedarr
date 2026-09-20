@@ -242,7 +242,7 @@ public class TorrentService : ITorrentService,
 
         if (_torrentRecheckService != null)
         {
-            return _torrentRecheckService.Recheck(torrent);
+            return _torrentRecheckService.QueueRecheck(id) ?? _torrentRecheckService.Recheck(torrent);
         }
 
         _logger.Info("Rechecking torrent: {0}", torrent.Name);

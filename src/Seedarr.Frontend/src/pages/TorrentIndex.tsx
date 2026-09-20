@@ -222,6 +222,36 @@ function TorrentIndex() {
     }
   }, [selectedIds, bulkAction, setSelectedIds, showToast]);
 
+  const handleBulkRecheck = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBulkPending(true);
+    const ids = [...selectedIds];
+    try {
+      const res = await bulkAction.mutateAsync({
+        torrentIds: ids,
+        action: "recheck",
+      });
+
+      if (res.failedCount === 0) {
+        showToast(
+          `Successfully queued recheck for ${res.successCount} torrent(s).`,
+          "success",
+        );
+      } else {
+        showToast(
+          `${res.successCount} recheck queued, ${res.failedCount} failed`,
+          "warning",
+        );
+      }
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to queue recheck";
+      showToast(msg, "error");
+    } finally {
+      setBulkPending(false);
+    }
+  }, [selectedIds, bulkAction, showToast]);
+
   const handleBulkDelete = useCallback(() => {
     const targetIds =
       selectedIds.size > 0
@@ -525,6 +555,7 @@ function TorrentIndex() {
         onBulkStop={handleBulkStop}
         onBulkDelete={handleBulkDelete}
         onBulkClear={() => setSelectedIds(new Set())}
+        onBulkRecheck={handleBulkRecheck}
         onBulkAddTags={handleBulkAddTags}
         onBulkRemoveTags={handleBulkRemoveTags}
         onBulkMoveQueue={handleBulkMoveQueue}
