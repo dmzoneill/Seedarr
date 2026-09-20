@@ -20,6 +20,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
 import { apiClient } from "../api/client";
 import { formatBytes } from "../utils/formatters";
+import MediaArtwork from "./MediaArtwork";
 import { trackModalOpen } from "../utils/analytics";
 
 interface CommandItem {
@@ -804,16 +805,17 @@ export function CommandPalette({
                   }}
                 >
                   {item.posterUrl ? (
-                    <img
+                    <MediaArtwork
                       src={item.posterUrl}
-                      alt=""
-                      style={{
-                        width: "28px",
-                        height: "40px",
-                        borderRadius: "3px",
-                        objectFit: "cover",
-                        flexShrink: 0,
-                      }}
+                      alt={item.title}
+                      title={item.title}
+                      category={item.category || undefined}
+                      fallbackIcon={item.icon}
+                      width="28px"
+                      height="40px"
+                      aspectRatio="auto"
+                      borderRadius="3px"
+                      style={{ flexShrink: 0 }}
                     />
                   ) : (
                     <span

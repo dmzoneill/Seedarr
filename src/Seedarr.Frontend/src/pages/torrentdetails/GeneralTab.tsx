@@ -20,6 +20,7 @@ import { getTorrentBadges, calculateHnrStatus } from "../../utils/milestones";
 import PieceMap from "../../components/PieceMap";
 import SeedingSimulator from "../../components/SeedingSimulator";
 import { StatusRow } from "./shared";
+import MediaArtwork from "../../components/MediaArtwork";
 
 export function GeneralTab({ torrent }: { torrent: Torrent }) {
   const { data: history } = useDownloadHistory();
@@ -60,16 +61,17 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-            {meta?.posterUrl && (
-              <img
-                src={meta.posterUrl}
-                alt=""
-                style={{
-                  width: "42px",
-                  height: "60px",
-                  objectFit: "cover",
-                  borderRadius: "4px",
-                }}
+            {(meta?.posterUrl || torrent.posterUrl) && (
+              <MediaArtwork
+                src={meta?.posterUrl || torrent.posterUrl}
+                alt={meta?.title || torrent.name}
+                title={meta?.title || torrent.name}
+                category={meta?.mediaType || torrent.source || undefined}
+                width="42px"
+                height="60px"
+                aspectRatio="auto"
+                borderRadius="4px"
+                style={{ flexShrink: 0 }}
               />
             )}
             <div>

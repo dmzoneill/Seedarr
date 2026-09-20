@@ -21,6 +21,7 @@ import {
 import { getMediaDeepLink, getDownloadClientUrl } from "../utils/arrLinks";
 import { calculateAchievements, calculateHnrStatus } from "../utils/milestones";
 import HealthAlerts from "../components/HealthAlerts";
+import MediaArtwork from "../components/MediaArtwork";
 import SpeedGraph from "../components/SpeedGraph";
 import { SkeletonGrid, SkeletonLine } from "../components/Skeleton";
 
@@ -953,22 +954,20 @@ function Dashboard() {
                   flex: 1,
                 }}
               >
-                {meta?.posterUrl ? (
-                  <img
-                    src={meta.posterUrl}
-                    alt=""
-                    style={{
-                      width: "32px",
-                      height: "46px",
-                      objectFit: "cover",
-                      borderRadius: "4px",
-                      border: "1px solid var(--border-light)",
-                      flexShrink: 0,
-                    }}
-                  />
-                ) : (
-                  <span style={{ fontSize: "1.4rem", flexShrink: 0 }}>📦</span>
-                )}
+                <MediaArtwork
+                  src={meta?.posterUrl}
+                  alt={meta?.title || t.name}
+                  title={meta?.title || t.name}
+                  category={meta?.mediaType || t.source || undefined}
+                  width="32px"
+                  height="46px"
+                  aspectRatio="auto"
+                  borderRadius="4px"
+                  style={{
+                    flexShrink: 0,
+                    border: "1px solid var(--border-light)",
+                  }}
+                />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Link
                     to="/torrents"

@@ -29,6 +29,7 @@ import TorrentContextMenu from "./TorrentContextMenu";
 import AddTorrentModal from "./AddTorrentModal";
 import DeleteTorrentModal from "./DeleteTorrentModal";
 import TrackerFavicon from "./TrackerFavicon";
+import MediaArtwork from "./MediaArtwork";
 import type { Torrent } from "../api/types";
 
 import {
@@ -661,17 +662,17 @@ function TorrentTable({
               minWidth: 0,
             }}
           >
-            {meta?.posterUrl && (
-              <img
-                src={meta.posterUrl}
-                alt=""
-                style={{
-                  width: "20px",
-                  height: "28px",
-                  objectFit: "cover",
-                  borderRadius: "2px",
-                  flexShrink: 0,
-                }}
+            {(meta?.posterUrl || torrent.posterUrl) && (
+              <MediaArtwork
+                src={meta?.posterUrl || torrent.posterUrl}
+                alt={meta?.title || torrent.name}
+                title={meta?.title || torrent.name}
+                category={meta?.mediaType || torrent.source || undefined}
+                width="20px"
+                height="28px"
+                aspectRatio="auto"
+                borderRadius="2px"
+                style={{ flexShrink: 0 }}
               />
             )}
             <span
