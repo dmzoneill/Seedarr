@@ -1,6 +1,9 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net;
 using BencodeNET.Objects;
+using BencodeNET.Parsing;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -477,5 +480,162 @@ public class PeerExchangeTest
         Assert.That(parsed.Added[1].PrefersEncryption, Is.True);
         Assert.That(parsed.Added[1].SupportsUtp, Is.True);
         Assert.That(parsed.Added[1].IsSeeder, Is.False);
+    }
+
+    [Test]
+    public void BuildPexMessage_should_include_added_f_with_length_matching_added_length_divided_by_six()
+    {
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x02 },
+            new PeerInfo { Ip = "93.184.216.35", Port = 6882, Flags = 0x01 },
+            new PeerInfo { Ip = "93.184.216.36", Port = 6883, Flags = 0x05 }
+        };
+
+        var encoded = _peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var parser = new BencodeParser();
+        using var stream = new MemoryStream(encoded);
+        var dict = parser.Parse<BDictionary>(stream);
+
+        Assert.That(dict.ContainsKey("added"), Is.True);
+        Assert.That(dict.ContainsKey("added.f"), Is.True);
+        var addedBytes = ((BString)dict["added"]).Value;
+        var flagsBytes = ((BString)dict["added.f"]).Value;
+        Assert.That(addedBytes.Length, Is.EqualTo(18));
+        Assert.That(flagsBytes.Length, Is.EqualTo(addedBytes.Length / 6));
+        Assert.That(flagsBytes.Length, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void BuildPexMessage_should_encode_ipv6_added6_and_added6_f_with_correct_lengths()
+    {
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "2001:4860:4860::8888", Port = 6881, Flags = 0x03 }
+        };
+
+        var encoded = _peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var parser = new BencodeParser();
+        using var stream = new MemoryStream(encoded);
+        var dict = parser.Parse<BDictionary>(stream);
+
+        Assert.That(dict.ContainsKey("added6"), Is.True);
+        Assert.That(dict.ContainsKey("added6.f"), Is.True);
+        var added6Bytes = ((BString)dict["added6"]).Value;
+        var flags6Bytes = ((BString)dict["added6.f"]).Value;
+        Assert.That(added6Bytes.Length, Is.EqualTo(18));
+        Assert.That(flags6Bytes.Length, Is.EqualTo(1));
+        Assert.That(flags6Bytes.Span[0], Is.EqualTo(0x03));
+    }
+
+    [Test]
+    public void ParseCompactPeers_should_reject_port_zero_and_bogon_addresses()
+    {
+        // 0.0.0.0:6881, 255.255.255.255:6881, 93.184.216.34:0
+        var bytes = new byte[]
+        {
+            0, 0, 0, 0, 0x1A, 0xE1,
+            255, 255, 255, 255, 0x1A, 0xE1,
+            93, 184, 216, 34, 0, 0
+        };
+
+        var peers = PeerExchange.ParseCompactPeers(bytes);
+        Assert.That(peers, Is.Empty);
+    }
+
+    [Test]
+    public void ParsePexMessage_should_parse_both_ipv4_and_ipv6_with_flags()
+    {
+        var ip6 = IPAddress.Parse("2001:4860:4860::8888");
+        var ip6Bytes = new byte[18];
+        ip6.GetAddressBytes().CopyTo(ip6Bytes, 0);
+        ip6Bytes[16] = 0x1A;
+        ip6Bytes[17] = 0xE1; // 6881
+
+        var dict = new BDictionary
+        {
+            ["added"] = new BString(new byte[] { 93, 184, 216, 34, 0x1A, 0xE1 }),
+            ["added.f"] = new BString(new byte[] { 0x02 }), // Seeder
+            ["added6"] = new BString(ip6Bytes),
+            ["added6.f"] = new BString(new byte[] { 0x05 })  // Encryption (0x01) | Utp (0x04)
+        };
+
+        var parsed = _peerExchange.ParsePexMessage(dict.EncodeAsBytes());
+
+        Assert.That(parsed.Added.Count, Is.EqualTo(2));
+        Assert.That(parsed.Added6.Count, Is.EqualTo(1));
+
+        var v4 = parsed.Added.First(p => p.Ip == "93.184.216.34");
+        Assert.That(v4.Port, Is.EqualTo(6881));
+        Assert.That(v4.Flags, Is.EqualTo(0x02));
+        Assert.That(v4.IsSeeder, Is.True);
+        Assert.That(v4.PrefersEncryption, Is.False);
+
+        var v6 = parsed.Added.First(p => p.Ip == "2001:4860:4860::8888");
+        Assert.That(v6.Port, Is.EqualTo(6881));
+        Assert.That(v6.Flags, Is.EqualTo(0x05));
+        Assert.That(v6.PrefersEncryption, Is.True);
+        Assert.That(v6.SupportsUtp, Is.True);
+        Assert.That(v6.IsSeeder, Is.False);
+    }
+
+    [Test]
+    public void PeerInfo_supports_holepunch_flag()
+    {
+        var peer = new PeerInfo { Flags = 0x08 };
+        Assert.That(peer.SupportsHolepunch, Is.True);
+        Assert.That(peer.PrefersEncryption, Is.False);
+        Assert.That(peer.IsSeeder, Is.False);
+        Assert.That(peer.SupportsUtp, Is.False);
+    }
+
+    [Test]
+    public void ParseCompactPeers_should_discard_trailing_incomplete_bytes()
+    {
+        // Valid peer (6 bytes) + 3 incomplete trailing bytes
+        var bytes = new byte[] { 93, 184, 216, 34, 0x1A, 0xE1, 1, 2, 3 };
+        var peers = PeerExchange.ParseCompactPeers(bytes);
+
+        Assert.That(peers.Count, Is.EqualTo(1));
+        Assert.That(peers[0].Ip, Is.EqualTo("93.184.216.34"));
+        Assert.That(peers[0].Port, Is.EqualTo(6881));
+    }
+
+    [Test]
+    public void ParseCompactPeers_should_deduplicate_repeated_peers()
+    {
+        // 93.184.216.34:6881 repeated twice
+        var bytes = new byte[]
+        {
+            93, 184, 216, 34, 0x1A, 0xE1,
+            93, 184, 216, 34, 0x1A, 0xE1
+        };
+        var peers = PeerExchange.ParseCompactPeers(bytes);
+
+        Assert.That(peers.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void BuildPexMessage_should_deduplicate_peers_in_added_and_dropped()
+    {
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x01 },
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x02 }
+        };
+        var dropped = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881 },
+            new PeerInfo { Ip = "93.184.216.35", Port = 6882 },
+            new PeerInfo { Ip = "93.184.216.35", Port = 6882 }
+        };
+
+        var encoded = _peerExchange.BuildPexMessage(added, dropped);
+        var parsed = _peerExchange.ParsePexMessage(encoded);
+
+        Assert.That(parsed.Added.Count, Is.EqualTo(1));
+        Assert.That(parsed.Added[0].Ip, Is.EqualTo("93.184.216.34"));
+        Assert.That(parsed.Dropped.Count, Is.EqualTo(1));
+        Assert.That(parsed.Dropped[0].Ip, Is.EqualTo("93.184.216.35"));
     }
 }
