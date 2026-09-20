@@ -238,6 +238,11 @@ export function AddTorrentForm({
         infoHash: release.infoHash || undefined,
         indexerId: release.indexerId,
         indexerName: release.indexer,
+        imdbId: release.imdbId || undefined,
+        tmdbId: release.tmdbId ?? undefined,
+        tvdbId: release.tvdbId ?? undefined,
+        minimumRatio: release.minimumRatio ?? undefined,
+        minimumSeedTime: release.minimumSeedTime ?? undefined,
       },
       {
         onSuccess: () => {

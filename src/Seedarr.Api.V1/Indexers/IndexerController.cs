@@ -7,6 +7,7 @@ using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Newznab;
 using NzbDrone.Core.Indexers.Prowlarr;
 using NzbDrone.Core.Indexers.Torznab;
+using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
@@ -30,6 +31,7 @@ public class IndexerController : Controller
     private readonly IIndexerStatusService _indexerStatusService;
     private readonly IRssRuleRepository _rssRuleRepository;
     private readonly IProwlarrIndexerSyncService _prowlarrSyncService;
+    private readonly ITorrentMediaMetadataRepository _mediaMetadataRepository;
 
     public IndexerController(
         IIndexerFactory indexerFactory,
@@ -42,7 +44,8 @@ public class IndexerController : Controller
         IProxySettingsProvider proxySettingsProvider = null,
         IRssRuleRepository rssRuleRepository = null,
         HttpClient httpClient = null,
-        IProwlarrIndexerSyncService prowlarrSyncService = null)
+        IProwlarrIndexerSyncService prowlarrSyncService = null,
+        ITorrentMediaMetadataRepository mediaMetadataRepository = null)
     {
         _indexerFactory = indexerFactory;
         _torrentService = torrentService;
@@ -54,6 +57,7 @@ public class IndexerController : Controller
         _proxySettingsProvider = proxySettingsProvider;
         _rssRuleRepository = rssRuleRepository;
         _prowlarrSyncService = prowlarrSyncService;
+        _mediaMetadataRepository = mediaMetadataRepository;
         _httpClient = httpClient ?? (proxySettingsProvider != null && proxySettingsProvider.IsEnabled
             ? new HttpClient(proxySettingsProvider.CreateHandler())
             : new HttpClient());
@@ -414,10 +418,13 @@ public class IndexerController : Controller
                 InfoHashV2 = parsed.InfoHashV2,
                 TrackerUrl = parsed.Trackers.Length > 0 ? parsed.Trackers[0] : null,
                 Status = TorrentStatus.Queued,
-                DateAdded = DateTime.UtcNow
+                DateAdded = DateTime.UtcNow,
+                RatioLimit = request.MinimumRatio,
+                SeedingTimeLimit = request.MinimumSeedTime.HasValue ? (int?)Math.Min(request.MinimumSeedTime.Value, int.MaxValue) : null
             };
 
             var added = _torrentService.Add(torrent);
+            SaveReleaseMediaMetadata(added.Id, added.Name, request);
 
             var tier = 0;
             foreach (var url in parsed.Trackers)
@@ -493,10 +500,13 @@ public class IndexerController : Controller
                     IsPrivate = parsed.IsPrivate,
                     TrackerUrl = parsed.AnnounceUrl,
                     Status = TorrentStatus.Queued,
-                    DateAdded = DateTime.UtcNow
+                    DateAdded = DateTime.UtcNow,
+                    RatioLimit = request.MinimumRatio,
+                    SeedingTimeLimit = request.MinimumSeedTime.HasValue ? (int?)Math.Min(request.MinimumSeedTime.Value, int.MaxValue) : null
                 };
 
                 var addedTorrent = _torrentService.Add(torrent);
+                SaveReleaseMediaMetadata(addedTorrent.Id, addedTorrent.Name, request);
 
                 if (parsed.Files != null)
                 {
@@ -604,6 +614,35 @@ public class IndexerController : Controller
             _ => throw new ArgumentException($"Unknown indexer type: {definition.IndexerType}"),
         };
     }
+
+    private void SaveReleaseMediaMetadata(int torrentId, string title, DownloadReleaseRequest request)
+    {
+        if (_mediaMetadataRepository == null || request == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ImdbId) && !request.TmdbId.HasValue && !request.TvdbId.HasValue)
+        {
+            return;
+        }
+
+        try
+        {
+            _mediaMetadataRepository.Upsert(new TorrentMediaMetadata
+            {
+                TorrentId = torrentId,
+                Title = title,
+                ImdbId = ReleaseInfo.NormalizeImdbId(request.ImdbId),
+                TmdbId = request.TmdbId?.ToString(),
+                TvdbId = request.TvdbId?.ToString()
+            });
+        }
+        catch
+        {
+            // Non-fatal if media metadata persistence fails
+        }
+    }
 }
 
 public class DownloadReleaseRequest
@@ -614,6 +653,11 @@ public class DownloadReleaseRequest
     public string InfoHash { get; set; }
     public int? IndexerId { get; set; }
     public string IndexerName { get; set; }
+    public string ImdbId { get; set; }
+    public int? TmdbId { get; set; }
+    public int? TvdbId { get; set; }
+    public double? MinimumRatio { get; set; }
+    public long? MinimumSeedTime { get; set; }
 }
 
 public class ProwlarrSyncRequest

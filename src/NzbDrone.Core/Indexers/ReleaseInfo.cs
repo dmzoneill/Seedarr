@@ -27,4 +27,41 @@ public class ReleaseInfo
     public int? ResponseTotal { get; set; }
     public int CustomFormatScore { get; set; }
     public List<string> MatchedCustomFormats { get; set; } = new List<string>();
+
+    private string _imdbId;
+
+    public string ImdbId
+    {
+        get => _imdbId;
+        set => _imdbId = NormalizeImdbId(value);
+    }
+
+    public int? TmdbId { get; set; }
+    public int? TvdbId { get; set; }
+    public string Resolution { get; set; }
+    public string VideoCodec { get; set; }
+    public string AudioCodec { get; set; }
+    public double? MinimumRatio { get; set; }
+    public long? MinimumSeedTime { get; set; }
+
+    public static string NormalizeImdbId(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"tt{trimmed.Substring(2)}";
+        }
+
+        if (long.TryParse(trimmed, out _))
+        {
+            return $"tt{trimmed}";
+        }
+
+        return trimmed;
+    }
 }

@@ -113,6 +113,94 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
         }
 
         [Test]
+        public void ParseResponse_should_parse_media_ids_codecs_and_seeding_attributes()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <title>Torznab Feed</title>
+        <item>
+            <title>The.Shawshank.Redemption.1994.1080p.BluRay.x264</title>
+            <link>http://indexer.local/torrent/123</link>
+            <size>1073741824</size>
+            <torznab:attr name=""imdbid"" value=""0111161"" />
+            <torznab:attr name=""tmdbid"" value=""278"" />
+            <torznab:attr name=""tvdbid"" value=""73545"" />
+            <torznab:attr name=""resolution"" value=""1080p"" />
+            <torznab:attr name=""video"" value=""x264"" />
+            <torznab:attr name=""audio"" value=""FLAC"" />
+            <torznab:attr name=""minimumratio"" value=""1.5"" />
+            <torznab:attr name=""minimumseedtime"" value=""259200"" />
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            var release = results[0];
+            Assert.That(release.ImdbId, Is.EqualTo("tt0111161"));
+            Assert.That(release.TmdbId, Is.EqualTo(278));
+            Assert.That(release.TvdbId, Is.EqualTo(73545));
+            Assert.That(release.Resolution, Is.EqualTo("1080p"));
+            Assert.That(release.VideoCodec, Is.EqualTo("x264"));
+            Assert.That(release.AudioCodec, Is.EqualTo("FLAC"));
+            Assert.That(release.MinimumRatio, Is.EqualTo(1.5));
+            Assert.That(release.MinimumSeedTime, Is.EqualTo(259200L));
+        }
+
+        [Test]
+        public void ParseResponse_should_parse_alternative_attribute_names_and_normalize_imdb()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <title>Torznab Feed</title>
+        <item>
+            <title>Inception.2010.2160p.UHD.Remux.HEVC.Atmos</title>
+            <link>http://indexer.local/torrent/456</link>
+            <size>50000000000</size>
+            <torznab:attr name=""imdb"" value=""tt1375666"" />
+            <torznab:attr name=""tmdb"" value=""27205"" />
+            <torznab:attr name=""tvdb"" value=""12345"" />
+            <torznab:attr name=""resolution"" value=""2160p"" />
+            <torznab:attr name=""videocodec"" value=""HEVC"" />
+            <torznab:attr name=""audiocodec"" value=""Atmos"" />
+            <torznab:attr name=""minimumratio"" value=""2.0"" />
+            <torznab:attr name=""minimumseedtime"" value=""172800"" />
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            var release = results[0];
+            Assert.That(release.ImdbId, Is.EqualTo("tt1375666"));
+            Assert.That(release.TmdbId, Is.EqualTo(27205));
+            Assert.That(release.TvdbId, Is.EqualTo(12345));
+            Assert.That(release.Resolution, Is.EqualTo("2160p"));
+            Assert.That(release.VideoCodec, Is.EqualTo("HEVC"));
+            Assert.That(release.AudioCodec, Is.EqualTo("Atmos"));
+            Assert.That(release.MinimumRatio, Is.EqualTo(2.0));
+            Assert.That(release.MinimumSeedTime, Is.EqualTo(172800L));
+        }
+
+        [TestCase("0111161", "tt0111161")]
+        [TestCase("tt0111161", "tt0111161")]
+        [TestCase("TT0111161", "tt0111161")]
+        [TestCase("1234567", "tt1234567")]
+        [TestCase(null, null)]
+        [TestCase("", null)]
+        [TestCase("   ", null)]
+        [TestCase("invalid_id", "invalid_id")]
+        public void NormalizeImdbId_should_normalize_imdb_correctly(string input, string expected)
+        {
+            var normalized = ReleaseInfo.NormalizeImdbId(input);
+            Assert.That(normalized, Is.EqualTo(expected));
+        }
+
+        [Test]
         public void ParseResponse_should_fallback_to_peers_attribute_when_leechers_not_present()
         {
             var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>

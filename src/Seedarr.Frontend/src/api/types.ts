@@ -1049,6 +1049,14 @@ export interface ReleaseInfo {
   infoHash?: string | null;
   categories?: string[];
   protocol?: string;
+  imdbId?: string | null;
+  tmdbId?: number | null;
+  tvdbId?: number | null;
+  resolution?: string | null;
+  videoCodec?: string | null;
+  audioCodec?: string | null;
+  minimumRatio?: number | null;
+  minimumSeedTime?: number | null;
 }
 
 export interface DownloadReleaseRequest {
@@ -1058,6 +1066,11 @@ export interface DownloadReleaseRequest {
   infoHash?: string;
   indexerId?: number;
   indexerName?: string;
+  imdbId?: string | null;
+  tmdbId?: number | null;
+  tvdbId?: number | null;
+  minimumRatio?: number | null;
+  minimumSeedTime?: number | null;
 }
 
 export type TrackerProtocol = "Udp" | "Http" | "Https" | number;
