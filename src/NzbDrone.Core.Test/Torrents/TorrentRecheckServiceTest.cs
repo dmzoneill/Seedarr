@@ -353,7 +353,7 @@ public class TorrentRecheckServiceTest
         server.Handle(new TorrentStatusChangedEvent(torrent, TorrentStatus.Checking, TorrentStatus.Seeding));
 
         // When recheck finishes, availability is updated for connected swarm peers
-                // When recheck finishes, availability is updated for connected swarm peers
+        // When recheck finishes, availability is updated for connected swarm peers
         fastExtension.Received().SendHaveAllOrBitfield(connection, 8, true, false, Arg.Any<byte[]>());
     }
 
