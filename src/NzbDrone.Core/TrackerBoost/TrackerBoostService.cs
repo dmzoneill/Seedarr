@@ -57,7 +57,17 @@ public class TrackerBoostService : ITrackerBoostService
 {
     private const int MaxLogEntries = 500;
 
-    private static readonly HttpClient HttpClient = new(new HttpClientHandler { CheckCertificateRevocationList = true }) { Timeout = TimeSpan.FromSeconds(6) };
+    private static readonly HttpClient DefaultHttpClient = new(new HttpClientHandler
+    {
+        CheckCertificateRevocationList = true,
+        AllowAutoRedirect = true,
+        MaxAutomaticRedirections = 3
+    })
+    {
+        Timeout = TimeSpan.FromSeconds(6)
+    };
+
+    internal static HttpClient HttpClient { get; set; } = DefaultHttpClient;
     private static readonly BencodeParser BParser = new();
     private static readonly ConcurrentDictionary<string, (DateTime BoostedAt, ImmutableHashSet<string> InjectedTrackers)> BoostHistory = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentQueue<TrackerBoostLogEntry> LogBuffer = new();
@@ -129,6 +139,7 @@ public class TrackerBoostService : ITrackerBoostService
         Interlocked.Exchange(ref _totalTorrentsBoosted, 0);
         Interlocked.Exchange(ref _totalTrackersInjected, 0);
         Interlocked.Exchange(ref _totalVerifiedMatchesCount, 0);
+        HttpClient = DefaultHttpClient;
     }
 
     private readonly ITrackerBoostTrackerRepository _trackerRepository;
@@ -297,10 +308,11 @@ public class TrackerBoostService : ITrackerBoostService
 
     public TrackerBoostTracker AddTracker(string url, TrackerSourceType source = TrackerSourceType.Manual, string sourceName = "Manual")
     {
-        return AddTrackerInternal(url, source, sourceName);
+        var (tracker, _) = AddTrackerInternal(url, source, sourceName);
+        return tracker;
     }
 
-    private TrackerBoostTracker AddTrackerInternal(string url, TrackerSourceType source, string sourceName)
+    internal (TrackerBoostTracker Tracker, bool WasInserted) AddTrackerInternal(string url, TrackerSourceType source, string sourceName)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -311,7 +323,7 @@ public class TrackerBoostService : ITrackerBoostService
         var existing = _trackerRepository.FindByUrl(cleanUrl);
         if (existing != null)
         {
-            return existing;
+            return (existing, false);
         }
 
         var protocol = TrackerProtocol.Udp;
@@ -353,7 +365,8 @@ public class TrackerBoostService : ITrackerBoostService
             Enabled = true
         };
 
-        return _trackerRepository.Insert(tracker);
+        var inserted = _trackerRepository.Insert(tracker);
+        return (inserted, true);
     }
 
     public void DeleteTracker(int id)
@@ -404,8 +417,8 @@ public class TrackerBoostService : ITrackerBoostService
             {
                 if (IsValidPublicTrackerUrl(entry.Url))
                 {
-                    var res = AddTrackerInternal(entry.Url, TrackerSourceType.ActiveTorrent, "Seedarr Active Download");
-                    if (res != null && res.Id > 0)
+                    var (_, wasInserted) = AddTrackerInternal(entry.Url, TrackerSourceType.ActiveTorrent, "Seedarr Active Download");
+                    if (wasInserted)
                     {
                         discovered++;
                     }
@@ -431,8 +444,8 @@ public class TrackerBoostService : ITrackerBoostService
                         {
                             if (IsValidPublicTrackerUrl(trUrl))
                             {
-                                var res = AddTrackerInternal(trUrl, TrackerSourceType.ActiveTorrent, $"{clientDef.Name} Swarm Harvest");
-                                if (res != null && res.Id > 0)
+                                var (_, wasInserted) = AddTrackerInternal(trUrl, TrackerSourceType.ActiveTorrent, $"{clientDef.Name} Swarm Harvest");
+                                if (wasInserted)
                                 {
                                     discovered++;
                                 }
@@ -534,8 +547,11 @@ public class TrackerBoostService : ITrackerBoostService
                             var trUrl = urlProp.GetString();
                             if (IsValidPublicTrackerUrl(trUrl))
                             {
-                                AddTrackerInternal(trUrl, TrackerSourceType.ActiveTorrent, $"qBittorrent ({clientDef.Name})");
-                                count++;
+                                var (_, wasInserted) = AddTrackerInternal(trUrl, TrackerSourceType.ActiveTorrent, $"qBittorrent ({clientDef.Name})");
+                                if (wasInserted)
+                                {
+                                    count++;
+                                }
                             }
                         }
                     }
@@ -688,8 +704,11 @@ public class TrackerBoostService : ITrackerBoostService
                             var u = urlItem.GetString();
                             if (IsValidPublicTrackerUrl(u))
                             {
-                                AddTrackerInternal(u, TrackerSourceType.Prowlarr, $"Prowlarr ({indexerName})");
-                                harvestedCount++;
+                                var (_, wasInserted) = AddTrackerInternal(u, TrackerSourceType.Prowlarr, $"Prowlarr ({indexerName})");
+                                if (wasInserted)
+                                {
+                                    harvestedCount++;
+                                }
                             }
                         }
                     }
@@ -708,8 +727,11 @@ public class TrackerBoostService : ITrackerBoostService
                                         var trackerVal = fvProp.GetString();
                                         if (IsValidPublicTrackerUrl(trackerVal))
                                         {
-                                            AddTrackerInternal(trackerVal, TrackerSourceType.Prowlarr, $"Prowlarr ({indexerName})");
-                                            harvestedCount++;
+                                            var (_, wasInserted) = AddTrackerInternal(trackerVal, TrackerSourceType.Prowlarr, $"Prowlarr ({indexerName})");
+                                            if (wasInserted)
+                                            {
+                                                harvestedCount++;
+                                            }
                                         }
                                     }
                                 }
@@ -758,8 +780,11 @@ public class TrackerBoostService : ITrackerBoostService
 
                     if (IsValidPublicTrackerUrl(clean))
                     {
-                        AddTrackerInternal(clean, TrackerSourceType.PublicList, "Curated Public Feed");
-                        count++;
+                        var (_, wasInserted) = AddTrackerInternal(clean, TrackerSourceType.PublicList, "Curated Public Feed");
+                        if (wasInserted)
+                        {
+                            count++;
+                        }
                     }
                 }
             }
@@ -900,14 +925,36 @@ public class TrackerBoostService : ITrackerBoostService
         }
     }
 
-    private async Task<bool> ProbeHttpTrackerAsync(string url)
+    internal async Task<bool> ProbeHttpTrackerAsync(string url, HttpClient httpClient = null)
     {
+        var client = httpClient ?? HttpClient;
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Head, url);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            var resp = await HttpClient.SendAsync(req, cts.Token);
-            return resp.IsSuccessStatusCode || resp.StatusCode == HttpStatusCode.BadRequest;
+            var resp = await client.SendAsync(req, cts.Token);
+            if (resp.IsSuccessStatusCode ||
+                resp.StatusCode == HttpStatusCode.BadRequest ||
+                resp.StatusCode == HttpStatusCode.MethodNotAllowed)
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            // HEAD might be rejected or unsupported at transport/daemon level, fall through to GET fallback
+        }
+
+        try
+        {
+            var separator = url.Contains('?') ? "&" : "?";
+            var getUrl = $"{url}{separator}info_hash=%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00&peer_id=-SD0001-000000000000&port=6881&uploaded=0&downloaded=0&left=0&compact=1";
+            using var getReq = new HttpRequestMessage(HttpMethod.Get, getUrl);
+            using var getCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            var getResp = await client.SendAsync(getReq, getCts.Token);
+            return getResp.IsSuccessStatusCode ||
+                   getResp.StatusCode == HttpStatusCode.BadRequest ||
+                   getResp.StatusCode == HttpStatusCode.MethodNotAllowed;
         }
         catch
         {

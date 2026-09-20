@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -320,5 +322,154 @@ public class TrackerBoostServiceTest
 
         Assert.That(results, Is.Empty);
         downloadClient.DidNotReceive().AddTrackers(Arg.Any<string>(), Arg.Any<IEnumerable<string>>());
+    }
+
+    [Test]
+    public async Task HarvestFromActiveDownloadsAsync_reharvesting_existing_trackers_does_not_increment_discovered_counter()
+    {
+        var publicTorrent = new Torrent { Id = 1, IsPrivate = false, InfoHash = "publichash1", Name = "Public" };
+        _torrentService.GetAll().Returns(new List<Torrent> { publicTorrent });
+
+        var publicTrackerEntry = new TrackerEntry { Id = 1, TorrentId = 1, Url = "udp://tracker.existing.org:1337/announce" };
+        _trackerEntryService.All().Returns(new List<TrackerEntry> { publicTrackerEntry });
+
+        var clientDef = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", Enable = true, ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        var publicItem = new DownloadClientItem { InfoHash = "publichash1", IsPrivate = false };
+        downloadClient.GetItems().Returns(new List<DownloadClientItem> { publicItem });
+        downloadClient.GetTrackers("publichash1").Returns(new List<string> { "udp://tracker.existing.org:1337/announce" });
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        _trackerRepository.FindByUrl("udp://tracker.existing.org:1337/announce")
+            .Returns(new TrackerBoostTracker { Id = 42, Url = "udp://tracker.existing.org:1337/announce" });
+
+        var count = await _service.HarvestFromActiveDownloadsAsync();
+
+        Assert.That(count, Is.EqualTo(0));
+        _trackerRepository.DidNotReceive().Insert(Arg.Any<TrackerBoostTracker>());
+    }
+
+    [Test]
+    public async Task HarvestFromActiveDownloadsAsync_genuinely_new_trackers_increments_discovered_counter()
+    {
+        var publicTorrent = new Torrent { Id = 1, IsPrivate = false, InfoHash = "publichash1", Name = "Public" };
+        _torrentService.GetAll().Returns(new List<Torrent> { publicTorrent });
+
+        var publicTrackerEntry = new TrackerEntry { Id = 1, TorrentId = 1, Url = "udp://tracker.brandnew.org:1337/announce" };
+        _trackerEntryService.All().Returns(new List<TrackerEntry> { publicTrackerEntry });
+
+        var clientDef = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", Enable = true, ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        var publicItem = new DownloadClientItem { InfoHash = "publichash1", IsPrivate = false };
+        downloadClient.GetItems().Returns(new List<DownloadClientItem> { publicItem });
+        downloadClient.GetTrackers("publichash1").Returns(new List<string> { "udp://tracker.swarmnew.org:1337/announce" });
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        _trackerRepository.FindByUrl(Arg.Any<string>()).Returns((TrackerBoostTracker)null);
+        _trackerRepository.Insert(Arg.Any<TrackerBoostTracker>()).Returns(callInfo =>
+        {
+            var t = callInfo.Arg<TrackerBoostTracker>();
+            t.Id = 101;
+            return t;
+        });
+
+        var count = await _service.HarvestFromActiveDownloadsAsync();
+
+        Assert.That(count, Is.EqualTo(2));
+        _trackerRepository.Received(1).Insert(Arg.Is<TrackerBoostTracker>(t => t.Url == "udp://tracker.brandnew.org:1337/announce"));
+        _trackerRepository.Received(1).Insert(Arg.Is<TrackerBoostTracker>(t => t.Url == "udp://tracker.swarmnew.org:1337/announce"));
+    }
+
+    [Test]
+    public async Task ProbeHttpTrackerAsync_with_MethodNotAllowed_returns_active()
+    {
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            Assert.That(req.Method, Is.EqualTo(HttpMethod.Head));
+            return new HttpResponseMessage(HttpStatusCode.MethodNotAllowed);
+        });
+        using var client = new HttpClient(handler);
+
+        var isHealthy = await _service.ProbeHttpTrackerAsync("http://tracker.example.com:6969/announce", client);
+
+        Assert.That(isHealthy, Is.True);
+    }
+
+    [Test]
+    public async Task ProbeHttpTrackerAsync_falls_back_to_get_with_bittorrent_parameters_when_head_fails()
+    {
+        var headCalled = false;
+        var getCalled = false;
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            if (req.Method == HttpMethod.Head)
+            {
+                headCalled = true;
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            if (req.Method == HttpMethod.Get)
+            {
+                getCalled = true;
+                Assert.That(req.RequestUri.Query, Does.Contain("info_hash="));
+                Assert.That(req.RequestUri.Query, Does.Contain("peer_id="));
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        });
+        using var client = new HttpClient(handler);
+
+        var isHealthy = await _service.ProbeHttpTrackerAsync("http://tracker.example.com:6969/announce", client);
+
+        Assert.That(isHealthy, Is.True);
+        Assert.That(headCalled, Is.True);
+        Assert.That(getCalled, Is.True);
+    }
+
+    [Test]
+    public async Task ProbeTrackerHealthAsync_with_http_405_MethodNotAllowed_marks_tracker_alive()
+    {
+        var handler = new FakeHttpMessageHandler(req => new HttpResponseMessage(HttpStatusCode.MethodNotAllowed));
+        using var client = new HttpClient(handler);
+        TrackerBoostService.HttpClient = client;
+
+        var tracker = new TrackerBoostTracker
+        {
+            Id = 10,
+            Url = "http://tracker.example.com:6969/announce",
+            Host = "tracker.example.com",
+            Port = 6969,
+            Protocol = TrackerProtocol.Http,
+            Enabled = true,
+            Status = TrackerHealthStatus.Untested
+        };
+
+        _trackerRepository.All().Returns(new List<TrackerBoostTracker> { tracker });
+
+        var tested = await _service.ProbeTrackerHealthAsync();
+
+        Assert.That(tested, Is.EqualTo(1));
+        _trackerRepository.Received(1).UpdateMany(Arg.Is<IEnumerable<TrackerBoostTracker>>(list =>
+            list.Any(t => t.Id == 10 && (t.Status == TrackerHealthStatus.Alive || t.Status == TrackerHealthStatus.Slow))));
+    }
+
+    private sealed class FakeHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
+
+        public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler)
+        {
+            _handler = handler;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_handler(request));
+        }
     }
 }
