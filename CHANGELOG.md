@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.10.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.0) - 2026-09-20
+
+### ✨ Features
+- feat(datastore): implement scheduled database vacuum and incremental page defragmentation maintenance (Closes #370)
+- feat(portmapping): implement PortMappingController and expose protocol, gateway, and lease telemetry in UI (Closes #421)
+- feat(blocklist): support dual-stack IPv6 CIDR and IP-range expansion using UInt128 binary search interval trees (Closes #383)
+- feat(torrents): detect swarm piece extinction and transition to StalledNoSeeds (Closes #521)
+
+### 🔧 Maintenance & Improvements
+- security(marketplace): implement template signature verification, input sanitization, and disabled-by-default execution (Closes #515)
+- perf(datastore): configure missing SQLite performance pragmas (Closes #372)
+
 ## [v1.9.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.9.0) - 2026-09-20
 
 ### ✨ Features
