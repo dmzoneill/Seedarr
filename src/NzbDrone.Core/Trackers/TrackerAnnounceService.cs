@@ -165,6 +165,12 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return results;
         }
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; halting tracker announce for torrent {0}.", torrent.Name ?? torrent.InfoHash);
+            return results;
+        }
+
         if (!force && torrent.Status == TorrentStatus.Paused && eventType != AnnounceEvent.Stopped)
         {
             return results;
@@ -259,6 +265,12 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return new TrackerAnnounceResult { Success = false, FailureReason = "Invalid torrent or tracker" };
         }
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; halting tracker announce for {0}.", entry.Url);
+            return new TrackerAnnounceResult { Success = false, FailureReason = "VPN outage: announce deferred" };
+        }
+
         if (!force && !entry.Enabled)
         {
             return new TrackerAnnounceResult { Success = false, FailureReason = "Tracker is disabled" };
@@ -303,6 +315,12 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return new TrackerScrapeResponse { Success = false, FailureReason = "Invalid torrent" };
         }
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; halting tracker scrape for torrent {0}.", torrent.Name ?? torrent.InfoHash);
+            return new TrackerScrapeResponse { Success = false, FailureReason = "VPN outage: scrape deferred" };
+        }
+
         if (IsVpnBlocked(torrent))
         {
             _logger.Debug("VPN is down or torrent {0} is VPN-paused; deferring tracker scrape.", torrent.Name ?? torrent.InfoHash);
@@ -325,6 +343,12 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
     private TrackerAnnounceResult ExecuteAnnounce(Torrent torrent, TrackerEntry entry, bool isFirstAnnounce, AnnounceEvent eventType = AnnounceEvent.None)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; halting tracker announce execution for {0}.", entry?.Url);
+            return new TrackerAnnounceResult { Success = false, FailureReason = "VPN outage: announce deferred" };
+        }
+
         var isStopped = torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused || eventType == AnnounceEvent.Stopped;
 
         AnnounceEvent announceEvent;
@@ -989,6 +1013,12 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     {
         _isVpnDown = false;
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN restored signal received but fail-closed is active; deferring staggered announces.");
+            return;
+        }
+
         lock (_staggeredLock)
         {
             if (DateTime.UtcNow - _lastVpnRestore < TimeSpan.FromSeconds(2))
@@ -1018,6 +1048,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
     public void ScheduleStaggeredAnnounces(IEnumerable<Torrent> torrents)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
+
         lock (_staggeredLock)
         {
             _staggeredCts?.Cancel();
@@ -1055,7 +1090,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
         while (_staggeredQueue.TryDequeue(out var torrent))
         {
-            if (cancellationToken.IsCancellationRequested || _isVpnDown)
+            if (cancellationToken.IsCancellationRequested || _isVpnDown || _vpnKillSwitchService?.IsFailClosedActive == true)
             {
                 break;
             }

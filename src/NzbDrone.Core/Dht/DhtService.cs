@@ -13,13 +13,16 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Dht;
 
-public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEvent>
+public class DhtService : BackgroundService, IDhtService,
+    IHandle<ConfigSavedEvent>,
+    IHandle<VpnKillSwitchTriggeredEvent>
 {
     private const int DhtPort = 6882;
     private const int PeerTtlMinutes = 30;
@@ -38,6 +41,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     private readonly IPeerDiscoveryService _peerDiscovery;
     private readonly ITorrentService _torrentService;
     private readonly IDhtStateService _dhtStateService;
+    private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly int? _customPort;
     private readonly RoutingTable _routingTable;
     private readonly Logger _logger;
@@ -70,13 +74,15 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         IPeerDiscoveryService peerDiscovery = null,
         ITorrentService torrentService = null,
         int? port = null,
-        IDhtStateService dhtStateService = null)
+        IDhtStateService dhtStateService = null,
+        IVpnKillSwitchService vpnKillSwitchService = null)
     {
         _configService = configService;
         _peerDiscovery = peerDiscovery;
         _torrentService = torrentService;
         _customPort = port;
         _dhtStateService = dhtStateService;
+        _vpnKillSwitchService = vpnKillSwitchService;
 
         var persistedHex = configService.DhtNodeIdHex;
         if (!string.IsNullOrWhiteSpace(persistedHex) && persistedHex.Length == 40)
@@ -242,6 +248,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                 StopDht();
             }
         }
+    }
+
+    public void Handle(VpnKillSwitchTriggeredEvent message)
+    {
+        _logger.Info("VPN kill switch triggered: suspending DHT operations");
+        _pendingQueries.Clear();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -467,6 +479,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         {
             try
             {
+                if (_vpnKillSwitchService?.IsFailClosedActive == true)
+                {
+                    await Task.Delay(500, stoppingToken);
+                    continue;
+                }
+
                 RotateSecretIfNeeded();
                 CleanupExpiredQueries();
                 CleanupExpiredRateLimitersIfNeeded();
@@ -490,6 +508,11 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                     }
 
                     var result = await client.ReceiveAsync(receiveCts.Token);
+                    if (_vpnKillSwitchService?.IsFailClosedActive == true)
+                    {
+                        continue;
+                    }
+
                     HandleMessage(result.Buffer, result.RemoteEndPoint);
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
@@ -500,6 +523,10 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                 // Periodic routing table refresh and torrent announce at the configured announcement interval
                 if (DateTime.UtcNow >= _nextRefresh)
                 {
+                    if (_vpnKillSwitchService?.IsFailClosedActive == true)
+                    {
+                        continue;
+                    }
                     if (_configService.DhtAutoBootstrap)
                     {
                         using var refreshCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
@@ -549,6 +576,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     {
         if (!_configService.EnableDht || _torrentService == null)
         {
+            return;
+        }
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT AnnounceTorrentsAsync");
             return;
         }
 
@@ -617,6 +650,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     private async Task Bootstrap(CancellationToken stoppingToken)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT bootstrap");
+            return;
+        }
+
         var bootstrapNodes = GetBootstrapNodes();
 
         foreach (var node in bootstrapNodes)
@@ -665,11 +704,23 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return;
         }
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT bootstrap to {0}", endpoint);
+            return;
+        }
+
         await SendFindNode(endpoint, _nodeId, ct);
     }
 
     private void HandleMessage(byte[] data, IPEndPoint sender)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; dropping incoming DHT message from {0}", sender);
+            return;
+        }
+
         try
         {
             if (sender?.Address != null && sender.Address.IsIPv4MappedToIPv6)
@@ -985,6 +1036,11 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             ["ip"] = new BString(EncodeCompactAddress(sender))
         };
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
+
         var bytes = response.EncodeAsBytes();
         _udpClient?.Send(bytes, bytes.Length, sender);
     }
@@ -1065,6 +1121,11 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
         _peerStore.AddPeer(infoHash, sender.Address, port);
         _logger.Debug("DHT announce_peer from {0}: stored peer for {1} at port {2}", sender, Convert.ToHexString(infoHash), port);
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
 
         SendPingResponse(sender, transactionId);
     }
@@ -1325,6 +1386,11 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     private void SendPingResponse(IPEndPoint target, BString transactionId)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
+
         var response = new BDictionary
         {
             ["t"] = transactionId,
@@ -1361,12 +1427,22 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             ["ip"] = new BString(EncodeCompactAddress(sender))
         };
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
+
         var bytes = response.EncodeAsBytes();
         _udpClient?.Send(bytes, bytes.Length, sender);
     }
 
     private void SendErrorResponse(IPEndPoint target, BString transactionId, int errorCode, string errorMessage)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
+
         var error = new BDictionary
         {
             ["t"] = transactionId ?? new BString(Array.Empty<byte>()),
@@ -1384,6 +1460,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     public Task SendPing(IPEndPoint target, CancellationToken ct = default)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT ping to {0}", target);
+            return Task.CompletedTask;
+        }
+
         return SendPingInternal(target, null, ct);
     }
 
@@ -1391,6 +1473,13 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     {
         if (_udpClient == null || target == null)
         {
+            tcs?.TrySetResult(false);
+            return;
+        }
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT ping to {0}", target);
             tcs?.TrySetResult(false);
             return;
         }
@@ -1446,6 +1535,11 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return;
         }
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
+
         if (_recentlyProbed.TryGetValue(nodeToProbe.EndPoint, out var lastProbed) &&
             (DateTime.UtcNow - lastProbed) < TimeSpan.FromSeconds(30))
         {
@@ -1470,6 +1564,11 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     public async Task<bool> ProbeNodeAsync(DhtNode node, TimeSpan? timeout = null, CancellationToken ct = default)
     {
         if (node?.EndPoint == null || _udpClient == null)
+        {
+            return false;
+        }
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
         {
             return false;
         }
@@ -1503,6 +1602,11 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     public async Task RefreshStaleBucketsAsync(CancellationToken ct = default)
     {
         if (_udpClient == null)
+        {
+            return;
+        }
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
         {
             return;
         }
@@ -1582,6 +1686,17 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     private async Task SendFindNode(IPEndPoint target, byte[] targetId, CancellationToken ct = default)
     {
+        if (_udpClient == null || target == null || targetId == null)
+        {
+            return;
+        }
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT find_node to {0}", target);
+            return;
+        }
+
         await _querySemaphore.WaitAsync(ct);
         try
         {
@@ -1629,6 +1744,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     public Task SendGetPeers(IPEndPoint target, byte[] infoHash, CancellationToken ct = default)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT get_peers to {0}", target);
+            return Task.CompletedTask;
+        }
+
         if (IsPrivateTorrent(infoHash))
         {
             _logger.Debug("DHT get_peers prohibited for private torrent {0}", infoHash != null ? Convert.ToHexString(infoHash) : string.Empty);
@@ -1645,6 +1766,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return Task.CompletedTask;
         }
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT get_peers to {0}", target);
+            return Task.CompletedTask;
+        }
+
         if (IsPrivateTorrent(infoHash))
         {
             _logger.Debug("DHT get_peers prohibited for private torrent {0}", infoHash);
@@ -1658,6 +1785,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     {
         if (_udpClient == null || infoHash == null)
         {
+            return;
+        }
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT get_peers to {0}", target);
             return;
         }
 
@@ -1719,6 +1852,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return Task.CompletedTask;
         }
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT announce_peer to {0}", target);
+            return Task.CompletedTask;
+        }
+
         if (IsPrivateTorrent(infoHash))
         {
             _logger.Debug("DHT announcement prohibited for private torrent {0}", infoHash);
@@ -1732,6 +1871,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     {
         if (_udpClient == null || infoHash == null || token == null)
         {
+            return;
+        }
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT announce_peer to {0}", target);
             return;
         }
 
@@ -1793,6 +1938,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return;
         }
 
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT AnnounceTorrent for {0}", infoHash);
+            return;
+        }
+
         if (IsPrivateTorrent(infoHash))
         {
             _logger.Debug("DHT announcement prohibited for private torrent {0}", infoHash);
@@ -1817,6 +1968,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     {
         if (infoHash == null || infoHash.Length != 20 || _udpClient == null)
         {
+            return;
+        }
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch fail-closed is active; skipping DHT AnnounceTorrent");
             return;
         }
 

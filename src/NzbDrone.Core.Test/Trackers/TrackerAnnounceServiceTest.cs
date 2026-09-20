@@ -32,6 +32,7 @@ public class TrackerAnnounceServiceTest
     private ITrackerMetricService _trackerMetricService;
     private ITorrentService _torrentService;
     private IEventAggregator _eventAggregator;
+    private IVpnKillSwitchService _vpnKillSwitchService;
     private TrackerAnnounceService _service;
 
     [SetUp]
@@ -45,6 +46,7 @@ public class TrackerAnnounceServiceTest
         _trackerMetricService = Substitute.For<ITrackerMetricService>();
         _torrentService = Substitute.For<ITorrentService>();
         _eventAggregator = Substitute.For<IEventAggregator>();
+        _vpnKillSwitchService = Substitute.For<IVpnKillSwitchService>();
 
         _configService.ListeningPort.Returns(51413);
         _configService.AnnounceIntervalSeconds.Returns(1800);
@@ -57,7 +59,8 @@ public class TrackerAnnounceServiceTest
             _configService,
             _trackerMetricService,
             eventAggregator: _eventAggregator,
-            torrentService: _torrentService);
+            torrentService: _torrentService,
+            vpnKillSwitchService: _vpnKillSwitchService);
     }
 
     [Test]
@@ -631,6 +634,96 @@ public class TrackerAnnounceServiceTest
         Assert.That(result.Success, Is.False);
         Assert.That(result.FailureReason, Does.Contain("deferred"));
         _multiTracker.DidNotReceive().Scrape(Arg.Any<string>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_halt_announce_when_vpn_kill_switch_fail_closed_active()
+    {
+        _vpnKillSwitchService.IsFailClosedActive.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 63,
+            Name = "FailClosed.Torrent",
+            InfoHash = "1234567890123456789012345678901234567890",
+            Status = TorrentStatus.Downloading,
+            IsVpnPaused = false
+        };
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results, Is.Empty);
+        _multiTracker.DidNotReceive().Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTracker_should_halt_announce_when_vpn_kill_switch_fail_closed_active()
+    {
+        _vpnKillSwitchService.IsFailClosedActive.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 64,
+            Name = "FailClosed.TrackerTorrent",
+            InfoHash = "2345678901234567890123456789012345678901",
+            Status = TorrentStatus.Downloading,
+            IsVpnPaused = false
+        };
+        var entry = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = torrent.Id,
+            Url = "http://tracker.example.com/announce",
+            Enabled = true
+        };
+
+        var result = _service.AnnounceTracker(torrent, entry, force: true);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("VPN outage"));
+        _multiTracker.DidNotReceive().Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void ScrapeTorrent_should_halt_scrape_when_vpn_kill_switch_fail_closed_active()
+    {
+        _vpnKillSwitchService.IsFailClosedActive.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 65,
+            Name = "FailClosed.ScrapeTorrent",
+            InfoHash = "3456789012345678901234567890123456789012",
+            Status = TorrentStatus.Downloading,
+            IsVpnPaused = false
+        };
+
+        var result = _service.ScrapeTorrent(torrent);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("VPN outage"));
+        _multiTracker.DidNotReceive().Scrape(Arg.Any<string>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void Handle_VpnInterfaceRestoredEvent_should_suppress_announces_when_fail_closed_active()
+    {
+        _vpnKillSwitchService.IsFailClosedActive.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 66,
+            Name = "Restored.FailClosed",
+            InfoHash = "4567890123456789012345678901234567890123",
+            Status = TorrentStatus.Downloading,
+            IsVpnPaused = false
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        _service.Handle(new VpnInterfaceRestoredEvent("tun0"));
+
+        Assert.That(_service.IsStaggeredAnnounceScheduled, Is.False);
+        Assert.That(_service.PendingStaggeredAnnounces, Is.EqualTo(0));
     }
 
     [Test]
