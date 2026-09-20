@@ -8,7 +8,6 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using NLog;
 using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Blocklist;
@@ -28,6 +27,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
 
     private readonly BlocklistSyncMetadata _metadata = new();
     private List<string> _rules = new();
+    private Ipv6IntervalTree _tree;
 
     public PeerBlocklistSyncService(
         HttpClient httpClient = null,
@@ -175,7 +175,36 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         {
             _rules = rules?.ToList() ?? new List<string>();
             _metadata.RuleCount = _rules.Count;
+            _tree = _rules.Count > 0 ? Ipv6IntervalTree.Parse(_rules) : null;
         }
+    }
+
+    public bool IsBlocked(IPAddress address)
+    {
+        if (address == null)
+        {
+            return false;
+        }
+
+        lock (_syncLock)
+        {
+            return _tree?.Contains(address) ?? false;
+        }
+    }
+
+    public bool IsBlocked(string ip)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            return false;
+        }
+
+        if (!IPAddress.TryParse(ip, out var address))
+        {
+            return false;
+        }
+
+        return IsBlocked(address);
     }
 
     public Task<BlocklistSyncResult> SyncBlocklistAsync(string url = null, bool force = false, CancellationToken cancellationToken = default)
@@ -399,6 +428,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         {
             _rules = parsedRules;
             _metadata.RuleCount = _rules.Count;
+            _tree = _rules.Count > 0 ? Ipv6IntervalTree.Parse(_rules) : null;
 
             if (!string.IsNullOrWhiteSpace(newETag))
             {

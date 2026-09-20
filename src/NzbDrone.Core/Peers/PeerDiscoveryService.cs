@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using NzbDrone.Core.Blocklist;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Torrents;
@@ -42,9 +44,19 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
     private static readonly TimeSpan StaleFailedCandidateAge = TimeSpan.FromHours(24);
     private static readonly TimeSpan StaleCandidateAge = TimeSpan.FromHours(48);
 
+    private readonly IConfigService _configService;
+    private readonly IPeerBlocklistSyncService _blocklistService;
     private readonly ConcurrentDictionary<string, List<DiscoveredPeer>> _peers = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _pruneLock = new();
     private DateTime _lastPruneTime = DateTime.UtcNow;
+
+    public PeerDiscoveryService(
+        IConfigService configService = null,
+        IPeerBlocklistSyncService blocklistService = null)
+    {
+        _configService = configService;
+        _blocklistService = blocklistService;
+    }
 
     public void AddPeers(string infoHash, IEnumerable<PeerInfo> peers, string source)
     {
@@ -66,6 +78,11 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
 
     public void AddPeers(string infoHash, IEnumerable<TrackerPeer> peers, string source)
     {
+        if (peers == null)
+        {
+            return;
+        }
+
         PruneIfDue();
 
         var list = _peers.GetOrAdd(infoHash, _ => new List<DiscoveredPeer>());
@@ -75,6 +92,11 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
             foreach (var peer in peers)
             {
                 if (string.IsNullOrEmpty(peer.Ip) || peer.Port <= 0)
+                {
+                    continue;
+                }
+
+                if (IsBlocked(peer.Ip))
                 {
                     continue;
                 }
@@ -135,6 +157,7 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
         lock (list)
         {
             var selected = list
+                .Where(p => !IsBlocked(p.Ip))
                 .Where(p => p.FailCount < MaxFailCount)
                 .Where(p => !p.LastAttempt.HasValue || (now - p.LastAttempt.Value).TotalMinutes >= GetRetryDelayMinutes(p.Source))
                 .OrderBy(p => p.FailCount)
@@ -190,8 +213,23 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
 
         lock (list)
         {
-            return list.Count(p => p.FailCount < MaxFailCount);
+            return list.Count(p => p.FailCount < MaxFailCount && !IsBlocked(p.Ip));
         }
+    }
+
+    private bool IsBlocked(string ip)
+    {
+        if (_blocklistService == null)
+        {
+            return false;
+        }
+
+        if (_configService != null && !_configService.BlocklistEnabled)
+        {
+            return false;
+        }
+
+        return _blocklistService.IsBlocked(ip);
     }
 
     public void RemoveTorrent(string infoHash)

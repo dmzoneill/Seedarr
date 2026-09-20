@@ -285,4 +285,30 @@ public class PeerBlocklistSyncServiceTests
         Assert.That(result.Status, Is.EqualTo("No URL Configured"));
         Assert.That(_mockHandler.Requests.Count, Is.EqualTo(0));
     }
+
+    [Test]
+    public void IsBlocked_should_identify_blocked_and_unblocked_addresses()
+    {
+        Assert.That(_service.IsBlocked("192.168.1.50"), Is.False);
+        Assert.That(_service.IsBlocked(IPAddress.Loopback), Is.False);
+        Assert.That(_service.IsBlocked((string)null), Is.False);
+        Assert.That(_service.IsBlocked((IPAddress)null), Is.False);
+        Assert.That(_service.IsBlocked("invalid-ip"), Is.False);
+
+        _service.SetActiveRules(new[]
+        {
+            "192.168.1.0/24",
+            "10.0.0.1",
+            "2001:db8::/32"
+        });
+
+        Assert.That(_service.IsBlocked("192.168.1.50"), Is.True);
+        Assert.That(_service.IsBlocked(IPAddress.Parse("192.168.1.50")), Is.True);
+        Assert.That(_service.IsBlocked("192.168.2.1"), Is.False);
+        Assert.That(_service.IsBlocked(IPAddress.Parse("192.168.2.1")), Is.False);
+        Assert.That(_service.IsBlocked("10.0.0.1"), Is.True);
+        Assert.That(_service.IsBlocked("10.0.0.2"), Is.False);
+        Assert.That(_service.IsBlocked("2001:db8::1"), Is.True);
+        Assert.That(_service.IsBlocked("2001:db9::1"), Is.False);
+    }
 }

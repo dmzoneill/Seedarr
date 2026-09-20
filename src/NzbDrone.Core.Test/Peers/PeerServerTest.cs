@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using BencodeNET.Objects;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Blocklist;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
@@ -1646,6 +1647,45 @@ public class PeerServerTest
     }
 
     [Test]
+    public void ConnectToPeer_should_abort_connection_when_candidate_is_blocklisted()
+    {
+        _configService.BlocklistEnabled.Returns(true);
+
+        var blocklistService = Substitute.For<IPeerBlocklistSyncService>();
+        blocklistService.IsBlocked(Arg.Any<IPAddress>()).Returns(true);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            blocklistService: blocklistService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "198.51.100.1",
+            Port = 5000,
+            Source = "tracker"
+        };
+
+        InvokeConnectToPeer(server, torrent, candidate);
+
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+        _peerDiscovery.Received().MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+
+        server.Dispose();
+    }
+
+    [Test]
     public void HandleMessage_should_use_supplied_torrent_without_calling_GetAll()
     {
         var conn = CreateTestConnection();
@@ -1914,6 +1954,64 @@ public class PeerServerTest
         // Should return gracefully without leaking half-open permits or IP entries
         Assert.That(halfOpen.CurrentCount, Is.EqualTo(initialCount));
         Assert.That(dict.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task ProcessIncomingClientAsync_should_reject_blocklisted_client_ip()
+    {
+        _configService.BlocklistEnabled.Returns(true);
+        var blocklistService = Substitute.For<IPeerBlocklistSyncService>();
+        blocklistService.IsBlocked(Arg.Any<IPAddress>()).Returns(true);
+
+        using var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            blocklistService: blocklistService);
+
+        var (clientTcp, serverTcp) = CreateRawTcpPair();
+        _clients.Add(clientTcp);
+        _clients.Add(serverTcp);
+
+        using var cts = new CancellationTokenSource();
+        await InvokeProcessIncomingClientAsync(serverTcp, cts.Token, server);
+
+        Assert.That(serverTcp.Connected, Is.False);
+        _connectionManager.DidNotReceive().TryReserveSlot(Arg.Any<string>(), Arg.Any<bool>(), out Arg.Any<IConnectionReservation>());
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public async Task Inbound_accept_loop_should_immediately_close_blocklisted_peer()
+    {
+        _configService.BlocklistEnabled.Returns(true);
+        var blocklistService = Substitute.For<IPeerBlocklistSyncService>();
+        blocklistService.IsBlocked(Arg.Any<IPAddress>()).Returns(true);
+
+        using var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            blocklistService: blocklistService);
+
+        using var cts = new CancellationTokenSource();
+        await server.StartAsync(cts.Token);
+
+        var localPort = ((IPEndPoint)server.ListenerSocket.LocalEndPoint).Port;
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, localPort);
+
+        var stream = client.GetStream();
+        var buffer = new byte[16];
+        var bytesRead = await stream.ReadAsync(buffer.AsMemory(), cts.Token);
+        Assert.That(bytesRead, Is.EqualTo(0));
+
+        await cts.CancelAsync();
     }
 
     [Test]
