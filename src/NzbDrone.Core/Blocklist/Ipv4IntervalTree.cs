@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 
@@ -108,29 +109,94 @@ public class Ipv4IntervalTree
         }
 
         var trimmed = rule.Trim();
-        if (trimmed.StartsWith('#') || trimmed.StartsWith("//", StringComparison.Ordinal))
+        if (trimmed.StartsWith('#') || trimmed.StartsWith("//", StringComparison.Ordinal) || trimmed.StartsWith(';'))
         {
             return false;
         }
 
-        // Check if rule has name prefix "name:ip"
-        var colonIdx = trimmed.IndexOf(':');
-        if (colonIdx > 0 && !trimmed.Contains("::") && trimmed.IndexOf(':', colonIdx + 1) < 0)
+        // 1. Direct clean parse: 1.2.3.4-1.2.3.10, 001.002.003.004 - 001.002.003.010, 1.2.3.0/24, 1.2.3.4
+        if (TryParseCleanIPv4Range(trimmed, out range))
         {
-            trimmed = trimmed[(colonIdx + 1)..].Trim();
+            return true;
         }
-        else
+
+        // 2. eMule .dat format: Start_IP - End_IP , Access_Level , Description
+        // Also handles single IP or CIDR followed by comma metadata.
+        var commaIdx = trimmed.IndexOf(',');
+        if (commaIdx > 0)
         {
-            var spaceIdx = trimmed.IndexOf(' ');
-            if (spaceIdx > 0)
+            var beforeComma = trimmed[..commaIdx].Trim();
+            if (TryParseCleanIPv4Range(beforeComma, out range))
             {
-                var candidate = trimmed[(spaceIdx + 1)..].Trim();
-                if (candidate.Length > 0 && (char.IsAsciiDigit(candidate[0]) || candidate[0] == ':'))
-                {
-                    trimmed = candidate;
-                }
+                return true;
             }
         }
+
+        // 3. PeerGuardian .p2p format: Range_Name:Start_IP-End_IP
+        // Range name may have colons or spaces: e.g. "Some:Org:Name:1.2.3.4-1.2.3.10"
+        // Try candidate substrings after colons (from right to left)
+        for (var colonIdx = trimmed.LastIndexOf(':'); colonIdx >= 0; colonIdx = trimmed.LastIndexOf(':', colonIdx - 1))
+        {
+            var candidate = trimmed[(colonIdx + 1)..].Trim();
+            if (candidate.Length == 0)
+            {
+                continue;
+            }
+
+            // Strip any trailing comma metadata if present in the IP candidate
+            var candidateComma = candidate.IndexOf(',');
+            if (candidateComma > 0)
+            {
+                var candidateBeforeComma = candidate[..candidateComma].Trim();
+                if (TryParseCleanIPv4Range(candidateBeforeComma, out range))
+                {
+                    return true;
+                }
+            }
+
+            if (TryParseCleanIPv4Range(candidate, out range))
+            {
+                return true;
+            }
+        }
+
+        // 4. Space-separated label prefix: e.g. "BadRange 1.2.3.4-1.2.3.10" or "BadRange 1.2.3.4"
+        for (var spaceIdx = trimmed.LastIndexOf(' '); spaceIdx > 0; spaceIdx = trimmed.LastIndexOf(' ', spaceIdx - 1))
+        {
+            var candidate = trimmed[(spaceIdx + 1)..].Trim();
+            if (candidate.Length == 0)
+            {
+                continue;
+            }
+
+            var candidateComma = candidate.IndexOf(',');
+            if (candidateComma > 0)
+            {
+                var candidateBeforeComma = candidate[..candidateComma].Trim();
+                if (TryParseCleanIPv4Range(candidateBeforeComma, out range))
+                {
+                    return true;
+                }
+            }
+
+            if (TryParseCleanIPv4Range(candidate, out range))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryParseCleanIPv4Range(string input, out Ipv4Range range)
+    {
+        range = default;
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return false;
+        }
+
+        var trimmed = input.Trim();
 
         // CIDR notation: 1.2.3.0/24 or ::ffff:1.2.3.0/24
         var slashIdx = trimmed.IndexOf('/');
@@ -139,7 +205,7 @@ public class Ipv4IntervalTree
             var ipStr = trimmed[..slashIdx].Trim();
             var prefixStr = trimmed[(slashIdx + 1)..].Trim();
             if (TryParseIPv4(ipStr, out var ip) &&
-                int.TryParse(prefixStr, out var prefix) &&
+                int.TryParse(prefixStr, NumberStyles.None, CultureInfo.InvariantCulture, out var prefix) &&
                 prefix >= 0 && prefix <= 32)
             {
                 range = FromCidr(ip, prefix);
@@ -149,7 +215,7 @@ public class Ipv4IntervalTree
             return false;
         }
 
-        // Range notation: 1.2.3.4-1.2.3.10
+        // Range notation: 1.2.3.4-1.2.3.10 or 001.002.003.004 - 001.002.003.010
         var dashIdx = trimmed.IndexOf('-');
         if (dashIdx >= 0)
         {
@@ -172,7 +238,7 @@ public class Ipv4IntervalTree
             return false;
         }
 
-        // Single IP: 1.2.3.4
+        // Single IP: 1.2.3.4 or 001.002.003.004
         if (TryParseIPv4(trimmed, out var singleIp))
         {
             var val = singleIp.ToUInt32();
@@ -185,17 +251,62 @@ public class Ipv4IntervalTree
 
     private static bool TryParseIPv4(string input, out IPAddress ip)
     {
-        if (IPAddress.TryParse(input, out ip))
+        ip = null;
+        if (string.IsNullOrWhiteSpace(input))
         {
-            if (ip.IsIPv4MappedToIPv6)
-            {
-                ip = ip.MapToIPv4();
-            }
-
-            return ip.AddressFamily == AddressFamily.InterNetwork;
+            return false;
         }
 
-        ip = null;
+        var s = input.Trim();
+        if (s.StartsWith("::ffff:", StringComparison.OrdinalIgnoreCase))
+        {
+            s = s[7..].Trim();
+        }
+
+        var parts = s.Split('.');
+        if (parts.Length == 4)
+        {
+            var octets = new byte[4];
+            for (var i = 0; i < 4; i++)
+            {
+                var part = parts[i].Trim();
+                if (part.Length == 0 || part.Length > 3)
+                {
+                    return false;
+                }
+
+                for (var c = 0; c < part.Length; c++)
+                {
+                    if (!char.IsAsciiDigit(part[c]))
+                    {
+                        return false;
+                    }
+                }
+
+                if (!byte.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out octets[i]))
+                {
+                    return false;
+                }
+            }
+
+            ip = new IPAddress(octets);
+            return true;
+        }
+
+        if (IPAddress.TryParse(input, out var parsed))
+        {
+            if (parsed.IsIPv4MappedToIPv6)
+            {
+                parsed = parsed.MapToIPv4();
+            }
+
+            if (parsed.AddressFamily == AddressFamily.InterNetwork)
+            {
+                ip = parsed;
+                return true;
+            }
+        }
+
         return false;
     }
 
