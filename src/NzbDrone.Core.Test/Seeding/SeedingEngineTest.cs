@@ -2532,4 +2532,285 @@ public class SeedingEngineTest
         CallTickWithDelta(TimeSpan.FromSeconds(1.0));
         Assert.That(torrent.UploadSpeed, Is.EqualTo(50_000));
     }
+
+    [Test]
+    public void Tick_should_promote_queued_torrents_to_seeding_when_complete_and_slots_available()
+    {
+        _configService.AutoStart.Returns(true);
+        _configService.MaxActiveSeeds.Returns(2);
+        _configService.MaxActiveTorrents.Returns(0);
+
+        var queued1 = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Queued,
+            Progress = 1.0,
+            Priority = 2,
+            SortOrder = 1,
+            TotalSize = 1000,
+            Downloaded = 1000
+        };
+
+        var queued2 = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Queued,
+            Progress = 1.0,
+            Priority = 1,
+            SortOrder = 2,
+            TotalSize = 1000,
+            Downloaded = 1000
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { queued1, queued2 });
+
+        CallTick();
+
+        Assert.That(queued1.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(queued2.Status, Is.EqualTo(TorrentStatus.Seeding));
+        _torrentService.Received(1).Update(queued1);
+        _torrentService.Received(1).Update(queued2);
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
+            e.Torrent.Id == 1 && e.OldStatus == TorrentStatus.Queued && e.NewStatus == TorrentStatus.Seeding && e.IsQueueManagerInternal));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
+            e.Torrent.Id == 2 && e.OldStatus == TorrentStatus.Queued && e.NewStatus == TorrentStatus.Seeding && e.IsQueueManagerInternal));
+    }
+
+    [Test]
+    public void Tick_should_respect_MaxActiveSeeds_cap_when_promoting_queued_seeding_torrents()
+    {
+        _configService.AutoStart.Returns(true);
+        _configService.MaxActiveSeeds.Returns(1);
+        _configService.MaxActiveTorrents.Returns(0);
+
+        var lowPrio = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Queued,
+            Progress = 1.0,
+            Priority = 1,
+            SortOrder = 2,
+            TotalSize = 1000,
+            Downloaded = 1000
+        };
+
+        var highPrio = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Queued,
+            Progress = 1.0,
+            Priority = 5,
+            SortOrder = 1,
+            TotalSize = 1000,
+            Downloaded = 1000
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { lowPrio, highPrio });
+
+        CallTick();
+
+        Assert.That(highPrio.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(lowPrio.Status, Is.EqualTo(TorrentStatus.Queued));
+        _torrentService.Received(1).Update(highPrio);
+        _torrentService.DidNotReceive().Update(lowPrio);
+    }
+
+    [Test]
+    public void Tick_should_respect_MaxActiveTorrents_global_cap_across_downloads_and_seeds()
+    {
+        _configService.AutoStart.Returns(true);
+        _configService.MaxActiveTorrents.Returns(2);
+        _configService.MaxActiveDownloads.Returns(5);
+        _configService.MaxActiveSeeds.Returns(5);
+
+        var activeDl = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Progress = 0.3,
+            TotalSize = 1000,
+            Downloaded = 300
+        };
+
+        var queuedDl = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Queued,
+            Progress = 0.5,
+            Priority = 10,
+            SortOrder = 1,
+            TotalSize = 1000,
+            Downloaded = 500
+        };
+
+        var queuedSeed = new Torrent
+        {
+            Id = 3,
+            Status = TorrentStatus.Queued,
+            Progress = 1.0,
+            Priority = 5,
+            SortOrder = 2,
+            TotalSize = 1000,
+            Downloaded = 1000
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { activeDl, queuedDl, queuedSeed });
+
+        CallTick();
+
+        // 1 slot was available (MaxActiveTorrents = 2, activeDl = 1).
+        // queuedDl takes the available slot; queuedSeed remains queued.
+        Assert.That(queuedDl.Status, Is.EqualTo(TorrentStatus.Downloading));
+        Assert.That(queuedSeed.Status, Is.EqualTo(TorrentStatus.Queued));
+    }
+
+    [Test]
+    public void Tick_should_demote_excess_downloads_when_MaxActiveDownloads_is_reduced()
+    {
+        _configService.AutoStart.Returns(true);
+        _configService.MaxActiveDownloads.Returns(1);
+        _configService.MaxActiveSeeds.Returns(0);
+        _configService.MaxActiveTorrents.Returns(0);
+
+        var highPrio = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Priority = 10,
+            SortOrder = 1,
+            Active = true,
+            TotalSize = 1000,
+            Downloaded = 100
+        };
+
+        var midPrio = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Downloading,
+            Priority = 5,
+            SortOrder = 2,
+            Active = true,
+            TotalSize = 1000,
+            Downloaded = 200
+        };
+
+        var lowPrio = new Torrent
+        {
+            Id = 3,
+            Status = TorrentStatus.Downloading,
+            Priority = 1,
+            SortOrder = 3,
+            Active = true,
+            TotalSize = 1000,
+            Downloaded = 300
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { highPrio, midPrio, lowPrio });
+
+        CallTick();
+
+        Assert.That(highPrio.Status, Is.EqualTo(TorrentStatus.Downloading));
+        Assert.That(midPrio.Status, Is.EqualTo(TorrentStatus.Queued));
+        Assert.That(lowPrio.Status, Is.EqualTo(TorrentStatus.Queued));
+
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
+            e.Torrent.Id == 2 && e.OldStatus == TorrentStatus.Downloading && e.NewStatus == TorrentStatus.Queued && e.IsQueueManagerInternal));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
+            e.Torrent.Id == 3 && e.OldStatus == TorrentStatus.Downloading && e.NewStatus == TorrentStatus.Queued && e.IsQueueManagerInternal));
+    }
+
+    [Test]
+    public void Tick_should_demote_excess_seeds_when_MaxActiveSeeds_is_reduced()
+    {
+        _configService.AutoStart.Returns(true);
+        _configService.MaxActiveDownloads.Returns(0);
+        _configService.MaxActiveSeeds.Returns(1);
+        _configService.MaxActiveTorrents.Returns(0);
+
+        var seed1 = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Priority = 5,
+            SortOrder = 1,
+            Progress = 1.0,
+            Active = true,
+            TotalSize = 1000,
+            Downloaded = 1000
+        };
+
+        var seed2 = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Seeding,
+            Priority = 1,
+            SortOrder = 2,
+            Progress = 1.0,
+            Active = true,
+            TotalSize = 1000,
+            Downloaded = 1000
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { seed1, seed2 });
+
+        CallTick();
+
+        Assert.That(seed1.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(seed2.Status, Is.EqualTo(TorrentStatus.Queued));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
+            e.Torrent.Id == 2 && e.OldStatus == TorrentStatus.Seeding && e.NewStatus == TorrentStatus.Queued && e.IsQueueManagerInternal));
+    }
+
+    [Test]
+    public void Tick_should_never_demote_ForceStart_torrents_even_when_limits_exceeded()
+    {
+        _configService.AutoStart.Returns(true);
+        _configService.MaxActiveDownloads.Returns(1);
+        _configService.MaxActiveSeeds.Returns(0);
+        _configService.MaxActiveTorrents.Returns(0);
+
+        var forced = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            ForceStart = true,
+            Priority = 0,
+            SortOrder = 99,
+            Active = true,
+            TotalSize = 1000,
+            Downloaded = 100
+        };
+
+        var normalHigh = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Downloading,
+            ForceStart = false,
+            Priority = 5,
+            SortOrder = 1,
+            Active = true,
+            TotalSize = 1000,
+            Downloaded = 200
+        };
+
+        var normalLow = new Torrent
+        {
+            Id = 3,
+            Status = TorrentStatus.Downloading,
+            ForceStart = false,
+            Priority = 1,
+            SortOrder = 2,
+            Active = true,
+            TotalSize = 1000,
+            Downloaded = 300
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { forced, normalHigh, normalLow });
+
+        CallTick();
+
+        Assert.That(forced.Status, Is.EqualTo(TorrentStatus.Downloading));
+        Assert.That(normalHigh.Status, Is.EqualTo(TorrentStatus.Downloading));
+        Assert.That(normalLow.Status, Is.EqualTo(TorrentStatus.Queued));
+    }
 }
