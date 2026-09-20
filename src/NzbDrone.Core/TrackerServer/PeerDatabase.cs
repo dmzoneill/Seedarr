@@ -7,7 +7,9 @@ namespace NzbDrone.Core.TrackerServer;
 
 public interface IPeerDatabase : IDisposable
 {
-    void AddPeer(string infoHash, string ip, int port, string peerId);
+    void AddPeer(string infoHash, string ip, int port, string peerId, bool isSeeder = true);
+    void AddPeer(string infoHash, string ip, int port, string peerId, long left, string announceEvent = null);
+    void RecordCompleted(string infoHash);
     void RemovePeer(string infoHash, string ip, int port);
     List<TrackerPeerEntry> GetPeers(string infoHash);
     ScrapeStats GetStats(string infoHash);
@@ -29,6 +31,8 @@ public class TrackerPeerEntry
     public int Port { get; set; }
     public string PeerId { get; set; }
     public DateTime LastAnnounce { get; set; }
+    public bool IsSeeder { get; set; }
+    public long Left { get; set; }
 }
 
 public class ScrapeStats
@@ -43,6 +47,7 @@ public class PeerDatabase : IPeerDatabase, IDisposable
     private const int PeerTtlMinutes = 45;
 
     private readonly Dictionary<string, List<TrackerPeerEntry>> _peers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _completed = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
     private readonly Timer _evictionTimer;
     private bool _disposed;
@@ -130,21 +135,50 @@ public class PeerDatabase : IPeerDatabase, IDisposable
         }
     }
 
-    public void AddPeer(string infoHash, string ip, int port, string peerId)
+    public void RecordCompleted(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            _completed[infoHash] = _completed.GetValueOrDefault(infoHash, 0) + 1;
+        }
+    }
+
+    public void AddPeer(string infoHash, string ip, int port, string peerId, bool isSeeder = true)
+    {
+        AddPeer(infoHash, ip, port, peerId, isSeeder ? 0L : 1L, null);
+    }
+
+    public void AddPeer(string infoHash, string ip, int port, string peerId, long left, string announceEvent = null)
     {
         lock (_lock)
         {
+            if (string.Equals(announceEvent, "completed", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrEmpty(infoHash))
+                {
+                    _completed[infoHash] = _completed.GetValueOrDefault(infoHash, 0) + 1;
+                }
+            }
+
             if (!_peers.TryGetValue(infoHash, out var list))
             {
                 list = new List<TrackerPeerEntry>();
                 _peers[infoHash] = list;
             }
 
+            var isSeeder = left == 0;
             var existing = list.FirstOrDefault(p => p.Ip == ip && p.Port == port);
             if (existing != null)
             {
                 existing.LastAnnounce = DateTime.UtcNow;
                 existing.PeerId = peerId;
+                existing.IsSeeder = isSeeder;
+                existing.Left = left;
             }
             else
             {
@@ -153,7 +187,9 @@ public class PeerDatabase : IPeerDatabase, IDisposable
                     Ip = ip,
                     Port = port,
                     PeerId = peerId,
-                    LastAnnounce = DateTime.UtcNow
+                    LastAnnounce = DateTime.UtcNow,
+                    IsSeeder = isSeeder,
+                    Left = left
                 });
             }
 
@@ -199,17 +235,27 @@ public class PeerDatabase : IPeerDatabase, IDisposable
     {
         lock (_lock)
         {
+            var downloaded = _completed.GetValueOrDefault(infoHash, 0);
+
             if (!_peers.TryGetValue(infoHash, out var list))
             {
-                return new ScrapeStats();
+                return new ScrapeStats
+                {
+                    Complete = 0,
+                    Incomplete = 0,
+                    Downloaded = downloaded
+                };
             }
 
             var active = list.Where(p => (DateTime.UtcNow - p.LastAnnounce).TotalMinutes <= PeerTtlMinutes).ToList();
+            var complete = active.Count(p => p.IsSeeder);
+            var incomplete = active.Count - complete;
+
             return new ScrapeStats
             {
-                Complete = active.Count,
-                Incomplete = 0,
-                Downloaded = active.Count
+                Complete = complete,
+                Incomplete = incomplete,
+                Downloaded = downloaded
             };
         }
     }
@@ -223,14 +269,16 @@ public class PeerDatabase : IPeerDatabase, IDisposable
 
             foreach (var kvp in _peers)
             {
-                var active = kvp.Value.Count(p => (now - p.LastAnnounce).TotalMinutes <= PeerTtlMinutes);
-                if (active > 0)
+                var active = kvp.Value.Where(p => (now - p.LastAnnounce).TotalMinutes <= PeerTtlMinutes).ToList();
+                if (active.Count > 0)
                 {
+                    var complete = active.Count(p => p.IsSeeder);
+                    var incomplete = active.Count - complete;
                     result[kvp.Key] = new ScrapeStats
                     {
-                        Complete = active,
-                        Incomplete = 0,
-                        Downloaded = active
+                        Complete = complete,
+                        Incomplete = incomplete,
+                        Downloaded = _completed.GetValueOrDefault(kvp.Key, 0)
                     };
                 }
             }

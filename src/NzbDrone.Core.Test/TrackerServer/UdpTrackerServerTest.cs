@@ -162,7 +162,7 @@ public class UdpTrackerServerTest
         return BinaryPrimitives.ReadInt64BigEndian(response.AsSpan(8, 8));
     }
 
-    private static byte[] BuildAnnounceRequest(long connectionId, int transactionId, byte[] infoHash, byte[] peerId, int eventId, int numWant, ushort port)
+    private static byte[] BuildAnnounceRequest(long connectionId, int transactionId, byte[] infoHash, byte[] peerId, int eventId, int numWant, ushort port, long left = 0)
     {
         var data = new byte[98];
         BinaryPrimitives.WriteInt64BigEndian(data.AsSpan(0, 8), connectionId);
@@ -170,6 +170,7 @@ public class UdpTrackerServerTest
         BinaryPrimitives.WriteInt32BigEndian(data.AsSpan(12, 4), transactionId);
         Buffer.BlockCopy(infoHash, 0, data, 16, 20);
         Buffer.BlockCopy(peerId, 0, data, 36, 20);
+        BinaryPrimitives.WriteInt64BigEndian(data.AsSpan(64, 8), left);
         BinaryPrimitives.WriteInt32BigEndian(data.AsSpan(80, 4), eventId);
         BinaryPrimitives.WriteInt32BigEndian(data.AsSpan(92, 4), numWant);
         BinaryPrimitives.WriteUInt16BigEndian(data.AsSpan(96, 2), port);
@@ -1115,6 +1116,26 @@ public class UdpTrackerServerTest
         InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881));
 
         _peerDatabase.Received(1).AddPeer(expectedHex, "10.0.0.1", 6881, Arg.Any<string>());
+        _peerDatabase.Received(1).RecordCompleted(expectedHex);
+    }
+
+    [Test]
+    public void HandleAnnounce_should_add_peer_as_leecher_when_left_is_greater_than_zero()
+    {
+        var connId = RegisterValidConnectionId();
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xAB);
+        var peerId = new byte[20];
+        Array.Fill(peerId, (byte)0x47);
+
+        var expectedHex = Convert.ToHexString(infoHash).ToLowerInvariant();
+        _peerDatabase.GetPeers(expectedHex).Returns(new List<TrackerPeerEntry>());
+        _peerDatabase.GetStats(expectedHex).Returns(new ScrapeStats());
+
+        var data = BuildAnnounceRequest(connId, 42, infoHash, peerId, 0, 50, 6881, left: 5000);
+        InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881));
+
+        _peerDatabase.Received(1).AddPeer(expectedHex, "10.0.0.1", 6881, Arg.Any<string>(), false);
     }
 
     [Test]

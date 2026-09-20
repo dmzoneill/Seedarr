@@ -210,7 +210,7 @@ public class PeerDatabaseTest
         var stats = _peerDatabase.GetStats("abc123");
 
         Assert.That(stats.Complete, Is.EqualTo(2));
-        Assert.That(stats.Downloaded, Is.EqualTo(2));
+        Assert.That(stats.Downloaded, Is.EqualTo(0));
         Assert.That(stats.Incomplete, Is.EqualTo(0));
     }
 
@@ -483,5 +483,86 @@ public class PeerDatabaseTest
         Assert.DoesNotThrow(() => db.Dispose());
 
         Assert.That(db.PruneStalePeers(), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void AddPeer_should_track_seeder_when_left_is_zero()
+    {
+        _peerDatabase.AddPeer("hash1", "192.168.1.1", 6881, "peer1", 0);
+
+        var stats = _peerDatabase.GetStats("hash1");
+        var peers = _peerDatabase.GetPeers("hash1");
+
+        Assert.That(stats.Complete, Is.EqualTo(1));
+        Assert.That(stats.Incomplete, Is.EqualTo(0));
+        Assert.That(peers[0].IsSeeder, Is.True);
+    }
+
+    [Test]
+    public void AddPeer_should_track_leecher_when_left_is_greater_than_zero()
+    {
+        _peerDatabase.AddPeer("hash1", "192.168.1.1", 6881, "peer1", 1024);
+
+        var stats = _peerDatabase.GetStats("hash1");
+        var peers = _peerDatabase.GetPeers("hash1");
+
+        Assert.That(stats.Complete, Is.EqualTo(0));
+        Assert.That(stats.Incomplete, Is.EqualTo(1));
+        Assert.That(peers[0].IsSeeder, Is.False);
+        Assert.That(peers[0].Left, Is.EqualTo(1024));
+    }
+
+    [Test]
+    public void AddPeer_should_transition_leecher_to_seeder_when_left_becomes_zero()
+    {
+        _peerDatabase.AddPeer("hash1", "192.168.1.1", 6881, "peer1", 1024);
+
+        var statsBefore = _peerDatabase.GetStats("hash1");
+        Assert.That(statsBefore.Complete, Is.EqualTo(0));
+        Assert.That(statsBefore.Incomplete, Is.EqualTo(1));
+
+        _peerDatabase.AddPeer("hash1", "192.168.1.1", 6881, "peer1", 0);
+
+        var statsAfter = _peerDatabase.GetStats("hash1");
+        Assert.That(statsAfter.Complete, Is.EqualTo(1));
+        Assert.That(statsAfter.Incomplete, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void RecordCompleted_should_increment_downloaded_count()
+    {
+        _peerDatabase.RecordCompleted("hash1");
+        _peerDatabase.RecordCompleted("hash1");
+
+        var stats = _peerDatabase.GetStats("hash1");
+
+        Assert.That(stats.Downloaded, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void AddPeer_with_completed_event_should_increment_downloaded_count()
+    {
+        _peerDatabase.AddPeer("hash1", "192.168.1.1", 6881, "peer1", 0, "completed");
+
+        var stats = _peerDatabase.GetStats("hash1");
+
+        Assert.That(stats.Downloaded, Is.EqualTo(1));
+        Assert.That(stats.Complete, Is.EqualTo(1));
+        Assert.That(stats.Incomplete, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetAllStats_should_distinguish_complete_incomplete_and_downloaded()
+    {
+        _peerDatabase.AddPeer("hash1", "192.168.1.1", 6881, "peer1", 0);
+        _peerDatabase.AddPeer("hash1", "192.168.1.2", 6882, "peer2", 500);
+        _peerDatabase.RecordCompleted("hash1");
+
+        var allStats = _peerDatabase.GetAllStats();
+
+        Assert.That(allStats, Does.ContainKey("hash1"));
+        Assert.That(allStats["hash1"].Complete, Is.EqualTo(1));
+        Assert.That(allStats["hash1"].Incomplete, Is.EqualTo(1));
+        Assert.That(allStats["hash1"].Downloaded, Is.EqualTo(1));
     }
 }
