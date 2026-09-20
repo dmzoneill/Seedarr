@@ -62,6 +62,53 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
         }
     }
 
+    public void BroadcastToGroup(string groupName, SignalRMessage message)
+    {
+        if (string.IsNullOrWhiteSpace(groupName) || message == null)
+        {
+            return;
+        }
+
+        if (_deduplicationWindow > TimeSpan.Zero && IsDuplicate(message, groupName))
+        {
+            _logger.Trace("Suppressing duplicate SignalR broadcast for group {0}, message: {1}", groupName, message.Name);
+            return;
+        }
+
+        var group = _hubContext?.Clients?.Group(groupName);
+        if (group == null)
+        {
+            return;
+        }
+
+        _logger.Trace("Broadcasting SignalR message to group {0}: {1}", groupName, message.Name);
+        group.SendAsync("receiveMessage", message)
+            ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR group broadcast failed"), TaskContinuationOptions.OnlyOnFaulted);
+
+        var eventName = GetNamedEvent(message);
+        if (!string.IsNullOrEmpty(eventName))
+        {
+            _logger.Trace("Broadcasting direct SignalR event to group {0}: {1}", groupName, eventName);
+            group.SendAsync(eventName, message.Body)
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR group named event broadcast failed"), TaskContinuationOptions.OnlyOnFaulted);
+        }
+    }
+
+    public void BroadcastToTorrent(int torrentId, SignalRMessage message)
+    {
+        BroadcastToGroup($"torrent-{torrentId}", message);
+    }
+
+    public void BroadcastToChannel(string channel, SignalRMessage message)
+    {
+        if (string.IsNullOrWhiteSpace(channel))
+        {
+            return;
+        }
+
+        BroadcastToGroup($"channel-{channel.ToLowerInvariant()}", message);
+    }
+
     private static string GetNamedEvent(SignalRMessage message)
     {
         if (string.IsNullOrEmpty(message?.Name))
@@ -180,9 +227,9 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
         return null;
     }
 
-    private bool IsDuplicate(SignalRMessage message)
+    private bool IsDuplicate(SignalRMessage message, string groupName = null)
     {
-        var key = GetDeduplicationKey(message);
+        var key = GetDeduplicationKey(message, groupName);
         var fingerprint = GetPayloadFingerprint(message.Body);
         var now = DateTime.UtcNow;
 
@@ -200,19 +247,20 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
         return false;
     }
 
-    private static string GetDeduplicationKey(SignalRMessage message)
+    private static string GetDeduplicationKey(SignalRMessage message, string groupName = null)
     {
+        var prefix = string.IsNullOrEmpty(groupName) ? string.Empty : $"[{groupName}]";
         var name = message.Name ?? string.Empty;
         var action = message.Action.ToString();
 
         if (message is PieceCompletedMessage pcm)
         {
-            return $"{name}:{pcm.InfoHash}:{pcm.PieceIndex}";
+            return $"{prefix}{name}:{pcm.InfoHash}:{pcm.PieceIndex}";
         }
 
         if (message is PieceBatchCompletedMessage pbcm)
         {
-            return $"{name}:{pbcm.InfoHash}:{string.Join(",", pbcm.PieceIndexes)}";
+            return $"{prefix}{name}:{pbcm.InfoHash}:{string.Join(",", pbcm.PieceIndexes)}";
         }
 
         if (message.Body != null)
@@ -223,12 +271,12 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
                 var id = idProp.GetValue(message.Body);
                 if (id != null)
                 {
-                    return $"{name}:{action}:{id}";
+                    return $"{prefix}{name}:{action}:{id}";
                 }
             }
         }
 
-        return $"{name}:{action}";
+        return $"{prefix}{name}:{action}";
     }
 
     private static string GetPayloadFingerprint(object body)
