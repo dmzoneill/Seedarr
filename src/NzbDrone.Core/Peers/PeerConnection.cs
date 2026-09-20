@@ -12,6 +12,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Bandwidth;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Peers.Messages;
@@ -40,7 +41,30 @@ public class PeerConnection : IDisposable
     public string InfoHashV2 { get; set; }
     public Torrent MatchedTorrent { get; set; }
     public int? ExpectedInfoHashLength { get; set; }
-    public string PeerId { get; set; }
+    private static IBandwidthLimiter _defaultBandwidthLimiter = NzbDrone.Core.Bandwidth.BandwidthLimiter.Instance;
+
+    public static IBandwidthLimiter DefaultBandwidthLimiter
+    {
+        get => _defaultBandwidthLimiter;
+        set => _defaultBandwidthLimiter = value;
+    }
+
+    public IBandwidthLimiter BandwidthLimiter { get; set; } = _defaultBandwidthLimiter;
+
+    private string _peerId;
+    public string PeerId
+    {
+        get => _peerId;
+        set
+        {
+            _peerId = value;
+            if (BandwidthLimiter != null && !string.IsNullOrEmpty(_peerId) && (_uploadRateLimit > 0 || _downloadRateLimit > 0))
+            {
+                BandwidthLimiter.SetPeerLimits(_peerId, _uploadRateLimit, _downloadRateLimit);
+            }
+        }
+    }
+
     public bool IsInbound { get; set; }
     public string DiscoverySource { get; set; }
     public bool IsLocalPeer => IPAddressExtensions.IsLocalSubnet(RemoteIp) || string.Equals(DiscoverySource, "lpd", StringComparison.OrdinalIgnoreCase);
@@ -473,6 +497,10 @@ public class PeerConnection : IDisposable
         {
             _uploadRateLimit = value;
             UpdateSocketBuffers();
+            if (BandwidthLimiter != null && !string.IsNullOrEmpty(PeerId))
+            {
+                BandwidthLimiter.SetPeerLimits(PeerId, _uploadRateLimit, _downloadRateLimit);
+            }
         }
     }
 
@@ -483,6 +511,10 @@ public class PeerConnection : IDisposable
         {
             _downloadRateLimit = value;
             UpdateSocketBuffers();
+            if (BandwidthLimiter != null && !string.IsNullOrEmpty(PeerId))
+            {
+                BandwidthLimiter.SetPeerLimits(PeerId, _uploadRateLimit, _downloadRateLimit);
+            }
         }
     }
 
@@ -548,6 +580,11 @@ public class PeerConnection : IDisposable
         }
 
         UpdateSocketBuffers();
+
+        if (BandwidthLimiter != null && !string.IsNullOrEmpty(PeerId))
+        {
+            BandwidthLimiter.SetPeerLimits(PeerId, _uploadRateLimit, _downloadRateLimit);
+        }
     }
 
     public void UpdateSocketBuffers()
@@ -1154,12 +1191,18 @@ public class PeerConnection : IDisposable
                     return;
                 }
 
-                if (_uploadRateLimit > 0 && bufferSize > _pacingChunkSize)
+                var hasLimiterUpload = BandwidthLimiter != null && BandwidthLimiter.HasUploadLimit(InfoHash, PeerId);
+                if ((_uploadRateLimit > 0 || hasLimiterUpload) && bufferSize > _pacingChunkSize)
                 {
                     WritePaced(buffer, bufferSize);
                 }
                 else
                 {
+                    if (hasLimiterUpload)
+                    {
+                        BandwidthLimiter.ConsumeUpload(InfoHash, PeerId, bufferSize);
+                    }
+
                     _activeStream.Write(buffer, 0, bufferSize);
                     _activeStream.Flush();
                 }
@@ -1182,6 +1225,11 @@ public class PeerConnection : IDisposable
         {
             var slice = Math.Min(chunkSize, count - offset);
             var sliceStart = Stopwatch.GetTimestamp();
+
+            if (BandwidthLimiter != null && BandwidthLimiter.HasUploadLimit(InfoHash, PeerId))
+            {
+                BandwidthLimiter.ConsumeUpload(InfoHash, PeerId, slice);
+            }
 
             _activeStream.Write(buffer, offset, slice);
             _activeStream.Flush();
@@ -1921,9 +1969,27 @@ public class PeerConnection : IDisposable
     private bool ReadExact(byte[] buffer, int count, ref int bytesReadForMessage)
     {
         var offset = 0;
+        var chunkSize = _pacingChunkSize > 0 ? _pacingChunkSize : DefaultPacingChunkSize;
+        var hasDownloadLimit = _downloadRateLimit > 0 || (BandwidthLimiter != null && BandwidthLimiter.HasDownloadLimit(InfoHash, PeerId));
+
         while (offset < count)
         {
-            var read = _activeStream.Read(buffer, offset, count - offset);
+            var toRead = count - offset;
+            if (hasDownloadLimit)
+            {
+                toRead = Math.Min(toRead, chunkSize);
+                if (BandwidthLimiter != null && BandwidthLimiter.HasDownloadLimit(InfoHash, PeerId))
+                {
+                    BandwidthLimiter.ConsumeDownload(InfoHash, PeerId, toRead);
+                }
+                else if (_downloadRateLimit > 0)
+                {
+                    var targetTicks = (long)((double)toRead * Stopwatch.Frequency / _downloadRateLimit);
+                    PaceWaitHandler(Stopwatch.GetTimestamp(), targetTicks);
+                }
+            }
+
+            var read = _activeStream.Read(buffer, offset, toRead);
             if (read == 0)
             {
                 return false;
@@ -1947,6 +2013,11 @@ public class PeerConnection : IDisposable
 
             _isDisposed = true;
             PendingRequestCount = 0;
+
+            if (BandwidthLimiter != null && !string.IsNullOrEmpty(_peerId))
+            {
+                BandwidthLimiter.RemovePeer(_peerId);
+            }
 
             if (_activeStream != _networkStream)
             {
