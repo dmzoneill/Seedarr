@@ -96,11 +96,72 @@ public class FastExtensionHandlerTest
     }
 
     [Test]
-    public void ComputeAllowedFastSet_should_return_empty_for_ipv6()
+    public void ComputeAllowedFastSet_should_support_ipv6_with_slash_64_masking()
     {
-        var result = _handler.ComputeAllowedFastSet("::1", _infoHash, 1000, 10);
+        var result = _handler.ComputeAllowedFastSet("2001:db8:85a3::8a2e:370:7334", _infoHash, 1000, 10);
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result, Is.Not.Empty);
+        Assert.That(result.Count, Is.EqualTo(10));
+        Assert.That(result, Is.All.GreaterThanOrEqualTo(0));
+        Assert.That(result, Is.All.LessThan(1000));
+    }
+
+    [Test]
+    public void ComputeAllowedFastSet_should_produce_same_result_for_same_ipv6_slash_64_subnet()
+    {
+        var result1 = _handler.ComputeAllowedFastSet("2001:db8:abcd:0012:0000:0000:0000:0001", _infoHash, 1000, 10);
+        var result2 = _handler.ComputeAllowedFastSet("2001:db8:abcd:0012:ffff:ffff:ffff:ffff", _infoHash, 1000, 10);
+
+        Assert.That(result1, Is.EqualTo(result2));
+    }
+
+    [Test]
+    public void ComputeAllowedFastSet_should_differ_for_different_ipv6_slash_64_subnets()
+    {
+        var result1 = _handler.ComputeAllowedFastSet("2001:db8:abcd:0012::1", _infoHash, 1000, 10);
+        var result2 = _handler.ComputeAllowedFastSet("2001:db8:abcd:0013::1", _infoHash, 1000, 10);
+
+        Assert.That(result1, Is.Not.EqualTo(result2));
+    }
+
+    [Test]
+    public void MaskIpToSubnet_should_mask_ipv4_to_slash_24()
+    {
+        var masked = FastExtensionHandler.MaskIpToSubnet("192.168.1.150");
+
+        Assert.That(masked, Is.Not.Null);
+        Assert.That(masked.Length, Is.EqualTo(4));
+        Assert.That(masked[0], Is.EqualTo(192));
+        Assert.That(masked[1], Is.EqualTo(168));
+        Assert.That(masked[2], Is.EqualTo(1));
+        Assert.That(masked[3], Is.EqualTo(0));
+    }
+
+    [Test]
+    public void MaskIpToSubnet_should_mask_ipv6_to_slash_64()
+    {
+        var ip = "2001:0db8:85a3:0042:1000:8a2e:0370:7334";
+        var masked = FastExtensionHandler.MaskIpToSubnet(ip);
+
+        Assert.That(masked, Is.Not.Null);
+        Assert.That(masked.Length, Is.EqualTo(16));
+        var originalBytes = IPAddress.Parse(ip).GetAddressBytes();
+        for (var i = 0; i < 8; i++)
+        {
+            Assert.That(masked[i], Is.EqualTo(originalBytes[i]));
+        }
+        for (var i = 8; i < 16; i++)
+        {
+            Assert.That(masked[i], Is.EqualTo(0));
+        }
+    }
+
+    [Test]
+    public void MaskIpToSubnet_should_return_null_for_invalid_ip()
+    {
+        Assert.That(FastExtensionHandler.MaskIpToSubnet("invalid-ip"), Is.Null);
+        Assert.That(FastExtensionHandler.MaskIpToSubnet((string)null), Is.Null);
+        Assert.That(FastExtensionHandler.MaskIpToSubnet((IPAddress)null), Is.Null);
     }
 
     [Test]
