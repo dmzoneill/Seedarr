@@ -293,8 +293,8 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                 var stats = _peerDatabase.GetStats(torrent.InfoHash);
                 if (stats != null)
                 {
-                    torrent.Seeders = stats.Complete;
-                    torrent.Leechers = stats.Incomplete;
+                    torrent.Seeders = Math.Max(torrent.Seeders, stats.Complete);
+                    torrent.Leechers = Math.Max(torrent.Leechers, stats.Incomplete);
                 }
             }
         }
@@ -908,8 +908,8 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                 var stats = _peerDatabase.GetStats(torrent.InfoHash);
                 if (stats != null)
                 {
-                    torrent.Seeders = stats.Complete;
-                    torrent.Leechers = stats.Incomplete;
+                    torrent.Seeders = Math.Max(torrent.Seeders, stats.Complete);
+                    torrent.Leechers = Math.Max(torrent.Leechers, stats.Incomplete);
                 }
             }
 
