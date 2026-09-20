@@ -125,6 +125,27 @@ public class HoffmanWebSeedClient : IWebSeedClient
         return await DownloadPayloadAsync(url, length, cancellationToken);
     }
 
+    public Task<byte[]> DownloadBlockAsync(
+        string baseUrl,
+        byte[] infoHash,
+        int pieceIndex,
+        long pieceLength,
+        int offset,
+        int length,
+        CancellationToken cancellationToken = default)
+    {
+        return DownloadBlockAsync(baseUrl, infoHash, pieceIndex, offset, length, cancellationToken);
+    }
+
+    public Task<byte[]> DownloadBlockAsync(
+        string url,
+        long startByte,
+        int length,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException("Hoffman (BEP 17) web seeds require info_hash and piece index.");
+    }
+
     private async Task<byte[]> DownloadPayloadAsync(string url, int expectedLength, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
