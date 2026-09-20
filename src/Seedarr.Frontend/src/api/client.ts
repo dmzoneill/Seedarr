@@ -221,6 +221,62 @@ class ApiClient {
     return this.post<CurrentUser>("/auth/login", request);
   }
 
+  /**
+   * Re-authenticates with retry for transient network connectivity issues.
+   */
+  async loginWithRetry(
+    request: LoginRequest,
+    maxRetries = 2,
+  ): Promise<CurrentUser> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.login(request);
+      } catch (err: any) {
+        lastError = err;
+        const msg = String(err?.message || "");
+        // Do not retry client/auth errors like invalid password
+        if (
+          msg.includes("401") ||
+          msg.includes("400") ||
+          msg.includes("Invalid credentials") ||
+          msg.includes("required")
+        ) {
+          throw err;
+        }
+        if (attempt < maxRetries) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 500 * Math.pow(2, attempt)),
+          );
+        }
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * Refreshes active session by probing /auth/me with retry for transient errors.
+   */
+  async refreshSession(maxRetries = 2): Promise<CurrentUser | null> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const user = await this.getCurrentUser();
+        return user;
+      } catch (err: any) {
+        if (err?.message?.includes("401")) {
+          throw err;
+        }
+        if (attempt === maxRetries) {
+          throw err;
+        }
+        await new Promise((resolve) =>
+          setTimeout(resolve, 300 * Math.pow(2, attempt)),
+        );
+      }
+    }
+    return null;
+  }
+
   logout(): Promise<{ message: string }> {
     return this.post<{ message: string }>("/auth/logout");
   }

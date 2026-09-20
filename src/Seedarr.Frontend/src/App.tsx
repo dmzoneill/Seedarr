@@ -47,6 +47,8 @@ import { useModalStack } from "./components/ModalProvider";
 import AddTorrentModal from "./components/AddTorrentModal";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
+import { useIdleTimer } from "./hooks/useIdleTimer";
+import { IdleLockModal, IdleCountdownModal } from "./components/IdleLockModal";
 import {
   GettingStartedModal,
   STORAGE_KEY_HIDE_GUIDE,
@@ -144,6 +146,49 @@ function App() {
   const { connected, isReconnecting, reconnect } = useSignalR();
   const { showToast } = useToast();
   const [currentUser, setCurrentUser] = useState<import("./api/types").CurrentUser | null>(null);
+  const [isManuallyLocked, setIsManuallyLocked] = useState(false);
+  const [lockReason, setLockReason] = useState<"idle" | "expired">("idle");
+
+  const {
+    isIdle,
+    isWarning,
+    remainingSeconds,
+    resetTimer,
+    lockSession,
+    unlockSession,
+  } = useIdleTimer({
+    enabled: Boolean(
+      currentUser && currentUser.isAuthenticated && location.pathname !== "/login",
+    ),
+    onIdle: () => {
+      setLockReason("idle");
+    },
+  });
+
+  const isLocked =
+    (isIdle || isManuallyLocked) &&
+    Boolean(currentUser && location.pathname !== "/login");
+
+  const handleUnlockSession = useCallback(() => {
+    setIsManuallyLocked(false);
+    unlockSession();
+    loadUser();
+    reconnect();
+    showToast(
+      t("auth.sessionUnlocked", undefined, "Session unlocked successfully"),
+      "success",
+    );
+  }, [unlockSession, reconnect, showToast, t]);
+
+  const handleStayLoggedIn = useCallback(async () => {
+    resetTimer();
+    try {
+      await apiClient.refreshSession(1);
+    } catch {
+      setLockReason("expired");
+      setIsManuallyLocked(true);
+    }
+  }, [resetTimer]);
 
   const loadUser = async () => {
     try {
@@ -177,28 +222,34 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = subscribeAuthChannel((event) => {
-      if (event.type === "AUTH_LOGOUT" || event.type === "AUTH_SESSION_EXPIRED") {
+      if (event.type === "AUTH_LOGOUT") {
         setCurrentUser(null);
         stopSignalR();
         navigate("/login");
-        if (event.type === "AUTH_SESSION_EXPIRED") {
+        showToast(
+          t(
+            "auth.loggedOutOtherTab",
+            undefined,
+            "You were logged out in another tab.",
+          ),
+          "info",
+        );
+      } else if (event.type === "AUTH_SESSION_EXPIRED") {
+        if (currentUser && location.pathname !== "/login") {
+          setLockReason("expired");
+          setIsManuallyLocked(true);
           showToast(
             t(
               "auth.sessionExpired",
               undefined,
-              "Your session has expired. Please sign in again.",
+              "Your session has expired. Enter your password to resume.",
             ),
             "warning",
           );
         } else {
-          showToast(
-            t(
-              "auth.loggedOutOtherTab",
-              undefined,
-              "You were logged out in another tab.",
-            ),
-            "info",
-          );
+          setCurrentUser(null);
+          stopSignalR();
+          navigate("/login");
         }
       } else if (event.type === "AUTH_LOGIN") {
         if (event.user) {
@@ -275,7 +326,9 @@ function App() {
       showAddTorrentModal ||
       showShortcutsModal ||
       showGettingStartedModal ||
-      showCommandPalette
+      showCommandPalette ||
+      isLocked ||
+      isWarning
     ) {
       return true;
     }
@@ -295,6 +348,8 @@ function App() {
     showGettingStartedModal,
     showCommandPalette,
     modalCount,
+    isLocked,
+    isWarning,
   ]);
 
   const isAnyModalOpenRef = useRef(false);
@@ -1215,6 +1270,17 @@ function App() {
                   <button
                     className="topbar-dropdown-item"
                     role="menuitem"
+                    onClick={() => {
+                      setShowActionsMenu(false);
+                      setLockReason("idle");
+                      setIsManuallyLocked(true);
+                    }}
+                  >
+                    {t("auth.lockScreen", undefined, "🔒 Lock Screen")}
+                  </button>
+                  <button
+                    className="topbar-dropdown-item"
+                    role="menuitem"
                     onClick={handleLogout}
                   >
                     {t("topbar.logout", undefined, "Log Out")}
@@ -1407,6 +1473,27 @@ function App() {
       <GettingStartedModal
         isOpen={showGettingStartedModal}
         onClose={() => setShowGettingStartedModal(false)}
+      />
+      <IdleLockModal
+        isOpen={isLocked}
+        currentUser={currentUser}
+        lockReason={lockReason}
+        onUnlock={handleUnlockSession}
+        onLogout={handleLogout}
+      />
+      <IdleCountdownModal
+        isOpen={
+          isWarning &&
+          !isLocked &&
+          Boolean(currentUser && location.pathname !== "/login")
+        }
+        remainingSeconds={remainingSeconds}
+        onStayLoggedIn={handleStayLoggedIn}
+        onLockNow={() => {
+          setLockReason("idle");
+          lockSession();
+        }}
+        onLogout={handleLogout}
       />
     </div>
   );
