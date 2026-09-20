@@ -424,6 +424,48 @@ public class IdentityProviderConfigControllerTest
     }
 
     [Test]
+    public async Task TestConnection_WhenConnectionFails_ReturnsFailureMessage()
+    {
+        _providerService.TestConnectionAsync(Arg.Any<IdentityProviderDefinition>()).Returns(Task.FromResult(false));
+
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "unsafe-oidc",
+            Name = "Unsafe OIDC",
+            IssuerUrl = "http://169.254.169.254/latest/meta-data",
+        };
+
+        var result = await _controller.TestConnection(resource);
+
+        Assert.That(result, Is.TypeOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        dynamic value = ok.Value;
+        Assert.That((bool)value.success, Is.False);
+        Assert.That((string)value.message, Is.EqualTo("Failed to reach provider endpoint"));
+    }
+
+    [Test]
+    public async Task TestConnection_WhenConnectionSucceeds_ReturnsSuccessMessage()
+    {
+        _providerService.TestConnectionAsync(Arg.Any<IdentityProviderDefinition>()).Returns(Task.FromResult(true));
+
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "valid-oidc",
+            Name = "Valid OIDC",
+            IssuerUrl = "https://accounts.google.com",
+        };
+
+        var result = await _controller.TestConnection(resource);
+
+        Assert.That(result, Is.TypeOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        dynamic value = ok.Value;
+        Assert.That((bool)value.success, Is.True);
+        Assert.That((string)value.message, Is.EqualTo("Connection successful"));
+    }
+
+    [Test]
     public async Task Create_WhenValidationFails_ReturnsBadRequest()
     {
         var resource = new IdentityProviderResource

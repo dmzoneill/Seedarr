@@ -14,7 +14,13 @@ public class IdentityProviderService : IIdentityProviderService
 {
     public const string DataProtectionPurpose = "Seedarr.IdentityProvider.ClientSecret";
 
-    private static readonly HttpClient DefaultHttpClient = new();
+    public static readonly SocketsHttpHandler SharedHandler = new()
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        AllowAutoRedirect = false,
+    };
+
+    private static readonly HttpClient DefaultHttpClient = new(SharedHandler, disposeHandler: false);
     private readonly IIdentityProviderRepository _repository;
     private readonly HttpClient _httpClient;
     private readonly IDataProtector _protector;
@@ -150,21 +156,23 @@ public class IdentityProviderService : IIdentityProviderService
 
         try
         {
-            var targetUrl = provider.ProviderType switch
+            var rawUrl = provider.ProviderType switch
             {
-                IdentityProviderType.Oidc => !string.IsNullOrEmpty(provider.IssuerUrl)
-                    ? (provider.IssuerUrl.TrimEnd('/').EndsWith(".well-known/openid-configuration", StringComparison.OrdinalIgnoreCase)
-                        ? provider.IssuerUrl
-                        : (provider.IssuerUrl.EndsWith("/") ? provider.IssuerUrl + ".well-known/openid-configuration" : provider.IssuerUrl + "/.well-known/openid-configuration"))
+                IdentityProviderType.Oidc => !string.IsNullOrWhiteSpace(provider.IssuerUrl)
+                    ? (provider.IssuerUrl.Trim().TrimEnd('/').EndsWith(".well-known/openid-configuration", StringComparison.OrdinalIgnoreCase)
+                        ? provider.IssuerUrl.Trim()
+                        : (provider.IssuerUrl.Trim().EndsWith("/") ? provider.IssuerUrl.Trim() + ".well-known/openid-configuration" : provider.IssuerUrl.Trim() + "/.well-known/openid-configuration"))
                     : provider.MetadataUrl,
                 IdentityProviderType.Saml => provider.MetadataUrl,
                 _ => provider.IssuerUrl,
             };
 
-            if (string.IsNullOrWhiteSpace(targetUrl))
+            if (string.IsNullOrWhiteSpace(rawUrl))
             {
                 return false;
             }
+
+            var targetUrl = rawUrl.Trim();
 
             if (!UrlValidator.IsSafeUrl(targetUrl))
             {
