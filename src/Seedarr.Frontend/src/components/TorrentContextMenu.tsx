@@ -16,6 +16,7 @@ export interface TorrentContextMenuProps {
   allColumns: ReadonlyArray<{ key: string; label: string }>;
   onClose: () => void;
   onToggleColumn: (key: string) => void;
+  onResetSort?: () => void;
   onStart: (id: number) => void;
   onStop: (id: number) => void;
   onUpdate: (torrent: Torrent) => void;
@@ -54,6 +55,7 @@ function TorrentContextMenu({
   allColumns,
   onClose,
   onToggleColumn,
+  onResetSort,
   onStart,
   onStop,
   onUpdate,
@@ -823,34 +825,48 @@ function TorrentContextMenu({
           </>
         ) : null}
 
-        {/* Columns section - always shown */}
-        <div
-          className="context-menu-item context-menu-submenu-trigger"
-          onMouseEnter={() => setOpenSubmenu("columns")}
-          onMouseLeave={() => setOpenSubmenu(null)}
-        >
-          {t("torrents.columns", undefined, "Columns")} ▶
-          {openSubmenu === "columns" && (
-            <div className="context-menu context-menu-submenu context-menu-columns">
-              {allColumns.map((col) => (
-                <label key={col.key} className="column-menu-item">
-                  <input
-                    type="checkbox"
-                    checked={visibleColumns.has(col.key)}
-                    onChange={() => onToggleColumn(col.key)}
-                  />
-                  {t(
-                    COLUMN_I18N_KEYS[
-                      col.key as keyof typeof COLUMN_I18N_KEYS
-                    ] || `torrents.table.${col.key}`,
-                    undefined,
-                    col.label,
-                  )}
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Columns section */}
+        {allColumns.length > 0 && (
+          <div
+            className="context-menu-item context-menu-submenu-trigger"
+            onMouseEnter={() => setOpenSubmenu("columns")}
+            onMouseLeave={() => setOpenSubmenu(null)}
+          >
+            {t("torrents.columns", undefined, "Columns")} ▶
+            {openSubmenu === "columns" && (
+              <div className="context-menu context-menu-submenu context-menu-columns">
+                {allColumns.map((col) => (
+                  <label key={col.key} className="column-menu-item">
+                    <input
+                      type="checkbox"
+                      checked={visibleColumns.has(col.key)}
+                      onChange={() => onToggleColumn(col.key)}
+                    />
+                    {t(
+                      COLUMN_I18N_KEYS[
+                        col.key as keyof typeof COLUMN_I18N_KEYS
+                      ] || `torrents.table.${col.key}`,
+                      undefined,
+                      col.label,
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {onResetSort && (
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              onResetSort();
+              onClose();
+            }}
+          >
+            {t("torrents.resetSort", undefined, "Reset Sort Order")}
+          </div>
+        )}
       </div>
       {promptConfig && (
         <PromptModal

@@ -37,6 +37,11 @@ import {
   DEFAULT_VISIBLE,
   loadVisibleColumns,
   saveVisibleColumns,
+  loadTableSortPreferences,
+  saveTableSortPreferences,
+  resetTableSortPreferences,
+  SORT_KEY_STORAGE,
+  SORT_ASC_STORAGE,
   ColumnKey,
   ColumnDef,
 } from "../pages/torrentindex/columnPreferences";
@@ -47,6 +52,11 @@ export {
   DEFAULT_VISIBLE,
   loadVisibleColumns,
   saveVisibleColumns,
+  loadTableSortPreferences,
+  saveTableSortPreferences,
+  resetTableSortPreferences,
+  SORT_KEY_STORAGE,
+  SORT_ASC_STORAGE,
 };
 export type { ColumnKey, ColumnDef };
 
@@ -128,6 +138,10 @@ export interface TorrentTableProps {
   onToggleActive?: () => void;
   visibleColumns?: Set<string>;
   onToggleColumn?: (key: string) => void;
+  sortKey?: ColumnKey | null;
+  sortAsc?: boolean;
+  onSortChange?: (key: ColumnKey | null, asc: boolean) => void;
+  onResetSort?: () => void;
 }
 
 function TorrentTable({
@@ -147,6 +161,10 @@ function TorrentTable({
   onToggleActive,
   visibleColumns: propVisibleColumns,
   onToggleColumn: propToggleColumn,
+  sortKey: propSortKey,
+  sortAsc: propSortAsc,
+  onSortChange: propOnSortChange,
+  onResetSort: propOnResetSort,
 }: TorrentTableProps) {
   const { t } = useTranslation();
   const { data: torrents, isLoading, isError } = useTorrents();
@@ -157,8 +175,24 @@ function TorrentTable({
   const announceTorrent = useAnnounceTorrent();
   const recheckTorrent = useRecheckTorrent();
   const moveTorrentQueue = useMoveTorrentQueue();
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortAsc, setSortAsc] = useState(true);
+
+  const [internalSortKey, setInternalSortKey] = useState<SortKey | null>(
+    () => loadTableSortPreferences().sortKey,
+  );
+  const [internalSortAsc, setInternalSortAsc] = useState<boolean>(
+    () => loadTableSortPreferences().sortAsc,
+  );
+
+  const sortKey = propSortKey !== undefined ? propSortKey : internalSortKey;
+  const sortAsc = propSortAsc !== undefined ? propSortAsc : internalSortAsc;
+
+  const handleResetSort = useCallback(() => {
+    setInternalSortKey(null);
+    setInternalSortAsc(true);
+    resetTableSortPreferences();
+    propOnResetSort?.();
+    propOnSortChange?.(null, true);
+  }, [propOnResetSort, propOnSortChange]);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
   const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
@@ -524,20 +558,33 @@ function TorrentTable({
   }
 
   function handleSort(key: SortKey) {
+    let nextKey: SortKey | null = key;
+    let nextAsc = true;
+
     if (sortKey === key) {
       if (sortAsc) {
-        setSortAsc(false);
+        nextKey = key;
+        nextAsc = false;
       } else {
-        setSortKey(null);
-        setSortAsc(true);
+        nextKey = null;
+        nextAsc = true;
       }
     } else {
-      setSortKey(key);
-      setSortAsc(true);
+      nextKey = key;
+      nextAsc = true;
     }
+
+    setInternalSortKey(nextKey);
+    setInternalSortAsc(nextAsc);
+    saveTableSortPreferences(nextKey, nextAsc);
+    propOnSortChange?.(nextKey, nextAsc);
   }
 
-  const columns = ALL_COLUMNS.filter((col) => visibleColumns.has(col.key));
+  const columns = useMemo(() => {
+    const matched = ALL_COLUMNS.filter((col) => visibleColumns.has(col.key));
+    if (matched.length > 0) return matched;
+    return ALL_COLUMNS.filter((col) => DEFAULT_VISIBLE.has(col.key));
+  }, [visibleColumns]);
 
   if (isLoading) {
     return (
@@ -968,6 +1015,7 @@ function TorrentTable({
           allColumns={ALL_COLUMNS}
           onClose={closeContextMenu}
           onToggleColumn={toggleColumn}
+          onResetSort={handleResetSort}
           onStart={(id) => startSeeding.mutate(id)}
           onStop={(id) => stopSeeding.mutate(id)}
           onUpdate={(torrent) => updateTorrent.mutate(torrent)}
