@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -24,16 +25,19 @@ public class AuthController : ControllerBase
     private readonly IIdentityProviderService _identityProviderService;
     private readonly IConfigFileProvider _configFileProvider;
     private readonly ISessionRevocationService _sessionRevocationService;
+    private readonly ILoginRateLimiter _loginRateLimiter;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public AuthController(
         IIdentityProviderService identityProviderService,
         IConfigFileProvider configFileProvider,
-        ISessionRevocationService sessionRevocationService = null)
+        ISessionRevocationService sessionRevocationService = null,
+        ILoginRateLimiter loginRateLimiter = null)
     {
         _identityProviderService = identityProviderService;
         _configFileProvider = configFileProvider;
         _sessionRevocationService = sessionRevocationService;
+        _loginRateLimiter = loginRateLimiter ?? new LoginRateLimiter();
     }
 
     [HttpGet("providers")]
@@ -77,6 +81,25 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<CurrentUserResource>> Login([FromBody] LoginRequestResource request, [FromQuery] string returnUrl = null)
     {
+        var clientIp = GetClientIpAddress();
+        if (_loginRateLimiter != null && _loginRateLimiter.IsRateLimited(clientIp, out var retryAfter))
+        {
+            var retryAfterSeconds = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds));
+            if (Response != null)
+            {
+                Response.Headers["Retry-After"] = retryAfterSeconds.ToString();
+            }
+
+            _logger.Warn("Login attempt blocked by rate limit for IP: {0}. Retry after {1} seconds.", clientIp, retryAfterSeconds);
+
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                error = "Too many failed login attempts. Please try again later.",
+                message = "Too many failed login attempts. Please try again later.",
+                retryAfter = retryAfterSeconds,
+            });
+        }
+
         if (request == null || string.IsNullOrWhiteSpace(request.Password))
         {
             return BadRequest(new { error = "Password or API key is required" });
@@ -91,9 +114,12 @@ public class AuthController : ControllerBase
 
         if (!isValid)
         {
+            _loginRateLimiter?.RecordFailedAttempt(clientIp);
             await Task.Delay(300);
             return Unauthorized(new { error = "Invalid credentials. Please verify your username and password or API key." });
         }
+
+        _loginRateLimiter?.RecordSuccessfulLogin(clientIp);
 
         var usernameMatchesApiKey = !string.IsNullOrWhiteSpace(masterApiKey) && FixedTimeEquals(enteredUser, masterApiKey);
         var username = string.IsNullOrWhiteSpace(enteredUser) || usernameMatchesApiKey
@@ -312,6 +338,91 @@ public class AuthController : ControllerBase
         }
 
         return string.Empty;
+    }
+
+    public string GetClientIpAddress()
+    {
+        if (HttpContext == null)
+        {
+            return "127.0.0.1";
+        }
+
+        if (Request?.Headers != null && Request.Headers.TryGetValue("X-Forwarded-For", out var xffValues))
+        {
+            var raw = xffValues.ToString();
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                var first = raw.Split(',')[0].Trim();
+                if (!string.IsNullOrWhiteSpace(first))
+                {
+                    var parsed = CleanAndValidateIp(first);
+                    if (!string.IsNullOrWhiteSpace(parsed))
+                    {
+                        return parsed;
+                    }
+                }
+            }
+        }
+
+        if (Request?.Headers != null && Request.Headers.TryGetValue("X-Real-IP", out var realIpValues))
+        {
+            var raw = realIpValues.ToString();
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                var parsed = CleanAndValidateIp(raw.Trim());
+                if (!string.IsNullOrWhiteSpace(parsed))
+                {
+                    return parsed;
+                }
+            }
+        }
+
+        var remoteIp = HttpContext.Connection?.RemoteIpAddress;
+        if (remoteIp != null)
+        {
+            var effective = remoteIp.IsIPv4MappedToIPv6 ? remoteIp.MapToIPv4() : remoteIp;
+            return effective.ToString();
+        }
+
+        return "127.0.0.1";
+    }
+
+    public static string CleanAndValidateIp(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return null;
+        }
+
+        var candidate = input.Trim();
+
+        if (candidate.StartsWith("[", StringComparison.Ordinal) && candidate.Contains(']'))
+        {
+            var closeIdx = candidate.IndexOf(']');
+            var inner = candidate.Substring(1, closeIdx - 1);
+            if (IPAddress.TryParse(inner, out var parsedIpv6))
+            {
+                return parsedIpv6.ToString();
+            }
+        }
+
+        if (candidate.Count(c => c == ':') == 1)
+        {
+            var colonIdx = candidate.IndexOf(':');
+            var hostPart = candidate.Substring(0, colonIdx);
+            if (IPAddress.TryParse(hostPart, out var parsedIpv4WithPort))
+            {
+                return parsedIpv4WithPort.ToString();
+            }
+        }
+
+        if (IPAddress.TryParse(candidate, out var parsedIp))
+        {
+            var effective = parsedIp.IsIPv4MappedToIPv6 ? parsedIp.MapToIPv4() : parsedIp;
+            return effective.ToString();
+        }
+
+        return null;
     }
 
     private static bool FixedTimeEquals(string a, string b)

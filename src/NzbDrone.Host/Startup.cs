@@ -84,6 +84,7 @@ public class Startup
         services.AddSingleton<ICertificateManager, CertificateManager>();
         services.AddSingleton<IRpcSessionStore, RpcSessionStore>();
         services.AddSingleton<ISessionRevocationService, SessionRevocationService>();
+        services.AddSingleton<ILoginRateLimiter, LoginRateLimiter>();
 
         var configFileProvider = this._container.Resolve<IConfigFileProvider>();
         if (configFileProvider.EnableSsl && configFileProvider.RedirectHttpToHttps)
