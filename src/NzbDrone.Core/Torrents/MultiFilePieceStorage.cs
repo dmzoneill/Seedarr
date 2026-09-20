@@ -175,7 +175,7 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage
         }
     }
 
-    private static int ReadSlice(SafeFileHandle handle, Memory<byte> destinationBuffer, TorrentSlice slice, int sliceLen)
+    private static int ReadSlice(SafeFileHandle handle, Memory<byte> destinationBuffer, FileSlice slice, int sliceLen)
     {
         var fileLength = RandomAccess.GetLength(handle);
         if (slice.FileOffset >= fileLength)

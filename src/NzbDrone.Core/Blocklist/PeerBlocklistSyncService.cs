@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using NLog;
 using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Blocklist;

@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.IO;
+using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 
 namespace NzbDrone.Core.Datastore;

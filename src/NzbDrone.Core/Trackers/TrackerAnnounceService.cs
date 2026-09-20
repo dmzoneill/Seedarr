@@ -542,6 +542,18 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             entry.ErrorMessage = null;
             entry.WarningMessage = null;
             _trackerEntryService.Update(entry);
+            var allEntries = _trackerEntryService?.GetByTorrentId(torrent.Id);
+            if (allEntries != null && allEntries.Count > 0)
+            {
+                torrent.Seeders = Math.Max(response.Complete, allEntries.Where(e => e.Enabled).Select(e => e.Seeders).DefaultIfEmpty(0).Max());
+                torrent.Leechers = Math.Max(response.Incomplete, allEntries.Where(e => e.Enabled).Select(e => e.Leechers).DefaultIfEmpty(0).Max());
+            }
+            else
+            {
+                torrent.Seeders = response.Complete;
+                torrent.Leechers = response.Incomplete;
+            }
+            _torrentService?.Update(torrent);
             _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Working));
 
             result.AnnounceInterval = interval;
