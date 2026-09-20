@@ -18,6 +18,7 @@ using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers.Encryption;
+using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
 
@@ -62,6 +63,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private readonly ConcurrentDictionary<string, Torrent> _torrentCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte[]> _metadataCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, SwarmPieceHistogram> _swarmHistograms = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ISuperSeedingTracker> _superSeedingTrackers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ISuperSeedingTracker _superSeedingTracker;
     private readonly Logger _logger;
     private readonly object _listenerLock = new();
     private readonly SemaphoreSlim _rebindSignal = new(0, 1);
@@ -105,6 +108,52 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
 
         return _swarmHistograms.GetOrAdd(infoHash, _ => new SwarmPieceHistogram(pieceCount));
+    }
+
+    private static string GetPeerKey(PeerConnection connection)
+    {
+        if (connection == null)
+        {
+            return string.Empty;
+        }
+
+        return !string.IsNullOrEmpty(connection.PeerId)
+            ? connection.PeerId
+            : $"{connection.RemoteIp}:{connection.RemotePort}";
+    }
+
+    public ISuperSeedingTracker GetSuperSeedingTracker(string infoHash, int pieceCount = 0)
+    {
+        if (_superSeedingTracker != null)
+        {
+            return _superSeedingTracker;
+        }
+
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return null;
+        }
+
+        return _superSeedingTrackers.GetOrAdd(infoHash, _ =>
+        {
+            var count = pieceCount > 0 ? pieceCount : (GetCachedTorrent(infoHash)?.PieceCount ?? 0);
+            return new SuperSeedingTracker(count);
+        });
+    }
+
+    private ISuperSeedingTracker GetOrCreateTracker(Torrent torrent)
+    {
+        if (_superSeedingTracker != null)
+        {
+            return _superSeedingTracker;
+        }
+
+        if (torrent == null || string.IsNullOrEmpty(torrent.InfoHash))
+        {
+            return null;
+        }
+
+        return _superSeedingTrackers.GetOrAdd(torrent.InfoHash, _ => new SuperSeedingTracker(torrent.PieceCount));
     }
 
     public bool BindFailed { get; private set; }
@@ -253,7 +302,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         Extensions.IPeerExchange peerExchange = null,
         PiecePicker.PiecePicker piecePicker = null,
         IPieceStorage pieceStorage = null,
-        Extensions.IPexService pexService = null)
+        Extensions.IPexService pexService = null,
+        ISuperSeedingTracker superSeedingTracker = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -279,6 +329,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _sequentialPicker = new PiecePicker.SequentialPiecePicker(_rarestFirstPicker, _random);
         _piecePicker = piecePicker ?? new PiecePicker.PiecePicker(_sequentialPicker, _rarestFirstPicker);
         _pieceStorage = pieceStorage;
+        _superSeedingTracker = superSeedingTracker;
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -1854,6 +1905,13 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             _fastExtensionHandler?.UnregisterPeer(connection);
             _chokeManager?.PeerDisconnected(connection);
             _connectionManager.Remove(connection);
+            var sessionInfoHash = connection.MatchedTorrent?.InfoHash ?? connection.InfoHash;
+            if (!string.IsNullOrEmpty(sessionInfoHash))
+            {
+                var tracker = GetSuperSeedingTracker(sessionInfoHash);
+                tracker?.OnPeerDisconnected(GetPeerKey(connection));
+            }
+
             if (connection.PeerPieces != null)
             {
                 var infoHash = connection.MatchedTorrent?.InfoHash ?? connection.InfoHash;
@@ -2410,28 +2468,25 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
                         if (torrent.SuperSeeding)
                         {
-                            if (connection.AssignedSuperSeedingPiece == pieceIndex)
+                            var tracker = GetOrCreateTracker(torrent);
+                            var peerKey = GetPeerKey(connection);
+                            if (tracker != null)
                             {
-                                connection.AssignedSuperSeedingPiece = null;
-                                if (!connection.AmChoking)
+                                var result = tracker.RecordPieceHave(peerKey, pieceIndex);
+                                if (result.NewlyPropagated && !string.IsNullOrEmpty(result.FreedPeerId))
                                 {
-                                    AllocateAndRevealSuperSeedingPiece(connection, torrent);
-                                }
-                            }
-                            else
-                            {
-                                var peers = _connectionManager?.GetConnections(torrent.InfoHash);
-                                if (peers != null)
-                                {
-                                    foreach (var peer in peers)
+                                    var peers = _connectionManager?.GetConnections(torrent.InfoHash);
+                                    var freedPeer = peers?.FirstOrDefault(p => p != null && GetPeerKey(p) == result.FreedPeerId);
+                                    if (freedPeer != null && !freedPeer.AmChoking)
                                     {
-                                        if (peer != null && !peer.AmChoking && peer.AssignedSuperSeedingPiece == pieceIndex)
-                                        {
-                                            peer.AssignedSuperSeedingPiece = null;
-                                            AllocateAndRevealSuperSeedingPiece(peer, torrent);
-                                        }
+                                        AllocateAndRevealSuperSeedingPiece(freedPeer, torrent);
                                     }
                                 }
+                            }
+
+                            if (!connection.AmChoking && connection.AssignedSuperSeedingPiece == null)
+                            {
+                                AllocateAndRevealSuperSeedingPiece(connection, torrent);
                             }
                         }
                     }
@@ -2475,18 +2530,23 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
                     if (torrent.SuperSeeding)
                     {
-                        var peers = _connectionManager?.GetConnections(torrent.InfoHash);
-                        if (peers != null)
+                        var tracker = GetOrCreateTracker(torrent);
+                        var peerKey = GetPeerKey(connection);
+                        if (tracker != null)
                         {
-                            foreach (var peer in peers)
+                            var propagations = tracker.RecordPeerBitfield(peerKey, connection.PeerPieces);
+                            if (propagations != null && propagations.Count > 0)
                             {
-                                if (peer != null && !peer.AmChoking && peer.AssignedSuperSeedingPiece.HasValue)
+                                var peers = _connectionManager?.GetConnections(torrent.InfoHash);
+                                foreach (var prop in propagations)
                                 {
-                                    var assigned = peer.AssignedSuperSeedingPiece.Value;
-                                    if (connection.PeerPieces != null && assigned < connection.PeerPieces.Length && connection.PeerPieces[assigned])
+                                    if (prop.NewlyPropagated && !string.IsNullOrEmpty(prop.FreedPeerId))
                                     {
-                                        peer.AssignedSuperSeedingPiece = null;
-                                        AllocateAndRevealSuperSeedingPiece(peer, torrent);
+                                        var freedPeer = peers?.FirstOrDefault(p => p != null && GetPeerKey(p) == prop.FreedPeerId);
+                                        if (freedPeer != null && !freedPeer.AmChoking)
+                                        {
+                                            AllocateAndRevealSuperSeedingPiece(freedPeer, torrent);
+                                        }
                                     }
                                 }
                             }
@@ -2563,6 +2623,21 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     {
                         connection.PendingRequestCount++;
                         HandlePieceRequest(connection, message.Payload);
+
+                        if (torrent != null && torrent.SuperSeeding && message.Payload?.Length >= 12)
+                        {
+                            var length = (int)(((uint)message.Payload[8] << 24) | ((uint)message.Payload[9] << 16) | ((uint)message.Payload[10] << 8) | message.Payload[11]);
+                            connection.AssignedPieceBytesUploaded += length;
+                            var pieceSize = (torrent.PieceLength > 0 && torrent.TotalSize > 0 && pieceIndex == torrent.PieceCount - 1)
+                                ? (int)(torrent.TotalSize - ((long)pieceIndex * torrent.PieceLength))
+                                : (torrent.PieceLength > 0 ? torrent.PieceLength : 16384);
+
+                            if (connection.AssignedPieceBytesUploaded >= pieceSize)
+                            {
+                                var tracker = GetOrCreateTracker(torrent);
+                                tracker?.RecordPieceUploaded(GetPeerKey(connection), pieceIndex);
+                            }
+                        }
                     }
                     else
                     {
@@ -3055,87 +3130,27 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             return false;
         }
 
-        if (connection.AssignedSuperSeedingPiece.HasValue)
+        var tracker = GetOrCreateTracker(torrent);
+        var peerKey = GetPeerKey(connection);
+
+        if (tracker != null)
         {
-            var currentPiece = connection.AssignedSuperSeedingPiece.Value;
-            var peerHasPiece = connection.PeerPieces != null &&
-                               currentPiece < connection.PeerPieces.Length &&
-                               connection.PeerPieces[currentPiece];
-
-            if (!peerHasPiece)
+            if (!tracker.IsPeerEligible(peerKey))
             {
-                return true;
+                return false;
             }
 
-            connection.AssignedSuperSeedingPiece = null;
-        }
-
-        var peers = _connectionManager?.GetConnections(torrent.InfoHash) ?? new List<PeerConnection>();
-        var assignedPieces = new HashSet<int>();
-        foreach (var p in peers)
-        {
-            if (p != null && p != connection && p.AssignedSuperSeedingPiece.HasValue)
+            if (!tracker.TryAllocatePiece(peerKey, connection.PeerPieces, out var chosenPiece))
             {
-                assignedPieces.Add(p.AssignedSuperSeedingPiece.Value);
-            }
-        }
-
-        int? chosenPiece = null;
-        var minSwarmCopies = int.MaxValue;
-
-        for (var i = 0; i < torrent.PieceCount; i++)
-        {
-            if (connection.PeerPieces != null && i < connection.PeerPieces.Length && connection.PeerPieces[i])
-            {
-                continue;
+                return false;
             }
 
-            var swarmCopies = 0;
-            foreach (var p in peers)
-            {
-                if (p != null && p != connection && p.PeerPieces != null && i < p.PeerPieces.Length && p.PeerPieces[i])
-                {
-                    swarmCopies++;
-                }
-            }
-
-            if (!assignedPieces.Contains(i))
-            {
-                if (swarmCopies == 0)
-                {
-                    chosenPiece = i;
-                    break;
-                }
-
-                if (swarmCopies < minSwarmCopies)
-                {
-                    minSwarmCopies = swarmCopies;
-                    chosenPiece = i;
-                }
-            }
-        }
-
-        if (!chosenPiece.HasValue)
-        {
-            for (var i = 0; i < torrent.PieceCount; i++)
-            {
-                if (connection.PeerPieces != null && i < connection.PeerPieces.Length && connection.PeerPieces[i])
-                {
-                    continue;
-                }
-
-                chosenPiece = i;
-                break;
-            }
-        }
-
-        if (chosenPiece.HasValue)
-        {
-            connection.AssignedSuperSeedingPiece = chosenPiece.Value;
-            connection.SendHave(chosenPiece.Value);
+            connection.AssignedSuperSeedingPiece = chosenPiece;
+            connection.AssignedPieceBytesUploaded = 0;
+            connection.SendHave(chosenPiece);
             _logger.Debug(
                 "Super-seeding: revealed piece {0} to peer {1}:{2} on torrent {3}",
-                chosenPiece.Value,
+                chosenPiece,
                 connection.RemoteIp,
                 connection.RemotePort,
                 torrent.Name ?? torrent.InfoHash);
@@ -3143,5 +3158,93 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
 
         return false;
+    }
+
+    public List<SelfishLeecherResult> CheckSuperSeedingTimeouts(Torrent torrent = null, DateTime? now = null)
+    {
+        var allTimeouts = new List<SelfishLeecherResult>();
+
+        if (torrent != null)
+        {
+            if (!torrent.SuperSeeding || string.IsNullOrEmpty(torrent.InfoHash))
+            {
+                return allTimeouts;
+            }
+
+            var tracker = GetOrCreateTracker(torrent);
+            if (tracker != null)
+            {
+                var timeouts = tracker.CheckTimeouts(now);
+                if (timeouts != null && timeouts.Count > 0)
+                {
+                    ProcessSelfishLeechers(timeouts, torrent);
+                    allTimeouts.AddRange(timeouts);
+                }
+            }
+        }
+        else
+        {
+            foreach (var kvp in _superSeedingTrackers)
+            {
+                var infoHash = kvp.Key;
+                var tracker = kvp.Value;
+                var cachedTorrent = GetCachedTorrent(infoHash);
+                if (cachedTorrent != null && cachedTorrent.SuperSeeding)
+                {
+                    var timeouts = tracker.CheckTimeouts(now);
+                    if (timeouts != null && timeouts.Count > 0)
+                    {
+                        ProcessSelfishLeechers(timeouts, cachedTorrent);
+                        allTimeouts.AddRange(timeouts);
+                    }
+                }
+            }
+        }
+
+        return allTimeouts;
+    }
+
+    private void ProcessSelfishLeechers(List<SelfishLeecherResult> timeouts, Torrent torrent)
+    {
+        var peers = _connectionManager?.GetConnections(torrent.InfoHash);
+        foreach (var timeout in timeouts)
+        {
+            var peer = peers?.FirstOrDefault(p => p != null && GetPeerKey(p) == timeout.PeerId);
+            if (peer != null)
+            {
+                peer.AmChoking = true;
+                peer.AssignedSuperSeedingPiece = null;
+                peer.AssignedPieceBytesUploaded = 0;
+                try
+                {
+                    peer.SendMessage(new PeerMessage { Type = PeerMessageType.Choke });
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Error sending choke message to selfish peer {0}", timeout.PeerId);
+                }
+
+                _logger.Warn(
+                    "Super-seeding: choked selfish peer {0} on torrent {1} after holding piece {2} for {3:F1}s without propagation",
+                    timeout.PeerId,
+                    torrent.Name ?? torrent.InfoHash,
+                    timeout.PieceIndex,
+                    timeout.HeldDuration.TotalSeconds);
+            }
+
+            if (peers != null)
+            {
+                foreach (var otherPeer in peers)
+                {
+                    if (otherPeer != null && otherPeer != peer && !otherPeer.AmChoking && otherPeer.AssignedSuperSeedingPiece == null)
+                    {
+                        if (AllocateAndRevealSuperSeedingPiece(otherPeer, torrent))
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
 }

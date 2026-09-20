@@ -123,6 +123,7 @@ public class PeerConnection : IDisposable
     public bool IsSnubbed { get; set; }
     public bool IsOptimisticUnchoked { get; set; }
     public int? AssignedSuperSeedingPiece { get; set; }
+    public int AssignedPieceBytesUploaded { get; set; }
     public const int RateWindowSeconds = 20;
 
     private readonly object _rateLock = new();

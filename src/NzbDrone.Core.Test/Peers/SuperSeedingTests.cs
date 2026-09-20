@@ -427,11 +427,12 @@ public class SuperSeedingTests
     }
 
     [Test]
-    public void HandleMessage_have_from_peer_advances_peer_to_next_piece()
+    public void HandleMessage_have_from_peer_advances_peer_to_next_piece_only_after_propagation()
     {
-        var (clientConn, serverConn) = CreateTestPair();
-        serverConn.AmChoking = false;
-        serverConn.AssignedSuperSeedingPiece = 0;
+        var (client1, server1) = CreateTestPair();
+        var (client2, server2) = CreateTestPair();
+        server1.AmChoking = false;
+        server2.AmChoking = false;
 
         var torrent = new Torrent
         {
@@ -442,29 +443,96 @@ public class SuperSeedingTests
             Progress = 1.0,
             SuperSeeding = true
         };
-        serverConn.MatchedTorrent = torrent;
+        server1.MatchedTorrent = torrent;
+        server2.MatchedTorrent = torrent;
 
-        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { serverConn });
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { server1, server2 });
 
-        // Peer announces HAVE(0)
-        var havePayload = new byte[4];
-        BinaryPrimitives.WriteInt32BigEndian(havePayload, 0);
-        var haveMsg = new PeerMessage
+        // Initially allocate piece 0 to server1
+        _server.AllocateAndRevealSuperSeedingPiece(server1, torrent);
+        Assert.That(server1.AssignedSuperSeedingPiece, Is.EqualTo(0));
+        var initialMsg = client1.ReceiveMessage();
+        Assert.That(initialMsg?.Type, Is.EqualTo(PeerMessageType.Have));
+        Assert.That(BinaryPrimitives.ReadInt32BigEndian(initialMsg.Payload), Is.EqualTo(0));
+
+        // Server1 announces HAVE(0) (reporting it has downloaded it)
+        var have0Payload = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(have0Payload, 0);
+        var have0Msg = new PeerMessage
         {
             Type = PeerMessageType.Have,
-            Payload = havePayload,
+            Payload = have0Payload,
             PayloadLength = 4
         };
 
-        _server.HandleMessage(serverConn, haveMsg, torrent);
+        _server.HandleMessage(server1, have0Msg, torrent);
 
-        // Peer should be advanced to next unseeded piece (piece 1)
-        Assert.That(serverConn.AssignedSuperSeedingPiece, Is.EqualTo(1));
+        // Server1 should NOT be advanced yet because piece 0 has not propagated to any other peer
+        Assert.That(server1.AssignedSuperSeedingPiece, Is.EqualTo(0));
 
-        var received = clientConn.ReceiveMessage();
-        Assert.That(received, Is.Not.Null);
-        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Have));
-        var nextPiece = BinaryPrimitives.ReadInt32BigEndian(received.Payload);
+        // Now Server2 (a secondary peer in the swarm) announces HAVE(0)
+        _server.HandleMessage(server2, have0Msg, torrent);
+
+        // Now that Server2 announced HAVE(0), piece 0 has propagated!
+        // Server1 should be advanced to its next piece (piece 1)
+        Assert.That(server1.AssignedSuperSeedingPiece, Is.EqualTo(1));
+
+        var advanceMsg = client1.ReceiveMessage();
+        Assert.That(advanceMsg, Is.Not.Null);
+        Assert.That(advanceMsg.Type, Is.EqualTo(PeerMessageType.Have));
+        var nextPiece = BinaryPrimitives.ReadInt32BigEndian(advanceMsg.Payload);
         Assert.That(nextPiece, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CheckSuperSeedingTimeouts_chokes_selfish_peer_and_reassigns_piece()
+    {
+        var (client1, server1) = CreateTestPair();
+        var (client2, server2) = CreateTestPair();
+        server1.AmChoking = false;
+        server2.AmChoking = false;
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+        server1.MatchedTorrent = torrent;
+        server2.MatchedTorrent = torrent;
+
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { server1, server2 });
+
+        // Allocate piece 0 to server1
+        _server.AllocateAndRevealSuperSeedingPiece(server1, torrent);
+        Assert.That(server1.AssignedSuperSeedingPiece, Is.EqualTo(0));
+        _ = client1.ReceiveMessage(); // Consume HAVE(0)
+
+        // Server1 downloads piece 0
+        var tracker = _server.GetSuperSeedingTracker(torrent.InfoHash);
+        var startTime = new DateTime(2026, 9, 20, 10, 0, 0, DateTimeKind.Utc);
+        tracker.RecordPieceUploaded(server1.PeerId ?? $"{server1.RemoteIp}:{server1.RemotePort}", 0, startTime);
+
+        // Trigger timeout at 95 seconds
+        var timeouts = _server.CheckSuperSeedingTimeouts(torrent, startTime.AddSeconds(95));
+        Assert.That(timeouts.Count, Is.EqualTo(1));
+        Assert.That(timeouts[0].PieceIndex, Is.EqualTo(0));
+
+        // Server1 should now be choked, and piece 0 reassigned to server2
+        Assert.That(server1.AmChoking, Is.True);
+        Assert.That(server1.AssignedSuperSeedingPiece, Is.Null);
+        Assert.That(server2.AssignedSuperSeedingPiece, Is.EqualTo(0));
+
+        var chokeMsg = client1.ReceiveMessage();
+        Assert.That(chokeMsg, Is.Not.Null);
+        Assert.That(chokeMsg.Type, Is.EqualTo(PeerMessageType.Choke));
+
+        var haveMsg = client2.ReceiveMessage();
+        Assert.That(haveMsg, Is.Not.Null);
+        Assert.That(haveMsg.Type, Is.EqualTo(PeerMessageType.Have));
+        Assert.That(BinaryPrimitives.ReadInt32BigEndian(haveMsg.Payload), Is.EqualTo(0));
     }
 }
