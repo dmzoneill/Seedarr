@@ -312,4 +312,26 @@ public class SystemControllerTest
         Assert.That(status.MaxFileDescriptors, Is.EqualTo(1024));
         Assert.That(status.FileDescriptorUsagePercentage, Is.EqualTo(33.2));
     }
+
+    [Test]
+    public void GetStatus_populates_OsArchitecture_and_CommitHash()
+    {
+        var originalCommit = BuildInfo.CommitHash;
+        try
+        {
+            BuildInfo.CommitHash = "testcommithash123";
+            var actionResult = _controller.GetStatus();
+
+            var okResult = actionResult.Result as OkObjectResult;
+            Assert.That(okResult, Is.Not.Null);
+            var status = okResult.Value as SystemResource;
+            Assert.That(status, Is.Not.Null);
+            Assert.That(status.OsArchitecture, Is.EqualTo(System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString()));
+            Assert.That(status.CommitHash, Is.EqualTo("testcommithash123"));
+        }
+        finally
+        {
+            BuildInfo.CommitHash = originalCommit;
+        }
+    }
 }

@@ -29,6 +29,16 @@ public class SystemResource : RestResource
     public string OsVersion { get; set; }
 
     /// <summary>
+    /// Gets or sets the operating system architecture.
+    /// </summary>
+    public string OsArchitecture { get; set; }
+
+    /// <summary>
+    /// Gets or sets the git commit hash.
+    /// </summary>
+    public string CommitHash { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the OS is Windows.
     /// </summary>
     public bool IsWindows { get; set; }

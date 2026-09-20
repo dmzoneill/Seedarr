@@ -250,6 +250,8 @@ export interface SystemStatus {
   startTime: string;
   osName: string;
   osVersion: string;
+  osArchitecture?: string;
+  commitHash?: string;
   runtimeVersion: string;
   runtimeName: string;
   isDocker: boolean;
