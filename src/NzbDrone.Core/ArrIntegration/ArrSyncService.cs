@@ -4,6 +4,7 @@ using System.Linq;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.ArrIntegration;
@@ -34,6 +35,7 @@ public class ArrSyncService : IArrSyncService
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly IConfigService _configService;
+    private readonly IRemotePathMappingService _remotePathMappingService;
     private readonly Logger _logger;
 
     public ArrSyncService(
@@ -43,7 +45,8 @@ public class ArrSyncService : IArrSyncService
         IArrMetadataEnricherService metadataEnricherService = null,
         ITrackerEntryService trackerEntryService = null,
         IDownloadClientFactory downloadClientFactory = null,
-        IConfigService configService = null)
+        IConfigService configService = null,
+        IRemotePathMappingService remotePathMappingService = null)
     {
         _connectionFactory = connectionFactory;
         _torrentService = torrentService;
@@ -52,6 +55,7 @@ public class ArrSyncService : IArrSyncService
         _trackerEntryService = trackerEntryService;
         _downloadClientFactory = downloadClientFactory;
         _configService = configService;
+        _remotePathMappingService = remotePathMappingService ?? new RemotePathMappingService();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -92,6 +96,20 @@ public class ArrSyncService : IArrSyncService
                     {
                         continue;
                     }
+
+                    var host = !string.IsNullOrWhiteSpace(definition.Url)
+                        ? RemotePathMappingService.ExtractIpOrHostname(definition.Url)
+                        : definition.Name;
+
+                    string translatedPath = null;
+                    if (!string.IsNullOrWhiteSpace(record.OutputPath) && _remotePathMappingService != null)
+                    {
+                        translatedPath = _remotePathMappingService.RemapRemoteToLocal(host, record.OutputPath);
+                    }
+
+                    var effectiveSavePath = !string.IsNullOrWhiteSpace(translatedPath)
+                        ? translatedPath
+                        : (definition.SavePath ?? _configService?.WatchFolderPath);
 
                     if (existingHashes.Contains(record.InfoHash.ToLowerInvariant()))
                     {
@@ -138,7 +156,8 @@ public class ArrSyncService : IArrSyncService
                                 DateAdded = DateTime.UtcNow,
                                 Status = TorrentStatus.Queued,
                                 Category = definition.Category ?? definition.ArrType?.ToLowerInvariant(),
-                                SavePath = definition.SavePath ?? _configService?.WatchFolderPath
+                                SavePath = effectiveSavePath,
+                                SourcePath = translatedPath
                             };
 
                             var hist = _downloadHistoryService.RecordTorrentAdded(
@@ -177,7 +196,8 @@ public class ArrSyncService : IArrSyncService
                         DateAdded = DateTime.UtcNow,
                         Status = TorrentStatus.Queued,
                         Category = definition.Category ?? definition.ArrType?.ToLowerInvariant(),
-                        SavePath = definition.SavePath ?? _configService?.WatchFolderPath
+                        SavePath = effectiveSavePath,
+                        SourcePath = translatedPath
                     };
 
                     _torrentService.Add(torrent);

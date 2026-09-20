@@ -5,6 +5,7 @@ namespace NzbDrone.Core.RemotePathMappings;
 public interface IRemotePathMappingService
 {
     List<RemotePathMapping> All();
+    List<RemotePathMapping> GetAll();
     RemotePathMapping Get(int id);
     RemotePathMapping Add(RemotePathMapping mapping);
     void Update(RemotePathMapping mapping);

@@ -8,13 +8,22 @@ namespace NzbDrone.Core.RemotePathMappings;
 
 public class RemotePathMappingService : IRemotePathMappingService
 {
+    private readonly IRemotePathMappingRepository _repository;
     private readonly List<RemotePathMapping> _mappings = new();
     private readonly object _lock = new();
     private readonly ICallerHostResolver _callerHostResolver;
     private int _nextId = 1;
 
     public RemotePathMappingService(
-        IEnumerable<RemotePathMapping> initialMappings = null,
+        IRemotePathMappingRepository repository,
+        ICallerHostResolver callerHostResolver = null)
+    {
+        _repository = repository;
+        _callerHostResolver = callerHostResolver ?? new CallerHostResolver();
+    }
+
+    public RemotePathMappingService(
+        IEnumerable<RemotePathMapping> initialMappings,
         ICallerHostResolver callerHostResolver = null)
     {
         _callerHostResolver = callerHostResolver ?? new CallerHostResolver();
@@ -27,16 +36,36 @@ public class RemotePathMappingService : IRemotePathMappingService
         }
     }
 
+    public RemotePathMappingService()
+        : this((IEnumerable<RemotePathMapping>)null, null)
+    {
+    }
+
     public List<RemotePathMapping> All()
     {
+        if (_repository != null)
+        {
+            return _repository.All().ToList();
+        }
+
         lock (_lock)
         {
             return _mappings.Select(Clone).ToList();
         }
     }
 
+    public List<RemotePathMapping> GetAll()
+    {
+        return All();
+    }
+
     public RemotePathMapping Get(int id)
     {
+        if (_repository != null)
+        {
+            return _repository.Get(id);
+        }
+
         lock (_lock)
         {
             var mapping = _mappings.FirstOrDefault(m => m.Id == id);
@@ -49,6 +78,11 @@ public class RemotePathMappingService : IRemotePathMappingService
         if (mapping == null)
         {
             throw new ArgumentNullException(nameof(mapping));
+        }
+
+        if (_repository != null)
+        {
+            return _repository.Insert(mapping);
         }
 
         lock (_lock)
@@ -67,6 +101,12 @@ public class RemotePathMappingService : IRemotePathMappingService
             throw new ArgumentNullException(nameof(mapping));
         }
 
+        if (_repository != null)
+        {
+            _repository.Update(mapping);
+            return;
+        }
+
         lock (_lock)
         {
             var index = _mappings.FindIndex(m => m.Id == mapping.Id);
@@ -79,6 +119,12 @@ public class RemotePathMappingService : IRemotePathMappingService
 
     public void Delete(int id)
     {
+        if (_repository != null)
+        {
+            _repository.Delete(id);
+            return;
+        }
+
         lock (_lock)
         {
             _mappings.RemoveAll(m => m.Id == id);
@@ -338,57 +384,55 @@ public class RemotePathMappingService : IRemotePathMappingService
         var cleanHost = ExtractIpOrHostname(rawHost);
         var resolvedHost = _callerHostResolver?.TryResolveHostname(cleanHost);
 
-        lock (_lock)
+        var mappings = All();
+        var scoredList = new List<(RemotePathMapping Mapping, int Priority, int PrefixLength)>();
+
+        foreach (var m in mappings)
         {
-            var scoredList = new List<(RemotePathMapping Mapping, int Priority, int PrefixLength)>();
-
-            foreach (var m in _mappings)
+            if (string.IsNullOrWhiteSpace(m.Host) ||
+                string.IsNullOrWhiteSpace(m.RemotePath) ||
+                string.IsNullOrWhiteSpace(m.LocalPath))
             {
-                if (string.IsNullOrWhiteSpace(m.Host) ||
-                    string.IsNullOrWhiteSpace(m.RemotePath) ||
-                    string.IsNullOrWhiteSpace(m.LocalPath))
-                {
-                    continue;
-                }
-
-                var ruleHost = m.Host.Trim();
-                var ruleHostClean = ExtractIpOrHostname(ruleHost);
-                var prefixLength = (isLocalToRemote ? m.LocalPath : m.RemotePath).TrimEnd('/', '\\').Length;
-
-                // Priority 1: Exact Hostname / IP (case-insensitive)
-                if (string.Equals(ruleHost, rawHost, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(ruleHostClean, cleanHost, StringComparison.OrdinalIgnoreCase) ||
-                    (!string.IsNullOrEmpty(resolvedHost) && (
-                        string.Equals(ruleHost, resolvedHost, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(ruleHostClean, resolvedHost, StringComparison.OrdinalIgnoreCase))))
-                {
-                    scoredList.Add((m, 300, prefixLength));
-                    continue;
-                }
-
-                // Priority 2: CIDR Subnet Matching
-                if (IsCidrNotation(ruleHost) && IsIpInCidr(cleanHost, ruleHost))
-                {
-                    var parts = ruleHost.Split('/');
-                    var cidrPrefixLen = int.TryParse(parts[1], out var parsed) ? parsed : 0;
-                    scoredList.Add((m, 200 + cidrPrefixLen, prefixLength));
-                    continue;
-                }
-
-                // Priority 3: Wildcard Fallback (*, default, all)
-                if (IsWildcardHost(ruleHost))
-                {
-                    scoredList.Add((m, 100, prefixLength));
-                }
+                continue;
             }
 
-            return scoredList
-                .OrderByDescending(x => x.Priority)
-                .ThenByDescending(x => x.PrefixLength)
-                .ThenBy(x => x.Mapping.Id)
-                .Select(x => x.Mapping)
-                .ToList();
+            var ruleHost = m.Host.Trim();
+            var ruleHostClean = ExtractIpOrHostname(ruleHost);
+            var prefixLength = (isLocalToRemote ? m.LocalPath : m.RemotePath).TrimEnd('/', '\\').Length;
+
+            // Priority 1: Exact Hostname / IP (case-insensitive)
+            if (string.Equals(ruleHost, rawHost, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(ruleHostClean, cleanHost, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(resolvedHost) && (
+                    string.Equals(ruleHost, resolvedHost, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(ruleHostClean, resolvedHost, StringComparison.OrdinalIgnoreCase))))
+            {
+                scoredList.Add((m, 300, prefixLength));
+                continue;
+            }
+
+            // Priority 2: CIDR Subnet Matching
+            if (IsCidrNotation(ruleHost) && IsIpInCidr(cleanHost, ruleHost))
+            {
+                var parts = ruleHost.Split('/');
+                var cidrPrefixLen = int.TryParse(parts[1], out var parsed) ? parsed : 0;
+                scoredList.Add((m, 200 + cidrPrefixLen, prefixLength));
+                continue;
+            }
+
+            // Priority 3: Wildcard Fallback (*, default, all)
+            if (IsWildcardHost(ruleHost))
+            {
+                scoredList.Add((m, 100, prefixLength));
+            }
         }
+
+        return scoredList
+            .OrderByDescending(x => x.Priority)
+            .ThenByDescending(x => x.PrefixLength)
+            .ThenBy(x => x.Mapping.Id)
+            .Select(x => x.Mapping)
+            .ToList();
     }
 
     public static bool IsPathPrefixMatch(string fullPath, string prefix, StringComparison comparison)
