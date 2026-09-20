@@ -14,6 +14,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Dht;
+using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
@@ -3364,12 +3365,12 @@ public class DhtServiceTest
 
     // ── Helpers ──────────────────────────────────────────────────────
 
-    private void InvokeHandleMessage(byte[] data, IPEndPoint sender)
+    private void InvokeHandleMessage(byte[] data, IPEndPoint sender, DhtService svc = null)
     {
         var method = typeof(DhtService).GetMethod(
             "HandleMessage",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Invoke(_service, new object[] { data, sender });
+        method.Invoke(svc ?? _service, new object[] { data, sender });
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ParseCompactNodes")]
@@ -3462,5 +3463,153 @@ public class DhtServiceTest
         pendingType.GetProperty("SentAt")?.SetValue(pendingInstance, DateTime.UtcNow);
 
         pendingDict[txKey] = pendingInstance;
+    }
+
+    // ── VPN Kill Switch Fail-Closed Protection ────────────────────────
+
+    [Test]
+    public void HandleMessage_should_drop_incoming_packets_when_fail_closed_active()
+    {
+        var vpnKillSwitch = Substitute.For<IVpnKillSwitchService>();
+        vpnKillSwitch.IsFailClosedActive.Returns(true);
+
+        using var service = new DhtService(_configService, vpnKillSwitchService: vpnKillSwitch);
+        service.RoutingTable.AllowLocal = true;
+        SetUdpClient(service);
+
+        var sender = new IPEndPoint(IPAddress.Loopback, 6881);
+        var randomNodeId = DhtSecurity.GenerateNodeId(IPAddress.Loopback);
+        var pingBytes = BuildPingBytesWithNodeId(randomNodeId);
+
+        InvokeHandleMessage(pingBytes, sender, service);
+
+        Assert.That(service.RoutingTable.GetAllNodes(), Is.Empty);
+    }
+
+    [Test]
+    public async Task SendPing_should_halt_outbound_dispatch_when_fail_closed_active()
+    {
+        var vpnKillSwitch = Substitute.For<IVpnKillSwitchService>();
+        vpnKillSwitch.IsFailClosedActive.Returns(true);
+
+        using var service = new DhtService(_configService, vpnKillSwitchService: vpnKillSwitch);
+        SetUdpClient(service);
+
+        var endpoint = new IPEndPoint(IPAddress.Loopback, 6881);
+        await service.SendPing(endpoint);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pending = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pending.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task SendGetPeers_should_halt_outbound_dispatch_when_fail_closed_active()
+    {
+        var vpnKillSwitch = Substitute.For<IVpnKillSwitchService>();
+        vpnKillSwitch.IsFailClosedActive.Returns(true);
+
+        using var service = new DhtService(_configService, vpnKillSwitchService: vpnKillSwitch);
+        SetUdpClient(service);
+
+        var endpoint = new IPEndPoint(IPAddress.Loopback, 6881);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+        await service.SendGetPeers(endpoint, infoHash);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pending = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pending.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task SendAnnouncePeer_should_halt_outbound_dispatch_when_fail_closed_active()
+    {
+        var vpnKillSwitch = Substitute.For<IVpnKillSwitchService>();
+        vpnKillSwitch.IsFailClosedActive.Returns(true);
+
+        using var service = new DhtService(_configService, vpnKillSwitchService: vpnKillSwitch);
+        SetUdpClient(service);
+
+        var endpoint = new IPEndPoint(IPAddress.Loopback, 6881);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+        var token = new byte[] { 1, 2, 3, 4 };
+        await service.SendAnnouncePeer(endpoint, infoHash, 6881, token);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pending = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pending.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task AnnounceTorrent_should_halt_outbound_dispatch_when_fail_closed_active()
+    {
+        var vpnKillSwitch = Substitute.For<IVpnKillSwitchService>();
+        vpnKillSwitch.IsFailClosedActive.Returns(true);
+
+        using var service = new DhtService(_configService, vpnKillSwitchService: vpnKillSwitch);
+        SetUdpClient(service);
+
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+        await service.AnnounceTorrent(infoHash, 6881);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pending = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pending.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task Bootstrap_should_halt_outbound_dispatch_when_fail_closed_active()
+    {
+        var vpnKillSwitch = Substitute.For<IVpnKillSwitchService>();
+        vpnKillSwitch.IsFailClosedActive.Returns(true);
+
+        using var service = new DhtService(_configService, vpnKillSwitchService: vpnKillSwitch);
+        SetUdpClient(service);
+
+        var endpoint = new IPEndPoint(IPAddress.Loopback, 6881);
+        await service.Bootstrap(endpoint);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pending = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pending.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task ProbeNodeAsync_should_return_false_when_fail_closed_active()
+    {
+        var vpnKillSwitch = Substitute.For<IVpnKillSwitchService>();
+        vpnKillSwitch.IsFailClosedActive.Returns(true);
+
+        using var service = new DhtService(_configService, vpnKillSwitchService: vpnKillSwitch);
+        SetUdpClient(service);
+
+        var node = new DhtNode
+        {
+            NodeId = CreateNodeId(0x10),
+            EndPoint = new IPEndPoint(IPAddress.Loopback, 6881),
+            LastSeen = DateTime.UtcNow
+        };
+        var result = await service.ProbeNodeAsync(node);
+
+        Assert.That(result, Is.False);
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pending = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pending.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Handle_VpnKillSwitchTriggeredEvent_should_clear_pending_queries()
+    {
+        using var service = new DhtService(_configService);
+        var endpoint = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02, 0x03, 0x04 }, endpoint, svc: service);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pending = (System.Collections.IDictionary)pendingField.GetValue(service);
+        Assert.That(pending.Count, Is.EqualTo(1));
+
+        service.Handle(new VpnKillSwitchTriggeredEvent("tun0"));
+
+        Assert.That(pending.Count, Is.EqualTo(0));
     }
 }
