@@ -216,4 +216,51 @@ public class MagnetLinkParserTest
         Assert.That(result.WebSeeds, Is.Empty);
         Assert.That(result.UrlList, Is.Empty);
     }
+
+    [Test]
+    public void Parse_should_parse_base32_encoded_infohash_with_padding()
+    {
+        var base32Hash = "ONXW2ZJAMRQXIYJAONXW2ZJAMRQXIYJA====";
+        var magnetUri = $"magnet:?xt=urn:btih:{base32Hash}&dn=Base32Padded";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.InfoHash.Length, Is.EqualTo(40));
+        Assert.That(result.Name, Is.EqualTo("Base32Padded"));
+    }
+
+    [Test]
+    public void BuildMagnetLink_should_generate_valid_magnet_link()
+    {
+        var trackers = new[]
+        {
+            "https://tracker1.example.com/announce",
+            "https://tracker2.example.com/announce?passkey=abc+def"
+        };
+
+        var magnet = MagnetLinkParser.BuildMagnetLink(ValidInfoHash, "Test Torrent", trackers);
+
+        Assert.That(magnet, Does.StartWith($"magnet:?xt=urn:btih:{ValidInfoHash.ToLowerInvariant()}"));
+        Assert.That(magnet, Does.Contain("&dn=Test%20Torrent"));
+        Assert.That(magnet, Does.Contain("&tr=https%3A%2F%2Ftracker1.example.com%2Fannounce"));
+        Assert.That(magnet, Does.Contain("&tr=https%3A%2F%2Ftracker2.example.com%2Fannounce%3Fpasskey%3Dabc%2Bdef"));
+
+        var parsed = MagnetLinkParser.Parse(magnet);
+        Assert.That(parsed.InfoHash, Is.EqualTo(ValidInfoHash.ToLowerInvariant()));
+        Assert.That(parsed.Name, Is.EqualTo("Test Torrent"));
+        Assert.That(parsed.Trackers, Is.EquivalentTo(trackers));
+    }
+
+    [Test]
+    public void BuildMagnetLink_should_throw_when_infohash_contains_non_hex_characters()
+    {
+        var invalidInfoHash = new string('g', 40);
+        Assert.Throws<ArgumentException>(() => MagnetLinkParser.BuildMagnetLink(invalidInfoHash, "Test"));
+    }
+
+    [Test]
+    public void BuildMagnetLink_should_throw_when_infohash_length_is_invalid()
+    {
+        Assert.Throws<ArgumentException>(() => MagnetLinkParser.BuildMagnetLink("0123456789abcdef", "Test"));
+    }
 }
