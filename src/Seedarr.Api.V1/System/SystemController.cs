@@ -93,6 +93,8 @@ public class SystemController : ControllerBase
             InstanceUuid = _configService?.InstanceUuid ?? string.Empty,
             OsName = OsInfo.Os,
             OsVersion = OsInfo.Version,
+            OsArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),
+            CommitHash = BuildInfo.CommitHash,
             IsWindows = OsInfo.IsWindows,
             IsLinux = OsInfo.IsLinux,
             IsOsx = OsInfo.IsOsx,

@@ -20,6 +20,21 @@ public class BuildInfoTest
     }
 
     [Test]
+    public void CommitHash_can_be_set_and_retrieved()
+    {
+        var original = BuildInfo.CommitHash;
+        try
+        {
+            BuildInfo.CommitHash = "abcdef123456";
+            Assert.That(BuildInfo.CommitHash, Is.EqualTo("abcdef123456"));
+        }
+        finally
+        {
+            BuildInfo.CommitHash = original;
+        }
+    }
+
+    [Test]
     public void Version_should_not_be_null()
     {
         Assert.That(BuildInfo.Version, Is.Not.Null);

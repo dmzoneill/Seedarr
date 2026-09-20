@@ -16,11 +16,13 @@ public static class BuildInfo
 
         var versionFromFile = ReadVersionFile();
         Version = versionFromFile ?? assemblyVersion;
+        CommitHash = ReadCommitHash();
     }
 
     public static Version Version { get; }
     public static string AppName => "Seedarr";
     public static string Branch => "main";
+    public static string CommitHash { get; set; }
 
     private static Version ReadVersionFile()
     {
@@ -79,6 +81,103 @@ public static class BuildInfo
                     if (TryParseVersionString(trimmed, out var direct))
                     {
                         return direct;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or FormatException)
+            {
+                Logger.Warn(ex, "Could not read version file at {0}", path);
+            }
+        }
+
+        return null;
+    }
+
+    private static string ReadCommitHash()
+    {
+        var envHash = Environment.GetEnvironmentVariable("GIT_COMMIT_HASH");
+        if (!string.IsNullOrWhiteSpace(envHash))
+        {
+            return envHash.Trim();
+        }
+
+        var candidates = new List<string>
+        {
+            Path.Combine(AppContext.BaseDirectory, "version"),
+            Path.Combine(Directory.GetCurrentDirectory(), "version"),
+        };
+
+        try
+        {
+            for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            {
+                candidates.Add(Path.Combine(dir.FullName, "version"));
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            for (var dir = new DirectoryInfo(Directory.GetCurrentDirectory()); dir != null; dir = dir.Parent)
+            {
+                candidates.Add(Path.Combine(dir.FullName, "version"));
+            }
+        }
+        catch
+        {
+        }
+
+        foreach (var path in candidates)
+        {
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                var content = File.ReadAllText(path).Trim();
+
+                foreach (var line in content.Split('\n'))
+                {
+                    var trimmed = line.Trim();
+
+                    if (trimmed.StartsWith("commit=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var hash = trimmed.Substring("commit=".Length).Trim();
+                        if (!string.IsNullOrWhiteSpace(hash))
+                        {
+                            return hash;
+                        }
+                    }
+
+                    if (trimmed.StartsWith("commit_hash=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var hash = trimmed.Substring("commit_hash=".Length).Trim();
+                        if (!string.IsNullOrWhiteSpace(hash))
+                        {
+                            return hash;
+                        }
+                    }
+
+                    if (trimmed.StartsWith("git_commit_hash=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var hash = trimmed.Substring("git_commit_hash=".Length).Trim();
+                        if (!string.IsNullOrWhiteSpace(hash))
+                        {
+                            return hash;
+                        }
+                    }
+
+                    if (trimmed.StartsWith("hash=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var hash = trimmed.Substring("hash=".Length).Trim();
+                        if (!string.IsNullOrWhiteSpace(hash))
+                        {
+                            return hash;
+                        }
                     }
                 }
             }

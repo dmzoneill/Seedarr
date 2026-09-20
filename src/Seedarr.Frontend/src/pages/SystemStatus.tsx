@@ -832,6 +832,28 @@ function SystemStatus() {
                   </span>
                 </div>
               )}
+              {status.branch && (
+                <div className="status-row">
+                  <span className="status-label">Branch</span>
+                  <span className="status-value">{status.branch}</span>
+                </div>
+              )}
+              {status.commitHash && (
+                <div className="status-row">
+                  <span className="status-label">Commit Hash</span>
+                  <span className="status-value">
+                    <code style={{ fontSize: "0.82rem" }}>
+                      {status.commitHash}
+                    </code>
+                  </span>
+                </div>
+              )}
+              {status.osArchitecture && (
+                <div className="status-row">
+                  <span className="status-label">Architecture</span>
+                  <span className="status-value">{status.osArchitecture}</span>
+                </div>
+              )}
               <div className="status-row">
                 <span className="status-label">.NET Runtime</span>
                 <span className="status-value">
