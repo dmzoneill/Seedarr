@@ -25,4 +25,8 @@ public interface IPeerServer
     void BroadcastPex(string infoHash = null);
 
     byte[] BuildPexMessage(string infoHash);
+
+    System.Collections.Generic.List<Seeding.SelfishLeecherResult> CheckSuperSeedingTimeouts(Torrent torrent = null, System.DateTime? now = null);
+
+    Seeding.ISuperSeedingTracker GetSuperSeedingTracker(string infoHash, int pieceCount = 0);
 }

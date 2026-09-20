@@ -62,6 +62,7 @@ public class SeedingEngine : BackgroundService
     private readonly IPieceStorage _pieceStorage;
     private readonly IDhtService _dhtService;
     private readonly ITrackerAnnounceService _trackerAnnounceService;
+    private readonly Peers.IPeerServer _peerServer;
     private bool _speedThresholdExceededState;
     private long _lastTickTimestamp;
 
@@ -89,7 +90,8 @@ public class SeedingEngine : BackgroundService
         ITorrentRepository torrentRepository = null,
         IPieceStorage pieceStorage = null,
         IDhtService dhtService = null,
-        ITrackerAnnounceService trackerAnnounceService = null)
+        ITrackerAnnounceService trackerAnnounceService = null,
+        Peers.IPeerServer peerServer = null)
     {
         _torrentService = torrentService;
         _torrentRepository = torrentRepository;
@@ -112,6 +114,7 @@ public class SeedingEngine : BackgroundService
         _pieceStorage = pieceStorage;
         _dhtService = dhtService;
         _trackerAnnounceService = trackerAnnounceService;
+        _peerServer = peerServer;
         _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService, tagService);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -762,6 +765,8 @@ public class SeedingEngine : BackgroundService
         {
             return;
         }
+
+        _peerServer?.CheckSuperSeedingTimeouts(torrent);
 
         var connectedPeers = _connectionManager.GetConnections(torrent.InfoHash);
         if (connectedPeers == null || connectedPeers.Count == 0)
