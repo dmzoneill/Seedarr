@@ -47,7 +47,7 @@ public class TorrentService : ITorrentService,
     private readonly ITorrentFileService _torrentFileService;
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IEventAggregator _eventAggregator;
-    private readonly ITorrentRecheckService _torrentRecheckService;
+    private readonly Lazy<ITorrentRecheckService> _torrentRecheckService;
     private readonly object _sortOrderLock = new();
     private readonly Logger _logger;
 
@@ -59,7 +59,7 @@ public class TorrentService : ITorrentService,
         ITrackerEntryService trackerEntryService,
         IEventAggregator eventAggregator,
         IDiskSpaceService diskSpaceService = null,
-        ITorrentRecheckService torrentRecheckService = null)
+        Lazy<ITorrentRecheckService> torrentRecheckService = null)
     {
         _repository = repository;
         _torrentFileService = torrentFileService;
@@ -240,9 +240,9 @@ public class TorrentService : ITorrentService,
             return null;
         }
 
-        if (_torrentRecheckService != null)
+        if (_torrentRecheckService?.Value != null)
         {
-            return _torrentRecheckService.QueueRecheck(id) ?? _torrentRecheckService.Recheck(torrent);
+            return _torrentRecheckService.Value.QueueRecheck(id) ?? _torrentRecheckService.Value.Recheck(torrent);
         }
 
         _logger.Info("Rechecking torrent: {0}", torrent.Name);
