@@ -30,7 +30,8 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         "SslCertPath",
         "SslKeyPath",
         "SslCertPassword",
-        "RedirectHttpToHttps"
+        "RedirectHttpToHttps",
+        "TrustedProxies"
     };
 
     private readonly IConfigFileProvider _configFileProvider;
@@ -186,7 +187,8 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             { "SslCertPath", resource.SslCertPath ?? string.Empty },
             { "SslKeyPath", resource.SslKeyPath ?? string.Empty },
             { "SslCertPassword", resource.SslCertPassword ?? string.Empty },
-            { "RedirectHttpToHttps", resource.RedirectHttpToHttps }
+            { "RedirectHttpToHttps", resource.RedirectHttpToHttps },
+            { "TrustedProxies", resource.TrustedProxies ?? string.Empty }
         };
 
         _configFileProvider.SaveConfigDictionary(xmlValues);

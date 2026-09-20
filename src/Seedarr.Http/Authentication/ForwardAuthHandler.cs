@@ -9,6 +9,9 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NLog;
+using NzbDrone.Core.Configuration;
+using Seedarr.Http.Security;
 
 namespace Seedarr.Http.Authentication;
 
@@ -23,20 +26,55 @@ public class ForwardAuthOptions : AuthenticationSchemeOptions
     public string DisplayNameHeaders { get; set; } = "X-authentik-name;Remote-Name;X-Forwarded-Preferred-Username";
 
     public string GroupsHeaders { get; set; } = "X-authentik-groups;Remote-Groups;X-Forwarded-Groups";
+
+    /// <summary>
+    /// Comma- or semicolon-separated list of trusted proxy IP addresses or CIDR ranges.
+    /// Default loopback addresses (127.0.0.1, ::1) are always trusted.
+    /// </summary>
+    public string TrustedProxies { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Comma-, semicolon-, or pipe-separated group names that grant Admin role.
+    /// </summary>
+    public string AdminGroups { get; set; } = "admin;admins;administrator;administrators";
+
+    /// <summary>
+    /// Default role for authenticated users who do not match AdminGroups. Defaults to "User".
+    /// </summary>
+    public string DefaultRole { get; set; } = "User";
 }
 
 public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
 {
+    private static readonly Logger NLogLogger = LogManager.GetCurrentClassLogger();
+    private readonly IConfigFileProvider _configFileProvider;
+
     public ForwardAuthHandler(
         IOptionsMonitor<ForwardAuthOptions> options,
         ILoggerFactory logger,
-        UrlEncoder encoder)
+        UrlEncoder encoder,
+        IConfigFileProvider configFileProvider = null)
         : base(options, logger, encoder)
     {
+        _configFileProvider = configFileProvider;
     }
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        var remoteIp = Context.Connection.RemoteIpAddress;
+        if (remoteIp == null)
+        {
+            NLogLogger.Warn("ForwardAuth authentication rejected: RemoteIpAddress is null.");
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
+        var trustedProxies = CombineProxies(Options.TrustedProxies, _configFileProvider?.TrustedProxies);
+        if (!IpSecurityHelper.IsTrustedProxy(remoteIp, trustedProxies))
+        {
+            NLogLogger.Warn("ForwardAuth authentication rejected: RemoteIpAddress {0} is not a trusted proxy.", remoteIp);
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
         var username = GetHeaderValue(Options.UsernameHeaders);
         if (string.IsNullOrWhiteSpace(username))
         {
@@ -50,12 +88,18 @@ public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
             ? rawGroupsStr.Split(new[] { ',', '|', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : Array.Empty<string>();
 
+        var adminGroups = (Options.AdminGroups ?? "admin;admins;administrator;administrators")
+            .Split(new[] { ',', '|', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var isAdmin = groups.Any(g => adminGroups.Contains(g, StringComparer.OrdinalIgnoreCase));
+        var role = isAdmin ? "Admin" : (!string.IsNullOrWhiteSpace(Options.DefaultRole) ? Options.DefaultRole : "User");
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, username),
             new(ClaimTypes.Name, username),
             new("DisplayName", displayName),
-            new(ClaimTypes.Role, "Admin"),
+            new(ClaimTypes.Role, role),
         };
 
         if (!string.IsNullOrEmpty(email))
@@ -73,6 +117,21 @@ public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
         var ticket = new AuthenticationTicket(principal, ForwardAuthOptions.DefaultScheme);
 
         return Task.FromResult(AuthenticateResult.Success(ticket));
+    }
+
+    private static string CombineProxies(string optProxies, string configProxies)
+    {
+        if (string.IsNullOrWhiteSpace(optProxies))
+        {
+            return configProxies ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(configProxies))
+        {
+            return optProxies ?? string.Empty;
+        }
+
+        return $"{optProxies},{configProxies}";
     }
 
     private string GetHeaderValue(string headerNames)
