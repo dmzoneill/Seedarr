@@ -715,7 +715,8 @@ function SystemStatus() {
                     d.totalSpace > 0
                       ? ((d.totalSpace - d.freeSpace) / d.totalSpace) * 100
                       : 0;
-                  const usedPercent = Math.max(0, Math.min(100, rawPercent));
+                  const safePercent = isNaN(rawPercent) ? 0 : rawPercent;
+                  const usedPercent = Math.min(100, Math.max(0, safePercent));
                   let barClass = "disk-progress-bar";
                   if (usedPercent >= 90)
                     barClass += " disk-progress-bar-danger";
@@ -982,6 +983,107 @@ function SystemStatus() {
                 <span className="status-label">Available Completion Port Threads</span>
                 <span className="status-value">
                   {status.availableCompletionPortThreads?.toLocaleString() ?? "N/A"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Host & Container Memory Card */}
+        {status && (
+          <div
+            className="card"
+            style={{
+              borderRadius: "8px",
+              border: "1px solid var(--border-light)",
+              boxShadow:
+                "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+              padding: "1.25rem",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "1.05rem",
+                fontWeight: 600,
+                color: "var(--accent, #c8a84e)",
+                marginTop: 0,
+                marginBottom: "0.85rem",
+              }}
+            >
+              Host &amp; Container Memory
+            </h2>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.6rem",
+              }}
+            >
+              <div className="status-row">
+                <span className="status-label">Memory Utilization</span>
+                <span className="status-value" style={{ fontWeight: 600 }}>
+                  {status.memoryUsagePercentage != null
+                    ? `${status.memoryUsagePercentage.toFixed(1)}%`
+                    : "N/A"}
+                </span>
+              </div>
+              {status.memoryUsagePercentage != null && (
+                <div style={{ marginTop: "-0.25rem", marginBottom: "0.25rem" }}>
+                  <div
+                    style={{
+                      height: "6px",
+                      width: "100%",
+                      backgroundColor: "var(--bg-secondary, #2a2a2a)",
+                      borderRadius: "3px",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${Math.min(100, Math.max(0, status.memoryUsagePercentage))}%`,
+                        backgroundColor:
+                          status.memoryUsagePercentage >= 95
+                            ? "var(--danger, #dc3545)"
+                            : status.memoryUsagePercentage >= 85
+                              ? "var(--warning, #ffc107)"
+                              : "var(--success, #28a745)",
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="status-row">
+                <span className="status-label">Process Working Set</span>
+                <span className="status-value">
+                  {status.workingSetBytes != null
+                    ? formatBytes(status.workingSetBytes)
+                    : "N/A"}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">GC Total Memory</span>
+                <span className="status-value">
+                  {status.gcTotalMemoryBytes != null
+                    ? formatBytes(status.gcTotalMemoryBytes)
+                    : "N/A"}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">Container / Host Limit</span>
+                <span className="status-value">
+                  {status.containerMemoryLimitBytes && status.containerMemoryLimitBytes > 0
+                    ? formatBytes(status.containerMemoryLimitBytes)
+                    : "Unlimited"}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">Cgroup / Limit Scope</span>
+                <span className="status-value">
+                  <span className="badge badge-primary">
+                    {status.isDocker ? "🐳 Container Limit" : "💻 Host Physical Memory"}
+                  </span>
                 </span>
               </div>
             </div>

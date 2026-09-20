@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -90,6 +91,13 @@ public class SystemController : ControllerBase
         var gcInfo = GC.GetGCMemoryInfo();
         var threadPoolStats = _cpuUsageService.GetThreadPoolStats();
 
+        var workingSetBytes = Process.GetCurrentProcess().WorkingSet64;
+        var gcTotalMemoryBytes = GC.GetTotalMemory(false);
+        var containerMemoryLimitBytes = gcInfo.TotalAvailableMemoryBytes;
+        var memoryUsagePercentage = containerMemoryLimitBytes > 0
+            ? Math.Clamp((double)workingSetBytes / containerMemoryLimitBytes * 100.0, 0.0, 100.0)
+            : 0.0;
+
         return Ok(new SystemResource
         {
             AppName = BuildInfo.AppName,
@@ -127,6 +135,10 @@ public class SystemController : ControllerBase
             ThreadCount = _cpuUsageService.GetThreadCount(),
             AvailableWorkerThreads = threadPoolStats.AvailableWorker,
             AvailableCompletionPortThreads = threadPoolStats.AvailableCompletionPort,
+            WorkingSetBytes = workingSetBytes,
+            GcTotalMemoryBytes = gcTotalMemoryBytes,
+            ContainerMemoryLimitBytes = containerMemoryLimitBytes,
+            MemoryUsagePercentage = memoryUsagePercentage,
         });
     }
 

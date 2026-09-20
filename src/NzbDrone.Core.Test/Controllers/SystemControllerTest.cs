@@ -286,6 +286,21 @@ public class SystemControllerTest
     }
 
     [Test]
+    public void GetStatus_populates_memory_telemetry()
+    {
+        var actionResult = _controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.WorkingSetBytes, Is.GreaterThan(0));
+        Assert.That(status.GcTotalMemoryBytes, Is.GreaterThan(0));
+        Assert.That(status.ContainerMemoryLimitBytes, Is.GreaterThan(0));
+        Assert.That(status.MemoryUsagePercentage, Is.InRange(0.0, 100.0));
+    }
+
+    [Test]
     public void GetStatus_populates_file_descriptor_telemetry_from_provider()
     {
         var fdProvider = Substitute.For<IFileDescriptorProvider>();

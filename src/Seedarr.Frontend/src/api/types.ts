@@ -276,6 +276,10 @@ export interface SystemStatus {
   threadCount?: number;
   availableWorkerThreads?: number;
   availableCompletionPortThreads?: number;
+  workingSetBytes?: number;
+  gcTotalMemoryBytes?: number;
+  containerMemoryLimitBytes?: number;
+  memoryUsagePercentage?: number;
 }
 
 export interface DiskSpaceInfo {
