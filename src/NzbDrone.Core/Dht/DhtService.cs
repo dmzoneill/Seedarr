@@ -890,7 +890,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         }
 
         var infoHash = hashStr.Value.ToArray();
-        var token = GenerateToken(sender.Address);
+        var token = GenerateToken(sender, infoHash);
 
         var responseDict = new BDictionary
         {
@@ -962,7 +962,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         var infoHash = hashStr.Value.ToArray();
         var receivedToken = tokenStr.Value.ToArray();
 
-        if (!ValidateToken(receivedToken, sender.Address))
+        if (!ValidateToken(receivedToken, sender, infoHash))
         {
             _logger.Debug("DHT announce_peer from {0}: invalid token", sender);
             SendErrorResponse(sender, transactionId, 203, "Invalid token");
@@ -1565,7 +1565,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         }
     }
 
-    private byte[] GenerateToken(IPAddress address)
+    private byte[] GenerateToken(IPEndPoint endpoint, byte[] infoHash)
     {
         byte[] secret;
         lock (_secretLock)
@@ -1573,12 +1573,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             secret = _tokenSecret;
         }
 
-        return GenerateTokenWithSecret(address, secret);
+        return GenerateTokenWithSecret(endpoint, infoHash, secret);
     }
 
-    private bool ValidateToken(byte[] token, IPAddress address)
+    private bool ValidateToken(byte[] token, IPEndPoint endpoint, byte[] infoHash)
     {
-        if (token == null || token.Length == 0)
+        if (token == null || token.Length == 0 || infoHash == null || endpoint == null || endpoint.Address == null)
         {
             return false;
         }
@@ -1592,22 +1592,33 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             previousSecret = _previousTokenSecret;
         }
 
-        var currentToken = GenerateTokenWithSecret(address, currentSecret);
+        var currentToken = GenerateTokenWithSecret(endpoint, infoHash, currentSecret);
         if (CryptographicOperations.FixedTimeEquals(token, currentToken))
         {
             return true;
         }
 
-        var previousToken = GenerateTokenWithSecret(address, previousSecret);
+        var previousToken = GenerateTokenWithSecret(endpoint, infoHash, previousSecret);
         return CryptographicOperations.FixedTimeEquals(token, previousToken);
     }
 
-    private byte[] GenerateTokenWithSecret(IPAddress address, byte[] secret)
+    private byte[] GenerateTokenWithSecret(IPEndPoint endpoint, byte[] infoHash, byte[] secret)
     {
-        var ipBytes = address.GetAddressBytes();
-        var input = new byte[ipBytes.Length + secret.Length];
-        Array.Copy(ipBytes, 0, input, 0, ipBytes.Length);
-        Array.Copy(secret, 0, input, ipBytes.Length, secret.Length);
+        var ipBytes = endpoint.Address.GetAddressBytes();
+        var portBytes = BitConverter.GetBytes((ushort)endpoint.Port);
+        var input = new byte[ipBytes.Length + portBytes.Length + (infoHash?.Length ?? 0) + secret.Length];
+        var offset = 0;
+        Buffer.BlockCopy(ipBytes, 0, input, offset, ipBytes.Length);
+        offset += ipBytes.Length;
+        Buffer.BlockCopy(portBytes, 0, input, offset, portBytes.Length);
+        offset += portBytes.Length;
+        if (infoHash != null && infoHash.Length > 0)
+        {
+            Buffer.BlockCopy(infoHash, 0, input, offset, infoHash.Length);
+            offset += infoHash.Length;
+        }
+
+        Buffer.BlockCopy(secret, 0, input, offset, secret.Length);
         return SHA1.HashData(input);
     }
 
