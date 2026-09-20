@@ -37,6 +37,7 @@ public class SystemController : ControllerBase
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
     private readonly IDatabaseMaintenanceService _databaseMaintenanceService;
     private readonly IFileDescriptorProvider _fileDescriptorProvider;
+    private readonly ICpuUsageService _cpuUsageService;
 
     public SystemController(
         ITaskManager taskManager,
@@ -49,7 +50,8 @@ public class SystemController : ControllerBase
         IScheduledTaskHistoryRepository taskHistoryRepository = null,
         IBroadcastSignalRMessage signalRBroadcaster = null,
         IDatabaseMaintenanceService databaseMaintenanceService = null,
-        IFileDescriptorProvider fileDescriptorProvider = null)
+        IFileDescriptorProvider fileDescriptorProvider = null,
+        ICpuUsageService cpuUsageService = null)
     {
         _taskManager = taskManager;
         _scheduledTasks = scheduledTasks ?? Enumerable.Empty<IScheduledTask>();
@@ -62,6 +64,7 @@ public class SystemController : ControllerBase
         _signalRBroadcaster = signalRBroadcaster;
         _databaseMaintenanceService = databaseMaintenanceService;
         _fileDescriptorProvider = fileDescriptorProvider ?? new FileDescriptorProvider();
+        _cpuUsageService = cpuUsageService ?? new CpuUsageService();
     }
 
     /// <summary>
@@ -85,6 +88,7 @@ public class SystemController : ControllerBase
 
         var dbType = _mainDatabase?.DatabaseType.ToString() ?? "SQLite";
         var gcInfo = GC.GetGCMemoryInfo();
+        var threadPoolStats = _cpuUsageService.GetThreadPoolStats();
 
         return Ok(new SystemResource
         {
@@ -118,6 +122,11 @@ public class SystemController : ControllerBase
             OpenFileDescriptors = _fileDescriptorProvider.GetOpenFileDescriptorCount(),
             MaxFileDescriptors = _fileDescriptorProvider.GetMaxFileDescriptors(),
             FileDescriptorUsagePercentage = _fileDescriptorProvider.GetFileDescriptorUsagePercentage(),
+            CpuUsagePercentage = _cpuUsageService.GetCpuUsagePercentage(),
+            ProcessorCount = _cpuUsageService.GetProcessorCount(),
+            ThreadCount = _cpuUsageService.GetThreadCount(),
+            AvailableWorkerThreads = threadPoolStats.AvailableWorker,
+            AvailableCompletionPortThreads = threadPoolStats.AvailableCompletionPort,
         });
     }
 

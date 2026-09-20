@@ -895,6 +895,99 @@ function SystemStatus() {
           </div>
         )}
 
+        {/* CPU & Thread Pool Card */}
+        {status && (
+          <div
+            className="card"
+            style={{
+              borderRadius: "8px",
+              border: "1px solid var(--border-light)",
+              boxShadow:
+                "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+              padding: "1.25rem",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "1.05rem",
+                fontWeight: 600,
+                color: "var(--accent, #c8a84e)",
+                marginTop: 0,
+                marginBottom: "0.85rem",
+              }}
+            >
+              CPU &amp; Thread Pool
+            </h2>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.6rem",
+              }}
+            >
+              <div className="status-row">
+                <span className="status-label">CPU Utilization</span>
+                <span className="status-value" style={{ fontWeight: 600 }}>
+                  {status.cpuUsagePercentage != null
+                    ? `${status.cpuUsagePercentage.toFixed(1)}%`
+                    : "N/A"}
+                </span>
+              </div>
+              {status.cpuUsagePercentage != null && (
+                <div style={{ marginTop: "-0.25rem", marginBottom: "0.25rem" }}>
+                  <div
+                    style={{
+                      height: "6px",
+                      width: "100%",
+                      backgroundColor: "var(--bg-secondary, #2a2a2a)",
+                      borderRadius: "3px",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${Math.min(100, Math.max(0, status.cpuUsagePercentage))}%`,
+                        backgroundColor:
+                          status.cpuUsagePercentage >= 85
+                            ? "var(--danger, #dc3545)"
+                            : status.cpuUsagePercentage >= 60
+                              ? "var(--warning, #ffc107)"
+                              : "var(--success, #28a745)",
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="status-row">
+                <span className="status-label">Logical Cores</span>
+                <span className="status-value">
+                  {status.processorCount ?? "N/A"}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">Active Threads</span>
+                <span className="status-value">
+                  {status.threadCount?.toLocaleString() ?? "N/A"}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">Available Worker Threads</span>
+                <span className="status-value">
+                  {status.availableWorkerThreads?.toLocaleString() ?? "N/A"}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">Available Completion Port Threads</span>
+                <span className="status-value">
+                  {status.availableCompletionPortThreads?.toLocaleString() ?? "N/A"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* .NET Managed Runtime & Memory Card */}
         {status && (
           <div

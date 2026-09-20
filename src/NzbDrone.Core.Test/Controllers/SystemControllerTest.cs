@@ -334,4 +334,35 @@ public class SystemControllerTest
             BuildInfo.CommitHash = originalCommit;
         }
     }
+
+    [Test]
+    public void GetStatus_populates_cpu_and_thread_telemetry_from_service()
+    {
+        var cpuService = Substitute.For<ICpuUsageService>();
+        cpuService.GetCpuUsagePercentage().Returns(18.5);
+        cpuService.GetProcessorCount().Returns(16);
+        cpuService.GetThreadCount().Returns(64);
+        cpuService.GetThreadPoolStats().Returns((AvailableWorker: 32700, AvailableCompletionPort: 990, MaxWorker: 32767, MaxCompletionPort: 1000));
+
+        var controller = new SystemController(
+            _taskManager,
+            new List<IScheduledTask>(),
+            _commandQueueManager,
+            _appFolderInfo,
+            _lifetime,
+            _configService,
+            cpuUsageService: cpuService);
+
+        var actionResult = controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.CpuUsagePercentage, Is.EqualTo(18.5));
+        Assert.That(status.ProcessorCount, Is.EqualTo(16));
+        Assert.That(status.ThreadCount, Is.EqualTo(64));
+        Assert.That(status.AvailableWorkerThreads, Is.EqualTo(32700));
+        Assert.That(status.AvailableCompletionPortThreads, Is.EqualTo(990));
+    }
 }

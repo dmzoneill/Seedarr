@@ -271,6 +271,11 @@ export interface SystemStatus {
   openFileDescriptors?: number;
   maxFileDescriptors?: number;
   fileDescriptorUsagePercentage?: number;
+  cpuUsagePercentage?: number;
+  processorCount?: number;
+  threadCount?: number;
+  availableWorkerThreads?: number;
+  availableCompletionPortThreads?: number;
 }
 
 export interface DiskSpaceInfo {
