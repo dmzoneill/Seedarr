@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
@@ -391,12 +393,41 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             _logger.Debug(ex, "Failed to update last access time for {0}", fullPath);
         }
 
+        var fileInfo = new FileInfo(fullPath);
+        var lastModifiedUtc = fileInfo.LastWriteTimeUtc;
+        var etag = $"\"{lastModifiedUtc.Ticks:x}-{fileInfo.Length:x}\"";
+
         if (Response != null)
         {
+            Response.Headers["Cache-Control"] = "public, max-age=604800, must-revalidate";
+            Response.Headers["ETag"] = etag;
+            Response.Headers["Last-Modified"] = lastModifiedUtc.ToString("R");
             Response.Headers["X-Content-Type-Options"] = "nosniff";
             if (string.Equals(contentType, "image/svg+xml", StringComparison.OrdinalIgnoreCase))
             {
                 Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+            }
+        }
+
+        if (Request != null)
+        {
+            var ifNoneMatch = Request.Headers.IfNoneMatch.ToString();
+            if (!string.IsNullOrEmpty(ifNoneMatch))
+            {
+                if (ifNoneMatch == "*" ||
+                    string.Equals(ifNoneMatch, etag, StringComparison.OrdinalIgnoreCase) ||
+                    ifNoneMatch.Split(',').Select(t => t.Trim()).Any(t => string.Equals(t, etag, StringComparison.OrdinalIgnoreCase) || string.Equals(t, $"W/{etag}", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return StatusCode(StatusCodes.Status304NotModified);
+                }
+            }
+            else if (!string.IsNullOrEmpty(Request.Headers.IfModifiedSince) &&
+                     DateTimeOffset.TryParse(Request.Headers.IfModifiedSince.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var ifModifiedSince))
+            {
+                if (lastModifiedUtc <= ifModifiedSince.UtcDateTime || (lastModifiedUtc - ifModifiedSince.UtcDateTime).TotalSeconds < 1)
+                {
+                    return StatusCode(StatusCodes.Status304NotModified);
+                }
             }
         }
 
