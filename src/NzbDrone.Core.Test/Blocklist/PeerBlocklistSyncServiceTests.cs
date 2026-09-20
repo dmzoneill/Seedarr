@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Blocklist;
@@ -310,5 +311,102 @@ public class PeerBlocklistSyncServiceTests
         Assert.That(_service.IsBlocked("10.0.0.2"), Is.False);
         Assert.That(_service.IsBlocked("2001:db8::1"), Is.True);
         Assert.That(_service.IsBlocked("2001:db9::1"), Is.False);
+    }
+
+    [Test]
+    public void IsBlocked_and_SetActiveRules_under_concurrent_stress_should_be_lock_free_and_thread_safe()
+    {
+        var rulesA = new[] { "192.168.1.0/24", "10.0.0.1", "2001:db8::/32" };
+        var rulesB = new[] { "172.16.0.0/16", "10.0.0.2", "2001:db9::/32" };
+
+        _service.SetActiveRules(rulesA);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var token = cts.Token;
+
+        var ipBlockedUnderA = IPAddress.Parse("192.168.1.100");
+        var ipBlockedUnderB = IPAddress.Parse("172.16.1.1");
+        var ipNeverBlocked = IPAddress.Parse("8.8.8.8");
+
+        var readerErrors = 0;
+        var readerIterations = 0;
+
+        // Start multiple reader tasks hammering IsBlocked
+        var readerTasks = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+        {
+            var count = 0;
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    _service.IsBlocked(ipBlockedUnderA);
+                    _service.IsBlocked(ipBlockedUnderB);
+                    var blockedNever = _service.IsBlocked(ipNeverBlocked);
+                    if (blockedNever)
+                    {
+                        Interlocked.Increment(ref readerErrors);
+                    }
+
+                    count++;
+                }
+                catch
+                {
+                    Interlocked.Increment(ref readerErrors);
+                }
+            }
+
+            Interlocked.Add(ref readerIterations, count);
+        })).ToArray();
+
+        // Start writer tasks repeatedly swapping active rules
+        var writerTasks = Enumerable.Range(0, 2).Select(i => Task.Run(async () =>
+        {
+            var flip = i % 2 == 0;
+            while (!token.IsCancellationRequested)
+            {
+                _service.SetActiveRules(flip ? rulesA : rulesB);
+                flip = !flip;
+                await Task.Yield();
+            }
+        })).ToArray();
+
+        Task.WaitAll(readerTasks.Concat(writerTasks).ToArray());
+
+        Assert.That(readerErrors, Is.EqualTo(0), "No exceptions or false positives should occur during concurrent read/write stress.");
+        Assert.That(readerIterations, Is.GreaterThan(1000), "Lock-free readers should complete many iterations without contention.");
+    }
+
+    [Test]
+    public async Task SyncAsync_atomic_swap_under_concurrent_lookups()
+    {
+        var response1 = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("10.10.0.0/16\n2001:db8:beef::/48\n")
+        };
+        _mockHandler.EnqueueResponse(response1);
+
+        var readCount = 0;
+        var cts = new CancellationTokenSource();
+
+        var reader = Task.Run(() =>
+        {
+            var testIp = IPAddress.Parse("10.10.1.1");
+            while (!cts.Token.IsCancellationRequested)
+            {
+                _service.IsBlocked(testIp);
+                Interlocked.Increment(ref readCount);
+            }
+        });
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        cts.Cancel();
+        await reader;
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(_service.IsBlocked("10.10.1.1"), Is.True);
+        Assert.That(_service.IntervalTree, Is.Not.Null);
+        Assert.That(_service.IntervalTree.IntervalCount, Is.GreaterThan(0));
+        Assert.That(readCount, Is.GreaterThan(0));
     }
 }

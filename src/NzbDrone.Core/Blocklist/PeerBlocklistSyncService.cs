@@ -169,13 +169,18 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         }
     }
 
+    public Ipv6IntervalTree IntervalTree => Volatile.Read(ref _tree);
+
     public void SetActiveRules(IEnumerable<string> rules)
     {
+        var ruleList = rules?.ToList() ?? new List<string>();
+        var newTree = ruleList.Count > 0 ? Ipv6IntervalTree.Parse(ruleList) : null;
+
         lock (_syncLock)
         {
-            _rules = rules?.ToList() ?? new List<string>();
+            _rules = ruleList;
             _metadata.RuleCount = _rules.Count;
-            _tree = _rules.Count > 0 ? Ipv6IntervalTree.Parse(_rules) : null;
+            Interlocked.Exchange(ref _tree, newTree);
         }
     }
 
@@ -186,10 +191,8 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             return false;
         }
 
-        lock (_syncLock)
-        {
-            return _tree?.Contains(address) ?? false;
-        }
+        var tree = Volatile.Read(ref _tree);
+        return tree?.Contains(address) ?? false;
     }
 
     public bool IsBlocked(string ip)
@@ -424,11 +427,13 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             };
         }
 
+        var newTree = parsedRules.Count > 0 ? Ipv6IntervalTree.Parse(parsedRules) : null;
+
         lock (_syncLock)
         {
             _rules = parsedRules;
             _metadata.RuleCount = _rules.Count;
-            _tree = _rules.Count > 0 ? Ipv6IntervalTree.Parse(_rules) : null;
+            Interlocked.Exchange(ref _tree, newTree);
 
             if (!string.IsNullOrWhiteSpace(newETag))
             {

@@ -267,4 +267,119 @@ public class Ipv6IntervalTreeTests
         var mapped = v4.MapToIPv6();
         Assert.That(mapped.ToUInt32(), Is.EqualTo(u32));
     }
+
+    [Test]
+    public void Ipv4IntervalTree_binary_search_and_merge_tests()
+    {
+        var ranges = new[]
+        {
+            new Ipv4Range(100, 200),
+            new Ipv4Range(50, 80),
+            new Ipv4Range(81, 99), // adjacent to [50..80] and [100..200] -> merges to [50..200]
+            new Ipv4Range(300, 400),
+            new Ipv4Range(350, 380), // fully contained in [300..400]
+            new Ipv4Range(600, 500)  // inverted range -> should normalize to [500..600]
+        };
+
+        var tree = new Ipv4IntervalTree(ranges);
+
+        Assert.That(tree.IntervalCount, Is.EqualTo(3));
+        Assert.That(tree.Intervals[0], Is.EqualTo(new Ipv4Range(50, 200)));
+        Assert.That(tree.Intervals[1], Is.EqualTo(new Ipv4Range(300, 400)));
+        Assert.That(tree.Intervals[2], Is.EqualTo(new Ipv4Range(500, 600)));
+
+        // Binary search correctness at and around boundary values
+        Assert.That(tree.Contains(49u), Is.False);
+        Assert.That(tree.Contains(50u), Is.True);
+        Assert.That(tree.Contains(150u), Is.True);
+        Assert.That(tree.Contains(200u), Is.True);
+        Assert.That(tree.Contains(201u), Is.False);
+
+        Assert.That(tree.Contains(299u), Is.False);
+        Assert.That(tree.Contains(300u), Is.True);
+        Assert.That(tree.Contains(400u), Is.True);
+        Assert.That(tree.Contains(401u), Is.False);
+
+        Assert.That(tree.Contains(500u), Is.True);
+        Assert.That(tree.Contains(550u), Is.True);
+        Assert.That(tree.Contains(600u), Is.True);
+        Assert.That(tree.Contains(601u), Is.False);
+    }
+
+    [Test]
+    public void Ipv4IntervalTree_near_uint_max_boundary_should_not_overflow()
+    {
+        var nearMax = uint.MaxValue - 10;
+        var max = uint.MaxValue;
+
+        var tree = new Ipv4IntervalTree(new[]
+        {
+            new Ipv4Range(nearMax, max - 1),
+            new Ipv4Range(max, max)
+        });
+
+        Assert.That(tree.IntervalCount, Is.EqualTo(1));
+        Assert.That(tree.Intervals[0].Start, Is.EqualTo(nearMax));
+        Assert.That(tree.Intervals[0].End, Is.EqualTo(max));
+
+        Assert.That(tree.Contains(max), Is.True);
+        Assert.That(tree.Contains(nearMax), Is.True);
+        Assert.That(tree.Contains(nearMax - 1), Is.False);
+    }
+
+    [Test]
+    public void Ipv6IntervalTree_MergeAndSort_enclosed_and_inverted_intervals()
+    {
+        var ranges = new[]
+        {
+            new Ipv6Range((UInt128)10, (UInt128)50),
+            new Ipv6Range((UInt128)20, (UInt128)30), // fully enclosed
+            new Ipv6Range((UInt128)5, (UInt128)60),  // encloses [10..50]
+            new Ipv6Range((UInt128)200, (UInt128)150) // inverted
+        };
+
+        var merged = Ipv6IntervalTree.MergeAndSort(ranges);
+
+        Assert.That(merged.Length, Is.EqualTo(2));
+        Assert.That(merged[0], Is.EqualTo(new Ipv6Range((UInt128)5, (UInt128)60)));
+        Assert.That(merged[1], Is.EqualTo(new Ipv6Range((UInt128)150, (UInt128)200)));
+    }
+
+    [Test]
+    public void Ipv6IntervalTree_broad_cidr_fallback_matches_ipv4_and_mapped()
+    {
+        // ::/0 blocks entire IPv6 space, which should also match mapped IPv4 addresses
+        var rules = new[]
+        {
+            "::/0"
+        };
+
+        var tree = Ipv6IntervalTree.Parse(rules);
+
+        Assert.That(tree.Contains(IPAddress.Parse("1.2.3.4")), Is.True);
+        Assert.That(tree.Contains(IPAddress.Parse("::ffff:1.2.3.4")), Is.True);
+        Assert.That(tree.Contains(IPAddress.Parse("2600::1")), Is.True);
+    }
+
+    [Test]
+    public void Ipv4IntervalTree_TryParse_handles_comments_labels_and_mapped_addresses()
+    {
+        Assert.That(Ipv4IntervalTree.TryParse("# comment", out _), Is.False);
+        Assert.That(Ipv4IntervalTree.TryParse("// comment", out _), Is.False);
+        Assert.That(Ipv4IntervalTree.TryParse("", out _), Is.False);
+
+        Assert.That(Ipv4IntervalTree.TryParse("Spammer:192.168.1.1", out var r1), Is.True);
+        Assert.That(r1.Start, Is.EqualTo(IPAddress.Parse("192.168.1.1").ToUInt32()));
+
+        Assert.That(Ipv4IntervalTree.TryParse("Spammer 192.168.1.0/24", out var r2), Is.True);
+        Assert.That(r2.Start, Is.EqualTo(IPAddress.Parse("192.168.1.0").ToUInt32()));
+        Assert.That(r2.End, Is.EqualTo(IPAddress.Parse("192.168.1.255").ToUInt32()));
+
+        Assert.That(Ipv4IntervalTree.TryParse("::ffff:10.0.0.1", out var r3), Is.True);
+        Assert.That(r3.Start, Is.EqualTo(IPAddress.Parse("10.0.0.1").ToUInt32()));
+
+        Assert.That(Ipv4IntervalTree.TryParse("::ffff:10.0.0.0/24", out var r4), Is.True);
+        Assert.That(r4.Start, Is.EqualTo(IPAddress.Parse("10.0.0.0").ToUInt32()));
+        Assert.That(r4.End, Is.EqualTo(IPAddress.Parse("10.0.0.255").ToUInt32()));
+    }
 }
