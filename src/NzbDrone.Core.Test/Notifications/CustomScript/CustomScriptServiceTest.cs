@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Processes;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 
@@ -418,6 +422,145 @@ public class CustomScriptServiceTest
             var result = await service.ExecuteScriptAsync(quotedPath, null, "Test");
 
             Assert.That(result, Is.True);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task ExecuteScriptAsync_should_throttle_concurrent_executions_to_configured_limit()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "sleep.bat" : "sleep.sh");
+            var scriptContent = isWindows
+                ? "@echo off\r\nping 127.0.0.1 -n 2 > nul\r\nexit /b 0\r\n"
+                : "#!/bin/sh\nsleep 0.3\nexit 0\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            if (!isWindows)
+            {
+                File.SetUnixFileMode(scriptFile, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            using var supervisor = new ProcessSupervisor();
+            using var service = new CustomScriptService(processSupervisor: supervisor, maxConcurrentScripts: 2);
+
+            var maxObservedProcesses = 0;
+            var lockObj = new object();
+            var cts = new CancellationTokenSource();
+
+            var monitorTask = Task.Run(async () =>
+            {
+                while (!cts.Token.IsCancellationRequested)
+                {
+                    var count = supervisor.ActiveProcessIds.Count;
+                    lock (lockObj)
+                    {
+                        if (count > maxObservedProcesses)
+                        {
+                            maxObservedProcesses = count;
+                        }
+                    }
+
+                    try
+                    {
+                        await Task.Delay(10, cts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
+            });
+
+            var tasks = new List<Task<bool>>();
+            for (var i = 0; i < 4; i++)
+            {
+                tasks.Add(service.ExecuteScriptAsync(scriptFile, null, "Test"));
+            }
+
+            var results = await Task.WhenAll(tasks);
+            await cts.CancelAsync();
+            await monitorTask;
+
+            Assert.That(results, Has.All.True);
+            Assert.That(maxObservedProcesses, Is.GreaterThan(0));
+            Assert.That(maxObservedProcesses, Is.LessThanOrEqualTo(2), "Concurrency throttle should limit active processes to 2");
+            Assert.That(supervisor.ActiveProcessIds, Is.Empty, "All processes should be unregistered after completion");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task ExecuteScriptAsync_should_abort_immediately_when_supervisor_is_shutting_down()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "test.bat" : "test.sh");
+            var scriptContent = isWindows
+                ? "@echo off\r\nexit /b 0\r\n"
+                : "#!/bin/sh\nexit 0\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            if (!isWindows)
+            {
+                File.SetUnixFileMode(scriptFile, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            using var supervisor = new ProcessSupervisor();
+            supervisor.Handle(new ApplicationShutdownRequested());
+
+            using var service = new CustomScriptService(processSupervisor: supervisor);
+            var result = await service.ExecuteScriptAsync(scriptFile, null, "Test");
+
+            Assert.That(result, Is.False, "ExecuteScriptAsync should return false when application is shutting down");
+            Assert.That(supervisor.ActiveProcessIds, Is.Empty);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task ExecuteScriptAsync_should_register_and_unregister_child_process_with_supervisor()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "test.bat" : "test.sh");
+            var scriptContent = isWindows
+                ? "@echo off\r\nexit /b 0\r\n"
+                : "#!/bin/sh\nexit 0\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            if (!isWindows)
+            {
+                File.SetUnixFileMode(scriptFile, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            var mockSupervisor = Substitute.For<ISidecarProcessSupervisor>();
+            using var service = new CustomScriptService(processSupervisor: mockSupervisor);
+
+            var result = await service.ExecuteScriptAsync(scriptFile, null, "Test");
+
+            Assert.That(result, Is.True);
+            mockSupervisor.Received(1).RegisterProcess(Arg.Any<Process>());
+            mockSupervisor.Received(1).UnregisterProcess(Arg.Any<int>());
         }
         finally
         {

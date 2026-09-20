@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.MediaEnrichment;
+using NzbDrone.Core.Processes;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 
@@ -21,10 +22,12 @@ public interface ICustomScriptService
     Task<CustomScriptTestResult> TestScriptAsync(string scriptPath, string arguments = null, string eventType = "Test");
 }
 
-public class CustomScriptService : ICustomScriptService
+public class CustomScriptService : ICustomScriptService, IDisposable
 {
     private readonly ITorrentMediaMetadataRepository _mediaMetadataRepository;
     private readonly ITagService _tagService;
+    private readonly ISidecarProcessSupervisor _processSupervisor;
+    private readonly SemaphoreSlim _concurrencyThrottle;
     private readonly TimeSpan _scriptTimeout;
     private readonly TimeSpan _streamDrainTimeout;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -34,20 +37,29 @@ public class CustomScriptService : ICustomScriptService
         IConfigService configService = null,
         IConfigFileProvider configFileProvider = null,
         ITagService tagService = null,
+        ISidecarProcessSupervisor processSupervisor = null,
         TimeSpan? scriptTimeout = null,
-        TimeSpan? streamDrainTimeout = null)
+        TimeSpan? streamDrainTimeout = null,
+        int maxConcurrentScripts = 4)
     {
         _mediaMetadataRepository = mediaMetadataRepository;
         _tagService = tagService;
+        _processSupervisor = processSupervisor;
         var timeoutSec = configService != null && configService.CustomScriptTimeoutSeconds > 0
             ? Math.Clamp(configService.CustomScriptTimeoutSeconds, 5, 3600)
             : 60;
 
         _scriptTimeout = scriptTimeout ?? TimeSpan.FromSeconds(timeoutSec);
         _streamDrainTimeout = streamDrainTimeout ?? TimeSpan.FromSeconds(3);
+        var concurrency = maxConcurrentScripts > 0 ? maxConcurrentScripts : 4;
+        _concurrencyThrottle = new SemaphoreSlim(concurrency, concurrency);
     }
 
     public TimeSpan ScriptTimeout => _scriptTimeout;
+
+    public SemaphoreSlim ConcurrencyThrottle => _concurrencyThrottle;
+
+    public ISidecarProcessSupervisor ProcessSupervisor => _processSupervisor;
 
     public static string CleanScriptPath(string path)
     {
@@ -525,6 +537,12 @@ public class CustomScriptService : ICustomScriptService
 
     public async Task<bool> ExecuteScriptAsync(string scriptPath, Torrent torrent, string eventType, string arguments = null)
     {
+        if (_processSupervisor != null && _processSupervisor.IsShuttingDown)
+        {
+            _logger.Warn("Skipping custom script execution for '{0}': application is shutting down.", scriptPath);
+            return false;
+        }
+
         var resolvedScriptPath = scriptPath;
         var resolvedArguments = arguments;
 
@@ -549,8 +567,15 @@ public class CustomScriptService : ICustomScriptService
             return false;
         }
 
+        await _concurrencyThrottle.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (_processSupervisor != null && _processSupervisor.IsShuttingDown)
+            {
+                _logger.Warn("Skipping custom script execution for '{0}': application is shutting down.", resolvedScriptPath);
+                return false;
+            }
+
             var workingDir = !string.IsNullOrWhiteSpace(torrent?.SavePath) && Directory.Exists(torrent.SavePath)
                 ? torrent.SavePath
                 : (Path.GetDirectoryName(resolvedScriptPath) ?? Environment.CurrentDirectory);
@@ -589,70 +614,98 @@ public class CustomScriptService : ICustomScriptService
             using var process = new Process { StartInfo = startInfo };
             process.Start();
 
-            using var timeoutCts = new CancellationTokenSource(_scriptTimeout);
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+            var pid = -1;
+            try
+            {
+                pid = process.Id;
+            }
+            catch
+            {
+            }
+
+            if (pid > 0)
+            {
+                _processSupervisor?.RegisterProcess(process);
+            }
 
             try
             {
-                await process.WaitForExitAsync(timeoutCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.Error("Custom script timed out after {0}s: {1}", _scriptTimeout.TotalSeconds, resolvedScriptPath);
-                await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
-                return false;
-            }
-
-            var stdout = string.Empty;
-            var stderr = string.Empty;
-
-            try
-            {
-                using var drainCts = new CancellationTokenSource(_streamDrainTimeout);
-                using var linkedDrainCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, drainCts.Token);
+                using var timeoutCts = new CancellationTokenSource(_scriptTimeout);
+                var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+                var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
 
                 try
                 {
-                    await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(linkedDrainCts.Token);
+                    await process.WaitForExitAsync(timeoutCts.Token);
                 }
-                catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
+                catch (OperationCanceledException)
                 {
-                    _logger.Debug("Custom script stream draining timed out after process exit: {0}", resolvedScriptPath);
+                    _logger.Error("Custom script timed out after {0}s: {1}", _scriptTimeout.TotalSeconds, resolvedScriptPath);
+                    await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
+                    return false;
                 }
 
-                if (stdoutTask.IsCompletedSuccessfully)
+                var stdout = string.Empty;
+                var stderr = string.Empty;
+
+                try
                 {
-                    stdout = await stdoutTask.ConfigureAwait(false);
-                }
+                    using var drainCts = new CancellationTokenSource(_streamDrainTimeout);
+                    using var linkedDrainCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, drainCts.Token);
 
-                if (stderrTask.IsCompletedSuccessfully)
+                    try
+                    {
+                        await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(linkedDrainCts.Token);
+                    }
+                    catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
+                    {
+                        _logger.Debug("Custom script stream draining timed out after process exit: {0}", resolvedScriptPath);
+                    }
+
+                    if (stdoutTask.IsCompletedSuccessfully)
+                    {
+                        stdout = await stdoutTask.ConfigureAwait(false);
+                    }
+
+                    if (stderrTask.IsCompletedSuccessfully)
+                    {
+                        stderr = await stderrTask.ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
                 {
-                    stderr = await stderrTask.ConfigureAwait(false);
+                    _logger.Debug(ex, "Exception while draining custom script streams: {0}", resolvedScriptPath);
+                }
+
+                if (!string.IsNullOrWhiteSpace(stdout))
+                {
+                    _logger.Debug("Custom script stdout: {0}", stdout.Trim());
+                }
+
+                if (!string.IsNullOrWhiteSpace(stderr))
+                {
+                    _logger.Warn("Custom script stderr: {0}", stderr.Trim());
+                }
+
+                _logger.Info("Custom script '{0}' completed with exit code: {1}", resolvedScriptPath, process.ExitCode);
+                return process.ExitCode == 0;
+            }
+            finally
+            {
+                if (pid > 0)
+                {
+                    _processSupervisor?.UnregisterProcess(pid);
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Exception while draining custom script streams: {0}", resolvedScriptPath);
-            }
-
-            if (!string.IsNullOrWhiteSpace(stdout))
-            {
-                _logger.Debug("Custom script stdout: {0}", stdout.Trim());
-            }
-
-            if (!string.IsNullOrWhiteSpace(stderr))
-            {
-                _logger.Warn("Custom script stderr: {0}", stderr.Trim());
-            }
-
-            _logger.Info("Custom script '{0}' completed with exit code: {1}", resolvedScriptPath, process.ExitCode);
-            return process.ExitCode == 0;
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to execute custom script: {0}", resolvedScriptPath);
             return false;
+        }
+        finally
+        {
+            _concurrencyThrottle.Release();
         }
     }
 
@@ -700,139 +753,210 @@ public class CustomScriptService : ICustomScriptService
             };
         }
 
-        var (resolvedFileName, resolvedArgs) = ResolveInterpreter(resolvedScriptPath, resolvedArguments);
+        if (_processSupervisor != null && _processSupervisor.IsShuttingDown)
+        {
+            var msg = "Application is shutting down.";
+            _logger.Warn(msg);
+            return new CustomScriptTestResult
+            {
+                Success = false,
+                ExitCode = -1,
+                Stdout = string.Empty,
+                Stderr = msg,
+                ExecutionTimeMs = 0,
+                TimedOut = false,
+                ResolvedInterpreter = string.Empty,
+                WorkingDirectory = workingDir,
+            };
+        }
 
-        var stopwatch = Stopwatch.StartNew();
+        await _concurrencyThrottle.WaitAsync().ConfigureAwait(false);
         try
         {
-            var startInfo = new ProcessStartInfo
+            if (_processSupervisor != null && _processSupervisor.IsShuttingDown)
             {
-                FileName = resolvedFileName,
-                Arguments = resolvedArgs,
-                WorkingDirectory = workingDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            };
-
-            // Sanitize inherited environment variables
-            SanitizeEnvironment(startInfo.EnvironmentVariables);
-
-            // Inject Servarr / Seedarr standard environment variables
-            var envVars = BuildEnvironmentVariables(eventType ?? "Test", null, null, _tagService);
-            foreach (var kvp in envVars)
-            {
-                var cleanKey = SanitizeEnvKey(kvp.Key);
-                var cleanVal = SanitizeEnvValue(kvp.Value);
-                if (!string.IsNullOrEmpty(cleanKey))
+                var msg = "Application is shutting down.";
+                _logger.Warn(msg);
+                return new CustomScriptTestResult
                 {
-                    startInfo.EnvironmentVariables[cleanKey] = cleanVal;
+                    Success = false,
+                    ExitCode = -1,
+                    Stdout = string.Empty,
+                    Stderr = msg,
+                    ExecutionTimeMs = 0,
+                    TimedOut = false,
+                    ResolvedInterpreter = string.Empty,
+                    WorkingDirectory = workingDir,
+                };
+            }
+
+            var (resolvedFileName, resolvedArgs) = ResolveInterpreter(resolvedScriptPath, resolvedArguments);
+
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = resolvedFileName,
+                    Arguments = resolvedArgs,
+                    WorkingDirectory = workingDir,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                };
+
+                // Sanitize inherited environment variables
+                SanitizeEnvironment(startInfo.EnvironmentVariables);
+
+                // Inject Servarr / Seedarr standard environment variables
+                var envVars = BuildEnvironmentVariables(eventType ?? "Test", null, null, _tagService);
+                foreach (var kvp in envVars)
+                {
+                    var cleanKey = SanitizeEnvKey(kvp.Key);
+                    var cleanVal = SanitizeEnvValue(kvp.Value);
+                    if (!string.IsNullOrEmpty(cleanKey))
+                    {
+                        startInfo.EnvironmentVariables[cleanKey] = cleanVal;
+                    }
                 }
-            }
 
-            _logger.Info("Testing custom script '{0}' for event '{1}' in working directory '{2}'...", resolvedScriptPath, eventType, workingDir);
+                _logger.Info("Testing custom script '{0}' for event '{1}' in working directory '{2}'...", resolvedScriptPath, eventType, workingDir);
 
-            using var process = new Process { StartInfo = startInfo };
-            process.Start();
+                using var process = new Process { StartInfo = startInfo };
+                process.Start();
 
-            using var timeoutCts = new CancellationTokenSource(_scriptTimeout);
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+                var pid = -1;
+                try
+                {
+                    pid = process.Id;
+                }
+                catch
+                {
+                }
 
-            var timedOut = false;
-            try
-            {
-                await process.WaitForExitAsync(timeoutCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                timedOut = true;
-                _logger.Error("Custom script test timed out after {0}s: {1}", _scriptTimeout.TotalSeconds, resolvedScriptPath);
-                await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
-            }
-
-            stopwatch.Stop();
-            var elapsedMs = stopwatch.ElapsedMilliseconds > 0 ? stopwatch.ElapsedMilliseconds : (stopwatch.Elapsed.TotalMilliseconds > 0 ? 1L : 0L);
-
-            var stdout = string.Empty;
-            var stderr = string.Empty;
-
-            try
-            {
-                using var drainCts = new CancellationTokenSource(_streamDrainTimeout);
-                using var linkedDrainCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, drainCts.Token);
+                if (pid > 0)
+                {
+                    _processSupervisor?.RegisterProcess(process);
+                }
 
                 try
                 {
-                    await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(linkedDrainCts.Token);
-                }
-                catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
-                {
-                    _logger.Debug("Custom script test stream draining timed out after process exit: {0}", resolvedScriptPath);
-                }
+                    using var timeoutCts = new CancellationTokenSource(_scriptTimeout);
+                    var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+                    var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
 
-                if (stdoutTask.IsCompletedSuccessfully)
-                {
-                    stdout = await stdoutTask.ConfigureAwait(false);
-                }
+                    var timedOut = false;
+                    try
+                    {
+                        await process.WaitForExitAsync(timeoutCts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        timedOut = true;
+                        _logger.Error("Custom script test timed out after {0}s: {1}", _scriptTimeout.TotalSeconds, resolvedScriptPath);
+                        await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
+                    }
 
-                if (stderrTask.IsCompletedSuccessfully)
+                    stopwatch.Stop();
+                    var elapsedMs = stopwatch.ElapsedMilliseconds > 0 ? stopwatch.ElapsedMilliseconds : (stopwatch.Elapsed.TotalMilliseconds > 0 ? 1L : 0L);
+
+                    var stdout = string.Empty;
+                    var stderr = string.Empty;
+
+                    try
+                    {
+                        using var drainCts = new CancellationTokenSource(_streamDrainTimeout);
+                        using var linkedDrainCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, drainCts.Token);
+
+                        try
+                        {
+                            await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(linkedDrainCts.Token);
+                        }
+                        catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
+                        {
+                            _logger.Debug("Custom script test stream draining timed out after process exit: {0}", resolvedScriptPath);
+                        }
+
+                        if (stdoutTask.IsCompletedSuccessfully)
+                        {
+                            stdout = await stdoutTask.ConfigureAwait(false);
+                        }
+
+                        if (stderrTask.IsCompletedSuccessfully)
+                        {
+                            stderr = await stderrTask.ConfigureAwait(false);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "Exception while draining custom script test streams: {0}", resolvedScriptPath);
+                    }
+
+                    var exitCode = timedOut ? -1 : process.ExitCode;
+                    if (timedOut && string.IsNullOrWhiteSpace(stderr))
+                    {
+                        stderr = $"Script execution timed out after {_scriptTimeout.TotalSeconds} seconds.";
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(stdout))
+                    {
+                        _logger.Debug("Custom script test stdout: {0}", stdout.Trim());
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(stderr))
+                    {
+                        _logger.Warn("Custom script test stderr: {0}", stderr.Trim());
+                    }
+
+                    _logger.Info("Custom script test '{0}' completed with exit code: {1}", resolvedScriptPath, exitCode);
+
+                    return new CustomScriptTestResult
+                    {
+                        Success = !timedOut && exitCode == 0,
+                        ExitCode = exitCode,
+                        Stdout = stdout ?? string.Empty,
+                        Stderr = stderr ?? string.Empty,
+                        ExecutionTimeMs = elapsedMs,
+                        TimedOut = timedOut,
+                        ResolvedInterpreter = resolvedFileName,
+                        WorkingDirectory = workingDir,
+                    };
+                }
+                finally
                 {
-                    stderr = await stderrTask.ConfigureAwait(false);
+                    if (pid > 0)
+                    {
+                        _processSupervisor?.UnregisterProcess(pid);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                _logger.Debug(ex, "Exception while draining custom script test streams: {0}", resolvedScriptPath);
+                stopwatch.Stop();
+                var elapsedMs = stopwatch.ElapsedMilliseconds > 0 ? stopwatch.ElapsedMilliseconds : (stopwatch.Elapsed.TotalMilliseconds > 0 ? 1L : 0L);
+                _logger.Error(ex, "Failed to execute custom script test: {0}", resolvedScriptPath);
+                return new CustomScriptTestResult
+                {
+                    Success = false,
+                    ExitCode = ex is System.ComponentModel.Win32Exception win32Ex ? win32Ex.NativeErrorCode : -1,
+                    Stdout = string.Empty,
+                    Stderr = ex.Message,
+                    ExecutionTimeMs = elapsedMs,
+                    TimedOut = false,
+                    ResolvedInterpreter = resolvedFileName,
+                    WorkingDirectory = workingDir,
+                };
             }
-
-            var exitCode = timedOut ? -1 : process.ExitCode;
-            if (timedOut && string.IsNullOrWhiteSpace(stderr))
-            {
-                stderr = $"Script execution timed out after {_scriptTimeout.TotalSeconds} seconds.";
-            }
-
-            if (!string.IsNullOrWhiteSpace(stdout))
-            {
-                _logger.Debug("Custom script test stdout: {0}", stdout.Trim());
-            }
-
-            if (!string.IsNullOrWhiteSpace(stderr))
-            {
-                _logger.Warn("Custom script test stderr: {0}", stderr.Trim());
-            }
-
-            _logger.Info("Custom script test '{0}' completed with exit code: {1}", resolvedScriptPath, exitCode);
-
-            return new CustomScriptTestResult
-            {
-                Success = !timedOut && exitCode == 0,
-                ExitCode = exitCode,
-                Stdout = stdout ?? string.Empty,
-                Stderr = stderr ?? string.Empty,
-                ExecutionTimeMs = elapsedMs,
-                TimedOut = timedOut,
-                ResolvedInterpreter = resolvedFileName,
-                WorkingDirectory = workingDir,
-            };
         }
-        catch (Exception ex)
+        finally
         {
-            stopwatch.Stop();
-            var elapsedMs = stopwatch.ElapsedMilliseconds > 0 ? stopwatch.ElapsedMilliseconds : (stopwatch.Elapsed.TotalMilliseconds > 0 ? 1L : 0L);
-            _logger.Error(ex, "Failed to execute custom script test: {0}", resolvedScriptPath);
-            return new CustomScriptTestResult
-            {
-                Success = false,
-                ExitCode = ex is System.ComponentModel.Win32Exception win32Ex ? win32Ex.NativeErrorCode : -1,
-                Stdout = string.Empty,
-                Stderr = ex.Message,
-                ExecutionTimeMs = elapsedMs,
-                TimedOut = false,
-                ResolvedInterpreter = resolvedFileName,
-                WorkingDirectory = workingDir,
-            };
+            _concurrencyThrottle.Release();
         }
+    }
+
+    public void Dispose()
+    {
+        _concurrencyThrottle?.Dispose();
     }
 }
