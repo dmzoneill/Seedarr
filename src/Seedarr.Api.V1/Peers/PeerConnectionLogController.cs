@@ -33,7 +33,9 @@ public class PeerConnectionLogController : Controller
     public ActionResult<List<PeerConnectionLogResource>> GetLogs(
         [FromQuery] DateTime? start,
         [FromQuery] DateTime? end,
-        [FromQuery] string infoHash)
+        [FromQuery] string infoHash,
+        [FromQuery] int limit = 1000,
+        [FromQuery] int offset = 0)
     {
         var startDate = start ?? DateTime.UtcNow.AddHours(-1);
         var endDate = end ?? DateTime.UtcNow;
@@ -44,24 +46,33 @@ public class PeerConnectionLogController : Controller
             return validation;
         }
 
+        var clampedLimit = limit <= 0 ? 1000 : Math.Min(limit, 5000);
+        var clampedOffset = Math.Max(0, offset);
+
         List<PeerConnectionLog> logs;
 
         if (!string.IsNullOrEmpty(infoHash))
         {
-            logs = _logService.GetByInfoHash(NormalizeInfoHash(infoHash), startDate, endDate);
+            logs = _logService.GetByInfoHash(NormalizeInfoHash(infoHash), startDate, endDate, clampedLimit, clampedOffset);
         }
         else
         {
-            logs = _logService.GetByTimeRange(startDate, endDate);
+            logs = _logService.GetByTimeRange(startDate, endDate, clampedLimit, clampedOffset);
         }
 
         return Ok(logs.Select(ToResource).ToList());
     }
 
     [HttpGet("active")]
-    public ActionResult<List<PeerConnectionLogResource>> GetActive()
+    public ActionResult<List<PeerConnectionLogResource>> GetActive([FromQuery] int maxRecords = 1000)
     {
         var activeConnections = _connectionManager?.GetAllConnections() ?? new List<PeerConnection>();
+
+        var clampedMax = maxRecords <= 0 ? 1000 : Math.Min(maxRecords, 5000);
+        if (activeConnections.Count > clampedMax)
+        {
+            activeConnections = activeConnections.Take(clampedMax).ToList();
+        }
 
         var resources = activeConnections.Select(conn => new PeerConnectionLogResource
         {
@@ -80,7 +91,8 @@ public class PeerConnectionLogController : Controller
     [HttpGet("graph")]
     public ActionResult<PeerGraphResource> GetGraph(
         [FromQuery] DateTime? start,
-        [FromQuery] DateTime? end)
+        [FromQuery] DateTime? end,
+        [FromQuery] int maxRecords = 1000)
     {
         var startDate = start ?? DateTime.UtcNow.AddHours(-1);
         var endDate = end ?? DateTime.UtcNow;
@@ -91,7 +103,8 @@ public class PeerConnectionLogController : Controller
             return validation;
         }
 
-        var logs = _logService.GetByTimeRange(startDate, endDate);
+        var clampedMax = maxRecords <= 0 ? 1000 : Math.Min(maxRecords, 5000);
+        var logs = _logService.GetByTimeRange(startDate, endDate, clampedMax, 0);
 
         var nodes = new List<PeerGraphNode>();
         var links = new List<PeerGraphLink>();

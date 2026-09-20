@@ -12,11 +12,14 @@ public interface IPeerConnectionLogService
 {
     void LogConnected(PeerConnection connection, string torrentName);
     void LogDisconnected(PeerConnection connection, string torrentName);
-    List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end);
-    List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end);
+    List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end, int limit = 1000, int offset = 0);
+    List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end, int limit = 1000, int offset = 0);
+    List<PeerConnectionLog> GetLogs(DateTime start, DateTime end, int limit = 1000, int offset = 0);
+    List<PeerConnectionLog> GetLogsByInfoHash(string infoHash, DateTime start, DateTime end, int limit = 1000, int offset = 0);
     (int EncryptedCount, int PlaintextCount) GetConnectionCounts(DateTime start, DateTime end);
     void Purge(DateTime before);
     void Purge(DateTime before, int maxLogs);
+    void Purge(DateTime before, int maxLogs, int batchSize);
     void Flush();
     Task FlushAsync();
 }
@@ -93,15 +96,21 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
         }
     }
 
-    public List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end)
+    public List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end, int limit = 1000, int offset = 0)
     {
-        return _repository.GetByTimeRange(start, end);
+        return _repository.GetByTimeRange(start, end, limit, offset);
     }
 
-    public List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end)
+    public List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end, int limit = 1000, int offset = 0)
     {
-        return _repository.GetByInfoHash(infoHash, start, end);
+        return _repository.GetByInfoHash(infoHash, start, end, limit, offset);
     }
+
+    public List<PeerConnectionLog> GetLogs(DateTime start, DateTime end, int limit = 1000, int offset = 0) =>
+        GetByTimeRange(start, end, limit, offset);
+
+    public List<PeerConnectionLog> GetLogsByInfoHash(string infoHash, DateTime start, DateTime end, int limit = 1000, int offset = 0) =>
+        GetByInfoHash(infoHash, start, end, limit, offset);
 
     public (int EncryptedCount, int PlaintextCount) GetConnectionCounts(DateTime start, DateTime end)
     {
@@ -110,13 +119,18 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
 
     public void Purge(DateTime before)
     {
-        Purge(before, 50000);
+        Purge(before, 50000, 1000);
     }
 
     public void Purge(DateTime before, int maxLogs)
     {
-        _repository.Purge(before, maxLogs);
-        _logger.Info("Purged peer connection logs before {0} (max {1} logs retained)", before, maxLogs);
+        Purge(before, maxLogs, 1000);
+    }
+
+    public void Purge(DateTime before, int maxLogs, int batchSize)
+    {
+        _repository.Purge(before, maxLogs, batchSize);
+        _logger.Info("Purged peer connection logs before {0} (max {1} logs retained, batch size {2})", before, maxLogs, batchSize);
     }
 
     public void Flush()

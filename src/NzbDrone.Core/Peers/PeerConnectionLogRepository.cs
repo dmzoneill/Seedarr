@@ -9,11 +9,14 @@ namespace NzbDrone.Core.Peers;
 
 public interface IPeerConnectionLogRepository : IBasicRepository<PeerConnectionLog>
 {
-    List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end);
-    List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end);
+    List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end, int limit = 1000, int offset = 0);
+    List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end, int limit = 1000, int offset = 0);
+    List<PeerConnectionLog> GetLogs(DateTime start, DateTime end, int limit = 1000, int offset = 0);
+    List<PeerConnectionLog> GetLogsByInfoHash(string infoHash, DateTime start, DateTime end, int limit = 1000, int offset = 0);
     (int EncryptedCount, int PlaintextCount) GetConnectionCounts(DateTime start, DateTime end);
     void Purge(DateTime before);
     void Purge(DateTime before, int maxLogs);
+    void Purge(DateTime before, int maxLogs, int batchSize);
 }
 
 public class PeerConnectionLogRepository : BasicRepository<PeerConnectionLog>, IPeerConnectionLogRepository
@@ -23,21 +26,33 @@ public class PeerConnectionLogRepository : BasicRepository<PeerConnectionLog>, I
     {
     }
 
-    public List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end)
+    public List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end, int limit = 1000, int offset = 0)
     {
+        var clampedLimit = limit <= 0 ? 1000 : Math.Min(limit, 5000);
+        var clampedOffset = Math.Max(0, offset);
+
         return QueryWithRetry(connection =>
             connection.Query<PeerConnectionLog>(
-                $"SELECT * FROM \"{_table}\" WHERE \"Timestamp\" >= @Start AND \"Timestamp\" <= @End ORDER BY \"Timestamp\" DESC",
-                new { Start = start, End = end }).ToList());
+                $"SELECT * FROM \"{_table}\" WHERE \"Timestamp\" >= @Start AND \"Timestamp\" <= @End ORDER BY \"Timestamp\" DESC LIMIT @Limit OFFSET @Offset",
+                new { Start = start, End = end, Limit = clampedLimit, Offset = clampedOffset }).ToList());
     }
 
-    public List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end)
+    public List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end, int limit = 1000, int offset = 0)
     {
+        var clampedLimit = limit <= 0 ? 1000 : Math.Min(limit, 5000);
+        var clampedOffset = Math.Max(0, offset);
+
         return QueryWithRetry(connection =>
             connection.Query<PeerConnectionLog>(
-                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash AND \"Timestamp\" >= @Start AND \"Timestamp\" <= @End ORDER BY \"Timestamp\" DESC",
-                new { InfoHash = infoHash, Start = start, End = end }).ToList());
+                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash AND \"Timestamp\" >= @Start AND \"Timestamp\" <= @End ORDER BY \"Timestamp\" DESC LIMIT @Limit OFFSET @Offset",
+                new { InfoHash = infoHash, Start = start, End = end, Limit = clampedLimit, Offset = clampedOffset }).ToList());
     }
+
+    public List<PeerConnectionLog> GetLogs(DateTime start, DateTime end, int limit = 1000, int offset = 0) =>
+        GetByTimeRange(start, end, limit, offset);
+
+    public List<PeerConnectionLog> GetLogsByInfoHash(string infoHash, DateTime start, DateTime end, int limit = 1000, int offset = 0) =>
+        GetByInfoHash(infoHash, start, end, limit, offset);
 
     public (int EncryptedCount, int PlaintextCount) GetConnectionCounts(DateTime start, DateTime end)
     {
@@ -67,11 +82,18 @@ public class PeerConnectionLogRepository : BasicRepository<PeerConnectionLog>, I
 
     public void Purge(DateTime before)
     {
-        Purge(before, 50000);
+        Purge(before, 50000, 1000);
     }
 
     public void Purge(DateTime before, int maxLogs)
     {
+        Purge(before, maxLogs, 1000);
+    }
+
+    public void Purge(DateTime before, int maxLogs, int batchSize)
+    {
+        var clampedBatchSize = batchSize <= 0 ? 1000 : batchSize;
+
         ExecuteWithRetry(connection =>
         {
             while (true)
@@ -81,11 +103,11 @@ public class PeerConnectionLogRepository : BasicRepository<PeerConnectionLog>, I
                     WHERE ""Id"" IN (
                         SELECT ""Id"" FROM ""{_table}""
                         WHERE ""Timestamp"" < @Before
-                        LIMIT 500
+                        LIMIT @BatchSize
                     )",
-                    new { Before = before });
+                    new { Before = before, BatchSize = clampedBatchSize });
 
-                if (rowsAffected == 0)
+                if (rowsAffected < clampedBatchSize)
                 {
                     break;
                 }
@@ -105,11 +127,11 @@ public class PeerConnectionLogRepository : BasicRepository<PeerConnectionLog>, I
                                 FROM ""{_table}""
                             ) sub
                             WHERE sub.rn > @MaxLogs
-                            LIMIT 500
+                            LIMIT @BatchSize
                         )",
-                        new { MaxLogs = maxLogs });
+                        new { MaxLogs = maxLogs, BatchSize = clampedBatchSize });
 
-                    if (rowsAffected == 0)
+                    if (rowsAffected < clampedBatchSize)
                     {
                         break;
                     }

@@ -204,4 +204,46 @@ public class DownloadHistoryRepositoryTest
         Assert.That(remaining.Any(r => r.InfoHash == "removed_hash"), Is.False);
         Assert.That(remaining.Any(r => r.InfoHash == "inactive_hash"), Is.False);
     }
+
+    [Test]
+    public void DeleteOlderThan_with_custom_batch_size_should_delete_records_in_chunks()
+    {
+        var now = DateTime.UtcNow;
+        var oldDate = now.AddDays(-30);
+        var entries = new List<DownloadHistory>();
+
+        for (var i = 0; i < 25; i++)
+        {
+            entries.Add(new DownloadHistory
+            {
+                TorrentId = null,
+                Title = $"Old Deleted Torrent {i}",
+                InfoHash = $"old_hash_{i}",
+                DateAdded = oldDate.AddMinutes(i),
+                DateRemoved = oldDate.AddDays(1),
+                Status = "Removed"
+            });
+        }
+
+        for (var i = 0; i < 2; i++)
+        {
+            entries.Add(new DownloadHistory
+            {
+                TorrentId = i + 1,
+                Title = $"Active Torrent {i}",
+                InfoHash = $"active_hash_{i}",
+                DateAdded = now.AddDays(-1),
+                Status = "Active"
+            });
+        }
+
+        _subject.InsertMany(entries);
+
+        // Delete with batchSize of 10
+        var deleted = _subject.DeleteOlderThan(now.AddDays(-7), batchSize: 10);
+
+        Assert.That(deleted, Is.EqualTo(25));
+        var remaining = _subject.All().ToList();
+        Assert.That(remaining, Has.Count.EqualTo(2));
+    }
 }

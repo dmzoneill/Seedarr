@@ -10,5 +10,6 @@ public interface IDownloadHistoryRepository : IBasicRepository<DownloadHistory>
     Dictionary<string, DownloadHistory> GetLatestByInfoHashes(IEnumerable<string> infoHashes);
     List<DownloadHistory> GetHistory(string query = null, string status = null, int limit = 500, int offset = 0);
     int DeleteOlderThan(global::System.DateTime cutoffDate);
+    int DeleteOlderThan(global::System.DateTime cutoffDate, int batchSize);
     void DeleteAll();
 }

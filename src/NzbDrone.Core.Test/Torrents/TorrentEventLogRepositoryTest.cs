@@ -177,4 +177,44 @@ public class TorrentEventLogRepositoryTest
         var remaining = _subject.GetByTorrentId(1, 100);
         Assert.That(remaining, Has.Count.EqualTo(5));
     }
+
+    [Test]
+    public void Purge_with_custom_batch_size_should_delete_records_in_chunks()
+    {
+        var now = DateTime.UtcNow;
+        var oldDate = now.AddDays(-30);
+        var logs = new List<TorrentEventLog>();
+
+        for (var i = 0; i < 25; i++)
+        {
+            logs.Add(new TorrentEventLog
+            {
+                TorrentId = 1,
+                TimeStamp = oldDate.AddMinutes(i),
+                Level = "Info",
+                Source = "Sys",
+                Message = $"Old Log {i}"
+            });
+        }
+
+        for (var i = 0; i < 3; i++)
+        {
+            logs.Add(new TorrentEventLog
+            {
+                TorrentId = 1,
+                TimeStamp = now.AddMinutes(i),
+                Level = "Info",
+                Source = "Sys",
+                Message = $"Recent Log {i}"
+            });
+        }
+
+        _subject.InsertMany(logs);
+
+        // Delete with batchSize of 10
+        _subject.Purge(now.AddDays(-1), 0, batchSize: 10);
+
+        var remaining = _subject.GetByTorrentId(1, 100);
+        Assert.That(remaining, Has.Count.EqualTo(3));
+    }
 }

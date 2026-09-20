@@ -12,6 +12,7 @@ public interface ITorrentEventLogRepository : IBasicRepository<TorrentEventLog>
     List<TorrentEventLog> GetByTorrentId(int torrentId, int count);
     void Purge(DateTime before);
     void Purge(DateTime before, int maxLogsPerTorrent);
+    void Purge(DateTime before, int maxLogsPerTorrent, int batchSize);
 }
 
 public class TorrentEventLogRepository : BasicRepository<TorrentEventLog>, ITorrentEventLogRepository
@@ -31,11 +32,18 @@ public class TorrentEventLogRepository : BasicRepository<TorrentEventLog>, ITorr
 
     public void Purge(DateTime before)
     {
-        Purge(before, 1000);
+        Purge(before, 1000, 1000);
     }
 
     public void Purge(DateTime before, int maxLogsPerTorrent)
     {
+        Purge(before, maxLogsPerTorrent, 1000);
+    }
+
+    public void Purge(DateTime before, int maxLogsPerTorrent, int batchSize)
+    {
+        var clampedBatchSize = batchSize <= 0 ? 1000 : batchSize;
+
         ExecuteWithRetry(connection =>
         {
             while (true)
@@ -45,11 +53,11 @@ public class TorrentEventLogRepository : BasicRepository<TorrentEventLog>, ITorr
                     WHERE ""Id"" IN (
                         SELECT ""Id"" FROM ""{_table}""
                         WHERE ""TimeStamp"" < @Before
-                        LIMIT 500
+                        LIMIT @BatchSize
                     )",
-                    new { Before = before });
+                    new { Before = before, BatchSize = clampedBatchSize });
 
-                if (rowsAffected == 0)
+                if (rowsAffected < clampedBatchSize)
                 {
                     break;
                 }
@@ -69,11 +77,11 @@ public class TorrentEventLogRepository : BasicRepository<TorrentEventLog>, ITorr
                                 FROM ""{_table}""
                             ) sub
                             WHERE sub.rn > @MaxLogs
-                            LIMIT 500
+                            LIMIT @BatchSize
                         )",
-                        new { MaxLogs = maxLogsPerTorrent });
+                        new { MaxLogs = maxLogsPerTorrent, BatchSize = clampedBatchSize });
 
-                    if (rowsAffected == 0)
+                    if (rowsAffected < clampedBatchSize)
                     {
                         break;
                     }

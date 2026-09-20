@@ -442,4 +442,71 @@ public class PeerConnectionLogControllerTest
         typeof(PeerConnection).GetProperty("IsEncrypted")?.SetValue(conn, isEncrypted);
         return conn;
     }
+
+    [Test]
+    public void GetLogs_passes_limit_and_offset_to_log_service()
+    {
+        var now = DateTime.UtcNow;
+        var start = now.AddHours(-1);
+        var end = now;
+
+        _logService.GetByTimeRange(start, end, 50, 10).Returns(new List<PeerConnectionLog>());
+
+        var result = _controller.GetLogs(start, end, null, limit: 50, offset: 10);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _logService.Received(1).GetByTimeRange(start, end, 50, 10);
+    }
+
+    [Test]
+    public void GetLogs_with_infohash_passes_limit_and_offset_to_log_service()
+    {
+        var now = DateTime.UtcNow;
+        var start = now.AddHours(-1);
+        var end = now;
+
+        _logService.GetByInfoHash("aabbcc", start, end, 25, 5).Returns(new List<PeerConnectionLog>());
+
+        var result = _controller.GetLogs(start, end, "AABBCC", limit: 25, offset: 5);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _logService.Received(1).GetByInfoHash("aabbcc", start, end, 25, 5);
+    }
+
+    [Test]
+    public void GetActive_caps_results_at_max_records()
+    {
+        var conns = new List<PeerConnection>();
+        for (var i = 0; i < 20; i++)
+        {
+            conns.Add(CreateMockPeerConnection($"10.0.0.{i}", 6881 + i, "aabbcc", $"peer_{i}", false));
+        }
+
+        _connectionManager.GetAllConnections().Returns(conns);
+
+        var result = _controller.GetActive(maxRecords: 5);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var resources = (List<PeerConnectionLogResource>)okResult.Value;
+
+        Assert.That(resources, Has.Count.EqualTo(5));
+    }
+
+    [Test]
+    public void GetGraph_passes_max_records_limit_to_log_service()
+    {
+        var now = DateTime.UtcNow;
+        var start = now.AddHours(-1);
+        var end = now;
+
+        _logService.GetByTimeRange(start, end, 200, 0).Returns(new List<PeerConnectionLog>());
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _peerDatabase.GetAllInfoHashes().Returns(new List<string>());
+
+        var result = _controller.GetGraph(start, end, maxRecords: 200);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _logService.Received(1).GetByTimeRange(start, end, 200, 0);
+    }
 }

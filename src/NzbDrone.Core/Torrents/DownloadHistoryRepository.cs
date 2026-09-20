@@ -104,8 +104,12 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
         });
     }
 
-    public int DeleteOlderThan(DateTime cutoffDate)
+    public int DeleteOlderThan(DateTime cutoffDate) => DeleteOlderThan(cutoffDate, 1000);
+
+    public int DeleteOlderThan(DateTime cutoffDate, int batchSize)
     {
+        var clampedBatchSize = batchSize <= 0 ? 1000 : batchSize;
+
         return QueryWithRetry(connection =>
         {
             var totalDeleted = 0;
@@ -122,12 +126,12 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
                                 (""DateRemoved"" IS NOT NULL AND ""DateRemoved"" < @Cutoff)
                                 OR (""DateRemoved"" IS NULL AND (""TorrentId"" IS NULL OR LOWER(""Status"") IN ('removed', 'inactive')))
                             )
-                        LIMIT 500
+                        LIMIT @BatchSize
                     )",
-                    new { Cutoff = cutoffDate });
+                    new { Cutoff = cutoffDate, BatchSize = clampedBatchSize });
 
                 totalDeleted += rowsAffected;
-                if (rowsAffected == 0)
+                if (rowsAffected < clampedBatchSize)
                 {
                     break;
                 }

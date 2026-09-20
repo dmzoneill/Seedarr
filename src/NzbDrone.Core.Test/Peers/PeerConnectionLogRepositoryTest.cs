@@ -356,4 +356,92 @@ public class PeerConnectionLogRepositoryTest
         var remaining = _subject.All().ToList();
         Assert.That(remaining, Has.Count.EqualTo(5));
     }
+
+    [Test]
+    public void GetByTimeRange_should_paginate_with_limit_and_offset()
+    {
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        for (var i = 1; i <= 10; i++)
+        {
+            InsertLog($"hash-{i:D2}", start.AddDays(i));
+        }
+
+        var page1 = _subject.GetByTimeRange(start, end, limit: 3, offset: 0);
+        var page2 = _subject.GetByTimeRange(start, end, limit: 3, offset: 3);
+
+        Assert.That(page1, Has.Count.EqualTo(3));
+        Assert.That(page2, Has.Count.EqualTo(3));
+        Assert.That(page1[0].InfoHash, Is.EqualTo("hash-10"));
+        Assert.That(page1[1].InfoHash, Is.EqualTo("hash-09"));
+        Assert.That(page1[2].InfoHash, Is.EqualTo("hash-08"));
+        Assert.That(page2[0].InfoHash, Is.EqualTo("hash-07"));
+        Assert.That(page2[1].InfoHash, Is.EqualTo("hash-06"));
+        Assert.That(page2[2].InfoHash, Is.EqualTo("hash-05"));
+    }
+
+    [Test]
+    public void GetByInfoHash_should_paginate_with_limit_and_offset()
+    {
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        const string targetHash = "paginatedhash";
+
+        for (var i = 1; i <= 5; i++)
+        {
+            InsertLog(targetHash, start.AddDays(i));
+        }
+
+        var page1 = _subject.GetByInfoHash(targetHash, start, end, limit: 2, offset: 0);
+        var page2 = _subject.GetByInfoHash(targetHash, start, end, limit: 2, offset: 2);
+
+        Assert.That(page1, Has.Count.EqualTo(2));
+        Assert.That(page2, Has.Count.EqualTo(2));
+        Assert.That(page1[0].Timestamp, Is.GreaterThan(page1[1].Timestamp));
+        Assert.That(page2[0].Timestamp, Is.GreaterThan(page2[1].Timestamp));
+        Assert.That(page1[1].Timestamp, Is.GreaterThan(page2[0].Timestamp));
+    }
+
+    [Test]
+    public void GetLogs_and_GetLogsByInfoHash_aliases_should_work_with_pagination()
+    {
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        const string targetHash = "aliashash";
+
+        for (var i = 1; i <= 4; i++)
+        {
+            InsertLog(targetHash, start.AddDays(i));
+        }
+
+        var timeRangeLogs = _subject.GetLogs(start, end, limit: 2, offset: 1);
+        var infoHashLogs = _subject.GetLogsByInfoHash(targetHash, start, end, limit: 2, offset: 1);
+
+        Assert.That(timeRangeLogs, Has.Count.EqualTo(2));
+        Assert.That(infoHashLogs, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public void Purge_with_custom_batch_size_should_delete_in_chunks()
+    {
+        var now = DateTime.UtcNow;
+        var oldDate = now.AddDays(-30);
+
+        for (var i = 0; i < 25; i++)
+        {
+            InsertLog($"old-batch-{i}", oldDate.AddMinutes(i));
+        }
+
+        for (var i = 0; i < 3; i++)
+        {
+            InsertLog($"recent-{i}", now.AddMinutes(i));
+        }
+
+        // Batch size 10, should take 3 iterations
+        _subject.Purge(now.AddDays(-1), 50000, batchSize: 10);
+
+        var remaining = _subject.All().ToList();
+        Assert.That(remaining, Has.Count.EqualTo(3));
+    }
 }
