@@ -5,6 +5,7 @@ using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.ArrIntegration;
@@ -29,8 +30,9 @@ public class ArrSyncServiceTest
             ITorrentService torrentService,
             IArrConnection provider,
             IDownloadHistoryService downloadHistoryService = null,
-            IConfigService configService = null)
-            : base(connectionFactory, torrentService, downloadHistoryService, configService: configService)
+            IConfigService configService = null,
+            IRemotePathMappingService remotePathMappingService = null)
+            : base(connectionFactory, torrentService, downloadHistoryService, configService: configService, remotePathMappingService: remotePathMappingService)
         {
             _provider = provider;
         }
@@ -38,8 +40,12 @@ public class ArrSyncServiceTest
         protected override IArrConnection CreateProvider(ArrConnectionDefinition definition) => _provider;
     }
 
-    private ArrSyncService CreateTestableService(IArrConnection provider, IDownloadHistoryService downloadHistoryService = null, IConfigService configService = null) =>
-        new TestableArrSyncService(_connectionFactory, _torrentService, provider, downloadHistoryService, configService);
+    private ArrSyncService CreateTestableService(
+        IArrConnection provider,
+        IDownloadHistoryService downloadHistoryService = null,
+        IConfigService configService = null,
+        IRemotePathMappingService remotePathMappingService = null) =>
+        new TestableArrSyncService(_connectionFactory, _torrentService, provider, downloadHistoryService, configService, remotePathMappingService);
 
     private static ArrConnectionDefinition EnabledDefinition(string arrType = "Sonarr") =>
         new() { Enable = true, SyncEnabled = true, ArrType = arrType, Name = "Test" };
@@ -1012,5 +1018,42 @@ public class ArrSyncServiceTest
             source: "Sonarr",
             downloadUrl: Arg.Any<string>(),
             indexerName: Arg.Any<string>());
+    }
+
+    [Test]
+    public void Sync_should_remap_record_output_path_using_remote_path_mapping_service()
+    {
+        var provider = Substitute.For<IArrConnection>();
+        provider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>
+        {
+            new()
+            {
+                InfoHash = "hash-remap-1",
+                Title = "Title Remap",
+                OutputPath = "/remote/tv/Episode1.mkv"
+            }
+        });
+
+        var def = new ArrConnectionDefinition
+        {
+            Enable = true,
+            SyncEnabled = true,
+            ArrType = "Sonarr",
+            Name = "SonarrRemap",
+            Url = "http://192.168.1.100:8989",
+            Category = "tv-remap"
+        };
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { def });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var mappingService = Substitute.For<IRemotePathMappingService>();
+        mappingService.RemapRemoteToLocal("192.168.1.100", "/remote/tv/Episode1.mkv")
+            .Returns("/local/storage/tv/Episode1.mkv");
+
+        CreateTestableService(provider, remotePathMappingService: mappingService).Sync();
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.SourcePath == "/local/storage/tv/Episode1.mkv" &&
+            t.SavePath == "/local/storage/tv/Episode1.mkv"));
     }
 }

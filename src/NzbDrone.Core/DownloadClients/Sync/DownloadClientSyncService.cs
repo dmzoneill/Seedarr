@@ -197,7 +197,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
                             if (!string.IsNullOrWhiteSpace(item.OutputPath))
                             {
-                                var remappedPath = _remotePathMappingService.Remap(definition.Host, item.OutputPath);
+                                var remappedPath = _remotePathMappingService.RemapRemoteToLocal(definition.Host, item.OutputPath);
                                 if (string.IsNullOrEmpty(torrent.SavePath))
                                 {
                                     torrent.SavePath = remappedPath;
@@ -251,7 +251,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             var total = parsed.TotalSize > 0 ? parsed.TotalSize : item.TotalSize;
                             var remaining = item.RemainingSize;
                             var downloaded = Math.Max(0, total - remaining);
-                            var remappedPath = _remotePathMappingService.Remap(definition.Host, item.OutputPath);
+                            var remappedPath = _remotePathMappingService.RemapRemoteToLocal(definition.Host, item.OutputPath);
                             var initialProgress = total > 0 ? (double)(total - remaining) / total : (remaining == 0 ? 1.0 : 0.0);
 
                             torrent = new Torrent
@@ -501,7 +501,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             torrentBytes = SearchIndexersForTorrent(normalizedHash);
         }
 
-        var remappedPath = _remotePathMappingService.Remap(definition?.Host, matchingItem?.OutputPath);
+        var remappedPath = _remotePathMappingService.RemapRemoteToLocal(definition?.Host, matchingItem?.OutputPath);
 
         Torrent torrent;
         if (torrentBytes != null && torrentBytes.Length > 0)

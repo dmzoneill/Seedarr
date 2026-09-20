@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.RemotePathMappings;
 
@@ -610,5 +611,67 @@ public class RemotePathMappingServiceTest
         // 6. Default fallback
         var fromDefault = resolver.ResolveFromHeaders(null, null, null, null);
         Assert.That(fromDefault, Is.EqualTo("localhost"));
+    }
+
+    [Test]
+    public void GetAll_delegates_to_repository_when_provided()
+    {
+        var repo = Substitute.For<IRemotePathMappingRepository>();
+        var mappings = new List<RemotePathMapping>
+        {
+            new() { Id = 1, Host = "host1", RemotePath = "/rem", LocalPath = "/loc" }
+        };
+        repo.All().Returns(mappings);
+
+        var service = new RemotePathMappingService(repo);
+        var result = service.GetAll();
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Host, Is.EqualTo("host1"));
+    }
+
+    [Test]
+    public void Add_Update_Delete_delegates_to_repository_when_provided()
+    {
+        var repo = Substitute.For<IRemotePathMappingRepository>();
+        var mapping = new RemotePathMapping { Id = 1, Host = "host1", RemotePath = "/rem", LocalPath = "/loc" };
+        repo.Insert(mapping).Returns(mapping);
+
+        var service = new RemotePathMappingService(repo);
+        var added = service.Add(mapping);
+        Assert.That(added, Is.EqualTo(mapping));
+        repo.Received(1).Insert(mapping);
+
+        service.Update(mapping);
+        repo.Received(1).Update(mapping);
+
+        service.Delete(1);
+        repo.Received(1).Delete(1);
+    }
+
+    [Test]
+    public void RemapRemoteToLocal_normalizes_cross_os_slashes_and_longest_prefix()
+    {
+        var service = new RemotePathMappingService();
+        service.Add(new RemotePathMapping
+        {
+            Host = "remote-server",
+            RemotePath = @"D:\Downloads",
+            LocalPath = "/mnt/storage/downloads/"
+        });
+        service.Add(new RemotePathMapping
+        {
+            Host = "remote-server",
+            RemotePath = @"D:\Downloads\TV",
+            LocalPath = "/mnt/storage/tv/"
+        });
+
+        // Specific subpath matches the longest prefix
+        var tvResult = service.RemapRemoteToLocal("remote-server", @"D:\Downloads\TV\Show\ep1.mkv");
+        Assert.That(tvResult, Is.EqualTo("/mnt/storage/tv/Show/ep1.mkv"));
+
+        // General path matches the shorter prefix
+        var genResult = service.RemapRemoteToLocal("remote-server", @"D:\Downloads\Moviesilm.mkv");
+        Assert.That(genResult, Is.EqualTo("/mnt/storage/downloads/Movies/film.mkv"));
     }
 }
