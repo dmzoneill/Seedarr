@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using NzbDrone.SignalR;
@@ -177,5 +179,62 @@ public class TagControllerTest
 
         Assert.That(result1, Is.InstanceOf<BadRequestObjectResult>());
         Assert.That(result2, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void Update_returns_not_found_when_tag_does_not_exist()
+    {
+        _tagService.Get(999).Returns((Tag)null);
+
+        var result = _controller.Update(new TagResource { Id = 999, Label = "NonExistent" });
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void Update_with_id_route_param_returns_not_found_when_tag_does_not_exist()
+    {
+        _tagService.Get(999).Returns((Tag)null);
+
+        var result = _controller.Update(999, new TagResource { Label = "NonExistent" });
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void Update_returns_conflict_on_duplicate_tag_label()
+    {
+        var existing = new Tag { Id = 1, Label = "Original" };
+        _tagService.Get(1).Returns(existing);
+        _tagService.Update(Arg.Any<Tag>()).Throws(new DuplicateTagException("Duplicate"));
+
+        var result = _controller.Update(new TagResource { Id = 1, Label = "Duplicate" });
+
+        Assert.That(result.Result, Is.InstanceOf<ConflictObjectResult>());
+    }
+
+    [Test]
+    public void Update_returns_updated_resource_when_successful()
+    {
+        var existing = new Tag { Id = 1, Label = "Original" };
+        var updated = new Tag { Id = 1, Label = "Updated" };
+        _tagService.Get(1).Returns(existing);
+        _tagService.Update(Arg.Any<Tag>()).Returns(updated);
+
+        var result = _controller.Update(new TagResource { Id = 1, Label = "Updated" });
+
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(result.Value.Id, Is.EqualTo(1));
+        Assert.That(result.Value.Label, Is.EqualTo("Updated"));
+    }
+
+    [Test]
+    public void Create_returns_conflict_on_duplicate_tag_label()
+    {
+        _tagService.Add(Arg.Any<Tag>()).Throws(new DuplicateTagException("Existing"));
+
+        var result = _controller.Create(new TagResource { Label = "Existing" });
+
+        Assert.That(result.Result, Is.InstanceOf<ConflictObjectResult>());
     }
 }

@@ -97,18 +97,29 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
         }
     }
 
+    [HttpPut("{id:int}")]
     [HttpPut]
-    public ActionResult<TagResource> Update([FromBody] TagResource resource)
+    public ActionResult<TagResource> Update([FromBody] TagResource resource, int? id = null)
     {
         if (resource == null)
         {
             return BadRequest("Request body cannot be null");
         }
 
+        if (id.HasValue && id.Value > 0)
+        {
+            resource.Id = id.Value;
+        }
+
         var result = _validator.Validate(resource);
         if (!result.IsValid)
         {
             return BadRequest(result.Errors);
+        }
+
+        if (resource.Id <= 0 || _tagService.Get(resource.Id) == null)
+        {
+            return NotFound();
         }
 
         try
@@ -131,6 +142,9 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    [NonAction]
+    public ActionResult<TagResource> Update(int id, TagResource resource) => Update(resource, id);
 
     [HttpDelete("{id:int}")]
     public ActionResult Delete(int id)
