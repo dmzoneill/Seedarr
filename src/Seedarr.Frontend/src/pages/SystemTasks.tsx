@@ -8,6 +8,7 @@ interface ScheduledTask {
   typeName: string;
   name?: string;
   interval: number;
+  isEnabled?: boolean;
   lastExecution: string | null;
   lastStartTime: string | null;
   lastDuration: string | null;
@@ -543,10 +544,221 @@ function TaskHistoryModal({ task, onClose }: TaskHistoryModalProps) {
   );
 }
 
+interface EditTaskModalProps {
+  task: ScheduledTask;
+  onClose: () => void;
+  onSave: (interval: number, isEnabled: boolean) => void;
+  isSaving: boolean;
+}
+
+function EditTaskModal({ task, onClose, onSave, isSaving }: EditTaskModalProps) {
+  const [interval, setInterval] = useState<number>(task.interval || 15);
+  const [isEnabled, setIsEnabled] = useState<boolean>(task.isEnabled !== false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (interval < 1) return;
+    onSave(interval, isEnabled);
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="task-edit-title"
+    >
+      <div
+        className="modal"
+        style={{
+          maxWidth: "480px",
+          width: "95%",
+          display: "flex",
+          flexDirection: "column",
+          padding: "1.5rem",
+          boxShadow:
+            "0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3)",
+          border: "1px solid var(--border-light)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+            paddingBottom: "0.75rem",
+            borderBottom: "1px solid var(--border-light)",
+          }}
+        >
+          <div>
+            <h2
+              id="task-edit-title"
+              className="modal-title"
+              style={{
+                margin: 0,
+                fontSize: "1.15rem",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <span>⚙️</span> Edit Task: {formatTaskName(task.typeName)}
+            </h2>
+            <div
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--text-muted)",
+                marginTop: "0.25rem",
+                fontFamily: "monospace",
+              }}
+            >
+              {task.typeName}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}
+            onClick={onClose}
+            title="Close"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: "1.25rem" }}>
+            <label
+              htmlFor="task-interval-input"
+              style={{
+                display: "block",
+                marginBottom: "0.35rem",
+                fontWeight: 500,
+                fontSize: "0.9rem",
+              }}
+            >
+              Execution Interval (minutes)
+            </label>
+            <input
+              id="task-interval-input"
+              type="number"
+              min="1"
+              step="1"
+              value={interval}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                setInterval(isNaN(val) ? 1 : Math.max(1, val));
+              }}
+              className="form-control"
+              style={{
+                width: "100%",
+                padding: "0.5rem 0.75rem",
+                borderRadius: "4px",
+                border: "1px solid var(--border-light)",
+                background: "var(--bg-secondary, #222)",
+                color: "var(--text-primary, #fff)",
+              }}
+              required
+            />
+            <div
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--text-muted)",
+                marginTop: "0.35rem",
+              }}
+            >
+              Current schedule: every {formatInterval(interval)}
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginBottom: "1.5rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+            }}
+          >
+            <input
+              id="task-enabled-toggle"
+              type="checkbox"
+              checked={isEnabled}
+              onChange={(e) => setIsEnabled(e.target.checked)}
+              style={{
+                width: "18px",
+                height: "18px",
+                cursor: "pointer",
+              }}
+            />
+            <label
+              htmlFor="task-enabled-toggle"
+              style={{
+                cursor: "pointer",
+                fontWeight: 500,
+                fontSize: "0.9rem",
+                margin: 0,
+              }}
+            >
+              Task Enabled (automatic background execution)
+            </label>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "0.75rem",
+              paddingTop: "0.75rem",
+              borderTop: "1px solid var(--border-light)",
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={onClose}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={isSaving || interval < 1}
+            >
+              {isSaving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function SystemTasks() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [selectedHistoryTask, setSelectedHistoryTask] = useState<ScheduledTask | null>(null);
+  const [selectedEditTask, setSelectedEditTask] = useState<ScheduledTask | null>(null);
   const [executingTasks, setExecutingTasks] = useState<Set<string>>(new Set());
   const timeoutIdsRef = useRef<number[]>([]);
 
@@ -668,6 +880,22 @@ function SystemTasks() {
     },
     onError: (err: Error) => {
       showToast(`Failed to abort task: ${err.message}`, "error");
+    },
+  });
+
+  const updateTaskMutation = useMutation({
+    mutationFn: (vars: { id: number; interval: number; isEnabled: boolean }) =>
+      apiClient.put<ScheduledTask>(`/system/task/${vars.id}`, {
+        interval: vars.interval,
+        isEnabled: vars.isEnabled,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
+      showToast("Task schedule updated successfully", "success");
+      setSelectedEditTask(null);
+    },
+    onError: (err: Error) => {
+      showToast(`Failed to update task: ${err.message}`, "error");
     },
   });
 
@@ -846,6 +1074,13 @@ function SystemTasks() {
                           >
                             ⏳ Running
                           </span>
+                        ) : task.isEnabled === false ? (
+                          <span
+                            className="badge badge-secondary"
+                            style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem", opacity: 0.7 }}
+                          >
+                            ⏸️ Disabled
+                          </span>
                         ) : (
                           <span
                             className="badge badge-secondary"
@@ -880,15 +1115,31 @@ function SystemTasks() {
                         )}
                       </td>
                       <td
-                        title={formatDateTime(task.nextExecution)}
+                        title={task.isEnabled === false ? "Task is disabled" : formatDateTime(task.nextExecution)}
                         style={{
-                          color: "var(--accent, #c8a84e)",
+                          color: task.isEnabled === false ? "var(--text-muted)" : "var(--accent, #c8a84e)",
                           fontWeight: 500,
                         }}
                       >
-                        {formatRelativeTime(task.nextExecution, true)}
+                        {task.isEnabled === false ? "Disabled" : formatRelativeTime(task.nextExecution, true)}
                       </td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "0.25rem 0.6rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            marginRight: "0.5rem",
+                          }}
+                          onClick={() => setSelectedEditTask(task)}
+                          title="Configure task interval and enabled state"
+                        >
+                          ⚙️ Edit
+                        </button>
                         <button
                           type="button"
                           className="btn btn-outline"
@@ -1086,6 +1337,23 @@ function SystemTasks() {
         <TaskHistoryModal
           task={selectedHistoryTask}
           onClose={() => setSelectedHistoryTask(null)}
+        />
+      )}
+
+      {selectedEditTask && (
+        <EditTaskModal
+          task={selectedEditTask}
+          onClose={() => setSelectedEditTask(null)}
+          onSave={(interval, isEnabled) => {
+            if (selectedEditTask.id !== undefined) {
+              updateTaskMutation.mutate({
+                id: selectedEditTask.id,
+                interval,
+                isEnabled,
+              });
+            }
+          }}
+          isSaving={updateTaskMutation.isPending}
         />
       )}
     </div>

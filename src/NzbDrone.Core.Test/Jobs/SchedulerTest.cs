@@ -248,4 +248,27 @@ public class SchedulerTest
         Assert.That(task.NextExecution.Kind, Is.EqualTo(DateTimeKind.Utc));
         Assert.That(task.NextExecution, Is.GreaterThan(DateTime.UtcNow));
     }
+
+    [Test]
+    public async Task ExecuteAsync_should_not_execute_disabled_task()
+    {
+        var testTask = new TestScheduledTask();
+        var scheduled = new ScheduledTask
+        {
+            TypeName = typeof(TestScheduledTask).FullName,
+            Interval = 1,
+            IsEnabled = false,
+            LastExecution = DateTime.UtcNow.AddMinutes(-10)
+        };
+
+        _taskManager.GetNextScheduled().Returns(scheduled);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { testTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        await _subject.StartAsync(cts.Token);
+        await Task.Delay(200);
+
+        Assert.That(testTask.ExecuteCount, Is.EqualTo(0));
+    }
 }

@@ -161,50 +161,80 @@ public class SystemController : ControllerBase
     public ActionResult<List<ScheduledTaskResource>> GetTasks()
     {
         var tasks = _taskManager.GetAll();
-        return Ok(tasks.Select(t =>
+        return Ok(tasks.Select(ToScheduledTaskResource).ToList());
+    }
+
+    /// <summary>
+    /// Updates interval and enabled status for a scheduled task by ID.
+    /// </summary>
+    [HttpPut("task/{id:int}")]
+    public ActionResult<ScheduledTaskResource> UpdateTask(int id, [FromBody] UpdateScheduledTaskRequest request)
+    {
+        if (request == null || request.Interval < 1)
         {
-            var taskInstance = _scheduledTasks.FirstOrDefault(st =>
-                string.Equals(st.GetType().FullName, t.TypeName, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(st.GetType().Name, t.TypeName, StringComparison.OrdinalIgnoreCase));
+            return BadRequest("Interval must be at least 1 minute.");
+        }
 
-            var simpleName = taskInstance != null
-                ? taskInstance.GetType().Name
-                : (t.TypeName.Contains('.') ? t.TypeName.Substring(t.TypeName.LastIndexOf('.') + 1) : t.TypeName);
+        var existing = _taskManager.GetAll().FirstOrDefault(t => t.Id == id);
+        if (existing == null)
+        {
+            return NotFound(new { message = $"Task with ID {id} not found" });
+        }
 
-            var isRunning = _taskManager.IsRunning(t.TypeName) ||
-                            (t.LastStartTime.HasValue && t.LastStartTime.Value > t.LastExecution);
+        _taskManager.Update(id, request.Interval, request.IsEnabled);
+        var updated = _taskManager.GetAll().FirstOrDefault(t => t.Id == id);
+        return Ok(ToScheduledTaskResource(updated));
+    }
 
-            TimeSpan? lastDuration = null;
+    private ScheduledTaskResource ToScheduledTaskResource(ScheduledTask t)
+    {
+        if (t == null)
+        {
+            return null;
+        }
 
-            if (isRunning && t.LastStartTime.HasValue)
+        var taskInstance = _scheduledTasks.FirstOrDefault(st =>
+            string.Equals(st.GetType().FullName, t.TypeName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(st.GetType().Name, t.TypeName, StringComparison.OrdinalIgnoreCase));
+
+        var simpleName = taskInstance != null
+            ? taskInstance.GetType().Name
+            : (t.TypeName.Contains('.') ? t.TypeName.Substring(t.TypeName.LastIndexOf('.') + 1) : t.TypeName);
+
+        var isRunning = _taskManager.IsRunning(t.TypeName) ||
+                        (t.LastStartTime.HasValue && t.LastStartTime.Value > t.LastExecution);
+
+        TimeSpan? lastDuration = null;
+
+        if (isRunning && t.LastStartTime.HasValue)
+        {
+            lastDuration = DateTime.UtcNow - t.LastStartTime.Value;
+        }
+        else if (t.LastStartTime.HasValue)
+        {
+            lastDuration = t.LastExecution - t.LastStartTime.Value;
+
+            if (lastDuration < TimeSpan.Zero)
             {
-                lastDuration = DateTime.UtcNow - t.LastStartTime.Value;
+                lastDuration = null;
             }
-            else if (t.LastStartTime.HasValue)
-            {
-                lastDuration = t.LastExecution - t.LastStartTime.Value;
+        }
 
-                if (lastDuration < TimeSpan.Zero)
-                {
-                    lastDuration = null;
-                }
-            }
+        var nextExecution = t.NextExecution;
 
-            var nextExecution = t.NextExecution;
-
-            return new ScheduledTaskResource
-            {
-                Id = t.Id,
-                TypeName = t.TypeName,
-                Name = simpleName,
-                Interval = t.Interval,
-                LastExecution = t.LastExecution,
-                LastStartTime = t.LastStartTime,
-                LastDuration = lastDuration,
-                NextExecution = nextExecution,
-                IsRunning = isRunning
-            };
-        }).ToList());
+        return new ScheduledTaskResource
+        {
+            Id = t.Id,
+            TypeName = t.TypeName,
+            Name = simpleName,
+            Interval = t.Interval,
+            IsEnabled = t.IsEnabled,
+            LastExecution = t.LastExecution,
+            LastStartTime = t.LastStartTime,
+            LastDuration = lastDuration,
+            NextExecution = nextExecution,
+            IsRunning = isRunning
+        };
     }
 
     /// <summary>

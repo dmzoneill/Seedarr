@@ -14,6 +14,7 @@ public interface ITaskManager
 {
     IEnumerable<ScheduledTask> GetAll();
     ScheduledTask GetNextScheduled();
+    void Update(int id, int interval, bool isEnabled);
     void UpdateLastExecution(string typeName);
     void RecordTaskStarted(string typeName);
     void RecordTaskStarted(string typeName, ScheduledTaskTriggerSource triggerSource);
@@ -98,10 +99,22 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
     public ScheduledTask GetNextScheduled()
     {
         return GetAll()
+            .Where(t => t.IsEnabled)
             .OrderBy(t => t.LastExecution == DateTime.MinValue
                 ? DateTime.UtcNow.AddMinutes(t.Interval)
                 : t.LastExecution.AddMinutes(t.Interval))
             .FirstOrDefault();
+    }
+
+    public void Update(int id, int interval, bool isEnabled)
+    {
+        var task = _repository.Get(id);
+        if (task != null)
+        {
+            task.Interval = Math.Max(1, interval);
+            task.IsEnabled = isEnabled;
+            _repository.Update(task);
+        }
     }
 
     public void UpdateLastExecution(string typeName)

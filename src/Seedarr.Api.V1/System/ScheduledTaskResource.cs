@@ -8,6 +8,7 @@ public class ScheduledTaskResource
     public string TypeName { get; set; }
     public string Name { get; set; }
     public int Interval { get; set; }
+    public bool IsEnabled { get; set; }
     public DateTime? LastExecution { get; set; }
     public DateTime? LastStartTime { get; set; }
     public TimeSpan? LastDuration { get; set; }

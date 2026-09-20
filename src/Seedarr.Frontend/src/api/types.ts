@@ -1494,3 +1494,21 @@ export interface SetupCompleteRequest {
   username?: string;
   password?: string;
 }
+
+export interface ScheduledTaskResource {
+  id?: number;
+  typeName: string;
+  name?: string;
+  interval: number;
+  isEnabled?: boolean;
+  lastExecution: string | null;
+  lastStartTime: string | null;
+  lastDuration: string | null;
+  nextExecution: string | null;
+  isRunning?: boolean;
+}
+
+export interface UpdateScheduledTaskRequest {
+  interval: number;
+  isEnabled: boolean;
+}

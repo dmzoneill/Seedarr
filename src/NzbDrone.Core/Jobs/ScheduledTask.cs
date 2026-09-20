@@ -9,6 +9,7 @@ public class ScheduledTask : ModelBase
 
     public string TypeName { get; set; }
     public int Interval { get; set; }
+    public bool IsEnabled { get; set; } = true;
     public DateTime LastExecution { get; set; }
     public DateTime? LastStartTime { get; set; }
 
