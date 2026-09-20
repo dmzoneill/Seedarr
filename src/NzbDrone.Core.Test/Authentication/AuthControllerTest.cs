@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
@@ -21,6 +22,7 @@ public class AuthControllerTest
     private IIdentityProviderService _identityProviderService;
     private IConfigFileProvider _configFileProvider;
     private ISessionRevocationService _sessionRevocationService;
+    private ILoginRateLimiter _loginRateLimiter;
     private AuthController _controller;
 
     [SetUp]
@@ -29,7 +31,8 @@ public class AuthControllerTest
         _identityProviderService = Substitute.For<IIdentityProviderService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
         _sessionRevocationService = Substitute.For<ISessionRevocationService>();
-        _controller = new AuthController(_identityProviderService, _configFileProvider, _sessionRevocationService);
+        _loginRateLimiter = new LoginRateLimiter();
+        _controller = new AuthController(_identityProviderService, _configFileProvider, _sessionRevocationService, _loginRateLimiter);
     }
 
     [Test]
@@ -431,5 +434,151 @@ public class AuthControllerTest
     public void NormalizePathBase_NormalizesCorrectly(string input, string expected)
     {
         Assert.That(AuthController.NormalizePathBase(input), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task Login_ConsecutiveFailedAttempts_TriggersHttp429TooManyRequestsWithRetryAfter()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.100");
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var request = new LoginRequestResource { Username = "admin", Password = "wrong-password" };
+
+        for (var i = 0; i < 5; i++)
+        {
+            var failResult = await _controller.Login(request);
+            Assert.That(failResult.Result, Is.TypeOf<UnauthorizedObjectResult>());
+        }
+
+        var blockedResult = await _controller.Login(request);
+        Assert.That(blockedResult.Result, Is.TypeOf<ObjectResult>());
+
+        var objResult = (ObjectResult)blockedResult.Result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(StatusCodes.Status429TooManyRequests));
+
+        Assert.That(httpContext.Response.Headers.ContainsKey("Retry-After"), Is.True);
+        var retryAfterValue = int.Parse(httpContext.Response.Headers["Retry-After"].ToString());
+        Assert.That(retryAfterValue, Is.GreaterThan(0));
+
+        var error = objResult.Value.GetType().GetProperty("error")?.GetValue(objResult.Value) as string;
+        Assert.That(error, Does.Contain("Too many failed login attempts"));
+    }
+
+    [Test]
+    public async Task Login_SuccessfulLogin_ResetsFailureCounter()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.100");
+
+        var authService = Substitute.For<IAuthenticationService>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IAuthenticationService)).Returns(authService);
+        httpContext.RequestServices = serviceProvider;
+
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var badRequest = new LoginRequestResource { Username = "admin", Password = "wrong-password" };
+        var goodRequest = new LoginRequestResource { Username = "admin", Password = "master-api-key" };
+
+        for (var i = 0; i < 4; i++)
+        {
+            var failResult = await _controller.Login(badRequest);
+            Assert.That(failResult.Result, Is.TypeOf<UnauthorizedObjectResult>());
+        }
+
+        Assert.That(_loginRateLimiter.GetFailedAttempts("192.168.1.100"), Is.EqualTo(4));
+
+        var successResult = await _controller.Login(goodRequest);
+        Assert.That(successResult.Result, Is.TypeOf<OkObjectResult>());
+        Assert.That(_loginRateLimiter.GetFailedAttempts("192.168.1.100"), Is.EqualTo(0));
+
+        for (var i = 0; i < 4; i++)
+        {
+            var failResult = await _controller.Login(badRequest);
+            Assert.That(failResult.Result, Is.TypeOf<UnauthorizedObjectResult>());
+        }
+
+        Assert.That(_loginRateLimiter.GetFailedAttempts("192.168.1.100"), Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task Login_DifferentClientIps_HaveIsolatedFailureBuckets()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var httpContextIp1 = new DefaultHttpContext();
+        httpContextIp1.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.100");
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContextIp1 };
+
+        var badRequest = new LoginRequestResource { Username = "admin", Password = "wrong-password" };
+
+        for (var i = 0; i < 5; i++)
+        {
+            var failResult = await _controller.Login(badRequest);
+            Assert.That(failResult.Result, Is.TypeOf<UnauthorizedObjectResult>());
+        }
+
+        var blockedResult = await _controller.Login(badRequest);
+        Assert.That(blockedResult.Result, Is.TypeOf<ObjectResult>());
+        Assert.That(((ObjectResult)blockedResult.Result).StatusCode, Is.EqualTo(StatusCodes.Status429TooManyRequests));
+
+        var httpContextIp2 = new DefaultHttpContext();
+        httpContextIp2.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.200");
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContextIp2 };
+
+        var ip2Result = await _controller.Login(badRequest);
+        Assert.That(ip2Result.Result, Is.TypeOf<UnauthorizedObjectResult>());
+        Assert.That(_loginRateLimiter.GetFailedAttempts("192.168.1.200"), Is.EqualTo(1));
+        Assert.That(_loginRateLimiter.IsRateLimited("192.168.1.200", out _), Is.False);
+        Assert.That(_loginRateLimiter.IsRateLimited("192.168.1.100", out _), Is.True);
+    }
+
+    [Test]
+    public async Task Login_WithXForwardedForHeader_ExtractsClientIpAndIsolatesBucket()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("10.0.0.1");
+        httpContext.Request.Headers["X-Forwarded-For"] = "203.0.113.50, 10.0.0.1";
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var badRequest = new LoginRequestResource { Username = "admin", Password = "wrong-password" };
+
+        for (var i = 0; i < 5; i++)
+        {
+            var failResult = await _controller.Login(badRequest);
+            Assert.That(failResult.Result, Is.TypeOf<UnauthorizedObjectResult>());
+        }
+
+        var blockedResult = await _controller.Login(badRequest);
+        Assert.That(blockedResult.Result, Is.TypeOf<ObjectResult>());
+        Assert.That(((ObjectResult)blockedResult.Result).StatusCode, Is.EqualTo(StatusCodes.Status429TooManyRequests));
+
+        Assert.That(_loginRateLimiter.IsRateLimited("203.0.113.50", out _), Is.True);
+        Assert.That(_loginRateLimiter.IsRateLimited("10.0.0.1", out _), Is.False);
+    }
+
+    [TestCase("192.168.1.1", "192.168.1.1")]
+    [TestCase("192.168.1.1:8080", "192.168.1.1")]
+    [TestCase("::1", "::1")]
+    [TestCase("[2001:db8::1]:443", "2001:db8::1")]
+    [TestCase("::ffff:192.0.2.1", "192.0.2.1")]
+    [TestCase("not-an-ip", null)]
+    [TestCase(null, null)]
+    [TestCase("", null)]
+    [TestCase("   ", null)]
+    public void CleanAndValidateIp_ReturnsExpectedResult(string input, string expected)
+    {
+        Assert.That(AuthController.CleanAndValidateIp(input), Is.EqualTo(expected));
     }
 }
