@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
+using NzbDrone.SignalR;
 
 namespace NzbDrone.Core.HealthCheck;
 
@@ -19,6 +21,7 @@ public class HealthCheckService : IHealthCheckService
 {
     private readonly IEnumerable<IHealthCheck> _healthChecks;
     private readonly IEventAggregator _eventAggregator;
+    private readonly IBroadcastSignalRMessage _signalRBroadcaster;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, HealthCheckResultType> _previousResults = new(StringComparer.OrdinalIgnoreCase);
 
@@ -29,14 +32,20 @@ public class HealthCheckService : IHealthCheckService
     private TimeSpan _checkTimeout = TimeSpan.FromSeconds(5);
 
     public HealthCheckService(IEnumerable<IHealthCheck> healthChecks)
-        : this(healthChecks, null)
+        : this(healthChecks, null, null)
     {
     }
 
     public HealthCheckService(IEnumerable<IHealthCheck> healthChecks, IEventAggregator eventAggregator)
+        : this(healthChecks, eventAggregator, null)
+    {
+    }
+
+    public HealthCheckService(IEnumerable<IHealthCheck> healthChecks, IEventAggregator eventAggregator, IBroadcastSignalRMessage signalRBroadcaster)
     {
         _healthChecks = healthChecks;
         _eventAggregator = eventAggregator;
+        _signalRBroadcaster = signalRBroadcaster;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -137,6 +146,14 @@ public class HealthCheckService : IHealthCheckService
 
             _cachedResults = results.ToList();
             _lastRunTimeUtc = DateTime.UtcNow;
+
+            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+            {
+                Name = "HealthCheckCompleted",
+                Action = ModelAction.Updated,
+                Body = _cachedResults
+            });
+
             return results;
         }
     }

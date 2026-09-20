@@ -31,8 +31,13 @@ function SystemStatus() {
 
   const isLoading = statusLoading || healthLoading || diskLoading;
 
+  const isWarningOrError = (type?: string) => {
+    const t = type?.toLowerCase();
+    return t === "warning" || t === "error";
+  };
+
   const warningOrErrorChecks =
-    health?.filter((c) => c.type === "Warning" || c.type === "Error") ?? [];
+    health?.filter((c) => isWarningOrError(c.type)) ?? [];
 
   const handleRestart = async () => {
     setIsRestarting(true);
@@ -254,7 +259,7 @@ function SystemStatus() {
             style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}
           >
             {warningOrErrorChecks.map((check, i) => {
-              const isError = check.type === "Error";
+              const isError = check.type?.toLowerCase() === "error";
               return (
                 <div
                   key={i}
