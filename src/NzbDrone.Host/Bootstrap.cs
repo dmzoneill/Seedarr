@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using NzbDrone.Common.Composition;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Common.Instrumentation;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Security;
@@ -34,6 +35,11 @@ public static class Bootstrap
 
     public static WebApplication CreateApplication(StartupContext startupContext, string[] urls = null)
     {
+        if (LogManager.Configuration == null)
+        {
+            NzbDroneLogger.Register(startupContext);
+        }
+
         Logger.Info("Starting Seedarr - {0}", BuildInfo.Version);
 
         var container = new Container(rules => rules.WithNzbDroneRules());
@@ -67,7 +73,7 @@ public static class Bootstrap
         {
             var loggingReconfig = app.Services.GetService<ILoggingReconfigurationService>()
                                   ?? (ILoggingReconfigurationService)app.Services.GetService<LoggingReconfigurationService>();
-            loggingReconfig?.ReconfigureLogging();
+            loggingReconfig?.Initialize();
         }
         catch (Exception ex)
         {
