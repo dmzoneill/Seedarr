@@ -36,6 +36,10 @@ function TorrentIndex() {
     deselectAll: deselectAllColumns,
     applyPreset: applyColumnPreset,
     toggleCategory: toggleCategoryColumns,
+    columnOrder,
+    setColumnOrder,
+    columnWidths,
+    setColumnWidths,
   } = useColumnPreferences();
   const {
     torrents,
@@ -624,6 +628,10 @@ function TorrentIndex() {
                   onToggleActive={handleToggleActiveSelected}
                   visibleColumns={visibleColumns}
                   onToggleColumn={toggleColumn}
+                  columnOrder={columnOrder}
+                  onColumnOrderChange={setColumnOrder}
+                  columnWidths={columnWidths}
+                  onColumnWidthsChange={setColumnWidths}
                 />
               ) : (
                 <TorrentGrid

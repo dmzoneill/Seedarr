@@ -1078,11 +1078,6 @@ public class UtpConnection : IUtpConnection
 
     private void TryReceiveUdpNonBlocking()
     {
-        if (!_ownsUdpClient)
-        {
-            return;
-        }
-
         if (!Monitor.TryEnter(_socketReceiveLock))
         {
             return;
@@ -1090,7 +1085,7 @@ public class UtpConnection : IUtpConnection
 
         try
         {
-            if (_udpClient.Client == null || (!_udpClient.Client.Connected && !_udpClient.Client.IsBound))
+            if (_udpClient?.Client == null || (!_udpClient.Client.Connected && !_udpClient.Client.IsBound))
             {
                 return;
             }

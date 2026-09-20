@@ -904,6 +904,8 @@ public class UtpConnectionTest
             serverPayload[i] = (byte)(((i * 3) + 7) % 251);
         }
 
+        using var clientFinished = new ManualResetEventSlim(false);
+
         var serverTask = Task.Run(() =>
         {
             var ep = new IPEndPoint(IPAddress.Any, 0);
@@ -943,6 +945,7 @@ public class UtpConnectionTest
             }
 
             serverConn.Flush();
+            clientFinished.Wait(TimeSpan.FromSeconds(10));
         });
 
         using var clientConn = new UtpConnection(connectionTimeoutSeconds: 10);
@@ -968,6 +971,7 @@ public class UtpConnectionTest
             read += r;
         }
 
+        clientFinished.Set();
         serverTask.Wait(TimeSpan.FromSeconds(10));
 
         Assert.That(serverReceivedData, Is.EqualTo(clientPayload));

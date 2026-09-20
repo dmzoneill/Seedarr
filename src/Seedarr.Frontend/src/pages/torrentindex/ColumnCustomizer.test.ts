@@ -20,6 +20,14 @@ import {
   loadTablePageSize,
   saveTablePageSize,
   resetTablePageSize,
+  COL_ORDER_STORAGE,
+  COL_WIDTHS_STORAGE,
+  loadColumnOrder,
+  saveColumnOrder,
+  resetColumnOrder,
+  loadColumnWidths,
+  saveColumnWidths,
+  resetColumnWidths,
   type ColumnKey,
   type ColumnCategory,
 } from "./columnPreferences";
@@ -419,5 +427,64 @@ describe("ColumnCustomizer: Search Filtering", () => {
   it("should return empty array for non-matching search", () => {
     const results = searchColumns("nonexistent_column_search_term");
     assert.strictEqual(results.length, 0);
+  });
+});
+
+describe("ColumnCustomizer: Column Order & Width Preferences", () => {
+  beforeEach(() => {
+    mockStorage[COL_ORDER_STORAGE] = "";
+    mockStorage[COL_WIDTHS_STORAGE] = "";
+    delete mockStorage[COL_ORDER_STORAGE];
+    delete mockStorage[COL_WIDTHS_STORAGE];
+  });
+
+  it("should load default column order matching ALL_COLUMNS when storage is empty", () => {
+    const order = loadColumnOrder();
+    assert.strictEqual(order.length, ALL_COLUMNS.length);
+    assert.deepStrictEqual(
+      order,
+      ALL_COLUMNS.map((c) => c.key),
+    );
+  });
+
+  it("should save and load custom column order", () => {
+    const customOrder: ColumnKey[] = ["name", "#", "status", "totalSize"];
+    saveColumnOrder(customOrder);
+    const loaded = loadColumnOrder();
+    assert.strictEqual(loaded[0], "name");
+    assert.strictEqual(loaded[1], "#");
+    assert.strictEqual(loaded[2], "status");
+    assert.strictEqual(loaded[3], "totalSize");
+    // Any remaining columns should be appended
+    assert.strictEqual(loaded.length, ALL_COLUMNS.length);
+  });
+
+  it("should reset column order", () => {
+    saveColumnOrder(["name", "#"]);
+    resetColumnOrder();
+    assert.strictEqual(localStorage.getItem(COL_ORDER_STORAGE), null);
+    const loaded = loadColumnOrder();
+    assert.strictEqual(loaded[0], ALL_COLUMNS[0].key);
+  });
+
+  it("should load empty column widths by default", () => {
+    const widths = loadColumnWidths();
+    assert.deepStrictEqual(widths, {});
+  });
+
+  it("should save and load column widths", () => {
+    const customWidths = { name: 300, totalSize: 120 };
+    saveColumnWidths(customWidths);
+    const loaded = loadColumnWidths();
+    assert.strictEqual(loaded.name, 300);
+    assert.strictEqual(loaded.totalSize, 120);
+  });
+
+  it("should reset column widths", () => {
+    saveColumnWidths({ name: 300 });
+    resetColumnWidths();
+    assert.strictEqual(localStorage.getItem(COL_WIDTHS_STORAGE), null);
+    const loaded = loadColumnWidths();
+    assert.deepStrictEqual(loaded, {});
   });
 });
