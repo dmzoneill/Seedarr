@@ -13,6 +13,7 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Migration;
+using NzbDrone.Core.Instrumentation;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
 using Seedarr.Api.V1.System;
@@ -282,5 +283,33 @@ public class SystemControllerTest
         Assert.That(status.GcTotalAllocatedBytes, Is.GreaterThan(0));
         Assert.That(status.GcHeapSizeBytes, Is.GreaterThan(0));
         Assert.That(status.GcPauseTimePercentage, Is.GreaterThanOrEqualTo(0.0));
+    }
+
+    [Test]
+    public void GetStatus_populates_file_descriptor_telemetry_from_provider()
+    {
+        var fdProvider = Substitute.For<IFileDescriptorProvider>();
+        fdProvider.GetOpenFileDescriptorCount().Returns(340);
+        fdProvider.GetMaxFileDescriptors().Returns(1024);
+        fdProvider.GetFileDescriptorUsagePercentage().Returns(33.2);
+
+        var controller = new SystemController(
+            _taskManager,
+            new List<IScheduledTask>(),
+            _commandQueueManager,
+            _appFolderInfo,
+            _lifetime,
+            _configService,
+            fileDescriptorProvider: fdProvider);
+
+        var actionResult = controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.OpenFileDescriptors, Is.EqualTo(340));
+        Assert.That(status.MaxFileDescriptors, Is.EqualTo(1024));
+        Assert.That(status.FileDescriptorUsagePercentage, Is.EqualTo(33.2));
     }
 }

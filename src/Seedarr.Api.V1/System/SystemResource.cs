@@ -132,4 +132,19 @@ public class SystemResource : RestResource
     /// Gets or sets the percentage of time spent in GC pauses.
     /// </summary>
     public double GcPauseTimePercentage { get; set; }
+
+    /// <summary>
+    /// Gets or sets the count of open file descriptors or operating system handles.
+    /// </summary>
+    public int OpenFileDescriptors { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum allowed file descriptors, or -1 if unbounded.
+    /// </summary>
+    public int MaxFileDescriptors { get; set; }
+
+    /// <summary>
+    /// Gets or sets the percentage of file descriptors currently in use, if bounded.
+    /// </summary>
+    public double? FileDescriptorUsagePercentage { get; set; }
 }

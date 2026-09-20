@@ -304,6 +304,109 @@ function SystemStatus() {
             })}
           </div>
         )}
+
+        {/* File Descriptors & Sockets Telemetry */}
+        {status && status.openFileDescriptors !== undefined && (
+          <div
+            style={{
+              marginTop: "1.25rem",
+              paddingTop: "1rem",
+              borderTop:
+                "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "0.5rem",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize: "0.9rem",
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  File Descriptors &amp; Sockets
+                </strong>
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  ({status.openFileDescriptors?.toLocaleString() ?? 0}
+                  {" / "}
+                  {status.maxFileDescriptors && status.maxFileDescriptors > 0
+                    ? status.maxFileDescriptors.toLocaleString()
+                    : "Unlimited"}
+                  )
+                </span>
+              </div>
+              {status.fileDescriptorUsagePercentage != null ? (
+                <span
+                  className={`badge ${
+                    status.fileDescriptorUsagePercentage >= 90
+                      ? "badge-error"
+                      : status.fileDescriptorUsagePercentage >= 80
+                        ? "badge-warning"
+                        : "badge-seeding"
+                  }`}
+                  style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                >
+                  {status.fileDescriptorUsagePercentage.toFixed(1)}% Used
+                </span>
+              ) : (
+                <span
+                  className="badge badge-primary"
+                  style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                >
+                  OS Handles
+                </span>
+              )}
+            </div>
+
+            {status.fileDescriptorUsagePercentage != null && (
+              <div
+                className="disk-progress"
+                style={{
+                  borderRadius: "4px",
+                  height: "16px",
+                  marginTop: "0.35rem",
+                }}
+              >
+                <div
+                  className={`disk-progress-bar ${
+                    status.fileDescriptorUsagePercentage >= 90
+                      ? "disk-progress-bar-danger"
+                      : status.fileDescriptorUsagePercentage >= 80
+                        ? "disk-progress-bar-warning"
+                        : ""
+                  }`}
+                  style={{
+                    width: `${Math.min(100, Math.max(0, status.fileDescriptorUsagePercentage))}%`,
+                    borderRadius: "4px",
+                  }}
+                />
+                <span
+                  className="disk-progress-text"
+                  style={{ fontWeight: 600, fontSize: "0.75rem" }}
+                >
+                  {status.fileDescriptorUsagePercentage.toFixed(1)}%
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Arr & Download Client Integrations Diagnostic Table Card */}
@@ -842,6 +945,17 @@ function SystemStatus() {
                     : "0.00%"}
                 </span>
               </div>
+              {status.openFileDescriptors !== undefined && (
+                <div className="status-row">
+                  <span className="status-label">File Descriptors / Handles</span>
+                  <span className="status-value">
+                    {status.openFileDescriptors.toLocaleString()}
+                    {status.maxFileDescriptors && status.maxFileDescriptors > 0
+                      ? ` / ${status.maxFileDescriptors.toLocaleString()}${status.fileDescriptorUsagePercentage != null ? ` (${status.fileDescriptorUsagePercentage.toFixed(1)}%)` : ""}`
+                      : ""}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
