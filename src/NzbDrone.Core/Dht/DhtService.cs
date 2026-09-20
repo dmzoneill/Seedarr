@@ -47,6 +47,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     private readonly object _stateLock = new();
     private readonly ConcurrentDictionary<string, PendingDhtQuery> _pendingQueries = new();
     private readonly ConcurrentDictionary<IPAddress, TokenBucket> _rateLimiters = new();
+    private readonly ConcurrentDictionary<IPEndPoint, DateTime> _recentlyProbed = new();
     private UdpClient _udpClient;
     private int _boundPort;
     private CancellationTokenSource _workerCts;
@@ -59,6 +60,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     private DateTime _lastSecretRotation;
     private DateTime _lastRateLimitCleanup;
     private DateTime _nextRefresh;
+    private DateTime _nextBucketRefresh;
     private SemaphoreSlim _querySemaphore;
 
     public event EventHandler<PeersDiscoveredEventArgs> PeersDiscovered;
@@ -100,6 +102,8 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             configService.DhtBucketSize,
             configService.DhtRoutingTableSize,
             configService.DhtMaxNodes);
+        _routingTable.PingBeforeEvict += OnPingBeforeEvict;
+        _nextBucketRefresh = DateTime.UtcNow.AddMinutes(1);
         _logger = LogManager.GetCurrentClassLogger();
         _peerStore = new DhtPeerStore(PeerTtlMinutes);
 
@@ -114,6 +118,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     public override void Dispose()
     {
+        _routingTable.PingBeforeEvict -= OnPingBeforeEvict;
         SaveRoutingTableState();
         StopDht();
         _querySemaphore?.Dispose();
@@ -447,6 +452,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                 CleanupExpiredQueries();
                 CleanupExpiredRateLimitersIfNeeded();
 
+                if (DateTime.UtcNow >= _nextBucketRefresh)
+                {
+                    await RefreshStaleBucketsAsync(stoppingToken);
+                    _nextBucketRefresh = DateTime.UtcNow.AddMinutes(1);
+                }
+
                 // Use query timeout so the loop wakes up periodically for maintenance
                 using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                 receiveCts.CancelAfter(TimeSpan.FromSeconds(_configService.DhtQueryTimeout));
@@ -484,6 +495,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                         }
                     }
 
+                    await RefreshStaleBucketsAsync(stoppingToken);
                     await AnnounceTorrentsAsync(stoppingToken);
                     SaveRoutingTableState();
 
@@ -764,6 +776,8 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             _logger.Debug("DHT response rejected: sender {0} does not match query target {1}", sender, pending?.Target);
             return;
         }
+
+        pending.CompletionSource?.TrySetResult(true);
 
         if (message.ContainsKey("ip") && message["ip"] is BString ipBStr)
         {
@@ -1115,6 +1129,204 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         _udpClient?.Send(bytes, bytes.Length, target);
     }
 
+    public Task SendPing(IPEndPoint target, CancellationToken ct = default)
+    {
+        return SendPingInternal(target, null, ct);
+    }
+
+    private async Task SendPingInternal(IPEndPoint target, TaskCompletionSource<bool> tcs, CancellationToken ct = default)
+    {
+        if (_udpClient == null || target == null)
+        {
+            tcs?.TrySetResult(false);
+            return;
+        }
+
+        await _querySemaphore.WaitAsync(ct);
+        try
+        {
+            var transactionId = RandomNumberGenerator.GetBytes(4);
+            var txKey = Convert.ToHexString(transactionId);
+
+            _pendingQueries[txKey] = new PendingDhtQuery
+            {
+                QueryType = "ping",
+                Target = target,
+                SentAt = DateTime.UtcNow,
+                CompletionSource = tcs
+            };
+
+            var query = new BDictionary
+            {
+                ["t"] = new BString(transactionId),
+                ["y"] = new BString("q"),
+                ["q"] = new BString("ping"),
+                ["a"] = new BDictionary
+                {
+                    ["id"] = new BString(_nodeId)
+                }
+            };
+
+            var bytes = query.EncodeAsBytes();
+            var client = _udpClient;
+            if (client != null)
+            {
+                await client.SendAsync(bytes, bytes.Length, target);
+                _logger.Debug("DHT sent ping to {0}", target);
+            }
+        }
+        catch
+        {
+            tcs?.TrySetResult(false);
+            throw;
+        }
+        finally
+        {
+            _querySemaphore.Release();
+        }
+    }
+
+    private void OnPingBeforeEvict(int bucketIndex, DhtNode nodeToProbe)
+    {
+        if (nodeToProbe?.EndPoint == null)
+        {
+            return;
+        }
+
+        if (_recentlyProbed.TryGetValue(nodeToProbe.EndPoint, out var lastProbed) &&
+            (DateTime.UtcNow - lastProbed) < TimeSpan.FromSeconds(30))
+        {
+            return;
+        }
+
+        _recentlyProbed[nodeToProbe.EndPoint] = DateTime.UtcNow;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await ProbeNodeAsync(nodeToProbe);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "DHT ping-before-evict probe failed for {0}", nodeToProbe.EndPoint);
+            }
+        });
+    }
+
+    public async Task<bool> ProbeNodeAsync(DhtNode node, TimeSpan? timeout = null, CancellationToken ct = default)
+    {
+        if (node?.EndPoint == null || _udpClient == null)
+        {
+            return false;
+        }
+
+        var queryTimeout = timeout ?? TimeSpan.FromSeconds(_configService.DhtQueryTimeout > 0 ? _configService.DhtQueryTimeout : 5);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(queryTimeout);
+
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using (cts.Token.Register(() => tcs.TrySetResult(false)))
+        {
+            try
+            {
+                await SendPingInternal(node.EndPoint, tcs, cts.Token);
+                var responded = await tcs.Task;
+                if (!responded)
+                {
+                    _routingTable.RecordFailure(node.EndPoint);
+                }
+
+                return responded;
+            }
+            catch (Exception)
+            {
+                _routingTable.RecordFailure(node.EndPoint);
+                return false;
+            }
+        }
+    }
+
+    public async Task RefreshStaleBucketsAsync(CancellationToken ct = default)
+    {
+        if (_udpClient == null)
+        {
+            return;
+        }
+
+        var staleIndices = _routingTable.GetStaleBucketIndices(TimeSpan.FromMinutes(15));
+        if (staleIndices.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Debug("DHT refreshing {0} stale buckets", staleIndices.Count);
+
+        foreach (var bucketIndex in staleIndices.Take(8))
+        {
+            if (ct.IsCancellationRequested)
+            {
+                break;
+            }
+
+            _routingTable.TouchBucket(bucketIndex);
+            var randomTargetId = _routingTable.GenerateRandomIdForBucket(bucketIndex);
+            var closestNodes = _routingTable.GetClosestNodes(randomTargetId, 8);
+
+            if (closestNodes.Count > 0)
+            {
+                foreach (var node in closestNodes.Take(4))
+                {
+                    if (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    if (node.EndPoint != null)
+                    {
+                        try
+                        {
+                            await SendFindNode(node.EndPoint, randomTargetId, ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Debug(ex, "DHT: failed to send find_node for bucket refresh to {0}", node.EndPoint);
+                        }
+                    }
+                }
+            }
+            else if (_configService.DhtAutoBootstrap)
+            {
+                foreach (var router in DefaultBootstrapRouters.Take(2))
+                {
+                    if (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    try
+                    {
+                        var lastColon = router.LastIndexOf(':');
+                        if (lastColon <= 0 || !int.TryParse(router.AsSpan(lastColon + 1), out var port))
+                        {
+                            continue;
+                        }
+
+                        var host = router.Substring(0, lastColon).Trim('[', ']');
+                        if (IPAddress.TryParse(host, out var ip))
+                        {
+                            await SendFindNode(new IPEndPoint(ip, port), randomTargetId, ct);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "DHT: bootstrap router refresh failed for {0}", router);
+                    }
+                }
+            }
+        }
+    }
+
     private async Task SendFindNode(IPEndPoint target, byte[] targetId, CancellationToken ct = default)
     {
         await _querySemaphore.WaitAsync(ct);
@@ -1341,7 +1553,14 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         {
             if (kvp.Value.SentAt < cutoff)
             {
-                _pendingQueries.TryRemove(kvp.Key, out _);
+                if (_pendingQueries.TryRemove(kvp.Key, out var query))
+                {
+                    query.CompletionSource?.TrySetResult(false);
+                    if (query.Target != null)
+                    {
+                        _routingTable.RecordFailure(query.Target);
+                    }
+                }
             }
         }
     }
@@ -1456,7 +1675,10 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         if (message.ContainsKey("t") && message["t"] is BString tStr)
         {
             var txKey = Convert.ToHexString(tStr.Value.ToArray());
-            _pendingQueries.TryRemove(txKey, out _);
+            if (_pendingQueries.TryRemove(txKey, out var query))
+            {
+                query.CompletionSource?.TrySetResult(false);
+            }
         }
 
         _logger.Debug("DHT received error response from {0}", sender);
@@ -1513,5 +1735,6 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         public bool IsAnnounce { get; set; }
         public int Port { get; set; }
         public DateTime SentAt { get; set; }
+        public TaskCompletionSource<bool> CompletionSource { get; set; }
     }
 }
