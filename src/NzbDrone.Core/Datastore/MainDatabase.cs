@@ -11,6 +11,14 @@ public interface IMainDatabase : IDatabase
     void Checkpoint();
 
     void Vacuum();
+
+    long GetFreelistCount();
+
+    long GetPageSize();
+
+    int GetAutoVacuumStatus();
+
+    void IncrementalVacuum(int maxPages = 5000);
 }
 
 public class MainDatabase : IMainDatabase
@@ -119,6 +127,111 @@ public class MainDatabase : IMainDatabase
             {
                 _logger.Warn(ex, "Failed to execute SQLite VACUUM");
             }
+        }
+    }
+
+    public long GetFreelistCount()
+    {
+        if (DatabaseType != DatabaseType.SQLite)
+        {
+            return 0;
+        }
+
+        try
+        {
+            using var conn = _database.OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA freelist_count;";
+            var result = cmd.ExecuteScalar();
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt64(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to query SQLite freelist_count");
+            return 0;
+        }
+    }
+
+    public long GetPageSize()
+    {
+        if (DatabaseType != DatabaseType.SQLite)
+        {
+            return 4096;
+        }
+
+        try
+        {
+            using var conn = _database.OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA page_size;";
+            var result = cmd.ExecuteScalar();
+            return result == null || result == DBNull.Value ? 4096 : Convert.ToInt64(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to query SQLite page_size");
+            return 4096;
+        }
+    }
+
+    public int GetAutoVacuumStatus()
+    {
+        if (DatabaseType != DatabaseType.SQLite)
+        {
+            return 0;
+        }
+
+        try
+        {
+            using var conn = _database.OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA auto_vacuum;";
+            var result = cmd.ExecuteScalar();
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to query SQLite auto_vacuum status");
+            return 0;
+        }
+    }
+
+    public void IncrementalVacuum(int maxPages = 5000)
+    {
+        if (DatabaseType != DatabaseType.SQLite)
+        {
+            return;
+        }
+
+        try
+        {
+            using var conn = _database.OpenConnection();
+            using var cmd = conn.CreateCommand();
+
+            var autoVacuum = GetAutoVacuumStatus();
+            if (autoVacuum != 2)
+            {
+                _logger.Info("SQLite auto_vacuum is not INCREMENTAL ({0}); converting database...", autoVacuum);
+                cmd.CommandText = "PRAGMA auto_vacuum = INCREMENTAL; VACUUM;";
+                cmd.ExecuteNonQuery();
+                return;
+            }
+
+            if (maxPages > 0)
+            {
+                cmd.CommandText = $"PRAGMA incremental_vacuum({maxPages});";
+            }
+            else
+            {
+                cmd.CommandText = "PRAGMA incremental_vacuum;";
+            }
+
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to execute SQLite incremental_vacuum");
+            throw;
         }
     }
 

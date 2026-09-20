@@ -34,6 +34,7 @@ public class SystemController : ControllerBase
     private readonly IMainDatabase _mainDatabase;
     private readonly IScheduledTaskHistoryRepository _taskHistoryRepository;
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
+    private readonly IDatabaseMaintenanceService _databaseMaintenanceService;
 
     public SystemController(
         ITaskManager taskManager,
@@ -44,7 +45,8 @@ public class SystemController : ControllerBase
         IConfigService configService = null,
         IMainDatabase mainDatabase = null,
         IScheduledTaskHistoryRepository taskHistoryRepository = null,
-        IBroadcastSignalRMessage signalRBroadcaster = null)
+        IBroadcastSignalRMessage signalRBroadcaster = null,
+        IDatabaseMaintenanceService databaseMaintenanceService = null)
     {
         _taskManager = taskManager;
         _scheduledTasks = scheduledTasks ?? Enumerable.Empty<IScheduledTask>();
@@ -55,6 +57,7 @@ public class SystemController : ControllerBase
         _mainDatabase = mainDatabase;
         _taskHistoryRepository = taskHistoryRepository;
         _signalRBroadcaster = signalRBroadcaster;
+        _databaseMaintenanceService = databaseMaintenanceService;
     }
 
     /// <summary>
@@ -582,5 +585,44 @@ public class SystemController : ControllerBase
         });
 
         return Ok(new { message = "Shutting down..." });
+    }
+
+    /// <summary>
+    /// Triggers database defragmentation, incremental vacuum, and freelist space reclamation.
+    /// </summary>
+    /// <param name="request">Optional request parameters specifying maxPages to reclaim.</param>
+    /// <param name="maxPages">Optional query parameter specifying maxPages to reclaim.</param>
+    /// <returns>Result containing reclaimed page counts and reclaimed bytes.</returns>
+    [HttpPost("database/vacuum")]
+    public ActionResult<DatabaseVacuumResource> VacuumDatabase(
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] DatabaseVacuumRequest request = null,
+        [FromQuery] int? maxPages = null)
+    {
+        if (_databaseMaintenanceService == null)
+        {
+            return StatusCode(500, new DatabaseVacuumResource
+            {
+                Success = false,
+                DatabaseType = _mainDatabase?.DatabaseType.ToString() ?? "Unknown",
+                Message = "Database maintenance service is unavailable."
+            });
+        }
+
+        var pages = maxPages ?? request?.MaxPages;
+        var result = _databaseMaintenanceService.PerformMaintenance(pages);
+
+        var resource = new DatabaseVacuumResource
+        {
+            Success = result.Success,
+            DatabaseType = result.DatabaseType,
+            InitialFreelistPages = result.InitialFreelistPages,
+            FinalFreelistPages = result.FinalFreelistPages,
+            ReclaimedPages = result.ReclaimedPages,
+            PageSize = result.PageSize,
+            ReclaimedBytes = result.ReclaimedBytes,
+            Message = result.Message
+        };
+
+        return Ok(resource);
     }
 }
