@@ -27,6 +27,12 @@ public class MediaContainerInfo
     public List<string> SubtitleTracks { get; set; } = new();
 
     public double DurationSeconds { get; set; }
+
+    public double FrameRate { get; set; }
+
+    public int AudioBitrate { get; set; }
+
+    public string AudioLanguage { get; set; }
 }
 
 public interface IMediaContainerInspector
@@ -38,6 +44,13 @@ public interface IMediaContainerInspector
 
 public class MediaContainerInspector : IMediaContainerInspector
 {
+    private readonly IFFprobeMediaInspector _ffprobeInspector;
+
+    public MediaContainerInspector(IFFprobeMediaInspector ffprobeInspector = null)
+    {
+        _ffprobeInspector = ffprobeInspector ?? new FFprobeMediaInspector();
+    }
+
     public MediaContainerInfo Inspect(System.IO.Stream stream, string fileName = "")
     {
         return InspectFileName(fileName);
@@ -48,6 +61,22 @@ public class MediaContainerInspector : IMediaContainerInspector
         if (string.IsNullOrWhiteSpace(filePath))
         {
             return null;
+        }
+
+        if (System.IO.File.Exists(filePath) && _ffprobeInspector != null)
+        {
+            try
+            {
+                var probed = _ffprobeInspector.Inspect(filePath);
+                if (probed != null)
+                {
+                    return probed;
+                }
+            }
+            catch
+            {
+                // Fallback to filename inspection below
+            }
         }
 
         var fileName = System.IO.Path.GetFileName(filePath);
