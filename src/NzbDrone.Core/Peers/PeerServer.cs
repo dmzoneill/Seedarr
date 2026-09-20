@@ -74,6 +74,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private readonly object _listenerLock = new();
     private readonly SemaphoreSlim _rebindSignal = new(0, 1);
     private readonly CancellationTokenSource _serverLifecycleCts = new();
+    private readonly ITorrentFileService _torrentFileService;
     private TcpListener _listener;
     private CancellationTokenSource _listenerCts;
 
@@ -86,7 +87,6 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     private IPieceCache _pieceCache;
     private IMultiFilePieceStorage _multiFilePieceStorage;
-    private readonly ITorrentFileService _torrentFileService;
 
     public IPieceCache PieceCache
     {
@@ -373,7 +373,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _magnetMetadataDownloader = magnetMetadataDownloader;
         _peerExchange = peerExchange ?? new Extensions.PeerExchange(_configService);
         _pexService = pexService ?? new Extensions.PexService(_connectionManager, _peerExchange, _torrentService, _configService);
-        _random = random ?? new RandomNumberGenerator();
+        _random = random ?? new NzbDrone.Common.EnvironmentInfo.RandomNumberGenerator();
         _rarestFirstPicker = new PiecePicker.RarestFirstPiecePicker(_random);
         _sequentialPicker = new PiecePicker.SequentialPiecePicker(_rarestFirstPicker, _random);
         _piecePicker = piecePicker ?? new PiecePicker.PiecePicker(_sequentialPicker, _rarestFirstPicker);
@@ -1039,7 +1039,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         var torrentId = torrent?.Id ?? 0;
         var connections = torrent != null && !string.IsNullOrEmpty(torrent.InfoHash)
             ? _connectionManager?.GetConnections(torrent.InfoHash) ?? Enumerable.Empty<PeerConnection>()
-            : _connectionManager?.GetConnections() ?? Enumerable.Empty<PeerConnection>();
+            : _connectionManager?.GetAllConnections() ?? Enumerable.Empty<PeerConnection>();
 
         foreach (var block in missingBlocks)
         {
@@ -2713,7 +2713,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                         break;
                     }
 
-                    var message = connection.ReceiveMessage();
+                    var message = await connection.ReceiveMessageAsync(stoppingToken);
                     if (message == null)
                     {
                         if (!connection.IsConnected)
@@ -3077,6 +3077,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 if (message.Payload != null && message.Payload.Length >= 12)
                 {
                     var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
+                    var begin = (int)(((uint)message.Payload[4] << 24) | ((uint)message.Payload[5] << 16) | ((uint)message.Payload[6] << 8) | message.Payload[7]);
+                    var length = (int)(((uint)message.Payload[8] << 24) | ((uint)message.Payload[9] << 16) | ((uint)message.Payload[10] << 8) | message.Payload[11]);
 
                     if (torrent != null && torrent.SuperSeeding)
                     {
@@ -3252,6 +3254,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 break;
 
             case PeerMessageType.Piece:
+            {
                 if (torrent != null && (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking))
                 {
                     _logger.Debug(
@@ -3382,6 +3385,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 }
 
                 break;
+            }
 
             case PeerMessageType.Extended:
                 HandleExtendedMessage(connection, message, torrent);

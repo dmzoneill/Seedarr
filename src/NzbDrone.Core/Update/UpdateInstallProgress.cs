@@ -15,7 +15,7 @@ public class UpdateInstallProgress
 {
     public UpdateInstallStage Stage { get; set; } = UpdateInstallStage.Idle;
 
-    public int Percentage { get; set; } = 0;
+    public int Percentage { get; set; }
 
     public string ErrorMessage { get; set; }
 

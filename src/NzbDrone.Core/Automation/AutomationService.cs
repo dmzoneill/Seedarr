@@ -874,6 +874,7 @@ public class AutomationService : IAutomationService
                 _eventAggregator.PublishEvent(new TorrentDeletedEvent(torrent.Id, torrent));
                 _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
             }
+
             return;
         }
 
