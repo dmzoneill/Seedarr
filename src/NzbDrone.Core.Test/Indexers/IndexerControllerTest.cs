@@ -296,7 +296,7 @@ public class IndexerControllerTest
     }
 
     [Test]
-    public void Search_when_indexer_returns_401_records_failure_and_does_not_call_record_success()
+    public async Task Search_when_indexer_returns_401_records_failure_and_does_not_call_record_success()
     {
         var handler = new FakeHttpMessageHandler
         {
@@ -330,14 +330,14 @@ public class IndexerControllerTest
         };
         _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
 
-        var result = controller.Search("ubuntu");
+        var result = await controller.Search("ubuntu");
 
         _indexerStatusService.Received(1).RecordFailure(1, 401, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
         _indexerStatusService.DidNotReceive().RecordSuccess(1);
     }
 
     [Test]
-    public void Search_when_indexer_returns_429_records_failure_with_retry_after()
+    public async Task Search_when_indexer_returns_429_records_failure_with_retry_after()
     {
         var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests)
         {
@@ -371,7 +371,7 @@ public class IndexerControllerTest
         };
         _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
 
-        controller.Search("ubuntu");
+        await controller.Search("ubuntu");
 
         _indexerStatusService.Received(1).RecordFailure(
             2,
@@ -383,7 +383,7 @@ public class IndexerControllerTest
     }
 
     [Test]
-    public void Search_when_indexer_succeeds_records_success()
+    public async Task Search_when_indexer_succeeds_records_success()
     {
         var xml = @"<?xml version=""1.0""?><rss version=""2.0""><channel></channel></rss>";
         var handler = new FakeHttpMessageHandler
@@ -418,14 +418,14 @@ public class IndexerControllerTest
         };
         _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
 
-        controller.Search("ubuntu");
+        await controller.Search("ubuntu");
 
         _indexerStatusService.Received(1).RecordSuccess(3);
         _indexerStatusService.DidNotReceive().RecordFailure(3, Arg.Any<int?>(), Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
     }
 
     [Test]
-    public void Search_with_structured_parameters_sends_tvsearch_and_records_success()
+    public async Task Search_with_structured_parameters_sends_tvsearch_and_records_success()
     {
         var xml = @"<?xml version=""1.0""?><rss version=""2.0""><channel></channel></rss>";
         var handler = new FakeHttpMessageHandler
@@ -460,7 +460,7 @@ public class IndexerControllerTest
         };
         _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
 
-        var result = controller.Search(
+        var result = await controller.Search(
             query: "Breaking Bad",
             searchType: "tvsearch",
             season: 1,
@@ -476,6 +476,292 @@ public class IndexerControllerTest
         Assert.That(uri, Does.Contain("season=1"));
         Assert.That(uri, Does.Contain("ep=3"));
         Assert.That(uri, Does.Contain("tvdbid=81189"));
+    }
+
+    [Test]
+    public async Task Search_when_prowlarr_returns_401_records_failure_and_does_not_call_record_success()
+    {
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                ReasonPhrase = "Unauthorized"
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 10,
+            Name = "Prowlarr 10",
+            IndexerType = "Prowlarr",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "wrong-key",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
+
+        var result = await controller.Search("ubuntu");
+
+        _indexerStatusService.Received(1).RecordFailure(10, 401, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+        _indexerStatusService.DidNotReceive().RecordSuccess(10);
+    }
+
+    [Test]
+    public async Task Search_multi_indexer_runs_in_parallel_and_aggregates_successful_results_while_ignoring_failed_indexers()
+    {
+        var defHealthy = new IndexerDefinition
+        {
+            Id = 101,
+            Name = "Healthy Indexer",
+            IndexerType = "Torznab",
+            Url = "http://1.1.1.1:9696",
+            ApiKey = "key1",
+            Enable = true,
+            EnableSearch = true
+        };
+        var defBroken = new IndexerDefinition
+        {
+            Id = 102,
+            Name = "Broken Indexer",
+            IndexerType = "Torznab",
+            Url = "http://2.2.2.2:9696",
+            ApiKey = "key2",
+            Enable = true,
+            EnableSearch = true
+        };
+        var defServerErr = new IndexerDefinition
+        {
+            Id = 103,
+            Name = "ServerError Indexer",
+            IndexerType = "Torznab",
+            Url = "http://3.3.3.3:9696",
+            ApiKey = "key3",
+            Enable = true,
+            EnableSearch = true
+        };
+
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { defHealthy, defBroken, defServerErr });
+
+        var xml = @"<?xml version=""1.0""?>
+<rss version=""2.0"">
+  <channel>
+    <item>
+      <title>Ubuntu Linux 24.04</title>
+      <guid>http://example.com/item/1</guid>
+      <torznab:attr name=""seeders"" value=""50"" xmlns:torznab=""http://torznab.com/schemas/2015/feed""/>
+    </item>
+  </channel>
+</rss>";
+
+        var handler = new FakeRoutingHttpMessageHandler(req =>
+        {
+            if (req.RequestUri.Host == "1.1.1.1")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(xml) };
+            }
+
+            if (req.RequestUri.Host == "2.2.2.2")
+            {
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized) { ReasonPhrase = "Unauthorized" };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError) { ReasonPhrase = "Internal Error" };
+        });
+
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var actionResult = await controller.Search("ubuntu");
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var list = okResult.Value as List<NzbDrone.Core.Indexers.ReleaseInfo>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list.Count, Is.EqualTo(1));
+        Assert.That(list[0].Title, Is.EqualTo("Ubuntu Linux 24.04"));
+
+        _indexerStatusService.Received(1).RecordSuccess(101);
+        _indexerStatusService.Received(1).RecordFailure(102, 401, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+        _indexerStatusService.Received(1).RecordFailure(103, 500, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+    }
+
+    [Test]
+    public async Task Search_when_targeted_indexer_fails_returns_error_response_with_message()
+    {
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                ReasonPhrase = "Unauthorized"
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 50,
+            Name = "Torznab 50",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.Get(50).Returns(indexerDef);
+
+        var actionResult = await controller.Search(query: "ubuntu", indexerId: 50);
+        var objResult = actionResult.Result as ObjectResult;
+        Assert.That(objResult, Is.Not.Null);
+        Assert.That(objResult.StatusCode, Is.EqualTo(401));
+
+        _indexerStatusService.Received(1).RecordFailure(50, 401, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+        _indexerStatusService.DidNotReceive().RecordSuccess(50);
+    }
+
+    [Test]
+    public async Task Search_when_targeted_indexer_returns_500_returns_internal_server_error()
+    {
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.InternalServerError)
+            {
+                ReasonPhrase = "Internal Server Error"
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 51,
+            Name = "Torznab 51",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.Get(51).Returns(indexerDef);
+
+        var actionResult = await controller.Search(query: "ubuntu", indexerId: 51);
+        var objResult = actionResult.Result as ObjectResult;
+        Assert.That(objResult, Is.Not.Null);
+        Assert.That(objResult.StatusCode, Is.EqualTo(500));
+
+        _indexerStatusService.Received(1).RecordFailure(51, 500, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+    }
+
+    [Test]
+    public async Task Search_when_targeted_indexer_not_found_returns_not_found()
+    {
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository);
+
+        _indexerFactory.Get(999).Returns((IndexerDefinition)null);
+
+        var actionResult = await controller.Search(query: "ubuntu", indexerId: 999);
+        var notFoundResult = actionResult.Result as NotFoundObjectResult;
+        Assert.That(notFoundResult, Is.Not.Null);
+        Assert.That(notFoundResult.StatusCode, Is.EqualTo(404));
+    }
+
+    [Test]
+    public async Task Search_when_targeted_indexer_is_disabled_returns_bad_request()
+    {
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository);
+
+        var def = new IndexerDefinition { Id = 77, Name = "Disabled Indexer", Enable = false, EnableSearch = true };
+        _indexerFactory.Get(77).Returns(def);
+
+        var actionResult = await controller.Search(query: "ubuntu", indexerId: 77);
+        var badResult = actionResult.Result as BadRequestObjectResult;
+        Assert.That(badResult, Is.Not.Null);
+        Assert.That(badResult.StatusCode, Is.EqualTo(400));
+    }
+
+    [Test]
+    public async Task Search_when_targeted_indexer_is_disabled_by_status_service_returns_service_unavailable()
+    {
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository);
+
+        var def = new IndexerDefinition { Id = 88, Name = "Backoff Indexer", Enable = true, EnableSearch = true };
+        _indexerFactory.Get(88).Returns(def);
+        _indexerStatusService.IsDisabled(88).Returns(true);
+
+        var actionResult = await controller.Search(query: "ubuntu", indexerId: 88);
+        var objResult = actionResult.Result as ObjectResult;
+        Assert.That(objResult, Is.Not.Null);
+        Assert.That(objResult.StatusCode, Is.EqualTo(503));
     }
 
     [Test]
@@ -628,6 +914,26 @@ public class IndexerControllerTest
         {
             SentRequest = request;
             return Task.FromResult(ResponseToReturn);
+        }
+    }
+
+    private class FakeRoutingHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _router;
+
+        public FakeRoutingHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> router)
+        {
+            _router = router;
+        }
+
+        protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return _router(request);
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_router(request));
         }
     }
 }

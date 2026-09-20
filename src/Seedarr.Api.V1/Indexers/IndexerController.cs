@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Newznab;
@@ -322,7 +324,7 @@ public class IndexerController : Controller
     }
 
     [HttpGet("search")]
-    public ActionResult<List<ReleaseInfo>> Search(
+    public async Task<ActionResult<List<ReleaseInfo>>> Search(
         [FromQuery] string query = null,
         [FromQuery] string category = null,
         [FromQuery] int? indexerId = null,
@@ -378,26 +380,60 @@ public class IndexerController : Controller
             return Ok(new List<ReleaseInfo>());
         }
 
-        var definitions = _indexerFactory.All().Where(d => d.Enable && d.EnableSearch).ToList();
+        List<IndexerDefinition> definitions;
         if (indexerId.HasValue && indexerId.Value > 0)
         {
-            definitions = definitions.Where(d => d.Id == indexerId.Value).ToList();
+            var def = _indexerFactory.Get(indexerId.Value);
+            if (def == null)
+            {
+                return NotFound(new { message = $"Indexer with ID {indexerId.Value} not found." });
+            }
+
+            if (!def.Enable || !def.EnableSearch)
+            {
+                return BadRequest(new { message = $"Indexer '{def.Name}' is disabled." });
+            }
+
+            if (_indexerStatusService.IsDisabled(def.Id))
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = $"Indexer '{def.Name}' is temporarily disabled due to recent failures." });
+            }
+
+            definitions = new List<IndexerDefinition> { def };
+        }
+        else
+        {
+            definitions = _indexerFactory.All()
+                .Where(d => d.Enable && d.EnableSearch && !_indexerStatusService.IsDisabled(d.Id))
+                .ToList();
         }
 
-        definitions = definitions.Where(d => !_indexerStatusService.IsDisabled(d.Id)).ToList();
+        if (definitions.Count == 0)
+        {
+            return Ok(new List<ReleaseInfo>());
+        }
 
-        var allResults = new List<ReleaseInfo>();
-        foreach (var def in definitions)
+        Exception singleTargetException = null;
+
+        var searchTasks = definitions.Select(async def =>
         {
             try
             {
                 var indexer = CreateIndexer(def);
-                var results = indexer.Search(def, criteria);
+                var results = await Task.Run(() => indexer.Search(def, criteria)).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                 _indexerStatusService.RecordSuccess(def.Id);
-                if (results != null && results.Count > 0)
+                return results ?? new List<ReleaseInfo>();
+            }
+            catch (TimeoutException ex)
+            {
+                var message = $"Search timed out after 10 seconds for indexer '{def.Name}'.";
+                _indexerStatusService.RecordFailure(def.Id, StatusCodes.Status504GatewayTimeout, message, ex);
+                if (indexerId.HasValue && indexerId.Value == def.Id)
                 {
-                    allResults.AddRange(results);
+                    singleTargetException = new TimeoutException(message, ex);
                 }
+
+                return new List<ReleaseInfo>();
             }
             catch (HttpRequestException ex)
             {
@@ -406,6 +442,13 @@ public class IndexerController : Controller
                     var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
                     _indexerStatusService.RecordFailure(def.Id, (int?)ex.StatusCode, ex.Message, ex, retryAfter);
                 }
+
+                if (indexerId.HasValue && indexerId.Value == def.Id)
+                {
+                    singleTargetException = ex;
+                }
+
+                return new List<ReleaseInfo>();
             }
             catch (IndexerException ex)
             {
@@ -413,12 +456,51 @@ public class IndexerController : Controller
                 {
                     _indexerStatusService.RecordFailure(def.Id, ex.StatusCode, ex.Message, ex, ex.RetryAfter);
                 }
+
+                if (indexerId.HasValue && indexerId.Value == def.Id)
+                {
+                    singleTargetException = ex;
+                }
+
+                return new List<ReleaseInfo>();
             }
             catch (Exception ex)
             {
                 _indexerStatusService.RecordFailure(def.Id, null, ex.Message, ex);
+                if (indexerId.HasValue && indexerId.Value == def.Id)
+                {
+                    singleTargetException = ex;
+                }
+
+                return new List<ReleaseInfo>();
             }
+        });
+
+        var resultsArray = await Task.WhenAll(searchTasks).ConfigureAwait(false);
+
+        if (indexerId.HasValue && indexerId.Value > 0 && singleTargetException != null)
+        {
+            if (singleTargetException is HttpRequestException httpEx)
+            {
+                var statusCode = (int?)httpEx.StatusCode ?? StatusCodes.Status502BadGateway;
+                return StatusCode(statusCode, new { message = httpEx.Message });
+            }
+
+            if (singleTargetException is IndexerException idxEx)
+            {
+                var statusCode = idxEx.StatusCode ?? StatusCodes.Status502BadGateway;
+                return StatusCode(statusCode, new { message = idxEx.Message });
+            }
+
+            if (singleTargetException is TimeoutException timeoutEx)
+            {
+                return StatusCode(StatusCodes.Status504GatewayTimeout, new { message = timeoutEx.Message });
+            }
+
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = singleTargetException.Message });
         }
+
+        var allResults = resultsArray.SelectMany(r => r).ToList();
 
         var sorted = allResults
             .OrderByDescending(r => r.Seeders ?? 0)
@@ -657,7 +739,7 @@ public class IndexerController : Controller
     {
         return definition.IndexerType switch
         {
-            "Prowlarr" => new ProwlarrIndexer(_httpClient),
+            "Prowlarr" => new ProwlarrIndexer(_httpClient, _indexerStatusService),
             "Torznab" => new TorznabIndexer(_httpClient, _indexerStatusService),
             "Newznab" => new NewznabIndexer(_httpClient, _indexerStatusService),
             _ => throw new ArgumentException($"Unknown indexer type: {definition.IndexerType}"),
