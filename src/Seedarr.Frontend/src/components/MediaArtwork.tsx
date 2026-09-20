@@ -13,9 +13,22 @@ export interface MediaArtworkProps {
   aspectRatio?: string;
   borderRadius?: string;
   fallbackIcon?: string;
+  allowRetry?: boolean;
+  onRetry?: () => void;
+  onError?: () => void;
+  initialState?: MediaArtworkState;
 }
 
 export type MediaArtworkState = "loading" | "loaded" | "error";
+
+export function sanitizeArtworkUrl(url?: string | null): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed === "null" || trimmed === "undefined") {
+    return null;
+  }
+  return trimmed;
+}
 
 export function getCategoryGlyph(category?: string): string {
   if (!category) return "📦";
@@ -49,6 +62,15 @@ export function getCategoryGlyph(category?: string): string {
   if (cat.includes("book") || cat.includes("readarr")) {
     return "📚";
   }
+  if (cat.includes("anime")) {
+    return "🍙";
+  }
+  if (cat.includes("game") || cat.includes("gaming")) {
+    return "🎮";
+  }
+  if (cat.includes("software") || cat.includes("app") || cat.includes("iso")) {
+    return "💾";
+  }
   return "📦";
 }
 
@@ -73,18 +95,24 @@ export function MediaArtwork({
   aspectRatio = "2 / 3",
   borderRadius,
   fallbackIcon,
+  allowRetry = false,
+  onRetry,
+  onError,
+  initialState,
 }: MediaArtworkProps) {
   const placeholderUrl = buildPlaceholderUrl(title, category);
-  const initialSrc = src && src.trim().length > 0 ? src.trim() : placeholderUrl;
+  const cleanSrc = sanitizeArtworkUrl(src);
+  const initialSrc = cleanSrc || placeholderUrl;
 
   const [currentSrc, setCurrentSrc] = useState<string>(initialSrc);
-  const [artworkState, setArtworkState] = useState<MediaArtworkState>("loading");
+  const [artworkState, setArtworkState] = useState<MediaArtworkState>(initialState || "loading");
 
   useEffect(() => {
-    const nextSrc = src && src.trim().length > 0 ? src.trim() : placeholderUrl;
+    const nextCleanSrc = sanitizeArtworkUrl(src);
+    const nextSrc = nextCleanSrc || placeholderUrl;
     setCurrentSrc(nextSrc);
-    setArtworkState("loading");
-  }, [src, title, category, placeholderUrl]);
+    setArtworkState(initialState || "loading");
+  }, [src, title, category, placeholderUrl, initialState]);
 
   const handleLoad = () => {
     setArtworkState("loaded");
@@ -98,12 +126,27 @@ export function MediaArtwork({
     } else {
       // Even placeholder failed; render client-side CSS fallback
       setArtworkState("error");
+      onError?.();
     }
   };
 
-  const isSmall =
-    (typeof width === "number" && width <= 60) ||
-    (typeof width === "string" && (width.endsWith("px") ? parseInt(width, 10) <= 60 : false));
+  const handleRetry = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const nextClean = sanitizeArtworkUrl(src);
+    setCurrentSrc(nextClean || placeholderUrl);
+    setArtworkState("loading");
+    onRetry?.();
+  };
+
+  const numericWidth =
+    typeof width === "number"
+      ? width
+      : typeof width === "string" && width.endsWith("px")
+        ? parseInt(width, 10)
+        : undefined;
+
+  const isVerySmall = numericWidth !== undefined && numericWidth <= 30;
+  const isSmall = (numericWidth !== undefined && numericWidth <= 60) || isVerySmall;
 
   const glyph = fallbackIcon || getCategoryGlyph(category);
 
@@ -165,6 +208,7 @@ export function MediaArtwork({
         /* Styled CSS Fallback when image fails to load or src is absent */
         <div
           className="media-artwork-fallback"
+          aria-label={alt || title || "Artwork placeholder"}
           style={{
             position: "absolute",
             top: 0,
@@ -175,26 +219,29 @@ export function MediaArtwork({
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            padding: isSmall ? "0.2rem" : "0.75rem",
+            padding: isVerySmall ? "1px" : isSmall ? "0.2rem" : "0.75rem",
             textAlign: "center",
             background: "linear-gradient(180deg, #2a2620 0%, #151412 100%)",
             color: "var(--text-secondary, #9c9484)",
             borderRadius,
             zIndex: 2,
             boxSizing: "border-box",
+            overflow: "hidden",
           }}
         >
           <span
             style={{
-              fontSize: isSmall ? "1.2rem" : "2.2rem",
+              fontSize: isVerySmall ? "0.85rem" : isSmall ? "1.2rem" : "2.2rem",
               marginBottom: isSmall ? 0 : "0.35rem",
               lineHeight: 1,
+              userSelect: "none",
             }}
           >
             {glyph}
           </span>
           {!isSmall && title && (
             <div
+              className="media-artwork-title"
               style={{
                 fontSize: "0.78rem",
                 fontWeight: 600,
@@ -209,6 +256,28 @@ export function MediaArtwork({
             >
               {title}
             </div>
+          )}
+          {allowRetry && (
+            <button
+              type="button"
+              className="media-artwork-retry-btn"
+              onClick={handleRetry}
+              title="Retry loading artwork"
+              aria-label="Retry loading artwork"
+              style={{
+                marginTop: isVerySmall ? "1px" : isSmall ? "2px" : "6px",
+                background: "rgba(255, 255, 255, 0.15)",
+                border: "1px solid rgba(255, 255, 255, 0.25)",
+                borderRadius: "3px",
+                color: "var(--text-secondary, #b0a898)",
+                fontSize: isVerySmall ? "0.6rem" : isSmall ? "0.7rem" : "0.8rem",
+                cursor: "pointer",
+                padding: isVerySmall ? "0 2px" : isSmall ? "1px 4px" : "2px 8px",
+                lineHeight: 1,
+              }}
+            >
+              ↻
+            </button>
           )}
         </div>
       )}
