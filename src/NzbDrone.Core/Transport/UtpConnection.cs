@@ -202,6 +202,7 @@ public class UtpConnection : IUtpConnection
     public const int MaxRtoMs = 10000;
     public const int GranularityMs = 10;
     public const uint TargetDelay = 100_000;
+    public const uint TARGET_DELAY = TargetDelay;
     public const uint InitialCongestionWindow = 3000;
     public const uint MinCongestionWindow = 150;
     public const double DefaultGain = 3000.0;
@@ -282,6 +283,7 @@ public class UtpConnection : IUtpConnection
     }
 
     public uint EffectiveCwnd => Math.Min(CongestionWindow, _remoteWindowSize);
+    public int BytesInFlight => _inFlightPackets.Values.Sum(p => p.PayloadLength);
 
     public uint BaseDelay
     {
@@ -301,6 +303,17 @@ public class UtpConnection : IUtpConnection
             lock (_congestionLock)
             {
                 return _queuingDelay;
+            }
+        }
+    }
+
+    public double OffTarget
+    {
+        get
+        {
+            lock (_congestionLock)
+            {
+                return (double)TargetDelay - _queuingDelay;
             }
         }
     }
@@ -528,12 +541,19 @@ public class UtpConnection : IUtpConnection
                     currentInFlightBytes = _inFlightPackets.Values.Sum(p => p.PayloadLength);
                 }
 
-                if (!IsConnected || _isClosing || (currentInFlightBytes >= effectiveWindow && totalSent > 0))
+                if (!IsConnected || _isClosing || currentInFlightBytes >= effectiveWindow)
                 {
                     break;
                 }
 
-                var chunkSize = Math.Min(MaxPayloadSize, length - totalSent);
+                var remainingToSend = length - totalSent;
+                var availableWindow = effectiveWindow - currentInFlightBytes;
+                var chunkSize = (int)Math.Min(MaxPayloadSize, Math.Min((long)remainingToSend, (long)availableWindow));
+                if (chunkSize <= 0)
+                {
+                    break;
+                }
+
                 var payload = new byte[chunkSize];
                 Array.Copy(data, offset + totalSent, payload, 0, chunkSize);
 
@@ -1280,7 +1300,7 @@ public class UtpConnection : IUtpConnection
         _rtoMs = (int)Math.Clamp(calculatedRto, MinRtoMs, MaxRtoMs);
     }
 
-    internal void UpdateCongestionWindow(uint delaySample, int bytesAcked)
+    internal void UpdateCongestionWindow(uint delaySample, int bytesAcked, long? timestampTicks = null)
     {
         if (delaySample == 0)
         {
@@ -1289,7 +1309,7 @@ public class UtpConnection : IUtpConnection
 
         lock (_congestionLock)
         {
-            var nowTicks = Stopwatch.GetTimestamp();
+            var nowTicks = timestampTicks ?? Stopwatch.GetTimestamp();
             var windowTicks = 120L * Stopwatch.Frequency;
 
             _delayHistory.RemoveAll(s => nowTicks - s.TimestampTicks > windowTicks);
@@ -1300,8 +1320,8 @@ public class UtpConnection : IUtpConnection
 
             if (bytesAcked > 0 && _congestionWindow > 0)
             {
-                var offset = (double)TargetDelay - _queuingDelay;
-                var delayFactor = offset / TargetDelay;
+                var offTarget = (double)TargetDelay - _queuingDelay;
+                var delayFactor = offTarget / TargetDelay;
                 var windowFactor = Math.Min((double)bytesAcked / _congestionWindow, 1.0);
                 var scaledGain = _gain * delayFactor * windowFactor;
 
