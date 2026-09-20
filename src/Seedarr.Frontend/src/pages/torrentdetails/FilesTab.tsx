@@ -3,6 +3,8 @@ import { Torrent } from "../../api/types";
 import { useTorrentFiles } from "../../api/hooks";
 import { formatBytes } from "../../utils/formatters";
 import { SkeletonLine } from "../../components/Skeleton";
+import { MediaPlayerModal } from "../../components/MediaPlayerModal";
+import { isPlayableFile, isAudioFile } from "../../utils/mediaPlayer";
 import {
   FileTreeNode,
   FilePriority,
@@ -24,6 +26,7 @@ function FileTreeRow({
   onFileWanted,
   filePriorities,
   fileWanted,
+  onPlayMedia,
 }: {
   node: FileTreeNode;
   depth: number;
@@ -35,6 +38,7 @@ function FileTreeRow({
   onFileWanted: (fileId: number, wanted: boolean) => void;
   filePriorities: Record<number, FilePriority>;
   fileWanted: Record<number, boolean>;
+  onPlayMedia: (file: { id: number; path: string; name: string; size: number }) => void;
 }) {
   const isOpen = expanded.has(node.path);
   const indent = depth * 20;
@@ -53,6 +57,7 @@ function FileTreeRow({
       ? fileWanted[node.fileId] ?? node.wanted ?? (formatPriority(filePrio) !== "Do Not Download")
       : true;
   const progressValue = node.progress ?? 100;
+  const playable = !node.isDir && node.fileId !== undefined && isPlayableFile(node.name);
 
   return (
     <>
@@ -106,7 +111,40 @@ function FileTreeRow({
               style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
             >
               <span style={{ width: 12 }} />
-              <span style={{ opacity: 0.7 }}>📄</span> {node.name}
+              <span style={{ opacity: 0.7 }}>
+                {playable ? (isAudioFile(node.name) ? "🎵" : "🎬") : "📄"}
+              </span>{" "}
+              {playable ? (
+                <button
+                  type="button"
+                  className="btn-link"
+                  aria-label={`Play ${node.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlayMedia({
+                      id: node.fileId!,
+                      path: node.path,
+                      name: node.name,
+                      size: node.size,
+                    });
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    color: "var(--accent-color, #3498db)",
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    fontSize: "inherit",
+                    textAlign: "left",
+                  }}
+                >
+                  {node.name}
+                </button>
+              ) : (
+                node.name
+              )}
             </span>
           )}
         </td>
@@ -197,6 +235,36 @@ function FileTreeRow({
             )}
           </div>
         </td>
+        <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+          {playable ? (
+            <button
+              type="button"
+              className="btn btn-xs btn-primary"
+              aria-label={`Stream ${node.name}`}
+              title={`Stream / Play ${node.name}`}
+              onClick={() =>
+                onPlayMedia({
+                  id: node.fileId!,
+                  path: node.path,
+                  name: node.name,
+                  size: node.size,
+                })
+              }
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+                padding: "0.15rem 0.45rem",
+                fontSize: "0.75rem",
+                cursor: "pointer",
+              }}
+            >
+              ▶ Play
+            </button>
+          ) : (
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>—</span>
+          )}
+        </td>
       </tr>
       {node.isDir &&
         isOpen &&
@@ -221,6 +289,7 @@ function FileTreeRow({
               onFileWanted={onFileWanted}
               filePriorities={filePriorities}
               fileWanted={fileWanted}
+              onPlayMedia={onPlayMedia}
             />
           ))}
     </>
@@ -234,6 +303,12 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
     Record<number, FilePriority>
   >({});
   const [fileWanted, setFileWanted] = useState<Record<number, boolean>>({});
+  const [selectedMediaFile, setSelectedMediaFile] = useState<{
+    id: number;
+    path: string;
+    name: string;
+    size: number;
+  } | null>(null);
 
   const toggleDir = useCallback((path: string) => {
     setExpanded((prev) => {
@@ -397,6 +472,9 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
                 <th className="torrent-table-th" style={{ width: 150 }}>
                   Priority
                 </th>
+                <th className="torrent-table-th" style={{ width: 90, textAlign: "center" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -421,11 +499,20 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
                     onFileWanted={handleFileWanted}
                     filePriorities={filePriorities}
                     fileWanted={fileWanted}
+                    onPlayMedia={setSelectedMediaFile}
                   />
                 ))}
             </tbody>
           </table>
         </div>
+      )}
+      {selectedMediaFile && (
+        <MediaPlayerModal
+          isOpen={Boolean(selectedMediaFile)}
+          onClose={() => setSelectedMediaFile(null)}
+          torrent={torrent}
+          file={selectedMediaFile}
+        />
       )}
     </div>
   );
