@@ -377,7 +377,7 @@ public class SpeedPolicy : ISpeedPolicy,
                     var snapshot = new SwarmSnapshot
                     {
                         SeedCount = torrent.Seeders,
-                        LeechCount = torrent.Leechers,
+                        LeechCount = Math.Max(1, torrent.Leechers),
                         PieceAvailability = torrent.Availability > 0 ? torrent.Availability : (torrent.Progress >= 1.0 ? 1.0 : torrent.Progress),
                         TorrentSizeBytes = torrent.TotalSize,
                         UploadRateBytesPerSec = torrent.UploadSpeed,
