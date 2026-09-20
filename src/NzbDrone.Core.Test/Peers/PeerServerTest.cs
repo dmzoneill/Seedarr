@@ -3715,4 +3715,169 @@ public class PeerServerTest
         {
         }
     }
+
+    [Test]
+    [CancelAfter(5000)]
+    public async Task Outbound_connection_in_prefer_encrypted_mode_falls_back_to_plaintext_when_mse_rejected()
+    {
+        var config = Substitute.For<IConfigService>();
+        config.MaxGlobalConnections.Returns(200);
+        config.MaximumHalfOpenConnections.Returns(50);
+        config.ListeningPort.Returns(0);
+        config.EncryptionMode.Returns("prefer");
+        config.HandshakeTimeoutSeconds.Returns(5);
+        config.MessageReadTimeoutSeconds.Returns(60);
+        config.KeepAliveIntervalSeconds.Returns(120);
+        config.PeerRequestCount.Returns(200);
+        config.PeerIdleChance.Returns(0.0);
+        config.PeerContactIntervalSeconds.Returns(300);
+
+        using var server = new PeerServer(
+            config,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            mseSkeyRegistry: _mseSkeyRegistry);
+
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        const string infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = infoHash,
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = port,
+            Source = "Tracker"
+        };
+
+        using var cts = new CancellationTokenSource();
+        TcpClient remotePeer1 = null;
+        TcpClient remotePeer2 = null;
+
+        var serverTask = Task.Run(async () =>
+        {
+            // 1st connection: MSE attempt from PeerServer. Remote peer closes immediately to simulate non-MSE peer.
+            remotePeer1 = await listener.AcceptTcpClientAsync(cts.Token);
+            _clients.Add(remotePeer1);
+            remotePeer1.Close();
+
+            // 2nd connection: Plaintext fallback from PeerServer.
+            remotePeer2 = await listener.AcceptTcpClientAsync(cts.Token);
+            _clients.Add(remotePeer2);
+            var stream = remotePeer2.GetStream();
+
+            var recvBuf = new byte[68];
+            var readTotal = 0;
+            while (readTotal < 68)
+            {
+                var r = await stream.ReadAsync(recvBuf.AsMemory(readTotal, 68 - readTotal), cts.Token);
+                if (r == 0) break;
+                readTotal += r;
+            }
+
+            Assert.That(readTotal, Is.EqualTo(68));
+            Assert.That(recvBuf[0], Is.EqualTo(0x13)); // Standard BT handshake
+
+            var replyHandshake = BuildBtHandshake(infoHash, "-SD0001-999999999999");
+            await stream.WriteAsync(replyHandshake, cts.Token);
+            await stream.FlushAsync(cts.Token);
+        });
+
+        var connectTask = InvokeConnectToPeerAsync(torrent, candidate, cts.Token, server);
+
+        await serverTask;
+
+        // Wait for connection to be added to connection manager
+        for (var i = 0; i < 50; i++)
+        {
+            if (_connectionManager.ReceivedCalls().Any()) break;
+            await Task.Delay(20);
+        }
+
+        _connectionManager.Received(1).Add(Arg.Is<PeerConnection>(c => !c.IsEncrypted && c.EncryptionMethod == CryptoMethod.PlainText));
+        _peerDiscovery.Received(1).MarkAttempted(infoHash, candidate.Ip, candidate.Port, true);
+
+        remotePeer2?.Close();
+        await cts.CancelAsync();
+        try
+        {
+            await connectTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public async Task Outbound_connection_in_require_encrypted_mode_aborts_when_mse_rejected()
+    {
+        var config = Substitute.For<IConfigService>();
+        config.MaxGlobalConnections.Returns(200);
+        config.MaximumHalfOpenConnections.Returns(50);
+        config.ListeningPort.Returns(0);
+        config.EncryptionMode.Returns("required");
+        config.HandshakeTimeoutSeconds.Returns(5);
+        config.MessageReadTimeoutSeconds.Returns(60);
+        config.KeepAliveIntervalSeconds.Returns(120);
+        config.PeerRequestCount.Returns(200);
+        config.PeerIdleChance.Returns(0.0);
+        config.PeerContactIntervalSeconds.Returns(300);
+
+        using var server = new PeerServer(
+            config,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            mseSkeyRegistry: _mseSkeyRegistry);
+
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        const string infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = infoHash,
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = port,
+            Source = "Tracker"
+        };
+
+        using var cts = new CancellationTokenSource();
+        TcpClient remotePeer = null;
+
+        var serverTask = Task.Run(async () =>
+        {
+            remotePeer = await listener.AcceptTcpClientAsync(cts.Token);
+            _clients.Add(remotePeer);
+            remotePeer.Close();
+        });
+
+        await InvokeConnectToPeerAsync(torrent, candidate, cts.Token, server);
+        await serverTask;
+
+        _peerDiscovery.Received(1).MarkAttempted(infoHash, candidate.Ip, candidate.Port, false);
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+    }
 }
