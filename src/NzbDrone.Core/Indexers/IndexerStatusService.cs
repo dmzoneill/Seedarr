@@ -24,17 +24,17 @@ public class IndexerStatusService : IIndexerStatusService
     {
     }
 
-    public IndexerStatusService(Func<DateTime> nowProvider)
+    internal IndexerStatusService(Func<DateTime> nowProvider)
         : this(nowProvider, null, DefaultFailureThreshold)
     {
     }
 
-    public IndexerStatusService(Func<DateTime> nowProvider, Func<double> jitterRandomProvider)
+    internal IndexerStatusService(Func<DateTime> nowProvider, Func<double> jitterRandomProvider)
         : this(nowProvider, jitterRandomProvider, DefaultFailureThreshold)
     {
     }
 
-    public IndexerStatusService(Func<DateTime> nowProvider, Func<double> jitterRandomProvider, int failureThreshold)
+    internal IndexerStatusService(Func<DateTime> nowProvider, Func<double> jitterRandomProvider, int failureThreshold)
     {
         _logger = LogManager.GetCurrentClassLogger();
         _nowProvider = nowProvider ?? (() => DateTime.UtcNow);

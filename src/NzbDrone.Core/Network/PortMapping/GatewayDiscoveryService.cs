@@ -21,7 +21,7 @@ public class GatewayDiscoveryService : IGatewayDiscoveryService
     {
     }
 
-    public GatewayDiscoveryService(string routeFilePath, Func<IPAddress> networkInterfaceFallback = null)
+    internal GatewayDiscoveryService(string routeFilePath, Func<IPAddress> networkInterfaceFallback = null)
     {
         _routeFilePath = routeFilePath ?? "/proc/net/route";
         _networkInterfaceFallback = networkInterfaceFallback ?? GetGatewayFromNetworkInterfaces;

@@ -23,7 +23,7 @@ public class FileDescriptorProvider : IFileDescriptorProvider
     {
     }
 
-    public FileDescriptorProvider(
+    internal FileDescriptorProvider(
         string procFdPath,
         string procLimitsPath,
         Func<int> handleCountAccessor = null,
