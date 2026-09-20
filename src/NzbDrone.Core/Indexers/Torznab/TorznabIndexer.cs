@@ -1008,6 +1008,46 @@ public class TorznabIndexer : IIndexer
                                 release.DownloadVolumeFactor = 0.0;
                             }
                         }
+                        else if ((name == "imdbid" || name == "imdb") && !string.IsNullOrWhiteSpace(val))
+                        {
+                            release.ImdbId = val;
+                        }
+                        else if ((name == "tmdbid" || name == "tmdb") && int.TryParse(val, out var tmdb))
+                        {
+                            release.TmdbId = tmdb;
+                        }
+                        else if ((name == "tvdbid" || name == "tvdb") && int.TryParse(val, out var tvdb))
+                        {
+                            release.TvdbId = tvdb;
+                        }
+                        else if (name == "resolution" && !string.IsNullOrWhiteSpace(val))
+                        {
+                            release.Resolution = val.Trim();
+                        }
+                        else if ((name == "video" || name == "videoquality" || name == "videocodec") && !string.IsNullOrWhiteSpace(val))
+                        {
+                            release.VideoCodec = val.Trim();
+                        }
+                        else if ((name == "audio" || name == "audiocodec") && !string.IsNullOrWhiteSpace(val))
+                        {
+                            release.AudioCodec = val.Trim();
+                        }
+                        else if (name == "minimumratio")
+                        {
+                            if (double.TryParse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var minRatio)
+                                && double.IsFinite(minRatio) && minRatio >= 0.0)
+                            {
+                                release.MinimumRatio = minRatio;
+                            }
+                        }
+                        else if (name == "minimumseedtime")
+                        {
+                            if (long.TryParse(val, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var minSeedTime)
+                                && minSeedTime >= 0)
+                            {
+                                release.MinimumSeedTime = minSeedTime;
+                            }
+                        }
                     }
 
                     if (!explicitLeechers && rawPeers.HasValue)

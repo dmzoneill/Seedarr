@@ -11,6 +11,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Prowlarr;
+using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Indexers;
@@ -504,6 +505,58 @@ public class IndexerControllerTest
         Assert.That(okResult.Value, Is.EqualTo(expectedResult));
 
         syncService.Received(1).Sync(5, "http://localhost:9696", "api-123");
+    }
+
+    [Test]
+    public void DownloadRelease_with_media_ids_and_seeding_requirements_populates_torrent_and_metadata()
+    {
+        var mediaMetadataRepo = Substitute.For<ITorrentMediaMetadataRepository>();
+        var torrentService = Substitute.For<ITorrentService>();
+        Torrent addedTorrent = null;
+        torrentService.Add(Arg.Do<Torrent>(t =>
+        {
+            t.Id = 42;
+            addedTorrent = t;
+        })).Returns(x => addedTorrent);
+
+        var controller = new IndexerController(
+            _indexerFactory,
+            torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            null,
+            null,
+            mediaMetadataRepo);
+
+        var request = new DownloadReleaseRequest
+        {
+            Title = "The Shawshank Redemption",
+            MagnetUrl = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=The.Shawshank.Redemption",
+            ImdbId = "0111161",
+            TmdbId = 278,
+            TvdbId = 73545,
+            MinimumRatio = 1.5,
+            MinimumSeedTime = 259200
+        };
+
+        var response = controller.DownloadRelease(request);
+
+        Assert.That(response.Result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(addedTorrent, Is.Not.Null);
+        Assert.That(addedTorrent.RatioLimit, Is.EqualTo(1.5));
+        Assert.That(addedTorrent.SeedingTimeLimit, Is.EqualTo(259200));
+
+        mediaMetadataRepo.Received(1).Upsert(Arg.Is<TorrentMediaMetadata>(m =>
+            m.TorrentId == 42 &&
+            m.Title == "The Shawshank Redemption" &&
+            m.ImdbId == "tt0111161" &&
+            m.TmdbId == "278" &&
+            m.TvdbId == "73545"));
     }
 
     private class FakeHttpMessageHandler : HttpMessageHandler
