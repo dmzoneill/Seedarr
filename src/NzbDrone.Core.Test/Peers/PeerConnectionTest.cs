@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -1901,5 +1902,201 @@ public class PeerConnectionTest
         Assert.That(received, Is.True);
         Assert.That(server.InfoHash, Is.EqualTo(v2InfoHash));
         Assert.That(server.InfoHashV2, Is.EqualTo(v2InfoHash));
+    }
+
+    private class TrackingArrayPool : ArrayPool<byte>
+    {
+        public int RentCount { get; private set; }
+        public int ReturnCount { get; private set; }
+
+        public override byte[] Rent(int minimumLength)
+        {
+            RentCount++;
+            return ArrayPool<byte>.Shared.Rent(minimumLength);
+        }
+
+        public override void Return(byte[] array, bool clearArray = false)
+        {
+            ReturnCount++;
+            ArrayPool<byte>.Shared.Return(array, clearArray);
+        }
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_handle_message_with_payload()
+    {
+        var (client, server) = CreateTestPair();
+
+        var payload = new byte[] { 0x01, 0x02, 0x03, 0x04 };
+        var message = new PeerMessage { Type = PeerMessageType.Request, Payload = payload };
+        client.SendMessage(message);
+
+        var received = await server.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Request));
+        Assert.That(received.Payload, Is.EqualTo(payload));
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_handle_message_without_payload()
+    {
+        var (client, server) = CreateTestPair();
+
+        var message = new PeerMessage { Type = PeerMessageType.Interested };
+        client.SendMessage(message);
+
+        var received = await server.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Interested));
+        Assert.That(received.Payload, Is.Null);
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_track_download_bytes_for_piece()
+    {
+        var (client, server) = CreateTestPair();
+
+        var payload = new byte[16];
+        payload[0] = 0xAA;
+        var message = new PeerMessage { Type = PeerMessageType.Piece, Payload = payload };
+        client.SendMessage(message);
+
+        var beforeBytes = server.BytesDownloaded;
+        var received = await server.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Piece));
+        Assert.That(server.BytesDownloaded, Is.EqualTo(beforeBytes + 8));
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_handle_keep_alive()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+
+        var stream = rawClient.GetStream();
+        await stream.WriteAsync(new byte[] { 0x00, 0x00, 0x00, 0x00 });
+        await stream.FlushAsync();
+
+        var before = DateTime.UtcNow;
+        var received = await conn.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Null);
+        Assert.That(conn.IsConnected, Is.True);
+        Assert.That(conn.LastActivity, Is.GreaterThanOrEqualTo(before));
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_return_rented_buffers_to_pool_on_success()
+    {
+        var (client, server) = CreateTestPair();
+        var pool = new TrackingArrayPool();
+        server.BufferPool = pool;
+
+        var message = new PeerMessage
+        {
+            Type = PeerMessageType.Have,
+            Payload = new byte[] { 0x00, 0x00, 0x00, 0x05 }
+        };
+        client.SendMessage(message);
+
+        var received = await server.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Not.Null);
+        Assert.That(pool.RentCount, Is.GreaterThanOrEqualTo(2));
+        Assert.That(pool.ReturnCount, Is.EqualTo(pool.RentCount));
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_return_rented_buffers_to_pool_on_keep_alive()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        var pool = new TrackingArrayPool();
+        conn.BufferPool = pool;
+
+        var stream = rawClient.GetStream();
+        await stream.WriteAsync(new byte[] { 0x00, 0x00, 0x00, 0x00 });
+        await stream.FlushAsync();
+
+        var received = await conn.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Null);
+        Assert.That(pool.RentCount, Is.EqualTo(1));
+        Assert.That(pool.ReturnCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ReceiveMessageAsync_should_throw_on_cancellation()
+    {
+        var (_, server) = CreateTestPair();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.CatchAsync<OperationCanceledException>(async () =>
+        {
+            await server.ReceiveMessageAsync(cts.Token);
+        });
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_return_null_on_timeout_without_cancellation()
+    {
+        var (_, server) = CreateTestPair();
+        server.MessageReadTimeoutMs = 100;
+
+        var received = await server.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Null);
+        Assert.That(server.IsConnected, Is.True);
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_dispose_on_timeout_after_partial_length()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        conn.MessageReadTimeoutMs = 150;
+
+        var stream = rawClient.GetStream();
+        await stream.WriteAsync(new byte[] { 0x00, 0x00 });
+        await stream.FlushAsync();
+
+        var received = await conn.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Null);
+        Assert.That(conn.IsConnected, Is.False);
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_dispose_on_timeout_after_partial_payload()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        conn.MessageReadTimeoutMs = 150;
+
+        var stream = rawClient.GetStream();
+        await stream.WriteAsync(new byte[] { 0x00, 0x00, 0x00, 0x10, 0x01, 0x02 });
+        await stream.FlushAsync();
+
+        var received = await conn.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Null);
+        Assert.That(conn.IsConnected, Is.False);
+    }
+
+    [Test]
+    public async Task ReceiveMessageAsync_should_return_null_when_data_truncated()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+
+        var stream = rawClient.GetStream();
+        await stream.WriteAsync(new byte[] { 0, 0, 0, 5, 0x02, 0x01 });
+        await stream.FlushAsync();
+        rawClient.Close();
+
+        var received = await conn.ReceiveMessageAsync();
+
+        Assert.That(received, Is.Null);
+        Assert.That(conn.IsConnected, Is.False);
     }
 }
