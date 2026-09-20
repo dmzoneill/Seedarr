@@ -633,7 +633,6 @@ public class RoutingTableTests
         }
     }
 
-
     // ── Replacement Cache & BEP 5 Enhancements ──────────────────────
 
     [Test]
