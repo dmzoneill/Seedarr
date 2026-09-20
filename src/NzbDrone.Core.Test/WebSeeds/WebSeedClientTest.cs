@@ -455,6 +455,367 @@ public class WebSeedClientTest
         Assert.That(sentRequest.Headers.Range.Ranges.First().To, Is.EqualTo(32767));
     }
 
+    [Test]
+    public void DownloadBlockAsync_404_permanently_marks_web_seed_dead_and_prevents_subsequent_requests()
+    {
+        var requestCount = 0;
+        var mockHandler = new TestHttpMessageHandler((req, ct) =>
+        {
+            requestCount++;
+            var response = new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                ReasonPhrase = "Not Found"
+            };
+            return Task.FromResult(response);
+        });
+
+        using var httpClient = new HttpClient(mockHandler);
+        var client = new WebSeedClient(httpClient);
+
+        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await client.DownloadBlockAsync("https://seed.example.com/files/movie.mkv", 0, 16384);
+        });
+
+        Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(requestCount, Is.EqualTo(1));
+        Assert.That(client.IsSeedDead("https://seed.example.com/files/movie.mkv"), Is.True);
+        Assert.That(client.IsSeedAvailable("https://seed.example.com/files/movie.mkv"), Is.False);
+
+        // Second request to same file must fail immediately with WebSeedException without hitting network
+        var ex2 = Assert.ThrowsAsync<WebSeedException>(async () =>
+        {
+            await client.DownloadBlockAsync("https://seed.example.com/files/movie.mkv", 0, 16384);
+        });
+        Assert.That(ex2.Message, Does.Contain("permanently disabled/dead"));
+        Assert.That(requestCount, Is.EqualTo(1));
+
+        // Third request to a different file on the same host must also be blocked without hitting network
+        var ex3 = Assert.ThrowsAsync<WebSeedException>(async () =>
+        {
+            await client.DownloadBlockAsync("https://seed.example.com/files/other.mkv", 0, 16384);
+        });
+        Assert.That(ex3.Message, Does.Contain("permanently disabled/dead"));
+        Assert.That(requestCount, Is.EqualTo(1));
+    }
+
+    [TestCase(HttpStatusCode.Unauthorized)]
+    [TestCase(HttpStatusCode.Forbidden)]
+    [TestCase(HttpStatusCode.Gone)]
+    public void DownloadBlockAsync_permanent_errors_mark_web_seed_dead(HttpStatusCode statusCode)
+    {
+        var requestCount = 0;
+        var mockHandler = new TestHttpMessageHandler((req, ct) =>
+        {
+            requestCount++;
+            return Task.FromResult(new HttpResponseMessage(statusCode) { ReasonPhrase = statusCode.ToString() });
+        });
+
+        using var httpClient = new HttpClient(mockHandler);
+        var client = new WebSeedClient(httpClient);
+
+        var url = $"https://seed-{statusCode}.example.com/file.dat";
+
+        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 1024);
+        });
+        Assert.That(ex.StatusCode, Is.EqualTo(statusCode));
+        Assert.That(client.IsSeedDead(url), Is.True);
+        Assert.That(requestCount, Is.EqualTo(1));
+
+        // Subsequent call throws WebSeedException
+        Assert.ThrowsAsync<WebSeedException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 1024);
+        });
+        Assert.That(requestCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task DownloadBlockAsync_429_RetryAfter_backs_off_requests_until_cooldown_expires()
+    {
+        var payload = new byte[1024];
+        new Random(123).NextBytes(payload);
+        var requestCount = 0;
+
+        var mockHandler = new TestHttpMessageHandler((req, ct) =>
+        {
+            requestCount++;
+            if (requestCount == 1)
+            {
+                var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+                {
+                    ReasonPhrase = "Too Many Requests"
+                };
+                response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(60));
+                return Task.FromResult(response);
+            }
+
+            var successResponse = new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent(payload)
+            };
+            return Task.FromResult(successResponse);
+        });
+
+        using var httpClient = new HttpClient(mockHandler);
+        var client = new WebSeedClient(httpClient);
+
+        var fixedTime = new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc);
+        client.UtcNow = () => fixedTime;
+
+        var url = "https://rate-limited.example.com/file.dat";
+
+        // 1st call: returns 429
+        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 1024);
+        });
+        Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+        Assert.That(requestCount, Is.EqualTo(1));
+        Assert.That(client.IsSeedCoolingDown(url), Is.True);
+        Assert.That(client.IsSeedAvailable(url), Is.False);
+        Assert.That(client.GetCooldownRemaining(url), Is.EqualTo(TimeSpan.FromSeconds(60)));
+
+        // 2nd call while cooldown is active: immediately throws WebSeedException without network call
+        var ex2 = Assert.ThrowsAsync<WebSeedException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 1024);
+        });
+        Assert.That(ex2.Message, Does.Contain("cooling down"));
+        Assert.That(requestCount, Is.EqualTo(1));
+
+        // Advance time partially (30s) - still cooling down
+        fixedTime = fixedTime.AddSeconds(30);
+        Assert.That(client.IsSeedCoolingDown(url), Is.True);
+        Assert.That(client.GetCooldownRemaining(url), Is.EqualTo(TimeSpan.FromSeconds(30)));
+        Assert.ThrowsAsync<WebSeedException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 1024);
+        });
+        Assert.That(requestCount, Is.EqualTo(1));
+
+        // Advance time past cooldown (31s more -> 61s total)
+        fixedTime = fixedTime.AddSeconds(31);
+        Assert.That(client.IsSeedCoolingDown(url), Is.False);
+        Assert.That(client.IsSeedAvailable(url), Is.True);
+
+        // 3rd call succeeds!
+        var result = await client.DownloadBlockAsync(url, 0, 1024);
+        Assert.That(result, Is.EqualTo(payload));
+        Assert.That(requestCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task DownloadBlockAsync_503_with_RetryAfter_date_backs_off()
+    {
+        var payload = new byte[512];
+        var requestCount = 0;
+        var baseTime = new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc);
+        var targetDate = new DateTimeOffset(baseTime.AddSeconds(45));
+
+        var mockHandler = new TestHttpMessageHandler((req, ct) =>
+        {
+            requestCount++;
+            if (requestCount == 1)
+            {
+                var response = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+                response.Headers.RetryAfter = new RetryConditionHeaderValue(targetDate);
+                return Task.FromResult(response);
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent(payload)
+            });
+        });
+
+        using var httpClient = new HttpClient(mockHandler);
+        var client = new WebSeedClient(httpClient);
+        client.UtcNow = () => baseTime;
+
+        var url = "https://service-unavailable.example.com/file.dat";
+
+        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 512);
+        });
+        Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.ServiceUnavailable));
+        Assert.That(client.IsSeedCoolingDown(url), Is.True);
+        Assert.That(client.GetCooldownRemaining(url), Is.EqualTo(TimeSpan.FromSeconds(45)));
+
+        // Advance time past targetDate
+        baseTime = baseTime.AddSeconds(50);
+        Assert.That(client.IsSeedCoolingDown(url), Is.False);
+
+        var result = await client.DownloadBlockAsync(url, 0, 512);
+        Assert.That(result, Is.EqualTo(payload));
+        Assert.That(requestCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task DownloadBlockAsync_consecutive_5xx_trips_circuit_breaker_with_exponential_backoff()
+    {
+        var payload = new byte[1024];
+        new Random(456).NextBytes(payload);
+        var requestCount = 0;
+        var shouldSucceed = false;
+
+        var mockHandler = new TestHttpMessageHandler((req, ct) =>
+        {
+            requestCount++;
+            if (!shouldSucceed)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    ReasonPhrase = "Internal Server Error"
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.PartialContent)
+            {
+                Content = new ByteArrayContent(payload)
+            });
+        });
+
+        using var httpClient = new HttpClient(mockHandler);
+        var client = new WebSeedClient(httpClient)
+        {
+            CircuitBreakerThreshold = 5
+        };
+
+        var fixedTime = new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc);
+        client.UtcNow = () => fixedTime;
+
+        var url = "https://faulty.example.com/file.dat";
+
+        // Failures 1 through 4: increment consecutive failure count, circuit breaker not tripped yet
+        for (var i = 1; i <= 4; i++)
+        {
+            var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+            {
+                await client.DownloadBlockAsync(url, 0, 1024);
+            });
+            Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+            Assert.That(client.GetConsecutiveFailures(url), Is.EqualTo(i));
+            Assert.That(client.IsSeedCoolingDown(url), Is.False);
+            Assert.That(requestCount, Is.EqualTo(i));
+        }
+
+        // 5th failure: threshold reached, trips circuit breaker!
+        var ex5 = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 1024);
+        });
+        Assert.That(ex5.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+        Assert.That(client.GetConsecutiveFailures(url), Is.EqualTo(5));
+        Assert.That(client.GetCircuitBreakerTripCount(url), Is.EqualTo(1));
+        Assert.That(client.IsSeedCoolingDown(url), Is.True);
+        Assert.That(client.GetCooldownRemaining(url), Is.EqualTo(TimeSpan.FromSeconds(15))); // 1st backoff step: 15s
+        Assert.That(requestCount, Is.EqualTo(5));
+
+        // Next call during cooldown: immediately rejected with WebSeedException without network request
+        var exCooling = Assert.ThrowsAsync<WebSeedException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 1024);
+        });
+        Assert.That(exCooling.Message, Does.Contain("cooling down"));
+        Assert.That(requestCount, Is.EqualTo(5));
+
+        // Advance time past 1st cooldown (16 seconds)
+        fixedTime = fixedTime.AddSeconds(16);
+        Assert.That(client.IsSeedCoolingDown(url), Is.False);
+
+        // Probe call fails again (6th failure) -> 2nd trip with exponential backoff (30s)!
+        var ex6 = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 1024);
+        });
+        Assert.That(requestCount, Is.EqualTo(6));
+        Assert.That(client.GetCircuitBreakerTripCount(url), Is.EqualTo(2));
+        Assert.That(client.IsSeedCoolingDown(url), Is.True);
+        Assert.That(client.GetCooldownRemaining(url), Is.EqualTo(TimeSpan.FromSeconds(30))); // 2nd backoff step: 30s
+
+        // Advance time past 2nd cooldown (31 seconds)
+        fixedTime = fixedTime.AddSeconds(31);
+        Assert.That(client.IsSeedCoolingDown(url), Is.False);
+
+        // Now server recovers: probe call succeeds!
+        shouldSucceed = true;
+        var result = await client.DownloadBlockAsync(url, 0, 1024);
+        Assert.That(result, Is.EqualTo(payload));
+        Assert.That(requestCount, Is.EqualTo(7));
+
+        // Circuit breaker completely reset after successful response
+        Assert.That(client.GetConsecutiveFailures(url), Is.EqualTo(0));
+        Assert.That(client.GetCircuitBreakerTripCount(url), Is.EqualTo(0));
+        Assert.That(client.IsSeedCoolingDown(url), Is.False);
+        Assert.That(client.IsSeedAvailable(url), Is.True);
+    }
+
+    [Test]
+    public void DownloadBlockAsync_network_exception_counts_towards_circuit_breaker()
+    {
+        var requestCount = 0;
+        var mockHandler = new TestHttpMessageHandler((req, ct) =>
+        {
+            requestCount++;
+            throw new HttpRequestException("Connection refused");
+        });
+
+        using var httpClient = new HttpClient(mockHandler);
+        var client = new WebSeedClient(httpClient)
+        {
+            CircuitBreakerThreshold = 3
+        };
+
+        var url = "https://down.example.com/file.dat";
+
+        for (var i = 1; i <= 2; i++)
+        {
+            Assert.ThrowsAsync<HttpRequestException>(async () =>
+            {
+                await client.DownloadBlockAsync(url, 0, 1024);
+            });
+            Assert.That(client.GetConsecutiveFailures(url), Is.EqualTo(i));
+            Assert.That(client.IsSeedCoolingDown(url), Is.False);
+        }
+
+        // 3rd failure trips circuit breaker
+        Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await client.DownloadBlockAsync(url, 0, 1024);
+        });
+        Assert.That(client.GetConsecutiveFailures(url), Is.EqualTo(3));
+        Assert.That(client.IsSeedCoolingDown(url), Is.True);
+        Assert.That(client.GetCircuitBreakerTripCount(url), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void DownloadBlockAsync_416_RangeNotSatisfiable_throws_informative_HttpRequestException()
+    {
+        var mockHandler = new TestHttpMessageHandler((req, ct) =>
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.RequestedRangeNotSatisfiable)
+            {
+                ReasonPhrase = "Range Not Satisfiable"
+            });
+        });
+
+        using var httpClient = new HttpClient(mockHandler);
+        var client = new WebSeedClient(httpClient);
+
+        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        {
+            await client.DownloadBlockAsync("https://seed.example.com/file.dat", 1000, 500);
+        });
+
+        Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.RequestedRangeNotSatisfiable));
+        Assert.That(ex.Message, Does.Contain("416 (Requested Range Not Satisfiable)"));
+        Assert.That(ex.Message, Does.Contain("exceed file boundaries"));
+    }
+
     private sealed class MonitoredStream : Stream
     {
         private readonly Action _onRead;
