@@ -759,4 +759,209 @@ public class CustomScriptServiceTest
             }
         }
     }
+
+    [Test]
+    public async Task TryReadShebang_should_parse_various_shebang_formats()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var bashScript = Path.Combine(tempDir, "bash_script");
+            await File.WriteAllTextAsync(bashScript, "#!/bin/bash\necho 1");
+            var res1 = CustomScriptService.TryReadShebang(bashScript, out var interp1, out var args1);
+            Assert.That(res1, Is.True);
+            Assert.That(interp1, Is.EqualTo("/bin/bash"));
+            Assert.That(args1, Is.Empty);
+
+            var shScript = Path.Combine(tempDir, "sh_script");
+            await File.WriteAllTextAsync(shScript, "#!/bin/sh\necho 2");
+            var res2 = CustomScriptService.TryReadShebang(shScript, out var interp2, out var args2);
+            Assert.That(res2, Is.True);
+            Assert.That(interp2, Is.EqualTo("/bin/sh"));
+            Assert.That(args2, Is.Empty);
+
+            var envPyScript = Path.Combine(tempDir, "py_script");
+            await File.WriteAllTextAsync(envPyScript, "#!/usr/bin/env python3 -u\nprint(1)");
+            var res3 = CustomScriptService.TryReadShebang(envPyScript, out var interp3, out var args3);
+            Assert.That(res3, Is.True);
+            Assert.That(interp3, Is.EqualTo("python3"));
+            Assert.That(args3, Is.EqualTo("-u"));
+
+            var envBashScript = Path.Combine(tempDir, "env_bash");
+            await File.WriteAllTextAsync(envBashScript, "#!/usr/bin/env bash\necho 3");
+            var res4 = CustomScriptService.TryReadShebang(envBashScript, out var interp4, out var args4);
+            Assert.That(res4, Is.True);
+            Assert.That(interp4, Is.EqualTo("bash"));
+            Assert.That(args4, Is.Empty);
+
+            var envSplitScript = Path.Combine(tempDir, "env_split");
+            await File.WriteAllTextAsync(envSplitScript, "#!/usr/bin/env -S node --inspect\nconsole.log(1)");
+            var res5 = CustomScriptService.TryReadShebang(envSplitScript, out var interp5, out var args5);
+            Assert.That(res5, Is.True);
+            Assert.That(interp5, Is.EqualTo("node"));
+            Assert.That(args5, Is.EqualTo("--inspect"));
+
+            var plainScript = Path.Combine(tempDir, "plain");
+            await File.WriteAllTextAsync(plainScript, "echo no shebang");
+            var res6 = CustomScriptService.TryReadShebang(plainScript, out var interp6, out var args6);
+            Assert.That(res6, Is.False);
+            Assert.That(interp6, Is.Null);
+            Assert.That(args6, Is.Null);
+
+            var emptyScript = Path.Combine(tempDir, "empty");
+            await File.WriteAllTextAsync(emptyScript, string.Empty);
+            var res7 = CustomScriptService.TryReadShebang(emptyScript, out var interp7, out var args7);
+            Assert.That(res7, Is.False);
+            Assert.That(interp7, Is.Null);
+            Assert.That(args7, Is.Null);
+
+            var missingScript = Path.Combine(tempDir, "non_existent");
+            var res8 = CustomScriptService.TryReadShebang(missingScript, out var interp8, out var args8);
+            Assert.That(res8, Is.False);
+            Assert.That(interp8, Is.Null);
+            Assert.That(args8, Is.Null);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task ResolveInterpreter_and_BuildProcessStartInfo_should_resolve_shebang_for_extensionless_scripts()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var scriptPath = Path.Combine(tempDir, "post-process");
+            await File.WriteAllTextAsync(scriptPath, "#!/bin/sh\necho done");
+
+            var (resolvedInterp, resolvedArgs) = CustomScriptService.ResolveInterpreter(scriptPath, "--flag test", isWindows: false);
+            Assert.That(resolvedInterp, Is.EqualTo("/bin/sh"));
+            Assert.That(resolvedArgs, Is.EqualTo($"\"{scriptPath}\" --flag test"));
+
+            var psi = CustomScriptService.BuildProcessStartInfo(scriptPath, "--flag test", isWindows: false);
+            Assert.That(psi.FileName, Is.EqualTo("/bin/sh"));
+            Assert.That(psi.ArgumentList, Is.EqualTo(new[] { scriptPath, "--flag", "test" }));
+
+            var pyScript = Path.Combine(tempDir, "custom-py");
+            await File.WriteAllTextAsync(pyScript, "#!/usr/bin/env python3 -u\nprint('hi')");
+
+            var (pyInterp, pyArgs) = CustomScriptService.ResolveInterpreter(pyScript, "run", isWindows: false);
+            Assert.That(pyInterp, Is.EqualTo("python3"));
+            Assert.That(pyArgs, Is.EqualTo($"-u \"{pyScript}\" run"));
+
+            var pyPsi = CustomScriptService.BuildProcessStartInfo(pyScript, "run", isWindows: false);
+            Assert.That(pyPsi.FileName, Is.EqualTo("python3"));
+            Assert.That(pyPsi.ArgumentList, Is.EqualTo(new[] { "-u", pyScript, "run" }));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task EnsureExecutablePermissions_should_grant_UserExecute_and_GroupExecute_on_POSIX()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Pass("POSIX permissions not applicable on Windows");
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var scriptPath = Path.Combine(tempDir, "no_exec.sh");
+            await File.WriteAllTextAsync(scriptPath, "#!/bin/sh\necho ok");
+
+            File.SetUnixFileMode(scriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            var initialMode = File.GetUnixFileMode(scriptPath);
+            Assert.That(initialMode.HasFlag(UnixFileMode.UserExecute), Is.False);
+
+            CustomScriptService.EnsureExecutablePermissions(scriptPath);
+
+            var updatedMode = File.GetUnixFileMode(scriptPath);
+            Assert.That(updatedMode.HasFlag(UnixFileMode.UserExecute), Is.True);
+            Assert.That(updatedMode.HasFlag(UnixFileMode.GroupExecute), Is.True);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task TestScriptAsync_should_auto_grant_execute_permission_and_run_successfully()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Pass("POSIX permissions not applicable on Windows");
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var scriptPath = Path.Combine(tempDir, "auto_chmod_test");
+            await File.WriteAllTextAsync(scriptPath, "#!/bin/sh\necho \"autochmod works\"\nexit 0\n");
+
+            File.SetUnixFileMode(scriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            Assert.That(File.GetUnixFileMode(scriptPath).HasFlag(UnixFileMode.UserExecute), Is.False);
+
+            var service = new CustomScriptService();
+            var result = await service.TestScriptAsync(scriptPath);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.ExitCode, Is.EqualTo(0));
+            Assert.That(result.Stdout, Does.Contain("autochmod works"));
+            Assert.That(File.GetUnixFileMode(scriptPath).HasFlag(UnixFileMode.UserExecute), Is.True);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task TestScriptAsync_and_ExecuteScriptAsync_should_report_actionable_error_on_permission_denied()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Pass("POSIX permissions not applicable on Windows");
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var nonExecInterpreter = Path.Combine(tempDir, "bad_interpreter");
+            await File.WriteAllTextAsync(nonExecInterpreter, "#!/bin/sh\necho nope\n");
+            File.SetUnixFileMode(nonExecInterpreter, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+            var scriptPath = Path.Combine(tempDir, "script_with_bad_interpreter");
+            await File.WriteAllTextAsync(scriptPath, $"#!{nonExecInterpreter}\necho test\n");
+            File.SetUnixFileMode(scriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+            var service = new CustomScriptService();
+            var testResult = await service.TestScriptAsync(scriptPath);
+
+            Assert.That(testResult, Is.Not.Null);
+            Assert.That(testResult.Success, Is.False);
+            Assert.That(testResult.ExitCode, Is.EqualTo(13));
+            Assert.That(testResult.Stderr, Does.Contain("Permission denied (EACCES)"));
+            Assert.That(testResult.Stderr, Does.Contain("chmod +x"));
+
+            var execResult = await service.ExecuteScriptAsync(scriptPath, null, "Test");
+            Assert.That(execResult, Is.False);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
 }
