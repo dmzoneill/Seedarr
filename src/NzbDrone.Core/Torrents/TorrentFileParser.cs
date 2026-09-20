@@ -30,6 +30,7 @@ public class ParsedTorrent
     public List<string> HttpSeeds { get; set; } = new();
     public List<string> UrlList { get; set; } = new();
     public Dictionary<string, byte[]> PieceLayers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public byte[] Pieces { get; set; }
 }
 
 public class ParsedTorrentFile
@@ -286,6 +287,7 @@ public class TorrentFileParser : ITorrentFileParser
                 MetaVersion = metaVersion,
                 PieceLength = (int)pieceLengthNum.Value,
                 PieceCount = pieceCount,
+                Pieces = piecesStr?.Value.ToArray(),
                 Comment = GetStringWithUtf8Fallback(torrent, "comment"),
                 CreatedBy = GetStringWithUtf8Fallback(torrent, "created by"),
                 IsPrivate = info.ContainsKey("private") && (info["private"] as BNumber)?.Value == 1,

@@ -1591,6 +1591,13 @@ public class PeerConnection : IDisposable
             return;
         }
 
+        if (MatchedTorrent != null && (MatchedTorrent.Status == TorrentStatus.Checking || MatchedTorrent.Status == TorrentStatus.QueuedForChecking))
+        {
+            var emptyByteCount = (pieceCount + 7) / 8;
+            SendBitfield(new byte[emptyByteCount]);
+            return;
+        }
+
         // Send full bitfield (all pieces available - we're a seeder)
         var byteCount = (pieceCount + 7) / 8;
         var bitfield = new byte[byteCount];

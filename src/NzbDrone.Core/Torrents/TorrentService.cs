@@ -47,6 +47,7 @@ public class TorrentService : ITorrentService,
     private readonly ITorrentFileService _torrentFileService;
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IEventAggregator _eventAggregator;
+    private readonly ITorrentRecheckService _torrentRecheckService;
     private readonly object _sortOrderLock = new();
     private readonly Logger _logger;
 
@@ -57,13 +58,15 @@ public class TorrentService : ITorrentService,
         ITorrentFileService torrentFileService,
         ITrackerEntryService trackerEntryService,
         IEventAggregator eventAggregator,
-        IDiskSpaceService diskSpaceService = null)
+        IDiskSpaceService diskSpaceService = null,
+        ITorrentRecheckService torrentRecheckService = null)
     {
         _repository = repository;
         _torrentFileService = torrentFileService;
         _trackerEntryService = trackerEntryService;
         _eventAggregator = eventAggregator;
         DiskSpaceService = diskSpaceService;
+        _torrentRecheckService = torrentRecheckService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -235,6 +238,11 @@ public class TorrentService : ITorrentService,
         if (torrent == null)
         {
             return null;
+        }
+
+        if (_torrentRecheckService != null)
+        {
+            return _torrentRecheckService.Recheck(torrent);
         }
 
         _logger.Info("Rechecking torrent: {0}", torrent.Name);

@@ -23,6 +23,11 @@ public class TorrentStateMachine : ITorrentStateMachine
 
     public bool HandleForceCompleted(Torrent torrent)
     {
+        if (torrent == null || torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking)
+        {
+            return false;
+        }
+
         if (torrent.ForceCompleted)
         {
             if (torrent.Status == TorrentStatus.Downloading)
@@ -43,6 +48,11 @@ public class TorrentStateMachine : ITorrentStateMachine
 
     public bool CheckDownloadThreshold(Torrent torrent, double defaultThreshold)
     {
+        if (torrent == null || torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking)
+        {
+            return false;
+        }
+
         var effectiveThreshold = torrent.Threshold > 0 ? torrent.Threshold / 100.0 : defaultThreshold;
         if (torrent.Progress >= effectiveThreshold && torrent.Status == TorrentStatus.Downloading)
         {
@@ -106,5 +116,56 @@ public class TorrentStateMachine : ITorrentStateMachine
         }
 
         return stoppedTorrents;
+    }
+
+    public bool CanScheduleTransfers(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return false;
+        }
+
+        if (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public void TransitionToChecking(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return;
+        }
+
+        var oldStatus = torrent.Status;
+        torrent.Status = TorrentStatus.Checking;
+        torrent.Active = false;
+        torrent.UploadSpeed = 0;
+        torrent.DownloadSpeed = 0;
+        _logger.Info("Torrent {0} transitioned to Checking", torrent.Name);
+        _eventLogService?.Info(torrent.Id, "Recheck", "Torrent entered hash verification");
+        _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Checking));
+    }
+
+    public TorrentStatus TransitionFromChecking(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return TorrentStatus.Downloading;
+        }
+
+        var oldStatus = torrent.Status;
+        var newStatus = torrent.Progress >= 1.0 ? TorrentStatus.Seeding : TorrentStatus.Downloading;
+        torrent.Status = newStatus;
+        torrent.Active = false;
+        torrent.UploadSpeed = 0;
+        torrent.DownloadSpeed = 0;
+        _logger.Info("Torrent {0} completed hash verification, transitioned to {1}", torrent.Name, newStatus);
+        _eventLogService?.Info(torrent.Id, "Recheck", $"Torrent completed hash verification, transitioned to {newStatus}");
+        _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, newStatus));
+        return newStatus;
     }
 }

@@ -187,6 +187,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         var byteCount = (torrent.PieceCount + 7) / 8;
         var bitfield = new byte[byteCount];
 
+        if (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking)
+        {
+            return bitfield;
+        }
+
         bool[] verified = null;
         if (_pieceStorage != null && !string.IsNullOrEmpty(torrent.InfoHash))
         {
@@ -233,6 +238,21 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     {
         if (torrent == null || torrent.PieceCount <= 0)
         {
+            return;
+        }
+
+        if (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking)
+        {
+            if (_fastExtensionHandler != null && (connection.SupportsFastExtension || _fastExtensionHandler.IsFastPeer(connection)))
+            {
+                connection.SendMessage(_fastExtensionHandler.SerializeHaveNone());
+            }
+            else
+            {
+                var byteCount = (torrent.PieceCount + 7) / 8;
+                connection.SendBitfield(new byte[byteCount]);
+            }
+
             return;
         }
 
@@ -438,7 +458,35 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     public void Handle(TorrentStatusChangedEvent message)
     {
-        if (message?.NewStatus == TorrentStatus.Seeding)
+        if (message?.Torrent == null)
+        {
+            return;
+        }
+
+        if (message.NewStatus == TorrentStatus.Checking || message.NewStatus == TorrentStatus.QueuedForChecking)
+        {
+            _torrentCache[message.Torrent.InfoHash] = message.Torrent;
+            ChokePeers(message.Torrent.InfoHash);
+            return;
+        }
+
+        if (message.OldStatus == TorrentStatus.Checking || message.OldStatus == TorrentStatus.QueuedForChecking)
+        {
+            _torrentCache[message.Torrent.InfoHash] = message.Torrent;
+            var connections = _connectionManager?.GetConnections(message.Torrent.InfoHash);
+            if (connections != null)
+            {
+                foreach (var conn in connections)
+                {
+                    if (conn != null && conn.IsConnected)
+                    {
+                        SendInitialAvailability(conn, message.Torrent);
+                    }
+                }
+            }
+        }
+
+        if (message.NewStatus == TorrentStatus.Seeding)
         {
             OnTorrentCompleted(message.Torrent);
         }
@@ -2657,6 +2705,27 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             case PeerMessageType.Request:
                 _chokeManager?.UpdatePeerActivity(connection);
 
+                if (torrent != null && (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking))
+                {
+                    _logger.Debug(
+                        "Rejecting piece request for {0} during {1} from {2}:{3}",
+                        torrent.Name,
+                        torrent.Status,
+                        connection.RemoteIp,
+                        connection.RemotePort);
+
+                    if (connection.SupportsFastExtension && _fastExtensionHandler != null && message.Payload?.Length >= 12)
+                    {
+                        var rejectMsg = _fastExtensionHandler.BuildRejectForRequest(message.Payload);
+                        if (rejectMsg != null)
+                        {
+                            connection.SendMessage(rejectMsg);
+                        }
+                    }
+
+                    break;
+                }
+
                 if (_random.NextDouble() < connection.IdleChance)
                 {
                     connection.SendKeepAlive();
@@ -2814,6 +2883,20 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
                         _piecePicker?.OnBlockRejected(connection, pieceIndex, begin, length);
                     }
+                }
+
+                break;
+
+            case PeerMessageType.Piece:
+                if (torrent != null && (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking))
+                {
+                    _logger.Debug(
+                        "Dropping incoming piece block for {0} during {1} from {2}:{3}",
+                        torrent.Name,
+                        torrent.Status,
+                        connection.RemoteIp,
+                        connection.RemotePort);
+                    break;
                 }
 
                 break;
@@ -3206,6 +3289,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     {
         try
         {
+            if (connection.MatchedTorrent != null && (connection.MatchedTorrent.Status == TorrentStatus.Checking || connection.MatchedTorrent.Status == TorrentStatus.QueuedForChecking))
+            {
+                return;
+            }
+
             var index = (int)(((uint)payload[0] << 24) | ((uint)payload[1] << 16) | ((uint)payload[2] << 8) | payload[3]);
 
             if (connection.MatchedTorrent != null && connection.MatchedTorrent.SuperSeeding)
