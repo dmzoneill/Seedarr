@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -26,6 +27,21 @@ public class ArrWebhookPayload
     [JsonPropertyName("release")]
     public ArrWebhookRelease Release { get; set; }
 
+    [JsonPropertyName("series")]
+    public ArrWebhookSeries Series { get; set; }
+
+    [JsonPropertyName("episodes")]
+    public List<ArrWebhookEpisode> Episodes { get; set; }
+
+    [JsonPropertyName("episodeFile")]
+    public ArrWebhookEpisodeFile EpisodeFile { get; set; }
+
+    [JsonPropertyName("movie")]
+    public ArrWebhookMovie Movie { get; set; }
+
+    [JsonPropertyName("movieFile")]
+    public ArrWebhookMovieFile MovieFile { get; set; }
+
     [JsonPropertyName("artist")]
     public ArrWebhookArtist Artist { get; set; }
 
@@ -43,6 +59,27 @@ public class ArrWebhookPayload
 
     [JsonPropertyName("bookFiles")]
     public List<ArrWebhookBookFile> BookFiles { get; set; }
+
+    [JsonPropertyName("deletedFiles")]
+    public List<string> DeletedFiles { get; set; }
+
+    [JsonPropertyName("deleteFiles")]
+    public bool? DeleteFiles { get; set; }
+
+    [JsonPropertyName("sourcePath")]
+    public string SourcePath { get; set; }
+
+    [JsonPropertyName("destinationPath")]
+    public string DestinationPath { get; set; }
+
+    [JsonPropertyName("renamedFiles")]
+    public List<ArrWebhookRenamedFile> RenamedFiles { get; set; }
+
+    [JsonPropertyName("renamedEpisodeFiles")]
+    public List<ArrWebhookRenamedFile> RenamedEpisodeFiles { get; set; }
+
+    [JsonPropertyName("renamedMovieFiles")]
+    public List<ArrWebhookRenamedFile> RenamedMovieFiles { get; set; }
 }
 
 public class ArrWebhookRelease
@@ -64,6 +101,159 @@ public class ArrWebhookRelease
 
     [JsonPropertyName("indexerFlags")]
     public string[] IndexerFlags { get; set; }
+}
+
+public class ArrWebhookSeries
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; }
+
+    [JsonPropertyName("path")]
+    public string Path { get; set; }
+
+    [JsonPropertyName("tvdbId")]
+    public int TvdbId { get; set; }
+
+    [JsonPropertyName("tvMazeId")]
+    public int TvMazeId { get; set; }
+
+    [JsonPropertyName("imdbId")]
+    public string ImdbId { get; set; }
+
+    [JsonPropertyName("type")]
+    public string Type { get; set; }
+
+    [JsonPropertyName("year")]
+    public int Year { get; set; }
+}
+
+public class ArrWebhookEpisode
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("episodeNumber")]
+    public int EpisodeNumber { get; set; }
+
+    [JsonPropertyName("seasonNumber")]
+    public int SeasonNumber { get; set; }
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; }
+
+    [JsonPropertyName("airDate")]
+    public string AirDate { get; set; }
+
+    [JsonPropertyName("airDateUtc")]
+    public DateTime? AirDateUtc { get; set; }
+}
+
+public class ArrWebhookEpisodeFile
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("relativePath")]
+    public string RelativePath { get; set; }
+
+    [JsonPropertyName("path")]
+    public string Path { get; set; }
+
+    [JsonPropertyName("quality")]
+    public string Quality { get; set; }
+
+    [JsonPropertyName("qualityVersion")]
+    public int QualityVersion { get; set; }
+
+    [JsonPropertyName("releaseGroup")]
+    public string ReleaseGroup { get; set; }
+
+    [JsonPropertyName("sceneName")]
+    public string SceneName { get; set; }
+
+    [JsonPropertyName("size")]
+    public long Size { get; set; }
+
+    [JsonPropertyName("dateAdded")]
+    public DateTime? DateAdded { get; set; }
+}
+
+public class ArrWebhookMovie
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("title")]
+    public string Title { get; set; }
+
+    [JsonPropertyName("year")]
+    public int Year { get; set; }
+
+    [JsonPropertyName("filePath")]
+    public string FilePath { get; set; }
+
+    [JsonPropertyName("path")]
+    public string Path { get; set; }
+
+    [JsonPropertyName("folderPath")]
+    public string FolderPath { get; set; }
+
+    [JsonPropertyName("releaseDate")]
+    public string ReleaseDate { get; set; }
+
+    [JsonPropertyName("tmdbId")]
+    public int TmdbId { get; set; }
+
+    [JsonPropertyName("imdbId")]
+    public string ImdbId { get; set; }
+}
+
+public class ArrWebhookMovieFile
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("relativePath")]
+    public string RelativePath { get; set; }
+
+    [JsonPropertyName("path")]
+    public string Path { get; set; }
+
+    [JsonPropertyName("quality")]
+    public string Quality { get; set; }
+
+    [JsonPropertyName("qualityVersion")]
+    public int QualityVersion { get; set; }
+
+    [JsonPropertyName("releaseGroup")]
+    public string ReleaseGroup { get; set; }
+
+    [JsonPropertyName("sceneName")]
+    public string SceneName { get; set; }
+
+    [JsonPropertyName("size")]
+    public long Size { get; set; }
+
+    [JsonPropertyName("dateAdded")]
+    public DateTime? DateAdded { get; set; }
+}
+
+public class ArrWebhookRenamedFile
+{
+    [JsonPropertyName("previousRelativePath")]
+    public string PreviousRelativePath { get; set; }
+
+    [JsonPropertyName("previousPath")]
+    public string PreviousPath { get; set; }
+
+    [JsonPropertyName("relativePath")]
+    public string RelativePath { get; set; }
+
+    [JsonPropertyName("path")]
+    public string Path { get; set; }
 }
 
 public class ArrWebhookArtist

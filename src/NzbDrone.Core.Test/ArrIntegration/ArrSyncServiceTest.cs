@@ -4,6 +4,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.ArrIntegration;
@@ -27,8 +28,9 @@ public class ArrSyncServiceTest
             IArrConnectionFactory connectionFactory,
             ITorrentService torrentService,
             IArrConnection provider,
-            IDownloadHistoryService downloadHistoryService = null)
-            : base(connectionFactory, torrentService, downloadHistoryService)
+            IDownloadHistoryService downloadHistoryService = null,
+            IConfigService configService = null)
+            : base(connectionFactory, torrentService, downloadHistoryService, configService: configService)
         {
             _provider = provider;
         }
@@ -36,8 +38,8 @@ public class ArrSyncServiceTest
         protected override IArrConnection CreateProvider(ArrConnectionDefinition definition) => _provider;
     }
 
-    private ArrSyncService CreateTestableService(IArrConnection provider, IDownloadHistoryService downloadHistoryService = null) =>
-        new TestableArrSyncService(_connectionFactory, _torrentService, provider, downloadHistoryService);
+    private ArrSyncService CreateTestableService(IArrConnection provider, IDownloadHistoryService downloadHistoryService = null, IConfigService configService = null) =>
+        new TestableArrSyncService(_connectionFactory, _torrentService, provider, downloadHistoryService, configService);
 
     private static ArrConnectionDefinition EnabledDefinition(string arrType = "Sonarr") =>
         new() { Enable = true, SyncEnabled = true, ArrType = arrType, Name = "Test" };
@@ -917,5 +919,98 @@ public class ArrSyncServiceTest
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Message, Does.Not.Contain("Unknown ArrType"));
+    }
+
+    [Test]
+    public void Sync_should_assign_category_and_save_path_from_connection()
+    {
+        var provider = Substitute.For<IArrConnection>();
+        provider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>
+        {
+            new() { InfoHash = "hash-route-1", Title = "Title 1" }
+        });
+
+        var def = new ArrConnectionDefinition
+        {
+            Enable = true,
+            SyncEnabled = true,
+            ArrType = "Sonarr",
+            Name = "SonarrMain",
+            Category = "tv-sonarr",
+            SavePath = "/downloads/tv"
+        };
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { def });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        CreateTestableService(provider).Sync();
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Category == "tv-sonarr" &&
+            t.SavePath == "/downloads/tv"));
+    }
+
+    [Test]
+    public void Sync_should_fallback_category_to_lowercase_arr_type_and_save_path_to_config()
+    {
+        var provider = Substitute.For<IArrConnection>();
+        provider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>
+        {
+            new() { InfoHash = "hash-route-2", Title = "Title 2" }
+        });
+
+        var def = new ArrConnectionDefinition
+        {
+            Enable = true,
+            SyncEnabled = true,
+            ArrType = "Radarr",
+            Name = "RadarrMain",
+            Category = null,
+            SavePath = null
+        };
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { def });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var configService = Substitute.For<IConfigService>();
+        configService.WatchFolderPath.Returns("/config/watch");
+
+        CreateTestableService(provider, configService: configService).Sync();
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Category == "radarr" &&
+            t.SavePath == "/config/watch"));
+    }
+
+    [Test]
+    public void Sync_should_assign_category_and_save_path_when_automatic_add_disabled()
+    {
+        var provider = Substitute.For<IArrConnection>();
+        provider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>
+        {
+            new() { InfoHash = "hash-route-3", Title = "Title 3" }
+        });
+
+        var def = new ArrConnectionDefinition
+        {
+            Enable = true,
+            SyncEnabled = true,
+            EnableAutomaticAdd = false,
+            ArrType = "Sonarr",
+            Name = "SonarrManual",
+            Category = "tv-manual",
+            SavePath = "/manual/tv"
+        };
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { def });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var historyService = Substitute.For<IDownloadHistoryService>();
+        historyService.GetByInfoHash("hash-route-3").Returns((DownloadHistory)null);
+
+        CreateTestableService(provider, downloadHistoryService: historyService).Sync();
+
+        historyService.Received(1).RecordTorrentAdded(
+            Arg.Is<Torrent>(t => t.Category == "tv-manual" && t.SavePath == "/manual/tv"),
+            source: "Sonarr",
+            downloadUrl: Arg.Any<string>(),
+            indexerName: Arg.Any<string>());
     }
 }

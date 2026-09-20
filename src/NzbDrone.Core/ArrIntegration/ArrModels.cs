@@ -28,6 +28,8 @@ public class ArrConnectionDefinition : ProviderDefinition
     public bool WebhookEnabled { get; set; } = true;
     public string WebhookHost { get; set; }
     public bool AcceptInvalidCertificates { get; set; }
+    public string Category { get; set; }
+    public string SavePath { get; set; }
     public List<int> Tags { get; set; } = new();
 
     public ArrConnectionDefinition Clone() => (ArrConnectionDefinition)MemberwiseClone();

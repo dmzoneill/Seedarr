@@ -543,6 +543,24 @@ public class MediaInspectionFailedEvent : IEvent
     }
 }
 
+public class TorrentImportedEvent : IEvent
+{
+    public Torrent Torrent { get; set; }
+    public string ArrType { get; set; }
+    public string ArrInstance { get; set; }
+
+    public TorrentImportedEvent()
+    {
+    }
+
+    public TorrentImportedEvent(Torrent torrent, string arrType = null, string arrInstance = null)
+    {
+        this.Torrent = torrent;
+        this.ArrType = arrType;
+        this.ArrInstance = arrInstance;
+    }
+}
+
 public class ArrImportCompletedEvent : IEvent
 {
     public Torrent Torrent { get; set; }

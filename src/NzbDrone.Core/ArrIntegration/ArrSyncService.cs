@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Torrents;
 
@@ -32,6 +33,7 @@ public class ArrSyncService : IArrSyncService
     private readonly IArrMetadataEnricherService _metadataEnricherService;
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IDownloadClientFactory _downloadClientFactory;
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
 
     public ArrSyncService(
@@ -40,7 +42,8 @@ public class ArrSyncService : IArrSyncService
         IDownloadHistoryService downloadHistoryService = null,
         IArrMetadataEnricherService metadataEnricherService = null,
         ITrackerEntryService trackerEntryService = null,
-        IDownloadClientFactory downloadClientFactory = null)
+        IDownloadClientFactory downloadClientFactory = null,
+        IConfigService configService = null)
     {
         _connectionFactory = connectionFactory;
         _torrentService = torrentService;
@@ -48,6 +51,7 @@ public class ArrSyncService : IArrSyncService
         _metadataEnricherService = metadataEnricherService;
         _trackerEntryService = trackerEntryService;
         _downloadClientFactory = downloadClientFactory;
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -132,7 +136,9 @@ public class ArrSyncService : IArrSyncService
                                 InfoHash = record.InfoHash.ToLowerInvariant(),
                                 TotalSize = record.Size,
                                 DateAdded = DateTime.UtcNow,
-                                Status = TorrentStatus.Queued
+                                Status = TorrentStatus.Queued,
+                                Category = definition.Category ?? definition.ArrType?.ToLowerInvariant(),
+                                SavePath = definition.SavePath ?? _configService?.WatchFolderPath
                             };
 
                             var hist = _downloadHistoryService.RecordTorrentAdded(
@@ -169,7 +175,9 @@ public class ArrSyncService : IArrSyncService
                         InfoHash = record.InfoHash.ToLowerInvariant(),
                         TotalSize = record.Size,
                         DateAdded = DateTime.UtcNow,
-                        Status = TorrentStatus.Queued
+                        Status = TorrentStatus.Queued,
+                        Category = definition.Category ?? definition.ArrType?.ToLowerInvariant(),
+                        SavePath = definition.SavePath ?? _configService?.WatchFolderPath
                     };
 
                     _torrentService.Add(torrent);

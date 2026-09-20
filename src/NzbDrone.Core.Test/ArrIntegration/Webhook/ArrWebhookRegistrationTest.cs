@@ -1351,4 +1351,32 @@ public class ArrWebhookRegistrationTest
         Assert.That(handler.Requests[0].RequestUri?.ToString(), Is.EqualTo("http://lidarr:8686/api/v1/notification"));
         Assert.That(handler.Requests[1].RequestUri?.ToString(), Is.EqualTo("http://lidarr:8686/api/v1/notification/11"));
     }
+
+    [Test]
+    public void RegisterWebhook_should_set_onDownload_and_onRename_to_true()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"[]");
+        handler.Enqueue(HttpStatusCode.Created, @"{""id"":123,""name"":""Seedarr""}");
+
+        var registration = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            WebhookEnabled = true,
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "test-key"
+        };
+
+        var result = registration.RegisterWebhook(connection);
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(2));
+        var postRequest = handler.Requests[1];
+        var body = postRequest.Content.ReadAsStringAsync().Result;
+
+        Assert.That(body, Does.Contain("\"onGrab\":true"));
+        Assert.That(body, Does.Contain("\"onDownload\":true"));
+        Assert.That(body, Does.Contain("\"onRename\":true"));
+    }
 }
