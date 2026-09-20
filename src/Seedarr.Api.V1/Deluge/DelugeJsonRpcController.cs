@@ -95,7 +95,16 @@ public class DelugeJsonRpcController : ControllerBase
 
     private string GetCallerHost()
     {
-        return _callerHostResolver?.ResolveHost(HttpContext) ?? "localhost";
+        var resolved = _callerHostResolver?.ResolveHost(HttpContext);
+        if (!string.IsNullOrWhiteSpace(resolved) && resolved != "localhost")
+        {
+            return resolved;
+        }
+
+        return HttpContext?.Connection?.RemoteIpAddress?.ToString()
+            ?? HttpContext?.Request?.Headers["Host"].ToString()
+            ?? resolved
+            ?? "localhost";
     }
 
     private string RemapRemoteToLocal(string path)
@@ -1766,6 +1775,7 @@ public class DelugeJsonRpcController : ControllerBase
             foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
             {
                 t.SourcePath = remappedPath;
+                t.SavePath = remappedPath;
                 _torrentService.Update(t);
             }
         }

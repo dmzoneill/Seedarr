@@ -1,3 +1,5 @@
+using System.Net;
+using NzbDrone.Core.RemotePathMappings;
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -760,5 +762,112 @@ public class TransmissionRpcControllerTest
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         _torrentService.Received(1).Delete(52, true);
+    }
+
+    [Test]
+    public async Task TorrentGet_Remaps_DownloadDir_Outbound()
+    {
+        var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
+        remotePathMappingService.RemapLocalToRemote("192.168.1.60", "/downloads/tv")
+            .Returns(@"Z:\Downloads\tv");
+
+        var controller = new TransmissionRpcController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _configFileProvider,
+            remotePathMappingService: remotePathMappingService,
+            categoryService: _categoryService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.60");
+        httpContext.Request.Headers[TransmissionRpcController.SessionHeaderName] = TransmissionRpcController.CurrentSessionId;
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1234567890123456789012345678901234567890",
+            Name = "Show.S01E01",
+            SourcePath = "/downloads/tv",
+            Status = TorrentStatus.Downloading,
+            TotalSize = 2000,
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-get",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["fields"] = JsonDocument.Parse("["id", "name", "downloadDir"]").RootElement,
+            },
+        };
+
+        var result = await controller.HandleRpc(request);
+        var okResult = result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var response = okResult.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        var dict = response.Arguments as Dictionary<string, object>;
+        var torrents = dict["torrents"] as List<Dictionary<string, object>>;
+        Assert.That(torrents, Is.Not.Null);
+        Assert.That(torrents[0]["downloadDir"], Is.EqualTo(@"Z:\Downloads\tv"));
+    }
+
+    [Test]
+    public async Task TorrentSetLocation_Remaps_Inbound_Location()
+    {
+        var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
+        remotePathMappingService.RemapRemoteToLocal("192.168.1.60", @"Z:\Downloads\tv")
+            .Returns("/downloads/tv");
+
+        var controller = new TransmissionRpcController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _configFileProvider,
+            remotePathMappingService: remotePathMappingService,
+            categoryService: _categoryService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.60");
+        httpContext.Request.Headers[TransmissionRpcController.SessionHeaderName] = TransmissionRpcController.CurrentSessionId;
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 10,
+            InfoHash = "1234567890123456789012345678901234567890",
+            Name = "Show.S01E01",
+            SourcePath = "/downloads/old",
+            SavePath = "/downloads/old",
+        };
+        _torrentService.Get(10).Returns(torrent);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-set-location",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[10]").RootElement,
+                ["location"] = JsonDocument.Parse(""Z:\\Downloads\\tv"").RootElement,
+                ["move"] = JsonDocument.Parse("false").RootElement,
+            },
+        };
+
+        var result = await controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(torrent.SourcePath, Is.EqualTo("/downloads/tv"));
+        Assert.That(torrent.SavePath, Is.EqualTo("/downloads/tv"));
+        _torrentService.Received(1).Update(torrent);
     }
 }

@@ -218,7 +218,16 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
     private string GetCallerHost()
     {
-        return _callerHostResolver?.ResolveHost(HttpContext) ?? "localhost";
+        var resolved = _callerHostResolver?.ResolveHost(HttpContext);
+        if (!string.IsNullOrWhiteSpace(resolved) && resolved != "localhost")
+        {
+            return resolved;
+        }
+
+        return HttpContext?.Connection?.RemoteIpAddress?.ToString()
+            ?? HttpContext?.Request?.Headers["Host"].ToString()
+            ?? resolved
+            ?? "localhost";
     }
 
     private string RemapRemoteToLocal(string path)
@@ -645,6 +654,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                     if (!string.IsNullOrWhiteSpace(targetLocation))
                     {
                         t.SourcePath = RemapRemoteToLocal(targetLocation);
+                        t.SavePath = t.SourcePath;
                     }
                 }
 
@@ -812,6 +822,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                     else
                     {
                         t.SourcePath = remappedLocation;
+                        t.SavePath = remappedLocation;
                         _torrentService.Update(t);
                     }
                 }
@@ -1168,7 +1179,8 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
     private IActionResult HandleFreeSpace(TransmissionRpcRequest request, object tag)
     {
         var targetPath = request.Arguments != null && request.Arguments.TryGetValue("path", out var p) ? p.GetString() : (_configService?.WatchFolderPath ?? "/downloads");
-        var freeBytes = GetFreeDiskSpace(targetPath);
+        var localPath = !string.IsNullOrWhiteSpace(targetPath) ? RemapRemoteToLocal(targetPath) : (_configService?.WatchFolderPath ?? "/downloads");
+        var freeBytes = GetFreeDiskSpace(localPath);
 
         return Ok(new TransmissionRpcResponse
         {

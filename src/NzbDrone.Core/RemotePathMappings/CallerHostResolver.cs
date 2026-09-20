@@ -20,6 +20,7 @@ public class CallerHostResolver : ICallerHostResolver
         string xForwardedFor = null;
         string xRealIp = null;
         string xForwardedHost = null;
+        string hostHeader = null;
 
         if (httpContext.Request?.Headers != null)
         {
@@ -37,10 +38,25 @@ public class CallerHostResolver : ICallerHostResolver
             {
                 xForwardedHost = fwdHostVal.ToString();
             }
+
+            if (httpContext.Request.Headers.TryGetValue("Host", out var hostVal))
+            {
+                hostHeader = hostVal.ToString();
+            }
         }
 
         var remoteIp = httpContext.Connection?.RemoteIpAddress?.ToString();
-        return ResolveFromHeaders(xForwardedFor, xRealIp, xForwardedHost, remoteIp);
+        var resolved = ResolveFromHeaders(xForwardedFor, xRealIp, xForwardedHost, remoteIp);
+        if ((string.IsNullOrWhiteSpace(resolved) || resolved == "localhost" || resolved == "127.0.0.1" || resolved == "::1") && !string.IsNullOrWhiteSpace(hostHeader))
+        {
+            var cleanHostHeader = RemotePathMappingService.ExtractIpOrHostname(hostHeader);
+            if (!string.IsNullOrWhiteSpace(cleanHostHeader) && cleanHostHeader != "localhost" && cleanHostHeader != "127.0.0.1" && cleanHostHeader != "::1")
+            {
+                return cleanHostHeader;
+            }
+        }
+
+        return resolved;
     }
 
     public string ResolveFromHeaders(string xForwardedFor, string xRealIp, string xForwardedHost, string remoteIp = null)
