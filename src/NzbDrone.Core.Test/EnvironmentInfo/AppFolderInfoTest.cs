@@ -67,16 +67,17 @@ public class AppFolderInfoTest
 
         Assume.That(CanCreateDirectory(expectedParent), "Default AppData parent folder is not writable on this system");
 
+        var expected = Path.Combine(expectedParent, "Seedarr");
+        var existedBefore = Directory.Exists(expected);
         var context = new StartupContext();
         var subject = new AppFolderInfo(context);
 
-        var expected = Path.Combine(expectedParent, "Seedarr");
         Assert.That(subject.AppDataFolder, Is.EqualTo(expected));
 
         // Cleanup to avoid leaving test artifacts
-        if (Directory.Exists(expected))
+        if (!existedBefore && Directory.Exists(expected))
         {
-            Directory.Delete(expected);
+            Directory.Delete(expected, true);
         }
     }
 
@@ -89,15 +90,17 @@ public class AppFolderInfoTest
 
         Assume.That(CanCreateDirectory(expectedParent), "Default AppData parent folder is not writable on this system");
 
+        var expected = Path.Combine(expectedParent, "Seedarr");
+        var existedBefore = Directory.Exists(expected);
         var context = new StartupContext();
         var subject = new AppFolderInfo(context);
 
         Assert.That(subject.AppDataFolder, Does.EndWith("Seedarr"));
 
         var created = subject.AppDataFolder;
-        if (Directory.Exists(created))
+        if (!existedBefore && Directory.Exists(created))
         {
-            Directory.Delete(created);
+            Directory.Delete(created, true);
         }
     }
 

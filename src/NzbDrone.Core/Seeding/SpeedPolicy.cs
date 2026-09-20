@@ -417,7 +417,7 @@ public class SpeedPolicy : ISpeedPolicy,
 
                 bytesPerSecond = CalculateEffectiveUploadSpeed(torrent, bytesPerSecond, currentTime);
 
-                if (torrent.Leechers <= 0 || bytesPerSecond <= 0)
+                if (bytesPerSecond <= 0)
                 {
                     isPausedOrZeroLeechers = true;
                     uploadBytesThisTick = 0;
@@ -741,12 +741,9 @@ public class SpeedPolicy : ISpeedPolicy,
             return 0;
         }
 
-        if (torrent.Leechers <= 0)
-        {
-            return 0;
-        }
-
-        var maxPlausibleUpload = (long)torrent.Leechers * DefaultMaxUploadPerLeecherBps;
+        // Seedarr is a simulator; when tracker reports 0 leechers, simulate at least 1 leecher
+        var effectiveLeechers = Math.Max(1, torrent.Leechers);
+        var maxPlausibleUpload = (long)effectiveLeechers * DefaultMaxUploadPerLeecherBps;
         var speed = Math.Min(targetSpeed, maxPlausibleUpload);
 
         var currentTime = now ?? DateTime.UtcNow;

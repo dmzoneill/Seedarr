@@ -13,7 +13,6 @@ import { useTorrentIndexState } from "./torrentindex/useTorrentIndexState";
 import { useColumnPreferences } from "./torrentindex/columnPreferences";
 import {
   useAnnounceTorrent,
-  useRecheckTorrent,
   useBulkTorrentAction,
   useMoveTorrentQueue,
 } from "../api/hooks";
@@ -24,7 +23,6 @@ function TorrentIndex() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const announceTorrent = useAnnounceTorrent();
-  const recheckTorrent = useRecheckTorrent();
   const bulkAction = useBulkTorrentAction();
   const { modalCount } = useModalStack();
   const {
@@ -226,35 +224,6 @@ function TorrentIndex() {
     }
   }, [selectedIds, bulkAction, setSelectedIds, showToast]);
 
-  const handleBulkRecheck = useCallback(async () => {
-    if (selectedIds.size === 0) return;
-    setBulkPending(true);
-    const ids = [...selectedIds];
-    try {
-      const res = await bulkAction.mutateAsync({
-        torrentIds: ids,
-        action: "recheck",
-      });
-
-      if (res.failedCount === 0) {
-        showToast(
-          `Successfully queued recheck for ${res.successCount} torrent(s).`,
-          "success",
-        );
-      } else {
-        showToast(
-          `${res.successCount} recheck queued, ${res.failedCount} failed`,
-          "warning",
-        );
-      }
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Failed to queue recheck";
-      showToast(msg, "error");
-    } finally {
-      setBulkPending(false);
-    }
-  }, [selectedIds, bulkAction, showToast]);
 
   const handleBulkDelete = useCallback(() => {
     const targetIds =
@@ -498,15 +467,6 @@ function TorrentIndex() {
         }
       }
 
-      // r / R: force recheck torrent files (single selected)
-      if (e.key === "r" || e.key === "R") {
-        if (selectedTorrentId != null) {
-          e.preventDefault();
-          recheckTorrent.mutate(selectedTorrentId);
-          return;
-        }
-      }
-
       // Delete / Backspace: delete torrent (supporting single & multi-selection)
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
@@ -525,7 +485,6 @@ function TorrentIndex() {
     setSelectedTorrentId,
     filteredTorrents,
     announceTorrent,
-    recheckTorrent,
     handleToggleActiveSelected,
     handleBulkDelete,
     handleSelectAll,
@@ -559,7 +518,6 @@ function TorrentIndex() {
         onBulkStop={handleBulkStop}
         onBulkDelete={handleBulkDelete}
         onBulkClear={() => setSelectedIds(new Set())}
-        onBulkRecheck={handleBulkRecheck}
         onBulkAddTags={handleBulkAddTags}
         onBulkRemoveTags={handleBulkRemoveTags}
         onBulkMoveQueue={handleBulkMoveQueue}

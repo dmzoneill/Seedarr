@@ -147,22 +147,17 @@ describe("TorrentToolbar accessibility attributes", () => {
     );
   });
 
-  it("renders bulk Force Recheck button when selectedCount > 0 and onBulkRecheck is provided", () => {
+  it("does not render bulk Force Recheck button", () => {
     const html = renderToStaticMarkup(
       React.createElement(TorrentToolbar, {
         ...defaultProps,
         selectedCount: 2,
-        onBulkRecheck: () => {},
       }),
     );
 
     assert.ok(
-      html.includes("bulk-recheck-btn"),
-      "Force Recheck button must be rendered in bulk actions",
-    );
-    assert.ok(
-      html.includes("Force Recheck"),
-      "Force Recheck text should be present",
+      !html.includes("bulk-recheck-btn"),
+      "Force Recheck button must not be rendered in bulk actions",
     );
   });
 });

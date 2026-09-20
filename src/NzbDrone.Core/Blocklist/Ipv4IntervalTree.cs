@@ -135,7 +135,7 @@ public class Ipv4IntervalTree
         // 3. PeerGuardian .p2p format: Range_Name:Start_IP-End_IP
         // Range name may have colons or spaces: e.g. "Some:Org:Name:1.2.3.4-1.2.3.10"
         // Try candidate substrings after colons (from right to left)
-        for (var colonIdx = trimmed.LastIndexOf(':'); colonIdx >= 0; colonIdx = trimmed.LastIndexOf(':', colonIdx - 1))
+        for (var colonIdx = trimmed.LastIndexOf(':'); colonIdx >= 0; colonIdx = colonIdx > 0 ? trimmed.LastIndexOf(':', colonIdx - 1) : -1)
         {
             var candidate = trimmed[(colonIdx + 1)..].Trim();
             if (candidate.Length == 0)
@@ -161,7 +161,7 @@ public class Ipv4IntervalTree
         }
 
         // 4. Space-separated label prefix: e.g. "BadRange 1.2.3.4-1.2.3.10" or "BadRange 1.2.3.4"
-        for (var spaceIdx = trimmed.LastIndexOf(' '); spaceIdx > 0; spaceIdx = trimmed.LastIndexOf(' ', spaceIdx - 1))
+        for (var spaceIdx = trimmed.LastIndexOf(' '); spaceIdx > 0; spaceIdx = spaceIdx > 0 ? trimmed.LastIndexOf(' ', spaceIdx - 1) : -1)
         {
             var candidate = trimmed[(spaceIdx + 1)..].Trim();
             if (candidate.Length == 0)
@@ -297,10 +297,11 @@ public class Ipv4IntervalTree
         {
             if (parsed.IsIPv4MappedToIPv6)
             {
-                parsed = parsed.MapToIPv4();
+                ip = parsed.MapToIPv4();
+                return true;
             }
 
-            if (parsed.AddressFamily == AddressFamily.InterNetwork)
+            if (parsed.AddressFamily == AddressFamily.InterNetwork && input.Contains('.'))
             {
                 ip = parsed;
                 return true;
