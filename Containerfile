@@ -70,7 +70,7 @@ COPY --from=frontend /build/src/NzbDrone.Host/wwwroot/ ./wwwroot/
 COPY version ./
 COPY CHANGELOG.md ./
 COPY tests/fixtures/ /app/fixtures/
-COPY --chmod=755 docker-entrypoint.sh /docker-entrypoint.sh
+COPY --chmod=755 container-entrypoint.sh /container-entrypoint.sh
 
 ENV SEEDARR__APP_DATA=/config
 ENV DOTNET_gcServer=0
@@ -81,7 +81,7 @@ VOLUME ["/config", "/data"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 CMD curl -f http://localhost:9898/api/v1/system/status || exit 1
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+ENTRYPOINT ["/container-entrypoint.sh"]
 
 # Stage 4: Test image with coverage tools
 FROM runtime AS test
