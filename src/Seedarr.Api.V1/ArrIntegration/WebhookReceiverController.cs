@@ -80,8 +80,10 @@ public class WebhookReceiverController : Controller
             return false;
         }
 
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(provided),
-            Encoding.UTF8.GetBytes(expected));
+        Span<byte> hashA = stackalloc byte[32];
+        Span<byte> hashB = stackalloc byte[32];
+        SHA256.HashData(Encoding.UTF8.GetBytes(provided), hashA);
+        SHA256.HashData(Encoding.UTF8.GetBytes(expected), hashB);
+        return CryptographicOperations.FixedTimeEquals(hashA, hashB);
     }
 }

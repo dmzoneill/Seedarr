@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -83,9 +84,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
 
         var configuredApiKey = _configFileProvider.ApiKey;
         if (string.IsNullOrWhiteSpace(configuredApiKey) ||
-            !CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(apiKey),
-                Encoding.UTF8.GetBytes(configuredApiKey)))
+            !FixedTimeEquals(apiKey, configuredApiKey))
         {
             return Task.FromResult(AuthenticateResult.Fail("Invalid API Key"));
         }
@@ -100,5 +99,19 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
         var ticket = new AuthenticationTicket(principal, ApiKeyAuthenticationOptions.DefaultScheme);
 
         return Task.FromResult(AuthenticateResult.Success(ticket));
+    }
+
+    private static bool FixedTimeEquals(string a, string b)
+    {
+        if (a == null || b == null)
+        {
+            return a == b;
+        }
+
+        Span<byte> hashA = stackalloc byte[32];
+        Span<byte> hashB = stackalloc byte[32];
+        SHA256.HashData(Encoding.UTF8.GetBytes(a), hashA);
+        SHA256.HashData(Encoding.UTF8.GetBytes(b), hashB);
+        return CryptographicOperations.FixedTimeEquals(hashA, hashB);
     }
 }

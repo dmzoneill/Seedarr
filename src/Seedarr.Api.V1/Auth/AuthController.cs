@@ -322,8 +322,10 @@ public class AuthController : ControllerBase
             return a == b;
         }
 
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(a),
-            Encoding.UTF8.GetBytes(b));
+        Span<byte> hashA = stackalloc byte[32];
+        Span<byte> hashB = stackalloc byte[32];
+        SHA256.HashData(Encoding.UTF8.GetBytes(a), hashA);
+        SHA256.HashData(Encoding.UTF8.GetBytes(b), hashB);
+        return CryptographicOperations.FixedTimeEquals(hashA, hashB);
     }
 }

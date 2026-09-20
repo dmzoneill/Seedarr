@@ -48,6 +48,29 @@ public class CsrfProtectionMiddlewareTest
     }
 
     [Test]
+    public async Task RequestsWithLegacySeedarrAuthCookie_RequireValidOriginOrReferer_BlocksWhenMissing()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/system/restart";
+        context.Request.Host = new HostString("seedarr.local:9898");
+        context.Request.Headers["Cookie"] = "SeedarrAuth=session_token_legacy";
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
+    }
+
+    [Test]
     public async Task RequestsWithSidCookie_OnRpcEndpoint_RequireValidOriginOrReferer_BlocksWhenMissing()
     {
         var context = new DefaultHttpContext();

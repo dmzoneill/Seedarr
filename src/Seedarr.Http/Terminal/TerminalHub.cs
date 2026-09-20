@@ -182,12 +182,13 @@ public class TerminalHub : Hub
     {
         if (left == null || right == null)
         {
-            return false;
+            return left == right;
         }
 
-        var leftBytes = Encoding.UTF8.GetBytes(left);
-        var rightBytes = Encoding.UTF8.GetBytes(right);
-
-        return CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
+        Span<byte> hashA = stackalloc byte[32];
+        Span<byte> hashB = stackalloc byte[32];
+        SHA256.HashData(Encoding.UTF8.GetBytes(left), hashA);
+        SHA256.HashData(Encoding.UTF8.GetBytes(right), hashB);
+        return CryptographicOperations.FixedTimeEquals(hashA, hashB);
     }
 }

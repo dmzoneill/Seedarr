@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -69,9 +70,10 @@ public class TelegramBotController : Controller
             return false;
         }
 
-        var providedBytes = Encoding.UTF8.GetBytes(providedToken);
-        var configuredBytes = Encoding.UTF8.GetBytes(configuredToken);
-
-        return CryptographicOperations.FixedTimeEquals(providedBytes, configuredBytes);
+        Span<byte> hashA = stackalloc byte[32];
+        Span<byte> hashB = stackalloc byte[32];
+        SHA256.HashData(Encoding.UTF8.GetBytes(providedToken), hashA);
+        SHA256.HashData(Encoding.UTF8.GetBytes(configuredToken), hashB);
+        return CryptographicOperations.FixedTimeEquals(hashA, hashB);
     }
 }
