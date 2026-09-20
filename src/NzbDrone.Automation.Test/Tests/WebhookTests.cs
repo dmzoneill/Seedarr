@@ -85,9 +85,16 @@ public class WebhookTests : ApiTestBase
     }
 
     [Test]
-    public async Task Rename_event_is_ignored()
+    public async Task Rename_event_is_processed()
     {
         var response = await PostWebhookAsync(new { eventType = "Rename" });
+        Assert.That(response, Does.Contain("Processed Rename event"));
+    }
+
+    [Test]
+    public async Task Unknown_event_is_ignored()
+    {
+        var response = await PostWebhookAsync(new { eventType = "Unknown" });
         Assert.That(response, Does.Contain("Ignored event type"));
     }
 
