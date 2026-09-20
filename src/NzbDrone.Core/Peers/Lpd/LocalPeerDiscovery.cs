@@ -6,6 +6,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -20,10 +21,14 @@ namespace NzbDrone.Core.Peers.Lpd;
 public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
 {
     private const string MulticastAddress = "239.192.152.143";
+    private const string MulticastAddressV6 = "ff15::efc0:988f";
     private const int MulticastPort = 6771;
     private const int PeerPort = 6881;
 
+    private static readonly Regex InfoHashRegex = new("^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$", RegexOptions.Compiled);
+
     protected virtual int AnnounceIntervalSeconds => 300;
+    protected virtual int RetryDelayMs => 5000;
 
     private int? _interAnnounceDelayMs;
 
@@ -41,12 +46,13 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
 
     private string _clientCookie = RandomNumberGenerator.GetHexString(8).ToLowerInvariant();
     private UdpClient _client;
+    private UdpClient _clientV6;
     private CancellationTokenSource _workerCts;
     private Task _workerTask;
     private bool _wasEnabled;
     private CancellationToken _stoppingToken;
 
-    public bool IsRunning => _client != null;
+    public bool IsRunning => _client != null || _clientV6 != null;
 
     internal string ClientCookie
     {
@@ -93,34 +99,66 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
             _wasEnabled = _configService.EnableLpd;
         }
 
-        if (_configService.EnableLpd)
-        {
-            StartLpd();
-        }
-        else
+        if (!_configService.EnableLpd)
         {
             _logger.Info("Local Peer Discovery disabled via configuration");
         }
 
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            await Task.Delay(Timeout.Infinite, stoppingToken);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            StopLpd();
-            if (_workerTask != null)
+            try
             {
+                if (_configService.EnableLpd)
+                {
+                    lock (_stateLock)
+                    {
+                        if (_client == null && _clientV6 == null && (_workerTask == null || _workerTask.IsCompleted))
+                        {
+                            StartLpd();
+                        }
+                    }
+                }
+
+                if ((_client != null || _clientV6 != null) && _workerTask != null)
+                {
+                    await Task.WhenAny(_workerTask, Task.Delay(Timeout.Infinite, stoppingToken));
+                    if (_workerTask.IsCompleted)
+                    {
+                        StopLpd();
+                    }
+                }
+                else
+                {
+                    await Task.Delay(RetryDelayMs, stoppingToken);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Local Peer Discovery loop error");
                 try
                 {
-                    await _workerTask.ConfigureAwait(false);
+                    await Task.Delay(RetryDelayMs, stoppingToken);
                 }
-                catch (Exception)
+                catch (OperationCanceledException)
                 {
+                    break;
                 }
+            }
+        }
+
+        StopLpd();
+        if (_workerTask != null)
+        {
+            try
+            {
+                await _workerTask.ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
             }
         }
     }
@@ -134,73 +172,177 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                 return;
             }
 
-            UdpClient client;
+            UdpClient client = null;
+            Socket socket = null;
 
             try
             {
-                client = new UdpClient(MulticastPort);
+                socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                socket.Bind(new IPEndPoint(IPAddress.Any, MulticastPort));
+                client = new UdpClient { Client = socket };
             }
             catch (SocketException ex)
             {
+                socket?.Dispose();
                 _logger.Warn(ex, "Local Peer Discovery failed to bind multicast port {0}, skipping", MulticastPort);
-                return;
-            }
-
-            var multicastAddress = IPAddress.Parse(MulticastAddress);
-            var joinedAny = false;
-
-            try
-            {
-                client.JoinMulticastGroup(multicastAddress);
-                joinedAny = true;
             }
             catch (Exception ex)
             {
-                _logger.Debug(ex, "Local Peer Discovery failed to join default multicast group");
+                socket?.Dispose();
+                _logger.Warn(ex, "Local Peer Discovery unexpected error binding multicast port {0}", MulticastPort);
             }
 
-            var activeInterfaces = GetActiveNetworkInterfaces();
-            foreach (var nic in activeInterfaces)
+            if (client != null)
             {
-                var ipProps = nic.GetIPProperties();
-                if (ipProps == null)
+                var multicastAddress = IPAddress.Parse(MulticastAddress);
+                var joinedAny = false;
+
+                try
                 {
-                    continue;
+                    client.JoinMulticastGroup(multicastAddress);
+                    joinedAny = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Local Peer Discovery failed to join default multicast group");
                 }
 
-                foreach (var unicast in ipProps.UnicastAddresses)
+                var activeInterfaces = GetActiveNetworkInterfaces();
+                foreach (var nic in activeInterfaces)
                 {
-                    if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                    var ipProps = nic.GetIPProperties();
+                    if (ipProps == null)
+                    {
+                        continue;
+                    }
+
+                    foreach (var unicast in ipProps.UnicastAddresses)
+                    {
+                        if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            try
+                            {
+                                client.JoinMulticastGroup(multicastAddress, unicast.Address);
+                                joinedAny = true;
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Debug(ex, "Local Peer Discovery failed to join multicast group on {0} ({1})", nic.Name, unicast.Address);
+                            }
+                        }
+                    }
+                }
+
+                if (!joinedAny)
+                {
+                    _logger.Warn("Local Peer Discovery failed to join multicast group on any interface, skipping");
+                    try
+                    {
+                        client.Close();
+                        client.Dispose();
+                    }
+                    catch (Exception)
+                    {
+                    }
+
+                    client = null;
+                }
+            }
+
+            UdpClient clientV6 = null;
+            if (Socket.OSSupportsIPv6)
+            {
+                Socket socketV6 = null;
+                try
+                {
+                    socketV6 = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+                    socketV6.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                    try
+                    {
+                        socketV6.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
+                    }
+                    catch
+                    {
+                    }
+
+                    socketV6.Bind(new IPEndPoint(IPAddress.IPv6Any, MulticastPort));
+                    clientV6 = new UdpClient { Client = socketV6 };
+
+                    var multicastAddressV6 = IPAddress.Parse(MulticastAddressV6);
+                    var joinedAnyV6 = false;
+
+                    try
+                    {
+                        clientV6.JoinMulticastGroup(multicastAddressV6);
+                        joinedAnyV6 = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "Local Peer Discovery failed to join default IPv6 multicast group");
+                    }
+
+                    var activeInterfaces = GetActiveNetworkInterfaces();
+                    foreach (var nic in activeInterfaces)
                     {
                         try
                         {
-                            client.JoinMulticastGroup(multicastAddress, unicast.Address);
-                            joinedAny = true;
+                            var ipProps = nic.GetIPProperties();
+                            var ipv6Props = ipProps?.GetIPv6Properties();
+                            if (ipv6Props != null)
+                            {
+                                clientV6.JoinMulticastGroup(ipv6Props.Index, multicastAddressV6);
+                                joinedAnyV6 = true;
+                            }
                         }
                         catch (Exception ex)
                         {
-                            _logger.Debug(ex, "Local Peer Discovery failed to join multicast group on {0} ({1})", nic.Name, unicast.Address);
+                            _logger.Debug(ex, "Local Peer Discovery failed to join IPv6 multicast group on {0}", nic.Name);
                         }
+                    }
+
+                    if (!joinedAnyV6)
+                    {
+                        _logger.Debug("Local Peer Discovery failed to join IPv6 multicast group on any interface");
+                        try
+                        {
+                            clientV6.Close();
+                            clientV6.Dispose();
+                        }
+                        catch (Exception)
+                        {
+                        }
+
+                        clientV6 = null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    socketV6?.Dispose();
+                    _logger.Debug(ex, "Local Peer Discovery IPv6 multicast setup not available or failed");
+                    if (clientV6 != null)
+                    {
+                        try
+                        {
+                            clientV6.Close();
+                            clientV6.Dispose();
+                        }
+                        catch (Exception)
+                        {
+                        }
+
+                        clientV6 = null;
                     }
                 }
             }
 
-            if (!joinedAny)
+            if (client == null && clientV6 == null)
             {
-                _logger.Warn("Local Peer Discovery failed to join multicast group on any interface, skipping");
-                try
-                {
-                    client.Close();
-                    client.Dispose();
-                }
-                catch (Exception)
-                {
-                }
-
                 return;
             }
 
             _client = client;
+            _clientV6 = clientV6;
             _wasEnabled = true;
             _logger.Info("Local Peer Discovery (BEP 14) started on {0}:{1}", MulticastAddress, MulticastPort);
 
@@ -211,14 +353,24 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
             var token = _workerCts.Token;
             _workerTask = Task.Run(async () =>
             {
-                var listenTask = ListenForPeers(client, token);
-                var announceTask = AnnounceLoop(token);
+                var tasks = new List<Task>();
+                if (client != null)
+                {
+                    tasks.Add(ListenForPeers(client, token));
+                }
 
-                await Task.WhenAny(listenTask, announceTask);
+                if (clientV6 != null)
+                {
+                    tasks.Add(ListenForPeers(clientV6, token));
+                }
+
+                tasks.Add(AnnounceLoop(token));
+
+                await Task.WhenAny(tasks);
 
                 try
                 {
-                    await Task.WhenAll(listenTask, announceTask).ConfigureAwait(false);
+                    await Task.WhenAll(tasks).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -267,10 +419,32 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                 }
 
                 _client = null;
-                _logger.Info("Local Peer Discovery stopped");
+            }
+
+            if (_clientV6 != null)
+            {
+                try
+                {
+                    _clientV6.DropMulticastGroup(IPAddress.Parse(MulticastAddressV6));
+                }
+                catch (Exception)
+                {
+                }
+
+                try
+                {
+                    _clientV6.Close();
+                    _clientV6.Dispose();
+                }
+                catch (Exception)
+                {
+                }
+
+                _clientV6 = null;
             }
 
             _workerTask = null;
+            _logger.Info("Local Peer Discovery stopped");
         }
     }
 
@@ -373,8 +547,14 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
 
     public static byte[] BuildAnnouncement(string infoHash, int port, string cookie = null)
     {
+        return BuildAnnouncement(infoHash, port, cookie, null);
+    }
+
+    public static byte[] BuildAnnouncement(string infoHash, int port, string cookie, string host)
+    {
         var cookieValue = cookie ?? RandomNumberGenerator.GetHexString(8).ToLowerInvariant();
-        var message = $"BT-SEARCH * HTTP/1.1\r\nHost: {MulticastAddress}:{MulticastPort}\r\nPort: {port}\r\nInfohash: {infoHash}\r\ncookie: {cookieValue}\r\n\r\n\r\n";
+        var hostValue = string.IsNullOrEmpty(host) ? $"{MulticastAddress}:{MulticastPort}" : host;
+        var message = $"BT-SEARCH * HTTP/1.1\r\nHost: {hostValue}\r\nPort: {port}\r\nInfohash: {infoHash}\r\ncookie: {cookieValue}\r\n\r\n\r\n";
         return Encoding.ASCII.GetBytes(message);
     }
 
@@ -439,33 +619,32 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
 
         foreach (var line in message.Split("\r\n", StringSplitOptions.RemoveEmptyEntries))
         {
-            if (line.StartsWith("Infohash:", StringComparison.OrdinalIgnoreCase))
+            var trimmedLine = line.Trim();
+            if (trimmedLine.StartsWith("Infohash:", StringComparison.OrdinalIgnoreCase))
             {
-                infoHash = line[9..].Trim();
+                infoHash = trimmedLine[9..].Trim();
             }
-            else if (line.StartsWith("Port:", StringComparison.OrdinalIgnoreCase))
+            else if (trimmedLine.StartsWith("Port:", StringComparison.OrdinalIgnoreCase))
             {
-                int.TryParse(line[5..].Trim(), out port);
+                int.TryParse(trimmedLine[5..].Trim(), out port);
             }
-            else if (line.StartsWith("cookie:", StringComparison.OrdinalIgnoreCase))
+            else if (trimmedLine.StartsWith("cookie:", StringComparison.OrdinalIgnoreCase))
             {
-                cookie = line[7..].Trim();
+                cookie = trimmedLine[7..].Trim();
             }
         }
 
-        if (string.IsNullOrEmpty(infoHash) || port <= 0)
+        if (string.IsNullOrEmpty(infoHash) || !InfoHashRegex.IsMatch(infoHash))
         {
             return;
         }
 
-        if (!string.IsNullOrEmpty(cookie) && !string.IsNullOrEmpty(_clientCookie) &&
-            string.Equals(cookie, _clientCookie, StringComparison.OrdinalIgnoreCase))
+        if (port <= 0 || port > 65535)
         {
-            _logger.Debug("LPD: rejected self-announcement with matching cookie {0}", cookie);
             return;
         }
 
-        if (port < 1024 || port > 65535)
+        if (port < 1024)
         {
             _logger.Debug("LPD: rejected announcement from {0} with invalid or privileged port {1}", sender.Address, port);
             return;

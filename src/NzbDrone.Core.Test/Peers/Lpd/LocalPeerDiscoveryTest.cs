@@ -154,13 +154,13 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
@@ -169,7 +169,7 @@ public class LocalPeerDiscoveryTest
         method.Invoke(lpd, new object[] { announcement, sender });
 
         peerDiscovery.Received(1).AddPeers(
-            "abc123def456",
+            "0123456789abcdef0123456789abcdef01234567",
             Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Port == 6881),
             "lpd");
     }
@@ -284,13 +284,13 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("abc123").Returns(new Torrent { InfoHash = "abc123", IsPrivate = false });
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nport: 6881\r\ninfohash: abc123\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nport: 6881\r\ninfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
@@ -299,7 +299,7 @@ public class LocalPeerDiscoveryTest
         method.Invoke(lpd, new object[] { announcement, sender });
 
         peerDiscovery.Received(1).AddPeers(
-            "abc123",
+            "0123456789abcdef0123456789abcdef01234567",
             Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Port == 6881),
             "lpd");
     }
@@ -642,13 +642,13 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse(ip), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
@@ -657,7 +657,7 @@ public class LocalPeerDiscoveryTest
         method.Invoke(lpd, new object[] { announcement, sender });
 
         peerDiscovery.Received(1).AddPeers(
-            "abc123def456",
+            "0123456789abcdef0123456789abcdef01234567",
             Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == ip && peers.Single().Port == 6881),
             "lpd");
     }
@@ -668,13 +668,13 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse(ip), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
@@ -683,7 +683,7 @@ public class LocalPeerDiscoveryTest
         method.Invoke(lpd, new object[] { announcement, sender });
 
         peerDiscovery.Received(1).AddPeers(
-            "abc123def456",
+            "0123456789abcdef0123456789abcdef01234567",
             Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == ip && peers.Single().Port == 6881),
             "lpd");
     }
@@ -694,13 +694,13 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse(ip), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
@@ -709,7 +709,7 @@ public class LocalPeerDiscoveryTest
         method.Invoke(lpd, new object[] { announcement, sender });
 
         peerDiscovery.Received(1).AddPeers(
-            "abc123def456",
+            "0123456789abcdef0123456789abcdef01234567",
             Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == ip && peers.Single().Port == 6881),
             "lpd");
     }
@@ -725,7 +725,7 @@ public class LocalPeerDiscoveryTest
             Substitute.For<ITorrentService>(),
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse(ip), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
@@ -752,7 +752,7 @@ public class LocalPeerDiscoveryTest
             Substitute.For<ITorrentService>(),
             peerDiscovery);
 
-        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: {port}\r\nInfohash: abc123def456\r\n\r\n";
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: {port}\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
@@ -775,7 +775,7 @@ public class LocalPeerDiscoveryTest
             Substitute.For<ITorrentService>(),
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
@@ -805,7 +805,7 @@ public class LocalPeerDiscoveryTest
 
         if (localIp != null)
         {
-            var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+            var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
             var sender = new IPEndPoint(localIp, 12345);
 
             var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
@@ -914,9 +914,9 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("private_hash").Returns(new Torrent
+        torrentService.FindByInfoHash("1111111111222222222233333333334444444444").Returns(new Torrent
         {
-            InfoHash = "private_hash",
+            InfoHash = "1111111111222222222233333333334444444444",
             IsPrivate = true,
             Status = TorrentStatus.Downloading
         });
@@ -926,7 +926,7 @@ public class LocalPeerDiscoveryTest
             torrentService,
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: private_hash\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 1111111111222222222233333333334444444444\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod(
@@ -944,14 +944,14 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("unknown_hash").Returns((Torrent)null);
+        torrentService.FindByInfoHash("2222222222333333333344444444445555555555").Returns((Torrent)null);
 
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: unknown_hash\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 2222222222333333333344444444445555555555\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod(
@@ -969,9 +969,9 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("public_hash").Returns(new Torrent
+        torrentService.FindByInfoHash("3333333333444444444455555555556666666666").Returns(new Torrent
         {
-            InfoHash = "public_hash",
+            InfoHash = "3333333333444444444455555555556666666666",
             IsPrivate = false,
             Status = TorrentStatus.Downloading
         });
@@ -981,7 +981,7 @@ public class LocalPeerDiscoveryTest
             torrentService,
             peerDiscovery);
 
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: public_hash\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 3333333333444444444455555555556666666666\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod(
@@ -991,7 +991,7 @@ public class LocalPeerDiscoveryTest
         method.Invoke(lpd, new object[] { announcement, sender });
 
         peerDiscovery.Received(1).AddPeers(
-            "public_hash",
+            "3333333333444444444455555555556666666666",
             Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == "192.168.1.50" && peers.Single().Port == 6881),
             "lpd");
     }
@@ -1001,14 +1001,14 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
         var cookie = lpd.ClientCookie;
-        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\ncookie: {cookie}\r\n\r\n";
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\ncookie: {cookie}\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod(
@@ -1026,14 +1026,14 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
         var cookie = lpd.ClientCookie.ToUpperInvariant();
-        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\ncookie: {cookie}\r\n\r\n";
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\ncookie: {cookie}\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod(
@@ -1051,14 +1051,14 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
         lpd.ClientCookie = "deadbeef";
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\ncookie: feedface\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\ncookie: feedface\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod(
@@ -1068,7 +1068,7 @@ public class LocalPeerDiscoveryTest
         method.Invoke(lpd, new object[] { announcement, sender });
 
         peerDiscovery.Received(1).AddPeers(
-            "abc123def456",
+            "0123456789abcdef0123456789abcdef01234567",
             Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == "192.168.1.50" && peers.Single().Port == 6881),
             "lpd");
     }
@@ -1078,14 +1078,14 @@ public class LocalPeerDiscoveryTest
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         var torrentService = Substitute.For<ITorrentService>();
-        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
             torrentService,
             peerDiscovery);
 
         lpd.ClientCookie = "deadbeef";
-        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod(
@@ -1095,7 +1095,7 @@ public class LocalPeerDiscoveryTest
         method.Invoke(lpd, new object[] { announcement, sender });
 
         peerDiscovery.Received(1).AddPeers(
-            "abc123def456",
+            "0123456789abcdef0123456789abcdef01234567",
             Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == "192.168.1.50" && peers.Single().Port == 6881),
             "lpd");
     }
@@ -1233,5 +1233,179 @@ public class LocalPeerDiscoveryTest
         await task.WaitAsync(TimeSpan.FromSeconds(3));
         Assert.That(task.IsCompleted, Is.True);
         Assert.That(pacedLpd.Announcements.Count, Is.EqualTo(1));
+    }
+
+    [TestCase("0123456789abcdef0123456789abcdef01234567")]
+    [TestCase("0123456789ABCDEF0123456789ABCDEF01234567")]
+    [TestCase("abcdef0123456789abcdef0123456789abcdef01")]
+    public void ParseAnnouncement_should_accept_valid_40_char_infohash(string infoHash)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash(infoHash).Returns(new Torrent { InfoHash = infoHash, IsPrivate = false });
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: {infoHash}\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            infoHash,
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Port == 6881),
+            "lpd");
+    }
+
+    [TestCase("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")]
+    [TestCase("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF")]
+    public void ParseAnnouncement_should_accept_valid_64_char_infohash(string infoHash)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash(infoHash).Returns(new Torrent { InfoHash = infoHash, IsPrivate = false });
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: {infoHash}\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            infoHash,
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Port == 6881),
+            "lpd");
+    }
+
+    [TestCase("abc123def456")]
+    [TestCase("0123456789abcdef0123456789abcdef0123456")]
+    [TestCase("0123456789abcdef0123456789abcdef012345678")]
+    [TestCase("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde")]
+    [TestCase("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0")]
+    [TestCase("0123456789abcdef0123456789abcdef0123456g")]
+    [TestCase("0123456789abcdef0123456789abcdef0123456!")]
+    public void ParseAnnouncement_should_reject_malformed_and_non_hex_infohashes(string infoHash)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
+
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: {infoHash}\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    [TestCase(-9999)]
+    [TestCase(65536)]
+    [TestCase(70000)]
+    public void ParseAnnouncement_should_reject_port_outside_bounds(int port)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
+
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: {port}\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+    }
+
+    [TestCase(1024)]
+    [TestCase(6881)]
+    [TestCase(8080)]
+    [TestCase(65535)]
+    public void ParseAnnouncement_should_accept_valid_ports_within_bounds(int port)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(new Torrent { InfoHash = "0123456789abcdef0123456789abcdef01234567", IsPrivate = false });
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: {port}\r\nInfohash: 0123456789abcdef0123456789abcdef01234567\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            "0123456789abcdef0123456789abcdef01234567",
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Port == port),
+            "lpd");
+    }
+
+    [Test]
+    public void BuildAnnouncement_with_ipv6_host_header_should_format_correctly()
+    {
+        var hash = "0123456789abcdef0123456789abcdef01234567";
+        var bytes = LocalPeerDiscovery.BuildAnnouncement(hash, 6881, "testcookie", "[ff15::efc0:988f]:6771");
+        var message = Encoding.ASCII.GetString(bytes);
+
+        Assert.That(message, Does.StartWith("BT-SEARCH * HTTP/1.1\r\n"));
+        Assert.That(message, Does.Contain("Host: [ff15::efc0:988f]:6771\r\n"));
+        Assert.That(message, Does.Contain("Port: 6881\r\n"));
+        Assert.That(message, Does.Contain($"Infohash: {hash}\r\n"));
+        Assert.That(message, Does.Contain("cookie: testcookie\r\n"));
+        Assert.That(message, Does.EndWith("\r\n\r\n"));
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_parse_announcement_with_whitespace_and_custom_host()
+    {
+        var hash = "0123456789abcdef0123456789abcdef01234567";
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash(hash).Returns(new Torrent { InfoHash = hash, IsPrivate = false });
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\n  Host: [ff15::efc0:988f]:6771\r\n  Port: 6881\r\n  Infohash: {hash}\r\n  cookie: foreign\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("fe80::1"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            hash,
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == "fe80::1" && peers.Single().Port == 6881),
+            "lpd");
     }
 }
