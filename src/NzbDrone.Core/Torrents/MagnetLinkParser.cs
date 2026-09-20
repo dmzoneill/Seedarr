@@ -1,10 +1,20 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Web;
+using NzbDrone.Core.WebSeeds;
 
 namespace NzbDrone.Core.Torrents;
 
-public record ParsedMagnetLink(string InfoHash, string Name, string[] Trackers, string InfoHashV2 = null);
+public record ParsedMagnetLink(string InfoHash, string Name, string[] Trackers, string InfoHashV2 = null)
+{
+    public List<string> WebSeeds { get; set; } = new();
+    public List<string> UrlList
+    {
+        get => WebSeeds;
+        set => WebSeeds = value;
+    }
+}
 
 public static class MagnetLinkParser
 {
@@ -96,7 +106,24 @@ public static class MagnetLinkParser
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .ToArray() ?? Array.Empty<string>();
 
-        return new ParsedMagnetLink(infoHashV1, displayName, trackers, infoHashV2);
+        var rawWebSeeds = parameters.GetValues("ws");
+        var webSeeds = new List<string>();
+        if (rawWebSeeds != null)
+        {
+            foreach (var rawWs in rawWebSeeds)
+            {
+                if (WebSeedUrlResolver.IsValidWebSeedUrl(rawWs, out var validUrl) &&
+                    !webSeeds.Contains(validUrl, StringComparer.OrdinalIgnoreCase))
+                {
+                    webSeeds.Add(validUrl);
+                }
+            }
+        }
+
+        return new ParsedMagnetLink(infoHashV1, displayName, trackers, infoHashV2)
+        {
+            WebSeeds = webSeeds
+        };
     }
 
     public static byte[] Base32Decode(string input)

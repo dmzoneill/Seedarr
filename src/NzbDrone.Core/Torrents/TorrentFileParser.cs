@@ -7,6 +7,7 @@ using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;
 using NzbDrone.Core.Exceptions;
+using NzbDrone.Core.WebSeeds;
 
 namespace NzbDrone.Core.Torrents;
 
@@ -29,6 +30,12 @@ public class ParsedTorrent
     public List<ParsedTorrentFile> Files { get; set; }
     public List<string> HttpSeeds { get; set; } = new();
     public List<string> UrlList { get; set; } = new();
+    public List<string> WebSeeds
+    {
+        get => UrlList;
+        set => UrlList = value;
+    }
+
     public Dictionary<string, byte[]> PieceLayers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public byte[] Pieces { get; set; }
 }
@@ -69,6 +76,11 @@ public class TorrentFileParser : ITorrentFileParser
     public TorrentFileParser()
     {
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public static string ResolveWebSeedUrl(string baseUrl, string torrentName, string relativeFilePath = null)
+    {
+        return WebSeedUrlResolver.ResolveWebSeedUrl(baseUrl, torrentName, relativeFilePath);
     }
 
     public ParsedTorrent Parse(string filePath)
@@ -586,20 +598,32 @@ public class TorrentFileParser : ITorrentFileParser
         if (dict[key] is BString bString)
         {
             var url = DecodeBString(bString)?.Trim();
-            if (!string.IsNullOrWhiteSpace(url) && !target.Contains(url, StringComparer.OrdinalIgnoreCase))
+            if (WebSeedUrlResolver.IsValidWebSeedUrl(url, out var validUrl) && !target.Contains(validUrl, StringComparer.OrdinalIgnoreCase))
             {
-                target.Add(url);
+                target.Add(validUrl);
             }
         }
         else if (dict[key] is BList bList)
         {
-            foreach (var item in bList.OfType<BString>())
+            ExtractUrlsFromList(bList, target);
+        }
+    }
+
+    private static void ExtractUrlsFromList(BList bList, List<string> target)
+    {
+        foreach (var item in bList)
+        {
+            if (item is BString itemStr)
             {
-                var url = DecodeBString(item)?.Trim();
-                if (!string.IsNullOrWhiteSpace(url) && !target.Contains(url, StringComparer.OrdinalIgnoreCase))
+                var url = DecodeBString(itemStr)?.Trim();
+                if (WebSeedUrlResolver.IsValidWebSeedUrl(url, out var validUrl) && !target.Contains(validUrl, StringComparer.OrdinalIgnoreCase))
                 {
-                    target.Add(url);
+                    target.Add(validUrl);
                 }
+            }
+            else if (item is BList nestedList)
+            {
+                ExtractUrlsFromList(nestedList, target);
             }
         }
     }
