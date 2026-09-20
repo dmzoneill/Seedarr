@@ -39,6 +39,7 @@ public interface IFastExtensionHandler
     FastMessage Deserialize(PeerMessage message);
     void HandleMessage(PeerConnection connection, PeerMessage message, int pieceCount);
     HashSet<int> GetAllowedFastSet(PeerConnection connection);
+    HashSet<int> GetRemoteAllowedFastSet(PeerConnection connection);
     bool IsFastPeer(PeerConnection connection);
     void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll = true);
     void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll, bool hasNone);
@@ -52,7 +53,8 @@ public class FastExtensionHandler : IFastExtensionHandler
 {
     private const int DefaultFastSetSize = 10;
 
-    private readonly Dictionary<string, HashSet<int>> _fastSets = new();
+    private readonly Dictionary<string, HashSet<int>> _localAllowedFastSets = new();
+    private readonly Dictionary<string, HashSet<int>> _remoteAllowedFastSets = new();
     private readonly HashSet<string> _fastPeers = new();
     private readonly object _lock = new();
     private readonly IEventAggregator _eventAggregator;
@@ -337,7 +339,22 @@ public class FastExtensionHandler : IFastExtensionHandler
 
         lock (_lock)
         {
-            if (_fastSets.TryGetValue(key, out var set))
+            if (_localAllowedFastSets.TryGetValue(key, out var set))
+            {
+                return new HashSet<int>(set);
+            }
+        }
+
+        return new HashSet<int>();
+    }
+
+    public HashSet<int> GetRemoteAllowedFastSet(PeerConnection connection)
+    {
+        var key = PeerKey(connection);
+
+        lock (_lock)
+        {
+            if (_remoteAllowedFastSets.TryGetValue(key, out var set))
             {
                 return new HashSet<int>(set);
             }
@@ -364,7 +381,7 @@ public class FastExtensionHandler : IFastExtensionHandler
         lock (_lock)
         {
             _fastPeers.Add(key);
-            _fastSets[key] = fastSet;
+            _localAllowedFastSets[key] = fastSet;
         }
 
         _logger.Debug("Registered fast peer {0} with {1} allowed-fast pieces", connection.RemoteIp, fastSet.Count);
@@ -382,7 +399,8 @@ public class FastExtensionHandler : IFastExtensionHandler
         lock (_lock)
         {
             _fastPeers.Remove(key);
-            _fastSets.Remove(key);
+            _localAllowedFastSets.Remove(key);
+            _remoteAllowedFastSets.Remove(key);
         }
     }
 
@@ -447,10 +465,10 @@ public class FastExtensionHandler : IFastExtensionHandler
 
         lock (_lock)
         {
-            if (!_fastSets.TryGetValue(key, out var set))
+            if (!_remoteAllowedFastSets.TryGetValue(key, out var set))
             {
                 set = new HashSet<int>();
-                _fastSets[key] = set;
+                _remoteAllowedFastSets[key] = set;
             }
 
             set.Add(pieceIndex);

@@ -333,15 +333,27 @@ public class FastExtensionHandlerTest
     }
 
     [Test]
+    public void GetRemoteAllowedFastSet_should_return_empty_for_unregistered_peer()
+    {
+        using var connection = CreateTestConnection();
+
+        var result = _handler.GetRemoteAllowedFastSet(connection);
+
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
     public void UnregisterPeer_should_remove_peer()
     {
         using var connection = CreateTestConnection();
         _handler.RegisterFastPeer(connection, _infoHash, 1000, 10);
+        _handler.HandleMessage(connection, _handler.SerializeAllowedFast(42), 1000);
 
         _handler.UnregisterPeer(connection);
 
         Assert.That(_handler.IsFastPeer(connection), Is.False);
         Assert.That(_handler.GetAllowedFastSet(connection), Is.Empty);
+        Assert.That(_handler.GetRemoteAllowedFastSet(connection), Is.Empty);
     }
 
     [Test]
@@ -475,8 +487,9 @@ public class FastExtensionHandlerTest
 
         _handler.HandleMessage(connection, message, 100);
 
-        var set = _handler.GetAllowedFastSet(connection);
-        Assert.That(set, Does.Contain(77));
+        var remoteSet = _handler.GetRemoteAllowedFastSet(connection);
+        Assert.That(remoteSet, Does.Contain(77));
+        Assert.That(_handler.GetAllowedFastSet(connection), Does.Not.Contain(77));
     }
 
     [Test]
@@ -501,11 +514,12 @@ public class FastExtensionHandlerTest
         _handler.HandleMessage(connection, _handler.SerializeAllowedFast(20), 100);
         _handler.HandleMessage(connection, _handler.SerializeAllowedFast(30), 100);
 
-        var set = _handler.GetAllowedFastSet(connection);
+        var set = _handler.GetRemoteAllowedFastSet(connection);
         Assert.That(set.Count, Is.EqualTo(3));
         Assert.That(set, Does.Contain(10));
         Assert.That(set, Does.Contain(20));
         Assert.That(set, Does.Contain(30));
+        Assert.That(_handler.GetAllowedFastSet(connection), Is.Empty);
     }
 
     [Test]
@@ -527,6 +541,7 @@ public class FastExtensionHandlerTest
 
         var set = _handler.GetAllowedFastSet(connection);
         Assert.That(set, Is.Not.Empty);
+        Assert.That(_handler.GetRemoteAllowedFastSet(connection), Is.Empty);
     }
 
     [Test]
@@ -537,6 +552,19 @@ public class FastExtensionHandlerTest
 
         var set1 = _handler.GetAllowedFastSet(connection);
         var set2 = _handler.GetAllowedFastSet(connection);
+
+        Assert.That(set1, Is.EqualTo(set2));
+        Assert.That(ReferenceEquals(set1, set2), Is.False);
+    }
+
+    [Test]
+    public void GetRemoteAllowedFastSet_should_return_copy_not_reference()
+    {
+        using var connection = CreateTestConnection();
+        _handler.HandleMessage(connection, _handler.SerializeAllowedFast(42), 1000);
+
+        var set1 = _handler.GetRemoteAllowedFastSet(connection);
+        var set2 = _handler.GetRemoteAllowedFastSet(connection);
 
         Assert.That(set1, Is.EqualTo(set2));
         Assert.That(ReferenceEquals(set1, set2), Is.False);
@@ -707,22 +735,24 @@ public class FastExtensionHandlerTest
     }
 
     [Test]
-    public void HandleMessage_AllowedFast_should_augment_set_of_already_registered_fast_peer()
+    public void HandleMessage_AllowedFast_should_not_augment_local_fast_set_preventing_choke_bypass()
     {
         using var connection = CreateTestConnection();
 
         // Seed with 1 allowed-fast piece via RegisterFastPeer
         _handler.RegisterFastPeer(connection, _infoHash, 1000, 1);
-        var initialCount = _handler.GetAllowedFastSet(connection).Count;
+        var initialLocalSet = _handler.GetAllowedFastSet(connection);
 
-        // Inject a known piece via HandleMessage — tests the "key already exists in _fastSets"
-        // branch inside RecordAllowedFastPiece when called after RegisterFastPeer
-        const int extraPiece = 999;
-        _handler.HandleMessage(connection, _handler.SerializeAllowedFast(extraPiece), 1000);
+        // Inject an inbound piece via HandleMessage — simulating a remote peer trying to bypass choke
+        const int forgedPiece = 999;
+        _handler.HandleMessage(connection, _handler.SerializeAllowedFast(forgedPiece), 1000);
 
-        var finalSet = _handler.GetAllowedFastSet(connection);
-        Assert.That(finalSet, Does.Contain(extraPiece));
-        Assert.That(finalSet.Count, Is.GreaterThanOrEqualTo(1));
+        var finalLocalSet = _handler.GetAllowedFastSet(connection);
+        Assert.That(finalLocalSet, Does.Not.Contain(forgedPiece));
+        Assert.That(finalLocalSet, Is.EquivalentTo(initialLocalSet));
+
+        var remoteSet = _handler.GetRemoteAllowedFastSet(connection);
+        Assert.That(remoteSet, Does.Contain(forgedPiece));
     }
 
     [Test]

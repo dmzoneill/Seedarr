@@ -84,6 +84,8 @@ public class FastExtensionTest
         Assert.That(connection.RemoteAllowedFastPieces.Count, Is.EqualTo(1));
         Assert.That(connection.AllowedFastPieces, Contains.Item(15));
         Assert.That(connection.AllowedFastPieces.Count, Is.EqualTo(1));
+        Assert.That(_handler.GetRemoteAllowedFastSet(connection), Contains.Item(15));
+        Assert.That(_handler.GetAllowedFastSet(connection), Does.Not.Contain(15));
 
         // Add another allowed fast piece
         var message2 = _handler.SerializeAllowedFast(27);
@@ -93,6 +95,24 @@ public class FastExtensionTest
         Assert.That(connection.RemoteAllowedFastPieces.Count, Is.EqualTo(2));
         Assert.That(connection.AllowedFastPieces, Contains.Item(27));
         Assert.That(connection.AllowedFastPieces.Count, Is.EqualTo(2));
+        Assert.That(_handler.GetRemoteAllowedFastSet(connection), Contains.Item(27));
+        Assert.That(_handler.GetAllowedFastSet(connection), Does.Not.Contain(27));
+    }
+
+    [Test]
+    public void RegisterFastPeer_should_populate_local_allowed_fast_set_correctly()
+    {
+        using var connection = CreateConnection();
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xAB);
+
+        _handler.RegisterFastPeer(connection, infoHash, 100, 5);
+
+        var localSet = _handler.GetAllowedFastSet(connection);
+        var remoteSet = _handler.GetRemoteAllowedFastSet(connection);
+
+        Assert.That(localSet.Count, Is.EqualTo(5));
+        Assert.That(remoteSet, Is.Empty);
     }
 
     [Test]
