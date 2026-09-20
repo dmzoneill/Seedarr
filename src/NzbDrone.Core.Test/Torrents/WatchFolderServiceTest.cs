@@ -826,6 +826,206 @@ public class WatchFolderServiceTest
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
     }
 
+    [Test]
+    public void PeriodicScan_should_skip_invalid_and_corrupt_quarantined_files()
+    {
+        var watchDir = Path.Combine(_tempDir, "quarantine-scan-watch");
+        Directory.CreateDirectory(watchDir);
+
+        var invalidTorrent = Path.Combine(watchDir, "broken.torrent.invalid");
+        var corruptTorrent = Path.Combine(watchDir, "broken2.torrent.corrupt");
+
+        File.WriteAllText(invalidTorrent, "corrupt data");
+        File.WriteAllText(corruptTorrent, "corrupt data");
+
+        var method = typeof(WatchFolderService).GetMethod("PeriodicScan",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { watchDir });
+
+        _parser.DidNotReceive().Parse(Arg.Any<string>());
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ProcessTorrentFile_when_torrent_exists_and_delete_after_add_true_merges_trackers_and_deletes_file()
+    {
+        _configService.WatchFolderDeleteAddedTorrents.Returns(true);
+
+        var torrentPath = Path.Combine(_tempDir, "duplicate_delete.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "DuplicateTorrent",
+            InfoHash = "duphash123",
+            TotalSize = 2048,
+            PieceLength = 1024,
+            PieceCount = 2,
+            AnnounceList = new List<List<string>>
+            {
+                new() { "http://tracker-existing.com/announce", "http://tracker-new.com/announce" }
+            },
+            Files = new List<ParsedTorrentFile>()
+        };
+
+        var existingTorrent = new Torrent
+        {
+            Id = 77,
+            Name = "DuplicateTorrent",
+            InfoHash = "duphash123"
+        };
+
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.GetByInfoHash("duphash123").Returns(existingTorrent);
+        _trackerEntryService.GetByTorrentId(77).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 77, Url = "http://tracker-existing.com/announce", Tier = 0 }
+        });
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, _tempDir });
+
+        // New tracker merged into existing torrent
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t =>
+            t.TorrentId == 77 && t.Url == "http://tracker-new.com/announce"));
+        _trackerEntryService.DidNotReceive().Add(Arg.Is<TrackerEntry>(t =>
+            t.Url == "http://tracker-existing.com/announce"));
+
+        // Torrent not re-added
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+
+        // File deleted from watch folder to prevent infinite loop
+        Assert.That(File.Exists(torrentPath), Is.False);
+    }
+
+    [Test]
+    public void ProcessTorrentFile_when_torrent_exists_and_delete_after_add_false_merges_trackers_and_marks_imported()
+    {
+        _configService.WatchFolderDeleteAddedTorrents.Returns(false);
+
+        var torrentPath = Path.Combine(_tempDir, "duplicate_imported.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "DuplicateTorrent",
+            InfoHash = "duphash456",
+            TotalSize = 2048,
+            PieceLength = 1024,
+            PieceCount = 2,
+            AnnounceUrl = "http://tracker-new.com/announce",
+            Files = new List<ParsedTorrentFile>()
+        };
+
+        var existingTorrent = new Torrent
+        {
+            Id = 88,
+            Name = "DuplicateTorrent",
+            InfoHash = "duphash456"
+        };
+
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.GetByInfoHash("duphash456").Returns(existingTorrent);
+        _trackerEntryService.GetByTorrentId(88).Returns(new List<TrackerEntry>());
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, _tempDir });
+
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t =>
+            t.TorrentId == 88 && t.Url == "http://tracker-new.com/announce" && t.Tier == 0));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+
+        Assert.That(File.Exists(torrentPath), Is.False);
+        Assert.That(File.Exists(torrentPath + ".imported"), Is.True);
+    }
+
+    [Test]
+    public void ProcessMagnetFile_when_torrent_exists_and_delete_after_add_true_merges_trackers_and_deletes_file()
+    {
+        _configService.WatchFolderDeleteAddedTorrents.Returns(true);
+
+        var magnetPath = Path.Combine(_tempDir, "duplicate.magnet");
+        var magnetUri = "magnet:?xt=urn:btih:fedcba0987654321fedcba0987654321fedcba09&dn=ExistingMagnet&tr=http%3A%2F%2Ftracker-new.com%2Fannounce";
+        File.WriteAllText(magnetPath, magnetUri);
+
+        var existingTorrent = new Torrent
+        {
+            Id = 99,
+            Name = "ExistingMagnet",
+            InfoHash = "fedcba0987654321fedcba0987654321fedcba09"
+        };
+
+        _torrentService.GetByInfoHash("fedcba0987654321fedcba0987654321fedcba09").Returns(existingTorrent);
+        _trackerEntryService.GetByTorrentId(99).Returns(new List<TrackerEntry>());
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessMagnetFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { magnetPath, _tempDir });
+
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t =>
+            t.TorrentId == 99 && t.Url == "http://tracker-new.com/announce"));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+
+        Assert.That(File.Exists(magnetPath), Is.False);
+    }
+
+    [Test]
+    public void QuarantineFile_renames_corrupted_file_to_specified_extension()
+    {
+        var corruptPath = Path.Combine(_tempDir, "corrupted_file.torrent");
+        File.WriteAllText(corruptPath, "not valid torrent bytes");
+
+        _subject.QuarantineFile(corruptPath, "invalid");
+
+        Assert.That(File.Exists(corruptPath), Is.False);
+        Assert.That(File.Exists(corruptPath + ".invalid"), Is.True);
+    }
+
+    [Test]
+    public void ProcessTorrentFile_calculates_and_persists_piece_offset_and_piece_count()
+    {
+        var torrentPath = Path.Combine(_tempDir, "piece_calc.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "PieceCalcTorrent",
+            InfoHash = "piececalc123",
+            TotalSize = 4000,
+            PieceCount = 4,
+            PieceLength = 1000,
+            Files = new List<ParsedTorrentFile>
+            {
+                new() { Path = "folder/file1.bin", Size = 2000 },
+                new() { Path = "folder/file2.bin", Size = 1500 },
+                new() { Path = "folder/file3.bin", Size = 500 }
+            }
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 105, Name = "PieceCalcTorrent" });
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, null });
+
+        // File 1: 0..2000 -> pieces [0, 1] => offset 0, count 2
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 105 && f.Path == "folder/file1.bin" && f.Size == 2000 &&
+            f.PieceOffset == 0 && f.PieceCount == 2));
+
+        // File 2: 2000..3500 -> pieces [2, 3] => offset 2, count 2
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 105 && f.Path == "folder/file2.bin" && f.Size == 1500 &&
+            f.PieceOffset == 2 && f.PieceCount == 2));
+
+        // File 3: 3500..4000 -> piece [3] => offset 3, count 1
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 105 && f.Path == "folder/file3.bin" && f.Size == 500 &&
+            f.PieceOffset == 3 && f.PieceCount == 1));
+    }
+
     private static void CreateDummyTorrentFile(string path)
     {
         var pieces = new byte[20];

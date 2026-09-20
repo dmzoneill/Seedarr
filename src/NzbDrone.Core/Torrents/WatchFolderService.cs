@@ -223,7 +223,9 @@ public class WatchFolderService : BackgroundService
         }
 
         if (filePath.EndsWith(".imported", StringComparison.OrdinalIgnoreCase) ||
-            filePath.EndsWith(".failed", StringComparison.OrdinalIgnoreCase))
+            filePath.EndsWith(".failed", StringComparison.OrdinalIgnoreCase) ||
+            filePath.EndsWith(".invalid", StringComparison.OrdinalIgnoreCase) ||
+            filePath.EndsWith(".corrupt", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -460,6 +462,20 @@ public class WatchFolderService : BackgroundService
 
             torrent.Status = initialStatus;
 
+            var existing = _torrentService.GetByInfoHash(parsed.InfoHash);
+            if (existing != null)
+            {
+                _logger.Info("Torrent already exists with info hash {0}, merging trackers: {1}", parsed.InfoHash, fileName);
+                MergeTrackerEntries(existing.Id, parsed);
+                if (string.IsNullOrWhiteSpace(existing.TrackerUrl) && !string.IsNullOrWhiteSpace(parsed.AnnounceUrl))
+                {
+                    existing.TrackerUrl = parsed.AnnounceUrl;
+                    _torrentService.Update(existing);
+                }
+                HandlePostImport(filePath, deleteAfterAdd);
+                return;
+            }
+
             if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
             {
                 _logger.Debug("Torrent already exists, skipping: {0}", fileName);
@@ -526,6 +542,15 @@ public class WatchFolderService : BackgroundService
             var deleteAfterAdd = _configService.WatchFolderDeleteAddedTorrents;
 
             var primaryHash = parsed.InfoHash ?? parsed.InfoHashV2;
+            var existing = _torrentService.GetByInfoHash(primaryHash);
+            if (existing != null)
+            {
+                _logger.Info("Torrent already exists with info hash {0}, merging trackers: {1}", primaryHash, fileName);
+                MergeTrackerEntriesFromMagnet(existing.Id, parsed.Trackers);
+                HandlePostImport(filePath, deleteAfterAdd);
+                return;
+            }
+
             if (_torrentService.ExistsByInfoHash(primaryHash))
             {
                 _logger.Debug("Torrent already exists, skipping: {0}", fileName);
@@ -627,20 +652,105 @@ public class WatchFolderService : BackgroundService
         }
     }
 
-    private void MarkFileFailed(string filePath)
+    internal void QuarantineFile(string filePath, string extension = "failed")
     {
         try
         {
             if (File.Exists(filePath))
             {
-                var failedPath = $"{filePath}.failed";
-                File.Move(filePath, failedPath, overwrite: true);
-                _logger.Warn("Marked unparseable or corrupted file as failed: {0}", Path.GetFileName(failedPath));
+                var quarantinedPath = $"{filePath}.{extension}";
+                File.Move(filePath, quarantinedPath, overwrite: true);
+                _logger.Warn("Quarantined unparseable or corrupted file as {0}: {1}", extension, Path.GetFileName(quarantinedPath));
             }
         }
         catch (Exception ex)
         {
-            _logger.Warn(ex, "Failed to rename file to .failed: {0}", filePath);
+            _logger.Warn(ex, "Failed to quarantine file to .{0}: {1}", extension, filePath);
+        }
+    }
+
+    private void MarkFileFailed(string filePath)
+    {
+        QuarantineFile(filePath, "failed");
+    }
+
+    private void MergeTrackerEntries(int torrentId, ParsedTorrent parsed)
+    {
+        if (_trackerEntryService == null)
+        {
+            return;
+        }
+
+        var existingTrackers = _trackerEntryService.GetByTorrentId(torrentId) ?? new List<TrackerEntry>();
+        var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
+
+        if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
+        {
+            for (var tier = 0; tier < parsed.AnnounceList.Count; tier++)
+            {
+                foreach (var url in parsed.AnnounceList[tier])
+                {
+                    if (string.IsNullOrWhiteSpace(url) || !existingUrls.Add(url))
+                    {
+                        continue;
+                    }
+
+                    _trackerEntryService.Add(new TrackerEntry
+                    {
+                        TorrentId = torrentId,
+                        Url = url,
+                        Tier = tier,
+                        Status = TrackerStatus.Unknown,
+                        Enabled = true,
+                        AnnounceInterval = _configService?.AnnounceIntervalSeconds ?? 1800,
+                        MinAnnounceInterval = _configService?.MinAnnounceIntervalSeconds ?? 300
+                    });
+                }
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(parsed.AnnounceUrl) && existingUrls.Add(parsed.AnnounceUrl))
+        {
+            _trackerEntryService.Add(new TrackerEntry
+            {
+                TorrentId = torrentId,
+                Url = parsed.AnnounceUrl,
+                Tier = 0,
+                Status = TrackerStatus.Unknown,
+                Enabled = true,
+                AnnounceInterval = _configService?.AnnounceIntervalSeconds ?? 1800,
+                MinAnnounceInterval = _configService?.MinAnnounceIntervalSeconds ?? 300
+            });
+        }
+    }
+
+    private void MergeTrackerEntriesFromMagnet(int torrentId, string[] trackers)
+    {
+        if (_trackerEntryService == null || trackers == null || trackers.Length == 0)
+        {
+            return;
+        }
+
+        var existingTrackers = _trackerEntryService.GetByTorrentId(torrentId) ?? new List<TrackerEntry>();
+        var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
+
+        var tier = existingTrackers.Count > 0 ? existingTrackers.Max(t => t.Tier) + 1 : 0;
+        foreach (var url in trackers)
+        {
+            if (string.IsNullOrWhiteSpace(url) || !existingUrls.Add(url))
+            {
+                continue;
+            }
+
+            _trackerEntryService.Add(new TrackerEntry
+            {
+                TorrentId = torrentId,
+                Url = url,
+                Tier = tier++,
+                Status = TrackerStatus.Unknown,
+                Enabled = true,
+                AnnounceInterval = _configService?.AnnounceIntervalSeconds ?? 1800,
+                MinAnnounceInterval = _configService?.MinAnnounceIntervalSeconds ?? 300
+            });
         }
     }
 
@@ -677,13 +787,24 @@ public class WatchFolderService : BackgroundService
     {
         if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)
         {
+            var pieceLength = parsed.PieceLength > 0 ? (long)parsed.PieceLength : 0L;
+            var runningByteOffset = 0L;
+
             foreach (var file in parsed.Files)
             {
+                var (pieceOffset, pieceCount) = TorrentPieceCalculator.CalculateForFile(runningByteOffset, file.Size, pieceLength);
+                if (pieceLength > 0)
+                {
+                    runningByteOffset += file.Size;
+                }
+
                 _torrentFileService.Add(new TorrentFile
                 {
                     TorrentId = torrentId,
                     Path = file.Path,
                     Size = file.Size,
+                    PieceOffset = pieceOffset,
+                    PieceCount = pieceCount,
                     IsPaddingFile = file.IsPaddingFile
                 });
             }

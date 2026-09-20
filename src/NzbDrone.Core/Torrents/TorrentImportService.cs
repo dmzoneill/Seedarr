@@ -113,12 +113,23 @@ public class TorrentImportService : ITorrentImportService
         var filesToAdd = new List<TorrentFile>();
         if (parsed.Files != null && parsed.Files.Count > 0)
         {
+            var pieceLength = parsed.PieceLength > 0 ? (long)parsed.PieceLength : 0L;
+            var runningByteOffset = 0L;
+
             foreach (var f in parsed.Files)
             {
+                var (pieceOffset, pieceCount) = TorrentPieceCalculator.CalculateForFile(runningByteOffset, f.Size, pieceLength);
+                if (pieceLength > 0)
+                {
+                    runningByteOffset += f.Size;
+                }
+
                 filesToAdd.Add(new TorrentFile
                 {
                     Path = f.Path,
                     Size = f.Size,
+                    PieceOffset = pieceOffset,
+                    PieceCount = pieceCount,
                     IsPaddingFile = f.IsPaddingFile
                 });
             }
