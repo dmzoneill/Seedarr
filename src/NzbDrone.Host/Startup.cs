@@ -179,7 +179,9 @@ public class Startup
             options.Cookie.Name = "Seedarr_Auth";
             options.Cookie.HttpOnly = true;
             options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
-            options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
+            options.Cookie.SecurePolicy = configFileProvider.EnableSsl
+                ? Microsoft.AspNetCore.Http.CookieSecurePolicy.Always
+                : Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
             var urlBase = configFileProvider?.UrlBase?.Trim();
             options.Cookie.Path = string.IsNullOrWhiteSpace(urlBase) ? "/" : (urlBase.StartsWith('/') ? urlBase : "/" + urlBase);
             options.ExpireTimeSpan = TimeSpan.FromDays(30);

@@ -128,4 +128,24 @@ public class BasicAuthenticationHandlerTest
         Assert.That(result.Succeeded, Is.False);
         Assert.That(result.Failure?.Message, Is.EqualTo("Invalid Basic authentication credentials."));
     }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenPasswordDifferentLength_FailsGracefully()
+    {
+        _configFileProvider.ApiKey.Returns("master-api-key-configured");
+
+        // Shorter password
+        var shortContext = new DefaultHttpContext();
+        var shortCreds = Convert.ToBase64String(Encoding.UTF8.GetBytes("admin:short"));
+        shortContext.Request.Headers["Authorization"] = $"Basic {shortCreds}";
+        var shortResult = await AuthenticateAsync(shortContext);
+        Assert.That(shortResult.Succeeded, Is.False);
+
+        // Longer password
+        var longContext = new DefaultHttpContext();
+        var longCreds = Convert.ToBase64String(Encoding.UTF8.GetBytes("admin:master-api-key-configured-extra-long-suffix"));
+        longContext.Request.Headers["Authorization"] = $"Basic {longCreds}";
+        var longResult = await AuthenticateAsync(longContext);
+        Assert.That(longResult.Succeeded, Is.False);
+    }
 }

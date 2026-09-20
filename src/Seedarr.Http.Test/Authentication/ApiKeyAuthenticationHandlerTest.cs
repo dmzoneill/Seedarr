@@ -126,6 +126,24 @@ public class ApiKeyAuthenticationHandlerTest
     }
 
     [Test]
+    public async Task HandleAuthenticateAsync_WhenApiKeyDifferentLength_FailsGracefullyWithoutTimingLeak()
+    {
+        _configFileProvider.ApiKey.Returns("configured-secret-key-12345");
+
+        // Shorter key
+        var shortContext = new DefaultHttpContext();
+        shortContext.Request.Headers["X-Api-Key"] = "short";
+        var shortResult = await AuthenticateAsync(shortContext);
+        Assert.That(shortResult.Succeeded, Is.False);
+
+        // Longer key
+        var longContext = new DefaultHttpContext();
+        longContext.Request.Headers["X-Api-Key"] = "configured-secret-key-12345-much-longer-key-extension";
+        var longResult = await AuthenticateAsync(longContext);
+        Assert.That(longResult.Succeeded, Is.False);
+    }
+
+    [Test]
     public async Task HandleAuthenticateAsync_WhenAuthenticationDisabled_SucceedsWithoutKey()
     {
         _configFileProvider.AuthenticationEnabled.Returns(false);
