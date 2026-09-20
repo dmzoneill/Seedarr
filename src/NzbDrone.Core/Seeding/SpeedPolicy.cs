@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Bandwidth;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
@@ -105,6 +106,9 @@ public class SpeedPolicy : ISpeedPolicy,
     private readonly Logger _logger;
     private readonly IPieceBoundaryMasker _pieceBoundaryMasker;
     private readonly ITorrentFileService _torrentFileService;
+    private readonly ConcurrentDictionary<int, double> _downloadFractionalTokens = new();
+    private readonly ConcurrentDictionary<int, double> _uploadFractionalTokens = new();
+    public IBandwidthLimiter BandwidthLimiter { get; set; }
 
     public SpeedPolicy(
         ISpeedDistributionManager distributionManager,
@@ -119,8 +123,10 @@ public class SpeedPolicy : ISpeedPolicy,
         ICategoryService categoryService = null,
         ITagService tagService = null,
         IPieceBoundaryMasker pieceBoundaryMasker = null,
-        ITorrentFileService torrentFileService = null)
+        ITorrentFileService torrentFileService = null,
+        IBandwidthLimiter bandwidthLimiter = null)
     {
+        BandwidthLimiter = bandwidthLimiter ?? NzbDrone.Core.Bandwidth.BandwidthLimiter.Instance;
         _distributionManager = distributionManager;
         _speedScheduler = speedScheduler;
         _configService = configService;
@@ -161,6 +167,13 @@ public class SpeedPolicy : ISpeedPolicy,
 
     public void ProcessDownloading(List<Torrent> torrents, SpeedLimits limits, TimeSpan tickInterval)
     {
+        if (BandwidthLimiter != null && limits != null)
+        {
+            BandwidthLimiter.SetGlobalLimits(
+                limits.MaxUploadSpeed == SpeedLimits.Unlimited ? 0 : limits.MaxUploadSpeed,
+                limits.MaxDownloadSpeed == SpeedLimits.Unlimited ? 0 : limits.MaxDownloadSpeed);
+        }
+
         var stoppedIndices = _stopPolicy.SelectDownloadStoppedTorrents(torrents);
         var priorityWeights = GetPriorityWeights(torrents);
         var variationMin = _configService.SpeedVariationMin;
@@ -208,8 +221,27 @@ public class SpeedPolicy : ISpeedPolicy,
                 bytesPerSecond = Math.Min(bytesPerSecond, perTorrentLimitBps);
             }
 
+            if (BandwidthLimiter != null && !string.IsNullOrEmpty(torrent.InfoHash))
+            {
+                var dlLimit = effectiveDlLimit > 0 ? (long)effectiveDlLimit * 1024 : 0;
+                var ulLimit = GetUploadLimit(torrent) > 0 ? (long)GetUploadLimit(torrent) * 1024 : 0;
+                BandwidthLimiter.SetTorrentLimits(torrent.InfoHash, ulLimit, dlLimit);
+            }
+
             var variationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
-            var bytesThisTick = (long)(bytesPerSecond * variationFactor * tickInterval.TotalSeconds);
+            var currentFraction = _downloadFractionalTokens.TryGetValue(torrent.Id, out var frac) ? frac : 0.0;
+            var rawBytes = (bytesPerSecond * variationFactor * tickInterval.TotalSeconds) + currentFraction;
+            var bytesThisTick = (long)rawBytes;
+            _downloadFractionalTokens[torrent.Id] = rawBytes - bytesThisTick;
+
+            if (bytesPerSecond > 0)
+            {
+                var maxBurst = Math.Max(16384L, (long)Math.Round(bytesPerSecond * Math.Max(tickInterval.TotalSeconds * 2.0, 0.100)));
+                if (bytesThisTick > maxBurst)
+                {
+                    bytesThisTick = maxBurst;
+                }
+            }
 
             torrent.Downloaded += bytesThisTick;
 
@@ -223,6 +255,13 @@ public class SpeedPolicy : ISpeedPolicy,
 
     public void ProcessSeeding(List<Torrent> torrents, SpeedLimits limits, TimeSpan tickInterval)
     {
+        if (BandwidthLimiter != null && limits != null)
+        {
+            BandwidthLimiter.SetGlobalLimits(
+                limits.MaxUploadSpeed == SpeedLimits.Unlimited ? 0 : limits.MaxUploadSpeed,
+                limits.MaxDownloadSpeed == SpeedLimits.Unlimited ? 0 : limits.MaxDownloadSpeed);
+        }
+
         var seederActive = _random.NextDouble() < _configService.SeederUploadActivityProbability;
         var stoppedIndices = _stopPolicy.SelectStoppedTorrents(torrents);
         var variationMin = _configService.SpeedVariationMin;
@@ -353,8 +392,27 @@ public class SpeedPolicy : ISpeedPolicy,
                 }
                 else
                 {
+                    if (BandwidthLimiter != null && !string.IsNullOrEmpty(torrent.InfoHash))
+                    {
+                        var ulLimit = effectiveUlLimit > 0 ? (long)effectiveUlLimit * 1024 : 0;
+                        var dlLimit = GetDownloadLimit(torrent) > 0 ? (long)GetDownloadLimit(torrent) * 1024 : 0;
+                        BandwidthLimiter.SetTorrentLimits(torrent.InfoHash, ulLimit, dlLimit);
+                    }
+
                     var variationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
-                    uploadBytesThisTick = (long)(bytesPerSecond * variationFactor * tickInterval.TotalSeconds);
+                    var currentFraction = _uploadFractionalTokens.TryGetValue(torrent.Id, out var frac) ? frac : 0.0;
+                    var rawBytes = (bytesPerSecond * variationFactor * tickInterval.TotalSeconds) + currentFraction;
+                    uploadBytesThisTick = (long)rawBytes;
+                    _uploadFractionalTokens[torrent.Id] = rawBytes - uploadBytesThisTick;
+
+                    if (bytesPerSecond > 0)
+                    {
+                        var maxBurst = Math.Max(16384L, (long)Math.Round(bytesPerSecond * Math.Max(tickInterval.TotalSeconds * 2.0, 0.100)));
+                        if (uploadBytesThisTick > maxBurst)
+                        {
+                            uploadBytesThisTick = maxBurst;
+                        }
+                    }
                 }
             }
 
@@ -605,6 +663,8 @@ public class SpeedPolicy : ISpeedPolicy,
     public void ResetSeedingStartTime(int torrentId)
     {
         _seedingStartTimes.TryRemove(torrentId, out _);
+        _uploadFractionalTokens.TryRemove(torrentId, out _);
+        _downloadFractionalTokens.TryRemove(torrentId, out _);
     }
 
     public void Handle(TorrentStatusChangedEvent message)
