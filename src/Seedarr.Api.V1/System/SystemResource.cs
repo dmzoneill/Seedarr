@@ -157,4 +157,29 @@ public class SystemResource : RestResource
     /// Gets or sets the percentage of file descriptors currently in use, if bounded.
     /// </summary>
     public double? FileDescriptorUsagePercentage { get; set; }
+
+    /// <summary>
+    /// Gets or sets the instantaneous process CPU usage percentage (0-100%).
+    /// </summary>
+    public double CpuUsagePercentage { get; set; }
+
+    /// <summary>
+    /// Gets or sets the logical processor count available to the process.
+    /// </summary>
+    public int ProcessorCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the count of active threads within the process.
+    /// </summary>
+    public int ThreadCount { get; set; }
+
+    /// <summary>
+    /// Gets or sets the available thread pool worker threads.
+    /// </summary>
+    public int AvailableWorkerThreads { get; set; }
+
+    /// <summary>
+    /// Gets or sets the available thread pool I/O completion port threads.
+    /// </summary>
+    public int AvailableCompletionPortThreads { get; set; }
 }

@@ -21,6 +21,7 @@ import {
   ActivityIcon,
   InfoIcon,
   ErrorIcon,
+  CpuIcon,
 } from "./icons/UIIcons";
 import { useTranslation } from "../i18n";
 
@@ -126,6 +127,11 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
               )
             : "..."}
         </span>
+        {systemStatus?.cpuUsagePercentage != null && (
+          <span className="status-bar-item">
+            <CpuIcon size={14} /> CPU: {systemStatus.cpuUsagePercentage.toFixed(1)}%
+          </span>
+        )}
         <span
           className="status-bar-item"
           style={{ color: hasIssues ? "var(--danger)" : "var(--success)" }}
