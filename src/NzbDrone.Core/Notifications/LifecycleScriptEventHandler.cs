@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 
@@ -16,12 +17,14 @@ public class LifecycleScriptEventHandler :
     IHandle<HealthIssueEvent>,
     IHandle<FileMoveCompletedEvent>,
     IHandle<ApplicationUpdatedEvent>,
+    IHandle<ApplicationShutdownRequested>,
     IDisposable
 {
     private readonly ICustomScriptService _customScriptService;
     private readonly IConfigService _configService;
     private readonly IEventAggregator _eventAggregator;
     private readonly SemaphoreSlim _scriptSemaphore;
+    private readonly CancellationTokenSource _cts = new();
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public LifecycleScriptEventHandler(
@@ -38,6 +41,17 @@ public class LifecycleScriptEventHandler :
     }
 
     public SemaphoreSlim ScriptSemaphore => _scriptSemaphore;
+
+    public void Handle(ApplicationShutdownRequested message)
+    {
+        try
+        {
+            _cts.Cancel();
+        }
+        catch
+        {
+        }
+    }
 
     public void Handle(TorrentAddedEvent message)
     {
@@ -180,21 +194,34 @@ public class LifecycleScriptEventHandler :
 
     public Task ExecuteThrottledScriptAsync(string scriptPath, Torrent torrent, string eventType)
     {
-        if (string.IsNullOrWhiteSpace(scriptPath))
+        if (string.IsNullOrWhiteSpace(scriptPath) || _cts.IsCancellationRequested)
         {
             return Task.CompletedTask;
         }
 
         return Task.Run(async () =>
         {
-            await _scriptSemaphore.WaitAsync().ConfigureAwait(false);
             try
             {
+                await _scriptSemaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            try
+            {
+                if (_cts.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 var success = await _customScriptService.ExecuteScriptAsync(scriptPath, torrent, eventType).ConfigureAwait(false);
                 if (!success)
                 {
                     _logger.Warn("Custom lifecycle script '{0}' for event '{1}' failed or timed out.", scriptPath, eventType);
-                    if (!string.Equals(eventType, "OnHealthIssue", StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(eventType, "OnHealthIssue", StringComparison.OrdinalIgnoreCase) && !_cts.IsCancellationRequested)
                     {
                         _eventAggregator?.PublishEvent(new HealthIssueEvent(
                             torrent,
@@ -204,10 +231,14 @@ public class LifecycleScriptEventHandler :
                     }
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // graceful shutdown
+            }
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Exception while executing custom lifecycle script '{0}' for event '{1}'.", scriptPath, eventType);
-                if (!string.Equals(eventType, "OnHealthIssue", StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(eventType, "OnHealthIssue", StringComparison.OrdinalIgnoreCase) && !_cts.IsCancellationRequested)
                 {
                     _eventAggregator?.PublishEvent(new HealthIssueEvent(
                         torrent,
@@ -218,7 +249,13 @@ public class LifecycleScriptEventHandler :
             }
             finally
             {
-                _scriptSemaphore.Release();
+                try
+                {
+                    _scriptSemaphore.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
             }
         });
     }
@@ -271,6 +308,15 @@ public class LifecycleScriptEventHandler :
 
     public void Dispose()
     {
+        try
+        {
+            _cts.Cancel();
+        }
+        catch
+        {
+        }
+
+        _cts.Dispose();
         _scriptSemaphore?.Dispose();
     }
 }

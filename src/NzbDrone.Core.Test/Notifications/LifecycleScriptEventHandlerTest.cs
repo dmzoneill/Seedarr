@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Torrents;
@@ -297,5 +298,24 @@ public class LifecycleScriptEventHandlerTest
         await Task.Delay(100);
 
         await customScriptService.Received(1).ExecuteScriptAsync("/scripts/seeding_done.sh", torrent, "OnSeedGoalReached");
+    }
+
+    [Test]
+    public async Task ApplicationShutdownRequested_should_cancel_and_prevent_further_script_execution()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.OnDownloadCompleteScript.Returns("/scripts/done.sh");
+
+        var customScriptService = Substitute.For<ICustomScriptService>();
+        using var handler = new LifecycleScriptEventHandler(customScriptService, configService);
+
+        handler.Handle(new ApplicationShutdownRequested());
+
+        var torrent = new Torrent { Id = 10, Name = "ShutdownTest" };
+        handler.Handle(new TorrentDownloadCompletedEvent(torrent));
+
+        await Task.Delay(100);
+
+        await customScriptService.DidNotReceive().ExecuteScriptAsync(Arg.Any<string>(), Arg.Any<Torrent>(), Arg.Any<string>(), Arg.Any<string>());
     }
 }
