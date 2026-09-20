@@ -1,7 +1,58 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, createContext, useContext, useMemo, type ReactNode } from "react";
+import type { HubConnection } from "@microsoft/signalr";
+import { HubConnectionState } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSignalR } from "../api/signalr";
+import {
+  useSignalR,
+  getSignalRConnection,
+  reconnectSignalR,
+  subscribeToTorrent,
+  unsubscribeFromTorrent,
+  subscribeToChannel,
+  unsubscribeFromChannel,
+  type ConnectionStatus,
+} from "../api/signalr";
 import { useToast } from "../context/ToastContext";
+
+export {
+  subscribeToTorrent,
+  unsubscribeFromTorrent,
+  subscribeToChannel,
+  unsubscribeFromChannel,
+};
+
+export interface SignalRContextValue {
+  connection: HubConnection;
+  status: ConnectionStatus;
+  connected: boolean;
+  isReconnecting: boolean;
+  reconnect: () => Promise<void>;
+  subscribeToTorrent: (id: number) => Promise<void>;
+  unsubscribeFromTorrent: (id: number) => Promise<void>;
+  subscribeToChannel: (name: string) => Promise<void>;
+  unsubscribeFromChannel: (name: string) => Promise<void>;
+}
+
+export const SignalRContext = createContext<SignalRContextValue | null>(null);
+
+export function useSignalRContext(): SignalRContextValue {
+  const context = useContext(SignalRContext);
+  if (context) {
+    return context;
+  }
+  const conn = getSignalRConnection();
+  return {
+    connection: conn,
+    status: conn.state === HubConnectionState.Connected ? "connected" : "disconnected",
+    connected: conn.state === HubConnectionState.Connected,
+    isReconnecting: conn.state === HubConnectionState.Reconnecting,
+    reconnect: reconnectSignalR,
+    subscribeToTorrent,
+    unsubscribeFromTorrent,
+    subscribeToChannel,
+    unsubscribeFromChannel,
+  };
+}
 
 export const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   TorrentAdded: [["torrents"], ["trackerboost"]],
@@ -60,9 +111,19 @@ export function isHandledByNamedEvent(name?: string): boolean {
   );
 }
 
-export default function SignalRProvider() {
+export default function SignalRProvider({ children }: { children?: ReactNode } = {}) {
   const queryClient = useQueryClient();
-  const { connection, status } = useSignalR(queryClient);
+  const {
+    connection,
+    status,
+    connected,
+    isReconnecting,
+    reconnect,
+    subscribeToTorrent: subTorrent,
+    unsubscribeFromTorrent: unsubTorrent,
+    subscribeToChannel: subChannel,
+    unsubscribeFromChannel: unsubChannel,
+  } = useSignalR(queryClient);
   const { showToast } = useToast();
   const showToastRef = useRef(showToast);
   showToastRef.current = showToast;
@@ -223,22 +284,50 @@ export default function SignalRProvider() {
         ? "Real-time: reconnecting..."
         : "Real-time: disconnected";
 
+  const contextValue = useMemo<SignalRContextValue>(
+    () => ({
+      connection,
+      status,
+      connected,
+      isReconnecting,
+      reconnect,
+      subscribeToTorrent: subTorrent,
+      unsubscribeFromTorrent: unsubTorrent,
+      subscribeToChannel: subChannel,
+      unsubscribeFromChannel: unsubChannel,
+    }),
+    [
+      connection,
+      status,
+      connected,
+      isReconnecting,
+      reconnect,
+      subTorrent,
+      unsubTorrent,
+      subChannel,
+      unsubChannel,
+    ],
+  );
+
   return (
-    <span
-      title={title}
-      aria-label={title}
-      style={{
-        display: "inline-block",
-        width: 8,
-        height: 8,
-        borderRadius: "50%",
-        backgroundColor: dotColor,
-        position: "fixed",
-        bottom: 12,
-        right: 12,
-        zIndex: 9999,
-        transition: "background-color 0.3s ease",
-      }}
-    />
+    <SignalRContext.Provider value={contextValue}>
+      {children}
+      <span
+        title={title}
+        aria-label={title}
+        style={{
+          display: "inline-block",
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          backgroundColor: dotColor,
+          position: "fixed",
+          bottom: 12,
+          right: 12,
+          zIndex: 9999,
+          transition: "background-color 0.3s ease",
+        }}
+      />
+    </SignalRContext.Provider>
   );
 }

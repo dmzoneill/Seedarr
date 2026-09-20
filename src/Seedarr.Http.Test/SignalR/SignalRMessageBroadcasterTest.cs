@@ -28,6 +28,7 @@ public class SignalRMessageBroadcasterTest
 
         _hubContext.Clients.Returns(_hubClients);
         _hubClients.All.Returns(_clientProxy);
+        _hubClients.Group(Arg.Any<string>()).Returns(_clientProxy);
         _clientProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
@@ -235,5 +236,165 @@ public class SignalRMessageBroadcasterTest
 
         _clientProxy.Received(1).SendCoreAsync("trackerUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
         _clientProxy.Received(1).SendCoreAsync("trackerAnnounced", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void BroadcastToGroup_routes_to_specified_group_and_sends_receiveMessage_and_named_event()
+    {
+        var groupProxy = Substitute.For<IClientProxy>();
+        groupProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _hubClients.Group("custom-group").Returns(groupProxy);
+
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 5, Name = "Test" }
+        };
+
+        _broadcaster.BroadcastToGroup("custom-group", msg);
+
+        _hubClients.Received(1).Group("custom-group");
+        groupProxy.Received(1).SendCoreAsync("receiveMessage", Arg.Is<object[]>(args => args.Length == 1 && args[0] == msg), Arg.Any<CancellationToken>());
+        groupProxy.Received(1).SendCoreAsync("TorrentUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        _ = _hubClients.DidNotReceive().All;
+    }
+
+    [Test]
+    public void BroadcastToGroup_deduplicates_identical_payloads_within_window()
+    {
+        var groupProxy = Substitute.For<IClientProxy>();
+        groupProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _hubClients.Group("group-1").Returns(groupProxy);
+
+        var msg1 = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 10, Progress = 80.0 }
+        };
+        var msg2 = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 10, Progress = 80.0 }
+        };
+
+        _broadcaster.BroadcastToGroup("group-1", msg1);
+        _broadcaster.BroadcastToGroup("group-1", msg2);
+
+        groupProxy.Received(1).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        groupProxy.Received(1).SendCoreAsync("TorrentUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void BroadcastToTorrent_routes_to_torrent_group()
+    {
+        var torrentProxy = Substitute.For<IClientProxy>();
+        torrentProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _hubClients.Group("torrent-42").Returns(torrentProxy);
+
+        var msg = new SignalRMessage
+        {
+            Name = "PieceCompleted",
+            Action = ModelAction.Updated,
+            Body = new { TorrentId = 42, PieceIndex = 3 }
+        };
+
+        _broadcaster.BroadcastToTorrent(42, msg);
+
+        _hubClients.Received(1).Group("torrent-42");
+        torrentProxy.Received(1).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        torrentProxy.Received(1).SendCoreAsync("PieceCompleted", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void BroadcastToChannel_routes_to_lowercased_channel_group()
+    {
+        var channelProxy = Substitute.For<IClientProxy>();
+        channelProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _hubClients.Group("channel-alerts").Returns(channelProxy);
+
+        var msg = new SignalRMessage
+        {
+            Name = "HealthCheckCompleted",
+            Action = ModelAction.Updated,
+            Body = new { Status = "Ok" }
+        };
+
+        _broadcaster.BroadcastToChannel("Alerts", msg);
+
+        _hubClients.Received(1).Group("channel-alerts");
+        channelProxy.Received(1).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        channelProxy.Received(1).SendCoreAsync("HealthCheckCompleted", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void BroadcastToGroup_does_not_throw_when_group_or_message_is_null()
+    {
+        Assert.DoesNotThrow(() => _broadcaster.BroadcastToGroup(null, new SignalRMessage { Name = "Test" }));
+        Assert.DoesNotThrow(() => _broadcaster.BroadcastToGroup("test-group", null));
+        Assert.DoesNotThrow(() => _broadcaster.BroadcastToChannel(null, new SignalRMessage { Name = "Test" }));
+        _hubClients.DidNotReceive().Group(Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task MessageHub_SubscribeToTorrent_and_UnsubscribeFromTorrent_manage_groups()
+    {
+        var hub = new MessageHub();
+        var callerContext = Substitute.For<HubCallerContext>();
+        var groupManager = Substitute.For<IGroupManager>();
+
+        callerContext.ConnectionId.Returns("conn-42");
+        hub.Context = callerContext;
+        hub.Groups = groupManager;
+
+        await hub.SubscribeToTorrent(123);
+        await groupManager.Received(1).AddToGroupAsync("conn-42", "torrent-123", Arg.Any<CancellationToken>());
+
+        await hub.UnsubscribeFromTorrent(123);
+        await groupManager.Received(1).RemoveFromGroupAsync("conn-42", "torrent-123", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MessageHub_SubscribeToChannel_and_UnsubscribeFromChannel_manage_groups_lowercased()
+    {
+        var hub = new MessageHub();
+        var callerContext = Substitute.For<HubCallerContext>();
+        var groupManager = Substitute.For<IGroupManager>();
+
+        callerContext.ConnectionId.Returns("conn-42");
+        hub.Context = callerContext;
+        hub.Groups = groupManager;
+
+        await hub.SubscribeToChannel("SystemStats");
+        await groupManager.Received(1).AddToGroupAsync("conn-42", "channel-systemstats", Arg.Any<CancellationToken>());
+
+        await hub.UnsubscribeFromChannel("SystemStats");
+        await groupManager.Received(1).RemoveFromGroupAsync("conn-42", "channel-systemstats", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MessageHub_SubscribeToChannel_ignores_null_or_whitespace()
+    {
+        var hub = new MessageHub();
+        var callerContext = Substitute.For<HubCallerContext>();
+        var groupManager = Substitute.For<IGroupManager>();
+
+        callerContext.ConnectionId.Returns("conn-42");
+        hub.Context = callerContext;
+        hub.Groups = groupManager;
+
+        await hub.SubscribeToChannel(null);
+        await hub.SubscribeToChannel("   ");
+        await hub.UnsubscribeFromChannel(null);
+        await hub.UnsubscribeFromChannel("   ");
+
+        await groupManager.DidNotReceive().AddToGroupAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await groupManager.DidNotReceive().RemoveFromGroupAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }

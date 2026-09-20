@@ -187,7 +187,10 @@ export function getSignalRConnection(): HubConnection {
       .build();
 
     connection.onreconnecting(() => notifyStatus("reconnecting"));
-    connection.onreconnected(() => notifyStatus("connected"));
+    connection.onreconnected(() => {
+      notifyStatus("connected");
+      resubscribeActiveGroups();
+    });
     connection.onclose((error) => {
       notifyStatus("disconnected");
       if (reconnectTimer) {
@@ -206,6 +209,10 @@ export function getSignalRConnection(): HubConnection {
       }, 2000);
     });
   }
+  (connection as any).subscribeToTorrent = subscribeToTorrent;
+  (connection as any).unsubscribeFromTorrent = unsubscribeFromTorrent;
+  (connection as any).subscribeToChannel = subscribeToChannel;
+  (connection as any).unsubscribeFromChannel = unsubscribeFromChannel;
   return connection;
 }
 
@@ -224,6 +231,7 @@ export async function startSignalR(): Promise<void> {
         .start()
         .then(() => {
           notifyStatus("connected");
+          resubscribeActiveGroups();
         })
         .catch((err) => {
           console.error("SignalR connection failed:", err);
@@ -267,6 +275,80 @@ export async function reconnectSignalR(): Promise<void> {
   }
   notifyStatus("reconnecting");
   return startSignalR();
+}
+
+const activeTorrentSubscriptions = new Set<number>();
+const activeChannelSubscriptions = new Set<string>();
+
+export async function subscribeToTorrent(torrentId: number): Promise<void> {
+  activeTorrentSubscriptions.add(torrentId);
+  const conn = getSignalRConnection();
+  if (conn.state === HubConnectionState.Connected) {
+    try {
+      await conn.invoke("SubscribeToTorrent", torrentId);
+    } catch (err) {
+      console.warn("Failed to subscribe to torrent:", torrentId, err);
+    }
+  }
+}
+
+export async function unsubscribeFromTorrent(torrentId: number): Promise<void> {
+  activeTorrentSubscriptions.delete(torrentId);
+  const conn = getSignalRConnection();
+  if (conn.state === HubConnectionState.Connected) {
+    try {
+      await conn.invoke("UnsubscribeFromTorrent", torrentId);
+    } catch (err) {
+      console.warn("Failed to unsubscribe from torrent:", torrentId, err);
+    }
+  }
+}
+
+export async function subscribeToChannel(channel: string): Promise<void> {
+  if (!channel) return;
+  activeChannelSubscriptions.add(channel.toLowerCase());
+  const conn = getSignalRConnection();
+  if (conn.state === HubConnectionState.Connected) {
+    try {
+      await conn.invoke("SubscribeToChannel", channel);
+    } catch (err) {
+      console.warn("Failed to subscribe to channel:", channel, err);
+    }
+  }
+}
+
+export async function unsubscribeFromChannel(channel: string): Promise<void> {
+  if (!channel) return;
+  activeChannelSubscriptions.delete(channel.toLowerCase());
+  const conn = getSignalRConnection();
+  if (conn.state === HubConnectionState.Connected) {
+    try {
+      await conn.invoke("UnsubscribeFromChannel", channel);
+    } catch (err) {
+      console.warn("Failed to unsubscribe from channel:", channel, err);
+    }
+  }
+}
+
+export async function resubscribeActiveGroups(): Promise<void> {
+  const conn = getSignalRConnection();
+  if (conn.state !== HubConnectionState.Connected) return;
+
+  for (const tid of activeTorrentSubscriptions) {
+    try {
+      await conn.invoke("SubscribeToTorrent", tid);
+    } catch (err) {
+      console.warn("Failed to resubscribe to torrent:", tid, err);
+    }
+  }
+
+  for (const ch of activeChannelSubscriptions) {
+    try {
+      await conn.invoke("SubscribeToChannel", ch);
+    } catch (err) {
+      console.warn("Failed to resubscribe to channel:", ch, err);
+    }
+  }
 }
 
 export function onSignalRMessage(
@@ -336,5 +418,9 @@ export function useSignalR(queryClient?: QueryClient) {
     connected: status === "connected",
     isReconnecting: status === "reconnecting",
     reconnect: reconnectSignalR,
+    subscribeToTorrent,
+    unsubscribeFromTorrent,
+    subscribeToChannel,
+    unsubscribeFromChannel,
   };
 }

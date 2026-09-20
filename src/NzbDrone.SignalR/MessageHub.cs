@@ -196,6 +196,36 @@ public class MessageHub : Hub
     {
         return Clients.All.SendAsync("trackerAnnounced", payload);
     }
+
+    public async Task SubscribeToTorrent(int torrentId)
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"torrent-{torrentId}");
+    }
+
+    public async Task UnsubscribeFromTorrent(int torrentId)
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"torrent-{torrentId}");
+    }
+
+    public async Task SubscribeToChannel(string channel)
+    {
+        if (string.IsNullOrWhiteSpace(channel))
+        {
+            return;
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"channel-{channel.ToLowerInvariant()}");
+    }
+
+    public async Task UnsubscribeFromChannel(string channel)
+    {
+        if (string.IsNullOrWhiteSpace(channel))
+        {
+            return;
+        }
+
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"channel-{channel.ToLowerInvariant()}");
+    }
 }
 
 public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle<TrackerStatusChangedEvent>
