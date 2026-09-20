@@ -892,6 +892,7 @@ function TorrentTable({
               <input
                 type="checkbox"
                 className="torrent-checkbox"
+                aria-label="Select all torrents"
                 checked={
                   sorted.length > 0 && selectedIds?.size === sorted.length
                 }
@@ -918,15 +919,37 @@ function TorrentTable({
           {sorted.map((t, index) => (
             <tr
               key={t.id}
+              role="row"
               ref={(el) => {
                 rowRefs.current[index] = el;
               }}
-              tabIndex={focusedIndex === index ? 0 : -1}
+              tabIndex={0}
+              aria-selected={
+                selectedTorrentId === t.id ||
+                (selectedIds?.has(t.id) ?? false)
+              }
               className={`torrent-table-row${selectedTorrentId === t.id ? " torrent-table-row-selected" : ""}${selectedIds?.has(t.id) ? " torrent-table-row-selected" : ""}${focusedIndex === index ? " torrent-table-row-focused" : ""}`}
               onFocus={() => {
                 setFocusedIndex(index);
                 if (anchorIndex === null) {
                   setAnchorIndex(index);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (
+                  typeof HTMLInputElement !== "undefined" &&
+                  e.target instanceof HTMLInputElement
+                ) {
+                  return;
+                }
+                if (e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation?.();
+                  onToggleSelect?.(t.id);
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation?.();
+                  onSelectTorrent?.(selectedTorrentId === t.id ? null : t.id);
                 }
               }}
               onClick={(e) => {
@@ -965,6 +988,7 @@ function TorrentTable({
                 <input
                   type="checkbox"
                   className="torrent-checkbox"
+                  aria-label={`Select ${t.name}`}
                   checked={selectedIds?.has(t.id) ?? false}
                   onChange={() => {}}
                   onClick={(e) => {
