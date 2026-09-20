@@ -646,13 +646,19 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         var peerIp = clientAddress.ToString();
         var eventType = parameters.GetValueOrDefault("event", "");
 
-        if (eventType == "stopped")
+        if (string.Equals(eventType, "completed", StringComparison.OrdinalIgnoreCase))
+        {
+            _peerDatabase.RecordCompleted(infoHash);
+        }
+
+        if (string.Equals(eventType, "stopped", StringComparison.OrdinalIgnoreCase))
         {
             _peerDatabase.RemovePeer(infoHash, peerIp, port);
         }
         else
         {
-            _peerDatabase.AddPeer(infoHash, peerIp, port, peerId);
+            var isSeeder = left == 0;
+            _peerDatabase.AddPeer(infoHash, peerIp, port, peerId, isSeeder);
         }
 
         _peerDatabase.IncrementAnnounces();
@@ -676,7 +682,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
             _peerTraffic[trafficKey] = (uploaded, downloaded);
 
-            if (eventType == "stopped")
+            if (string.Equals(eventType, "stopped", StringComparison.OrdinalIgnoreCase))
             {
                 _peerTraffic.TryRemove(trafficKey, out _);
             }
@@ -715,10 +721,13 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         var minInterval = _configService.MinAnnounceIntervalSeconds;
+        var stats = _peerDatabase.GetStats(infoHash) ?? new ScrapeStats();
         var dict = new BDictionary
         {
             ["interval"] = new BNumber(interval),
             ["min interval"] = new BNumber(minInterval),
+            ["complete"] = new BNumber(stats.Complete),
+            ["incomplete"] = new BNumber(stats.Incomplete),
             ["peers"] = peersObject,
             ["peers6"] = new BString(compactPeers6),
         };

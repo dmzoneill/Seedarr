@@ -349,6 +349,8 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             }
         }
 
+        var left = BinaryPrimitives.ReadInt64BigEndian(data.AsSpan(64, 8));
+        var isSeeder = left == 0;
         var eventId = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(80, 4));
 
         var numWant = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(92, 4));
@@ -374,13 +376,18 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             _ => ""
         };
 
+        if (eventName == "completed")
+        {
+            _peerDatabase.RecordCompleted(infoHash);
+        }
+
         if (eventName == "stopped")
         {
             _peerDatabase.RemovePeer(infoHash, peerIp, peerPort);
         }
         else
         {
-            _peerDatabase.AddPeer(infoHash, peerIp, peerPort, peerId);
+            _peerDatabase.AddPeer(infoHash, peerIp, peerPort, peerId, isSeeder);
         }
 
         _peerDatabase.IncrementAnnounces();
@@ -390,7 +397,7 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         var compactPeers = isIpv6Client
             ? BuildCompactPeers6(peers, peerIp, peerPort, numWant)
             : BuildCompactPeers(peers, peerIp, peerPort, numWant);
-        var stats = _peerDatabase.GetStats(infoHash);
+        var stats = _peerDatabase.GetStats(infoHash) ?? new ScrapeStats();
 
         var announceInterval = _configService.TrackerAnnounceInterval;
 

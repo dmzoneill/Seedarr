@@ -951,6 +951,68 @@ public class TrackerServerTest
     }
 
     [Test]
+    public void HandleAnnounce_should_include_complete_and_incomplete_in_bencoded_response()
+    {
+        _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
+        _peerDatabase.GetStats(DefaultInfoHash).Returns(new ScrapeStats { Complete = 5, Incomplete = 2, Downloaded = 10 });
+
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        Assert.That(result, Does.Contain("8:completei5e"));
+        Assert.That(result, Does.Contain("10:incompletei2e"));
+    }
+
+    [Test]
+    public void HandleAnnounce_should_add_peer_as_seeder_when_left_is_zero()
+    {
+        _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
+
+        InvokeHandleAnnounce(
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, DefaultPeerId, true);
+    }
+
+    [Test]
+    public void HandleAnnounce_should_add_peer_as_leecher_when_left_is_greater_than_zero()
+    {
+        _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
+
+        InvokeHandleAnnounce(
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=1024",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, DefaultPeerId, false);
+    }
+
+    [Test]
+    public void HandleAnnounce_should_record_completed_event_when_event_is_completed()
+    {
+        _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
+
+        InvokeHandleAnnounce(
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0&event=completed",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        _peerDatabase.Received(1).RecordCompleted(DefaultInfoHash);
+    }
+
+    [Test]
+    public void HandleAnnounce_should_not_record_completed_for_started_event()
+    {
+        _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
+
+        InvokeHandleAnnounce(
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0&event=started",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        _peerDatabase.DidNotReceive().RecordCompleted(Arg.Any<string>());
+    }
+
+    [Test]
     public void HandleAnnounce_should_include_private_flag_when_enabled()
     {
         _configService.TrackerPrivateMode.Returns(true);
