@@ -22,6 +22,7 @@ public interface ITaskManager
     CancellationTokenSource RecordTaskStarted(string typeName, CancellationTokenSource cts, TimeSpan? timeout = null, ScheduledTaskTriggerSource triggerSource = ScheduledTaskTriggerSource.Scheduler);
     void RecordTaskFinished(string typeName, DateTime startTime);
     void RecordTaskFinished(string typeName, DateTime startTime, ScheduledTaskTriggerSource? triggerSource = null);
+    void RecordTaskFailed(string typeName, DateTime startTime, string errorMessage);
     void RecordTaskFailed(string typeName, DateTime startTime, Exception exception, ScheduledTaskTriggerSource? triggerSource = null);
     void RecordTaskFailed(string typeName, DateTime startTime, string errorMessage, string exceptionDetails = null, ScheduledTaskTriggerSource? triggerSource = null);
     bool IsRunning(string typeName);
@@ -198,8 +199,9 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 
         var isCanceled = (_taskStatuses.TryGetValue(typeName, out var status) && string.Equals(status, "Canceled", StringComparison.OrdinalIgnoreCase)) ||
                          (execInfo?.Cts != null && execInfo.Cts.IsCancellationRequested);
+        var isFailed = string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase);
 
-        if (!isCanceled && status != "Failed")
+        if (!isCanceled && !isFailed)
         {
             _taskStatuses[typeName] = "Completed";
         }
@@ -212,6 +214,12 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         {
             task.LastStartTime = startTime;
             task.LastExecution = DateTime.UtcNow;
+            if (!isFailed)
+            {
+                task.LastStatus = TaskExecutionStatus.Success;
+                task.LastErrorMessage = null;
+            }
+
             _repository.Update(task);
         }
 
@@ -249,6 +257,11 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         }
     }
 
+    public void RecordTaskFailed(string typeName, DateTime startTime, string errorMessage)
+    {
+        RecordTaskFailed(typeName, startTime, errorMessage, null, null);
+    }
+
     public void RecordTaskFailed(string typeName, DateTime startTime, Exception exception, ScheduledTaskTriggerSource? triggerSource = null)
     {
         RecordTaskFailed(typeName, startTime, exception?.Message ?? "Task execution failed", exception?.ToString(), triggerSource);
@@ -265,6 +278,15 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         var task = _repository.All()
             .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase) ||
                                  string.Equals(t.TypeName.Split('.').LastOrDefault(), typeName, StringComparison.OrdinalIgnoreCase));
+
+        if (task != null)
+        {
+            task.LastStartTime = startTime;
+            task.LastExecution = now;
+            task.LastStatus = TaskExecutionStatus.Failed;
+            task.LastErrorMessage = errorMessage;
+            _repository.Update(task);
+        }
 
         var history = new ScheduledTaskHistory
         {

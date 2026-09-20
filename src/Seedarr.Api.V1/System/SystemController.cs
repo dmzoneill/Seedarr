@@ -233,7 +233,9 @@ public class SystemController : ControllerBase
             LastStartTime = t.LastStartTime,
             LastDuration = lastDuration,
             NextExecution = nextExecution,
-            IsRunning = isRunning
+            IsRunning = isRunning,
+            LastStatus = t.LastStatus.ToString(),
+            LastErrorMessage = t.LastErrorMessage
         };
     }
 
@@ -347,6 +349,10 @@ public class SystemController : ControllerBase
             try
             {
                 taskInstance.Execute();
+            }
+            catch (Exception ex)
+            {
+                _taskManager.RecordTaskFailed(task.TypeName, startTime, ex.Message);
             }
             finally
             {

@@ -12,6 +12,8 @@ public class ScheduledTask : ModelBase
     public bool IsEnabled { get; set; } = true;
     public DateTime LastExecution { get; set; }
     public DateTime? LastStartTime { get; set; }
+    public TaskExecutionStatus LastStatus { get; set; } = TaskExecutionStatus.None;
+    public string LastErrorMessage { get; set; }
 
     [Ignore]
     public DateTime NextExecution
