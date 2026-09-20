@@ -54,8 +54,9 @@ public class SeedingEngine : BackgroundService
     private readonly Dictionary<int, long> _prevDownloaded = new();
     private readonly Dictionary<int, long> _sessionStartUploaded = new();
     private readonly Dictionary<int, long> _sessionStartDownloaded = new();
-    private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _uploadSpeedHistory = new();
-    private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _downloadSpeedHistory = new();
+    private readonly Dictionary<int, double> _uploadSpeedHistory = new();
+    private readonly Dictionary<int, double> _downloadSpeedHistory = new();
+    private readonly HashSet<int> _previousActiveTorrentIds = new();
     private readonly HashSet<int> _stalledTorrentIds = new();
     private readonly HashSet<int> _extinctNotifiedTorrentIds = new();
     private readonly HashSet<int> _seedingTimeReachedTorrentIds = new();
@@ -208,17 +209,31 @@ public class SeedingEngine : BackgroundService
 
     private void Tick()
     {
+        TickInternal(null);
+    }
+
+    internal void TickForTesting(TimeSpan delta)
+    {
+        TickInternal(delta);
+    }
+
+    private void TickInternal(TimeSpan? overrideDelta)
+    {
         var now = Stopwatch.GetTimestamp();
         TimeSpan actualDelta;
 
-        if (_lastTickTimestamp == 0)
+        if (overrideDelta.HasValue)
+        {
+            actualDelta = overrideDelta.Value;
+        }
+        else if (_lastTickTimestamp == 0)
         {
             actualDelta = TickInterval;
         }
         else
         {
             var elapsedSeconds = (double)(now - _lastTickTimestamp) / Stopwatch.Frequency;
-            elapsedSeconds = Math.Clamp(elapsedSeconds, 0.1, 10.0);
+            elapsedSeconds = Math.Clamp(elapsedSeconds, 0.001, 60.0);
             actualDelta = TimeSpan.FromSeconds(elapsedSeconds);
         }
 
@@ -336,6 +351,7 @@ public class SeedingEngine : BackgroundService
                 _torrentService.UpdateMany(idleToUpdate);
             }
 
+            _previousActiveTorrentIds.Clear();
             return;
         }
 
@@ -378,7 +394,7 @@ public class SeedingEngine : BackgroundService
             .Where(t => t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.StalledNoSeeds)
             .ToList();
 
-        var recoveredTorrents = UpdateComputedFields(activeTorrents, thresholdPercent);
+        var recoveredTorrents = UpdateComputedFields(activeTorrents, thresholdPercent, actualDelta);
 
         var dirtyTorrents = new List<Torrent>();
         dirtyTorrents.AddRange(activeTorrents);
@@ -573,31 +589,43 @@ public class SeedingEngine : BackgroundService
 
         _connectionManager.ProcessDropouts();
         _connectionManager.RotateConnections();
+
+        _previousActiveTorrentIds.Clear();
+        foreach (var t in activeTorrents)
+        {
+            _previousActiveTorrentIds.Add(t.Id);
+        }
     }
 
-    private long CalculateMovingAverageSpeed(int torrentId, long instantSpeed, Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> history, DateTime now)
+    internal static double CalculateExponentialMovingAverage(long instantSpeed, double currentEma, double elapsedSeconds, double tau = 3.0)
     {
-        if (!history.TryGetValue(torrentId, out var queue))
-        {
-            queue = new Queue<(DateTime Timestamp, long Speed)>();
-            history[torrentId] = queue;
-        }
-
-        queue.Enqueue((now, instantSpeed));
-
-        var cutoff = now.AddSeconds(-5);
-        while (queue.Count > 1 && queue.Peek().Timestamp < cutoff)
-        {
-            queue.Dequeue();
-        }
-
-        var avg = (long)queue.Average(s => s.Speed);
-        return Math.Max(0, avg);
+        var alpha = 1.0 - Math.Exp(-elapsedSeconds / tau);
+        return (alpha * instantSpeed) + ((1.0 - alpha) * currentEma);
     }
 
-    private HashSet<int> UpdateComputedFields(List<Torrent> activeTorrents, int thresholdPercent)
+    private long CalculateMovingAverageSpeed(int torrentId, long instantSpeed, Dictionary<int, double> history, double elapsedSeconds)
     {
-        var tickSeconds = TickInterval.TotalSeconds;
+        const double tau = 3.0;
+
+        if (!history.TryGetValue(torrentId, out var currentEma))
+        {
+            history[torrentId] = instantSpeed;
+            return instantSpeed;
+        }
+
+        var newEma = CalculateExponentialMovingAverage(instantSpeed, currentEma, elapsedSeconds, tau);
+        if (instantSpeed == 0 && newEma < 0.5)
+        {
+            newEma = 0;
+        }
+
+        history[torrentId] = newEma;
+        return (long)Math.Round(newEma);
+    }
+
+    private HashSet<int> UpdateComputedFields(List<Torrent> activeTorrents, int thresholdPercent, TimeSpan actualDelta)
+    {
+        var elapsedSeconds = Math.Max(0.001, actualDelta.TotalSeconds);
         var now = _clock.UtcNow;
         var recoveredTorrents = new HashSet<int>();
 
@@ -609,16 +637,35 @@ public class SeedingEngine : BackgroundService
                 _sessionStartDownloaded[torrent.Id] = torrent.Downloaded;
             }
 
+            var isNewlyActive = !_previousActiveTorrentIds.Contains(torrent.Id);
+            if (isNewlyActive)
+            {
+                _prevUploaded.Remove(torrent.Id);
+                _prevDownloaded.Remove(torrent.Id);
+                _uploadSpeedHistory.Remove(torrent.Id);
+                _downloadSpeedHistory.Remove(torrent.Id);
+            }
+
             if (_prevUploaded.TryGetValue(torrent.Id, out var prevUp))
             {
-                var instantUp = Math.Max(0, (long)((torrent.Uploaded - prevUp) / tickSeconds));
-                torrent.UploadSpeed = CalculateMovingAverageSpeed(torrent.Id, instantUp, _uploadSpeedHistory, now);
+                var deltaUp = Math.Max(0, torrent.Uploaded - prevUp);
+                var instantUp = Math.Max(0, (long)(deltaUp / elapsedSeconds));
+                torrent.UploadSpeed = CalculateMovingAverageSpeed(torrent.Id, instantUp, _uploadSpeedHistory, elapsedSeconds);
+            }
+            else
+            {
+                torrent.UploadSpeed = 0;
             }
 
             if (_prevDownloaded.TryGetValue(torrent.Id, out var prevDown))
             {
-                var instantDown = Math.Max(0, (long)((torrent.Downloaded - prevDown) / tickSeconds));
-                torrent.DownloadSpeed = CalculateMovingAverageSpeed(torrent.Id, instantDown, _downloadSpeedHistory, now);
+                var deltaDown = Math.Max(0, torrent.Downloaded - prevDown);
+                var instantDown = Math.Max(0, (long)(deltaDown / elapsedSeconds));
+                torrent.DownloadSpeed = CalculateMovingAverageSpeed(torrent.Id, instantDown, _downloadSpeedHistory, elapsedSeconds);
+            }
+            else
+            {
+                torrent.DownloadSpeed = 0;
             }
 
             _prevUploaded[torrent.Id] = torrent.Uploaded;
@@ -646,7 +693,7 @@ public class SeedingEngine : BackgroundService
             torrent.LastActive = _clock.UtcNow;
             if (torrent.Status == TorrentStatus.Seeding)
             {
-                torrent.SeedingTime += (long)tickSeconds;
+                torrent.SeedingTime += (long)Math.Max(1, actualDelta.TotalSeconds);
             }
 
             if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed > 0 && torrent.TotalSize > 0)

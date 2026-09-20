@@ -97,6 +97,11 @@ public class SeedingEngineTest
         method.Invoke(_engine, null);
     }
 
+    private void CallTickWithDelta(TimeSpan delta)
+    {
+        _engine.TickForTesting(delta);
+    }
+
     [Test]
     public void Tick_should_deactivate_all_when_no_active_torrents()
     {
@@ -2446,5 +2451,85 @@ public class SeedingEngineTest
         CallTick();
 
         Assert.That(torrent.StallDurationSeconds, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Tick_should_compute_speed_using_elapsed_wall_clock_time_without_spike_on_delayed_tick()
+    {
+        var torrent = new Torrent
+        {
+            Id = 99,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            Downloaded = 1_000_000,
+            Progress = 1.0,
+            InfoHash = "twma_hash_1"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        // First tick establishes baseline
+        CallTickWithDelta(TimeSpan.FromSeconds(1.0));
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
+
+        // Delayed tick by 2.5 seconds with 250,000 bytes uploaded -> 100,000 B/s actual rate
+        torrent.Uploaded = 250_000;
+        CallTickWithDelta(TimeSpan.FromSeconds(2.5));
+
+        // Speed must be ~100,000 B/s (divided by 2.5s), NOT 250,000 B/s (divided by 1.0s)
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(100_000));
+    }
+
+    [Test]
+    public void Tick_should_apply_exponential_moving_average_weighting_under_irregular_tick_intervals()
+    {
+        // Constant speed over irregular sampling intervals should remain constant
+        const long targetSpeed = 500_000;
+        var ema = (double)targetSpeed;
+
+        ema = SeedingEngine.CalculateExponentialMovingAverage(targetSpeed, ema, 0.5);
+        Assert.That(Math.Round(ema), Is.EqualTo(targetSpeed));
+
+        ema = SeedingEngine.CalculateExponentialMovingAverage(targetSpeed, ema, 2.5);
+        Assert.That(Math.Round(ema), Is.EqualTo(targetSpeed));
+
+        ema = SeedingEngine.CalculateExponentialMovingAverage(targetSpeed, ema, 1.0);
+        Assert.That(Math.Round(ema), Is.EqualTo(targetSpeed));
+
+        // Speed drops to 0 with elapsed 3.0s (one tau):
+        // Expected decay factor = exp(-3.0 / 3.0) = 1 / e ~= 0.36788
+        ema = SeedingEngine.CalculateExponentialMovingAverage(0, 100_000, 3.0);
+        Assert.That(ema, Is.EqualTo(100_000 * Math.Exp(-1.0)).Within(1.0));
+    }
+
+    [Test]
+    public void Tick_should_not_spike_when_paused_torrent_is_resumed_with_accumulated_bytes()
+    {
+        var torrent = new Torrent
+        {
+            Id = 101,
+            Status = TorrentStatus.Paused,
+            Uploaded = 5_000,
+            Downloaded = 1_000_000,
+            Progress = 1.0,
+            InfoHash = "resume_spike_hash"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        // Ticks while paused
+        CallTickWithDelta(TimeSpan.FromSeconds(1.0));
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
+
+        // Torrent resumed with 50 MB accumulated while paused
+        torrent.Status = TorrentStatus.Seeding;
+        torrent.Uploaded = 50_000_000;
+        CallTickWithDelta(TimeSpan.FromSeconds(1.0));
+
+        // Resumed tick must not compute 50 MB / 1s = 50 MB/s spike
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
+
+        // Subsequent tick computes normal speed
+        torrent.Uploaded = 50_050_000; // 50,000 bytes over 1.0s = 50,000 B/s
+        CallTickWithDelta(TimeSpan.FromSeconds(1.0));
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(50_000));
     }
 }
