@@ -52,6 +52,7 @@ public class TorrentService : ITorrentService,
     private readonly Logger _logger;
 
     public IDiskSpaceService DiskSpaceService { get; set; }
+    public IDiskAllocationService DiskAllocationService { get; set; }
 
     public TorrentService(
         ITorrentRepository repository,
@@ -59,7 +60,8 @@ public class TorrentService : ITorrentService,
         ITrackerEntryService trackerEntryService,
         IEventAggregator eventAggregator,
         IDiskSpaceService diskSpaceService = null,
-        Lazy<ITorrentRecheckService> torrentRecheckService = null)
+        Lazy<ITorrentRecheckService> torrentRecheckService = null,
+        IDiskAllocationService diskAllocationService = null)
     {
         _repository = repository;
         _torrentFileService = torrentFileService;
@@ -67,6 +69,7 @@ public class TorrentService : ITorrentService,
         _eventAggregator = eventAggregator;
         DiskSpaceService = diskSpaceService;
         _torrentRecheckService = torrentRecheckService;
+        DiskAllocationService = diskAllocationService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -122,6 +125,7 @@ public class TorrentService : ITorrentService,
         if (torrent.Status == TorrentStatus.Downloading)
         {
             ValidateDiskSpaceForTorrent(torrent);
+            DiskAllocationService?.PreallocateFiles(torrent, torrent.Files);
         }
 
         if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
@@ -484,6 +488,9 @@ public class TorrentService : ITorrentService,
         }
 
         ValidateDiskSpaceForTorrent(torrent);
+
+        var files = _torrentFileService?.GetFilesByTorrentId(torrent.Id) ?? torrent.Files;
+        DiskAllocationService?.PreallocateFiles(torrent, files);
 
         torrent.Resume();
         if (torrent.ErrorMessage != null && torrent.ErrorMessage.StartsWith(EmergencyDiskSpacePausePrefix, StringComparison.OrdinalIgnoreCase))

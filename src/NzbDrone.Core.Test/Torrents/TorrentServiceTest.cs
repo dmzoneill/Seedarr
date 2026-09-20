@@ -1078,5 +1078,61 @@ namespace NzbDrone.Core.Test.Torrents
             var ex = Assert.Throws<InsufficientDiskSpaceException>(() => _subject.Add(torrent));
             Assert.That(ex.Message, Does.Contain("Insufficient disk space on destination volume to complete torrent download"));
         }
+
+        [Test]
+        public void Start_should_call_DiskAllocationService_PreallocateFiles_when_starting_torrent()
+        {
+            var torrent = new Torrent
+            {
+                Id = 15,
+                Name = "TorrentToStart",
+                Status = TorrentStatus.Stopped,
+                TotalSize = 1000,
+                SavePath = "/downloads"
+            };
+
+            var files = new List<TorrentFile>
+            {
+                new TorrentFile { TorrentId = 15, Path = "file1.mkv", Size = 1000 }
+            };
+
+            _repository.Get(15).Returns(torrent);
+            _repository.Update(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
+            _torrentFileService.GetFilesByTorrentId(15).Returns(files);
+
+            var diskAllocationService = Substitute.For<IDiskAllocationService>();
+            _subject.DiskAllocationService = diskAllocationService;
+
+            _subject.Start(15);
+
+            diskAllocationService.Received(1).PreallocateFiles(torrent, files);
+        }
+
+        [Test]
+        public void Add_should_call_DiskAllocationService_PreallocateFiles_when_adding_downloading_torrent()
+        {
+            var files = new List<TorrentFile>
+            {
+                new TorrentFile { Path = "download.bin", Size = 2000 }
+            };
+
+            var torrent = new Torrent
+            {
+                Name = "NewDownloadingTorrent",
+                Status = TorrentStatus.Downloading,
+                TotalSize = 2000,
+                SavePath = "/downloads",
+                Files = files
+            };
+
+            _repository.Insert(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
+
+            var diskAllocationService = Substitute.For<IDiskAllocationService>();
+            _subject.DiskAllocationService = diskAllocationService;
+
+            _subject.Add(torrent);
+
+            diskAllocationService.Received(1).PreallocateFiles(torrent, files);
+        }
     }
 }
