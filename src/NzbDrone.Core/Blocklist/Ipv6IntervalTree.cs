@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 
@@ -150,10 +151,35 @@ public class Ipv6IntervalTree
         }
 
         var trimmed = rule.Trim();
-        if (trimmed.StartsWith("#", StringComparison.Ordinal) || trimmed.StartsWith("//", StringComparison.Ordinal))
+        if (trimmed.StartsWith("#", StringComparison.Ordinal) ||
+            trimmed.StartsWith("//", StringComparison.Ordinal) ||
+            trimmed.StartsWith(";", StringComparison.Ordinal))
         {
             return false;
         }
+
+        if (TryParseCleanIPv6(trimmed, out range))
+        {
+            return true;
+        }
+
+        // Handle eMule trailing comma metadata (e.g. "2001:db8::1 - 2001:db8::ff , 000 , Bad IPv6")
+        var commaIdx = trimmed.IndexOf(',');
+        if (commaIdx > 0)
+        {
+            var beforeComma = trimmed[..commaIdx].Trim();
+            if (TryParseCleanIPv6(beforeComma, out range))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryParseCleanIPv6(string trimmed, out Ipv6Range range)
+    {
+        range = default;
 
         // CIDR notation: 2001:db8::/32 or ::ffff:192.0.2.0/120
         var slashIdx = trimmed.LastIndexOf('/');
@@ -162,7 +188,7 @@ public class Ipv6IntervalTree
             var ipPart = trimmed[..slashIdx].Trim();
             var prefixPart = trimmed[(slashIdx + 1)..].Trim();
 
-            if (!int.TryParse(prefixPart, out var prefix))
+            if (!int.TryParse(prefixPart, NumberStyles.None, CultureInfo.InvariantCulture, out var prefix))
             {
                 return false;
             }
@@ -258,7 +284,9 @@ public class Ipv6IntervalTree
             }
 
             var trimmed = rule.Trim();
-            if (trimmed.StartsWith("#", StringComparison.Ordinal) || trimmed.StartsWith("//", StringComparison.Ordinal))
+            if (trimmed.StartsWith("#", StringComparison.Ordinal) ||
+                trimmed.StartsWith("//", StringComparison.Ordinal) ||
+                trimmed.StartsWith(";", StringComparison.Ordinal))
             {
                 continue;
             }
@@ -361,18 +389,24 @@ public class Ipv6IntervalTree
             return true;
         }
 
-        // Try stripping label before first colon (e.g. "BadPeer:2001:db8::")
-        var colonIdx = s.IndexOf(':');
-        if (colonIdx > 0 && IPAddress.TryParse(s[(colonIdx + 1)..].Trim(), out ip))
+        // Try stripping label before colons (e.g. "Bad:Peer:2001:db8::")
+        for (var colonIdx = s.IndexOf(':'); colonIdx > 0 && colonIdx < s.Length - 1; colonIdx = s.IndexOf(':', colonIdx + 1))
         {
-            return true;
+            var candidate = s[(colonIdx + 1)..].Trim();
+            if (IPAddress.TryParse(candidate, out ip))
+            {
+                return true;
+            }
         }
 
-        // Try stripping label before whitespace (e.g. "BadPeer 2001:db8::")
-        var spaceIdx = s.IndexOf(' ');
-        if (spaceIdx > 0 && IPAddress.TryParse(s[(spaceIdx + 1)..].Trim(), out ip))
+        // Try stripping label before whitespace (e.g. "Bad Peer 2001:db8::")
+        for (var spaceIdx = s.IndexOf(' '); spaceIdx > 0 && spaceIdx < s.Length - 1; spaceIdx = s.IndexOf(' ', spaceIdx + 1))
         {
-            return true;
+            var candidate = s[(spaceIdx + 1)..].Trim();
+            if (IPAddress.TryParse(candidate, out ip))
+            {
+                return true;
+            }
         }
 
         return false;
