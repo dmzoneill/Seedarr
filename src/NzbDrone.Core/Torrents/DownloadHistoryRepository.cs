@@ -104,6 +104,29 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
         });
     }
 
+    public int GetCount(string query = null, string status = null)
+    {
+        return QueryWithRetry(connection =>
+        {
+            var sql = new StringBuilder($"SELECT COUNT(*) FROM \"{_table}\" WHERE 1=1");
+            var parameters = new DynamicParameters();
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                sql.Append(" AND (\"Title\" LIKE @Query OR \"InfoHash\" LIKE @Query OR \"PrimaryTracker\" LIKE @Query OR \"IndexerName\" LIKE @Query)");
+                parameters.Add("Query", $"%{query.Trim()}%");
+            }
+
+            if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, "all", StringComparison.OrdinalIgnoreCase))
+            {
+                sql.Append(" AND \"Status\" = @Status");
+                parameters.Add("Status", status.Trim());
+            }
+
+            return connection.ExecuteScalar<int>(sql.ToString(), parameters);
+        });
+    }
+
     public int DeleteOlderThan(DateTime cutoffDate) => DeleteOlderThan(cutoffDate, 1000);
 
     public int DeleteOlderThan(DateTime cutoffDate, int batchSize)

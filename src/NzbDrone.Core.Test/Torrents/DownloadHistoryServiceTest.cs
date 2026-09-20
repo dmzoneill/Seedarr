@@ -496,5 +496,16 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(pruned, Is.EqualTo(0));
             _historyRepository.DidNotReceive().DeleteOlderThan(Arg.Any<DateTime>());
         }
+
+        [Test]
+        public void GetCount_should_delegate_to_repository()
+        {
+            _historyRepository.GetCount("query", "status").Returns(42);
+
+            var result = _subject.GetCount("query", "status");
+
+            Assert.That(result, Is.EqualTo(42));
+            _historyRepository.Received(1).GetCount("query", "status");
+        }
     }
 }

@@ -50,6 +50,8 @@ function formatDuration(seconds: number): string {
 export default function DownloadHistory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
   const [selectedDetailItem, setSelectedDetailItem] =
@@ -69,6 +71,8 @@ export default function DownloadHistory() {
   } = useDownloadHistory({
     query: searchTerm.trim() || undefined,
     status: statusFilter !== "all" ? statusFilter : undefined,
+    page,
+    pageSize,
   });
 
   const reAddMutation = useReAddHistoryTorrent();
@@ -168,7 +172,11 @@ export default function DownloadHistory() {
     });
   };
 
-  const totalCount = history?.length || 0;
+  const totalCount = history?.totalCount ?? history?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const startIndex = totalCount === 0 ? 0 : (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + (history?.length ?? 0), totalCount);
 
   return (
     <div
@@ -320,7 +328,10 @@ export default function DownloadHistory() {
                 borderRadius: "6px",
                 fontWeight: 500,
               }}
-              onClick={() => setStatusFilter(st)}
+              onClick={() => {
+                setStatusFilter(st);
+                setPage(1);
+              }}
             >
               {st === "all" ? "All" : st}
             </button>
@@ -342,7 +353,10 @@ export default function DownloadHistory() {
             className="form-control"
             placeholder="Filter history by title, actor, genre, hash..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
             style={{
               width: "100%",
               padding: "0.4rem 0.75rem",
@@ -356,7 +370,10 @@ export default function DownloadHistory() {
           {searchTerm && (
             <button
               className="btn btn-outline"
-              onClick={() => setSearchTerm("")}
+              onClick={() => {
+                setSearchTerm("");
+                setPage(1);
+              }}
               style={{
                 fontSize: "0.75rem",
                 padding: "0.35rem 0.5rem",
@@ -1204,6 +1221,115 @@ export default function DownloadHistory() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {!isLoading && !isError && totalCount > 0 && (
+        <div
+          className="card"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0.65rem 1rem",
+            marginTop: "1rem",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+            fontSize: "0.85rem",
+            color: "var(--text-muted)",
+            borderRadius: "8px",
+            flexShrink: 0,
+            boxShadow:
+              "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <span>
+              Showing {startIndex + 1}–{endIndex} of {totalCount} records
+            </span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.35rem",
+              }}
+            >
+              <span style={{ fontSize: "0.8rem" }}>Per page:</span>
+              <select
+                aria-label="Items per page"
+                className="form-control"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                style={{
+                  padding: "0.2rem 0.4rem",
+                  fontSize: "0.8rem",
+                  backgroundColor: "var(--bg-primary)",
+                  color: "inherit",
+                  border: "1px solid var(--border-light)",
+                  borderRadius: "4px",
+                  width: "auto",
+                }}
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={250}>250</option>
+              </select>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              style={{
+                padding: "0.25rem 0.65rem",
+                fontSize: "0.8rem",
+                borderRadius: "4px",
+                cursor: currentPage <= 1 ? "default" : "pointer",
+                opacity: currentPage <= 1 ? 0.5 : 1,
+              }}
+            >
+              ◀ Previous
+            </button>
+            <span style={{ fontWeight: 500 }}>
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              style={{
+                padding: "0.25rem 0.65rem",
+                fontSize: "0.8rem",
+                borderRadius: "4px",
+                cursor: currentPage >= totalPages ? "default" : "pointer",
+                opacity: currentPage >= totalPages ? 0.5 : 1,
+              }}
+            >
+              Next ▶
+            </button>
           </div>
         </div>
       )}

@@ -246,4 +246,83 @@ public class DownloadHistoryRepositoryTest
         var remaining = _subject.All().ToList();
         Assert.That(remaining, Has.Count.EqualTo(2));
     }
+
+    [Test]
+    public void GetCount_without_filters_returns_total_count()
+    {
+        var entries = new List<DownloadHistory>
+        {
+            new() { Title = "Ubuntu 22.04", InfoHash = "hash1", Status = "Active", PrimaryTracker = "tracker1" },
+            new() { Title = "Debian 12", InfoHash = "hash2", Status = "Completed", PrimaryTracker = "tracker2" },
+            new() { Title = "Arch Linux", InfoHash = "hash3", Status = "Removed", PrimaryTracker = "tracker3" }
+        };
+
+        _subject.InsertMany(entries);
+
+        var count = _subject.GetCount();
+        Assert.That(count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void GetCount_with_status_filter_returns_filtered_count()
+    {
+        var entries = new List<DownloadHistory>
+        {
+            new() { Title = "Ubuntu 22.04", InfoHash = "hash1", Status = "Active", PrimaryTracker = "tracker1" },
+            new() { Title = "Debian 12", InfoHash = "hash2", Status = "Completed", PrimaryTracker = "tracker2" },
+            new() { Title = "Fedora 40", InfoHash = "hash3", Status = "Active", PrimaryTracker = "tracker1" }
+        };
+
+        _subject.InsertMany(entries);
+
+        var activeCount = _subject.GetCount(status: "Active");
+        var completedCount = _subject.GetCount(status: "Completed");
+        var removedCount = _subject.GetCount(status: "Removed");
+
+        Assert.That(activeCount, Is.EqualTo(2));
+        Assert.That(completedCount, Is.EqualTo(1));
+        Assert.That(removedCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetCount_with_query_filter_returns_matching_count()
+    {
+        var entries = new List<DownloadHistory>
+        {
+            new() { Title = "Ubuntu 22.04 Server", InfoHash = "hash1", Status = "Active", PrimaryTracker = "tracker1" },
+            new() { Title = "Debian 12 Bookworm", InfoHash = "hash2", Status = "Completed", PrimaryTracker = "specialtracker" },
+            new() { Title = "Arch Linux", InfoHash = "ubuntuhash", Status = "Removed", PrimaryTracker = "tracker3" }
+        };
+
+        _subject.InsertMany(entries);
+
+        var ubuntuCount = _subject.GetCount(query: "Ubuntu");
+        var trackerCount = _subject.GetCount(query: "specialtracker");
+        var nonExistentCount = _subject.GetCount(query: "FreeBSD");
+
+        Assert.That(ubuntuCount, Is.EqualTo(2));
+        Assert.That(trackerCount, Is.EqualTo(1));
+        Assert.That(nonExistentCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetCount_with_query_and_status_filter_returns_conjunction_count()
+    {
+        var entries = new List<DownloadHistory>
+        {
+            new() { Title = "Ubuntu 22.04 Desktop", InfoHash = "hash1", Status = "Active" },
+            new() { Title = "Ubuntu 24.04 Server", InfoHash = "hash2", Status = "Completed" },
+            new() { Title = "Debian 12", InfoHash = "hash3", Status = "Active" }
+        };
+
+        _subject.InsertMany(entries);
+
+        var activeUbuntu = _subject.GetCount(query: "Ubuntu", status: "Active");
+        var completedUbuntu = _subject.GetCount(query: "Ubuntu", status: "Completed");
+        var removedUbuntu = _subject.GetCount(query: "Ubuntu", status: "Removed");
+
+        Assert.That(activeUbuntu, Is.EqualTo(1));
+        Assert.That(completedUbuntu, Is.EqualTo(1));
+        Assert.That(removedUbuntu, Is.EqualTo(0));
+    }
 }

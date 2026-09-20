@@ -55,6 +55,7 @@ import type {
   NetworkDiagnostics,
   PortTestResult,
   DownloadHistoryEntry,
+  DownloadHistoryResponse,
   ReleaseInfo,
   DownloadReleaseRequest,
   TrackerBoostTracker,
@@ -1287,18 +1288,49 @@ export function useDownloadHistory(params?: {
   query?: string;
   status?: string;
   limit?: number;
+  offset?: number;
+  page?: number;
+  pageSize?: number;
 }) {
   const interval = useRefetchInterval();
   const searchParams = new URLSearchParams();
   if (params?.query) searchParams.set("query", params.query);
   if (params?.status) searchParams.set("status", params.status);
-  if (params?.limit) searchParams.set("limit", String(params.limit));
+  if (params?.limit !== undefined) searchParams.set("limit", String(params.limit));
+  if (params?.offset !== undefined) searchParams.set("offset", String(params.offset));
+  if (params?.page !== undefined) searchParams.set("page", String(params.page));
+  if (params?.pageSize !== undefined) searchParams.set("pageSize", String(params.pageSize));
   const queryString = searchParams.toString();
 
-  return useQuery<DownloadHistoryEntry[]>({
-    queryKey: ["downloadhistory", params?.query, params?.status, params?.limit],
-    queryFn: () =>
-      apiClient.get(`/downloadhistory${queryString ? `?${queryString}` : ""}`),
+  return useQuery<DownloadHistoryResponse>({
+    queryKey: [
+      "downloadhistory",
+      params?.query,
+      params?.status,
+      params?.limit,
+      params?.offset,
+      params?.page,
+      params?.pageSize,
+    ],
+    queryFn: async () => {
+      const res = await apiClient.getWithHeaders<DownloadHistoryEntry[]>(
+        `/downloadhistory${queryString ? `?${queryString}` : ""}`,
+      );
+      const items = res.data ?? [];
+      const totalHeader = res.headers.get("X-Total-Count");
+      const pageHeader = res.headers.get("X-Page-Count");
+      const totalCount = totalHeader !== null ? parseInt(totalHeader, 10) : items.length;
+      const totalPages = pageHeader !== null ? parseInt(pageHeader, 10) : 1;
+
+      // Return items array augmented with pagination metadata for backward compatibility
+      const result = items as DownloadHistoryResponse;
+      result.records = items;
+      result.totalCount = Number.isNaN(totalCount) ? items.length : totalCount;
+      result.page = params?.page ?? 1;
+      result.pageSize = params?.pageSize ?? (params?.limit ?? 50);
+      result.totalPages = Number.isNaN(totalPages) ? 1 : totalPages;
+      return result;
+    },
     refetchInterval: interval,
   });
 }
