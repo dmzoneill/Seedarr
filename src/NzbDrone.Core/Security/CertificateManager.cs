@@ -818,6 +818,8 @@ public class CertificateManager : ICertificateManager, IDisposable
 
         public int PeerTos => 0;
 
+        public string TrustedProxies => string.Empty;
+
         public void SaveConfigDictionary(Dictionary<string, object> configValues)
         {
         }

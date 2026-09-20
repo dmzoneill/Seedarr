@@ -27,6 +27,8 @@ public class IdentityProviderDefinition : ModelBase
 
     public string RoleMappingRules { get; set; }
 
+    public string TrustedProxies { get; set; }
+
     public string IconUrl { get; set; }
 
     public string ButtonText { get; set; }

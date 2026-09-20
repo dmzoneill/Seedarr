@@ -66,5 +66,7 @@ public interface IConfigFileProvider
 
     int PeerTos { get; }
 
+    string TrustedProxies { get; }
+
     void SaveConfigDictionary(Dictionary<string, object> configValues);
 }

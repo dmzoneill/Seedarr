@@ -59,6 +59,8 @@ public class GeneralConfigResource : RestResource
 
     public string AllowedHosts { get; set; } = string.Empty;
 
+    public string TrustedProxies { get; set; } = string.Empty;
+
     public bool TerminalAccessEnabled { get; set; } = true;
 
     public string TmdbApiKey { get; set; }
@@ -110,6 +112,7 @@ public static class GeneralConfigResourceMapper
             CsrfProtectionEnabled = config?.CsrfProtectionEnabled ?? true,
             HostHeaderValidationEnabled = config?.HostHeaderValidationEnabled ?? false,
             AllowedHosts = config?.AllowedHosts ?? string.Empty,
+            TrustedProxies = fileProvider?.TrustedProxies ?? string.Empty,
             TerminalAccessEnabled = fileProvider?.TerminalAccessEnabled ?? true,
             TmdbApiKey = config?.TmdbApiKey,
         };

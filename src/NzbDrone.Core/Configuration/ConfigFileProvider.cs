@@ -129,6 +129,8 @@ public class ConfigFileProvider : IConfigFileProvider
 
     public int PeerTos => GetValueInt("PeerTos", 0);
 
+    public string TrustedProxies => GetValue("TrustedProxies", string.Empty);
+
     private void LoadFromFile()
     {
         lock (Mutex)

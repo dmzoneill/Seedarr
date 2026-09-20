@@ -18,6 +18,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Serializer;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Security;
 using NzbDrone.SignalR;
@@ -126,11 +127,30 @@ public class Startup
                 }
 
                 // 3. Forward-Auth reverse proxy headers
-                if ((req.Headers.TryGetValue("Remote-User", out var rUser) && !string.IsNullOrWhiteSpace(rUser)) ||
+                var hasForwardAuthHeaders = (req.Headers.TryGetValue("Remote-User", out var rUser) && !string.IsNullOrWhiteSpace(rUser)) ||
                     (req.Headers.TryGetValue("X-authentik-username", out var aUser) && !string.IsNullOrWhiteSpace(aUser)) ||
-                    (req.Headers.TryGetValue("X-Forwarded-User", out var fUser) && !string.IsNullOrWhiteSpace(fUser)))
+                    (req.Headers.TryGetValue("X-Forwarded-User", out var fUser) && !string.IsNullOrWhiteSpace(fUser));
+
+                if (hasForwardAuthHeaders)
                 {
-                    return ForwardAuthOptions.DefaultScheme;
+                    var remoteIp = req.HttpContext.Connection.RemoteIpAddress;
+                    var configTrustedProxies = configFileProvider?.TrustedProxies;
+                    var idpRepo = context.RequestServices.GetService<IIdentityProviderRepository>();
+                    var forwardAuthIdp = idpRepo?.GetEnabled()?.FirstOrDefault(p => p.ProviderType == IdentityProviderType.ForwardAuth);
+                    var isForwardAuthEnabled = forwardAuthIdp != null || !string.IsNullOrWhiteSpace(configTrustedProxies);
+
+                    if (isForwardAuthEnabled && remoteIp != null)
+                    {
+                        var idpProxies = forwardAuthIdp?.TrustedProxies;
+                        var combinedProxies = !string.IsNullOrWhiteSpace(idpProxies)
+                            ? (!string.IsNullOrWhiteSpace(configTrustedProxies) ? $"{configTrustedProxies},{idpProxies}" : idpProxies)
+                            : configTrustedProxies;
+
+                        if (IpSecurityHelper.IsTrustedProxy(remoteIp, combinedProxies))
+                        {
+                            return ForwardAuthOptions.DefaultScheme;
+                        }
+                    }
                 }
 
                 // 4. Cookie for interactive browser session or login flow
