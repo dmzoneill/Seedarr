@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using NLog;
 using NzbDrone.Core.Indexers.Torznab;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Indexers.Prowlarr;
@@ -13,15 +14,91 @@ public class ProwlarrIndexer : IIndexer
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
     private readonly IIndexerStatusService _indexerStatusService;
+    private readonly IProxySettingsProvider _proxySettingsProvider;
+
+    private readonly object _syncLock = new();
+    private SocketsHttpHandler _proxyHandler;
+    private HttpClient _proxyClient;
+    private string _lastProxyHost;
+    private int _lastProxyPort;
+    private ProxyType _lastProxyType;
+    private bool _lastProxyEnabled;
+
+    internal HttpMessageHandler Handler
+    {
+        get
+        {
+            EnsureProxyClient();
+            return _proxyHandler;
+        }
+    }
+
+    internal HttpClient Client => GetHttpClient();
 
     public string Name => "Prowlarr";
     public string IndexerType => "Prowlarr";
 
-    public ProwlarrIndexer(HttpClient httpClient = null, IIndexerStatusService indexerStatusService = null)
+    public ProwlarrIndexer(
+        HttpClient httpClient = null,
+        IIndexerStatusService indexerStatusService = null,
+        IProxySettingsProvider proxySettingsProvider = null)
     {
-        _httpClient = httpClient ?? DefaultClient;
+        _httpClient = httpClient;
         _indexerStatusService = indexerStatusService;
+        _proxySettingsProvider = proxySettingsProvider;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public ProwlarrIndexer(IProxySettingsProvider proxySettingsProvider, IIndexerStatusService indexerStatusService = null)
+        : this(null, indexerStatusService, proxySettingsProvider)
+    {
+    }
+
+    private HttpClient GetHttpClient()
+    {
+        if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
+        {
+            EnsureProxyClient();
+            lock (_syncLock)
+            {
+                return _proxyClient ?? DefaultClient;
+            }
+        }
+
+        return _httpClient ?? DefaultClient;
+    }
+
+    private void EnsureProxyClient()
+    {
+        if (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled)
+        {
+            lock (_syncLock)
+            {
+                _lastProxyEnabled = false;
+                _proxyClient = null;
+                _proxyHandler = null;
+            }
+            return;
+        }
+
+        lock (_syncLock)
+        {
+            var host = _proxySettingsProvider.Host;
+            var port = _proxySettingsProvider.Port;
+            var type = _proxySettingsProvider.Type;
+
+            if (_proxyClient == null || !_lastProxyEnabled || _lastProxyHost != host || _lastProxyPort != port || _lastProxyType != type)
+            {
+                _proxyHandler = _proxySettingsProvider.CreateHandler();
+                _proxyClient = _proxyHandler != null
+                    ? new HttpClient(_proxyHandler) { Timeout = TimeSpan.FromSeconds(10) }
+                    : DefaultClient;
+                _lastProxyEnabled = true;
+                _lastProxyHost = host;
+                _lastProxyPort = port;
+                _lastProxyType = type;
+            }
+        }
     }
 
     public bool TestConnection(IndexerDefinition definition)
@@ -46,7 +123,7 @@ public class ProwlarrIndexer : IIndexer
             }
 
             using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
-            using var response = _httpClient.Send(request, cts.Token);
+            using var response = Client.Send(request, cts.Token);
 
             if (response.IsSuccessStatusCode)
             {
@@ -118,7 +195,7 @@ public class ProwlarrIndexer : IIndexer
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = _httpClient.Send(request);
+            using var response = Client.Send(request);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -153,7 +230,7 @@ public class ProwlarrIndexer : IIndexer
                                 dlRequest.Headers.Add("X-Api-Key", definition.ApiKey);
                             }
 
-                            using var dlResponse = _httpClient.Send(dlRequest);
+                            using var dlResponse = Client.Send(dlRequest);
                             if (dlResponse.IsSuccessStatusCode)
                             {
                                 using var ms = new System.IO.MemoryStream();
@@ -275,7 +352,7 @@ public class ProwlarrIndexer : IIndexer
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = _httpClient.Send(request);
+            using var response = Client.Send(request);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Prowlarr search returned status code {0}", response.StatusCode);

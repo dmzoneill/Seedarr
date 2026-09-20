@@ -22,6 +22,7 @@ namespace Seedarr.Api.V1.Indexers;
 [Route("api/v1/indexer")]
 public class IndexerController : Controller
 {
+    private static readonly HttpClient DefaultClient = new();
     private readonly HttpClient _httpClient;
     private readonly IProxySettingsProvider _proxySettingsProvider;
     private readonly IIndexerFactory _indexerFactory;
@@ -60,9 +61,7 @@ public class IndexerController : Controller
         _rssRuleRepository = rssRuleRepository;
         _prowlarrSyncService = prowlarrSyncService;
         _mediaMetadataRepository = mediaMetadataRepository;
-        _httpClient = httpClient ?? (proxySettingsProvider != null && proxySettingsProvider.IsEnabled
-            ? new HttpClient(proxySettingsProvider.CreateHandler())
-            : new HttpClient());
+        _httpClient = httpClient;
     }
 
     [HttpGet]
@@ -604,7 +603,7 @@ public class IndexerController : Controller
                     }
                 }
 
-                using var httpResponse = _httpClient.Send(httpRequest);
+                using var httpResponse = GetHttpClient().Send(httpRequest);
                 if (!httpResponse.IsSuccessStatusCode)
                 {
                     return BadRequest($"Failed to download torrent file from indexer (HTTP {(int)httpResponse.StatusCode})");
@@ -739,11 +738,22 @@ public class IndexerController : Controller
     {
         return definition.IndexerType switch
         {
-            "Prowlarr" => new ProwlarrIndexer(_httpClient, _indexerStatusService),
-            "Torznab" => new TorznabIndexer(_httpClient, _indexerStatusService),
-            "Newznab" => new NewznabIndexer(_httpClient, _indexerStatusService),
+            "Prowlarr" => new ProwlarrIndexer(_httpClient, _indexerStatusService, _proxySettingsProvider),
+            "Torznab" => new TorznabIndexer(_httpClient, _indexerStatusService, _proxySettingsProvider),
+            "Newznab" => new NewznabIndexer(_httpClient, _indexerStatusService, _proxySettingsProvider),
             _ => throw new ArgumentException($"Unknown indexer type: {definition.IndexerType}"),
         };
+    }
+
+    private HttpClient GetHttpClient()
+    {
+        if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
+        {
+            var handler = _proxySettingsProvider.CreateHandler();
+            return handler != null ? new HttpClient(handler) : DefaultClient;
+        }
+
+        return _httpClient ?? DefaultClient;
     }
 
     private string DetermineSource(DownloadReleaseRequest request)
