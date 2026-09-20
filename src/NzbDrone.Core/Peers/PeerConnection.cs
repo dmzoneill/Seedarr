@@ -454,6 +454,9 @@ public class PeerConnection : IDisposable
     public HashSet<int> SuggestedPieces { get; } = new();
     public HashSet<int> RemoteAllowedFastPieces { get; } = new();
     public HashSet<int> AllowedFastPieces => RemoteAllowedFastPieces;
+    public List<PeerRequest> PendingIncomingRequests { get; } = new();
+    public List<PeerRequest> IncomingRequests => PendingIncomingRequests;
+    public event Action<PeerConnection, PeerMessage> MessageSent;
     public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
     public DateTime? LastUnchokedAt { get; set; }
     public DateTime LastPexReceived { get; set; } = DateTime.MinValue;
@@ -1171,7 +1174,7 @@ public class PeerConnection : IDisposable
         }
     }
 
-    public void SendMessage(PeerMessage message)
+    public virtual void SendMessage(PeerMessage message)
     {
         var length = message.Length;
         var bufferSize = 4 + length;
@@ -1215,6 +1218,7 @@ public class PeerConnection : IDisposable
             }
 
             LastActivity = DateTime.UtcNow;
+            MessageSent?.Invoke(this, message);
         }
         finally
         {

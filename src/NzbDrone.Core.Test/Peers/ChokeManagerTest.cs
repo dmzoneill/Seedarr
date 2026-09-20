@@ -816,4 +816,42 @@ public class ChokeManagerTest
         // Total regular unchoked slots across all 3 swarms must equal regularSlotCount (4)
         Assert.That(unchokedA.Count + unchokedB.Count + unchokedC.Count, Is.EqualTo(4));
     }
+
+    [Test]
+    public void Choking_peer_with_fast_extension_sends_reject_request_for_pending_requests_outside_allowed_fast_set()
+    {
+        var peer = CreatePeer("hashA", 1001, rate: 1000);
+        peer.AmChoking = false;
+        peer.SupportsFastExtension = true;
+        peer.AllowedFastPieces.Add(5);
+
+        var sentMessages = new List<PeerMessage>();
+        peer.MessageSent += (c, msg) => sentMessages.Add(msg);
+
+        peer.PendingIncomingRequests.Add(new PeerRequest(3, 0, 16384));
+        peer.PendingIncomingRequests.Add(new PeerRequest(5, 0, 16384));
+
+        _subject.Choke(peer);
+
+        Assert.That(peer.AmChoking, Is.True);
+        Assert.That(sentMessages.Any(m => m.Type == PeerMessageType.Choke), Is.True);
+
+        var rejectMessages = sentMessages.Where(m => m.Type == PeerMessageType.RejectRequest).ToList();
+        Assert.That(rejectMessages.Count, Is.EqualTo(1));
+
+        var rejectMsg = rejectMessages[0];
+        Assert.That(rejectMsg.Payload, Is.Not.Null);
+        Assert.That(rejectMsg.Payload.Length, Is.EqualTo(12));
+
+        var rejectedPiece = (int)(((uint)rejectMsg.Payload[0] << 24) | ((uint)rejectMsg.Payload[1] << 16) | ((uint)rejectMsg.Payload[2] << 8) | rejectMsg.Payload[3]);
+        var rejectedBegin = (int)(((uint)rejectMsg.Payload[4] << 24) | ((uint)rejectMsg.Payload[5] << 16) | ((uint)rejectMsg.Payload[6] << 8) | rejectMsg.Payload[7]);
+        var rejectedLength = (int)(((uint)rejectMsg.Payload[8] << 24) | ((uint)rejectMsg.Payload[9] << 16) | ((uint)rejectMsg.Payload[10] << 8) | rejectMsg.Payload[11]);
+
+        Assert.That(rejectedPiece, Is.EqualTo(3));
+        Assert.That(rejectedBegin, Is.EqualTo(0));
+        Assert.That(rejectedLength, Is.EqualTo(16384));
+
+        Assert.That(peer.PendingIncomingRequests.Any(r => r.PieceIndex == 3), Is.False);
+        Assert.That(peer.PendingIncomingRequests.Any(r => r.PieceIndex == 5), Is.True);
+    }
 }
