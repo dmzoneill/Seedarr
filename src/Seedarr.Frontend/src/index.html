@@ -19,9 +19,24 @@
       }
       gtag("js", new Date());
 
-      gtag("config", "G-KTFS19RQ76", {
-        send_page_view: false,
-      });
+      try {
+        var uuid = localStorage.getItem("seedarr_instance_uuid");
+        if (uuid) {
+          gtag("set", "user_properties", { instance_id: uuid });
+          gtag("config", "G-KTFS19RQ76", {
+            user_id: uuid,
+            send_page_view: false,
+          });
+        } else {
+          gtag("config", "G-KTFS19RQ76", {
+            send_page_view: false,
+          });
+        }
+      } catch (e) {
+        gtag("config", "G-KTFS19RQ76", {
+          send_page_view: false,
+        });
+      }
     </script>
   </head>
   <body>
