@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../api/client";
+import { broadcastLogin } from "../utils/authChannel";
 import { AuthProvider } from "../api/types";
 import SeedarrLogo from "../components/icons/SeedarrLogo";
 import { useTranslation } from "../i18n";
@@ -47,7 +48,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     try {
       setLoading(true);
       setError(null);
-      await api.login({ username: username.trim(), password, rememberMe });
+      const user = await api.login({ username: username.trim(), password, rememberMe });
+      broadcastLogin(user);
       onLoginSuccess();
     } catch (err: any) {
       setError(

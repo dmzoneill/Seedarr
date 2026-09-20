@@ -319,6 +319,27 @@ export async function startSignalR(): Promise<void> {
   }
 }
 
+export async function stopSignalR(): Promise<void> {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (connection) {
+    try {
+      if (
+        connection.state === HubConnectionState.Connected ||
+        connection.state === HubConnectionState.Connecting ||
+        connection.state === HubConnectionState.Reconnecting
+      ) {
+        await connection.stop();
+      }
+    } catch {
+      // ignore
+    }
+    notifyStatus("disconnected");
+  }
+}
+
 export async function reconnectSignalR(): Promise<void> {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -525,6 +546,7 @@ export function useSignalR(queryClient?: QueryClient) {
     connected: status === "connected",
     isReconnecting: status === "reconnecting",
     reconnect: reconnectSignalR,
+    disconnect: stopSignalR,
     requestStateSnapshot,
     subscribeToTorrent,
     unsubscribeFromTorrent,

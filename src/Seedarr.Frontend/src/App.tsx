@@ -38,7 +38,11 @@ import ToastContainer from "./components/Toast";
 import AriaLiveAnnouncer from "./components/AriaLiveAnnouncer";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SignalRProvider from "./components/SignalRProvider";
-import { useSignalR } from "./api/signalr";
+import { useSignalR, stopSignalR } from "./api/signalr";
+import {
+  broadcastLogout,
+  subscribeAuthChannel,
+} from "./utils/authChannel";
 import { useModalStack } from "./components/ModalProvider";
 import AddTorrentModal from "./components/AddTorrentModal";
 import CommandPalette from "./components/CommandPalette";
@@ -138,6 +142,7 @@ function App() {
   }, [location.pathname, location.search]);
 
   const { connected, isReconnecting, reconnect } = useSignalR();
+  const { showToast } = useToast();
   const [currentUser, setCurrentUser] = useState<import("./api/types").CurrentUser | null>(null);
 
   const loadUser = async () => {
@@ -170,12 +175,62 @@ function App() {
       });
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = subscribeAuthChannel((event) => {
+      if (event.type === "AUTH_LOGOUT" || event.type === "AUTH_SESSION_EXPIRED") {
+        setCurrentUser(null);
+        stopSignalR();
+        navigate("/login");
+        if (event.type === "AUTH_SESSION_EXPIRED") {
+          showToast(
+            t(
+              "auth.sessionExpired",
+              undefined,
+              "Your session has expired. Please sign in again.",
+            ),
+            "warning",
+          );
+        } else {
+          showToast(
+            t(
+              "auth.loggedOutOtherTab",
+              undefined,
+              "You were logged out in another tab.",
+            ),
+            "info",
+          );
+        }
+      } else if (event.type === "AUTH_LOGIN") {
+        if (event.user) {
+          setCurrentUser(event.user);
+        } else {
+          loadUser();
+        }
+        reconnect();
+        if (location.pathname === "/login") {
+          navigate("/");
+        }
+        showToast(
+          t("auth.loggedInOtherTab", undefined, "Signed in from another tab."),
+          "info",
+        );
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [navigate, reconnect, showToast, t, location.pathname]);
+
   const handleLogout = async () => {
     try {
       await apiClient.logout();
-      setCurrentUser(null);
-      navigate("/login");
     } catch {
+      // ignore
+    } finally {
+      broadcastLogout();
+      setCurrentUser(null);
+      stopSignalR();
       navigate("/login");
     }
   };
@@ -316,7 +371,6 @@ function App() {
     }
   }, [generalConfig?.instanceUuid]);
   const { data: downloadClients } = useDownloadClients();
-  const { showToast } = useToast();
   const [showApiKey, setShowApiKey] = useState(false);
   const [unmaskedApiKey, setUnmaskedApiKey] = useState<string | null>(null);
 
