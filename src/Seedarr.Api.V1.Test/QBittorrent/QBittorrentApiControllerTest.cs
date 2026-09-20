@@ -1,3 +1,6 @@
+using System.Net;
+using Microsoft.AspNetCore.Http;
+using NzbDrone.Core.RemotePathMappings;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -505,5 +508,91 @@ public class QBittorrentApiControllerTest
 
         Assert.That(result, Is.InstanceOf<ContentResult>());
         _torrentService.Received(1).Delete(101, true);
+    }
+
+    [Test]
+    public void TorrentsInfo_Remaps_SavePath_And_ContentPath_Outbound()
+    {
+        var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
+        remotePathMappingService.RemapLocalToRemote("192.168.1.50", "/downloads/movies")
+            .Returns(@"X:\Downloads\movies");
+        remotePathMappingService.RemapLocalToRemote("192.168.1.50", "/downloads/movies/MyMovie")
+            .Returns(@"X:\Downloads\movies\MyMovie");
+
+        var controller = new QBittorrentApiController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _tagService,
+            _configFileProvider,
+            remotePathMappingService: remotePathMappingService,
+            categoryService: _categoryService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.50");
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "aabbccddeeff00112233aabbccddeeff00112233",
+            Name = "MyMovie",
+            SourcePath = "/downloads/movies",
+            Status = TorrentStatus.Seeding,
+            TotalSize = 1000,
+            Progress = 1.0,
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = controller.GetTorrentsInfo();
+        var okResult = result.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var list = okResult.Value as List<Dictionary<string, object>>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list[0]["save_path"], Is.EqualTo(@"X:\Downloads\movies"));
+        Assert.That(list[0]["content_path"], Is.EqualTo(@"X:\Downloads\movies\MyMovie"));
+    }
+
+    [Test]
+    public void SetLocation_Remaps_Inbound_Path_And_Updates_Both_SourcePath_And_SavePath()
+    {
+        var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
+        remotePathMappingService.RemapRemoteToLocal("192.168.1.50", @"X:\Downloads\movies")
+            .Returns("/downloads/movies");
+
+        var controller = new QBittorrentApiController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _tagService,
+            _configFileProvider,
+            remotePathMappingService: remotePathMappingService,
+            categoryService: _categoryService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.50");
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "aabbccddeeff00112233aabbccddeeff00112233",
+            Name = "MyMovie",
+            SourcePath = "/downloads/old",
+            SavePath = "/downloads/old",
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var actionResult = controller.SetLocation("aabbccddeeff00112233aabbccddeeff00112233", @"X:\Downloads\movies");
+        Assert.That(actionResult, Is.InstanceOf<ContentResult>());
+        Assert.That(torrent.SourcePath, Is.EqualTo("/downloads/movies"));
+        Assert.That(torrent.SavePath, Is.EqualTo("/downloads/movies"));
+        _torrentService.Received(1).Update(torrent);
     }
 }

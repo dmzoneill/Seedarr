@@ -1,3 +1,5 @@
+using System.Net;
+using NzbDrone.Core.RemotePathMappings;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -540,5 +542,95 @@ public class DelugeJsonRpcControllerTest
             d.ContainsKey("MaxActiveLimit") && (int)d["MaxActiveLimit"] == 20 &&
             d.ContainsKey("MaxActiveDownloads") && (int)d["MaxActiveDownloads"] == 8 &&
             d.ContainsKey("MaxActiveUploads") && (int)d["MaxActiveUploads"] == 12));
+    }
+
+    [Test]
+    public void CoreGetTorrentsStatus_Remaps_SavePath_And_DownloadLocation_Outbound()
+    {
+        var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
+        remotePathMappingService.RemapLocalToRemote("192.168.1.70", "/downloads/music")
+            .Returns(@"M:\Downloads\music");
+
+        var controller = new DelugeJsonRpcController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _configService,
+            _tagService,
+            _configFileProvider,
+            categoryService: _categoryService,
+            trackerService: _trackerService,
+            diskSpaceService: _diskSpaceService,
+            remotePathMappingService: remotePathMappingService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.70");
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            Name = "Album",
+            SourcePath = "/downloads/music",
+            Status = TorrentStatus.Seeding,
+            TotalSize = 500,
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var doc = JsonDocument.Parse("{"method":"core.get_torrents_status","params":[{},["save_path","download_location"]],"id":1}");
+        var actionResult = controller.HandleJsonRpc(doc.RootElement);
+        var okResult = actionResult as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var json = JsonSerializer.Serialize(okResult.Value);
+        using var resDoc = JsonDocument.Parse(json);
+        var resObj = resDoc.RootElement.GetProperty("result");
+        var torrentObj = resObj.GetProperty("abcdefabcdefabcdefabcdefabcdefabcdefabcd");
+        Assert.That(torrentObj.GetProperty("save_path").GetString(), Is.EqualTo(@"M:\Downloads\music"));
+        Assert.That(torrentObj.GetProperty("download_location").GetString(), Is.EqualTo(@"M:\Downloads\music"));
+    }
+
+    [Test]
+    public void CoreMoveStorage_Remaps_Inbound_NewPath()
+    {
+        var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
+        remotePathMappingService.RemapRemoteToLocal("192.168.1.70", @"M:\Downloads\music")
+            .Returns("/downloads/music");
+
+        var controller = new DelugeJsonRpcController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _configService,
+            _tagService,
+            _configFileProvider,
+            categoryService: _categoryService,
+            trackerService: _trackerService,
+            diskSpaceService: _diskSpaceService,
+            remotePathMappingService: remotePathMappingService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.70");
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 5,
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            Name = "Album",
+            SourcePath = "/downloads/old",
+            SavePath = "/downloads/old",
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var doc = JsonDocument.Parse("{"method":"core.move_storage","params":[["abcdefabcdefabcdefabcdefabcdefabcdefabcd"],"M:\\Downloads\\music"],"id":2}");
+        var actionResult = controller.HandleJsonRpc(doc.RootElement);
+        Assert.That(actionResult, Is.InstanceOf<OkObjectResult>());
+        Assert.That(torrent.SourcePath, Is.EqualTo("/downloads/music"));
+        Assert.That(torrent.SavePath, Is.EqualTo("/downloads/music"));
+        _torrentService.Received(1).Update(torrent);
     }
 }
