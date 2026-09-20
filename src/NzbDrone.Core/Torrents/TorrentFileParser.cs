@@ -6,6 +6,7 @@ using System.Text;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.WebSeeds;
 
@@ -356,6 +357,7 @@ public class TorrentFileParser : ITorrentFileParser
             else if (info.ContainsKey("files") && info["files"] is BList files)
             {
                 var rootDirName = SanitizeDirectoryName(result.Name);
+                var fileIndex = 0;
 
                 foreach (var fileObj in files)
                 {
@@ -380,13 +382,13 @@ public class TorrentFileParser : ITorrentFileParser
                         throw new InvalidTorrentFileException("Malformed torrent file: file entry missing or invalid 'path'.");
                     }
 
-                    var sanitizedSegments = SanitizePathSegments(pathList.OfType<BString>());
-                    if (sanitizedSegments.Count == 0)
+                    var sanitizedSegments = SanitizePathSegments(pathList.OfType<BString>(), fileIndex);
+                    var relativePath = string.Join("/", sanitizedSegments);
+                    if (string.IsNullOrWhiteSpace(relativePath))
                     {
-                        throw new InvalidTorrentFileException("Malformed torrent file: file entry missing or invalid 'path'.");
+                        relativePath = $"file_{fileIndex}";
                     }
 
-                    var relativePath = string.Join("/", sanitizedSegments);
                     var fullRelativePath = string.IsNullOrEmpty(rootDirName)
                         ? relativePath
                         : $"{rootDirName}/{relativePath}";
@@ -401,6 +403,8 @@ public class TorrentFileParser : ITorrentFileParser
                         Size = fileLengthNum.Value,
                         IsPaddingFile = isPadding
                     });
+
+                    fileIndex++;
                 }
             }
             else
@@ -415,27 +419,21 @@ public class TorrentFileParser : ITorrentFileParser
                     throw new InvalidTorrentFileException($"Malformed torrent file: negative file length {lengthNum.Value}.");
                 }
 
-                var singleFilePath = result.Name;
+                string singleFilePath;
                 var pathList = GetPathListWithUtf8Fallback(info) ?? GetPathListWithUtf8Fallback(torrent);
                 if (pathList != null)
                 {
-                    var sanitizedSegments = SanitizePathSegments(pathList.OfType<BString>());
-                    if (sanitizedSegments.Count > 0)
-                    {
-                        singleFilePath = string.Join("/", sanitizedSegments);
-                    }
-                    else
-                    {
-                        throw new InvalidTorrentFileException("Malformed torrent file: file path is empty or invalid.");
-                    }
+                    var sanitizedSegments = SanitizePathSegments(pathList.OfType<BString>(), 0);
+                    singleFilePath = string.Join("/", sanitizedSegments);
                 }
-                else if (!string.IsNullOrWhiteSpace(singleFilePath))
+                else
                 {
-                    var sanitized = SanitizeDirectoryName(singleFilePath);
-                    if (!string.IsNullOrEmpty(sanitized))
-                    {
-                        singleFilePath = sanitized;
-                    }
+                    singleFilePath = SanitizeSingleFilePath(result.Name, 0);
+                }
+
+                if (string.IsNullOrWhiteSpace(singleFilePath))
+                {
+                    singleFilePath = "file_0";
                 }
 
                 result.Files.Add(new ParsedTorrentFile
@@ -780,34 +778,39 @@ public class TorrentFileParser : ITorrentFileParser
         return null;
     }
 
-    private static List<string> SanitizePathSegments(IEnumerable<BString> rawSegments)
+    private static readonly HashSet<char> IllegalFileNameChars = new()
+    {
+        '<', '>', ':', '"', '/', '\\', '|', '?', '*'
+    };
+
+    private static List<string> SanitizePathSegments(IEnumerable<BString> rawSegments, int fileIndex = 0)
     {
         var sanitizedSegments = new List<string>();
 
-        foreach (var bString in rawSegments)
+        if (rawSegments != null)
         {
-            var decoded = DecodeBString(bString);
-            if (string.IsNullOrWhiteSpace(decoded))
+            foreach (var bString in rawSegments)
             {
-                continue;
-            }
-
-            var parts = decoded.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var part in parts)
-            {
-                var trimmed = part.Trim();
-                if (string.IsNullOrEmpty(trimmed) || trimmed == ".")
+                var decoded = DecodeBString(bString);
+                if (string.IsNullOrWhiteSpace(decoded))
                 {
                     continue;
                 }
 
-                if (trimmed == "..")
+                var parts = decoded.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var part in parts)
                 {
-                    throw new InvalidTorrentFileException($"Path traversal attempt detected in torrent file path: '{decoded}'.");
+                    if (TrySanitizeSegment(part, decoded, out var sanitized))
+                    {
+                        sanitizedSegments.Add(sanitized);
+                    }
                 }
-
-                sanitizedSegments.Add(trimmed.Normalize(NormalizationForm.FormC));
             }
+        }
+
+        if (sanitizedSegments.Count == 0)
+        {
+            sanitizedSegments.Add($"file_{fileIndex}");
         }
 
         return sanitizedSegments;
@@ -825,21 +828,94 @@ public class TorrentFileParser : ITorrentFileParser
 
         foreach (var part in parts)
         {
-            var trimmed = part.Trim();
+            if (TrySanitizeSegment(part, dirName, out var sanitized))
+            {
+                cleanParts.Add(sanitized);
+            }
+        }
+
+        return cleanParts.Count > 0 ? string.Join("/", cleanParts) : null;
+    }
+
+    private static string SanitizeSingleFilePath(string fileName, int fileIndex = 0)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return $"file_{fileIndex}";
+        }
+
+        var parts = fileName.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+        var cleanParts = new List<string>();
+
+        foreach (var part in parts)
+        {
+            if (TrySanitizeSegment(part, fileName, out var sanitized))
+            {
+                cleanParts.Add(sanitized);
+            }
+        }
+
+        return cleanParts.Count > 0 ? string.Join("/", cleanParts) : $"file_{fileIndex}";
+    }
+
+    private static bool TrySanitizeSegment(string rawPart, string contextForException, out string sanitized)
+    {
+        sanitized = null;
+
+        var trimmed = rawPart?.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed == ".")
+        {
+            return false;
+        }
+
+        if (trimmed == "..")
+        {
+            throw new InvalidTorrentFileException($"Path traversal attempt detected in torrent file path: '{contextForException}'.");
+        }
+
+        // Strip drive letters (e.g., "C:" or "C:file.txt")
+        if (trimmed.Length >= 2 && char.IsLetter(trimmed[0]) && trimmed[1] == ':')
+        {
+            trimmed = trimmed.Substring(2).TrimStart('/', '\\').Trim();
             if (string.IsNullOrEmpty(trimmed) || trimmed == ".")
             {
-                continue;
+                return false;
             }
 
             if (trimmed == "..")
             {
-                throw new InvalidTorrentFileException($"Path traversal attempt detected in torrent directory name: '{dirName}'.");
+                throw new InvalidTorrentFileException($"Path traversal attempt detected in torrent file path: '{contextForException}'.");
             }
-
-            cleanParts.Add(trimmed.Normalize(NormalizationForm.FormC));
         }
 
-        return cleanParts.Count > 0 ? string.Join("/", cleanParts) : null;
+        // Sanitize invalid chars, control chars, and colon (to prevent Windows Alternate Data Streams)
+        var sb = new StringBuilder(trimmed.Length);
+        foreach (var c in trimmed)
+        {
+            if (!char.IsControl(c) && !IllegalFileNameChars.Contains(c) && !Path.GetInvalidFileNameChars().Contains(c))
+            {
+                sb.Append(c);
+            }
+        }
+
+        var clean = sb.ToString().TrimEnd('.', ' ');
+        if (string.IsNullOrWhiteSpace(clean) || clean == ".")
+        {
+            return false;
+        }
+
+        if (clean == "..")
+        {
+            throw new InvalidTorrentFileException($"Path traversal attempt detected in torrent file path: '{contextForException}'.");
+        }
+
+        if (PathSanitizer.IsWindowsReservedName(clean))
+        {
+            return false;
+        }
+
+        sanitized = clean.Normalize(NormalizationForm.FormC);
+        return true;
     }
 
     private static bool IsPadding(BDictionary fileDict, string path)
