@@ -24,6 +24,16 @@ import { formatBytes, formatDate } from "../../utils/formatters";
 import { TextInput, SelectInput, Toggle, NumberInput, SectionCard } from "./shared";
 import { useToast } from "../../context/ToastContext";
 
+export function formatIndexerTestError(error: any): string {
+  if (!error) return "Connection failed";
+  if (typeof error === "string") return error;
+  return (
+    error?.response?.data?.message ||
+    error?.message ||
+    "Connection failed"
+  );
+}
+
 export function IndexersTab() {
   const { showToast } = useToast();
 
@@ -40,6 +50,7 @@ export function IndexersTab() {
   const syncProwlarrMutation = useSyncProwlarrIndexers();
   const [editing, setEditing] = useState<Partial<IndexerDefinition> | null>(null);
   const [testResults, setTestResults] = useState<Record<number, boolean | null>>({});
+  const [testErrorMessages, setTestErrorMessages] = useState<Record<number, string>>({});
   const [modalTestResult, setModalTestResult] = useState<IndexerTestResult | null>(null);
   const [capsFilter, setCapsFilter] = useState<string>("");
   const { data: indexerCaps } = useIndexerCaps(editing?.id);
@@ -150,18 +161,27 @@ export function IndexersTab() {
 
   const handleTest = (id: number) => {
     setTestResults((prev) => ({ ...prev, [id]: null }));
+    setTestErrorMessages((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     testMutation.mutate(id, {
       onSuccess: (data) => {
         setTestResults((prev) => ({ ...prev, [id]: data.success }));
         if (data.success) {
           showToast("Indexer connection successful", "success");
         } else {
-          showToast(`Indexer connection failed: ${data.message || "Unknown error"}`, "error");
+          const message = data.message || "Connection failed";
+          setTestErrorMessages((prev) => ({ ...prev, [id]: message }));
+          showToast(`Indexer connection failed: ${message}`, "error");
         }
       },
-      onError: () => {
+      onError: (err: any) => {
+        const message = formatIndexerTestError(err);
         setTestResults((prev) => ({ ...prev, [id]: false }));
-        showToast("Indexer connection test failed", "error");
+        setTestErrorMessages((prev) => ({ ...prev, [id]: message }));
+        showToast(`Indexer connection test failed: ${message}`, "error");
       },
     });
   };
@@ -181,12 +201,13 @@ export function IndexersTab() {
           showToast(`Indexer connection failed: ${res.message || "Unknown error"}`, "error");
         }
       },
-      onError: (err) => {
+      onError: (err: any) => {
+        const message = formatIndexerTestError(err);
         setModalTestResult({
           success: false,
-          message: err.message || "Failed to test indexer connection.",
+          message,
         });
-        showToast(`Indexer connection failed: ${err.message || "Unknown error"}`, "error");
+        showToast(`Indexer connection failed: ${message}`, "error");
       },
     });
   };
@@ -395,8 +416,25 @@ export function IndexersTab() {
                 </div>
               )}
               {testResults[idx.id] === false && (
-                <div className="provider-card-test provider-card-test-fail">
+                <div
+                  className="provider-card-test provider-card-test-fail"
+                  title={testErrorMessages[idx.id] || "Connection Failed"}
+                >
                   Connection Failed
+                  {testErrorMessages[idx.id] && (
+                    <div
+                      className="provider-card-test-error"
+                      style={{
+                        fontSize: "0.72rem",
+                        marginTop: "0.25rem",
+                        color: "var(--danger, #ef4444)",
+                        lineHeight: "1.25",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {testErrorMessages[idx.id]}
+                    </div>
+                  )}
                 </div>
               )}
               {testResults[idx.id] === null && (
