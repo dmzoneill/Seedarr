@@ -1,6 +1,7 @@
-import { useRef, useEffect } from "react";
+import { useEffect } from "react";
 import { useModalRegistration } from "./ModalProvider";
 import { trackModalOpen } from "../utils/analytics";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
@@ -16,7 +17,10 @@ export function KeyboardShortcutsModal({
   isOpen,
   onClose,
 }: KeyboardShortcutsModalProps) {
-  const modalRef = useRef<HTMLDivElement>(null);
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    onEscape: onClose,
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -114,6 +118,7 @@ export function KeyboardShortcutsModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="keyboard-shortcuts-title"
+      tabIndex={-1}
       style={{
         position: "fixed",
         top: 0,

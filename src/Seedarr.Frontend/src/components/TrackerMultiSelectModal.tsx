@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import TrackerFavicon from "./TrackerFavicon";
 import { useModalRegistration } from "./ModalProvider";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 export interface TrackerPickerItem {
   url: string;
@@ -43,7 +44,10 @@ export default function TrackerMultiSelectModal({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [customUrl, setCustomUrl] = useState("");
-  const modalRef = useRef<HTMLDivElement>(null);
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    onEscape: onClose,
+  });
 
   useModalRegistration({
     id: "tracker-multi-select-modal",
@@ -136,6 +140,7 @@ export default function TrackerMultiSelectModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="tracker-picker-title"
+      tabIndex={-1}
       style={{
         position: "fixed",
         top: 0,

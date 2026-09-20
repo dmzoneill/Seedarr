@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useNavigate } from "react-router";
 import { useTranslation } from "../i18n";
 import { useModalRegistration } from "./ModalProvider";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import {
   useCreateDownloadClient,
   useTestDirectDownloadClient,
@@ -287,7 +288,10 @@ export function GettingStartedModal({
     }
   };
 
-  const modalRef = useRef<HTMLDivElement>(null);
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    onEscape: () => handleClose(true),
+  });
 
   useModalRegistration({
     id: "getting-started-modal",
@@ -524,6 +528,7 @@ export function GettingStartedModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="getting-started-modal-title"
+      tabIndex={-1}
       style={{
         position: "fixed",
         top: 0,

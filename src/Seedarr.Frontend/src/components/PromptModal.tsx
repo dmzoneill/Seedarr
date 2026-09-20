@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "../i18n";
 import { useModalRegistration } from "./ModalProvider";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 export interface PromptModalProps {
   isOpen: boolean;
@@ -41,7 +42,11 @@ export function PromptModal({
   const [value, setValue] = useState(String(initialValue ?? ""));
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
+  const modalRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    initialFocusRef: inputRef,
+    onEscape: onClose,
+  });
 
   useModalRegistration({
     id: "prompt-modal",
@@ -102,6 +107,7 @@ export function PromptModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="prompt-modal-title"
+      tabIndex={-1}
       aria-describedby={description ? "prompt-modal-desc" : undefined}
       style={{
         position: "fixed",
