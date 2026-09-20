@@ -547,7 +547,51 @@ public class IndexerController : Controller
         clone.ApiKey = clone.ApiKey?.Length > 4
             ? new string('*', clone.ApiKey.Length - 4) + clone.ApiKey[^4..]
             : new string('*', clone.ApiKey?.Length ?? 0);
+        if (clone.Capabilities == null)
+        {
+            clone.Capabilities = TorznabIndexer.GetCachedCapabilities(definition);
+        }
+
         return clone;
+    }
+
+    [HttpGet("{id}/caps")]
+    public ActionResult<TorznabCapabilities> GetCapabilities(int id)
+    {
+        var definition = _indexerFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound();
+        }
+
+        if (definition.Capabilities != null)
+        {
+            return Ok(definition.Capabilities);
+        }
+
+        var cached = TorznabIndexer.GetCachedCapabilities(definition);
+        if (cached != null)
+        {
+            return Ok(cached);
+        }
+
+        IIndexer indexer;
+        try
+        {
+            indexer = CreateIndexer(definition);
+        }
+        catch (Exception)
+        {
+            return Ok(new TorznabCapabilities());
+        }
+
+        if (indexer is TorznabIndexer torznabIndexer)
+        {
+            var caps = torznabIndexer.GetCapabilities(definition);
+            return Ok(caps ?? new TorznabCapabilities());
+        }
+
+        return Ok(new TorznabCapabilities());
     }
 
     private IIndexer CreateIndexer(IndexerDefinition definition)

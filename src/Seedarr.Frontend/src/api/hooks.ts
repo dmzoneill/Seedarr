@@ -33,6 +33,7 @@ import type {
   ArrTestResult,
   DownloadClientTestResult,
   IndexerTestResult,
+  TorznabCapabilities,
   ProwlarrSyncResult,
   SyncResult,
   BatchImportResponse,
@@ -950,6 +951,14 @@ export function useSyncProwlarrIndexers() {
   return useMutation<ProwlarrSyncResult, Error, { prowlarrIndexerId?: number } | undefined>({
     mutationFn: (req) => apiClient.post("/indexer/prowlarr/sync", req ?? {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["indexers"] }),
+  });
+}
+
+export function useIndexerCaps(id?: number) {
+  return useQuery<TorznabCapabilities>({
+    queryKey: ["indexer", id, "caps"],
+    queryFn: () => apiClient.get(`/indexers/${id}/caps`),
+    enabled: !!id && id > 0,
   });
 }
 

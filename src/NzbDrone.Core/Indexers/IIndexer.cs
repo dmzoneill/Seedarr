@@ -8,6 +8,7 @@ public class IndexerTestResult
     public string Message { get; set; }
     public int? StatusCode { get; set; }
     public System.TimeSpan? RetryAfter { get; set; }
+    public Torznab.TorznabCapabilities Capabilities { get; set; }
 }
 
 public interface IIndexer : IProvider

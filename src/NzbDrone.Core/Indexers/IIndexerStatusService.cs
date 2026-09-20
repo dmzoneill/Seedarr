@@ -37,6 +37,7 @@ public interface IIndexerStatusService
 {
     void RecordSuccess(int indexerId);
     void RecordFailure(int indexerId, int? statusCode = null, string errorMessage = null, Exception ex = null, TimeSpan? retryAfter = null);
+    void RecordFailure(int indexerId, System.Net.HttpStatusCode? statusCode = null, string retryAfterHeader = null);
     bool IsDisabled(int indexerId);
     bool IsAuthFailed(int indexerId);
     bool IsRateLimited(int indexerId);

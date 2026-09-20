@@ -683,6 +683,31 @@ export interface DownloadClientRemoteItem {
   uploadSpeed?: number | null;
 }
 
+export interface TorznabSubcategory {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+export interface TorznabCategory {
+  id: number;
+  name: string;
+  description?: string;
+  subcategories?: TorznabSubcategory[];
+}
+
+export interface TorznabSearchCapability {
+  available: boolean;
+  supportedParams: string[];
+}
+
+export interface TorznabCapabilities {
+  serverTitle?: string;
+  serverVersion?: string;
+  categories?: TorznabCategory[];
+  searching?: Record<string, TorznabSearchCapability>;
+}
+
 export interface IndexerDefinition {
   id: number;
   name: string;
@@ -699,6 +724,7 @@ export interface IndexerDefinition {
   configContract: string;
   enable: boolean;
   prowlarrIndexerId?: number | null;
+  capabilities?: TorznabCapabilities | null;
 }
 
 export interface ProwlarrSyncResult {
@@ -716,6 +742,8 @@ export interface IndexerTestResult {
   success: boolean;
   message?: string;
   responseTimeMs?: number;
+  statusCode?: number | null;
+  capabilities?: TorznabCapabilities | null;
 }
 
 export interface RssRule {

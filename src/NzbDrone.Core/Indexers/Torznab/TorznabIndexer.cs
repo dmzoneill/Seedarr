@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -81,6 +83,56 @@ public class TorznabIndexer : IIndexer
         { 8000, new List<int> { 8000, 8010, 8020 } } // Other
     };
 
+    private static readonly ConcurrentDictionary<string, TorznabCapabilities> CapabilitiesCache = new();
+
+    public static TorznabCapabilities GetCachedCapabilities(IndexerDefinition definition)
+    {
+        if (definition == null)
+        {
+            return null;
+        }
+
+        if (definition.Capabilities != null)
+        {
+            return definition.Capabilities;
+        }
+
+        if (definition.Id > 0 && CapabilitiesCache.TryGetValue($"id:{definition.Id}", out var capsById))
+        {
+            return capsById;
+        }
+
+        if (!string.IsNullOrWhiteSpace(definition.Url) && CapabilitiesCache.TryGetValue($"url:{definition.Url.TrimEnd('/')}", out var capsByUrl))
+        {
+            return capsByUrl;
+        }
+
+        return null;
+    }
+
+    public static void CacheCapabilities(IndexerDefinition definition, TorznabCapabilities caps)
+    {
+        if (definition == null || caps == null)
+        {
+            return;
+        }
+
+        if (definition.Id > 0)
+        {
+            CapabilitiesCache[$"id:{definition.Id}"] = caps;
+        }
+
+        if (!string.IsNullOrWhiteSpace(definition.Url))
+        {
+            CapabilitiesCache[$"url:{definition.Url.TrimEnd('/')}"] = caps;
+        }
+    }
+
+    public static void ClearCapabilitiesCache()
+    {
+        CapabilitiesCache.Clear();
+    }
+
     public TorznabIndexer(HttpClient httpClient = null, IIndexerStatusService indexerStatusService = null)
     {
         _httpClient = httpClient ?? DefaultClient;
@@ -90,15 +142,91 @@ public class TorznabIndexer : IIndexer
 
     public static string MapFriendlyCategory(string category)
     {
+        return MapFriendlyCategory(category, (TorznabCapabilities)null);
+    }
+
+    public static string MapFriendlyCategory(string category, TorznabCapabilities capabilities)
+    {
         if (string.IsNullOrWhiteSpace(category))
         {
             return null;
         }
 
         var trimmed = category.Trim();
-        if (int.TryParse(trimmed, out var numericCat))
+        if (capabilities != null && capabilities.Categories != null && capabilities.Categories.Count > 0)
         {
-            if (CategoryHierarchy.TryGetValue(numericCat, out var subcats))
+            if (int.TryParse(trimmed, out var numericCat))
+            {
+                var foundCat = capabilities.Categories.FirstOrDefault(c => c.Id == numericCat);
+                if (foundCat != null && foundCat.Subcategories != null && foundCat.Subcategories.Count > 0)
+                {
+                    var ids = new List<int> { foundCat.Id };
+                    ids.AddRange(foundCat.Subcategories.Select(s => s.Id));
+                    return string.Join(",", ids.Distinct());
+                }
+
+                var foundSub = capabilities.Categories.SelectMany(c => c.Subcategories ?? Enumerable.Empty<TorznabSubcategory>()).FirstOrDefault(s => s.Id == numericCat);
+                if (foundSub != null)
+                {
+                    return foundSub.Id.ToString(CultureInfo.InvariantCulture);
+                }
+
+                if (CategoryHierarchy.TryGetValue(numericCat, out var standardSubcats))
+                {
+                    return string.Join(",", standardSubcats);
+                }
+
+                return trimmed;
+            }
+
+            if (trimmed.Contains(','))
+            {
+                var parts = trimmed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var mappedList = new List<string>();
+                foreach (var part in parts)
+                {
+                    var mapped = MapFriendlyCategory(part, capabilities);
+                    if (!string.IsNullOrEmpty(mapped))
+                    {
+                        mappedList.Add(mapped);
+                    }
+                }
+
+                return mappedList.Count > 0 ? string.Join(",", mappedList.Distinct()) : null;
+            }
+
+            var lower = trimmed.ToLowerInvariant();
+            var matched = capabilities.Categories.Where(c =>
+                c.Name.Equals(lower, StringComparison.OrdinalIgnoreCase) ||
+                ((lower == "movies" || lower == "movie") && (c.Name.Contains("movie", StringComparison.OrdinalIgnoreCase) || c.Id == 2000)) ||
+                ((lower == "tv" || lower == "television" || lower == "series" || lower == "shows" || lower == "show") && (c.Name.Contains("tv", StringComparison.OrdinalIgnoreCase) || c.Name.Contains("series", StringComparison.OrdinalIgnoreCase) || c.Id == 5000)) ||
+                ((lower == "music" || lower == "audio") && (c.Name.Contains("music", StringComparison.OrdinalIgnoreCase) || c.Name.Contains("audio", StringComparison.OrdinalIgnoreCase) || c.Id == 3000)) ||
+                ((lower == "apps" || lower == "software" || lower == "pc") && (c.Name.Contains("app", StringComparison.OrdinalIgnoreCase) || c.Name.Contains("pc", StringComparison.OrdinalIgnoreCase) || c.Id == 4000)) ||
+                ((lower == "games" || lower == "game" || lower == "console") && (c.Name.Contains("game", StringComparison.OrdinalIgnoreCase) || c.Name.Contains("console", StringComparison.OrdinalIgnoreCase) || c.Id == 1000)) ||
+                ((lower == "books" || lower == "book" || lower == "ebook" || lower == "ebooks") && (c.Name.Contains("book", StringComparison.OrdinalIgnoreCase) || c.Id == 7000)) ||
+                (lower == "anime" && (c.Name.Contains("anime", StringComparison.OrdinalIgnoreCase) || (c.Subcategories != null && c.Subcategories.Any(s => s.Id == 5070 || s.Name.Contains("anime", StringComparison.OrdinalIgnoreCase))))) ||
+                ((lower == "xxx" || lower == "adult") && (c.Name.Contains("xxx", StringComparison.OrdinalIgnoreCase) || c.Name.Contains("adult", StringComparison.OrdinalIgnoreCase) || c.Id == 6000)) ||
+                ((lower == "other" || lower == "misc") && (c.Name.Contains("other", StringComparison.OrdinalIgnoreCase) || c.Id == 8000))).ToList();
+
+            if (matched.Count > 0)
+            {
+                var allIds = new List<int>();
+                foreach (var m in matched)
+                {
+                    allIds.Add(m.Id);
+                    if (m.Subcategories != null)
+                    {
+                        allIds.AddRange(m.Subcategories.Select(s => s.Id));
+                    }
+                }
+
+                return string.Join(",", allIds.Distinct());
+            }
+        }
+
+        if (int.TryParse(trimmed, out var numericCategory))
+        {
+            if (CategoryHierarchy.TryGetValue(numericCategory, out var subcats))
             {
                 return string.Join(",", subcats);
             }
@@ -140,6 +268,52 @@ public class TorznabIndexer : IIndexer
     public bool TestConnection(IndexerDefinition definition)
     {
         return TestConnectionDetailed(definition).Success;
+    }
+
+    public TorznabCapabilities GetCapabilities(IndexerDefinition definition)
+    {
+        if (definition == null || string.IsNullOrWhiteSpace(definition.Url))
+        {
+            return new TorznabCapabilities();
+        }
+
+        var cached = GetCachedCapabilities(definition);
+        if (cached != null)
+        {
+            return cached;
+        }
+
+        try
+        {
+            var apiPath = string.IsNullOrEmpty(definition.ApiPath) ? "/api" : definition.ApiPath;
+            var url = $"{definition.Url.TrimEnd('/')}{apiPath}?t=caps";
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (!string.IsNullOrWhiteSpace(definition.ApiKey))
+            {
+                request.Headers.Add("X-Api-Key", definition.ApiKey);
+            }
+
+            using var response = _httpClient.Send(request);
+            if (response.IsSuccessStatusCode)
+            {
+                using var stream = response.Content.ReadAsStream();
+                using var reader = new StreamReader(stream);
+                var content = reader.ReadToEnd();
+                var caps = TorznabCapsParser.Parse(content);
+                if (caps != null)
+                {
+                    definition.Capabilities = caps;
+                    CacheCapabilities(definition, caps);
+                    return caps;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to retrieve capabilities from Torznab at {0}", definition.Url);
+        }
+
+        return new TorznabCapabilities();
     }
 
     public IndexerTestResult TestConnectionDetailed(IndexerDefinition definition)
@@ -204,10 +378,26 @@ public class TorznabIndexer : IIndexer
 
             if (response.IsSuccessStatusCode)
             {
+                TorznabCapabilities capabilities = null;
+                if (!string.IsNullOrWhiteSpace(content))
+                {
+                    capabilities = TorznabCapsParser.Parse(content);
+                    if (capabilities != null)
+                    {
+                        if (definition != null)
+                        {
+                            definition.Capabilities = capabilities;
+                        }
+
+                        CacheCapabilities(definition, capabilities);
+                    }
+                }
+
                 return new IndexerTestResult
                 {
                     Success = true,
-                    Message = $"Successfully connected to Torznab indexer at {definition.Url}"
+                    Message = $"Successfully connected to Torznab indexer at {definition.Url}",
+                    Capabilities = capabilities
                 };
             }
 
@@ -468,14 +658,15 @@ public class TorznabIndexer : IIndexer
                 break;
         }
 
-        var mappedCat = MapFriendlyCategory(searchQuery.Category);
+        var caps = definition?.Capabilities ?? GetCachedCapabilities(definition);
+        var mappedCat = MapFriendlyCategory(searchQuery.Category, caps);
         if (!string.IsNullOrWhiteSpace(mappedCat))
         {
             queryParams.Add($"cat={Uri.EscapeDataString(mappedCat)}");
         }
         else if (!string.IsNullOrWhiteSpace(definition.Categories))
         {
-            var defCat = MapFriendlyCategory(definition.Categories);
+            var defCat = MapFriendlyCategory(definition.Categories, caps);
             if (!string.IsNullOrWhiteSpace(defCat))
             {
                 queryParams.Add($"cat={Uri.EscapeDataString(defCat)}");
