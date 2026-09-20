@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Network.Pcp;
 using Open.Nat;
 
 namespace NzbDrone.Core.Network;
@@ -16,23 +17,56 @@ public class PortMappingEngine : IPortMappingEngine
 
     private readonly IGatewayDiscoveryService _gatewayDiscoveryService;
     private readonly IUpnpService _upnpService;
+    private readonly IPcpClient _pcpClient;
     private readonly Func<IPAddress, CancellationToken, Task<PortMappingProtocol>> _udpProber;
     private readonly Func<CancellationToken, Task<bool>> _upnpProber;
     private readonly Logger _logger;
 
     public PortMappingProtocol CurrentProtocol { get; private set; } = PortMappingProtocol.None;
+    public IPcpClient PcpClient => _pcpClient;
 
     public PortMappingEngine(
         IGatewayDiscoveryService gatewayDiscoveryService,
         IUpnpService upnpService = null,
         Func<IPAddress, CancellationToken, Task<PortMappingProtocol>> udpProber = null,
-        Func<CancellationToken, Task<bool>> upnpProber = null)
+        Func<CancellationToken, Task<bool>> upnpProber = null,
+        IPcpClient pcpClient = null)
     {
         _gatewayDiscoveryService = gatewayDiscoveryService;
         _upnpService = upnpService;
+        _pcpClient = pcpClient;
         _logger = LogManager.GetCurrentClassLogger();
         _udpProber = udpProber ?? ProbeUdpAsync;
         _upnpProber = upnpProber ?? ProbeUpnpAsync;
+    }
+
+    public void DemoteToNatPmp()
+    {
+        CurrentProtocol = PortMappingProtocol.NatPmp;
+        _logger.Info("Port mapping protocol demoted from PCP to NAT-PMP");
+    }
+
+    public async Task<PcpMappingResult> CreatePcpMappingAsync(
+        IPAddress gateway,
+        IPAddress clientIp,
+        int internalPort,
+        int suggestedExternalPort,
+        PortMappingTransport protocol,
+        TimeSpan lifetime,
+        CancellationToken cancellationToken = default)
+    {
+        if (_pcpClient == null)
+        {
+            throw new InvalidOperationException("PCP client is not configured.");
+        }
+
+        var result = await _pcpClient.CreateMappingAsync(gateway, clientIp, internalPort, suggestedExternalPort, protocol, lifetime, cancellationToken);
+        if (result.ResultCode == PcpResultCode.UnsupportedVersion)
+        {
+            DemoteToNatPmp();
+        }
+
+        return result;
     }
 
     public async Task<PortMappingProtocol> DetectProtocolAsync(CancellationToken cancellationToken = default)
@@ -243,7 +277,12 @@ public class PortMappingEngine : IPortMappingEngine
             _ => "None"
         };
 
-        var externalIp = _upnpService?.ExternalIp ?? string.Empty;
+        var externalIp = _pcpClient?.ExternalAddress?.ToString();
+        if (string.IsNullOrWhiteSpace(externalIp))
+        {
+            externalIp = _upnpService?.ExternalIp ?? string.Empty;
+        }
+
         var routerModel = _upnpService?.RouterModel;
         if (string.IsNullOrWhiteSpace(routerModel))
         {
@@ -257,6 +296,25 @@ public class PortMappingEngine : IPortMappingEngine
         }
 
         var mappings = new List<EnrichedPortMapping>();
+
+        if (_pcpClient != null && _pcpClient.ActiveMappings.Count > 0)
+        {
+            foreach (var m in _pcpClient.ActiveMappings)
+            {
+                mappings.Add(new EnrichedPortMapping
+                {
+                    InternalPort = m.InternalPort,
+                    ExternalPort = m.AssignedExternalPort,
+                    Protocol = m.Protocol.ToString().ToUpperInvariant(),
+                    Description = "PCP Mapping",
+                    LeaseSeconds = (int)m.Lifetime.TotalSeconds,
+                    ExpiryUtc = m.CreatedAtUtc.Add(m.Lifetime),
+                    IsActive = m.IsActive,
+                    Status = m.IsActive ? "Active" : "Inactive"
+                });
+            }
+        }
+
         if (_upnpService != null)
         {
             var rawMappings = _upnpService.GetMappings();

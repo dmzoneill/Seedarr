@@ -11,4 +11,5 @@ public interface IPortMappingEngine
     PortMappingProtocol DetectProtocol();
     Task<PortMappingStatus> GetStatusAsync(CancellationToken cancellationToken = default);
     Task<PortMappingStatus> RefreshAsync(CancellationToken cancellationToken = default);
+    void DemoteToNatPmp();
 }
