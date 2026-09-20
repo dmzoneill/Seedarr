@@ -103,6 +103,8 @@ public class SpeedPolicy : ISpeedPolicy,
     private readonly ICategoryService _categoryService;
     private readonly ITagService _tagService;
     private readonly Logger _logger;
+    private readonly IPieceBoundaryMasker _pieceBoundaryMasker;
+    private readonly ITorrentFileService _torrentFileService;
 
     public SpeedPolicy(
         ISpeedDistributionManager distributionManager,
@@ -115,7 +117,9 @@ public class SpeedPolicy : ISpeedPolicy,
         ISwarmAnalyzer swarmAnalyzer = null,
         IEventAggregator eventAggregator = null,
         ICategoryService categoryService = null,
-        ITagService tagService = null)
+        ITagService tagService = null,
+        IPieceBoundaryMasker pieceBoundaryMasker = null,
+        ITorrentFileService torrentFileService = null)
     {
         _distributionManager = distributionManager;
         _speedScheduler = speedScheduler;
@@ -128,6 +132,8 @@ public class SpeedPolicy : ISpeedPolicy,
         _eventAggregator = eventAggregator;
         _categoryService = categoryService;
         _tagService = tagService;
+        _pieceBoundaryMasker = pieceBoundaryMasker ?? new PieceBoundaryMasker();
+        _torrentFileService = torrentFileService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -207,20 +213,7 @@ public class SpeedPolicy : ISpeedPolicy,
 
             torrent.Downloaded += bytesThisTick;
 
-            if (torrent.TotalSize > 0)
-            {
-                var wasComplete = torrent.Progress >= 1.0;
-                torrent.Progress = torrent.Downloaded >= torrent.TotalSize
-                    ? 1.0
-                    : Math.Round((double)torrent.Downloaded / torrent.TotalSize, 6);
-
-                if (!wasComplete && torrent.Progress >= 1.0)
-                {
-                    _eventLogService.Info(torrent.Id, "Download", $"Download complete ({FormatBytes(torrent.TotalSize)})");
-                    _eventAggregator?.PublishEvent(new TorrentDownloadCompletedEvent(torrent));
-                    _eventAggregator?.PublishEvent(new TorrentFinishedEvent(torrent));
-                }
-            }
+            UpdateDownloadProgress(torrent);
 
             torrent.UpdateRatio();
 
@@ -432,21 +425,14 @@ public class SpeedPolicy : ISpeedPolicy,
 
             torrent.Uploaded += uploadBytesThisTick;
 
-            if (!torrent.ForceCompleted && torrent.Progress < 1.0 && torrent.TotalSize > 0)
+            if (!torrent.ForceCompleted && torrent.Progress < 1.0 && (torrent.TotalSize > 0 || (torrent.Files != null && torrent.Files.Count > 0)))
             {
                 var dlVariationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
                 var effectiveDownloadBps = limits.MaxDownloadSpeed == SpeedLimits.Unlimited ? 1_000_000_000L : limits.MaxDownloadSpeed;
                 var dlBytesThisTick = (long)(effectiveDownloadBps * dlVariationFactor * tickInterval.TotalSeconds / Math.Max(1, torrents.Count));
 
                 torrent.Downloaded += dlBytesThisTick;
-                torrent.Progress = torrent.Downloaded >= torrent.TotalSize
-                    ? 1.0
-                    : Math.Round((double)torrent.Downloaded / torrent.TotalSize, 6);
-
-                if (torrent.Progress >= 1.0)
-                {
-                    _eventLogService.Info(torrent.Id, "Download", $"Download complete ({FormatBytes(torrent.TotalSize)})");
-                }
+                UpdateDownloadProgress(torrent);
             }
 
             torrent.UpdateRatio();
@@ -472,6 +458,29 @@ public class SpeedPolicy : ISpeedPolicy,
             0 => 0.5,
             _ => 1.0
         };
+    }
+
+    private void UpdateDownloadProgress(Torrent torrent)
+    {
+        var files = torrent.Files ?? _torrentFileService?.GetByTorrentId(torrent.Id);
+        var isSelective = files != null && files.Count > 0 && _pieceBoundaryMasker.IsSelectiveDownload(files);
+        var wantedSize = isSelective ? _pieceBoundaryMasker.CalculateWantedSize(torrent, files) : torrent.TotalSize;
+        var targetSize = isSelective ? wantedSize : torrent.TotalSize;
+
+        if (targetSize > 0)
+        {
+            var wasComplete = torrent.Progress >= 1.0;
+            torrent.Progress = torrent.Downloaded >= targetSize
+                ? 1.0
+                : Math.Min(1.0, Math.Round((double)torrent.Downloaded / targetSize, 6));
+
+            if (!wasComplete && torrent.Progress >= 1.0)
+            {
+                _eventLogService.Info(torrent.Id, "Download", $"Download complete ({FormatBytes(targetSize)})");
+                _eventAggregator?.PublishEvent(new TorrentDownloadCompletedEvent(torrent));
+                _eventAggregator?.PublishEvent(new TorrentFinishedEvent(torrent));
+            }
+        }
     }
 
     private static string FormatBytes(long bytes)

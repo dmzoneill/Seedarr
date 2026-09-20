@@ -5,6 +5,7 @@ using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
@@ -939,5 +940,124 @@ public class SpeedPolicyTest
 
         var maxPayload = SpeedPolicy.CalculateMaxPayloadAllowance(105_000, 0.05);
         Assert.That(maxPayload, Is.EqualTo(100_000L));
+    }
+
+    [Test]
+    public void ProcessDownloading_when_selective_download_computes_progress_based_on_wanted_size_and_fires_completed_event()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var subject = new SpeedPolicy(
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventLogService,
+            _stateMachine,
+            _stopPolicy,
+            new RandomNumberGenerator(42),
+            eventAggregator: eventAggregator,
+            categoryService: _categoryService,
+            tagService: _tagService);
+
+        var torrent = new Torrent
+        {
+            Id = 42,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000,
+            Progress = 0.0,
+            Files = new List<TorrentFile>
+            {
+                new TorrentFile { ByteOffset = 0, Size = 2_000, Wanted = true },
+                new TorrentFile { ByteOffset = 2_000, Size = 8_000, Wanted = false }
+            }
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectDownloadStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 1_000 });
+
+        // First tick: downloads 1,000 bytes out of 2,000 wanted bytes -> progress should be 0.5 (not 0.1)
+        subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = 1_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Downloaded, Is.EqualTo(1_000));
+        Assert.That(torrent.Progress, Is.EqualTo(0.5));
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentDownloadCompletedEvent>());
+
+        // Second tick: downloads another 1,000 bytes -> reaches 2,000 wanted bytes -> progress should be 1.0
+        subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = 1_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Downloaded, Is.EqualTo(2_000));
+        Assert.That(torrent.Progress, Is.EqualTo(1.0));
+        eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentDownloadCompletedEvent>(e => e.Torrent.Id == 42));
+        _eventLogService.Received(1).Info(42, "Download", Arg.Is<string>(s => s.Contains("complete")));
+    }
+
+    [Test]
+    public void ProcessDownloading_when_not_selective_computes_progress_based_on_total_size()
+    {
+        var torrent = new Torrent
+        {
+            Id = 43,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000,
+            Progress = 0.0,
+            Files = new List<TorrentFile>
+            {
+                new TorrentFile { ByteOffset = 0, Size = 5_000, Wanted = true },
+                new TorrentFile { ByteOffset = 5_000, Size = 5_000, Wanted = true }
+            }
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectDownloadStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 2_000 });
+
+        _subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = 2_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Downloaded, Is.EqualTo(2_000));
+        Assert.That(torrent.Progress, Is.EqualTo(0.2));
+    }
+
+    [Test]
+    public void ProcessSeeding_when_selective_download_reaches_wanted_size_sets_progress_to_one()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var subject = new SpeedPolicy(
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventLogService,
+            _stateMachine,
+            _stopPolicy,
+            new RandomNumberGenerator(42),
+            eventAggregator: eventAggregator,
+            categoryService: _categoryService,
+            tagService: _tagService);
+
+        var torrent = new Torrent
+        {
+            Id = 44,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000,
+            Progress = 0.0,
+            Leechers = 1,
+            Files = new List<TorrentFile>
+            {
+                new TorrentFile { ByteOffset = 0, Size = 500, Wanted = true },
+                new TorrentFile { ByteOffset = 500, Size = 9_500, Wanted = false }
+            }
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+
+        subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 100, MaxDownloadSpeed = 500 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Downloaded, Is.GreaterThanOrEqualTo(500));
+        Assert.That(torrent.Progress, Is.EqualTo(1.0));
     }
 }

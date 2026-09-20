@@ -91,7 +91,9 @@ public class SeedingEngine : BackgroundService
         IPieceStorage pieceStorage = null,
         IDhtService dhtService = null,
         ITrackerAnnounceService trackerAnnounceService = null,
-        Peers.IPeerServer peerServer = null)
+        Peers.IPeerServer peerServer = null,
+        IPieceBoundaryMasker pieceBoundaryMasker = null,
+        ITorrentFileService torrentFileService = null)
     {
         _torrentService = torrentService;
         _torrentRepository = torrentRepository;
@@ -115,7 +117,7 @@ public class SeedingEngine : BackgroundService
         _dhtService = dhtService;
         _trackerAnnounceService = trackerAnnounceService;
         _peerServer = peerServer;
-        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService, tagService);
+        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService, tagService, pieceBoundaryMasker, torrentFileService);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
