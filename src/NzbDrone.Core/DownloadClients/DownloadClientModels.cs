@@ -51,6 +51,8 @@ public class DownloadClientItem
     public bool IsPrivate { get; set; }
     public long? DownloadSpeed { get; set; }
     public long? UploadSpeed { get; set; }
+    public int ClientId { get; set; }
+    public string ClientName { get; set; }
 }
 
 public class DownloadClientRemoteItem
@@ -69,6 +71,8 @@ public class DownloadClientRemoteItem
     public int? LibraryTorrentId { get; set; }
     public long? DownloadSpeed { get; set; }
     public long? UploadSpeed { get; set; }
+    public int ClientId { get; set; }
+    public string ClientName { get; set; }
 }
 
 public class DownloadClientImportRequest

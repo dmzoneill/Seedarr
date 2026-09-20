@@ -1485,4 +1485,32 @@ public class DownloadClientSyncServiceTest
         var backoff = DownloadClientSyncService.CalculateBackoff(failures);
         Assert.That(backoff.TotalSeconds, Is.EqualTo(expectedSeconds));
     }
+
+    [Test]
+    public void GetAllClientItems_should_aggregate_items_from_all_enabled_clients()
+    {
+        var client1Def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true };
+        var client2Def = new DownloadClientDefinition { Id = 2, Name = "Transmission", ClientType = "Transmission", Enable = true };
+        var disabledDef = new DownloadClientDefinition { Id = 3, Name = "Deluge", ClientType = "Deluge", Enable = false };
+
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { client1Def, client2Def, disabledDef });
+        _downloadClientFactory.Get(1).Returns(client1Def);
+        _downloadClientFactory.Get(2).Returns(client2Def);
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { Title = "Linux ISO", InfoHash = "hash1", TotalSize = 1000 }
+        });
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var allItems = _service.GetAllClientItems();
+
+        Assert.That(allItems, Has.Count.EqualTo(2));
+        Assert.That(allItems[0].ClientId, Is.EqualTo(1));
+        Assert.That(allItems[0].ClientName, Is.EqualTo("qBittorrent"));
+        Assert.That(allItems[1].ClientId, Is.EqualTo(2));
+        Assert.That(allItems[1].ClientName, Is.EqualTo("Transmission"));
+    }
 }

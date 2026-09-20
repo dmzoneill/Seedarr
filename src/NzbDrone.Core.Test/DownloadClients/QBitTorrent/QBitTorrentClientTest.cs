@@ -624,4 +624,70 @@ public class QBitTorrentClientTest
         Assert.That(handler.Requests[3].RequestUri.AbsolutePath, Does.Contain("auth/login"));
         Assert.That(handler.Requests[4].RequestUri.AbsolutePath, Does.Contain("torrents/info"));
     }
+
+    [Test]
+    public void PauseTorrent_should_post_to_pause_endpoint()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(System.Net.HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(System.Net.HttpStatusCode.OK, "");
+        InjectMockClient(handler);
+
+        var result = _client.PauseTorrent("abc123hash");
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests, Has.Count.EqualTo(2));
+        Assert.That(handler.Requests[1].RequestUri.AbsolutePath, Does.Contain("torrents/pause"));
+    }
+
+    [Test]
+    public void PauseTorrent_should_return_false_on_empty_hash()
+    {
+        var result = _client.PauseTorrent("");
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void ResumeTorrent_should_post_to_resume_endpoint()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(System.Net.HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(System.Net.HttpStatusCode.OK, "");
+        InjectMockClient(handler);
+
+        var result = _client.ResumeTorrent("abc123hash");
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests, Has.Count.EqualTo(2));
+        Assert.That(handler.Requests[1].RequestUri.AbsolutePath, Does.Contain("torrents/resume"));
+    }
+
+    [Test]
+    public void ResumeTorrent_should_return_false_on_empty_hash()
+    {
+        var result = _client.ResumeTorrent("");
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void DeleteTorrent_should_post_to_delete_endpoint_with_delete_data()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(System.Net.HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(System.Net.HttpStatusCode.OK, "");
+        InjectMockClient(handler);
+
+        var result = _client.DeleteTorrent("abc123hash", deleteData: true);
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests, Has.Count.EqualTo(2));
+        Assert.That(handler.Requests[1].RequestUri.AbsolutePath, Does.Contain("torrents/delete"));
+    }
+
+    [Test]
+    public void DeleteTorrent_should_return_false_on_empty_hash()
+    {
+        var result = _client.DeleteTorrent("");
+        Assert.That(result, Is.False);
+    }
 }

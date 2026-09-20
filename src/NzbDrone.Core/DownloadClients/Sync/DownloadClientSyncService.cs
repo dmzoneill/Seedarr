@@ -27,6 +27,7 @@ public interface IDownloadClientSyncService
 {
     SyncResult Sync();
     List<DownloadClientRemoteItem> GetClientItems(int clientId);
+    List<DownloadClientRemoteItem> GetAllClientItems();
     Torrent ImportTorrent(int clientId, string infoHash);
     BatchImportResponse ImportTorrents(int clientId, List<string> infoHashes);
     DownloadClientStatus GetClientStatus(int clientId);
@@ -392,7 +393,37 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 LibraryTorrentId = libraryId,
                 DownloadSpeed = item.DownloadSpeed,
                 UploadSpeed = item.UploadSpeed,
+                ClientId = clientId,
+                ClientName = definition.Name,
             });
+        }
+
+        return result;
+    }
+
+    public List<DownloadClientRemoteItem> GetAllClientItems()
+    {
+        var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+        var result = new List<DownloadClientRemoteItem>();
+
+        foreach (var client in clients)
+        {
+            var status = _clientStatuses.GetOrAdd(client.Id, id => new DownloadClientStatus { ClientId = id });
+            if (status.IsInBackoff)
+            {
+                _logger.Warn("Download client {0} is in backoff until {1}. Skipping item fetch.", client.Name, status.BackoffUntil);
+                continue;
+            }
+
+            try
+            {
+                var items = GetClientItems(client.Id);
+                result.AddRange(items);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to retrieve items from download client {0} ({1}) for aggregated view", client.Name, client.Id);
+            }
         }
 
         return result;

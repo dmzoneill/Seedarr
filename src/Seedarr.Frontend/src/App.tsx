@@ -701,6 +701,15 @@ function App() {
                 <HistoryIcon />{" "}
                 <span>{t("nav.history", undefined, "History")}</span>
               </NavLink>
+              {downloadClients && downloadClients.filter((c) => c.enable).length > 1 && (
+                <NavLink
+                  to="/activity/client/all"
+                  className="sidebar-nav-item sidebar-nav-sub"
+                  title="All Clients"
+                >
+                  <DownloadAgentIcon /> <span>All Clients</span>
+                </NavLink>
+              )}
               {downloadClients
                 ?.filter((c) => c.enable)
                 .map((client) => (

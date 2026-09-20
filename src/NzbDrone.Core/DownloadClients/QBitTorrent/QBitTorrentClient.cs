@@ -535,6 +535,88 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         }
     }
 
+    public bool PauseTorrent(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var response = SendWithAuth(() =>
+            {
+                var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("hashes", infoHash),
+                });
+                return new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/pause") { Content = content };
+            });
+
+            return response != null && response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to pause qBittorrent torrent {0}", infoHash);
+            return false;
+        }
+    }
+
+    public bool ResumeTorrent(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var response = SendWithAuth(() =>
+            {
+                var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("hashes", infoHash),
+                });
+                return new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/resume") { Content = content };
+            });
+
+            return response != null && response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to resume qBittorrent torrent {0}", infoHash);
+            return false;
+        }
+    }
+
+    public bool DeleteTorrent(string infoHash, bool deleteData = false)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var response = SendWithAuth(() =>
+            {
+                var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("hashes", infoHash),
+                    new KeyValuePair<string, string>("deleteFiles", deleteData ? "true" : "false"),
+                });
+                return new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/delete") { Content = content };
+            });
+
+            return response != null && response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to delete qBittorrent torrent {0}", infoHash);
+            return false;
+        }
+    }
+
     public bool TestConnection()
     {
         return TestConnectionDetailed().Success;

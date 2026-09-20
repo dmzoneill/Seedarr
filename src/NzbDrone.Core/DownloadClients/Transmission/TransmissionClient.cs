@@ -421,6 +421,70 @@ public class TransmissionClient : IDownloadClient, IDisposable
         }
     }
 
+    public bool PauseTorrent(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            var args = new { ids = new[] { infoHash } };
+            using var doc = SendRequest("torrent-stop", args);
+            return doc.RootElement.TryGetProperty("result", out var res) && res.GetString() == "success";
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to pause Transmission torrent {0}", infoHash);
+            return false;
+        }
+    }
+
+    public bool ResumeTorrent(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            var args = new { ids = new[] { infoHash } };
+            using var doc = SendRequest("torrent-start", args);
+            return doc.RootElement.TryGetProperty("result", out var res) && res.GetString() == "success";
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to resume Transmission torrent {0}", infoHash);
+            return false;
+        }
+    }
+
+    public bool DeleteTorrent(string infoHash, bool deleteData = false)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            var args = new Dictionary<string, object>
+            {
+                ["ids"] = new[] { infoHash },
+                ["delete-local-data"] = deleteData
+            };
+            using var doc = SendRequest("torrent-remove", args);
+            return doc.RootElement.TryGetProperty("result", out var res) && res.GetString() == "success";
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to remove Transmission torrent {0}", infoHash);
+            return false;
+        }
+    }
+
     public bool TestConnection()
     {
         return TestConnectionDetailed().Success;
