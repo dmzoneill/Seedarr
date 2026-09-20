@@ -17,6 +17,7 @@ public interface ITorrentEventLogService
     List<TorrentEventLog> GetByTorrentId(int torrentId, int count);
     void Purge(DateTime before);
     void Purge(DateTime before, int maxLogsPerTorrent);
+    void Purge(DateTime before, int maxLogsPerTorrent, int batchSize);
     Task FlushAsync();
 }
 
@@ -90,13 +91,18 @@ public class TorrentEventLogService : ITorrentEventLogService, IDisposable, IAsy
 
     public void Purge(DateTime before)
     {
-        Purge(before, 1000);
+        Purge(before, 1000, 1000);
     }
 
     public void Purge(DateTime before, int maxLogsPerTorrent)
     {
-        _repository.Purge(before, maxLogsPerTorrent);
-        _logger.Trace("Purged torrent event logs before {0} (max {1} per torrent)", before, maxLogsPerTorrent);
+        Purge(before, maxLogsPerTorrent, 1000);
+    }
+
+    public void Purge(DateTime before, int maxLogsPerTorrent, int batchSize)
+    {
+        _repository.Purge(before, maxLogsPerTorrent, batchSize);
+        _logger.Trace("Purged torrent event logs before {0} (max {1} per torrent, batch size {2})", before, maxLogsPerTorrent, batchSize);
     }
 
     public async Task FlushAsync()
