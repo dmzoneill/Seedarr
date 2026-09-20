@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
@@ -69,6 +70,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly ITorrentService _torrentService;
     private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
     private readonly IVpnKillSwitchService _vpnKillSwitchService;
+    private readonly IClientProfileFactory _clientProfileFactory;
     private readonly ConcurrentDictionary<int, bool> _completedTorrents = new();
     private readonly ConcurrentQueue<Torrent> _staggeredQueue = new();
     private readonly object _staggeredLock = new();
@@ -92,7 +94,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         IEventAggregator eventAggregator = null,
         ITorrentService torrentService = null,
         IClientBehaviorSimulator clientBehaviorSimulator = null,
-        IVpnKillSwitchService vpnKillSwitchService = null)
+        IVpnKillSwitchService vpnKillSwitchService = null,
+        IClientProfileFactory clientProfileFactory = null)
     {
         _trackerEntryService = trackerEntryService;
         _multiTracker = multiTracker;
@@ -104,6 +107,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         _torrentService = torrentService;
         _clientBehaviorSimulator = clientBehaviorSimulator;
         _vpnKillSwitchService = vpnKillSwitchService;
+        _clientProfileFactory = clientProfileFactory;
         _logger = LogManager.GetCurrentClassLogger();
 
         if (_torrentService != null)
@@ -337,37 +341,67 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         var left = announceEvent == AnnounceEvent.Completed ? 0 : Math.Max(0, torrent.TotalSize - torrent.Downloaded);
         var eventName = announceEvent != AnnounceEvent.None ? announceEvent.ToString().ToLowerInvariant() : "regular";
 
-        var uploadedBytes = Math.Max(torrent.Uploaded, entry.LastAnnouncedUploaded);
+        var isSimulated = torrent.IsSimulated || (_configService != null && _configService.SimulationModeEnabled);
+        var isLoopback = IsLoopbackOrMockTracker(entry.Url);
+
+        long effectiveUploaded;
+        if (isSimulated && !isLoopback)
+        {
+            effectiveUploaded = torrent.RealUploaded;
+            if (torrent.Uploaded > torrent.RealUploaded)
+            {
+                _logger.Debug(
+                    "Simulated torrent {0}: suppressing synthetic upload bytes ({1:N0} bytes) from external tracker {2}; reporting genuine wire bytes ({3:N0} bytes)",
+                    torrent.Name ?? torrent.InfoHash,
+                    torrent.Uploaded,
+                    entry.Url,
+                    effectiveUploaded);
+            }
+        }
+        else
+        {
+            effectiveUploaded = torrent.Uploaded;
+        }
+
+        var uploadedBytes = Math.Max(effectiveUploaded, entry.LastAnnouncedUploaded);
 
         _eventLogService.Info(
             torrent.Id,
             "Tracker",
             $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {uploadedBytes:N0} bytes, left: {left:N0} bytes)");
 
-        var session = (_clientBehaviorSimulator != null && !_configService.AnonymousMode)
-            ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
-            : null;
-        var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && !_configService.AnonymousMode)
-            ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
-            : null);
+        IClientProfile profile = null;
+        TorrentClientSession session = null;
+
+        if (!string.IsNullOrWhiteSpace(torrent.ClientProfile))
+        {
+            profile = ResolveProfileByName(torrent.ClientProfile);
+        }
+
+        if (profile == null && _clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+        {
+            session = _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate);
+            profile = session?.Profile ?? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate);
+        }
+
+        if (profile == null && !string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent))
+        {
+            profile = DetectProfileFromUserAgent(_configService.BitTorrentUserAgent);
+        }
+
+        if (profile == null && _clientBehaviorSimulator != null && !_configService.AnonymousMode)
+        {
+            session = _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate);
+            profile = session?.Profile ?? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate);
+        }
 
         if (profile == null)
         {
-            var primary = _configService.PrimaryClient?.Trim().ToLowerInvariant() ?? "";
-            profile = primary switch
-            {
-                "transmission" => new TransmissionProfile(),
-                "deluge" => new DelugeProfile(),
-                "utorrent" => new UTorrentProfile(),
-                "biglybt" => new BiglyBTProfile(),
-                _ => new QBittorrentProfile()
-            };
+            profile = ResolveProfileByName(_configService.PrimaryClient) ?? new QBittorrentProfile();
         }
 
         var peerId = session?.PeerId ?? profile.GeneratePeerId();
-        var userAgent = !_configService.ClientBehaviorEngineEnabled && !string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent)
-            ? _configService.BitTorrentUserAgent
-            : (session?.Profile?.UserAgent ?? profile.UserAgent ?? _configService.BitTorrentUserAgent);
+        var userAgent = session?.Profile?.UserAgent ?? profile.UserAgent ?? (!string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent) ? _configService.BitTorrentUserAgent : "qBittorrent/4.4.2");
         var announceKey = session?.AnnounceKey ?? RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue).ToString("X8", CultureInfo.InvariantCulture);
 
         var request = new TrackerAnnounceRequest
@@ -543,6 +577,116 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         _eventAggregator?.PublishEvent(new TrackerAnnounceEvent(torrent, entry.Url, response.Complete, response.Incomplete, response.Peers?.Count ?? 0, sw.ElapsedMilliseconds, response.Success, response.FailureReason, entry.Id, entry.Status));
 
         return result;
+    }
+
+    public static bool IsLoopbackOrMockTracker(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            var host = uri.Host;
+            if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (IPAddress.TryParse(host, out var ip) && IPAddress.IsLoopback(ip))
+            {
+                return true;
+            }
+
+            if (uri.Scheme.StartsWith("mock", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private IClientProfile ResolveProfileByName(string clientName)
+    {
+        if (string.IsNullOrWhiteSpace(clientName))
+        {
+            return null;
+        }
+
+        var name = clientName.Trim().ToLowerInvariant();
+
+        if (_clientProfileFactory != null)
+        {
+            try
+            {
+                var available = _clientProfileFactory.GetAvailableProviders();
+                if (available != null)
+                {
+                    var match = available.FirstOrDefault(p =>
+                        p.Name.Equals(clientName, StringComparison.OrdinalIgnoreCase) ||
+                        p.GetType().Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase) ||
+                        p.Name.ToLowerInvariant().Contains(name));
+                    if (match != null)
+                    {
+                        return match;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to get available providers from ClientProfileFactory");
+            }
+        }
+
+        return name switch
+        {
+            var s when s.Contains("transmission") => new TransmissionProfile(),
+            var s when s.Contains("deluge") => new DelugeProfile(),
+            var s when s.Contains("utorrent") || s.Contains("µtorrent") => new UTorrentProfile(),
+            var s when s.Contains("biglybt") => new BiglyBTProfile(),
+            var s when s.Contains("qbittorrent") => new QBittorrentProfile(),
+            _ => null
+        };
+    }
+
+    private IClientProfile DetectProfileFromUserAgent(string userAgent)
+    {
+        if (string.IsNullOrWhiteSpace(userAgent))
+        {
+            return null;
+        }
+
+        var ua = userAgent.ToLowerInvariant();
+        if (ua.Contains("transmission"))
+        {
+            return ResolveProfileByName("Transmission") ?? new TransmissionProfile();
+        }
+
+        if (ua.Contains("deluge"))
+        {
+            return ResolveProfileByName("Deluge") ?? new DelugeProfile();
+        }
+
+        if (ua.Contains("utorrent") || ua.Contains("µtorrent"))
+        {
+            return ResolveProfileByName("uTorrent") ?? new UTorrentProfile();
+        }
+
+        if (ua.Contains("biglybt"))
+        {
+            return ResolveProfileByName("BiglyBT") ?? new BiglyBTProfile();
+        }
+
+        if (ua.Contains("qbittorrent"))
+        {
+            return ResolveProfileByName("qBittorrent") ?? new QBittorrentProfile();
+        }
+
+        return null;
     }
 
     public static double CalculateJitteredInterval(double interval, int minInterval = 0, double? jitterFraction = null)

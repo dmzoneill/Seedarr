@@ -3334,6 +3334,10 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
                 connection.SendMessage(new PeerMessage { Type = PeerMessageType.Piece, Payload = piecePayload, PayloadLength = payloadSize });
                 connection.BytesUploaded += length;
+                if (connection.MatchedTorrent != null)
+                {
+                    connection.MatchedTorrent.RealUploaded += length;
+                }
             }
             finally
             {

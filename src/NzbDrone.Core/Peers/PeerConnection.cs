@@ -279,6 +279,10 @@ public class PeerConnection : IDisposable
         if (bytes > 0)
         {
             BytesUploaded += bytes;
+            if (MatchedTorrent != null)
+            {
+                MatchedTorrent.RealUploaded += bytes;
+            }
         }
     }
 

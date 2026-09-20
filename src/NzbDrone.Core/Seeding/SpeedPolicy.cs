@@ -482,6 +482,7 @@ public class SpeedPolicy : ISpeedPolicy,
             var uploadBytesThisTick = uploadBytesPerTorrent[i];
 
             torrent.Uploaded += uploadBytesThisTick;
+            torrent.SimulatedUploaded += uploadBytesThisTick;
 
             if (!torrent.ForceCompleted && torrent.Progress < 1.0 && (torrent.TotalSize > 0 || (torrent.Files != null && torrent.Files.Count > 0)))
             {
