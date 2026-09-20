@@ -201,6 +201,10 @@ public class UtpConnection : IUtpConnection
     public const int MinRtoMs = 500;
     public const int MaxRtoMs = 10000;
     public const int GranularityMs = 10;
+    public const uint TargetDelay = 100_000;
+    public const uint InitialCongestionWindow = 3000;
+    public const uint MinCongestionWindow = 150;
+    public const double DefaultGain = 3000.0;
     private const int HeaderSize = 20;
     private const uint DefaultWindowSize = 65535;
     private const int MaxPayloadSize = 1360;
@@ -216,6 +220,8 @@ public class UtpConnection : IUtpConnection
     private readonly object _sendLock = new();
     private readonly ManualResetEventSlim _ackReceivedEvent = new(false);
     private readonly ConcurrentDictionary<ushort, InFlightPacket> _inFlightPackets = new();
+    private readonly List<(uint Delay, long TimestampTicks)> _delayHistory = new();
+    private readonly object _congestionLock = new();
 
     private ushort _connectionId;
     private ushort _sequenceNumber;
@@ -223,6 +229,10 @@ public class UtpConnection : IUtpConnection
     private IPEndPoint _remoteEndpoint;
     private uint _lastTimestampDiff;
     private uint _remoteWindowSize = DefaultWindowSize;
+    private double _congestionWindow = InitialCongestionWindow;
+    private uint _baseDelay;
+    private uint _queuingDelay;
+    private double _gain = DefaultGain;
     private ushort _expectedSeqNr;
     private ushort _lastAckReceived;
     private int _duplicateAckCount;
@@ -252,6 +262,68 @@ public class UtpConnection : IUtpConnection
     public int FastRetransmitCount => _fastRetransmitCount;
     public ushort LastAckReceived => _lastAckReceived;
     public uint RemoteWindowSize { get => _remoteWindowSize; internal set => _remoteWindowSize = value; }
+    public uint CongestionWindow
+    {
+        get
+        {
+            lock (_congestionLock)
+            {
+                return (uint)Math.Round(_congestionWindow);
+            }
+        }
+
+        internal set
+        {
+            lock (_congestionLock)
+            {
+                _congestionWindow = value;
+            }
+        }
+    }
+
+    public uint EffectiveCwnd => Math.Min(CongestionWindow, _remoteWindowSize);
+
+    public uint BaseDelay
+    {
+        get
+        {
+            lock (_congestionLock)
+            {
+                return _baseDelay;
+            }
+        }
+    }
+
+    public uint QueuingDelay
+    {
+        get
+        {
+            lock (_congestionLock)
+            {
+                return _queuingDelay;
+            }
+        }
+    }
+
+    public double Gain
+    {
+        get
+        {
+            lock (_congestionLock)
+            {
+                return _gain;
+            }
+        }
+
+        set
+        {
+            lock (_congestionLock)
+            {
+                _gain = value;
+            }
+        }
+    }
+
     public IPEndPoint RemoteEndPoint => _remoteEndpoint;
     public bool OwnsUdpClient => _ownsUdpClient;
     public ushort ReceiveId { get; private set; }
@@ -441,7 +513,8 @@ public class UtpConnection : IUtpConnection
             {
                 var sendWaitStart = DateTime.UtcNow;
                 var currentInFlightBytes = _inFlightPackets.Values.Sum(p => p.PayloadLength);
-                while (currentInFlightBytes >= _remoteWindowSize && IsConnected && !_isClosing)
+                var effectiveWindow = Math.Min(CongestionWindow, _remoteWindowSize);
+                while (currentInFlightBytes >= effectiveWindow && IsConnected && !_isClosing)
                 {
                     if (_connectionTimeoutSeconds > 0 && (DateTime.UtcNow - sendWaitStart).TotalSeconds >= _connectionTimeoutSeconds)
                     {
@@ -451,10 +524,11 @@ public class UtpConnection : IUtpConnection
                     TryReceiveUdpNonBlocking();
                     RetransmitUnackedPackets();
                     Thread.Sleep(2);
+                    effectiveWindow = Math.Min(CongestionWindow, _remoteWindowSize);
                     currentInFlightBytes = _inFlightPackets.Values.Sum(p => p.PayloadLength);
                 }
 
-                if (!IsConnected || _isClosing || (currentInFlightBytes >= _remoteWindowSize && totalSent > 0))
+                if (!IsConnected || _isClosing || (currentInFlightBytes >= effectiveWindow && totalSent > 0))
                 {
                     break;
                 }
@@ -749,7 +823,7 @@ public class UtpConnection : IUtpConnection
             _lastTimestampDiff = GetMicroseconds() - header.Timestamp;
         }
 
-        ProcessAck(header.AckNumber);
+        var bytesAcked = ProcessAck(header.AckNumber);
 
         var payloadOffset = HeaderSize;
         if (header.Extension != 0)
@@ -771,7 +845,7 @@ public class UtpConnection : IUtpConnection
 
                 if (currentExt == 1)
                 {
-                    ProcessSackBitmask(header.AckNumber, data.AsSpan(extOffset, extLen));
+                    bytesAcked += ProcessSackBitmask(header.AckNumber, data.AsSpan(extOffset, extLen));
                 }
 
                 extOffset += extLen;
@@ -779,6 +853,11 @@ public class UtpConnection : IUtpConnection
             }
 
             payloadOffset = extOffset;
+        }
+
+        if (header.TimestampDiff > 0)
+        {
+            UpdateCongestionWindow(header.TimestampDiff, bytesAcked);
         }
 
         if (header.Type == UtpPacketType.Reset)
@@ -945,7 +1024,13 @@ public class UtpConnection : IUtpConnection
             return MicrosecondProvider();
         }
 
-        return (uint)(Environment.TickCount64 * 1000 & 0xFFFFFFFF);
+        var freq = Stopwatch.Frequency;
+        if (freq > 1_000_000L && freq % 1_000_000L == 0)
+        {
+            return (uint)((Stopwatch.GetTimestamp() / (freq / 1_000_000L)) & 0xFFFFFFFF);
+        }
+
+        return (uint)((Stopwatch.GetTimestamp() * 1_000_000L / freq) & 0xFFFFFFFF);
     }
 
     private void SendUdpPacket(byte[] data, int length, IPEndPoint endpoint)
@@ -1007,7 +1092,7 @@ public class UtpConnection : IUtpConnection
         }
     }
 
-    private void ProcessAck(ushort ackNr)
+    private int ProcessAck(ushort ackNr)
     {
         if (!_hasReceivedFirstAck)
         {
@@ -1029,13 +1114,18 @@ public class UtpConnection : IUtpConnection
                         lostPacket.FastRetransmitted = true;
                         lostPacket.Retries++;
                         lostPacket.SentTimestamp = Environment.TickCount64;
+                        lock (_congestionLock)
+                        {
+                            _congestionWindow = Math.Max(MinCongestionWindow, _congestionWindow * 0.5);
+                        }
+
                         SendUdpPacket(lostPacket.PacketData, lostPacket.PacketData.Length, _remoteEndpoint);
                         _fastRetransmitCount++;
                     }
                 }
             }
 
-            return;
+            return 0;
         }
         else if (IsAhead(ackNr, _lastAckReceived))
         {
@@ -1045,7 +1135,7 @@ public class UtpConnection : IUtpConnection
 
         if (_inFlightPackets.IsEmpty)
         {
-            return;
+            return 0;
         }
 
         var anyRemoved = false;
@@ -1063,11 +1153,13 @@ public class UtpConnection : IUtpConnection
             ackedKeys.Sort((a, b) => (short)(a - b));
         }
 
+        var bytesAcked = 0;
         foreach (var key in ackedKeys)
         {
             if (_inFlightPackets.TryRemove(key, out var packet))
             {
                 anyRemoved = true;
+                bytesAcked += packet.PayloadLength;
                 UpdateRtt(packet);
             }
         }
@@ -1076,12 +1168,15 @@ public class UtpConnection : IUtpConnection
         {
             _ackReceivedEvent.Set();
         }
+
+        return bytesAcked;
     }
 
-    private void ProcessSackBitmask(ushort ackNr, ReadOnlySpan<byte> bitmask)
+    private int ProcessSackBitmask(ushort ackNr, ReadOnlySpan<byte> bitmask)
     {
         var anyRemoved = false;
         var newlyAckedSeqNrs = new List<ushort>();
+        var bytesAcked = 0;
 
         for (var byteIdx = 0; byteIdx < bitmask.Length; byteIdx++)
         {
@@ -1095,6 +1190,7 @@ public class UtpConnection : IUtpConnection
                     {
                         anyRemoved = true;
                         newlyAckedSeqNrs.Add(sackSeq);
+                        bytesAcked += packet.PayloadLength;
                         UpdateRtt(packet);
                         _logger.Trace("SACK acknowledged in-flight packet {0}", sackSeq);
                     }
@@ -1111,6 +1207,8 @@ public class UtpConnection : IUtpConnection
         {
             CheckSackFastRetransmit(newlyAckedSeqNrs);
         }
+
+        return bytesAcked;
     }
 
     private void CheckSackFastRetransmit(List<ushort> newlyAckedSeqNrs)
@@ -1141,6 +1239,11 @@ public class UtpConnection : IUtpConnection
 
         if (packetsToRetransmit.Count > 0)
         {
+            lock (_congestionLock)
+            {
+                _congestionWindow = Math.Max(MinCongestionWindow, _congestionWindow * 0.5);
+            }
+
             packetsToRetransmit.Sort((a, b) => (short)(a.SequenceNumber - b.SequenceNumber));
             var now = Environment.TickCount64;
             foreach (var packet in packetsToRetransmit)
@@ -1177,6 +1280,48 @@ public class UtpConnection : IUtpConnection
         _rtoMs = (int)Math.Clamp(calculatedRto, MinRtoMs, MaxRtoMs);
     }
 
+    internal void UpdateCongestionWindow(uint delaySample, int bytesAcked)
+    {
+        if (delaySample == 0)
+        {
+            return;
+        }
+
+        lock (_congestionLock)
+        {
+            var nowTicks = Stopwatch.GetTimestamp();
+            var windowTicks = 120L * Stopwatch.Frequency;
+
+            _delayHistory.RemoveAll(s => nowTicks - s.TimestampTicks > windowTicks);
+            _delayHistory.Add((delaySample, nowTicks));
+
+            _baseDelay = _delayHistory.Min(s => s.Delay);
+            _queuingDelay = (uint)Math.Max(0, (long)delaySample - (long)_baseDelay);
+
+            if (bytesAcked > 0 && _congestionWindow > 0)
+            {
+                var offset = (double)TargetDelay - _queuingDelay;
+                var delayFactor = offset / TargetDelay;
+                var windowFactor = Math.Min((double)bytesAcked / _congestionWindow, 1.0);
+                var scaledGain = _gain * delayFactor * windowFactor;
+
+                var newCwnd = _congestionWindow + scaledGain;
+                _congestionWindow = Math.Clamp(newCwnd, (double)MinCongestionWindow, (double)MaxBufferSize);
+            }
+        }
+    }
+
+    internal void ResetCongestionControl(uint initialCwnd = InitialCongestionWindow)
+    {
+        lock (_congestionLock)
+        {
+            _congestionWindow = initialCwnd;
+            _baseDelay = 0;
+            _queuingDelay = 0;
+            _delayHistory.Clear();
+        }
+    }
+
     private void UpdateRtt(InFlightPacket packet)
     {
         var now = Environment.TickCount64;
@@ -1206,6 +1351,11 @@ public class UtpConnection : IUtpConnection
             _rtoMs = Math.Min(_rtoMs * 2, MaxRtoMs);
             head.Retries++;
             head.SentTimestamp = now;
+            lock (_congestionLock)
+            {
+                _congestionWindow = Math.Max(MinCongestionWindow, _congestionWindow * 0.5);
+            }
+
             SendUdpPacket(head.PacketData, head.PacketData.Length, _remoteEndpoint);
         }
     }
