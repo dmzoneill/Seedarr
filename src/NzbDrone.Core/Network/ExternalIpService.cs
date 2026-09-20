@@ -33,37 +33,293 @@ public class ExternalIpService : BackgroundService, IExternalIpService
         "https://checkip.amazonaws.com"
     };
 
-    private static readonly HttpClient SharedClient = new(new SocketsHttpHandler
-    {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
-    })
-    { Timeout = TimeSpan.FromSeconds(5) };
-
-    private readonly HttpClient _client;
+    private readonly HttpClient _injectedClient;
     private readonly IConfigService _configService;
+    private readonly Vpn.IVpnKillSwitchService _vpnKillSwitchService;
+    private readonly IProxySettingsProvider _proxySettingsProvider;
     private readonly Logger _logger;
     private readonly SemaphoreSlim _fetchLock = new(1, 1);
+    private readonly object _clientLock = new();
+
+    private HttpClient _currentClient;
+    private HttpMessageHandler _currentHandler;
+    private bool _lastProxyEnabled;
+    private string _lastProxyHost = string.Empty;
+    private int _lastProxyPort;
+    private ProxyType _lastProxyType = ProxyType.None;
+    private string _lastBindInterface = string.Empty;
+    private string _lastBindIp = string.Empty;
+
     private string _cachedIp = "";
     private DateTime _lastFetch = DateTime.MinValue;
     private volatile bool _networkChanged;
+    private volatile bool _clientNeedsRebuild;
 
     public string CachedIp => _cachedIp;
 
-    public ExternalIpService(IConfigService configService, HttpClient httpClient = null)
+    public Func<string, IPAddress> InterfaceIpResolver { get; set; }
+
+    internal HttpMessageHandler Handler => _currentHandler;
+
+    internal HttpClient Client => _injectedClient ?? _currentClient;
+
+    public ExternalIpService(
+        IConfigService configService,
+        Vpn.IVpnKillSwitchService vpnKillSwitchService = null,
+        IProxySettingsProvider proxySettingsProvider = null,
+        HttpClient httpClient = null)
     {
         _configService = configService;
-        _client = httpClient ?? SharedClient;
+        _vpnKillSwitchService = vpnKillSwitchService;
+        _proxySettingsProvider = proxySettingsProvider;
+        _injectedClient = httpClient;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    public ExternalIpService(IConfigService configService, HttpClient httpClient)
+        : this(configService, null, null, httpClient)
+    {
+    }
+
     public ExternalIpService(HttpClient httpClient)
-        : this(null, httpClient)
+        : this(null, null, null, httpClient)
     {
     }
 
     public ExternalIpService()
-        : this(null, null)
+        : this(null, null, null, null)
     {
+    }
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        _fetchLock.Dispose();
+        if (_injectedClient == null)
+        {
+            _currentClient?.Dispose();
+        }
+    }
+
+    internal bool HasDedicatedBindInterface()
+    {
+        var bindIface = _configService?.BindInterface?.Trim();
+        return !string.IsNullOrWhiteSpace(bindIface) &&
+               !bindIface.Equals("Any", StringComparison.OrdinalIgnoreCase) &&
+               !bindIface.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+               !bindIface.Equals("*", StringComparison.OrdinalIgnoreCase) &&
+               !bindIface.Equals("0.0.0.0", StringComparison.OrdinalIgnoreCase) &&
+               !bindIface.Equals("::", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal IPAddress ResolveBindIp(string bindInterface)
+    {
+        if (string.IsNullOrWhiteSpace(bindInterface))
+        {
+            return null;
+        }
+
+        if (InterfaceIpResolver != null)
+        {
+            var resolved = InterfaceIpResolver(bindInterface);
+            if (resolved != null)
+            {
+                return resolved;
+            }
+        }
+
+        if (_vpnKillSwitchService != null)
+        {
+            if (_vpnKillSwitchService.IsFailClosedActive)
+            {
+                return null;
+            }
+
+            if (_configService?.EnableIPv6 == true)
+            {
+                var ip6 = _vpnKillSwitchService.GetVpnInterfaceIpAddress(System.Net.Sockets.AddressFamily.InterNetworkV6);
+                if (ip6 != null)
+                {
+                    return ip6;
+                }
+            }
+
+            var ip4 = _vpnKillSwitchService.GetVpnInterfaceIpAddress(System.Net.Sockets.AddressFamily.InterNetwork);
+            if (ip4 != null)
+            {
+                return ip4;
+            }
+        }
+
+        if (IPAddress.TryParse(bindInterface, out var parsed))
+        {
+            if (!parsed.Equals(IPAddress.Any) && !parsed.Equals(IPAddress.IPv6Any))
+            {
+                return parsed;
+            }
+
+            return null;
+        }
+
+        return ResolveInterfaceIpFromName(bindInterface);
+    }
+
+    private IPAddress ResolveInterfaceIpFromName(string interfaceName)
+    {
+        try
+        {
+            var nics = NetworkInterface.GetAllNetworkInterfaces();
+            var nic = nics.FirstOrDefault(n =>
+                string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
+
+            if (nic == null || nic.OperationalStatus != OperationalStatus.Up)
+            {
+                return null;
+            }
+
+            var unicast = nic.GetIPProperties()?.UnicastAddresses;
+            if (unicast == null)
+            {
+                return null;
+            }
+
+            if (_configService?.EnableIPv6 == true)
+            {
+                var ip6 = unicast.FirstOrDefault(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 &&
+                    !IPAddress.IsLoopback(a.Address) &&
+                    !a.Address.Equals(IPAddress.IPv6Any) &&
+                    !a.Address.Equals(IPAddress.IPv6None) &&
+                    !a.Address.IsIPv6LinkLocal &&
+                    !a.Address.IsIPv6SiteLocal &&
+                    !a.Address.IsIPv6Multicast)?.Address;
+
+                if (ip6 != null)
+                {
+                    return ip6;
+                }
+            }
+
+            var ip4 = unicast.FirstOrDefault(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork &&
+                !IPAddress.IsLoopback(a.Address) &&
+                !a.Address.Equals(IPAddress.Any) &&
+                !a.Address.Equals(IPAddress.None))?.Address;
+
+            return ip4;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to resolve IP for interface '{0}'", interfaceName);
+            return null;
+        }
+    }
+
+    internal static SocketsHttpHandler CreateBoundHandler(string bindInterface, IPAddress bindIp)
+    {
+        var deviceName = IPAddress.TryParse(bindInterface, out _) ? null : bindInterface;
+
+        return new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+            ConnectCallback = async (context, cancellationToken) =>
+            {
+                var socket = new System.Net.Sockets.Socket(bindIp.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+                try
+                {
+                    socket.NoDelay = true;
+                    socket.BindToNetworkInterface(deviceName, bindIp, 0);
+                    await socket.ConnectAsync(context.DnsEndPoint, cancellationToken);
+                    return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+                }
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            }
+        };
+    }
+
+    internal HttpMessageHandler CreateHandler()
+    {
+        IPAddress bindIp = null;
+        string bindInterface = null;
+
+        if (_proxySettingsProvider?.IsEnabled != true && HasDedicatedBindInterface())
+        {
+            bindInterface = _configService?.BindInterface?.Trim();
+            bindIp = ResolveBindIp(bindInterface);
+        }
+
+        return CreateHandler(bindInterface, bindIp);
+    }
+
+    internal HttpMessageHandler CreateHandler(string bindInterface, IPAddress bindIp)
+    {
+        if (_proxySettingsProvider?.IsEnabled == true)
+        {
+            _logger.Debug("Using proxy handler for external IP discovery");
+            var proxyHandler = _proxySettingsProvider.CreateHandler();
+            if (proxyHandler != null)
+            {
+                return proxyHandler;
+            }
+        }
+
+        if (bindIp != null && !string.IsNullOrWhiteSpace(bindInterface))
+        {
+            _logger.Debug("Creating interface-bound handler for external IP discovery on {0} ({1})", bindInterface, bindIp);
+            return CreateBoundHandler(bindInterface, bindIp);
+        }
+
+        return new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+        };
+    }
+
+    private HttpClient GetHttpClient(string bindInterface, IPAddress bindIp)
+    {
+        if (_injectedClient != null)
+        {
+            return _injectedClient;
+        }
+
+        lock (_clientLock)
+        {
+            var currentProxyEnabled = _proxySettingsProvider?.IsEnabled == true;
+            var currentProxyHost = _proxySettingsProvider?.Host ?? string.Empty;
+            var currentProxyPort = _proxySettingsProvider?.Port ?? 0;
+            var currentProxyType = _proxySettingsProvider?.Type ?? ProxyType.None;
+            var currentBindInterface = bindInterface ?? string.Empty;
+            var currentBindIp = bindIp?.ToString() ?? string.Empty;
+
+            if (_currentClient == null ||
+                _clientNeedsRebuild ||
+                _lastProxyEnabled != currentProxyEnabled ||
+                _lastProxyHost != currentProxyHost ||
+                _lastProxyPort != currentProxyPort ||
+                _lastProxyType != currentProxyType ||
+                _lastBindInterface != currentBindInterface ||
+                _lastBindIp != currentBindIp)
+            {
+                _clientNeedsRebuild = false;
+                _currentHandler = CreateHandler(bindInterface, bindIp);
+                _currentClient = new HttpClient(_currentHandler)
+                {
+                    Timeout = TimeSpan.FromSeconds(5)
+                };
+
+                _lastProxyEnabled = currentProxyEnabled;
+                _lastProxyHost = currentProxyHost;
+                _lastProxyPort = currentProxyPort;
+                _lastProxyType = currentProxyType;
+                _lastBindInterface = currentBindInterface;
+                _lastBindIp = currentBindIp;
+            }
+
+            return _currentClient;
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -103,6 +359,7 @@ public class ExternalIpService : BackgroundService, IExternalIpService
     private void OnNetworkChanged(object sender, EventArgs e)
     {
         _networkChanged = true;
+        _clientNeedsRebuild = true;
     }
 
     private async Task RefreshIp(CancellationToken cancellationToken)
@@ -125,6 +382,18 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
     public async Task<string> GetExternalIpAsync(CancellationToken cancellationToken = default)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Warn("VPN kill switch fail-closed is active; external IP discovery aborted.");
+            return _cachedIp;
+        }
+
+        if (_configService?.ForceProxy == true && _proxySettingsProvider?.IsEnabled != true)
+        {
+            _logger.Warn("ForceProxy is active but proxy is not configured; external IP discovery aborted.");
+            return _cachedIp;
+        }
+
         if (!string.IsNullOrEmpty(_cachedIp) && DateTime.UtcNow - _lastFetch < CacheDuration)
         {
             return _cachedIp;
@@ -147,6 +416,35 @@ public class ExternalIpService : BackgroundService, IExternalIpService
                 return _cachedIp;
             }
 
+            if (_vpnKillSwitchService?.IsFailClosedActive == true)
+            {
+                _logger.Warn("VPN kill switch fail-closed is active; external IP discovery aborted.");
+                return _cachedIp;
+            }
+
+            var isProxyEnabled = _proxySettingsProvider?.IsEnabled == true;
+            if (_configService?.ForceProxy == true && !isProxyEnabled)
+            {
+                _logger.Warn("ForceProxy is active but proxy is not configured; external IP discovery aborted.");
+                return _cachedIp;
+            }
+
+            var hasDedicatedInterface = HasDedicatedBindInterface();
+            IPAddress bindIp = null;
+            string bindInterface = null;
+            if (!isProxyEnabled && hasDedicatedInterface)
+            {
+                bindInterface = _configService.BindInterface.Trim();
+                bindIp = ResolveBindIp(bindInterface);
+                if (bindIp == null)
+                {
+                    _logger.Warn("Configured bind interface '{0}' is not available or has no IP; external IP discovery aborted.", bindInterface);
+                    return _cachedIp;
+                }
+            }
+
+            var client = GetHttpClient(bindInterface, bindIp);
+
             var uuid = _configService?.InstanceUuid;
             if (string.IsNullOrWhiteSpace(uuid))
             {
@@ -163,7 +461,7 @@ public class ExternalIpService : BackgroundService, IExternalIpService
             {
                 try
                 {
-                    var response = await _client.GetStringAsync(source, cancellationToken);
+                    var response = await client.GetStringAsync(source, cancellationToken);
 
                     if (TryExtractIpFromResponse(response, out var ip))
                     {

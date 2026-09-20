@@ -126,7 +126,10 @@ public class NetworkStatusService : INetworkStatusService, IHandle<UpnpMappingCr
             ? _vpnKillSwitchService.IsKillSwitchEnabled
             : (_configService?.EnableVpnKillSwitch ?? false);
 
-        var externalIp = _upnpService.ExternalIp;
+        var isProxyActive = (_proxySettings != null && _proxySettings.IsEnabled) ||
+                            (_configService != null && _configService.ForceProxy);
+
+        var externalIp = isProxyActive ? null : _upnpService.ExternalIp;
 
         if (string.IsNullOrEmpty(externalIp))
         {
