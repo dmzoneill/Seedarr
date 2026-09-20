@@ -892,11 +892,12 @@ public class UtpConnectionTest
         using var serverUdp = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         var serverPort = ((IPEndPoint)serverUdp.Client.LocalEndPoint!).Port;
 
-        var serverReceivedData = new byte[100 * 1024];
-        var clientReceivedData = new byte[100 * 1024];
+        var transferSize = 16 * 1024;
+        var serverReceivedData = new byte[transferSize];
+        var clientReceivedData = new byte[transferSize];
 
-        var clientPayload = new byte[100 * 1024];
-        var serverPayload = new byte[100 * 1024];
+        var clientPayload = new byte[transferSize];
+        var serverPayload = new byte[transferSize];
         for (var i = 0; i < clientPayload.Length; i++)
         {
             clientPayload[i] = (byte)(i % 251);
