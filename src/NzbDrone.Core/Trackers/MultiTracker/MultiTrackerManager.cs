@@ -6,6 +6,7 @@ using System.Threading;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Network.Vpn;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Trackers.MultiTracker;
 
@@ -14,6 +15,7 @@ public interface IMultiTrackerManager
     TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList);
     TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList, bool isPrivate);
     TrackerScrapeResponse Scrape(string infoHash, List<List<string>> announceList);
+    TrackerScrapeResponse Scrape(TrackerEntry entry, string infoHash);
 }
 
 public class MultiTrackerManager : IMultiTrackerManager
@@ -83,6 +85,22 @@ public class MultiTrackerManager : IMultiTrackerManager
             () => new TrackerAnnounceResponse { Success = false, FailureReason = "All trackers failed" },
             true,
             isPrivate);
+    }
+
+    public TrackerScrapeResponse Scrape(TrackerEntry entry, string infoHash)
+    {
+        if (entry == null || string.IsNullOrWhiteSpace(entry.Url))
+        {
+            return new TrackerScrapeResponse { Success = false, FailureReason = "Invalid tracker entry" };
+        }
+
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch active; deferring tracker scrape for {0}", infoHash);
+            return new TrackerScrapeResponse { Success = false, FailureReason = "VPN outage: scrape deferred" };
+        }
+
+        return ScrapeTracker(infoHash, entry.Url).Response;
     }
 
     public TrackerScrapeResponse Scrape(string infoHash, List<List<string>> announceList)

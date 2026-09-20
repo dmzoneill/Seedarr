@@ -5,6 +5,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
@@ -40,6 +42,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly IDownloadHistoryRepository _downloadHistoryRepository;
     private readonly ITrackerBoostService _trackerBoostService;
     private readonly ITrackerAnnounceService _trackerAnnounceService;
+    private readonly ITrackerScrapeService _trackerScrapeService;
     private readonly IMediaEnrichmentService _mediaEnrichmentService;
     private readonly ICategoryService _categoryService;
     private readonly NzbDrone.Core.Network.GeoIp.IGeoIpService _geoIpService;
@@ -76,7 +79,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         ITorrentStreamService torrentStreamService = null,
         ISubtitleDiscoveryService subtitleDiscoveryService = null,
         ISubtitleConversionService subtitleConversionService = null,
-        ISubtitleEncodingDetector subtitleEncodingDetector = null)
+        ISubtitleEncodingDetector subtitleEncodingDetector = null,
+        ITrackerScrapeService trackerScrapeService = null)
         : base(signalRBroadcaster, null, coalesceWindow)
     {
         _torrentService = torrentService;
@@ -98,6 +102,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _subtitleDiscoveryService = subtitleDiscoveryService ?? new SubtitleDiscoveryService();
         _subtitleConversionService = subtitleConversionService ?? new SubtitleConversionService();
         _subtitleEncodingDetector = subtitleEncodingDetector ?? new SubtitleEncodingDetector();
+        _trackerScrapeService = trackerScrapeService;
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -1493,6 +1498,24 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         return results ?? new List<TrackerAnnounceResult>();
+    }
+
+    [HttpPost("{id}/scrape")]
+    public async Task<ActionResult> Scrape(int id, CancellationToken cancellationToken = default)
+    {
+        var torrent = _torrentService.Get(id);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        if (_trackerScrapeService == null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Tracker scrape service is not available");
+        }
+
+        var result = await _trackerScrapeService.ScrapeTorrentAsync(id, cancellationToken);
+        return Ok(result);
     }
 
     [HttpPost("{id:int}/announce")]
