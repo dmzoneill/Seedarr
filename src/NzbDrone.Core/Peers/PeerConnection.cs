@@ -40,6 +40,7 @@ public class PeerConnection : IDisposable
     public string InfoHash { get; set; }
     public string InfoHashV2 { get; set; }
     public Torrent MatchedTorrent { get; set; }
+    public IClientProfile ClientProfile { get; set; }
     public int? ExpectedInfoHashLength { get; set; }
     private static IBandwidthLimiter _defaultBandwidthLimiter = NzbDrone.Core.Bandwidth.BandwidthLimiter.Instance;
 
@@ -377,9 +378,9 @@ public class PeerConnection : IDisposable
                         var hasPiece = byteIndex < value.Length && ((value[byteIndex] >> bitIndex) & 1) != 0;
                         _peerPieces[i] = hasPiece;
                         if (hasPiece)
-                    {
-                        count++;
-                    }
+                        {
+                            count++;
+                        }
                     }
 
                     HaveCount = count;
@@ -400,9 +401,9 @@ public class PeerConnection : IDisposable
                         var hasPiece = ((value[byteIndex] >> bitIndex) & 1) != 0;
                         _peerPieces[i] = hasPiece;
                         if (hasPiece)
-                    {
-                        count++;
-                    }
+                        {
+                            count++;
+                        }
                     }
 
                     HaveCount = count;
@@ -718,7 +719,7 @@ public class PeerConnection : IDisposable
             var payload = initialPayload;
             if (payload == null && EnableIaPipelining && !string.IsNullOrEmpty(PeerId))
             {
-                payload = BuildHandshake(infoHash, PeerId);
+                payload = BuildHandshake(infoHash, PeerId, isPrivate: MatchedTorrent?.IsPrivate == true, clientProfile: ClientProfile);
             }
 
             _activeStream = handshake.NegotiateOutgoing(_networkStream ?? _activeStream, payload);
@@ -756,7 +757,7 @@ public class PeerConnection : IDisposable
             var payload = initialPayload;
             if (payload == null && EnableIaPipelining && !string.IsNullOrEmpty(PeerId))
             {
-                payload = BuildHandshake(infoHash, PeerId);
+                payload = BuildHandshake(infoHash, PeerId, isPrivate: MatchedTorrent?.IsPrivate == true, clientProfile: ClientProfile);
             }
 
             _activeStream = await handshake.NegotiateOutgoingAsync(_networkStream ?? _activeStream, payload, cancellationToken);
@@ -1002,6 +1003,7 @@ public class PeerConnection : IDisposable
     {
         try
         {
+            ClientProfile = clientProfile;
             if (HandshakeSent && string.Equals(InfoHash, infoHash, StringComparison.OrdinalIgnoreCase))
             {
                 PeerId = peerId;
@@ -1691,17 +1693,19 @@ public class PeerConnection : IDisposable
         Encoding.ASCII.GetBytes(ProtocolString, 0, 19, buffer, 1);
 
         // Advertise BEP 10 (Extension Protocol), BEP 6 (Fast Extension), BEP 5 (DHT), BEP 52 (v2)
-        if (supportsExtensions)
+        var effectiveExtensions = supportsExtensions && (clientProfile == null || clientProfile.SupportsExtensionProtocol);
+        if (effectiveExtensions)
         {
             buffer[25] |= 0x10; // BEP 10
         }
 
-        if (supportsFast)
+        var effectiveFast = supportsFast && (clientProfile == null || clientProfile.SupportsFastExtension);
+        if (effectiveFast)
         {
             buffer[27] |= 0x04; // BEP 6
         }
 
-        var effectiveDht = supportsDht && !isPrivate && clientProfile?.SupportsDht != false;
+        var effectiveDht = supportsDht && !isPrivate && (clientProfile == null || clientProfile.SupportsDht);
         if (effectiveDht)
         {
             buffer[27] |= 0x01; // BEP 5

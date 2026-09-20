@@ -1822,6 +1822,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     return;
                 }
 
+                connection.MatchedTorrent = torrent;
+
                 if (!string.Equals(_configService.EncryptionMode, "disabled", StringComparison.OrdinalIgnoreCase) &&
                     !string.Equals(_configService.EncryptionMode, "plain", StringComparison.OrdinalIgnoreCase) &&
                     !string.Equals(_configService.EncryptionMode, "none", StringComparison.OrdinalIgnoreCase))
@@ -1844,6 +1846,10 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                         try
                         {
                             connection = CreateOutgoingPeerConnection(candidate, localBind);
+                            if (connection != null)
+                            {
+                                connection.MatchedTorrent = torrent;
+                            }
                         }
                         catch (Exception ex)
                         {

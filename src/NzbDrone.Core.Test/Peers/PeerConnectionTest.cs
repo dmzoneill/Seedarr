@@ -1413,6 +1413,50 @@ public class PeerConnectionTest
     }
 
     [Test]
+    public void BuildHandshake_should_mask_extension_protocol_bit_when_client_profile_does_not_support_extensions()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.SupportsExtensionProtocol.Returns(false);
+
+        var handshake = PeerConnection.BuildHandshake("0102030405060708091011121314151617181920", "-SD0001-012345678901", isPrivate: false, clientProfile: profile);
+
+        Assert.That(handshake[25] & 0x10, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void BuildHandshake_should_preserve_extension_protocol_bit_when_client_profile_supports_extensions()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.SupportsExtensionProtocol.Returns(true);
+
+        var handshake = PeerConnection.BuildHandshake("0102030405060708091011121314151617181920", "-SD0001-012345678901", isPrivate: false, clientProfile: profile);
+
+        Assert.That(handshake[25] & 0x10, Is.EqualTo(0x10));
+    }
+
+    [Test]
+    public void BuildHandshake_should_mask_fast_extension_bit_when_client_profile_does_not_support_fast()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.SupportsFastExtension.Returns(false);
+
+        var handshake = PeerConnection.BuildHandshake("0102030405060708091011121314151617181920", "-SD0001-012345678901", isPrivate: false, clientProfile: profile);
+
+        Assert.That(handshake[27] & 0x04, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void BuildHandshake_should_preserve_fast_extension_bit_when_client_profile_supports_fast()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.SupportsFastExtension.Returns(true);
+
+        var handshake = PeerConnection.BuildHandshake("0102030405060708091011121314151617181920", "-SD0001-012345678901", isPrivate: false, clientProfile: profile);
+
+        Assert.That(handshake[27] & 0x04, Is.EqualTo(0x04));
+    }
+
+    [Test]
     public void Constructor_should_accept_and_store_DhKeyPool()
     {
         var pool = Substitute.For<IDhKeyPool>();

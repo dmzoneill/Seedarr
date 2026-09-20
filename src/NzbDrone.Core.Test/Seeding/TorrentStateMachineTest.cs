@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Categories;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Torrents;
 
@@ -188,5 +190,141 @@ public class TorrentStateMachineTest
         Assert.That(stopped, Is.Empty);
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(list, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void ApplyRatioLimit_stops_torrents_reaching_per_torrent_ratio_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Ratio = 1.6,
+            RatioLimit = 1.5,
+            UploadSpeed = 100,
+            Active = true
+        };
+        var list = new List<Torrent> { torrent };
+
+        var stopped = _subject.ApplyRatioLimit(list, 0.0);
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(stopped, Has.Count.EqualTo(1));
+        Assert.That(list, Is.Empty);
+    }
+
+    [Test]
+    public void ApplyRatioLimit_per_torrent_ratio_limit_overrides_global_ratio_limit_when_below_torrent_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Ratio = 2.5,
+            RatioLimit = 3.0,
+            UploadSpeed = 100,
+            Active = true
+        };
+        var list = new List<Torrent> { torrent };
+
+        // Global limit is 2.0, but per-torrent limit is 3.0, current ratio 2.5 -> should NOT stop
+        var stopped = _subject.ApplyRatioLimit(list, 2.0);
+
+        Assert.That(stopped, Is.Empty);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(list, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void ApplyRatioLimit_stops_torrents_reaching_per_torrent_seeding_time_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Ratio = 0.5,
+            SeedingTime = 3605,
+            SeedingTimeLimit = 3600,
+            UploadSpeed = 100,
+            Active = true
+        };
+        var list = new List<Torrent> { torrent };
+
+        var stopped = _subject.ApplyRatioLimit(list, 0.0);
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(stopped, Has.Count.EqualTo(1));
+        Assert.That(list, Is.Empty);
+    }
+
+    [Test]
+    public void ApplyRatioLimit_stops_torrents_reaching_category_target_ratio()
+    {
+        var categoryService = Substitute.For<ICategoryService>();
+        categoryService.GetByName("Movies").Returns(new Category { Name = "Movies", TargetRatio = 1.75 });
+        var subject = new TorrentStateMachine(_eventLogService, null, _torrentService, categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Category = "Movies",
+            Status = TorrentStatus.Seeding,
+            Ratio = 1.8,
+            UploadSpeed = 100,
+            Active = true
+        };
+        var list = new List<Torrent> { torrent };
+
+        var stopped = subject.ApplyRatioLimit(list, 0.0);
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(stopped, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void ApplyRatioLimit_stops_torrents_reaching_category_target_seed_time()
+    {
+        var categoryService = Substitute.For<ICategoryService>();
+        categoryService.GetByName("TV").Returns(new Category { Name = "TV", TargetSeedTimeMinutes = 60 });
+        var subject = new TorrentStateMachine(_eventLogService, null, _torrentService, categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Category = "TV",
+            Status = TorrentStatus.Seeding,
+            Ratio = 0.5,
+            SeedingTime = 3660, // 61 minutes
+            UploadSpeed = 100,
+            Active = true
+        };
+        var list = new List<Torrent> { torrent };
+
+        var stopped = subject.ApplyRatioLimit(list, 0.0);
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(stopped, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void ApplyRatioLimit_publishes_seeding_time_reached_event_when_seed_time_limit_reached()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var subject = new TorrentStateMachine(_eventLogService, eventAggregator, _torrentService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Ratio = 0.5,
+            SeedingTime = 3600,
+            SeedingTimeLimit = 3600
+        };
+        var list = new List<Torrent> { torrent };
+
+        subject.ApplyRatioLimit(list, 0.0);
+
+        eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedingTimeReachedEvent>());
+        eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedGoalReachedEvent>());
     }
 }
