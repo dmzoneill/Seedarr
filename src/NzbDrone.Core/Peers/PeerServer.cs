@@ -69,6 +69,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private readonly ConcurrentDictionary<string, ISuperSeedingTracker> _superSeedingTrackers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ISuperSeedingTracker _superSeedingTracker;
     private readonly IPeerBlocklistSyncService _blocklistService;
+    private readonly IEndgameManager _endgameManager;
     private readonly Logger _logger;
     private readonly object _listenerLock = new();
     private readonly SemaphoreSlim _rebindSignal = new(0, 1);
@@ -80,6 +81,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     public PiecePicker.PiecePicker PiecePicker => _piecePicker;
     public PiecePicker.IPiecePicker SequentialPicker => _piecePicker?.SequentialPicker ?? _sequentialPicker;
     public PiecePicker.IPiecePicker RarestFirstPicker => _piecePicker?.RarestFirstPicker ?? _rarestFirstPicker;
+    public IEndgameManager EndgameManager => _endgameManager;
     public bool IsListening { get; private set; }
 
     private IPieceCache _pieceCache;
@@ -349,7 +351,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         IPeerBlocklistSyncService blocklistService = null,
         IPieceCache pieceCache = null,
         IMultiFilePieceStorage multiFilePieceStorage = null,
-        ITorrentFileService torrentFileService = null)
+        ITorrentFileService torrentFileService = null,
+        IEndgameManager endgameManager = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -380,6 +383,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _torrentFileService = torrentFileService;
         _superSeedingTracker = superSeedingTracker;
         _blocklistService = blocklistService;
+        _endgameManager = endgameManager ?? new EndgameManager();
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -529,6 +533,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         {
             return;
         }
+
+        _endgameManager?.ClearTorrent(torrent.Id);
 
         var connections = _connectionManager?.GetConnections(torrent.InfoHash);
         if (connections == null)
@@ -810,6 +816,12 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     public void Handle(TorrentDeletedEvent message)
     {
+        var torrentId = message?.Torrent?.Id ?? message?.TorrentId ?? 0;
+        if (torrentId > 0)
+        {
+            _endgameManager?.ClearTorrent(torrentId);
+        }
+
         var infoHash = message?.Torrent?.InfoHash;
         if (!string.IsNullOrEmpty(infoHash))
         {
@@ -870,7 +882,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         var sequential = torrent?.SequentialDownload ?? false;
         var firstLast = torrent?.FirstLastPiecePrio ?? false;
         var pieceCount = torrent?.PieceCount ?? 0;
-        return _piecePicker?.RequestBlock(connection, pieceIndex, sequential, firstLast, pieceCount);
+        return RequestBlockInternal(connection, pieceIndex, sequential, firstLast, pieceCount, torrent);
     }
 
     public PiecePicker.PieceBlock RequestBlock(PeerConnection connection, int pieceIndex, bool sequential)
@@ -878,7 +890,194 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         var torrent = connection?.MatchedTorrent ?? GetCachedTorrent(connection?.InfoHash);
         var firstLast = torrent?.FirstLastPiecePrio ?? false;
         var pieceCount = torrent?.PieceCount ?? 0;
-        return _piecePicker?.RequestBlock(connection, pieceIndex, sequential, firstLast, pieceCount);
+        return RequestBlockInternal(connection, pieceIndex, sequential, firstLast, pieceCount, torrent);
+    }
+
+    private PiecePicker.PieceBlock RequestBlockInternal(
+        PeerConnection connection,
+        int pieceIndex,
+        bool sequential,
+        bool firstLast,
+        int pieceCount,
+        Torrent torrent)
+    {
+        if (connection == null)
+        {
+            return null;
+        }
+
+        var block = _piecePicker?.RequestBlock(connection, pieceIndex, sequential, firstLast, pieceCount);
+        var torrentId = torrent?.Id ?? 0;
+
+        if (block != null)
+        {
+            _endgameManager?.RegisterRequest(torrentId, block.PieceIndex, block.Begin, block.Length, connection);
+            return block;
+        }
+
+        if (_piecePicker != null && _endgameManager != null)
+        {
+            if (connection.PendingRequestCount < connection.MaxPipelinedRequests)
+            {
+                var activePieces = _piecePicker.ActivePieces.Values;
+                var allBlocks = activePieces.SelectMany(p => p.Blocks).ToList();
+                var missingBlocks = allBlocks.Where(b => !b.IsCompleted).ToList();
+                var inFlightCount = missingBlocks.Count(b => b.IsRequested);
+                var missingCount = missingBlocks.Count;
+
+                if (_endgameManager.IsInEndgame(missingCount, inFlightCount))
+                {
+                    var canServe = !connection.PeerChoking ||
+                                   (connection.SupportsFastExtension && (pieceIndex >= 0 ? connection.RemoteAllowedFastPieces.Contains(pieceIndex) : connection.RemoteAllowedFastPieces.Count > 0));
+
+                    if (canServe)
+                    {
+                        var candidates = pieceIndex >= 0
+                            ? missingBlocks.Where(b => b.PieceIndex == pieceIndex)
+                            : missingBlocks;
+
+                        foreach (var cand in candidates)
+                        {
+                            if (!connection.HasPiece(cand.PieceIndex))
+                            {
+                                continue;
+                            }
+
+                            if (connection.PeerChoking && !(connection.SupportsFastExtension && connection.RemoteAllowedFastPieces.Contains(cand.PieceIndex)))
+                            {
+                                continue;
+                            }
+
+                            if (_endgameManager.HasRequested(torrentId, cand.PieceIndex, cand.Begin, cand.Length, connection))
+                            {
+                                continue;
+                            }
+
+                            _endgameManager.RegisterRequest(torrentId, cand.PieceIndex, cand.Begin, cand.Length, connection);
+                            connection.PendingRequestCount++;
+                            return cand;
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public virtual void SendCancel(PeerConnection connection, int pieceIndex, int begin, int length)
+    {
+        if (connection == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var payload = new byte[12];
+            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), pieceIndex);
+            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), begin);
+            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(8, 4), length);
+
+            connection.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Cancel,
+                Payload = payload
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to send cancel message to {0}:{1}", connection.RemoteIp, connection.RemotePort);
+        }
+    }
+
+    public virtual void SendBlockRequest(PeerConnection connection, int pieceIndex, int begin, int length)
+    {
+        if (connection == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var payload = new byte[12];
+            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), pieceIndex);
+            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), begin);
+            BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(8, 4), length);
+
+            connection.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Request,
+                Payload = payload
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to send block request to {0}:{1}", connection.RemoteIp, connection.RemotePort);
+        }
+    }
+
+    public List<(PeerConnection Peer, PiecePicker.PieceBlock Block)> DuplicateEndgameRequests(Torrent torrent = null)
+    {
+        var duplicated = new List<(PeerConnection, PiecePicker.PieceBlock)>();
+        if (_piecePicker == null || _endgameManager == null)
+        {
+            return duplicated;
+        }
+
+        var activePieces = _piecePicker.ActivePieces.Values;
+        var allBlocks = activePieces.SelectMany(p => p.Blocks).ToList();
+        var missingBlocks = allBlocks.Where(b => !b.IsCompleted).ToList();
+        var inFlightCount = missingBlocks.Count(b => b.IsRequested);
+        var missingCount = missingBlocks.Count;
+
+        if (!_endgameManager.IsInEndgame(missingCount, inFlightCount))
+        {
+            return duplicated;
+        }
+
+        var torrentId = torrent?.Id ?? 0;
+        var connections = torrent != null && !string.IsNullOrEmpty(torrent.InfoHash)
+            ? _connectionManager?.GetConnections(torrent.InfoHash) ?? Enumerable.Empty<PeerConnection>()
+            : _connectionManager?.GetConnections() ?? Enumerable.Empty<PeerConnection>();
+
+        foreach (var block in missingBlocks)
+        {
+            foreach (var peer in connections)
+            {
+                if (peer == null || !peer.IsConnected)
+                {
+                    continue;
+                }
+
+                if (peer.PendingRequestCount >= peer.MaxPipelinedRequests)
+                {
+                    continue;
+                }
+
+                if (peer.PeerChoking && !(peer.SupportsFastExtension && peer.RemoteAllowedFastPieces.Contains(block.PieceIndex)))
+                {
+                    continue;
+                }
+
+                if (!peer.HasPiece(block.PieceIndex))
+                {
+                    continue;
+                }
+
+                if (_endgameManager.HasRequested(torrentId, block.PieceIndex, block.Begin, block.Length, peer))
+                {
+                    continue;
+                }
+
+                _endgameManager.RegisterRequest(torrentId, block.PieceIndex, block.Begin, block.Length, peer);
+                peer.PendingRequestCount++;
+                SendBlockRequest(peer, block.PieceIndex, block.Begin, block.Length);
+                duplicated.Add((peer, block));
+            }
+        }
+
+        return duplicated;
     }
 
     public void SetTorrentMetadata(string infoHash, byte[] metadata)
@@ -2105,6 +2304,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         {
             _fastExtensionHandler?.UnregisterPeer(connection);
             _chokeManager?.PeerDisconnected(connection);
+            _endgameManager?.UnregisterPeer(connection);
             _connectionManager.Remove(connection);
             var sessionInfoHash = connection.MatchedTorrent?.InfoHash ?? connection.InfoHash;
             if (!string.IsNullOrEmpty(sessionInfoHash))
@@ -2542,6 +2742,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         {
             _fastExtensionHandler?.UnregisterPeer(connection);
             _chokeManager?.PeerDisconnected(connection);
+            _endgameManager?.UnregisterPeer(connection);
             if (addedToConnectionManager)
             {
                 _connectionManager.Remove(connection);
@@ -2955,6 +3156,29 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 break;
 
             case PeerMessageType.Cancel:
+                if (message.Payload != null && message.Payload.Length >= 12)
+                {
+                    var cancelPieceIndex = BinaryPrimitives.ReadInt32BigEndian(message.Payload.AsSpan(0, 4));
+                    var cancelBegin = BinaryPrimitives.ReadInt32BigEndian(message.Payload.AsSpan(4, 4));
+                    var cancelLength = BinaryPrimitives.ReadInt32BigEndian(message.Payload.AsSpan(8, 4));
+
+                    lock (connection.PendingIncomingRequests)
+                    {
+                        connection.PendingIncomingRequests.RemoveAll(r =>
+                            r.PieceIndex == cancelPieceIndex &&
+                            r.Begin == cancelBegin &&
+                            (cancelLength <= 0 || r.Length == cancelLength));
+                    }
+
+                    lock (connection.OutboundQueue)
+                    {
+                        connection.OutboundQueue.RemoveAll(r =>
+                            r.PieceIndex == cancelPieceIndex &&
+                            r.Begin == cancelBegin &&
+                            (cancelLength <= 0 || r.Length == cancelLength));
+                    }
+                }
+
                 if (connection.PendingRequestCount > 0)
                 {
                     connection.PendingRequestCount--;
@@ -3047,6 +3271,19 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
                 var pieceBegin = (int)(((uint)message.Payload[4] << 24) | ((uint)message.Payload[5] << 16) | ((uint)message.Payload[6] << 8) | message.Payload[7]);
                 var blockData = message.Payload[8..];
+
+                if (_endgameManager != null)
+                {
+                    var torrentId = torrent?.Id ?? 0;
+                    var otherPeers = _endgameManager.OnBlockReceived(torrentId, pieceIndex, pieceBegin, blockData.Length, connection);
+                    if (otherPeers != null && otherPeers.Count > 0)
+                    {
+                        foreach (var otherPeer in otherPeers)
+                        {
+                            SendCancel(otherPeer, pieceIndex, pieceBegin, blockData.Length);
+                        }
+                    }
+                }
 
                 if (torrent != null)
                 {

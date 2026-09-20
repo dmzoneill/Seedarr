@@ -456,6 +456,8 @@ public class PeerConnection : IDisposable
     public HashSet<int> AllowedFastPieces => RemoteAllowedFastPieces;
     public List<PeerRequest> PendingIncomingRequests { get; } = new();
     public List<PeerRequest> IncomingRequests => PendingIncomingRequests;
+    public List<PeerRequest> OutboundQueue { get; } = new();
+    public List<PeerRequest> OutgoingBlocks => OutboundQueue;
     public event Action<PeerConnection, PeerMessage> MessageSent;
     public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
     public DateTime? LastUnchokedAt { get; set; }
@@ -471,6 +473,21 @@ public class PeerConnection : IDisposable
     {
         get => _isSeed || Progress >= 1.0 || (PeerPieces != null && PeerPieces.Length > 0 && ((HaveCount > 0 && HaveCount == PeerPieces.Length) || (HaveCount == 0 && PeerPieces.All(p => p))));
         set => _isSeed = value;
+    }
+
+    public virtual bool HasPiece(int pieceIndex)
+    {
+        if (IsSeed)
+        {
+            return true;
+        }
+
+        if (PeerPieces != null && pieceIndex >= 0 && pieceIndex < PeerPieces.Length)
+        {
+            return PeerPieces[pieceIndex];
+        }
+
+        return false;
     }
 
     public IDhKeyPool DhKeyPool { get; set; }
@@ -1681,6 +1698,24 @@ public class PeerConnection : IDisposable
         var payload = new byte[4];
         BinaryPrimitives.WriteInt32BigEndian(payload, pieceIndex);
         SendMessage(new PeerMessage { Type = PeerMessageType.Have, Payload = payload });
+    }
+
+    public virtual void SendCancel(int pieceIndex, int begin, int length)
+    {
+        var payload = new byte[12];
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), pieceIndex);
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), begin);
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(8, 4), length);
+        SendMessage(new PeerMessage { Type = PeerMessageType.Cancel, Payload = payload });
+    }
+
+    public virtual void SendRequest(int pieceIndex, int begin, int length)
+    {
+        var payload = new byte[12];
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), pieceIndex);
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), begin);
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(8, 4), length);
+        SendMessage(new PeerMessage { Type = PeerMessageType.Request, Payload = payload });
     }
 
     public virtual bool SendLtDontHave(int pieceIndex)
