@@ -15,6 +15,7 @@ public class RssRuleControllerTest
     private IRssRuleRepository _rssRuleRepository;
     private IIndexerRepository _indexerRepository;
     private ICategoryService _categoryService;
+    private IRssGrabHistoryRepository _grabHistoryRepository;
     private RssRuleController _controller;
 
     [SetUp]
@@ -23,7 +24,8 @@ public class RssRuleControllerTest
         _rssRuleRepository = Substitute.For<IRssRuleRepository>();
         _indexerRepository = Substitute.For<IIndexerRepository>();
         _categoryService = Substitute.For<ICategoryService>();
-        _controller = new RssRuleController(_rssRuleRepository, _indexerRepository, _categoryService);
+        _grabHistoryRepository = Substitute.For<IRssGrabHistoryRepository>();
+        _controller = new RssRuleController(_rssRuleRepository, _indexerRepository, _categoryService, _grabHistoryRepository);
     }
 
     [Test]
@@ -221,5 +223,86 @@ public class RssRuleControllerTest
         var updated = (RssRuleResource)okResult.Value;
         Assert.That(updated.Tags, Is.EquivalentTo(new[] { 5 }));
         _rssRuleRepository.Received(1).Update(Arg.Is<RssRule>(r => r.Id == 1 && r.Tags.Contains(5)));
+    }
+
+    [Test]
+    public void Create_with_quality_and_ingestion_mappings_succeeds()
+    {
+        _rssRuleRepository.All().Returns(new List<RssRule>());
+        _rssRuleRepository.Insert(Arg.Any<RssRule>()).Returns(callInfo =>
+        {
+            var rule = callInfo.Arg<RssRule>();
+            rule.Id = 42;
+            return rule;
+        });
+
+        var resource = new RssRuleResource
+        {
+            Name = "4K Remux Rule",
+            AllowedResolutions = new List<string> { "2160p" },
+            AllowedSources = new List<string> { "Remux" },
+            AllowedCodecs = new List<string> { "HEVC" },
+            SavePath = "/downloads/4k",
+            SequentialDownload = true,
+            InitialStatus = "Paused"
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var created = (RssRuleResource)((OkObjectResult)result.Result).Value;
+        Assert.That(created.AllowedResolutions, Does.Contain("2160p"));
+        Assert.That(created.AllowedSources, Does.Contain("Remux"));
+        Assert.That(created.AllowedCodecs, Does.Contain("HEVC"));
+        Assert.That(created.SavePath, Is.EqualTo("/downloads/4k"));
+        Assert.That(created.SequentialDownload, Is.True);
+        Assert.That(created.InitialStatus, Is.EqualTo("Paused"));
+    }
+
+    [Test]
+    public void Create_with_invalid_InitialStatus_returns_bad_request()
+    {
+        var resource = new RssRuleResource
+        {
+            Name = "Invalid Status Rule",
+            InitialStatus = "InvalidStatusName"
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void GetHistory_should_return_records_from_repository()
+    {
+        var historyRecords = new List<RssGrabHistory>
+        {
+            new RssGrabHistory
+            {
+                Id = 1,
+                ReleaseTitle = "Movie.2024.1080p",
+                Status = "Grabbed",
+                RuleId = 10,
+                RuleName = "HD Rule"
+            }
+        };
+
+        _grabHistoryRepository.GetCount(null, null).Returns(1);
+        _grabHistoryRepository.GetHistory(null, null, 50, 0).Returns(historyRecords);
+
+        // Mock controller response headers
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
+        };
+
+        var result = _controller.GetHistory();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var returned = (List<RssGrabHistoryResource>)((OkObjectResult)result.Result).Value;
+        Assert.That(returned.Count, Is.EqualTo(1));
+        Assert.That(returned[0].ReleaseTitle, Is.EqualTo("Movie.2024.1080p"));
+        Assert.That(returned[0].Status, Is.EqualTo("Grabbed"));
     }
 }

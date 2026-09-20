@@ -50,5 +50,6 @@ public static class TableRegistration
         TableMapping.Register<TorrentEventLog>("TorrentEventLogs");
         TableMapping.Register<ScheduledTaskHistory>("ScheduledTaskHistory");
         TableMapping.Register<RssSeenRelease>("RssSeenReleases");
+        TableMapping.Register<RssGrabHistory>("RssGrabHistory");
     }
 }
