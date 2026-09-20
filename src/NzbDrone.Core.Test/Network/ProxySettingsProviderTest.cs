@@ -59,6 +59,54 @@ namespace NzbDrone.Core.Test.Network
             Assert.That(_subject.Type, Is.EqualTo(ProxyType.None));
         }
 
+        [TestCase("socks5", ProxyType.Socks5)]
+        [TestCase("Socks5", ProxyType.Socks5)]
+        [TestCase("SOCKS5", ProxyType.Socks5)]
+        [TestCase("sOcKs5", ProxyType.Socks5)]
+        [TestCase("http", ProxyType.Http)]
+        [TestCase("Http", ProxyType.Http)]
+        [TestCase("HTTP", ProxyType.Http)]
+        [TestCase("hTtP", ProxyType.Http)]
+        [TestCase("none", ProxyType.None)]
+        [TestCase("None", ProxyType.None)]
+        [TestCase("NONE", ProxyType.None)]
+        [TestCase("nOnE", ProxyType.None)]
+        [TestCase("socks4", ProxyType.None)]
+        [TestCase("InvalidValue", ProxyType.None)]
+        [TestCase("", ProxyType.None)]
+        public void Type_should_parse_case_insensitively(string configValue, ProxyType expectedType)
+        {
+            _configService.GetValue("ProxyType", "None").Returns(configValue);
+
+            Assert.That(_subject.Type, Is.EqualTo(expectedType));
+        }
+
+        [TestCase("socks5")]
+        [TestCase("SOCKS5")]
+        [TestCase("sOcKs5")]
+        [TestCase("http")]
+        [TestCase("HTTP")]
+        [TestCase("hTtP")]
+        public void IsEnabled_should_return_true_for_case_insensitive_proxy_type_when_host_set(string proxyType)
+        {
+            _configService.GetValue("ProxyType", "None").Returns(proxyType);
+            _configService.GetValue("ProxyHost", "").Returns("proxy.example.com");
+
+            Assert.That(_subject.IsEnabled, Is.True);
+        }
+
+        [TestCase("none")]
+        [TestCase("None")]
+        [TestCase("NONE")]
+        [TestCase("socks4")]
+        public void IsEnabled_should_return_false_when_proxy_type_is_none_or_unsupported(string proxyType)
+        {
+            _configService.GetValue("ProxyType", "None").Returns(proxyType);
+            _configService.GetValue("ProxyHost", "").Returns("proxy.example.com");
+
+            Assert.That(_subject.IsEnabled, Is.False);
+        }
+
         [Test]
         public void Host_should_return_config_value()
         {
@@ -223,6 +271,37 @@ namespace NzbDrone.Core.Test.Network
 
             Assert.That(handler, Is.Not.Null);
             Assert.That(handler.Proxy, Is.Null);
+        }
+
+        [Test]
+        public void CreateHandler_should_return_proxy_handler_when_lowercase_http_enabled()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("http");
+            _configService.GetValue("ProxyHost", "").Returns("proxy.example.com");
+            _configService.GetValueInt("ProxyPort", 8080).Returns(3128);
+
+            var handler = _subject.CreateHandler();
+
+            Assert.That(handler, Is.Not.Null);
+            Assert.That(handler.Proxy, Is.Not.Null);
+        }
+
+        [Test]
+        public void CreateHandler_should_return_socks5h_proxy_handler_when_lowercase_socks5_enabled()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("socks5");
+            _configService.GetValue("ProxyHost", "").Returns("proxy.example.com");
+            _configService.GetValueInt("ProxyPort", 8080).Returns(1080);
+
+            var handler = _subject.CreateHandler();
+
+            Assert.That(handler, Is.Not.Null);
+            Assert.That(handler.Proxy, Is.Not.Null);
+            Assert.That(handler.UseProxy, Is.True);
+            var proxy = handler.Proxy as WebProxy;
+            Assert.That(proxy, Is.Not.Null);
+            Assert.That(proxy.Address, Is.EqualTo(new Uri("socks5h://proxy.example.com:1080")));
+            Assert.That(proxy.Address.Scheme, Is.EqualTo("socks5h"));
         }
     }
 }

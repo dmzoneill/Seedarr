@@ -109,7 +109,6 @@ export function ProxySettingsTab() {
             options={[
               { value: "none", label: "None (Direct Connection)" },
               { value: "socks5", label: "SOCKS5 Proxy" },
-              { value: "socks4", label: "SOCKS4 Proxy" },
               { value: "http", label: "HTTP Proxy" },
             ]}
           />

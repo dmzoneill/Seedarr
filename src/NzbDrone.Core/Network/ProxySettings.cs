@@ -35,7 +35,7 @@ public class ProxySettingsProvider : IProxySettingsProvider
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public ProxyType Type => Enum.TryParse<ProxyType>(_configService.GetValue("ProxyType", "None"), out var type) ? type : ProxyType.None;
+    public ProxyType Type => Enum.TryParse<ProxyType>(_configService.GetValue("ProxyType", "None"), ignoreCase: true, out var type) ? type : ProxyType.None;
     public string Host => _configService.GetValue("ProxyHost", "");
     public int Port => _configService.GetValueInt("ProxyPort", 8080);
     public string Username => _configService.GetValue("ProxyUsername", "");
