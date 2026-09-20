@@ -43,17 +43,18 @@ public interface ICategoryService
 
     void InvalidateCache();
 
-    bool CanDownload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null);
+    bool CanDownload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null, bool ignoreSlowTorrents = true);
 
     bool CanUpload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveUploads = null);
 
-    List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> queuedTorrents, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null);
+    List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> queuedTorrents, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null, bool ignoreSlowTorrents = true);
 
-    List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> allTorrents, int? globalMaxActiveDownloads = null);
+    List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> allTorrents, int? globalMaxActiveDownloads = null, bool ignoreSlowTorrents = true);
 }
 
 public class CategoryService : ICategoryService, IQueueService
 {
+    private const long SlowTorrentThresholdBytesPerSec = 10 * 1024; // 10 KB/s
     private static readonly Category NotFoundCategory = new();
 
     private readonly ICategoryRepository _repository;
@@ -676,7 +677,35 @@ public class CategoryService : ICategoryService, IQueueService
         }
     }
 
-    public bool CanDownload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null)
+    private static bool IsSlotConsuming(Torrent torrent, bool ignoreSlowTorrents = true)
+    {
+        if (torrent == null)
+        {
+            return false;
+        }
+
+        if (torrent.IsExtinct || torrent.Status == TorrentStatus.StalledNoSeeds)
+        {
+            return false;
+        }
+
+        if (ignoreSlowTorrents)
+        {
+            if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed < SlowTorrentThresholdBytesPerSec)
+            {
+                return false;
+            }
+
+            if (torrent.DownloadSpeed > 0 && torrent.DownloadSpeed < SlowTorrentThresholdBytesPerSec)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public bool CanDownload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null, bool ignoreSlowTorrents = true)
     {
         if (torrent == null)
         {
@@ -684,7 +713,7 @@ public class CategoryService : ICategoryService, IQueueService
         }
 
         var activeList = (activeTorrents as IList<Torrent> ?? activeTorrents?.ToList() ?? new List<Torrent>())
-            .Where(t => !t.IsExtinct && t.Status != TorrentStatus.StalledNoSeeds)
+            .Where(t => IsSlotConsuming(t, ignoreSlowTorrents))
             .ToList();
 
         if (globalMaxActiveDownloads.HasValue && globalMaxActiveDownloads.Value > 0 && activeList.Count >= globalMaxActiveDownloads.Value)
@@ -806,7 +835,7 @@ public class CategoryService : ICategoryService, IQueueService
         return true;
     }
 
-    public List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> allTorrents, int? globalMaxActiveDownloads = null)
+    public List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> allTorrents, int? globalMaxActiveDownloads = null, bool ignoreSlowTorrents = true)
     {
         if (allTorrents == null)
         {
@@ -814,13 +843,13 @@ public class CategoryService : ICategoryService, IQueueService
         }
 
         var list = allTorrents.ToList();
-        var activeTorrents = list.Where(t => t.Status == TorrentStatus.Downloading && !t.IsExtinct).ToList();
+        var activeTorrents = list.Where(t => (t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.StalledNoSeeds) && !t.IsExtinct).ToList();
         var queuedTorrents = list.Where(t => t.Status == TorrentStatus.Queued).OrderBy(t => t.SortOrder).ThenBy(t => t.Id).ToList();
 
-        return EvaluateDownloadQueue(queuedTorrents, activeTorrents, globalMaxActiveDownloads);
+        return EvaluateDownloadQueue(queuedTorrents, activeTorrents, globalMaxActiveDownloads, ignoreSlowTorrents);
     }
 
-    public List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> queuedTorrents, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null)
+    public List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> queuedTorrents, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null, bool ignoreSlowTorrents = true)
     {
         var promoted = new List<Torrent>();
         if (queuedTorrents == null)
@@ -835,7 +864,7 @@ public class CategoryService : ICategoryService, IQueueService
         }
 
         var activeList = activeTorrents?
-            .Where(t => !t.IsExtinct && t.Status != TorrentStatus.StalledNoSeeds)
+            .Where(t => IsSlotConsuming(t, ignoreSlowTorrents))
             .ToList() ?? new List<Torrent>();
         var totalActiveCount = activeList.Count;
 
