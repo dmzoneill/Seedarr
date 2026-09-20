@@ -150,6 +150,133 @@ public class MediaCoverSecurityTest
         }
     }
 
+    [Test]
+    public void MediaCoverController_rejects_artwork_when_AppFolderInfo_is_null()
+    {
+        var controllerWithoutAppFolder = new MediaCoverController(_enrichmentService, null)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext(),
+            },
+        };
+
+        _enrichmentService.GetMetadata(10).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 10,
+            PosterLocalPath = "/etc/passwd",
+        });
+
+        var result = controllerWithoutAppFolder.GetPoster(10);
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    public void MediaCoverController_rejects_artwork_when_AppDataFolder_is_empty_or_whitespace(string emptyAppData)
+    {
+        var appFolder = Substitute.For<IAppFolderInfo>();
+        appFolder.AppDataFolder.Returns(emptyAppData);
+
+        var controller = new MediaCoverController(_enrichmentService, appFolder)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext(),
+            },
+        };
+
+        _enrichmentService.GetMetadata(10).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 10,
+            PosterLocalPath = "/etc/passwd",
+        });
+
+        var result = controller.GetPoster(10);
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void MediaCoverController_rejects_artwork_in_AppDataFolder_root_outside_whitelisted_directories()
+    {
+        var sensitiveDb = Path.Combine(_tempAppData, "seedarr.db");
+        File.WriteAllText(sensitiveDb, "SQLite format 3");
+
+        _enrichmentService.GetMetadata(10).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 10,
+            PosterLocalPath = sensitiveDb,
+        });
+
+        var result = _controller.GetPoster(10);
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [TestCase("../../../../../etc/passwd")]
+    [TestCase("MediaCover/../../etc/passwd")]
+    public void MediaCoverController_rejects_relative_directory_traversal_in_PosterLocalPath(string traversalPath)
+    {
+        _enrichmentService.GetMetadata(10).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 10,
+            PosterLocalPath = traversalPath,
+        });
+
+        var result = _controller.GetPoster(10);
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void MediaCoverController_serves_valid_artwork_within_MediaCache_directory()
+    {
+        var cacheDir = Path.Combine(_tempAppData, "MediaCache", "10");
+        Directory.CreateDirectory(cacheDir);
+        var posterFile = Path.Combine(cacheDir, "poster.jpg");
+        File.WriteAllBytes(posterFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+        _enrichmentService.GetMetadata(10).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 10,
+            PosterLocalPath = posterFile,
+        });
+
+        var result = _controller.GetPoster(10);
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(posterFile)));
+        Assert.That(fileResult.ContentType, Is.EqualTo("image/jpeg"));
+    }
+
+    [Test]
+    public void FindArtworkOnDisk_ignores_candidate_directories_outside_AppDataFolder()
+    {
+        var outsideDir = Path.Combine(Path.GetTempPath(), "seedarr_outside_candidate_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDir);
+        var outsidePoster = Path.Combine(outsideDir, "poster.jpg");
+        File.WriteAllBytes(outsidePoster, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+        try
+        {
+            _enrichmentService.GetMetadata(10).Returns(new TorrentMediaMetadata
+            {
+                TorrentId = 10,
+                PosterLocalPath = null,
+                BackdropLocalPath = outsidePoster,
+            });
+
+            var result = _controller.GetPoster(10);
+
+            Assert.That(result, Is.InstanceOf<ContentResult>());
+            var contentResult = (ContentResult)result;
+            Assert.That(contentResult.ContentType, Is.EqualTo("image/svg+xml; charset=utf-8"));
+        }
+        finally
+        {
+            Directory.Delete(outsideDir, true);
+        }
+    }
+
     [TestCase("../../../../etc/passwd")]
     [TestCase("..\\..\\windows\\win.ini")]
     [TestCase("valid/../../etc/passwd")]

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -232,5 +233,90 @@ public class MediaCoverControllerTest
         Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
         var fileResult = (PhysicalFileResult)result;
         Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(posterFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_rejects_paths_outside_AppDataFolder_with_NotFound()
+    {
+        var outsideDir = Path.Combine(Path.GetTempPath(), "seedarr_v1_outside_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDir);
+        var outsideFile = Path.Combine(outsideDir, "poster.jpg");
+        File.WriteAllBytes(outsideFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+        try
+        {
+            _enrichmentService.GetMetadata(20).Returns(new TorrentMediaMetadata
+            {
+                TorrentId = 20,
+                PosterLocalPath = outsideFile,
+            });
+
+            var result = _controller.GetPoster(20);
+
+            Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        }
+        finally
+        {
+            Directory.Delete(outsideDir, true);
+        }
+    }
+
+    [Test]
+    public void ServeArtwork_rejects_paths_when_AppFolderInfo_is_null_with_NotFound()
+    {
+        var controllerWithoutAppFolder = new MediaCoverController(_enrichmentService, null)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext(),
+            },
+        };
+
+        _enrichmentService.GetMetadata(21).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 21,
+            PosterLocalPath = "/etc/passwd",
+        });
+
+        var result = controllerWithoutAppFolder.GetPoster(21);
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [TestCase("../../../../../etc/passwd")]
+    [TestCase("MediaCover/../../etc/passwd")]
+    public void ServeArtwork_rejects_traversal_paths_with_NotFound(string traversalPath)
+    {
+        _enrichmentService.GetMetadata(22).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 22,
+            PosterLocalPath = traversalPath,
+        });
+
+        var result = _controller.GetPoster(22);
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void MediaMetadataResource_serialization_does_not_leak_local_paths()
+    {
+        var resource = new MediaMetadataResource
+        {
+            Id = 1,
+            TorrentId = 1,
+            Title = "Secret Movie",
+            PosterUrl = "/api/v1/mediacover/1/poster.jpg",
+            PosterLocalPath = "/root/secret/MediaCover/1/poster.jpg",
+            BackdropUrl = "/api/v1/mediacover/1/backdrop.jpg",
+            BackdropLocalPath = "/root/secret/MediaCover/1/backdrop.jpg",
+        };
+
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var json = JsonSerializer.Serialize(resource, options);
+
+        Assert.That(json, Does.Not.Contain("posterLocalPath"));
+        Assert.That(json, Does.Not.Contain("backdropLocalPath"));
+        Assert.That(json, Does.Not.Contain("/root/secret"));
+        Assert.That(json, Does.Contain("posterUrl"));
+        Assert.That(json, Does.Contain("backdropUrl"));
     }
 }
