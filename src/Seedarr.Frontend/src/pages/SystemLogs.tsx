@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
 import { apiClient } from "../api/client";
 
 type LogLevel = "Trace" | "Debug" | "Info" | "Warn" | "Error";
@@ -22,6 +23,7 @@ interface LogEntry {
 }
 
 const ALL_LEVELS: LogLevel[] = ["Trace", "Debug", "Info", "Warn", "Error"];
+const DEFAULT_WINDOW_SIZE = 250;
 
 function toLogLevel(level: string): LogLevel {
   const normalized =
@@ -69,9 +71,29 @@ function SystemLogs() {
     isError,
   } = useLogEntries(levelFilter === "All" ? null : levelFilter);
   const [searchText, setSearchText] = useState("");
+  const [debouncedSearchText, setDebouncedSearchText] = useState("");
+  const [visibleCount, setVisibleCount] = useState(DEFAULT_WINDOW_SIZE);
   const [autoScroll, setAutoScroll] = useState(true);
   const [clearedBeforeId, setClearedBeforeId] = useState<number | null>(null);
   const logContentRef = useRef<HTMLDivElement>(null);
+  const isExpandingRef = useRef(false);
+
+  // Debounce search input by 250ms
+  useEffect(() => {
+    if (!searchText) {
+      setDebouncedSearchText("");
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearchText(searchText);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchText]);
+
+  // Reset window slice when filter, search, or clear changes
+  useEffect(() => {
+    setVisibleCount(DEFAULT_WINDOW_SIZE);
+  }, [debouncedSearchText, levelFilter, clearedBeforeId]);
 
   const filteredEntries = useMemo(() => {
     if (!entries) return [];
@@ -79,15 +101,42 @@ function SystemLogs() {
       clearedBeforeId !== null
         ? entries.filter((entry) => entry.id > clearedBeforeId)
         : entries;
-    if (!searchText) return visible;
-    const q = searchText.toLowerCase();
+    if (!debouncedSearchText) return visible;
+    const q = debouncedSearchText.toLowerCase();
     return visible.filter(
       (entry) =>
         entry.message.toLowerCase().includes(q) ||
         entry.source.toLowerCase().includes(q) ||
         entry.level.toLowerCase().includes(q),
     );
-  }, [entries, searchText, clearedBeforeId]);
+  }, [entries, debouncedSearchText, clearedBeforeId]);
+
+  const hasMore = filteredEntries.length > visibleCount;
+  const remainingCount = hasMore ? filteredEntries.length - visibleCount : 0;
+
+  const displayedEntries = useMemo(() => {
+    if (!hasMore) return filteredEntries;
+    return filteredEntries.slice(filteredEntries.length - visibleCount);
+  }, [filteredEntries, hasMore, visibleCount]);
+
+  const handleShowMore = useCallback(() => {
+    if (logContentRef.current) {
+      isExpandingRef.current = true;
+      const prevScrollHeight = logContentRef.current.scrollHeight;
+      const prevScrollTop = logContentRef.current.scrollTop;
+      setVisibleCount((prev) => prev + DEFAULT_WINDOW_SIZE);
+      requestAnimationFrame(() => {
+        if (logContentRef.current) {
+          const newScrollHeight = logContentRef.current.scrollHeight;
+          logContentRef.current.scrollTop =
+            prevScrollTop + (newScrollHeight - prevScrollHeight);
+        }
+        isExpandingRef.current = false;
+      });
+    } else {
+      setVisibleCount((prev) => prev + DEFAULT_WINDOW_SIZE);
+    }
+  }, []);
 
   const handleClear = useCallback(() => {
     if (entries && entries.length > 0) {
@@ -101,10 +150,11 @@ function SystemLogs() {
 
   // Auto-scroll to bottom
   useEffect(() => {
+    if (isExpandingRef.current) return;
     if (autoScroll && logContentRef.current) {
       logContentRef.current.scrollTop = logContentRef.current.scrollHeight;
     }
-  }, [filteredEntries, autoScroll]);
+  }, [displayedEntries, autoScroll]);
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
@@ -185,6 +235,13 @@ function SystemLogs() {
             <button className="btn btn-small btn-outline" onClick={handleClear}>
               Clear
             </button>
+            <Link
+              to="/system/logfiles"
+              className="btn btn-small btn-outline"
+              style={{ textDecoration: "none" }}
+            >
+              Log Files
+            </Link>
           </div>
         </div>
 
@@ -196,7 +253,25 @@ function SystemLogs() {
           {!isLoading && !isError && filteredEntries.length === 0 && (
             <p className="log-empty">No log entries</p>
           )}
-          {filteredEntries.map((entry) => (
+          {!isLoading && !isError && remainingCount > 0 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                padding: "0.75rem",
+                borderBottom: "1px solid var(--border-light, #333)",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-small btn-outline"
+                onClick={handleShowMore}
+              >
+                Show more ({remainingCount} remaining)
+              </button>
+            </div>
+          )}
+          {displayedEntries.map((entry) => (
             <div key={entry.id} className="log-entry">
               <span className="log-timestamp">
                 {formatTimestamp(entry.timestamp)}
