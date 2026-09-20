@@ -2874,4 +2874,237 @@ public class UtpConnectionTest
 
         Assert.That(connection.CongestionWindow, Is.GreaterThan(initialCwnd), "Congestion window should increase on ACK with low queuing delay");
     }
+
+    [Test]
+    public void TargetDelay_constant_should_be_100_000_microseconds()
+    {
+        Assert.That(UtpConnection.TargetDelay, Is.EqualTo(100_000u));
+        Assert.That(UtpConnection.TARGET_DELAY, Is.EqualTo(100_000u));
+    }
+
+    [Test]
+    public void UpdateCongestionWindow_should_expire_samples_outside_rolling_two_minute_window()
+    {
+        using var connection = new UtpConnection();
+        connection.ResetCongestionControl(3000);
+
+        var startTicks = 1_000_000_000L;
+        // Sample at t = 0s
+        connection.UpdateCongestionWindow(30_000, 0, startTicks);
+        Assert.That(connection.BaseDelay, Is.EqualTo(30_000u));
+
+        // Sample at t = 60s (within 2-minute window)
+        var ticks60s = startTicks + (60L * Stopwatch.Frequency);
+        connection.UpdateCongestionWindow(80_000, 0, ticks60s);
+        Assert.That(connection.BaseDelay, Is.EqualTo(30_000u), "Base delay should remain minimum of 30_000 within 2 minutes");
+
+        // Sample at t = 125s (first sample 30_000 expires since > 120s has passed)
+        var ticks125s = startTicks + (125L * Stopwatch.Frequency);
+        connection.UpdateCongestionWindow(90_000, 0, ticks125s);
+        Assert.That(connection.BaseDelay, Is.EqualTo(80_000u), "Base delay should update to new minimum after 30_000 sample expired");
+
+        // Sample at t = 250s (80_000 and 90_000 expired)
+        var ticks250s = startTicks + (250L * Stopwatch.Frequency);
+        connection.UpdateCongestionWindow(100_000, 0, ticks250s);
+        Assert.That(connection.BaseDelay, Is.EqualTo(100_000u), "Base delay should update to latest active sample");
+    }
+
+    [Test]
+    public void UpdateCongestionWindow_should_calculate_queuing_delay_and_off_target_correctly()
+    {
+        using var connection = new UtpConnection();
+        connection.ResetCongestionControl(3000);
+
+        // Baseline delay sample
+        connection.UpdateCongestionWindow(40_000, 0);
+        Assert.That(connection.BaseDelay, Is.EqualTo(40_000u));
+        Assert.That(connection.QueuingDelay, Is.EqualTo(0u));
+        Assert.That(connection.OffTarget, Is.EqualTo((double)UtpConnection.TargetDelay));
+
+        // Delay sample with queuing delay below target (70_000 µs queuing delay < 100_000 µs target)
+        connection.UpdateCongestionWindow(110_000, 0);
+        Assert.That(connection.BaseDelay, Is.EqualTo(40_000u));
+        Assert.That(connection.QueuingDelay, Is.EqualTo(70_000u));
+        Assert.That(connection.OffTarget, Is.EqualTo(30_000.0));
+
+        // Delay sample with queuing delay exceeding target (160_000 µs queuing delay > 100_000 µs target)
+        connection.UpdateCongestionWindow(200_000, 0);
+        Assert.That(connection.QueuingDelay, Is.EqualTo(160_000u));
+        Assert.That(connection.OffTarget, Is.EqualTo(-60_000.0));
+    }
+
+    [Test]
+    public void UpdateCongestionWindow_should_grow_cwnd_proportionally_when_below_target()
+    {
+        using var conn1 = new UtpConnection();
+        conn1.ResetCongestionControl(3000);
+        conn1.UpdateCongestionWindow(50_000, 0); // Base delay = 50_000
+
+        // In conn1, queuing delay is 0 (off_target = 100_000, delayFactor = 1.0)
+        var cwndBefore1 = conn1.CongestionWindow;
+        conn1.UpdateCongestionWindow(50_000, 1360);
+        var growth1 = conn1.CongestionWindow - cwndBefore1;
+
+        using var conn2 = new UtpConnection();
+        conn2.ResetCongestionControl(3000);
+        conn2.UpdateCongestionWindow(50_000, 0); // Base delay = 50_000
+
+        // In conn2, queuing delay is 50_000 (off_target = 50_000, delayFactor = 0.5)
+        var cwndBefore2 = conn2.CongestionWindow;
+        conn2.UpdateCongestionWindow(100_000, 1360);
+        var growth2 = conn2.CongestionWindow - cwndBefore2;
+
+        Assert.That(growth1, Is.GreaterThan(0u), "Cwnd should grow when queuing delay is below target");
+        Assert.That(growth2, Is.GreaterThan(0u), "Cwnd should grow when queuing delay is below target");
+        Assert.That(growth1, Is.GreaterThan(growth2), "Cwnd growth should be larger when queuing delay is further below target");
+        // Proportional growth: growth2 should be approximately half of growth1
+        Assert.That(growth2, Is.EqualTo(growth1 / 2).Within(5u));
+    }
+
+    [Test]
+    public void UpdateCongestionWindow_should_throttle_and_shrink_cwnd_proportionally_when_exceeding_target()
+    {
+        using var conn1 = new UtpConnection();
+        conn1.ResetCongestionControl(10_000);
+        conn1.UpdateCongestionWindow(50_000, 0); // Base delay = 50_000
+
+        // Queuing delay = 150_000 (off_target = -50_000, delayFactor = -0.5)
+        var cwndBefore1 = conn1.CongestionWindow;
+        conn1.UpdateCongestionWindow(200_000, 1360);
+        var drop1 = (int)cwndBefore1 - (int)conn1.CongestionWindow;
+
+        using var conn2 = new UtpConnection();
+        conn2.ResetCongestionControl(10_000);
+        conn2.UpdateCongestionWindow(50_000, 0); // Base delay = 50_000
+
+        // Queuing delay = 200_000 (off_target = -100_000, delayFactor = -1.0)
+        var cwndBefore2 = conn2.CongestionWindow;
+        conn2.UpdateCongestionWindow(250_000, 1360);
+        var drop2 = (int)cwndBefore2 - (int)conn2.CongestionWindow;
+
+        Assert.That(drop1, Is.GreaterThan(0), "Cwnd should decrease when queuing delay exceeds target");
+        Assert.That(drop2, Is.GreaterThan(0), "Cwnd should decrease when queuing delay exceeds target");
+        Assert.That(drop2, Is.GreaterThan(drop1), "Cwnd drop should be proportionally greater for higher queuing delay");
+        Assert.That(drop2, Is.EqualTo(drop1 * 2).Within(5));
+    }
+
+    [Test]
+    public void Send_should_throttle_packet_transmission_so_bytes_in_flight_never_exceeds_effective_cwnd()
+    {
+        using var connection = new UtpConnection();
+        SetConnected(connection, true);
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54324);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        connection.RemoteWindowSize = 65535;
+        connection.CongestionWindow = 2000;
+
+        var maxBytesInFlightSeen = 0;
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            var type = (UtpPacketType)(data[0] >> 4);
+            if (type == UtpPacketType.Data)
+            {
+                lock (sentPackets)
+                {
+                    sentPackets.Add(data.ToArray());
+                    maxBytesInFlightSeen = Math.Max(maxBytesInFlightSeen, connection.BytesInFlight);
+                }
+            }
+
+            return true;
+        };
+
+        var sendData = new byte[4000];
+        var sendTask = Task.Run(() => connection.Send(sendData, 0, sendData.Length));
+
+        Thread.Sleep(50);
+
+        lock (sentPackets)
+        {
+            Assert.That(sentPackets.Count, Is.EqualTo(2), "Should transmit only packets fitting within cwnd (1360 + 640)");
+            Assert.That(sentPackets[0].Length - 20, Is.EqualTo(1360));
+            Assert.That(sentPackets[1].Length - 20, Is.EqualTo(640));
+            Assert.That(maxBytesInFlightSeen, Is.EqualTo(2000));
+            Assert.That(connection.BytesInFlight, Is.LessThanOrEqualTo((int)connection.EffectiveCwnd));
+        }
+
+        // Acknowledge packet 1 (1360 bytes)
+        var ackPacket = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 1);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        Thread.Sleep(50);
+
+        lock (sentPackets)
+        {
+            Assert.That(maxBytesInFlightSeen, Is.LessThanOrEqualTo(2000));
+            Assert.That(sentPackets.Count, Is.GreaterThanOrEqualTo(3), "Should send next chunk once in-flight drops below cwnd");
+        }
+
+        // Drain all remaining packets by acknowledging
+        for (ushort seq = 2; seq <= 10; seq++)
+        {
+            var ack = CreatePacket(UtpPacketType.State, connection.ReceiveId, seq, seq);
+            connection.HandleIncomingPacket(ack, remoteEp);
+        }
+
+        var completed = sendTask.Wait(TimeSpan.FromSeconds(2));
+        Assert.That(completed, Is.True);
+        Assert.That(sendTask.Result, Is.EqualTo(4000));
+        Assert.That(maxBytesInFlightSeen, Is.LessThanOrEqualTo(2000), "bytes_in_flight must never exceed cwnd");
+    }
+
+    [Test]
+    public void Send_should_gate_when_cwnd_reduces_from_increased_queuing_delay()
+    {
+        using var connection = new UtpConnection();
+        SetConnected(connection, true);
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54325);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        connection.RemoteWindowSize = 65535;
+        connection.CongestionWindow = 3000;
+
+        // Establish base delay of 20,000 µs
+        var basePacket = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 0);
+        BinaryPrimitives.WriteUInt32BigEndian(basePacket.AsSpan(8, 4), 20_000);
+        connection.HandleIncomingPacket(basePacket, remoteEp);
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            var type = (UtpPacketType)(data[0] >> 4);
+            if (type == UtpPacketType.Data)
+            {
+                lock (sentPackets)
+                {
+                    sentPackets.Add(data.ToArray());
+                }
+            }
+
+            return true;
+        };
+
+        var sendData = new byte[3000];
+        var sendTask = Task.Run(() => connection.Send(sendData, 0, sendData.Length));
+
+        Thread.Sleep(50);
+
+        lock (sentPackets)
+        {
+            // Initial burst: fits within 3000 bytes (1360 + 1360 + 280)
+            Assert.That(sentPackets.Count, Is.EqualTo(3));
+        }
+
+        // Deliver ACK for packet 1 with high queuing delay (queuing delay = 180,000 µs > 100,000 µs)
+        var highDelayAck = CreatePacket(UtpPacketType.State, connection.ReceiveId, 2, 1);
+        BinaryPrimitives.WriteUInt32BigEndian(highDelayAck.AsSpan(8, 4), 200_000);
+        connection.HandleIncomingPacket(highDelayAck, remoteEp);
+
+        // Verify cwnd was reduced below 3000 due to congestion
+        Assert.That(connection.CongestionWindow, Is.LessThan(3000u));
+        Assert.That(connection.QueuingDelay, Is.EqualTo(180_000u));
+        Assert.That(connection.OffTarget, Is.LessThan(0.0));
+    }
 }
