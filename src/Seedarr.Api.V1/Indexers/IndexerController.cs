@@ -29,6 +29,7 @@ public class IndexerController : Controller
     private readonly IDownloadHistoryService _downloadHistoryService;
     private readonly IIndexerStatusService _indexerStatusService;
     private readonly IRssRuleRepository _rssRuleRepository;
+    private readonly IProwlarrIndexerSyncService _prowlarrSyncService;
 
     public IndexerController(
         IIndexerFactory indexerFactory,
@@ -40,7 +41,8 @@ public class IndexerController : Controller
         IIndexerStatusService indexerStatusService = null,
         IProxySettingsProvider proxySettingsProvider = null,
         IRssRuleRepository rssRuleRepository = null,
-        HttpClient httpClient = null)
+        HttpClient httpClient = null,
+        IProwlarrIndexerSyncService prowlarrSyncService = null)
     {
         _indexerFactory = indexerFactory;
         _torrentService = torrentService;
@@ -51,6 +53,7 @@ public class IndexerController : Controller
         _indexerStatusService = indexerStatusService ?? new IndexerStatusService();
         _proxySettingsProvider = proxySettingsProvider;
         _rssRuleRepository = rssRuleRepository;
+        _prowlarrSyncService = prowlarrSyncService;
         _httpClient = httpClient ?? (proxySettingsProvider != null && proxySettingsProvider.IsEnabled
             ? new HttpClient(proxySettingsProvider.CreateHandler())
             : new HttpClient());
@@ -286,6 +289,29 @@ public class IndexerController : Controller
         else
         {
             _indexerStatusService.RecordFailure(definition.Id, result.StatusCode, errorMessage: result.Message, retryAfter: result.RetryAfter);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpPost("prowlarr/sync")]
+    public ActionResult<ProwlarrSyncResult> SyncProwlarr(
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] ProwlarrSyncRequest request = null,
+        [FromQuery] int? prowlarrIndexerId = null)
+    {
+        if (_prowlarrSyncService == null)
+        {
+            return BadRequest(new { message = "Prowlarr sync service is not available." });
+        }
+
+        var targetId = request?.ProwlarrIndexerId ?? prowlarrIndexerId;
+        var baseUrl = request?.BaseUrl;
+        var apiKey = request?.ApiKey;
+
+        var result = _prowlarrSyncService.Sync(targetId, baseUrl, apiKey);
+        if (!result.Success && result.Errors.Count > 0 && result.Added == 0 && result.Updated == 0)
+        {
+            return BadRequest(result);
         }
 
         return Ok(result);
@@ -542,4 +568,11 @@ public class DownloadReleaseRequest
     public string InfoHash { get; set; }
     public int? IndexerId { get; set; }
     public string IndexerName { get; set; }
+}
+
+public class ProwlarrSyncRequest
+{
+    public int? ProwlarrIndexerId { get; set; }
+    public string BaseUrl { get; set; }
+    public string ApiKey { get; set; }
 }

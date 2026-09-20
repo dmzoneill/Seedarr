@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
+using NzbDrone.Core.Indexers.Prowlarr;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Indexers;
@@ -459,6 +460,50 @@ public class IndexerControllerTest
 
         _indexerStatusService.Received(1).RecordFailure(4, 401, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
         _indexerStatusService.DidNotReceive().RecordSuccess(4);
+    }
+
+    [Test]
+    public void SyncProwlarr_should_return_bad_request_when_service_is_null()
+    {
+        var result = _controller.SyncProwlarr(new ProwlarrSyncRequest());
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void SyncProwlarr_should_delegate_to_service_and_return_ok()
+    {
+        var syncService = Substitute.For<IProwlarrIndexerSyncService>();
+        var expectedResult = new ProwlarrSyncResult
+        {
+            Success = true,
+            Added = 2,
+            Updated = 1,
+            Removed = 0,
+            Message = "Prowlarr sync complete: 2 added, 1 updated, 0 removed."
+        };
+        syncService.Sync(Arg.Any<int?>(), Arg.Any<string>(), Arg.Any<string>()).Returns(expectedResult);
+
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            null,
+            syncService);
+
+        var request = new ProwlarrSyncRequest { ProwlarrIndexerId = 5, BaseUrl = "http://localhost:9696", ApiKey = "api-123" };
+        var actionResult = controller.SyncProwlarr(request);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)actionResult.Result;
+        Assert.That(okResult.Value, Is.EqualTo(expectedResult));
+
+        syncService.Received(1).Sync(5, "http://localhost:9696", "api-123");
     }
 
     private class FakeHttpMessageHandler : HttpMessageHandler
