@@ -353,6 +353,106 @@ public class TorrentRecheckServiceTest
         server.Handle(new TorrentStatusChangedEvent(torrent, TorrentStatus.Checking, TorrentStatus.Seeding));
 
         // When recheck finishes, availability is updated for connected swarm peers
+                // When recheck finishes, availability is updated for connected swarm peers
         fastExtension.Received().SendHaveAllOrBitfield(connection, 8, true, false, Arg.Any<byte[]>());
+    }
+
+    [Test]
+    public void QueueRecheck_sets_status_to_QueuedForChecking_and_returns_torrent()
+    {
+        var torrent = new Torrent
+        {
+            Id = 20,
+            Name = "Queued Torrent",
+            Status = TorrentStatus.Paused,
+            PieceCount = 2,
+            TotalSize = 2000
+        };
+
+        _torrentRepository.Get(20).Returns(torrent);
+
+        var result = _service.QueueRecheck(20);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
+        _torrentRepository.Received().Update(Arg.Is<Torrent>(t => t.Id == 20 && t.Status == TorrentStatus.QueuedForChecking));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent.Id == 20 && e.NewStatus == TorrentStatus.QueuedForChecking));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task RecheckAsync_publishes_TorrentRecheckProgressEvent_during_piece_verification()
+    {
+        var torrent = new Torrent
+        {
+            Id = 21,
+            Name = "Progress Torrent",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 4,
+            TotalSize = 4000
+        };
+
+        _torrentRepository.Get(21).Returns(torrent);
+
+        var result = await _service.RecheckAsync(torrent);
+
+        Assert.That(result, Is.Not.Null);
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentRecheckProgressEvent>(e => e.TorrentId == 21 && e.TotalPieces == 4));
+    }
+
+    [Test]
+    public void RecheckAsync_respects_cancellation_token()
+    {
+        var torrent = new Torrent
+        {
+            Id = 22,
+            Name = "Cancel Torrent",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 10,
+            TotalSize = 10000
+        };
+
+        _torrentRepository.Get(22).Returns(torrent);
+
+        using var cts = new System.Threading.CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.CatchAsync<System.OperationCanceledException>(async () =>
+        {
+            await _service.RecheckAsync(torrent, null, cts.Token);
+        });
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task RecheckAsync_broadcasts_progress_via_signalr_broadcaster()
+    {
+        var signalR = Substitute.For<NzbDrone.SignalR.IBroadcastSignalRMessage>();
+        var serviceWithSignalR = new TorrentRecheckService(
+            _torrentRepository,
+            _torrentFileService,
+            _pieceStorage,
+            _pieceVerificationService,
+            _multiFilePieceStorage,
+            _stateMachine,
+            _eventAggregator,
+            null,
+            _fastResumeService,
+            signalR);
+
+        var torrent = new Torrent
+        {
+            Id = 23,
+            Name = "SignalR Torrent",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 2,
+            TotalSize = 2000
+        };
+
+        _torrentRepository.Get(23).Returns(torrent);
+
+        await serviceWithSignalR.RecheckAsync(torrent);
+
+        signalR.Received().BroadcastMessage(Arg.Is<NzbDrone.SignalR.SignalRMessage>(m => m.Name == "TorrentRecheckProgress"));
     }
 }

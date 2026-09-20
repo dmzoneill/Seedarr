@@ -980,4 +980,53 @@ public class TorrentControllerTest
         Assert.That(httpContext.Response.Headers.ContainsKey("Retry-After"), Is.True);
         Assert.That(httpContext.Response.Headers["Retry-After"].ToString(), Is.EqualTo("60"));
     }
+
+    [Test]
+    public void Recheck_queues_recheck_and_returns_Ok_with_status()
+    {
+        const int torrentId = 15;
+        var torrent = new Torrent
+        {
+            Id = torrentId,
+            Name = "Rechecking Torrent",
+            Status = TorrentStatus.QueuedForChecking,
+            Progress = 0.5
+        };
+
+        _torrentService.Recheck(torrentId).Returns(torrent);
+
+        var result = _controller.Recheck(torrentId);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var resource = (TorrentResource)okResult.Value;
+        Assert.That(resource.Id, Is.EqualTo(torrentId));
+        Assert.That(resource.Status, Is.EqualTo("QueuedForChecking"));
+        _torrentService.Received(1).Recheck(torrentId);
+    }
+
+    [Test]
+    public void BulkAction_recheck_queues_recheck_for_selected_torrents()
+    {
+        var torrent1 = new Torrent { Id = 1, Name = "Torrent 1", Status = TorrentStatus.QueuedForChecking };
+        var torrent2 = new Torrent { Id = 2, Name = "Torrent 2", Status = TorrentStatus.QueuedForChecking };
+
+        _torrentService.Recheck(1).Returns(torrent1);
+        _torrentService.Recheck(2).Returns(torrent2);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "recheck",
+            TorrentIds = new List<int> { 1, 2 }
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var bulkResult = (BulkActionResult)((OkObjectResult)result.Result).Value;
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(2));
+        Assert.That(bulkResult.FailedCount, Is.EqualTo(0));
+        _torrentService.Received(1).Recheck(1);
+        _torrentService.Received(1).Recheck(2);
+    }
 }

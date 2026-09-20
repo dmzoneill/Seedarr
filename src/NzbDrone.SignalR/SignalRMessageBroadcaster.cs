@@ -219,7 +219,12 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
             return "trackerAnnounced";
         }
 
-        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandStarted" or "CommandCompleted" or "TaskStarted" or "TaskCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated" or "PieceCompleted" or "PieceBatchCompleted" or "TrackerUpdated" or "trackerUpdated" or "TrackerAnnounced" or "trackerAnnounced" or "TrackerAnnounceEvent")
+        if (string.Equals(message.Name, "TorrentRecheckProgress", StringComparison.OrdinalIgnoreCase))
+        {
+            return "TorrentRecheckProgress";
+        }
+
+        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandStarted" or "CommandCompleted" or "TaskStarted" or "TaskCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated" or "PieceCompleted" or "PieceBatchCompleted" or "TrackerUpdated" or "trackerUpdated" or "TrackerAnnounced" or "trackerAnnounced" or "TrackerAnnounceEvent" or "TorrentRecheckProgress")
         {
             return message.Name;
         }

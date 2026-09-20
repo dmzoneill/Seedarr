@@ -682,3 +682,26 @@ public class TorrentRelocationProgressEvent : IEvent
         this.ErrorMessage = errorMessage;
     }
 }
+
+public class TorrentRecheckProgressEvent : IEvent
+{
+    public int TorrentId { get; set; }
+
+    public double Progress { get; set; }
+
+    public int CheckedPieces { get; set; }
+
+    public int TotalPieces { get; set; }
+
+    public TorrentRecheckProgressEvent()
+    {
+    }
+
+    public TorrentRecheckProgressEvent(int torrentId, double progress, int checkedPieces, int totalPieces)
+    {
+        this.TorrentId = torrentId;
+        this.Progress = progress;
+        this.CheckedPieces = checkedPieces;
+        this.TotalPieces = totalPieces;
+    }
+}

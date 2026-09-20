@@ -146,4 +146,23 @@ describe("TorrentToolbar accessibility attributes", () => {
       "Remove Tags text should be present",
     );
   });
+
+  it("renders bulk Force Recheck button when selectedCount > 0 and onBulkRecheck is provided", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TorrentToolbar, {
+        ...defaultProps,
+        selectedCount: 2,
+        onBulkRecheck: () => {},
+      }),
+    );
+
+    assert.ok(
+      html.includes("bulk-recheck-btn"),
+      "Force Recheck button must be rendered in bulk actions",
+    );
+    assert.ok(
+      html.includes("Force Recheck"),
+      "Force Recheck text should be present",
+    );
+  });
 });

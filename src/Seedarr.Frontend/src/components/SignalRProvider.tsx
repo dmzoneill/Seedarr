@@ -58,6 +58,7 @@ export const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   TorrentAdded: [["torrents"], ["trackerboost"]],
   TorrentUpdated: [["torrents"], ["trackerboost"]],
   TorrentDeleted: [["torrents"], ["trackerboost"]],
+  TorrentRecheckProgress: [["torrents"]],
   SeedingStatsUpdated: [["seeding", "stats"]],
   HealthCheckCompleted: [["health"]],
   CommandStarted: [["system", "status"], ["system", "commands"]],
@@ -181,15 +182,25 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
         if (
           event === "TorrentAdded" ||
           event === "TorrentUpdated" ||
-          event === "TorrentDeleted"
+          event === "TorrentDeleted" ||
+          event === "TorrentRecheckProgress"
         ) {
           const bodyObj = data as Record<string, unknown> | undefined;
-          if (bodyObj?.id && typeof bodyObj.id === "number") {
+          const torrentId =
+            typeof bodyObj?.id === "number"
+              ? bodyObj.id
+              : typeof bodyObj?.torrentId === "number"
+              ? bodyObj.torrentId
+              : typeof bodyObj?.TorrentId === "number"
+              ? bodyObj.TorrentId
+              : undefined;
+
+          if (torrentId) {
             queryClient.invalidateQueries({
-              queryKey: ["torrents", bodyObj.id],
+              queryKey: ["torrents", torrentId],
             });
             queryClient.invalidateQueries({
-              queryKey: ["torrents", bodyObj.id, "trackers"],
+              queryKey: ["torrents", torrentId, "trackers"],
             });
           }
         }
