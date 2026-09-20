@@ -517,15 +517,6 @@ public class SpeedPolicy : ISpeedPolicy,
             torrent.SimulatedUploaded += uploadBytesThisTick;
 
             torrent.UpdateRatio();
-
-            if (!torrent.ForceCompleted && torrent.Progress < 1.0 && torrent.TotalSize > 0)
-            {
-                var dlVariationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
-                var dlBytesThisTick = (long)(limits.MaxDownloadSpeed * dlVariationFactor * tickInterval.TotalSeconds / Math.Max(1, torrents.Count));
-
-                torrent.Downloaded += dlBytesThisTick;
-                UpdateDownloadProgress(torrent);
-            }
         }
     }
 
