@@ -57,10 +57,19 @@ public class WebhookControllerTests : IntegrationTestBase
     [Test]
     public async Task PostWebhook_with_unhandled_event_returns_ignored_message()
     {
-        var (status, result) = await PostWebhookAsync(new { eventType = "Test", instanceName = "Sonarr" });
+        var (status, result) = await PostWebhookAsync(new { eventType = "Unknown", instanceName = "Sonarr" });
 
         Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(result["message"].ToString(), Does.Contain("Ignored event type"));
+    }
+
+    [Test]
+    public async Task PostWebhook_with_Test_event_returns_connection_test_successful()
+    {
+        var (status, result) = await PostWebhookAsync(new { eventType = "Test", instanceName = "Sonarr" });
+
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(result["message"].ToString(), Does.Contain("Seedarr webhook connection test successful"));
     }
 
     [Test]

@@ -135,6 +135,13 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
     private static bool IsRateLimited(TrackerEntry entry, bool isFirstAnnounce, out int minIntervalSeconds, out int retryAfter)
     {
+        if (IsLoopbackOrMockTracker(entry?.Url))
+        {
+            minIntervalSeconds = 0;
+            retryAfter = 0;
+            return false;
+        }
+
         minIntervalSeconds = entry.MinAnnounceInterval > 0
             ? entry.MinAnnounceInterval
             : Math.Min(entry.AnnounceInterval > 0 ? entry.AnnounceInterval / 2 : 60, 60);
