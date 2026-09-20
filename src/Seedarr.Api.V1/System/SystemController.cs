@@ -10,6 +10,7 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Migration;
+using NzbDrone.Core.Instrumentation;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.SignalR;
@@ -35,6 +36,7 @@ public class SystemController : ControllerBase
     private readonly IScheduledTaskHistoryRepository _taskHistoryRepository;
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
     private readonly IDatabaseMaintenanceService _databaseMaintenanceService;
+    private readonly IFileDescriptorProvider _fileDescriptorProvider;
 
     public SystemController(
         ITaskManager taskManager,
@@ -46,7 +48,8 @@ public class SystemController : ControllerBase
         IMainDatabase mainDatabase = null,
         IScheduledTaskHistoryRepository taskHistoryRepository = null,
         IBroadcastSignalRMessage signalRBroadcaster = null,
-        IDatabaseMaintenanceService databaseMaintenanceService = null)
+        IDatabaseMaintenanceService databaseMaintenanceService = null,
+        IFileDescriptorProvider fileDescriptorProvider = null)
     {
         _taskManager = taskManager;
         _scheduledTasks = scheduledTasks ?? Enumerable.Empty<IScheduledTask>();
@@ -58,6 +61,7 @@ public class SystemController : ControllerBase
         _taskHistoryRepository = taskHistoryRepository;
         _signalRBroadcaster = signalRBroadcaster;
         _databaseMaintenanceService = databaseMaintenanceService;
+        _fileDescriptorProvider = fileDescriptorProvider ?? new FileDescriptorProvider();
     }
 
     /// <summary>
@@ -109,6 +113,9 @@ public class SystemController : ControllerBase
             GcTotalAllocatedBytes = GC.GetTotalAllocatedBytes(),
             GcHeapSizeBytes = gcInfo.HeapSizeBytes,
             GcPauseTimePercentage = gcInfo.PauseTimePercentage,
+            OpenFileDescriptors = _fileDescriptorProvider.GetOpenFileDescriptorCount(),
+            MaxFileDescriptors = _fileDescriptorProvider.GetMaxFileDescriptors(),
+            FileDescriptorUsagePercentage = _fileDescriptorProvider.GetFileDescriptorUsagePercentage(),
         });
     }
 

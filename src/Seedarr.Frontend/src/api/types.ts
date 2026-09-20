@@ -266,6 +266,9 @@ export interface SystemStatus {
   gcTotalAllocatedBytes?: number;
   gcHeapSizeBytes?: number;
   gcPauseTimePercentage?: number;
+  openFileDescriptors?: number;
+  maxFileDescriptors?: number;
+  fileDescriptorUsagePercentage?: number;
 }
 
 export interface DiskSpaceInfo {
