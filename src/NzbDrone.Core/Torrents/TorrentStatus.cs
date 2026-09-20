@@ -10,5 +10,6 @@ public enum TorrentStatus
     Downloading = 5,
     Checking = 6,
     QueuedForChecking = 7,
-    Moving = 8
+    Moving = 8,
+    StalledNoSeeds = 9
 }

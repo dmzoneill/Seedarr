@@ -274,6 +274,24 @@ public class TorrentStallResolvedEvent : IEvent
     }
 }
 
+public class TorrentPieceExtinctionEvent : IEvent
+{
+    public Torrent Torrent { get; set; }
+    public int ExtinctPieceCount { get; set; }
+    public int TotalPieces { get; set; }
+
+    public TorrentPieceExtinctionEvent()
+    {
+    }
+
+    public TorrentPieceExtinctionEvent(Torrent torrent, int extinctPieceCount, int totalPieces)
+    {
+        this.Torrent = torrent;
+        this.ExtinctPieceCount = extinctPieceCount;
+        this.TotalPieces = totalPieces;
+    }
+}
+
 public class TorrentSeedingTimeReachedEvent : IEvent
 {
     public Torrent Torrent { get; set; }

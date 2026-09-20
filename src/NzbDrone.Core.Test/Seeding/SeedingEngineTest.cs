@@ -7,12 +7,14 @@ using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Dht;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 using NzbDrone.Core.TrackerServer;
 
 namespace NzbDrone.Core.Test.Seeding;
@@ -28,6 +30,9 @@ public class SeedingEngineTest
     private IPeerDatabase _peerDatabase;
     private IConnectionManager _connectionManager;
     private ITorrentEventLogService _eventLogService;
+    private IPieceStorage _pieceStorage;
+    private IDhtService _dhtService;
+    private ITrackerAnnounceService _trackerAnnounceService;
     private SeedingEngine _engine;
 
     [SetUp]
@@ -41,6 +46,9 @@ public class SeedingEngineTest
         _peerDatabase = Substitute.For<IPeerDatabase>();
         _connectionManager = Substitute.For<IConnectionManager>();
         _eventLogService = Substitute.For<ITorrentEventLogService>();
+        _pieceStorage = Substitute.For<IPieceStorage>();
+        _dhtService = Substitute.For<IDhtService>();
+        _trackerAnnounceService = Substitute.For<ITrackerAnnounceService>();
 
         _configService.AutoStart.Returns(true);
         _configService.AlternativeSpeedEnabled.Returns(false);
@@ -57,6 +65,7 @@ public class SeedingEngineTest
         _configService.UploadStoppedMaxPercentage.Returns(0);
         _configService.DownloadStoppedMinPercentage.Returns(0);
         _configService.DownloadStoppedMaxPercentage.Returns(0);
+        _configService.StalledNoSeedsTimeoutSeconds.Returns(60);
 
         _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
         {
@@ -75,7 +84,10 @@ public class SeedingEngineTest
             _eventAggregator,
             _peerDatabase,
             _connectionManager,
-            _eventLogService);
+            _eventLogService,
+            pieceStorage: _pieceStorage,
+            dhtService: _dhtService,
+            trackerAnnounceService: _trackerAnnounceService);
     }
 
     private void CallTick()
@@ -1890,6 +1902,7 @@ public class SeedingEngineTest
             Progress = 0.5,
             DownloadSpeed = 0,
             DateAdded = DateTime.UtcNow.AddMinutes(-10),
+            StallDurationSeconds = 300,
             IsVpnPaused = true
         };
 
@@ -1910,6 +1923,7 @@ public class SeedingEngineTest
             Progress = 0.5,
             DownloadSpeed = 0,
             DateAdded = DateTime.UtcNow.AddMinutes(-10),
+            StallDurationSeconds = 300,
             IsVpnPaused = false
         };
 
@@ -1948,6 +1962,7 @@ public class SeedingEngineTest
             Progress = 0.5,
             DownloadSpeed = 0,
             DateAdded = DateTime.UtcNow.AddMinutes(-10),
+            StallDurationSeconds = 300,
             IsVpnPaused = false
         };
 
@@ -2265,5 +2280,171 @@ public class SeedingEngineTest
         Assert.That(torrent.SuperSeeding, Is.False);
         Assert.That(ms1.Length, Is.GreaterThan(0));
         Assert.That(ms2.Length, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void CalculateSwarmAvailability_detects_extinct_pieces_when_no_peer_has_missing_piece()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "test_hash_extinct",
+            PieceCount = 4,
+            Progress = 0.5
+        };
+
+        var verified = new[] { true, true, false, false };
+
+        using var ms1 = new System.IO.MemoryStream();
+        var peer1 = new PeerConnection(ms1, "192.168.1.1", 6881)
+        {
+            InfoHash = torrent.InfoHash,
+            PeerPieces = new[] { true, false, false, false }
+        };
+
+        var (availability, isExtinct, extinctCount) = SeedingEngine.CalculateSwarmAvailability(
+            torrent,
+            new List<PeerConnection> { peer1 },
+            verified);
+
+        Assert.That(isExtinct, Is.True);
+        Assert.That(extinctCount, Is.EqualTo(2));
+        Assert.That(availability, Is.EqualTo(0.5));
+    }
+
+    [Test]
+    public void CalculateSwarmAvailability_not_extinct_when_seeds_present()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "test_hash_seed",
+            PieceCount = 4,
+            Progress = 0.5
+        };
+
+        var verified = new[] { true, true, false, false };
+
+        using var ms1 = new System.IO.MemoryStream();
+        var seedPeer = new PeerConnection(ms1, "192.168.1.2", 6881)
+        {
+            InfoHash = torrent.InfoHash,
+            Progress = 1.0
+        };
+
+        var (availability, isExtinct, extinctCount) = SeedingEngine.CalculateSwarmAvailability(
+            torrent,
+            new List<PeerConnection> { seedPeer },
+            verified);
+
+        Assert.That(isExtinct, Is.False);
+        Assert.That(extinctCount, Is.EqualTo(0));
+        Assert.That(availability, Is.GreaterThanOrEqualTo(1.0));
+    }
+
+    [Test]
+    public void Tick_transitions_torrent_to_StalledNoSeeds_when_extinct_and_timeout_exceeded()
+    {
+        var torrent = new Torrent
+        {
+            Id = 42,
+            InfoHash = "hash_stalled_no_seeds",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 2,
+            Progress = 0.5,
+            DownloadSpeed = 0,
+            StallDurationSeconds = 65,
+            Active = true
+        };
+
+        _pieceStorage.GetVerifiedPieces(torrent.InfoHash).Returns(new[] { true, false });
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection>());
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        CallTick();
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.StalledNoSeeds));
+        Assert.That(torrent.IsExtinct, Is.True);
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(
+            e => e.Torrent.Id == 42 &&
+                 e.OldStatus == TorrentStatus.Downloading &&
+                 e.NewStatus == TorrentStatus.StalledNoSeeds));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentPieceExtinctionEvent>(
+            e => e.Torrent.Id == 42 &&
+                 e.ExtinctPieceCount == 1 &&
+                 e.TotalPieces == 2));
+    }
+
+    [Test]
+    public void Tick_recovers_torrent_from_StalledNoSeeds_when_peer_with_missing_piece_arrives()
+    {
+        var torrent = new Torrent
+        {
+            Id = 43,
+            InfoHash = "hash_stalled_recovery",
+            Status = TorrentStatus.StalledNoSeeds,
+            PieceCount = 2,
+            Progress = 0.5,
+            DownloadSpeed = 0,
+            StallDurationSeconds = 120,
+            IsExtinct = true,
+            Active = true
+        };
+
+        _pieceStorage.GetVerifiedPieces(torrent.InfoHash).Returns(new[] { true, false });
+
+        using var ms = new System.IO.MemoryStream();
+        var peer = new PeerConnection(ms, "192.168.1.10", 6881)
+        {
+            InfoHash = torrent.InfoHash,
+            PeerPieces = new[] { false, true }
+        };
+
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { peer });
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        CallTick();
+
+        Assert.That(torrent.IsExtinct, Is.False);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+        Assert.That(torrent.StallDurationSeconds, Is.EqualTo(0));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(
+            e => e.Torrent.Id == 43 &&
+                 e.OldStatus == TorrentStatus.StalledNoSeeds &&
+                 e.NewStatus == TorrentStatus.Downloading));
+    }
+
+    [Test]
+    public void Tick_increments_and_resets_StallDurationSeconds_correctly()
+    {
+        _configService.UiRefreshRateSec.Returns(5);
+        var torrent = new Torrent
+        {
+            Id = 44,
+            InfoHash = "hash_stall_counter",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 2,
+            Progress = 0.5,
+            DownloadSpeed = 0,
+            StallDurationSeconds = 10,
+            Active = true
+        };
+
+        _pieceStorage.GetVerifiedPieces(torrent.InfoHash).Returns(new[] { true, false });
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection>());
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        CallTick();
+
+        Assert.That(torrent.StallDurationSeconds, Is.EqualTo(15));
+
+        // Now simulate download activity resuming
+        torrent.Downloaded += 100_000;
+        CallTick();
+
+        Assert.That(torrent.StallDurationSeconds, Is.EqualTo(0));
     }
 }

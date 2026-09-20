@@ -132,6 +132,7 @@ public interface IConfigService
     double SpeedVariationMax { get; }
     int DownloadThresholdPercent { get; }
     double ProtocolOverheadFactor { get; }
+    int StalledNoSeedsTimeoutSeconds { get; }
 
     // Scheduler
     bool SchedulerEnabled { get; }
@@ -544,6 +545,7 @@ public class ConfigService : IConfigService
     public double SpeedVariationMax => Math.Max(SpeedVariationMin, GetValueDouble("SpeedVariationMax", 0.8));
     public int DownloadThresholdPercent => GetValueInt("DownloadThresholdPercent", 30);
     public double ProtocolOverheadFactor => GetValueDouble("ProtocolOverheadFactor", 0.0);
+    public int StalledNoSeedsTimeoutSeconds => GetValueInt("StalledNoSeedsTimeoutSeconds", 60);
 
     // Scheduler
     public bool SchedulerEnabled => GetValueBoolean("SchedulerEnabled", false);

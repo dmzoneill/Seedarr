@@ -458,10 +458,10 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                     torrents = torrents.Where(t => t.DownloadSpeed == 0 && t.UploadSpeed == 0).ToList();
                     break;
                 case "stalled":
-                    torrents = torrents.Where(t => (t.Status == TorrentStatus.Downloading && t.DownloadSpeed == 0) || (t.Status == TorrentStatus.Seeding && t.UploadSpeed == 0)).ToList();
+                    torrents = torrents.Where(t => t.Status == TorrentStatus.StalledNoSeeds || (t.Status == TorrentStatus.Downloading && t.DownloadSpeed == 0) || (t.Status == TorrentStatus.Seeding && t.UploadSpeed == 0)).ToList();
                     break;
                 case "stalled_downloading":
-                    torrents = torrents.Where(t => t.Status == TorrentStatus.Downloading && t.DownloadSpeed == 0).ToList();
+                    torrents = torrents.Where(t => t.Status == TorrentStatus.StalledNoSeeds || (t.Status == TorrentStatus.Downloading && t.DownloadSpeed == 0)).ToList();
                     break;
                 case "stalled_uploading":
                     torrents = torrents.Where(t => t.Status == TorrentStatus.Seeding && t.UploadSpeed == 0).ToList();
@@ -2612,6 +2612,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             TorrentStatus.Checking => progress >= 1.0 ? "checkingUP" : "checkingDL",
             TorrentStatus.QueuedForChecking => progress >= 1.0 ? "checkingUP" : "checkingDL",
             TorrentStatus.Downloading => "downloading",
+            TorrentStatus.StalledNoSeeds => "stalledDL",
             TorrentStatus.Seeding => "uploading",
             TorrentStatus.Paused => progress >= 1.0 ? "pausedUP" : "pausedDL",
             TorrentStatus.Stopped => progress >= 1.0 ? "pausedUP" : "pausedDL",
