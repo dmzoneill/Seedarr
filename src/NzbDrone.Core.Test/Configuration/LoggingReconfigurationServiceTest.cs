@@ -1,3 +1,4 @@
+using System.Linq;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
@@ -182,6 +183,42 @@ namespace NzbDrone.Core.Test.Configuration
 
             // The multi-target rule containing "console" should have been removed and replaced with a fresh console rule
             Assert.That(config.LoggingRules, Has.None.Matches<LoggingRule>(r => r.Targets.Contains(otherTarget)));
+        }
+
+        [Test]
+        public void Initialize_should_reconfigure_logging()
+        {
+            var config = new LoggingConfiguration();
+            var consoleTarget = new ConsoleTarget("console");
+            config.AddTarget(consoleTarget);
+            config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget);
+            LogManager.Configuration = config;
+
+            _configService.LogToFile.Returns(true);
+            _configService.FileLogLevel.Returns("Debug");
+
+            _subject.Initialize();
+
+            Assert.That(LogManager.Configuration.FindTargetByName<FileTarget>("file"), Is.Not.Null);
+        }
+
+        [Test]
+        public void ReconfigureLogging_when_file_target_already_exists_from_startup_should_update_rules()
+        {
+            var config = new LoggingConfiguration();
+            var fileTarget = new FileTarget("file") { FileName = "/tmp/seedarr-test/logs/seedarr.txt" };
+            config.AddTarget(fileTarget);
+            config.AddRule(LogLevel.Info, LogLevel.Fatal, fileTarget);
+            LogManager.Configuration = config;
+
+            _configService.LogToFile.Returns(true);
+            _configService.FileLogLevel.Returns("Trace");
+
+            _subject.ReconfigureLogging();
+
+            var rules = LogManager.Configuration.LoggingRules.Where(r => r.Targets.Contains(fileTarget)).ToList();
+            Assert.That(rules, Has.Count.EqualTo(1));
+            Assert.That(rules[0].Levels, Does.Contain(LogLevel.Trace));
         }
     }
 }

@@ -4,6 +4,7 @@ using NLog;
 using NLog.Config;
 using NLog.Targets;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Common.Instrumentation;
 using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
 
@@ -11,12 +12,13 @@ namespace NzbDrone.Core.Configuration;
 
 public interface ILoggingReconfigurationService
 {
+    void Initialize();
     void ReconfigureLogging();
 }
 
 public class LoggingReconfigurationService : ILoggingReconfigurationService, IHandle<ConfigSavedEvent>, IHandle<ApplicationStartedEvent>
 {
-    private const string FileTargetName = "file";
+    private const string FileTargetName = NzbDroneLogger.FileTargetName;
 
     private readonly IConfigService _configService;
     private readonly IAppFolderInfo _appFolderInfo;
@@ -27,6 +29,11 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
         _configService = configService;
         _appFolderInfo = appFolderInfo;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public void Initialize()
+    {
+        ReconfigureLogging();
     }
 
     public void Handle(ConfigSavedEvent message)
@@ -69,15 +76,7 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
 
             if (existingTarget == null)
             {
-                var fileTarget = new FileTarget(FileTargetName)
-                {
-                    FileName = logFilePath,
-                    ArchiveFileName = logFilePath,
-                    ArchiveSuffixFormat = "_{1:yyyyMMdd}_{0}",
-                    MaxArchiveFiles = 5,
-                    ArchiveAboveSize = 1_048_576,
-                    Layout = "${date:format=yyyy-MM-dd HH\\:mm\\:ss.f}|${level:uppercase=true}|${logger}|${message}${onexception:inner=${newline}${exception:format=toString}}"
-                };
+                var fileTarget = NzbDroneLogger.CreateFileTarget(logFilePath);
 
                 config.AddTarget(fileTarget);
                 config.AddRule(level, LogLevel.Fatal, fileTarget);
