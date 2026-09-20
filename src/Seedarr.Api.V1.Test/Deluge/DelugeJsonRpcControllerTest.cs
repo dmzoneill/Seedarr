@@ -868,4 +868,77 @@ public class DelugeJsonRpcControllerTest
         Assert.That(prioElem[0].GetInt32(), Is.EqualTo(1));
         Assert.That(prioElem[1].GetInt32(), Is.EqualTo(1));
     }
+
+    [Test]
+    public async Task CoreRenameFiles_Updates_File_Path()
+    {
+        var hash = "aabbccddeeff00112233445566778899aabbccdd";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Name = "Test Torrent",
+        };
+        var file = new TorrentFile
+        {
+            Id = 10,
+            TorrentId = 1,
+            Path = "Season 1/Episode 01.mkv",
+            Size = 1000L,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+        var payload = JsonDocument.Parse($@"{{
+            ""method"": ""core.rename_files"",
+            ""params"": [""{hash}"", [[0, ""Season 1/Episode 01 - Pilot.mkv""]]],
+            ""id"": 1
+        }}").RootElement;
+
+        var result = await _controller.HandleRpc(payload);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+        var jsonString = JsonSerializer.Serialize(jsonResult.Value);
+        var doc = JsonDocument.Parse(jsonString);
+        Assert.That(doc.RootElement.GetProperty("result").GetBoolean(), Is.True);
+        Assert.That(file.Path, Is.EqualTo("Season 1/Episode 01 - Pilot.mkv"));
+        _torrentFileService.Received(1).Update(file);
+    }
+
+    [Test]
+    public async Task CoreRenameFiles_Rejects_Directory_Traversal()
+    {
+        var hash = "aabbccddeeff00112233445566778899aabbccdd";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Name = "Test Torrent",
+        };
+        var file = new TorrentFile
+        {
+            Id = 10,
+            TorrentId = 1,
+            Path = "Season 1/Episode 01.mkv",
+            Size = 1000L,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+        var payload = JsonDocument.Parse($@"{{
+            ""method"": ""core.rename_files"",
+            ""params"": [""{hash}"", [[0, ""../../outside.mkv""]]],
+            ""id"": 1
+        }}").RootElement;
+
+        var result = await _controller.HandleRpc(payload);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+        var jsonString = JsonSerializer.Serialize(jsonResult.Value);
+        var doc = JsonDocument.Parse(jsonString);
+        Assert.That(doc.RootElement.TryGetProperty("error", out var err) && err.ValueKind != JsonValueKind.Null, Is.True);
+        _torrentFileService.DidNotReceive().Update(Arg.Any<TorrentFile>());
+    }
 }

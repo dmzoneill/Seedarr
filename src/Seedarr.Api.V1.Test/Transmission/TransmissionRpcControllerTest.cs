@@ -114,6 +114,47 @@ public class TransmissionRpcControllerTest
     }
 
     [Test]
+    public async Task HandleRpc_TorrentRenamePath_Rejects_Directory_Traversal()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Original Torrent Name",
+            InfoHash = "aabbccddeeff00112233aabbccddeeff00112233",
+        };
+        var file = new TorrentFile
+        {
+            Id = 10,
+            TorrentId = 1,
+            Path = "Season 01/Episode 01.mkv",
+            Size = 1000,
+        };
+
+        _torrentService.Get(1).Returns(torrent);
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-rename-path",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[1]").RootElement,
+                ["path"] = JsonDocument.Parse("\"Season 01/Episode 01.mkv\"").RootElement,
+                ["name"] = JsonDocument.Parse("\"../../evil.mkv\"").RootElement,
+            },
+            Tag = JsonDocument.Parse("42").RootElement,
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.Not.EqualTo("success"));
+        _torrentFileService.DidNotReceive().Update(Arg.Any<TorrentFile>());
+    }
+
+    [Test]
     public async Task HandleRpc_TorrentRenamePath_FolderRename_Updates_Matching_Child_Files()
     {
         var torrent = new Torrent

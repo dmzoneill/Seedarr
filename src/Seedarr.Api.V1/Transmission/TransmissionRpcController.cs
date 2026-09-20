@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.Blocklist;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
@@ -1386,6 +1387,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         return stopPolicy.ShouldStop(torrent);
     }
 
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is sanitized against directory traversal")]
     private IActionResult HandleTorrentRenamePath(TransmissionRpcRequest request, object tag)
     {
         var ids = ExtractIds(request.Arguments, false);
@@ -1406,18 +1408,68 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             name = n.ValueKind == JsonValueKind.String ? n.GetString() : n.ToString();
         }
 
+        if (PathSanitizer.ContainsPathTraversal(path) || PathSanitizer.ContainsPathTraversal(name))
+        {
+            return Ok(new TransmissionRpcResponse
+            {
+                Result = "directory traversal not allowed",
+                Arguments = new Dictionary<string, object>
+                {
+                    ["path"] = path,
+                    ["name"] = name,
+                    ["id"] = ids[0],
+                },
+                Tag = tag,
+            });
+        }
+
         var t = _torrentService.Get(ids[0]);
         if (t != null && !string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(name))
         {
-            var normalizedPath = path.Replace('\\', '/').Trim('/');
-            var cleanName = name.Replace('\\', '/').Trim('/');
+            var normalizedPath = PathSanitizer.SanitizeRelativePath(path);
+            var cleanName = PathSanitizer.SanitizeFileName(name);
+
+            if (string.IsNullOrWhiteSpace(normalizedPath) || string.IsNullOrWhiteSpace(cleanName) || !PathSanitizer.IsValidFileName(cleanName))
+            {
+                return Ok(new TransmissionRpcResponse
+                {
+                    Result = "invalid name or path",
+                    Arguments = new Dictionary<string, object>
+                    {
+                        ["path"] = path,
+                        ["name"] = name,
+                        ["id"] = t.Id,
+                    },
+                    Tag = tag,
+                });
+            }
+
+            var savePath = !string.IsNullOrWhiteSpace(t.SavePath)
+                ? t.SavePath
+                : (!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"));
+
+            var torrentRootDir = !string.IsNullOrWhiteSpace(t.Name) && !string.IsNullOrWhiteSpace(savePath)
+                ? Path.Combine(savePath, t.Name)
+                : savePath;
+
             var files = _torrentFileService.GetByTorrentId(t.Id);
 
-            var exactMatch = files.FirstOrDefault(f => string.Equals(f.Path?.Replace('\\', '/').Trim('/'), normalizedPath, StringComparison.OrdinalIgnoreCase));
+            var exactMatch = files.FirstOrDefault(f => string.Equals(PathSanitizer.SanitizeRelativePath(f.Path), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (exactMatch != null)
             {
                 var lastSlash = normalizedPath.LastIndexOf('/');
-                exactMatch.Path = lastSlash >= 0 ? $"{normalizedPath.Substring(0, lastSlash)}/{cleanName}" : cleanName;
+                var newRelativePath = lastSlash >= 0 ? $"{normalizedPath.Substring(0, lastSlash)}/{cleanName}" : cleanName;
+
+                if (!string.IsNullOrWhiteSpace(torrentRootDir) && !PathSanitizer.IsPathUnderRoot(torrentRootDir, newRelativePath))
+                {
+                    return Ok(new TransmissionRpcResponse
+                    {
+                        Result = "path must stay within torrent directory",
+                        Tag = tag,
+                    });
+                }
+
+                exactMatch.Path = newRelativePath;
                 _torrentFileService.Update(exactMatch);
             }
             else
@@ -1427,9 +1479,18 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 var parentDir = lastSlash >= 0 ? normalizedPath.Substring(0, lastSlash) : null;
                 var newFolderPath = parentDir != null ? $"{parentDir}/{cleanName}" : cleanName;
 
+                if (!string.IsNullOrWhiteSpace(torrentRootDir) && !PathSanitizer.IsPathUnderRoot(torrentRootDir, newFolderPath))
+                {
+                    return Ok(new TransmissionRpcResponse
+                    {
+                        Result = "path must stay within torrent directory",
+                        Tag = tag,
+                    });
+                }
+
                 foreach (var file in files)
                 {
-                    var normalizedFilePath = file.Path?.Replace('\\', '/').Trim('/') ?? string.Empty;
+                    var normalizedFilePath = PathSanitizer.SanitizeRelativePath(file.Path);
                     if (normalizedFilePath.StartsWith(folderPrefix, StringComparison.OrdinalIgnoreCase))
                     {
                         var relativePart = normalizedFilePath.Substring(folderPrefix.Length);

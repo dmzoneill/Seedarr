@@ -89,6 +89,144 @@ public class QBittorrentApiControllerTest
     }
 
     [Test]
+    public void RenameFile_With_Directory_Traversal_In_NewPath_Returns_BadRequest()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Name = "Test Torrent",
+        };
+        var file = new TorrentFile
+        {
+            Id = 10,
+            TorrentId = 1,
+            Path = "Season 1/Episode 01.mkv",
+            Size = 5000,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+        var result = _controller.RenameFile(hash, "Season 1/Episode 01.mkv", "../../outside.mkv");
+
+        Assert.That(result, Is.InstanceOf<BadRequestResult>());
+        _torrentFileService.DidNotReceive().Update(Arg.Any<TorrentFile>());
+    }
+
+    [Test]
+    public void RenameFile_With_Directory_Traversal_In_OldPath_Returns_BadRequest()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Name = "Test Torrent",
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.RenameFile(hash, "../outside.mkv", "Season 1/Episode 01.mkv");
+
+        Assert.That(result, Is.InstanceOf<BadRequestResult>());
+        _torrentFileService.DidNotReceive().Update(Arg.Any<TorrentFile>());
+    }
+
+    [Test]
+    public void RenameFile_With_Leading_Slash_In_NewPath_Sanitizes_Path()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Name = "Test Torrent",
+        };
+        var file = new TorrentFile
+        {
+            Id = 10,
+            TorrentId = 1,
+            Path = "Season 1/Episode 01.mkv",
+            Size = 5000,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+        var result = _controller.RenameFile(hash, "Season 1/Episode 01.mkv", "/Season 1/Episode 01 - Renamed.mkv");
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.Content, Is.EqualTo("Ok."));
+        Assert.That(file.Path, Is.EqualTo("Season 1/Episode 01 - Renamed.mkv"));
+        _torrentFileService.Received(1).Update(file);
+    }
+
+    [Test]
+    public void RenameFile_Renames_File_On_Disk_If_It_Exists()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "qbittorrent_rename_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var torrentDir = Path.Combine(tempDir, "MyTorrent");
+            var seasonDir = Path.Combine(torrentDir, "Season 1");
+            Directory.CreateDirectory(seasonDir);
+
+            var oldFilePath = Path.Combine(seasonDir, "Episode 01.mkv");
+            File.WriteAllText(oldFilePath, "sample video data");
+
+            const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+            var torrent = new Torrent
+            {
+                Id = 1,
+                InfoHash = hash,
+                Name = "MyTorrent",
+                SavePath = tempDir,
+            };
+            var file = new TorrentFile
+            {
+                Id = 10,
+                TorrentId = 1,
+                Path = "Season 1/Episode 01.mkv",
+                Size = 5000,
+            };
+
+            _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+            _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+            var result = _controller.RenameFile(hash, "Season 1/Episode 01.mkv", "Season 1/Episode 01 - Pilot.mkv");
+
+            Assert.That(result, Is.InstanceOf<ContentResult>());
+            var content = (ContentResult)result;
+            Assert.That(content.Content, Is.EqualTo("Ok."));
+            Assert.That(file.Path, Is.EqualTo("Season 1/Episode 01 - Pilot.mkv"));
+
+            var newFilePath = Path.Combine(seasonDir, "Episode 01 - Pilot.mkv");
+            Assert.That(File.Exists(oldFilePath), Is.False, "Old file should not exist after rename");
+            Assert.That(File.Exists(newFilePath), Is.True, "New file should exist after rename");
+            Assert.That(File.ReadAllText(newFilePath), Is.EqualTo("sample video data"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
+    [Test]
+    public void RenameTorrent_With_Directory_Traversal_Returns_BadRequest()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var result = _controller.RenameTorrent(hash, "../MaliciousName");
+        Assert.That(result, Is.InstanceOf<BadRequestResult>());
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+    }
+
+    [Test]
     public void RenameFolder_Updates_Prefix_Of_Nested_Files()
     {
         const string hash = "abcdef1234567890abcdef1234567890abcdef12";

@@ -197,4 +197,72 @@ public static class PathSanitizer
 
         return result;
     }
+
+    public static string SanitizeRelativePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        var normalized = path.Replace('\\', '/');
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var stack = new List<string>();
+
+        foreach (var segment in segments)
+        {
+            var trimmed = segment.Trim();
+            if (string.IsNullOrEmpty(trimmed) || trimmed == ".")
+            {
+                continue;
+            }
+
+            if (trimmed == "..")
+            {
+                if (stack.Count > 0)
+                {
+                    stack.RemoveAt(stack.Count - 1);
+                }
+
+                continue;
+            }
+
+            var sanitized = SanitizeFileName(trimmed);
+            if (!string.IsNullOrEmpty(sanitized))
+            {
+                stack.Add(sanitized);
+            }
+        }
+
+        return string.Join("/", stack);
+    }
+
+    public static bool IsPathUnderRoot(string rootPath, string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(rootPath) || string.IsNullOrWhiteSpace(relativePath))
+        {
+            return false;
+        }
+
+        if (ContainsPathTraversal(relativePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullRoot = System.IO.Path.GetFullPath(rootPath);
+            var rootWithSep = fullRoot.EndsWith(System.IO.Path.DirectorySeparatorChar)
+                ? fullRoot
+                : fullRoot + System.IO.Path.DirectorySeparatorChar;
+
+            var fullTarget = System.IO.Path.GetFullPath(System.IO.Path.Combine(fullRoot, relativePath));
+            return fullTarget.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(fullTarget, fullRoot, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -1316,6 +1317,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     }
 
     [HttpPost("torrents/rename")]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is sanitized and validated against torrent save directory")]
     public ActionResult RenameTorrent([FromForm] string hash, [FromForm] string name)
     {
         if (string.IsNullOrWhiteSpace(hash) || string.IsNullOrWhiteSpace(name))
@@ -1328,25 +1330,53 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             return BadRequest();
         }
 
+        var sanitizedName = PathSanitizer.SanitizeFileName(name);
+        if (string.IsNullOrWhiteSpace(sanitizedName))
+        {
+            return BadRequest();
+        }
+
         var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, hash, StringComparison.OrdinalIgnoreCase));
         if (torrent == null)
         {
             return NotFound();
         }
 
-        torrent.Name = name.Trim();
+        var savePath = !string.IsNullOrWhiteSpace(torrent.SavePath)
+            ? torrent.SavePath
+            : (!string.IsNullOrWhiteSpace(torrent.SourcePath) ? torrent.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"));
+
+        if (!string.IsNullOrWhiteSpace(savePath) && !string.IsNullOrWhiteSpace(torrent.Name))
+        {
+            try
+            {
+                var oldTorrentDir = Path.Combine(savePath, torrent.Name);
+                var newTorrentDir = Path.Combine(savePath, sanitizedName);
+                if (Directory.Exists(oldTorrentDir) && !string.Equals(oldTorrentDir, newTorrentDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    Directory.Move(oldTorrentDir, newTorrentDir);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to rename torrent directory on disk from '{0}' to '{1}'", torrent.Name, sanitizedName);
+            }
+        }
+
+        torrent.Name = sanitizedName;
         _torrentService.Update(torrent);
         return Content("Ok.", "text/plain");
     }
 
     [HttpPost("torrents/renameFile")]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is sanitized and validated against torrent save directory")]
     public ActionResult RenameFile(
         [FromForm] string hash = null,
         [FromForm] string oldPath = null,
         [FromForm] string newPath = null,
-        [FromQuery] string hashQuery = null,
-        [FromQuery] string oldPathQuery = null,
-        [FromQuery] string newPathQuery = null)
+        [FromQuery(Name = "hash")] string hashQuery = null,
+        [FromQuery(Name = "oldPath")] string oldPathQuery = null,
+        [FromQuery(Name = "newPath")] string newPathQuery = null)
     {
         var targetHash = !string.IsNullOrWhiteSpace(hash) ? hash : hashQuery;
         var targetOldPath = !string.IsNullOrWhiteSpace(oldPath) ? oldPath : oldPathQuery;
@@ -1357,7 +1387,13 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             return BadRequest();
         }
 
-        if (PathSanitizer.ContainsPathTraversal(targetNewPath) || !PathSanitizer.IsValidPath(targetNewPath))
+        if (PathSanitizer.ContainsPathTraversal(targetOldPath) || PathSanitizer.ContainsPathTraversal(targetNewPath))
+        {
+            return BadRequest();
+        }
+
+        var sanitizedNewPath = PathSanitizer.SanitizeRelativePath(targetNewPath);
+        if (string.IsNullOrWhiteSpace(sanitizedNewPath) || !PathSanitizer.IsValidPath(sanitizedNewPath))
         {
             return BadRequest();
         }
@@ -1369,14 +1405,57 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         }
 
         var files = _torrentFileService.GetByTorrentId(torrent.Id);
-        var normalizedOldPath = targetOldPath.Replace('\\', '/').Trim('/');
-        var file = files.FirstOrDefault(f => string.Equals(f.Path?.Replace('\\', '/').Trim('/'), normalizedOldPath, StringComparison.OrdinalIgnoreCase));
+        var normalizedOldPath = PathSanitizer.SanitizeRelativePath(targetOldPath);
+        var file = files.FirstOrDefault(f => string.Equals(PathSanitizer.SanitizeRelativePath(f.Path), normalizedOldPath, StringComparison.OrdinalIgnoreCase));
         if (file == null)
         {
             return NotFound();
         }
 
-        file.Path = targetNewPath.Trim().Replace('\\', '/');
+        var savePath = !string.IsNullOrWhiteSpace(torrent.SavePath)
+            ? torrent.SavePath
+            : (!string.IsNullOrWhiteSpace(torrent.SourcePath) ? torrent.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"));
+
+        var torrentRootDir = !string.IsNullOrWhiteSpace(torrent.Name) && !string.IsNullOrWhiteSpace(savePath)
+            ? Path.Combine(savePath, torrent.Name)
+            : savePath;
+
+        if (!string.IsNullOrWhiteSpace(torrentRootDir) && !PathSanitizer.IsPathUnderRoot(torrentRootDir, sanitizedNewPath))
+        {
+            return BadRequest();
+        }
+
+        // Rename file on disk if it exists
+        var existingDiskPath = ResolveTorrentFilePath(savePath, torrent.Name, file.Path);
+        if (existingDiskPath != null && global::System.IO.File.Exists(existingDiskPath))
+        {
+            try
+            {
+                var targetDiskDir = !string.IsNullOrWhiteSpace(torrent.Name) &&
+                                    !string.IsNullOrWhiteSpace(savePath) &&
+                                    existingDiskPath.StartsWith(Path.Combine(savePath, torrent.Name), StringComparison.OrdinalIgnoreCase)
+                    ? Path.Combine(savePath, torrent.Name)
+                    : savePath;
+
+                var fullTargetDiskPath = Path.GetFullPath(Path.Combine(targetDiskDir, sanitizedNewPath));
+                if (!string.Equals(existingDiskPath, fullTargetDiskPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    var parentDir = Path.GetDirectoryName(fullTargetDiskPath);
+                    if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
+                    {
+                        Directory.CreateDirectory(parentDir);
+                    }
+
+                    global::System.IO.File.Move(existingDiskPath, fullTargetDiskPath, overwrite: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to move file on disk from '{0}' to '{1}'", existingDiskPath, sanitizedNewPath);
+            }
+        }
+
+        file.Path = sanitizedNewPath;
         _torrentFileService.Update(file);
         _torrentService.Recheck(torrent.Id);
 
@@ -1384,13 +1463,14 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     }
 
     [HttpPost("torrents/renameFolder")]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is sanitized and validated against torrent save directory")]
     public ActionResult RenameFolder(
         [FromForm] string hash = null,
         [FromForm] string oldPath = null,
         [FromForm] string newPath = null,
-        [FromQuery] string hashQuery = null,
-        [FromQuery] string oldPathQuery = null,
-        [FromQuery] string newPathQuery = null)
+        [FromQuery(Name = "hash")] string hashQuery = null,
+        [FromQuery(Name = "oldPath")] string oldPathQuery = null,
+        [FromQuery(Name = "newPath")] string newPathQuery = null)
     {
         var targetHash = !string.IsNullOrWhiteSpace(hash) ? hash : hashQuery;
         var targetOldPath = !string.IsNullOrWhiteSpace(oldPath) ? oldPath : oldPathQuery;
@@ -1401,7 +1481,13 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             return BadRequest();
         }
 
-        if (PathSanitizer.ContainsPathTraversal(targetNewPath) || !PathSanitizer.IsValidPath(targetNewPath))
+        if (PathSanitizer.ContainsPathTraversal(targetOldPath) || PathSanitizer.ContainsPathTraversal(targetNewPath))
+        {
+            return BadRequest();
+        }
+
+        var sanitizedNewPath = PathSanitizer.SanitizeRelativePath(targetNewPath);
+        if (string.IsNullOrWhiteSpace(sanitizedNewPath) || !PathSanitizer.IsValidPath(sanitizedNewPath))
         {
             return BadRequest();
         }
@@ -1413,14 +1499,14 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         }
 
         var files = _torrentFileService.GetByTorrentId(torrent.Id);
-        var normalizedOldPath = targetOldPath.Replace('\\', '/').Trim('/');
-        var normalizedNewPath = targetNewPath.Replace('\\', '/').Trim('/');
+        var normalizedOldPath = PathSanitizer.SanitizeRelativePath(targetOldPath);
+        var normalizedNewPath = sanitizedNewPath;
         var prefix = normalizedOldPath + "/";
 
         var matchedAny = false;
         foreach (var file in files)
         {
-            var normalizedFilePath = file.Path?.Replace('\\', '/').TrimStart('/') ?? string.Empty;
+            var normalizedFilePath = PathSanitizer.SanitizeRelativePath(file.Path);
             if (normalizedFilePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
                 var remainder = normalizedFilePath.Substring(prefix.Length);

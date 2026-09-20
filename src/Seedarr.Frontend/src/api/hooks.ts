@@ -148,6 +148,30 @@ export function useTorrentFiles(torrentId: number) {
   });
 }
 
+export function useRenameTorrentFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      hash,
+      oldPath,
+      newPath,
+    }: {
+      torrentId?: number;
+      hash: string;
+      oldPath: string;
+      newPath: string;
+    }) => apiClient.renameTorrentFile(hash, oldPath, newPath),
+    onSuccess: (_, variables) => {
+      if (variables.torrentId) {
+        queryClient.invalidateQueries({
+          queryKey: ["torrents", variables.torrentId, "files"],
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
 export function useTorrentFileSubtitles(torrentId?: number, fileId?: number) {
   return useQuery<SubtitleTrack[]>({
     queryKey: ["torrents", torrentId, "files", fileId, "subtitles"],

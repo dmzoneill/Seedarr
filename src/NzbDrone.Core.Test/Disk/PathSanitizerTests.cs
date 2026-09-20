@@ -99,4 +99,35 @@ public class PathSanitizerTests
     {
         Assert.That(PathSanitizer.IsValidPath(path), Is.EqualTo(expected));
     }
+
+    [TestCase("Season 1/Episode 01.mkv", "Season 1/Episode 01.mkv")]
+    [TestCase("/Season 1/Episode 01.mkv", "Season 1/Episode 01.mkv")]
+    [TestCase("///Season 1///Episode 01.mkv", "Season 1/Episode 01.mkv")]
+    [TestCase("Season 1/../Season 2/Episode 01.mkv", "Season 2/Episode 01.mkv")]
+    [TestCase("../../outside.mkv", "outside.mkv")]
+    [TestCase("..", "")]
+    [TestCase("/..", "")]
+    [TestCase("", "")]
+    [TestCase("   ", "")]
+    public void SanitizeRelativePath_strips_leading_slashes_and_traversal(string input, string expected)
+    {
+        Assert.That(PathSanitizer.SanitizeRelativePath(input), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void IsPathUnderRoot_allows_paths_inside_root()
+    {
+        var root = "/downloads/MyTorrent";
+        Assert.That(PathSanitizer.IsPathUnderRoot(root, "Season 1/Episode 01.mkv"), Is.True);
+        Assert.That(PathSanitizer.IsPathUnderRoot(root, "file.mkv"), Is.True);
+    }
+
+    [Test]
+    public void IsPathUnderRoot_rejects_paths_with_traversal()
+    {
+        var root = "/downloads/MyTorrent";
+        Assert.That(PathSanitizer.IsPathUnderRoot(root, "../outside.mkv"), Is.False);
+        Assert.That(PathSanitizer.IsPathUnderRoot(root, "../../etc/passwd"), Is.False);
+        Assert.That(PathSanitizer.IsPathUnderRoot(root, "sub/../../outside.mkv"), Is.False);
+    }
 }
