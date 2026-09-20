@@ -671,6 +671,169 @@ public class MediaEnrichmentServiceTest
         _inspector.DidNotReceive().InspectFile(sampleFile);
     }
 
+    [TestCase("http://radarr.lan:7878.evil.com/poster.jpg")]
+    [TestCase("http://radarr.lan:7878@evil.com/poster.jpg")]
+    [TestCase("http://radarr.lan:7878evil/poster.jpg")]
+    [TestCase("http://radarr.lan:7879/poster.jpg")]
+    [TestCase("https://radarr.lan:7878/poster.jpg")]
+    [TestCase("http://otherhost.lan:7878/poster.jpg")]
+    [TestCase("not-a-url")]
+    [TestCase("")]
+    [TestCase(null)]
+    public void GetServarrApiKey_SpoofedOrMismatchedHost_ReturnsNull(string url)
+    {
+        var config = new ArrConnectionDefinition
+        {
+            Url = "http://radarr.lan:7878",
+            ApiKey = "secret-radarr-api-key"
+        };
+        _arrRepository.All().Returns(new List<ArrConnectionDefinition> { config });
+
+        var apiKey = _service.GetServarrApiKey(url);
+
+        Assert.That(apiKey, Is.Null);
+    }
+
+    [TestCase("http://radarr.lan:7878/api/v3/mediacover/1/poster.jpg")]
+    [TestCase("http://radarr.lan:7878/MediaCover/1/poster.jpg")]
+    [TestCase("http://radarr.lan:7878/poster.jpg")]
+    public void GetServarrApiKey_ValidServarrHostAndPort_ReturnsApiKey(string url)
+    {
+        var config = new ArrConnectionDefinition
+        {
+            Url = "http://radarr.lan:7878",
+            ApiKey = "secret-radarr-api-key"
+        };
+        _arrRepository.All().Returns(new List<ArrConnectionDefinition> { config });
+
+        var apiKey = _service.GetServarrApiKey(url);
+
+        Assert.That(apiKey, Is.EqualTo("secret-radarr-api-key"));
+    }
+
+    [Test]
+    public void GetServarrApiKey_WithConfiguredSubpath_MatchesSubpathOnly()
+    {
+        var config = new ArrConnectionDefinition
+        {
+            Url = "http://radarr.lan:7878/radarr",
+            ApiKey = "subpath-radarr-api-key"
+        };
+        _arrRepository.All().Returns(new List<ArrConnectionDefinition> { config });
+
+        Assert.That(_service.GetServarrApiKey("http://radarr.lan:7878/radarr/api/v3/mediacover/1/poster.jpg"), Is.EqualTo("subpath-radarr-api-key"));
+        Assert.That(_service.GetServarrApiKey("http://radarr.lan:7878/radarr/poster.jpg"), Is.EqualTo("subpath-radarr-api-key"));
+        Assert.That(_service.GetServarrApiKey("http://radarr.lan:7878/radarrevil/poster.jpg"), Is.Null);
+        Assert.That(_service.GetServarrApiKey("http://radarr.lan:7878/other/poster.jpg"), Is.Null);
+    }
+
+    [TestCase("http://127.0.0.1/poster.jpg")]
+    [TestCase("http://127.0.0.1:8080/admin/poster.jpg")]
+    [TestCase("http://169.254.169.254/latest/meta-data/poster.jpg")]
+    [TestCase("http://10.0.0.1/poster.jpg")]
+    [TestCase("http://192.168.1.1/poster.jpg")]
+    [TestCase("http://172.16.0.1/poster.jpg")]
+    [TestCase("http://[::1]/poster.jpg")]
+    public async Task CacheArtworkAsync_SsrfUrls_RejectsAndReturnsNull(string url)
+    {
+        var requested = false;
+        var handler = new FakeHttpMessageHandler(_ =>
+        {
+            requested = true;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46 })
+            };
+        });
+        using var httpClient = new HttpClient(handler);
+        var service = new MediaEnrichmentService(
+            _repository,
+            _inspector,
+            _configService,
+            _appFolderInfo,
+            _eventAggregator,
+            _arrRepository,
+            _connectionFactory,
+            httpClient);
+
+        var result = await service.CacheArtworkAsync(url, 201, "poster");
+
+        Assert.That(result, Is.Null);
+        Assert.That(requested, Is.False, "Outbound HTTP request should not have been initiated for SSRF URL");
+    }
+
+    [TestCase("https://image.tmdb.org/t/p/w500/poster.jpg")]
+    [TestCase("https://thetvdb.com/banners/poster.jpg")]
+    [TestCase("https://assets.fanart.tv/fanart/poster.jpg")]
+    public async Task CacheArtworkAsync_LegitimatePublicCdn_AllowsAndCachesArtwork(string url)
+    {
+        var validJpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46 };
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(validJpeg)
+        });
+        using var httpClient = new HttpClient(handler);
+        var service = new MediaEnrichmentService(
+            _repository,
+            _inspector,
+            _configService,
+            _appFolderInfo,
+            _eventAggregator,
+            _arrRepository,
+            _connectionFactory,
+            httpClient);
+
+        var result = await service.CacheArtworkAsync(url, 202, "poster");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(File.Exists(result), Is.True);
+    }
+
+    [TestCase("http://radarr.lan:7878/api/v3/mediacover/1/poster.jpg")]
+    [TestCase("http://127.0.0.1:7878/api/v3/mediacover/1/poster.jpg")]
+    public async Task CacheArtworkAsync_ConfiguredServarrInstance_AllowsAndAttachesApiKey(string url)
+    {
+        var uri = new Uri(url);
+        var servarrBaseUrl = $"{uri.Scheme}://{uri.Authority}";
+        var config = new ArrConnectionDefinition
+        {
+            Url = servarrBaseUrl,
+            ApiKey = "servarr-test-api-key"
+        };
+        _arrRepository.All().Returns(new List<ArrConnectionDefinition> { config });
+
+        string capturedApiKey = null;
+        var validJpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46 };
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            if (req.Headers.TryGetValues("X-Api-Key", out var values))
+            {
+                capturedApiKey = values.FirstOrDefault();
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(validJpeg)
+            };
+        });
+        using var httpClient = new HttpClient(handler);
+        var service = new MediaEnrichmentService(
+            _repository,
+            _inspector,
+            _configService,
+            _appFolderInfo,
+            _eventAggregator,
+            _arrRepository,
+            _connectionFactory,
+            httpClient);
+
+        var result = await service.CacheArtworkAsync(url, 203, "poster");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(File.Exists(result), Is.True);
+        Assert.That(capturedApiKey, Is.EqualTo("servarr-test-api-key"));
+    }
+
     private class RepeatingStream : Stream
     {
         private readonly long _length;
