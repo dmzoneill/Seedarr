@@ -200,6 +200,9 @@ function TorrentGrid({
         return (
           <div
             key={torrent.id}
+            role="button"
+            tabIndex={0}
+            aria-selected={isSelected}
             className={`card${isSelected ? " torrent-card-selected" : ""}`}
             style={{
               padding: 0,
@@ -227,6 +230,27 @@ function TorrentGrid({
               if (e.ctrlKey || e.metaKey) {
                 onToggleSelect?.(torrent.id);
               } else {
+                onSelectTorrent?.(
+                  isSelected && selectedTorrentId === torrent.id
+                    ? null
+                    : torrent.id,
+                );
+              }
+            }}
+            onKeyDown={(e) => {
+              if (
+                typeof HTMLInputElement !== "undefined" &&
+                e.target instanceof HTMLInputElement
+              ) {
+                return;
+              }
+              if (e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation?.();
+                onToggleSelect?.(torrent.id);
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation?.();
                 onSelectTorrent?.(
                   isSelected && selectedTorrentId === torrent.id
                     ? null
@@ -289,7 +313,7 @@ function TorrentGrid({
                     height: 16,
                     margin: 0,
                   }}
-                  aria-label={`Select ${torrent.name}`}
+                  aria-label={`Select ${displayTitle}`}
                 />
                 {torrent.source && (
                   <div
