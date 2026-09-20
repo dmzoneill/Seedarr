@@ -1,0 +1,115 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { TorrentToolbar } from "./TorrentToolbar";
+import type { SeedingConfig } from "../../api/types";
+
+(globalThis as any).React = React;
+
+describe("TorrentToolbar accessibility attributes", () => {
+  const mockSeedingConfig: Partial<SeedingConfig> = {
+    maxUploadSpeedKbps: 1024,
+    maxDownloadSpeedKbps: 2048,
+  };
+
+  const defaultProps = {
+    count: 10,
+    totalUploadSpeed: 512,
+    totalDownloadSpeed: 1024,
+    seedingConfig: mockSeedingConfig as SeedingConfig,
+    adjustSpeed: () => {},
+    filter: "",
+    onFilterChange: () => {},
+    viewMode: "table" as const,
+    onViewModeChange: () => {},
+    onAddTorrent: () => {},
+    onStartAll: () => {},
+    onStopAll: () => {},
+    selectedCount: 0,
+    bulkPending: false,
+    onBulkStart: () => {},
+    onBulkStop: () => {},
+    onBulkDelete: () => {},
+    onBulkClear: () => {},
+  };
+
+  it("renders speed adjustment buttons with descriptive aria-label attributes", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TorrentToolbar, defaultProps),
+    );
+
+    assert.ok(
+      html.includes('aria-label="Double upload speed limit"'),
+      "Double upload speed button must have descriptive aria-label",
+    );
+    assert.ok(
+      html.includes('aria-label="Halve upload speed limit"'),
+      "Halve upload speed button must have descriptive aria-label",
+    );
+    assert.ok(
+      html.includes('aria-label="Double download speed limit"'),
+      "Double download speed button must have descriptive aria-label",
+    );
+    assert.ok(
+      html.includes('aria-label="Halve download speed limit"'),
+      "Halve download speed button must have descriptive aria-label",
+    );
+  });
+
+  it("renders filter search input with accessible aria-label", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TorrentToolbar, defaultProps),
+    );
+
+    assert.ok(
+      html.includes('aria-label="Filter torrents"') || html.includes('aria-label="Filter torrents..."'),
+      "Filter input must have accessible aria-label",
+    );
+    assert.ok(
+      html.includes('class="search-input"'),
+      "Search input element must be rendered",
+    );
+  });
+
+  it("reflects correct aria-pressed state on view mode toggle buttons for table mode", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TorrentToolbar, {
+        ...defaultProps,
+        viewMode: "table",
+      }),
+    );
+
+    // Table view button should be aria-pressed=true, Grid view button aria-pressed=false
+    assert.ok(
+      html.includes('title="Table view" aria-pressed="true"') ||
+      html.includes('aria-pressed="true" title="Table view"') ||
+      (html.includes('title="Table view"') && html.includes('aria-pressed="true"')),
+      "Table view button should have aria-pressed=true",
+    );
+    assert.ok(
+      html.includes('title="Grid view" aria-pressed="false"') ||
+      html.includes('aria-pressed="false" title="Grid view"') ||
+      (html.includes('title="Grid view"') && html.includes('aria-pressed="false"')),
+      "Grid view button should have aria-pressed=false",
+    );
+  });
+
+  it("reflects correct aria-pressed state on view mode toggle buttons for grid mode", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TorrentToolbar, {
+        ...defaultProps,
+        viewMode: "grid",
+      }),
+    );
+
+    // In grid mode: Grid view button aria-pressed=true, Table view button aria-pressed=false
+    const tableMatch = html.match(/<button[^>]*title="Table view"[^>]*>/);
+    assert.ok(tableMatch, "Table button found");
+    assert.ok(tableMatch[0].includes('aria-pressed="false"'), "Table button should be aria-pressed=false");
+
+    const gridMatch = html.match(/<button[^>]*title="Grid view"[^>]*>/);
+    assert.ok(gridMatch, "Grid button found");
+    assert.ok(gridMatch[0].includes('aria-pressed="true"'), "Grid button should be aria-pressed=true");
+  });
+});

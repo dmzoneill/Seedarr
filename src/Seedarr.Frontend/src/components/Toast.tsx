@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import React, { useContext } from "react";
 import ToastContext from "../context/ToastContext";
 
 function ToastContainer() {
@@ -6,9 +6,15 @@ function ToastContainer() {
   if (!ctx || ctx.toasts.length === 0) return null;
 
   return (
-    <div className="toast-container">
+    <div className="toast-container" role="region" aria-label="Notifications">
       {ctx.toasts.map((toast) => (
-        <div key={toast.id} className={`toast toast-${toast.type}`}>
+        <div
+          key={toast.id}
+          className={`toast toast-${toast.type}`}
+          role={toast.type === "error" ? "alert" : "status"}
+          aria-live={toast.type === "error" ? "assertive" : "polite"}
+          aria-atomic="true"
+        >
           <span className="toast-message">{toast.message}</span>
           <button
             className="toast-dismiss"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { SeedingConfig } from "../../api/types";
 import { formatSpeed } from "../../utils/formatters";
 import { useTranslation } from "../../i18n";
@@ -331,6 +331,7 @@ export function TorrentToolbar({
             className="btn btn-small btn-success"
             onClick={() => adjustSpeed("maxUploadSpeedKbps", 2)}
             title="Double upload speed limit"
+            aria-label="Double upload speed limit"
             disabled={!seedingConfig}
           >
             &#9650;&#9650;
@@ -339,6 +340,7 @@ export function TorrentToolbar({
             className="btn btn-small btn-success"
             onClick={() => adjustSpeed("maxUploadSpeedKbps", 0.5)}
             title="Halve upload speed limit"
+            aria-label="Halve upload speed limit"
             disabled={!seedingConfig}
           >
             &#9660;&#9660;
@@ -350,6 +352,7 @@ export function TorrentToolbar({
             className="btn btn-small btn-danger"
             onClick={() => adjustSpeed("maxDownloadSpeedKbps", 2)}
             title="Double download speed limit"
+            aria-label="Double download speed limit"
             disabled={!seedingConfig}
           >
             &#9650;&#9650;
@@ -358,6 +361,7 @@ export function TorrentToolbar({
             className="btn btn-small btn-danger"
             onClick={() => adjustSpeed("maxDownloadSpeedKbps", 0.5)}
             title="Halve download speed limit"
+            aria-label="Halve download speed limit"
             disabled={!seedingConfig}
           >
             &#9660;&#9660;
@@ -371,6 +375,11 @@ export function TorrentToolbar({
             undefined,
             "Filter torrents...",
           )}
+          aria-label={t(
+            "torrents.filterPlaceholder",
+            undefined,
+            "Filter torrents",
+          )}
           value={localFilter}
           onChange={(e) => setLocalFilter(e.target.value)}
         />
@@ -379,6 +388,7 @@ export function TorrentToolbar({
             className={`view-toggle-btn${viewMode === "table" ? " active" : ""}`}
             onClick={() => onViewModeChange("table")}
             title="Table view"
+            aria-pressed={viewMode === "table"}
           >
             <TableIcon size={13} />{" "}
             {t("torrents.tableView", undefined, "Table")}
@@ -387,6 +397,7 @@ export function TorrentToolbar({
             className={`view-toggle-btn${viewMode === "grid" ? " active" : ""}`}
             onClick={() => onViewModeChange("grid")}
             title="Grid view"
+            aria-pressed={viewMode === "grid"}
           >
             <GridIcon size={13} /> {t("torrents.gridView", undefined, "Grid")}
           </button>
