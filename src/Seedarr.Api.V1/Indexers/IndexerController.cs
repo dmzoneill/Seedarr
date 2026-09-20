@@ -571,7 +571,7 @@ public class IndexerController : Controller
 
             _downloadHistoryService.RecordTorrentAdded(
                 added,
-                source: !string.IsNullOrWhiteSpace(request.IndexerName) ? $"Prowlarr ({request.IndexerName})" : "Prowlarr",
+                source: DetermineSource(request),
                 magnetUrl: magnetUri,
                 indexerName: request.IndexerName);
 
@@ -667,7 +667,7 @@ public class IndexerController : Controller
 
                 _downloadHistoryService.RecordTorrentAdded(
                     addedTorrent,
-                    source: !string.IsNullOrWhiteSpace(request.IndexerName) ? $"Prowlarr ({request.IndexerName})" : "Prowlarr",
+                    source: DetermineSource(request),
                     downloadUrl: request.DownloadUrl,
                     indexerName: request.IndexerName);
 
@@ -744,6 +744,43 @@ public class IndexerController : Controller
             "Newznab" => new NewznabIndexer(_httpClient, _indexerStatusService),
             _ => throw new ArgumentException($"Unknown indexer type: {definition.IndexerType}"),
         };
+    }
+
+    private string DetermineSource(DownloadReleaseRequest request)
+    {
+        if (request.IndexerId.HasValue && request.IndexerId.Value > 0)
+        {
+            try
+            {
+                var def = _indexerFactory.Get(request.IndexerId.Value);
+                if (def != null)
+                {
+                    var baseType = !string.IsNullOrWhiteSpace(def.IndexerType) ? def.IndexerType : (!string.IsNullOrWhiteSpace(def.Name) ? def.Name : "Indexer");
+                    if (!string.IsNullOrWhiteSpace(request.IndexerName))
+                    {
+                        if (string.Equals(baseType, request.IndexerName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return baseType;
+                        }
+
+                        return $"{baseType} ({request.IndexerName})";
+                    }
+
+                    return baseType;
+                }
+            }
+            catch
+            {
+                // Fallback if indexer retrieval fails
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.IndexerName))
+        {
+            return request.IndexerName;
+        }
+
+        return "Indexer";
     }
 
     private void SaveReleaseMediaMetadata(int torrentId, string title, DownloadReleaseRequest request)

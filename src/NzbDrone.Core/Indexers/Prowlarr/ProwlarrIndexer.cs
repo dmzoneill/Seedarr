@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using NLog;
+using NzbDrone.Core.Indexers.Torznab;
 using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Indexers.Prowlarr;
@@ -251,9 +252,11 @@ public class ProwlarrIndexer : IIndexer
         try
         {
             var url = $"{definition.Url.TrimEnd('/')}/api/v1/search?query={Uri.EscapeDataString(query)}&type=search";
-            if (!string.IsNullOrWhiteSpace(category))
+            var catToMap = !string.IsNullOrWhiteSpace(category) ? category : definition.Categories;
+            var mappedCat = TorznabIndexer.MapFriendlyCategory(catToMap) ?? catToMap;
+            if (!string.IsNullOrWhiteSpace(mappedCat))
             {
-                url += $"&categories={Uri.EscapeDataString(category)}";
+                url += $"&categories={Uri.EscapeDataString(mappedCat)}";
             }
 
             if (offset > 0)
@@ -379,6 +382,42 @@ public class ProwlarrIndexer : IIndexer
                 if (element.TryGetProperty("protocol", out var protoProp) && protoProp.ValueKind == System.Text.Json.JsonValueKind.String)
                 {
                     release.Protocol = protoProp.GetString();
+                }
+
+                if (element.TryGetProperty("downloadVolumeFactor", out var dvfProp))
+                {
+                    if (dvfProp.ValueKind == System.Text.Json.JsonValueKind.Number && dvfProp.TryGetDouble(out var dvfVal) && double.IsFinite(dvfVal) && dvfVal >= 0.0)
+                    {
+                        release.DownloadVolumeFactor = Math.Clamp(dvfVal, 0.0, 10.0);
+                    }
+                    else if (dvfProp.ValueKind == System.Text.Json.JsonValueKind.String &&
+                             double.TryParse(dvfProp.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dvfStr) &&
+                             double.IsFinite(dvfStr) && dvfStr >= 0.0)
+                    {
+                        release.DownloadVolumeFactor = Math.Clamp(dvfStr, 0.0, 10.0);
+                    }
+                    else if (dvfProp.ValueKind == System.Text.Json.JsonValueKind.Null)
+                    {
+                        release.DownloadVolumeFactor = null;
+                    }
+                }
+
+                if (element.TryGetProperty("uploadVolumeFactor", out var uvfProp))
+                {
+                    if (uvfProp.ValueKind == System.Text.Json.JsonValueKind.Number && uvfProp.TryGetDouble(out var uvfVal) && double.IsFinite(uvfVal) && uvfVal >= 0.0)
+                    {
+                        release.UploadVolumeFactor = Math.Clamp(uvfVal, 0.0, 10.0);
+                    }
+                    else if (uvfProp.ValueKind == System.Text.Json.JsonValueKind.String &&
+                             double.TryParse(uvfProp.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var uvfStr) &&
+                             double.IsFinite(uvfStr) && uvfStr >= 0.0)
+                    {
+                        release.UploadVolumeFactor = Math.Clamp(uvfStr, 0.0, 10.0);
+                    }
+                    else if (uvfProp.ValueKind == System.Text.Json.JsonValueKind.Null)
+                    {
+                        release.UploadVolumeFactor = null;
+                    }
                 }
 
                 if (!string.IsNullOrWhiteSpace(release.Title))
