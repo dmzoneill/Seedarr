@@ -60,7 +60,207 @@ public class MediaContainerInspector : IMediaContainerInspector
 
     public MediaContainerInfo Inspect(System.IO.Stream stream, string fileName = "")
     {
-        return InspectFileName(fileName);
+        if (stream == null || !stream.CanRead)
+        {
+            return InspectFileName(fileName);
+        }
+
+        var buffer = new byte[4096];
+        var bytesRead = 0;
+        long initialPos = 0;
+        var canSeek = false;
+
+        try
+        {
+            if (stream.CanSeek)
+            {
+                initialPos = stream.Position;
+                canSeek = true;
+            }
+
+            while (bytesRead < buffer.Length)
+            {
+                var read = stream.Read(buffer, bytesRead, buffer.Length - bytesRead);
+                if (read <= 0)
+                {
+                    break;
+                }
+
+                bytesRead += read;
+            }
+        }
+        catch
+        {
+            return InspectFileName(fileName);
+        }
+        finally
+        {
+            if (canSeek)
+            {
+                try
+                {
+                    stream.Position = initialPos;
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        if (bytesRead < 4)
+        {
+            return InspectFileName(fileName);
+        }
+
+        var headerInfo = DetectHeader(buffer, bytesRead, fileName);
+        if (headerInfo == null || string.IsNullOrEmpty(headerInfo.ContainerFormat))
+        {
+            return InspectFileName(fileName);
+        }
+
+        var result = InspectFileName(fileName);
+        result.ContainerFormat = headerInfo.ContainerFormat;
+
+        if (!string.IsNullOrEmpty(headerInfo.AudioCodec))
+        {
+            result.AudioCodec = headerInfo.AudioCodec;
+        }
+
+        if (!string.IsNullOrEmpty(headerInfo.AudioChannels))
+        {
+            result.AudioChannels = headerInfo.AudioChannels;
+        }
+
+        if (headerInfo.AudioSampleRate > 0)
+        {
+            result.AudioSampleRate = headerInfo.AudioSampleRate;
+        }
+
+        if (headerInfo.AudioBitDepth > 0)
+        {
+            result.AudioBitDepth = headerInfo.AudioBitDepth;
+        }
+
+        return result;
+    }
+
+    private static MediaContainerInfo DetectHeader(byte[] buffer, int bytesRead, string fileName)
+    {
+        // EBML: 0x1A, 0x45, 0xDF, 0xA3 -> Matroska or WebM
+        if (bytesRead >= 4 && buffer[0] == 0x1A && buffer[1] == 0x45 && buffer[2] == 0xDF && buffer[3] == 0xA3)
+        {
+            var isWebm = !string.IsNullOrEmpty(fileName) && fileName.EndsWith(".webm", StringComparison.OrdinalIgnoreCase);
+            if (!isWebm)
+            {
+                var maxCheck = Math.Min(bytesRead - 3, 512);
+                for (var i = 4; i < maxCheck; i++)
+                {
+                    if ((buffer[i] == 'w' || buffer[i] == 'W') &&
+                        (buffer[i + 1] == 'e' || buffer[i + 1] == 'E') &&
+                        (buffer[i + 2] == 'b' || buffer[i + 2] == 'B') &&
+                        (buffer[i + 3] == 'm' || buffer[i + 3] == 'M'))
+                    {
+                        isWebm = true;
+                        break;
+                    }
+                }
+            }
+
+            return new MediaContainerInfo
+            {
+                ContainerFormat = isWebm ? "WebM" : "Matroska"
+            };
+        }
+
+        // MP4 / ISO Base Media: 'ftyp' box at offset 4
+        if (bytesRead >= 8 && buffer[4] == 0x66 && buffer[5] == 0x74 && buffer[6] == 0x79 && buffer[7] == 0x70)
+        {
+            var brand = bytesRead >= 12 ? System.Text.Encoding.ASCII.GetString(buffer, 8, 4) : string.Empty;
+            return new MediaContainerInfo
+            {
+                ContainerFormat = brand == "qt  " ? "QuickTime" : "MPEG-4"
+            };
+        }
+
+        // FLAC: magic 'fLaC' (0x66, 0x4C, 0x61, 0x43)
+        if (bytesRead >= 4 && buffer[0] == 0x66 && buffer[1] == 0x4C && buffer[2] == 0x61 && buffer[3] == 0x43)
+        {
+            var flacInfo = new MediaContainerInfo
+            {
+                ContainerFormat = "FLAC",
+                AudioCodec = "FLAC"
+            };
+
+            var siOffset = 4;
+            if (bytesRead >= 42 && (buffer[4] == 0x00 || buffer[4] == 0x80) && buffer[5] == 0x00 && buffer[6] == 0x00 && buffer[7] == 0x22)
+            {
+                siOffset = 8;
+            }
+
+            if (bytesRead >= siOffset + 14)
+            {
+                var sampleRate = (buffer[siOffset + 10] << 12) | (buffer[siOffset + 11] << 4) | (buffer[siOffset + 12] >> 4);
+                var channels = ((buffer[siOffset + 12] >> 1) & 0x07) + 1;
+                var bitDepth = (((buffer[siOffset + 12] & 0x01) << 4) | (buffer[siOffset + 13] >> 4)) + 1;
+
+                flacInfo.AudioSampleRate = sampleRate;
+                flacInfo.AudioBitDepth = bitDepth;
+                flacInfo.AudioChannels = channels switch
+                {
+                    8 => "7.1",
+                    6 => "5.1",
+                    2 => "2.0",
+                    1 => "1.0",
+                    > 0 => $"{channels}.0",
+                    _ => null
+                };
+            }
+
+            return flacInfo;
+        }
+
+        // ID3v2 / MP3: "ID3" (0x49, 0x44, 0x33) or sync bytes (0xFF, 0xFB / 0xF3 / 0xF2 / 0xFA)
+        if ((bytesRead >= 3 && buffer[0] == 0x49 && buffer[1] == 0x44 && buffer[2] == 0x33) ||
+            (bytesRead >= 2 && buffer[0] == 0xFF && (buffer[1] == 0xFB || buffer[1] == 0xF3 || buffer[1] == 0xF2 || (buffer[1] & 0xFE) == 0xFA || (buffer[1] & 0xFE) == 0xF2)))
+        {
+            return new MediaContainerInfo
+            {
+                ContainerFormat = "MP3",
+                AudioCodec = "MP3"
+            };
+        }
+
+        // RIFF: "RIFF" at offset 0, and format at offset 8: "AVI " or "WAVE"
+        if (bytesRead >= 12 && buffer[0] == 0x52 && buffer[1] == 0x49 && buffer[2] == 0x46 && buffer[3] == 0x46)
+        {
+            var riffFormat = System.Text.Encoding.ASCII.GetString(buffer, 8, 4);
+            if (riffFormat == "AVI ")
+            {
+                return new MediaContainerInfo
+                {
+                    ContainerFormat = "AVI"
+                };
+            }
+
+            if (riffFormat == "WAVE")
+            {
+                return new MediaContainerInfo
+                {
+                    ContainerFormat = "WAV"
+                };
+            }
+        }
+
+        // Ogg: "OggS" (0x4F, 0x67, 0x67, 0x53)
+        if (bytesRead >= 4 && buffer[0] == 0x4F && buffer[1] == 0x67 && buffer[2] == 0x67 && buffer[3] == 0x53)
+        {
+            return new MediaContainerInfo
+            {
+                ContainerFormat = "Ogg"
+            };
+        }
+
+        return null;
     }
 
     public MediaContainerInfo InspectFile(string filePath)
@@ -80,14 +280,29 @@ public class MediaContainerInspector : IMediaContainerInspector
             }
             catch
             {
-                // Fallback to filename inspection below
+                // Fallback to stream/filename inspection below
             }
         }
 
         if (info == null)
         {
             var fileName = System.IO.Path.GetFileName(filePath);
-            info = InspectFileName(fileName);
+            if (System.IO.File.Exists(filePath))
+            {
+                try
+                {
+                    using var stream = new System.IO.FileStream(filePath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite);
+                    info = Inspect(stream, fileName);
+                }
+                catch
+                {
+                    info = InspectFileName(fileName);
+                }
+            }
+            else
+            {
+                info = InspectFileName(fileName);
+            }
         }
 
         if (info != null && System.IO.File.Exists(filePath) && _subtitleDiscoveryService != null)
