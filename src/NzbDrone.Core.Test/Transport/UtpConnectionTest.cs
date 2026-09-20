@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Transport;
 
 namespace NzbDrone.Core.Test.Transport;
@@ -2533,5 +2534,115 @@ public class UtpConnectionTest
         var field = typeof(UtpConnection).GetField("_inFlightPackets", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var inFlight = (System.Collections.IDictionary)field.GetValue(connection)!;
         return inFlight.Contains(seqNr);
+    }
+
+    [Test]
+    public void CalculateBdpBufferSize_should_match_bdp_specification()
+    {
+        Assert.That(UtpConnection.CalculateBdpBufferSize(0), Is.EqualTo(UtpConnection.DefaultUnthrottledBufferSize));
+        Assert.That(UtpConnection.CalculateBdpBufferSize(-10), Is.EqualTo(UtpConnection.DefaultUnthrottledBufferSize));
+
+        // Min clamped
+        Assert.That(UtpConnection.CalculateBdpBufferSize(10_000, 0.1), Is.EqualTo(UtpConnection.MinThrottledBufferSize));
+
+        // Proportional
+        Assert.That(UtpConnection.CalculateBdpBufferSize(300_000, 0.1), Is.EqualTo(30_000));
+
+        // Max clamped
+        Assert.That(UtpConnection.CalculateBdpBufferSize(5_000_000, 0.1), Is.EqualTo(UtpConnection.MaxThrottledBufferSize));
+    }
+
+    [Test]
+    public void CalculatePacingIntervalTicks_should_calculate_correct_delay_for_payload()
+    {
+        using var conn = new UtpConnection();
+        conn.UploadRateLimit = 1_000_000; // 1 MB/s
+        conn.PacketPacingIntervalMicroseconds = 0;
+
+        // 1360 bytes at 1,000,000 B/s => 0.001360s = 1360 microseconds
+        var ticks = conn.CalculatePacingIntervalTicks(1360);
+        var expectedTicks = (long)(1360.0 * System.Diagnostics.Stopwatch.Frequency / 1_000_000.0);
+
+        Assert.That(ticks, Is.EqualTo(expectedTicks));
+        Assert.That(conn.CalculatePacingIntervalMicroseconds(1360), Is.InRange(1350, 1370));
+    }
+
+    [Test]
+    public void CalculatePacingIntervalTicks_should_respect_minimum_packet_pacing_interval()
+    {
+        using var conn = new UtpConnection();
+        conn.UploadRateLimit = 0; // Unthrottled
+        conn.PacketPacingIntervalMicroseconds = 100;
+
+        var micros = conn.CalculatePacingIntervalMicroseconds(1360);
+        Assert.That(micros, Is.InRange(95, 105));
+    }
+
+    [Test]
+    public void UploadRateLimit_and_DownloadRateLimit_should_update_udp_socket_buffers()
+    {
+        using var conn = new UtpConnection();
+        conn.UploadRateLimit = 200_000;
+        conn.DownloadRateLimit = 500_000;
+
+        Assert.That(conn.SendBufferSize, Is.GreaterThanOrEqualTo(20_000));
+        Assert.That(conn.ReceiveBufferSize, Is.GreaterThanOrEqualTo(50_000));
+    }
+
+    [Test]
+    public void Send_should_insert_pacing_interval_between_consecutive_udp_packets()
+    {
+        using var conn = new UtpConnection();
+        // Set connected state via reflection
+        typeof(UtpConnection).GetProperty("IsConnected")!.SetValue(conn, true);
+        typeof(UtpConnection).GetField("_remoteEndpoint", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(conn, new IPEndPoint(IPAddress.Loopback, 12345));
+
+        conn.UploadRateLimit = 500_000; // 500 KB/s
+        conn.PacketPacingIntervalMicroseconds = 50;
+
+        var pacedPackets = new List<(int Size, long Ticks)>();
+        conn.OnPacketPaced = (size, ticks) => pacedPackets.Add((size, ticks));
+
+        // Use fast non-blocking handler for test
+        UtpConnection.PaceWaitHandler = (start, ticks) => { };
+
+        try
+        {
+            // Send 3000 bytes (requires 3 packets: 1360 + 1360 + 280)
+            var data = new byte[3000];
+            conn.Send(data, 0, data.Length);
+
+            // Between packet 1 and 2, and between packet 2 and 3 => 2 paced intervals
+            Assert.That(pacedPackets.Count, Is.EqualTo(2));
+            Assert.That(pacedPackets[0].Size, Is.EqualTo(1360));
+            Assert.That(pacedPackets[0].Ticks, Is.GreaterThan(0));
+            Assert.That(pacedPackets[1].Size, Is.EqualTo(1360));
+            Assert.That(pacedPackets[1].Ticks, Is.GreaterThan(0));
+        }
+        finally
+        {
+            UtpConnection.PaceWaitHandler = BandwidthPacer.PaceWait;
+        }
+    }
+
+    [Test]
+    public void Send_should_not_pace_for_single_packet_payload()
+    {
+        using var conn = new UtpConnection();
+        typeof(UtpConnection).GetProperty("IsConnected")!.SetValue(conn, true);
+        typeof(UtpConnection).GetField("_remoteEndpoint", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(conn, new IPEndPoint(IPAddress.Loopback, 12345));
+
+        conn.UploadRateLimit = 100_000;
+        conn.PacketPacingIntervalMicroseconds = 50;
+
+        var pacedPackets = new List<(int Size, long Ticks)>();
+        conn.OnPacketPaced = (size, ticks) => pacedPackets.Add((size, ticks));
+
+        var data = new byte[500]; // Single packet
+        conn.Send(data, 0, data.Length);
+
+        Assert.That(pacedPackets, Is.Empty);
     }
 }

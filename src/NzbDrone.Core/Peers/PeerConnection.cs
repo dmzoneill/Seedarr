@@ -2,6 +2,7 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -255,6 +256,136 @@ public class PeerConnection : IDisposable
     public bool HandshakeSent { get; private set; }
     public bool EnableIaPipelining { get; set; } = true;
 
+    public const int MinThrottledBufferSize = BandwidthPacer.MinThrottledBufferSize;
+    public const int MaxThrottledBufferSize = BandwidthPacer.MaxThrottledBufferSize;
+    public const int DefaultUnthrottledBufferSize = BandwidthPacer.DefaultUnthrottledBufferSize;
+    public const double DefaultEstimatedRttSeconds = BandwidthPacer.DefaultEstimatedRttSeconds;
+    public const int DefaultPacingChunkSize = BandwidthPacer.DefaultPacingChunkSize;
+
+    public static int CalculateBdpBufferSize(
+        long rateBytesPerSec,
+        double rttSeconds = DefaultEstimatedRttSeconds,
+        int minThrottled = MinThrottledBufferSize,
+        int maxThrottled = MaxThrottledBufferSize,
+        int unthrottled = DefaultUnthrottledBufferSize)
+    {
+        return BandwidthPacer.CalculateBdpBufferSize(rateBytesPerSec, rttSeconds, minThrottled, maxThrottled, unthrottled);
+    }
+
+    private long _uploadRateLimit;
+    private long _downloadRateLimit;
+    private double _estimatedRttSeconds = DefaultEstimatedRttSeconds;
+    private int _pacingChunkSize = DefaultPacingChunkSize;
+
+    public long UploadRateLimit
+    {
+        get => _uploadRateLimit;
+        set
+        {
+            _uploadRateLimit = value;
+            UpdateSocketBuffers();
+        }
+    }
+
+    public long DownloadRateLimit
+    {
+        get => _downloadRateLimit;
+        set
+        {
+            _downloadRateLimit = value;
+            UpdateSocketBuffers();
+        }
+    }
+
+    public double EstimatedRttSeconds
+    {
+        get => _estimatedRttSeconds;
+        set
+        {
+            _estimatedRttSeconds = value > 0 ? value : DefaultEstimatedRttSeconds;
+            UpdateSocketBuffers();
+        }
+    }
+
+    public int PacingChunkSize
+    {
+        get => _pacingChunkSize;
+        set => _pacingChunkSize = Math.Clamp(value, 512, 65536);
+    }
+
+    public int SendBufferSize
+    {
+        get => _client?.Client?.SendBufferSize ?? 0;
+        set
+        {
+            if (_client?.Client != null)
+            {
+                try
+                {
+                    _client.Client.SendBufferSize = value;
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+
+    public int ReceiveBufferSize
+    {
+        get => _client?.Client?.ReceiveBufferSize ?? 0;
+        set
+        {
+            if (_client?.Client != null)
+            {
+                try
+                {
+                    _client.Client.ReceiveBufferSize = value;
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+
+    public void SetRateLimits(long uploadRateLimitBytesPerSec, long downloadRateLimitBytesPerSec = 0, double rttSeconds = DefaultEstimatedRttSeconds)
+    {
+        _uploadRateLimit = uploadRateLimitBytesPerSec;
+        _downloadRateLimit = downloadRateLimitBytesPerSec;
+        if (rttSeconds > 0)
+        {
+            _estimatedRttSeconds = rttSeconds;
+        }
+
+        UpdateSocketBuffers();
+    }
+
+    public void UpdateSocketBuffers()
+    {
+        if (_client?.Client != null)
+        {
+            try
+            {
+                _client.Client.SendBufferSize = CalculateBdpBufferSize(_uploadRateLimit, _estimatedRttSeconds);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                _client.Client.ReceiveBufferSize = CalculateBdpBufferSize(_downloadRateLimit, _estimatedRttSeconds);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    internal Action<int, long> OnWriteChunkPaced { get; set; }
+    internal static Action<long, long> PaceWaitHandler { get; set; } = BandwidthPacer.PaceWait;
+
     public PeerConnection(TcpClient client, IDhKeyPool dhKeyPool = null)
     {
         DhKeyPool = dhKeyPool;
@@ -272,6 +403,8 @@ public class PeerConnection : IDisposable
             RemoteIp = endpoint.Address.ToString();
             RemotePort = endpoint.Port;
         }
+
+        ApplySocketOptions(_client, 0, 0);
 
         ConnectedAt = DateTime.UtcNow;
         LastActivity = DateTime.UtcNow;
@@ -728,8 +861,15 @@ public class PeerConnection : IDisposable
                     return;
                 }
 
-                _activeStream.Write(buffer, 0, bufferSize);
-                _activeStream.Flush();
+                if (_uploadRateLimit > 0 && bufferSize > _pacingChunkSize)
+                {
+                    WritePaced(buffer, bufferSize);
+                }
+                else
+                {
+                    _activeStream.Write(buffer, 0, bufferSize);
+                    _activeStream.Flush();
+                }
             }
 
             LastActivity = DateTime.UtcNow;
@@ -737,6 +877,29 @@ public class PeerConnection : IDisposable
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private void WritePaced(byte[] buffer, int count)
+    {
+        var offset = 0;
+        var chunkSize = _pacingChunkSize > 0 ? _pacingChunkSize : DefaultPacingChunkSize;
+
+        while (offset < count && !_isDisposed)
+        {
+            var slice = Math.Min(chunkSize, count - offset);
+            var sliceStart = Stopwatch.GetTimestamp();
+
+            _activeStream.Write(buffer, offset, slice);
+            _activeStream.Flush();
+            offset += slice;
+
+            if (offset < count && _uploadRateLimit > 0)
+            {
+                var targetTicks = (long)((double)slice * Stopwatch.Frequency / _uploadRateLimit);
+                OnWriteChunkPaced?.Invoke(slice, targetTicks);
+                PaceWaitHandler(sliceStart, targetTicks);
+            }
         }
     }
 
@@ -958,8 +1121,19 @@ public class PeerConnection : IDisposable
         return buffer;
     }
 
-    private static void ApplySocketOptions(TcpClient client, int dscp, int tos)
+    public static void ApplySocketOptions(
+        TcpClient client,
+        int dscp = 0,
+        int tos = 0,
+        long sendRateLimit = 0,
+        long receiveRateLimit = 0,
+        double rttSeconds = DefaultEstimatedRttSeconds)
     {
+        if (client?.Client == null)
+        {
+            return;
+        }
+
         if (dscp > 0)
         {
             try
@@ -979,6 +1153,22 @@ public class PeerConnection : IDisposable
             catch
             {
             }
+        }
+
+        try
+        {
+            client.Client.SendBufferSize = CalculateBdpBufferSize(sendRateLimit, rttSeconds);
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            client.Client.ReceiveBufferSize = CalculateBdpBufferSize(receiveRateLimit, rttSeconds);
+        }
+        catch
+        {
         }
     }
 
