@@ -81,6 +81,8 @@ export const RECONNECT_QUERY_KEYS: string[][] = [
   ["seeding", "history"],
   ["categories"],
   ["tags"],
+  ["speedschedule"],
+  ["speedschedule", "active"],
   ["health"],
   ["system", "status"],
   ["system", "commands"],
@@ -167,6 +169,9 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
       } else if (name.includes("seeding")) {
         queryClient.invalidateQueries({ queryKey: ["seeding", "stats"] });
         // Do NOT invalidate ["torrents"] on 1-second ticks; torrents are invalidated on TorrentUpdated
+      } else if (name.includes("schedule") || name.includes("speedschedule")) {
+        queryClient.invalidateQueries({ queryKey: ["speedschedule"] });
+        queryClient.invalidateQueries({ queryKey: ["speedschedule", "active"] });
       }
     };
 

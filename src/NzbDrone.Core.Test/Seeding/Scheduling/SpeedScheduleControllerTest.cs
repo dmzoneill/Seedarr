@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Seeding.Scheduling;
+using NzbDrone.SignalR;
 using Seedarr.Api.V1.Seeding;
 
 namespace NzbDrone.Core.Test.Seeding.Scheduling;
@@ -13,6 +15,7 @@ public class SpeedScheduleControllerTest
 {
     private ISpeedScheduler _speedScheduler;
     private IConfigService _configService;
+    private IBroadcastSignalRMessage _signalRBroadcaster;
     private SpeedScheduleController _controller;
 
     [SetUp]
@@ -20,7 +23,8 @@ public class SpeedScheduleControllerTest
     {
         _speedScheduler = Substitute.For<ISpeedScheduler>();
         _configService = Substitute.For<IConfigService>();
-        _controller = new SpeedScheduleController(_speedScheduler, _configService);
+        _signalRBroadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        _controller = new SpeedScheduleController(_speedScheduler, _configService, _signalRBroadcaster);
     }
 
     [Test]
@@ -361,5 +365,128 @@ public class SpeedScheduleControllerTest
         Assert.That(result.Value, Is.Not.Null);
         Assert.That(result.Value.MaxUploadSpeed, Is.EqualTo(5000 * 1024));
         Assert.That(result.Value.MaxDownloadSpeed, Is.EqualTo(10000 * 1024));
+    }
+
+    [Test]
+    public void Create_valid_resource_broadcasts_signalr_message()
+    {
+        var resource = new SpeedScheduleResource
+        {
+            Name = "Valid Schedule",
+            Days = 127,
+            StartTime = "08:00",
+            EndTime = "17:00",
+            MaxUploadSpeed = 1000,
+            MaxDownloadSpeed = 1000,
+            IsEnabled = true,
+            Priority = 1
+        };
+
+        _speedScheduler.Add(Arg.Any<SpeedSchedule>()).Returns(callInfo =>
+        {
+            var model = callInfo.Arg<SpeedSchedule>();
+            model.Id = 42;
+            return model;
+        });
+
+        _controller.Create(resource);
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "SpeedSchedule" &&
+            m.Action == ModelAction.Created &&
+            m.Body is SpeedScheduleResource &&
+            ((SpeedScheduleResource)m.Body).Id == 42 &&
+            ((SpeedScheduleResource)m.Body).Name == "Valid Schedule"));
+    }
+
+    [Test]
+    public void Update_valid_resource_broadcasts_signalr_message()
+    {
+        var existing = new SpeedSchedule { Id = 1, Name = "Existing" };
+        _speedScheduler.Get(1).Returns(existing);
+        _speedScheduler.Update(Arg.Any<SpeedSchedule>()).Returns(callInfo => callInfo.Arg<SpeedSchedule>());
+
+        var resource = new SpeedScheduleResource
+        {
+            Name = "Updated Name",
+            Days = 127,
+            StartTime = "09:00",
+            EndTime = "18:00",
+            MaxUploadSpeed = 500,
+            MaxDownloadSpeed = 500,
+            IsEnabled = true,
+            Priority = 2
+        };
+
+        _controller.Update(1, resource);
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "SpeedSchedule" &&
+            m.Action == ModelAction.Updated &&
+            m.Body is SpeedScheduleResource &&
+            ((SpeedScheduleResource)m.Body).Id == 1 &&
+            ((SpeedScheduleResource)m.Body).Name == "Updated Name"));
+    }
+
+    [Test]
+    public void Delete_existing_schedule_returns_ok_and_broadcasts_signalr_message()
+    {
+        var existing = new SpeedSchedule { Id = 5, Name = "To Delete" };
+        _speedScheduler.Get(5).Returns(existing);
+
+        var result = _controller.Delete(5);
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        _speedScheduler.Received(1).Delete(5);
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "SpeedSchedule" &&
+            m.Action == ModelAction.Deleted &&
+            m.Body is SpeedScheduleResource &&
+            ((SpeedScheduleResource)m.Body).Id == 5 &&
+            ((SpeedScheduleResource)m.Body).Name == "To Delete"));
+    }
+
+    [Test]
+    public void Delete_non_existing_returns_not_found_and_does_not_broadcast()
+    {
+        _speedScheduler.Get(99).Returns((SpeedSchedule)null);
+
+        var result = _controller.Delete(99);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _speedScheduler.DidNotReceive().Delete(Arg.Any<int>());
+        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void Mutations_without_signalr_broadcaster_do_not_throw()
+    {
+        var controllerWithoutSignalR = new SpeedScheduleController(_speedScheduler, _configService, null);
+
+        var resource = new SpeedScheduleResource
+        {
+            Name = "No SignalR",
+            Days = 127,
+            StartTime = "08:00",
+            EndTime = "17:00",
+            MaxUploadSpeed = 1000,
+            MaxDownloadSpeed = 1000
+        };
+
+        _speedScheduler.Add(Arg.Any<SpeedSchedule>()).Returns(callInfo =>
+        {
+            var model = callInfo.Arg<SpeedSchedule>();
+            model.Id = 10;
+            return model;
+        });
+
+        Assert.DoesNotThrow(() => controllerWithoutSignalR.Create(resource));
+
+        var existing = new SpeedSchedule { Id = 10, Name = "Existing" };
+        _speedScheduler.Get(10).Returns(existing);
+        _speedScheduler.Update(Arg.Any<SpeedSchedule>()).Returns(callInfo => callInfo.Arg<SpeedSchedule>());
+
+        Assert.DoesNotThrow(() => controllerWithoutSignalR.Update(10, resource));
+        Assert.DoesNotThrow(() => controllerWithoutSignalR.Delete(10));
     }
 }

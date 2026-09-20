@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Seeding.Scheduling;
+using NzbDrone.SignalR;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Seeding;
@@ -13,11 +15,16 @@ public class SpeedScheduleController : Controller
 {
     private readonly ISpeedScheduler _speedScheduler;
     private readonly IConfigService _configService;
+    private readonly IBroadcastSignalRMessage _signalRBroadcaster;
 
-    public SpeedScheduleController(ISpeedScheduler speedScheduler, IConfigService configService)
+    public SpeedScheduleController(
+        ISpeedScheduler speedScheduler,
+        IConfigService configService,
+        IBroadcastSignalRMessage signalRBroadcaster = null)
     {
         _speedScheduler = speedScheduler;
         _configService = configService;
+        _signalRBroadcaster = signalRBroadcaster;
     }
 
     [HttpGet]
@@ -77,7 +84,16 @@ public class SpeedScheduleController : Controller
         }
 
         var added = _speedScheduler.Add(schedule);
-        return Created($"/api/v1/speedschedule/{added.Id}", ToResource(added));
+        var addedResource = ToResource(added);
+
+        _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+        {
+            Name = "SpeedSchedule",
+            Action = ModelAction.Created,
+            Body = addedResource
+        });
+
+        return Created($"/api/v1/speedschedule/{added.Id}", addedResource);
     }
 
     [HttpPut("{id:int}")]
@@ -107,7 +123,16 @@ public class SpeedScheduleController : Controller
 
         schedule.Id = id;
         var updated = _speedScheduler.Update(schedule);
-        return ToResource(updated);
+        var updatedResource = ToResource(updated);
+
+        _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+        {
+            Name = "SpeedSchedule",
+            Action = ModelAction.Updated,
+            Body = updatedResource
+        });
+
+        return updatedResource;
     }
 
     [HttpDelete("{id:int}")]
@@ -120,6 +145,14 @@ public class SpeedScheduleController : Controller
         }
 
         _speedScheduler.Delete(id);
+
+        _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+        {
+            Name = "SpeedSchedule",
+            Action = ModelAction.Deleted,
+            Body = ToResource(existing)
+        });
+
         return Ok();
     }
 
