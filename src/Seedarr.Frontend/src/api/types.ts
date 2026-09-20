@@ -713,6 +713,8 @@ export interface DownloadClientRemoteItem {
   libraryTorrentId?: number | null;
   downloadSpeed?: number | null;
   uploadSpeed?: number | null;
+  clientId?: number;
+  clientName?: string;
 }
 
 export interface TorznabSubcategory {

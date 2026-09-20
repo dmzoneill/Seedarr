@@ -8,6 +8,9 @@ import {
   useDownloadHistory,
   useArrConnections,
   useBoostHash,
+  usePauseRemoteTorrent,
+  useResumeRemoteTorrent,
+  useDeleteRemoteTorrent,
 } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 import { formatBytes } from "../utils/formatters";
@@ -16,14 +19,15 @@ import type { BatchImportItemResult } from "../api/types";
 
 export default function DownloadClientTorrents() {
   const { id } = useParams<{ id: string }>();
-  const clientId = parseInt(id || "0", 10);
+  const isAll = id === "all";
+  const clientId = isAll ? 0 : parseInt(id || "0", 10);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
   const { data: clients, isLoading: clientsLoading } = useDownloadClients();
   const client = useMemo(
-    () => clients?.find((c) => c.id === clientId),
-    [clients, clientId],
+    () => (isAll ? null : clients?.find((c) => c.id === clientId)),
+    [clients, clientId, isAll],
   );
 
   const {
@@ -33,7 +37,7 @@ export default function DownloadClientTorrents() {
     error,
     refetch,
     isFetching,
-  } = useDownloadClientItems(clientId);
+  } = useDownloadClientItems(isAll ? "all" : clientId);
 
   const { data: history } = useDownloadHistory();
   const { data: arrConnections } = useArrConnections();
@@ -41,6 +45,84 @@ export default function DownloadClientTorrents() {
   const importOneMutation = useImportDownloadClientTorrent(clientId);
   const importAllMutation = useImportDownloadClientTorrents(clientId);
   const boostHashMutation = useBoostHash();
+  const pauseRemoteMutation = usePauseRemoteTorrent(clientId);
+  const resumeRemoteMutation = useResumeRemoteTorrent(clientId);
+  const deleteRemoteMutation = useDeleteRemoteTorrent(clientId);
+
+  const [deleteTarget, setDeleteTarget] = useState<{
+    clientId: number;
+    clientName?: string;
+    infoHash: string;
+    title: string;
+  } | null>(null);
+  const [deleteFiles, setDeleteFiles] = useState(false);
+
+  const duplicateHashes = useMemo(() => {
+    if (!items) return new Set<string>();
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      if (item.infoHash) {
+        const h = item.infoHash.toLowerCase();
+        counts.set(h, (counts.get(h) || 0) + 1);
+      }
+    }
+    const dupes = new Set<string>();
+    for (const [hash, count] of counts.entries()) {
+      if (count > 1) {
+        dupes.add(hash);
+      }
+    }
+    return dupes;
+  }, [items]);
+
+  const handlePauseTorrent = (targetClientId: number, hash: string, title: string) => {
+    pauseRemoteMutation.mutate(
+      { clientId: targetClientId, infoHash: hash },
+      {
+        onSuccess: () => {
+          showToast(`Paused "${title}"`, "success");
+        },
+        onError: (err) => {
+          showToast(`Failed to pause "${title}": ${err.message}`, "error");
+        },
+      },
+    );
+  };
+
+  const handleResumeTorrent = (targetClientId: number, hash: string, title: string) => {
+    resumeRemoteMutation.mutate(
+      { clientId: targetClientId, infoHash: hash },
+      {
+        onSuccess: () => {
+          showToast(`Resumed "${title}"`, "success");
+        },
+        onError: (err) => {
+          showToast(`Failed to resume "${title}": ${err.message}`, "error");
+        },
+      },
+    );
+  };
+
+  const confirmDeleteTorrent = () => {
+    if (!deleteTarget) return;
+    deleteRemoteMutation.mutate(
+      {
+        clientId: deleteTarget.clientId,
+        infoHash: deleteTarget.infoHash,
+        deleteData: deleteFiles,
+      },
+      {
+        onSuccess: () => {
+          showToast(`Removed "${deleteTarget.title}" from download client`, "success");
+          setDeleteTarget(null);
+        },
+        onError: (err) => {
+          showToast(`Failed to delete "${deleteTarget.title}": ${err.message}`, "error");
+          setDeleteTarget(null);
+        },
+      },
+    );
+  };
 
   const handleBoostTorrent = (
     hash: string,
@@ -151,9 +233,9 @@ export default function DownloadClientTorrents() {
     });
   };
 
-  const handleImportOne = (hash: string, title: string) => {
+  const handleImportOne = (hash: string, title: string, targetClientId?: number) => {
     setImportingHash(hash);
-    importOneMutation.mutate(hash, {
+    importOneMutation.mutate({ infoHash: hash, clientId: targetClientId || clientId }, {
       onSuccess: () => {
         setImportingHash(null);
         setSelectedHashes((prev) => {
@@ -261,7 +343,7 @@ export default function DownloadClientTorrents() {
     );
   }
 
-  if (!client) {
+  if (!isAll && !client) {
     return (
       <div className="content-area">
         <div className="card" style={{ padding: "3rem", textAlign: "center" }}>
@@ -327,12 +409,18 @@ export default function DownloadClientTorrents() {
                 gap: "0.5rem",
               }}
             >
-              <span>💽</span> {client.name} ({totalCount})
+              <span>💽</span> {isAll ? "All Download Clients" : client?.name} ({totalCount})
             </h1>
-            <span className="badge badge-primary">{client.clientType}</span>
-            <span className="badge badge-secondary">
-              {client.host}:{client.port}
-            </span>
+            {isAll ? (
+              <span className="badge badge-primary">Aggregated View</span>
+            ) : (
+              <>
+                <span className="badge badge-primary">{client?.clientType}</span>
+                <span className="badge badge-secondary">
+                  {client?.host}:{client?.port}
+                </span>
+              </>
+            )}
           </div>
           <p
             style={{
@@ -341,8 +429,33 @@ export default function DownloadClientTorrents() {
               fontSize: "0.9rem",
             }}
           >
-            Live torrent list from {client.clientType} download agent
+            {isAll
+              ? "Aggregated live torrents across all configured download agents"
+              : `Live torrent list from ${client?.clientType} download agent`}
           </p>
+          {clients && clients.filter((c) => c.enable).length > 1 && (
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+              <Link
+                to="/activity/client/all"
+                className={`btn btn-small ${isAll ? "btn-primary" : "btn-outline"}`}
+                style={{ borderRadius: "16px", padding: "0.2rem 0.75rem", fontSize: "0.8rem" }}
+              >
+                All Clients
+              </Link>
+              {clients
+                .filter((c) => c.enable)
+                .map((c) => (
+                  <Link
+                    key={c.id}
+                    to={`/activity/client/${c.id}`}
+                    className={`btn btn-small ${!isAll && clientId === c.id ? "btn-primary" : "btn-outline"}`}
+                    style={{ borderRadius: "16px", padding: "0.2rem 0.75rem", fontSize: "0.8rem" }}
+                  >
+                    {c.name}
+                  </Link>
+                ))}
+            </div>
+          )}
         </div>
 
         <div
@@ -378,7 +491,7 @@ export default function DownloadClientTorrents() {
               rel="noopener noreferrer"
               className="btn btn-outline"
               style={{ fontSize: "0.85rem", textDecoration: "none" }}
-              title={`Open ${client.name} Web UI`}
+              title={`Open ${client?.name} Web UI`}
             >
               Open Web UI ↗
             </a>
@@ -537,7 +650,7 @@ export default function DownloadClientTorrents() {
           style={{ padding: "3rem", textAlign: "center", borderRadius: "8px" }}
         >
           <div className="loading">
-            Connecting to {client.name} and fetching torrents...
+            Connecting to {isAll ? "download clients" : client?.name} and fetching torrents...
           </div>
         </div>
       )}
@@ -605,7 +718,7 @@ export default function DownloadClientTorrents() {
           >
             {searchTerm || filterMode !== "all"
               ? "No torrents match the active search or filter criteria."
-              : `No torrents currently reported by ${client.name}.`}
+              : isAll ? "No torrents currently reported across download clients." : `No torrents currently reported by ${client?.name}.`}
           </div>
         </div>
       )}
@@ -883,12 +996,28 @@ export default function DownloadClientTorrents() {
                             ? "badge-success"
                             : item.status?.toLowerCase() === "downloading"
                               ? "badge-primary"
-                              : "badge-secondary"
+                              : item.status?.toLowerCase() === "paused" || item.status?.toLowerCase() === "stopped"
+                                ? "badge-warning"
+                                : "badge-secondary"
                         }`}
                         style={{ fontSize: "0.72rem" }}
                       >
                         {item.status || "unknown"}
                       </span>
+                      {isAll && item.clientName && (
+                        <span className="badge badge-secondary" style={{ fontSize: "0.72rem" }}>
+                          {item.clientName}
+                        </span>
+                      )}
+                      {duplicateHashes.has(item.infoHash?.toLowerCase()) && (
+                        <span
+                          className="badge badge-warning"
+                          style={{ fontSize: "0.72rem" }}
+                          title="This torrent is running on multiple download clients"
+                        >
+                          Duplicate
+                        </span>
+                      )}
 
                       <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
                         {!item.isPrivate ? (
@@ -956,13 +1085,76 @@ export default function DownloadClientTorrents() {
                               borderRadius: "4px",
                             }}
                             onClick={() =>
-                              handleImportOne(item.infoHash, item.title)
+                              handleImportOne(item.infoHash, item.title, item.clientId)
                             }
                             disabled={isImporting}
                           >
                             {isImporting ? "Importing..." : "+ Import"}
                           </button>
                         )}
+
+                        {item.status?.toLowerCase() === "paused" || item.status?.toLowerCase() === "stopped" ? (
+                          <button
+                            className="btn btn-outline btn-small"
+                            style={{
+                              fontSize: "0.78rem",
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "4px",
+                            }}
+                            onClick={() =>
+                              handleResumeTorrent(
+                                item.clientId || clientId,
+                                item.infoHash,
+                                item.title,
+                              )
+                            }
+                            disabled={resumeRemoteMutation.isPending}
+                            title="Resume remote torrent"
+                          >
+                            ▶ Resume
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-outline btn-small"
+                            style={{
+                              fontSize: "0.78rem",
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "4px",
+                            }}
+                            onClick={() =>
+                              handlePauseTorrent(
+                                item.clientId || clientId,
+                                item.infoHash,
+                                item.title,
+                              )
+                            }
+                            disabled={pauseRemoteMutation.isPending}
+                            title="Pause remote torrent"
+                          >
+                            ⏸ Pause
+                          </button>
+                        )}
+
+                        <button
+                          className="btn btn-danger btn-small"
+                          style={{
+                            fontSize: "0.78rem",
+                            padding: "0.2rem 0.55rem",
+                            borderRadius: "4px",
+                          }}
+                          onClick={() =>
+                            setDeleteTarget({
+                              clientId: item.clientId || clientId,
+                              clientName: item.clientName || client?.name,
+                              infoHash: item.infoHash,
+                              title: item.title,
+                            })
+                          }
+                          disabled={deleteRemoteMutation.isPending}
+                          title="Remove torrent from download client"
+                        >
+                          🗑 Delete
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1187,18 +1379,36 @@ export default function DownloadClientTorrents() {
                         </td>
 
                         <td style={{ padding: "0.75rem 1rem" }}>
-                          <span
-                            className={`badge ${
-                              item.status?.toLowerCase() === "seeding"
-                                ? "badge-success"
-                                : item.status?.toLowerCase() === "downloading"
-                                  ? "badge-primary"
-                                  : "badge-secondary"
-                            }`}
-                            style={{ borderRadius: "4px" }}
-                          >
-                            {item.status || "unknown"}
-                          </span>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", alignItems: "flex-start" }}>
+                            <span
+                              className={`badge ${
+                                item.status?.toLowerCase() === "seeding"
+                                  ? "badge-success"
+                                  : item.status?.toLowerCase() === "downloading"
+                                    ? "badge-primary"
+                                    : item.status?.toLowerCase() === "paused" || item.status?.toLowerCase() === "stopped"
+                                      ? "badge-warning"
+                                      : "badge-secondary"
+                              }`}
+                              style={{ borderRadius: "4px" }}
+                            >
+                              {item.status || "unknown"}
+                            </span>
+                            {isAll && item.clientName && (
+                              <span className="badge badge-secondary" style={{ fontSize: "0.7rem", borderRadius: "4px" }}>
+                                {item.clientName}
+                              </span>
+                            )}
+                            {duplicateHashes.has(item.infoHash?.toLowerCase()) && (
+                              <span
+                                className="badge badge-warning"
+                                style={{ fontSize: "0.7rem", borderRadius: "4px" }}
+                                title="This torrent is running on multiple download clients"
+                              >
+                                Duplicate
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td style={{ padding: "0.75rem 1rem" }}>
@@ -1426,7 +1636,7 @@ export default function DownloadClientTorrents() {
                                   whiteSpace: "nowrap",
                                 }}
                                 onClick={() =>
-                                  handleImportOne(item.infoHash, item.title)
+                                  handleImportOne(item.infoHash, item.title, item.clientId)
                                 }
                                 disabled={isImporting}
                               >
@@ -1440,6 +1650,84 @@ export default function DownloadClientTorrents() {
                                 )}
                               </button>
                             )}
+
+                            {item.status?.toLowerCase() === "paused" || item.status?.toLowerCase() === "stopped" ? (
+                              <button
+                                className="btn btn-outline"
+                                style={{
+                                  fontSize: "0.78rem",
+                                  padding: "0.3rem 0.65rem",
+                                  borderRadius: "4px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem",
+                                  whiteSpace: "nowrap",
+                                }}
+                                onClick={() =>
+                                  handleResumeTorrent(
+                                    item.clientId || clientId,
+                                    item.infoHash,
+                                    item.title,
+                                  )
+                                }
+                                disabled={resumeRemoteMutation.isPending}
+                                title="Resume remote torrent"
+                              >
+                                <span>▶</span>
+                                <span>Resume</span>
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-outline"
+                                style={{
+                                  fontSize: "0.78rem",
+                                  padding: "0.3rem 0.65rem",
+                                  borderRadius: "4px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem",
+                                  whiteSpace: "nowrap",
+                                }}
+                                onClick={() =>
+                                  handlePauseTorrent(
+                                    item.clientId || clientId,
+                                    item.infoHash,
+                                    item.title,
+                                  )
+                                }
+                                disabled={pauseRemoteMutation.isPending}
+                                title="Pause remote torrent"
+                              >
+                                <span>⏸</span>
+                                <span>Pause</span>
+                              </button>
+                            )}
+
+                            <button
+                              className="btn btn-danger"
+                              style={{
+                                fontSize: "0.78rem",
+                                padding: "0.3rem 0.65rem",
+                                borderRadius: "4px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                whiteSpace: "nowrap",
+                              }}
+                              onClick={() =>
+                                setDeleteTarget({
+                                  clientId: item.clientId || clientId,
+                                  clientName: item.clientName || client?.name,
+                                  infoHash: item.infoHash,
+                                  title: item.title,
+                                })
+                              }
+                              disabled={deleteRemoteMutation.isPending}
+                              title="Remove torrent from download client"
+                            >
+                              <span>🗑</span>
+                              <span>Delete</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1450,6 +1738,107 @@ export default function DownloadClientTorrents() {
             </div>
           </div>
         )}
+
+      {/* Delete Remote Torrent Modal */}
+      {deleteTarget && (
+        <div
+          className="modal-backdrop"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="modal-dialog"
+            style={{
+              backgroundColor: "var(--bg-secondary, #1e1e24)",
+              borderRadius: "8px",
+              padding: "1.5rem",
+              maxWidth: "480px",
+              width: "90%",
+              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
+              border: "1px solid var(--border-light, #333)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginBottom: "1rem",
+              }}
+            >
+              <span style={{ fontSize: "1.4rem" }}>🗑</span>
+              <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 600 }}>
+                Remove Torrent from Download Client
+              </h3>
+            </div>
+
+            <p style={{ color: "var(--text-primary)", fontSize: "0.95rem", lineHeight: 1.5 }}>
+              Are you sure you want to remove <strong>"{deleteTarget.title}"</strong>
+              {deleteTarget.clientName ? ` from ${deleteTarget.clientName}` : ""}?
+            </p>
+
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.6rem",
+                marginTop: "1.25rem",
+                cursor: "pointer",
+                padding: "0.5rem 0.75rem",
+                backgroundColor: "var(--bg-primary, #141418)",
+                borderRadius: "6px",
+                border: "1px solid var(--border-light, #333)",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={deleteFiles}
+                onChange={(e) => setDeleteFiles(e.target.checked)}
+                style={{ width: "16px", height: "16px", cursor: "pointer" }}
+              />
+              <span style={{ fontSize: "0.88rem", color: "var(--text-danger, #e55353)", fontWeight: 500 }}>
+                Also delete downloaded files from disk
+              </span>
+            </label>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+                marginTop: "1.5rem",
+              }}
+            >
+              <button
+                className="btn btn-outline"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteRemoteMutation.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={confirmDeleteTorrent}
+                disabled={deleteRemoteMutation.isPending}
+              >
+                {deleteRemoteMutation.isPending ? "Removing..." : "Delete Torrent"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Batch Import Failure Diagnostic Modal */}
       {failedImportItems && failedImportItems.length > 0 && (
@@ -1495,7 +1884,7 @@ export default function DownloadClientTorrents() {
                 lineHeight: 1.5,
               }}
             >
-              The following torrents failed to import from {client.name}. Diagnostic details and retry actions are listed below:
+              The following torrents failed to import from {client?.name || "download client"}. Diagnostic details and retry actions are listed below:
             </p>
 
             <div

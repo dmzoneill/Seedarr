@@ -597,4 +597,144 @@ public class DownloadClientControllerTest
         Assert.That(client.ConsecutiveFailures, Is.EqualTo(2));
         Assert.That(client.BackoffUntil, Is.Not.Null);
     }
+
+    [Test]
+    public void GetAllItems_returns_aggregated_items_from_sync_service()
+    {
+        var items = new List<DownloadClientRemoteItem>
+        {
+            new() { DownloadId = "1", Title = "Torrent 1", InfoHash = "hash1", ClientId = 1, ClientName = "qBittorrent" },
+            new() { DownloadId = "2", Title = "Torrent 2", InfoHash = "hash2", ClientId = 2, ClientName = "Transmission" },
+        };
+        _syncService.GetAllClientItems().Returns(items);
+
+        var result = _controller.GetAllItems();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var returnedItems = (List<DownloadClientRemoteItem>)okResult.Value;
+        Assert.That(returnedItems, Has.Count.EqualTo(2));
+        Assert.That(returnedItems[0].ClientName, Is.EqualTo("qBittorrent"));
+        Assert.That(returnedItems[1].ClientName, Is.EqualTo("Transmission"));
+    }
+
+    [Test]
+    public void PauseTorrent_returns_not_found_when_client_does_not_exist()
+    {
+        _downloadClientFactory.Get(999).Returns((DownloadClientDefinition)null);
+
+        var result = _controller.PauseTorrent(999, "hash123");
+
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public void PauseTorrent_returns_ok_when_client_pauses_successfully()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.PauseTorrent("hash123").Returns(true);
+
+        _downloadClientFactory.Get(1).Returns(def);
+        _downloadClientFactory.CreateClient(def).Returns(mockClient);
+
+        var result = _controller.PauseTorrent(1, "hash123");
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+    }
+
+    [Test]
+    public void PauseTorrent_returns_bad_request_when_client_pause_fails()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.PauseTorrent("hash123").Returns(false);
+
+        _downloadClientFactory.Get(1).Returns(def);
+        _downloadClientFactory.CreateClient(def).Returns(mockClient);
+
+        var result = _controller.PauseTorrent(1, "hash123");
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void ResumeTorrent_returns_not_found_when_client_does_not_exist()
+    {
+        _downloadClientFactory.Get(999).Returns((DownloadClientDefinition)null);
+
+        var result = _controller.ResumeTorrent(999, "hash123");
+
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public void ResumeTorrent_returns_ok_when_client_resumes_successfully()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.ResumeTorrent("hash123").Returns(true);
+
+        _downloadClientFactory.Get(1).Returns(def);
+        _downloadClientFactory.CreateClient(def).Returns(mockClient);
+
+        var result = _controller.ResumeTorrent(1, "hash123");
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+    }
+
+    [Test]
+    public void ResumeTorrent_returns_bad_request_when_client_resume_fails()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.ResumeTorrent("hash123").Returns(false);
+
+        _downloadClientFactory.Get(1).Returns(def);
+        _downloadClientFactory.CreateClient(def).Returns(mockClient);
+
+        var result = _controller.ResumeTorrent(1, "hash123");
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void DeleteTorrent_returns_not_found_when_client_does_not_exist()
+    {
+        _downloadClientFactory.Get(999).Returns((DownloadClientDefinition)null);
+
+        var result = _controller.DeleteTorrent(999, "hash123", deleteData: true);
+
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public void DeleteTorrent_returns_ok_when_client_deletes_successfully()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.DeleteTorrent("hash123", true).Returns(true);
+
+        _downloadClientFactory.Get(1).Returns(def);
+        _downloadClientFactory.CreateClient(def).Returns(mockClient);
+
+        var result = _controller.DeleteTorrent(1, "hash123", deleteData: true);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+    }
+
+    [Test]
+    public void DeleteTorrent_returns_bad_request_when_client_delete_fails()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.DeleteTorrent("hash123", false).Returns(false);
+
+        _downloadClientFactory.Get(1).Returns(def);
+        _downloadClientFactory.CreateClient(def).Returns(mockClient);
+
+        var result = _controller.DeleteTorrent(1, "hash123", deleteData: false);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
 }

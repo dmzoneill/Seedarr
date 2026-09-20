@@ -895,4 +895,64 @@ public class TransmissionClientTest
 
         Assert.That(result, Is.Null);
     }
+
+    [Test]
+    public void PauseTorrent_should_send_torrent_stop_rpc()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":""success""}");
+        InjectMockClient(handler);
+
+        var result = _client.PauseTorrent("hash123");
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void PauseTorrent_should_return_false_on_empty_hash()
+    {
+        var result = _client.PauseTorrent("");
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void ResumeTorrent_should_send_torrent_start_rpc()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":""success""}");
+        InjectMockClient(handler);
+
+        var result = _client.ResumeTorrent("hash123");
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void ResumeTorrent_should_return_false_on_empty_hash()
+    {
+        var result = _client.ResumeTorrent("");
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void DeleteTorrent_should_send_torrent_remove_rpc_with_delete_data()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":""success""}");
+        InjectMockClient(handler);
+
+        var result = _client.DeleteTorrent("hash123", deleteData: true);
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void DeleteTorrent_should_return_false_on_empty_hash()
+    {
+        var result = _client.DeleteTorrent("");
+        Assert.That(result, Is.False);
+    }
 }

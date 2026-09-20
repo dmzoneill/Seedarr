@@ -678,4 +678,67 @@ public class DelugeClientTest
 
         Assert.That(result, Is.Null);
     }
+
+    [Test]
+    public void PauseTorrent_should_send_pause_torrent_rpc()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":2}"); // core.pause_torrent
+        InjectMockClient(handler);
+
+        var result = _client.PauseTorrent("delugehash123");
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void PauseTorrent_should_return_false_on_empty_hash()
+    {
+        var result = _client.PauseTorrent("");
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void ResumeTorrent_should_send_resume_torrent_rpc()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":2}"); // core.resume_torrent
+        InjectMockClient(handler);
+
+        var result = _client.ResumeTorrent("delugehash123");
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void ResumeTorrent_should_return_false_on_empty_hash()
+    {
+        var result = _client.ResumeTorrent("");
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void DeleteTorrent_should_send_remove_torrent_rpc_with_delete_data()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":2}"); // core.remove_torrent
+        InjectMockClient(handler);
+
+        var result = _client.DeleteTorrent("delugehash123", deleteData: true);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void DeleteTorrent_should_return_false_on_empty_hash()
+    {
+        var result = _client.DeleteTorrent("");
+        Assert.That(result, Is.False);
+    }
 }

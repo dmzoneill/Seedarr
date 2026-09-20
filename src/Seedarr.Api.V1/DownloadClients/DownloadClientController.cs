@@ -203,6 +203,116 @@ public class DownloadClientController : Controller
         return Ok(result);
     }
 
+    [HttpGet("items")]
+    public ActionResult<List<DownloadClientRemoteItem>> GetAllItems()
+    {
+        try
+        {
+            var items = _syncService.GetAllClientItems();
+            return Ok(items);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status500InternalServerError, new { message = $"Failed to fetch aggregated items: {ex.Message}" });
+        }
+    }
+
+    [HttpPost("{id:int}/torrents/{infoHash}/pause")]
+    public ActionResult PauseTorrent(int id, string infoHash)
+    {
+        var definition = _downloadClientFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        IDownloadClient client;
+        try
+        {
+            client = _downloadClientFactory.CreateClient(definition);
+            if (client == null)
+            {
+                return BadRequest(new { message = $"Unknown client type: {definition.ClientType}" });
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        var success = client.PauseTorrent(infoHash);
+        if (!success)
+        {
+            return BadRequest(new { message = $"Failed to pause torrent {infoHash} on client {definition.Name}" });
+        }
+
+        return Ok(new { success = true });
+    }
+
+    [HttpPost("{id:int}/torrents/{infoHash}/resume")]
+    public ActionResult ResumeTorrent(int id, string infoHash)
+    {
+        var definition = _downloadClientFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        IDownloadClient client;
+        try
+        {
+            client = _downloadClientFactory.CreateClient(definition);
+            if (client == null)
+            {
+                return BadRequest(new { message = $"Unknown client type: {definition.ClientType}" });
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        var success = client.ResumeTorrent(infoHash);
+        if (!success)
+        {
+            return BadRequest(new { message = $"Failed to resume torrent {infoHash} on client {definition.Name}" });
+        }
+
+        return Ok(new { success = true });
+    }
+
+    [HttpDelete("{id:int}/torrents/{infoHash}")]
+    public ActionResult DeleteTorrent(int id, string infoHash, [FromQuery] bool deleteData = false)
+    {
+        var definition = _downloadClientFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        IDownloadClient client;
+        try
+        {
+            client = _downloadClientFactory.CreateClient(definition);
+            if (client == null)
+            {
+                return BadRequest(new { message = $"Unknown client type: {definition.ClientType}" });
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        var success = client.DeleteTorrent(infoHash, deleteData);
+        if (!success)
+        {
+            return BadRequest(new { message = $"Failed to delete torrent {infoHash} on client {definition.Name}" });
+        }
+
+        return Ok(new { success = true });
+    }
+
     [HttpGet("{id}/items")]
     public ActionResult<List<DownloadClientRemoteItem>> GetItems(int id)
     {

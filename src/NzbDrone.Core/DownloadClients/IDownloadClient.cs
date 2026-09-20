@@ -22,6 +22,9 @@ public interface IDownloadClient : IProvider
     List<string> GetTrackers(string infoHash);
     bool AddTrackers(string infoHash, IEnumerable<string> trackers);
     bool Reannounce(string infoHash);
+    bool PauseTorrent(string infoHash);
+    bool ResumeTorrent(string infoHash);
+    bool DeleteTorrent(string infoHash, bool deleteData = false);
     bool TestConnection();
     DownloadClientTestResult TestConnectionDetailed();
     Task<DownloadClientSpeedLimits> GetSpeedLimitsAsync(CancellationToken cancellationToken = default);

@@ -527,6 +527,108 @@ public class DelugeClient : IDownloadClient, IDisposable
         }
     }
 
+    public bool PauseTorrent(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        if (!Authenticate())
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = SendRequest("core.pause_torrent", new object[] { new[] { infoHash } });
+            if (doc.RootElement.TryGetProperty("error", out var err) && err.ValueKind != JsonValueKind.Null)
+            {
+                return false;
+            }
+
+            if (doc.RootElement.TryGetProperty("result", out var res))
+            {
+                return res.ValueKind != JsonValueKind.False;
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to pause Deluge torrent {0}", infoHash);
+            return false;
+        }
+    }
+
+    public bool ResumeTorrent(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        if (!Authenticate())
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = SendRequest("core.resume_torrent", new object[] { new[] { infoHash } });
+            if (doc.RootElement.TryGetProperty("error", out var err) && err.ValueKind != JsonValueKind.Null)
+            {
+                return false;
+            }
+
+            if (doc.RootElement.TryGetProperty("result", out var res))
+            {
+                return res.ValueKind != JsonValueKind.False;
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to resume Deluge torrent {0}", infoHash);
+            return false;
+        }
+    }
+
+    public bool DeleteTorrent(string infoHash, bool deleteData = false)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        if (!Authenticate())
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = SendRequest("core.remove_torrent", new object[] { infoHash, deleteData });
+            if (doc.RootElement.TryGetProperty("error", out var err) && err.ValueKind != JsonValueKind.Null)
+            {
+                return false;
+            }
+
+            if (doc.RootElement.TryGetProperty("result", out var res))
+            {
+                return res.ValueKind != JsonValueKind.False;
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to remove Deluge torrent {0}", infoHash);
+            return false;
+        }
+    }
+
     public bool TestConnection()
     {
         return TestConnectionDetailed().Success;
