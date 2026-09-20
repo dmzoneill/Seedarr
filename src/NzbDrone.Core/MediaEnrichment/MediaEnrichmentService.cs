@@ -17,6 +17,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.MediaInspection;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.MediaEnrichment;
 
@@ -77,6 +78,36 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         "logo",
         "thumb",
     };
+
+    private static readonly HashSet<string> KnownSafeArtworkHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image.tmdb.org",
+        "images.tmdb.org",
+        "themoviedb.org",
+        "tmdb.org",
+        "thetvdb.com",
+        "artworks.thetvdb.com",
+        "fanart.tv",
+        "assets.fanart.tv",
+        "images.metacritic.com",
+        "m.media-amazon.com",
+        "media-amazon.com",
+        "imdb.com",
+        "ia.media-imdb.com",
+        "m.media-imdb.com"
+    };
+
+    private static bool IsKnownSafeArtworkHost(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return false;
+        }
+
+        var trimmed = host.Trim().Trim('[', ']');
+        return KnownSafeArtworkHosts.Contains(trimmed) ||
+               KnownSafeArtworkHosts.Any(domain => trimmed.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase));
+    }
 
     private static readonly Regex ImdbIdRegex = new(@"\b(tt\d{7,10})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -684,6 +715,12 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 return null;
             }
 
+            if (!IsConfiguredServarrHost(uri) && !IsKnownSafeArtworkHost(uri.Host) && !UrlValidator.IsSafeHost(uri.Host, allowLoopback: false))
+            {
+                _logger.Warn("Refusing to cache artwork from untrusted or unsafe host: {0}", uri.Host);
+                return null;
+            }
+
             var extRemote = ".jpg";
             var uriExt = Path.GetExtension(uri.AbsolutePath);
             if (!string.IsNullOrEmpty(uriExt) && uriExt.Length <= 5)
@@ -1068,9 +1105,45 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         }
     }
 
+    private static bool IsMatchingServarr(ArrConnectionDefinition c, Uri uri)
+    {
+        if (c == null || string.IsNullOrWhiteSpace(c.Url) || uri == null || !uri.IsAbsoluteUri)
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(c.Url, UriKind.Absolute, out var servarrUri))
+        {
+            return false;
+        }
+
+        if (!uri.Scheme.Equals(servarrUri.Scheme, StringComparison.OrdinalIgnoreCase) ||
+            !uri.Host.Equals(servarrUri.Host, StringComparison.OrdinalIgnoreCase) ||
+            uri.Port != servarrUri.Port)
+        {
+            return false;
+        }
+
+        var basePath = servarrUri.AbsolutePath.TrimEnd('/');
+        return string.IsNullOrEmpty(basePath) ||
+               uri.AbsolutePath.Equals(basePath, StringComparison.OrdinalIgnoreCase) ||
+               uri.AbsolutePath.StartsWith(basePath + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsConfiguredServarrHost(Uri uri)
+    {
+        if (uri == null)
+        {
+            return false;
+        }
+
+        var definitions = _arrRepository?.All() ?? _connectionFactory?.All();
+        return definitions != null && definitions.Any(c => c != null && IsMatchingServarr(c, uri));
+    }
+
     internal string GetServarrApiKey(string url)
     {
-        if (string.IsNullOrWhiteSpace(url))
+        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
             return null;
         }
@@ -1079,9 +1152,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         if (definitions != null)
         {
             var matched = definitions.FirstOrDefault(c =>
-                !string.IsNullOrWhiteSpace(c.Url) &&
-                url.StartsWith(c.Url.TrimEnd('/'), StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(c.ApiKey));
+                c != null &&
+                !string.IsNullOrWhiteSpace(c.ApiKey) &&
+                IsMatchingServarr(c, uri));
 
             return matched?.ApiKey;
         }
@@ -1096,16 +1169,16 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             return _explicitHttpClient;
         }
 
-        var definitions = _arrRepository?.All() ?? _connectionFactory?.All();
-        if (definitions != null && !string.IsNullOrWhiteSpace(url))
+        if (!string.IsNullOrWhiteSpace(url) && Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
-            var matched = definitions.FirstOrDefault(c =>
-                !string.IsNullOrWhiteSpace(c.Url) &&
-                url.StartsWith(c.Url.TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
-
-            if (matched != null && matched.AcceptInvalidCertificates)
+            var definitions = _arrRepository?.All() ?? _connectionFactory?.All();
+            if (definitions != null)
             {
-                return ArrConnectionResources.SharedInsecureClient;
+                var matched = definitions.FirstOrDefault(c => c != null && IsMatchingServarr(c, uri));
+                if (matched != null && matched.AcceptInvalidCertificates)
+                {
+                    return ArrConnectionResources.SharedInsecureClient;
+                }
             }
         }
 
