@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Prowlarr;
@@ -255,6 +256,95 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
             Assert.That(handler.SentRequests.Count, Is.EqualTo(2));
             Assert.That(handler.SentRequests[0].Headers.Contains("X-Api-Key"), Is.False);
             Assert.That(handler.SentRequests[1].Headers.Contains("X-Api-Key"), Is.False);
+        }
+
+        [Test]
+        public void Search_when_prowlarr_returns_401_throws_HttpRequestException_and_records_failure()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var handler = new ProwlarrTestHttpMessageHandler
+            {
+                Handler = req => new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                {
+                    ReasonPhrase = "Unauthorized"
+                }
+            };
+            var indexer = new ProwlarrIndexer(new HttpClient(handler), statusService);
+            var definition = new IndexerDefinition
+            {
+                Id = 15,
+                Name = "Prowlarr",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "invalid-key"
+            };
+
+            var ex = Assert.Throws<HttpRequestException>(() => indexer.Search(definition, "ubuntu"));
+            Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+            statusService.Received(1).RecordFailure(15, 401, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+        }
+
+        [Test]
+        public void Search_when_prowlarr_returns_500_throws_HttpRequestException_and_records_failure()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var handler = new ProwlarrTestHttpMessageHandler
+            {
+                Handler = req => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    ReasonPhrase = "Internal Server Error"
+                }
+            };
+            var indexer = new ProwlarrIndexer(new HttpClient(handler), statusService);
+            var definition = new IndexerDefinition
+            {
+                Id = 16,
+                Name = "Prowlarr",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "some-key"
+            };
+
+            var ex = Assert.Throws<HttpRequestException>(() => indexer.Search(definition, "ubuntu"));
+            Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+            statusService.Received(1).RecordFailure(16, 500, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+        }
+
+        [Test]
+        public void Search_when_prowlarr_succeeds_returns_parsed_releases()
+        {
+            var searchJson = @"[
+                {
+                    ""guid"": ""guid-123"",
+                    ""title"": ""Ubuntu 24.04 LTS Desktop"",
+                    ""size"": 1073741824,
+                    ""seeders"": 100,
+                    ""leechers"": 10,
+                    ""infoHash"": ""0123456789abcdef0123456789abcdef01234567"",
+                    ""downloadUrl"": ""http://8.8.8.8:9696/download/test.torrent""
+                }
+            ]";
+
+            var handler = new ProwlarrTestHttpMessageHandler
+            {
+                Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(searchJson)
+                }
+            };
+            var indexer = new ProwlarrIndexer(new HttpClient(handler));
+            var definition = new IndexerDefinition
+            {
+                Id = 17,
+                Name = "Prowlarr Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "valid-key"
+            };
+
+            var results = indexer.Search(definition, "ubuntu");
+            Assert.That(results, Is.Not.Null);
+            Assert.That(results.Count, Is.EqualTo(1));
+            Assert.That(results[0].Title, Is.EqualTo("Ubuntu 24.04 LTS Desktop"));
+            Assert.That(results[0].Seeders, Is.EqualTo(100));
+            Assert.That(results[0].InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
         }
 
         private class ProwlarrTestHttpMessageHandler : HttpMessageHandler

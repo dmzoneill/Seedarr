@@ -11,13 +11,15 @@ public class ProwlarrIndexer : IIndexer
     private static readonly HttpClient DefaultClient = new() { Timeout = TimeSpan.FromSeconds(10) };
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
+    private readonly IIndexerStatusService _indexerStatusService;
 
     public string Name => "Prowlarr";
     public string IndexerType => "Prowlarr";
 
-    public ProwlarrIndexer(HttpClient httpClient = null)
+    public ProwlarrIndexer(HttpClient httpClient = null, IIndexerStatusService indexerStatusService = null)
     {
         _httpClient = httpClient ?? DefaultClient;
+        _indexerStatusService = indexerStatusService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -274,18 +276,35 @@ public class ProwlarrIndexer : IIndexer
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Prowlarr search returned status code {0}", response.StatusCode);
-                var ex = new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
+                var ex = new HttpRequestException($"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}", null, response.StatusCode);
+                TimeSpan? retryAfter = null;
                 if (response.Headers.RetryAfter != null)
                 {
                     if (response.Headers.RetryAfter.Delta.HasValue)
                     {
-                        ex.Data["RetryAfter"] = response.Headers.RetryAfter.Delta.Value;
+                        retryAfter = response.Headers.RetryAfter.Delta.Value;
                     }
                     else if (response.Headers.RetryAfter.Date.HasValue)
                     {
                         var diff = response.Headers.RetryAfter.Date.Value - DateTimeOffset.UtcNow;
-                        ex.Data["RetryAfter"] = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+                        retryAfter = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
                     }
+                }
+
+                if (!retryAfter.HasValue && response.Headers.TryGetValues("Retry-After", out var rawValues))
+                {
+                    retryAfter = IndexerStatusService.ParseRetryAfter(string.Join(",", rawValues));
+                }
+
+                if (retryAfter.HasValue)
+                {
+                    ex.Data["RetryAfter"] = retryAfter.Value;
+                }
+
+                if (definition != null && definition.Id > 0 && _indexerStatusService != null)
+                {
+                    _indexerStatusService.RecordFailure(definition.Id, (int)response.StatusCode, ex.Message, ex, retryAfter);
+                    ex.Data["Recorded"] = true;
                 }
 
                 throw ex;

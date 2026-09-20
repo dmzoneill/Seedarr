@@ -503,7 +503,7 @@ public class NewznabIndexer : IIndexer
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Newznab search returned status code {0}", response.StatusCode);
-                var ex = new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
+                var ex = new HttpRequestException($"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}", null, response.StatusCode);
                 TimeSpan? retryAfter = null;
                 if (response.Headers.RetryAfter != null)
                 {
