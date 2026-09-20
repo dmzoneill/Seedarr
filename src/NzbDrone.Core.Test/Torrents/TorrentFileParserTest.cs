@@ -1982,4 +1982,267 @@ public class TorrentFileParserTest
         Assert.That(result.PieceHashes, Is.EqualTo(rawPieces));
         Assert.That(result.PieceCount, Is.EqualTo(3));
     }
+
+    [Test]
+    public void Parse_should_sanitize_drive_letters_in_multi_file_path_segments()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1000) },
+                { "path", new BList { new BString("C:"), new BString("folder"), new BString("file.txt") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(2000) },
+                { "path", new BList { new BString(@"D:\subfolder"), new BString("video.mkv") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(3000) },
+                { "path", new BList { new BString("E:single_segment_file.mp4") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "files", files }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(3));
+        Assert.That(result.Files[0].Path, Is.EqualTo("my-torrent/folder/file.txt"));
+        Assert.That(result.Files[1].Path, Is.EqualTo("my-torrent/subfolder/video.mkv"));
+        Assert.That(result.Files[2].Path, Is.EqualTo("my-torrent/single_segment_file.mp4"));
+    }
+
+    [Test]
+    public void Parse_should_sanitize_invalid_chars_and_colon_in_multi_file_paths()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1000) },
+                { "path", new BList { new BString("fol<der>"), new BString("file:name?*.mkv") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(2000) },
+                { "path", new BList { new BString("dir"), new BString("file.txt:stream") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "files", files }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(2));
+        Assert.That(result.Files[0].Path, Is.EqualTo("my-torrent/folder/filename.mkv"));
+        Assert.That(result.Files[1].Path, Is.EqualTo("my-torrent/dir/file.txtstream"));
+    }
+
+    [Test]
+    public void Parse_should_disallow_windows_reserved_names_in_multi_file_paths()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1000) },
+                { "path", new BList { new BString("con"), new BString("file.txt") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(2000) },
+                { "path", new BList { new BString("folder"), new BString("aux.txt") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "files", files }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(2));
+        Assert.That(result.Files[0].Path, Is.EqualTo("my-torrent/file.txt"));
+        Assert.That(result.Files[1].Path, Is.EqualTo("my-torrent/folder"));
+    }
+
+    [Test]
+    public void Parse_should_fallback_to_file_index_when_all_segments_are_stripped()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1000) },
+                { "path", new BList { new BString("CON") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(2000) },
+                { "path", new BList { new BString(":::???*") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(3000) },
+                { "path", new BList { new BString("C:") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "files", files }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(3));
+        Assert.That(result.Files[0].Path, Is.EqualTo("my-torrent/file_0"));
+        Assert.That(result.Files[1].Path, Is.EqualTo("my-torrent/file_1"));
+        Assert.That(result.Files[2].Path, Is.EqualTo("my-torrent/file_2"));
+    }
+
+    [Test]
+    public void Parse_should_sanitize_single_file_torrent_with_drive_letter()
+    {
+        var torrentDict = CreateMinimalTorrent(@"C:\Windows\System32\payload.iso");
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("Windows/System32/payload.iso"));
+    }
+
+    [TestCase("../../secret.iso")]
+    [TestCase(@"..\..\secret.iso")]
+    [TestCase("folder/../secret.iso")]
+    [TestCase(@"folder\..\secret.iso")]
+    public void Parse_should_throw_when_single_file_torrent_name_contains_directory_traversal(string maliciousName)
+    {
+        var torrentDict = CreateMinimalTorrent(maliciousName);
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("Path traversal attempt detected"));
+    }
+
+    [Test]
+    public void Parse_should_sanitize_single_file_torrent_with_invalid_chars_and_colon()
+    {
+        var torrentDict = CreateMinimalTorrent("movie<2024>:final?.mkv");
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("movie2024final.mkv"));
+    }
+
+    [TestCase("CON")]
+    [TestCase("nul.mkv")]
+    [TestCase("aux.txt")]
+    [TestCase("COM1")]
+    public void Parse_should_fallback_to_file_0_when_single_file_torrent_name_is_windows_reserved(string reservedName)
+    {
+        var torrentDict = CreateMinimalTorrent(reservedName);
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("file_0"));
+    }
+
+    [TestCase("???:::***")]
+    [TestCase("C:")]
+    [TestCase("   ")]
+    [TestCase(".")]
+    public void Parse_should_fallback_to_file_0_when_single_file_torrent_name_is_completely_stripped(string strippedName)
+    {
+        var torrentDict = CreateMinimalTorrent(strippedName);
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("file_0"));
+    }
+
+    [Test]
+    public void Parse_should_sanitize_multi_file_torrent_root_dir_drive_letter_and_invalid_chars()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1000) },
+                { "path", new BList { new BString("folder"), new BString("file.txt") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString(@"D:\My<Torrent>:Cool") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "files", files }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("MyTorrentCool/folder/file.txt"));
+    }
 }
