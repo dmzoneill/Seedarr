@@ -13,6 +13,11 @@ import SpeedGraph, {
   CANVAS_PADDING,
   UPLOAD_COLOR,
   DOWNLOAD_COLOR,
+  MAX_PHYSICAL_SPEED_BYTES_PER_SEC,
+  MIN_TIME_DELTA_SEC,
+  ZERO_DECAY_THRESHOLD_MS,
+  ZERO_DECAY_INTERVAL_MS,
+  calculateSpeedFromDelta,
 } from "./SpeedGraph";
 
 function createQueryClient() {
@@ -194,6 +199,96 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
         assert.equal(targetWidth, tc.expectedW);
         assert.equal(targetHeight, tc.expectedH);
       }
+    });
+  });
+
+  describe("Zero-decay telemetry & time delta safety (Issue #309)", () => {
+    it("exports expected telemetry timing and physical speed thresholds", () => {
+      assert.equal(ZERO_DECAY_THRESHOLD_MS, 1500);
+      assert.equal(ZERO_DECAY_INTERVAL_MS, 1000);
+      assert.equal(MIN_TIME_DELTA_SEC, 0.2);
+      assert.equal(MAX_PHYSICAL_SPEED_BYTES_PER_SEC, 10 * 1024 * 1024 * 1024);
+    });
+
+    it("skips division and recalibrates on non-finite or negative time deltas (prevents NaN / Infinity)", () => {
+      const prev = { totalUploaded: 1000, totalDownloaded: 2000, timestamp: 5000 };
+      const current = { totalUploaded: 1500, totalDownloaded: 2500 };
+
+      // Negative timeDelta (clock drift backward)
+      const resNegative = calculateSpeedFromDelta(current, prev, 4000);
+      assert.equal(resNegative.skipped, true);
+      assert.equal(resNegative.isSpikeOrRecalibration, true);
+      assert.equal(Number.isFinite(resNegative.uploadSpeed), true);
+      assert.equal(Number.isFinite(resNegative.downloadSpeed), true);
+
+      // Non-finite timestamp (NaN)
+      const resNaN = calculateSpeedFromDelta(current, prev, NaN);
+      assert.equal(resNaN.skipped, true);
+      assert.equal(resNaN.isSpikeOrRecalibration, true);
+      assert.equal(Number.isFinite(resNaN.uploadSpeed), true);
+    });
+
+    it("skips calculations without resetting baseline for rapid packets under 0.2s", () => {
+      const prev = { totalUploaded: 1000, totalDownloaded: 2000, timestamp: 1000 };
+      const current = { totalUploaded: 1050, totalDownloaded: 2050 };
+
+      // timeDelta = 0.1s (100ms) < 0.2s
+      const res = calculateSpeedFromDelta(current, prev, 1100);
+      assert.equal(res.skipped, true);
+      assert.equal(res.isSpikeOrRecalibration, false);
+      assert.equal(res.uploadSpeed, 0);
+      assert.equal(res.downloadSpeed, 0);
+    });
+
+    it("discards impossible physical transfer spikes (> 10 GB/s on local import) as baseline recalibration", () => {
+      const prev = { totalUploaded: 1000, totalDownloaded: 2000, timestamp: 1000 };
+      // 50 GB sudden jump in 1 second
+      const current = {
+        totalUploaded: 1000 + 50 * 1024 * 1024 * 1024,
+        totalDownloaded: 2000,
+      };
+
+      const res = calculateSpeedFromDelta(current, prev, 2000);
+      assert.equal(res.skipped, true);
+      assert.equal(res.isSpikeOrRecalibration, true);
+      assert.equal(res.uploadSpeed, 0);
+      assert.equal(res.downloadSpeed, 0);
+    });
+
+    it("recalibrates baseline if telemetry counters reset", () => {
+      const prev = { totalUploaded: 50000, totalDownloaded: 60000, timestamp: 1000 };
+      // Daemon restarted and reset stats counters to 0
+      const current = { totalUploaded: 100, totalDownloaded: 200 };
+
+      const res = calculateSpeedFromDelta(current, prev, 2000);
+      assert.equal(res.skipped, true);
+      assert.equal(res.isSpikeOrRecalibration, true);
+      assert.equal(res.uploadSpeed, 0);
+      assert.equal(res.downloadSpeed, 0);
+    });
+
+    it("calculates exact upload and download speeds for valid telemetry updates", () => {
+      const prev = { totalUploaded: 1000, totalDownloaded: 2000, timestamp: 1000 };
+      // 2 seconds later, 2000 bytes uploaded, 4000 bytes downloaded
+      const current = { totalUploaded: 3000, totalDownloaded: 6000 };
+
+      const res = calculateSpeedFromDelta(current, prev, 3000);
+      assert.equal(res.skipped, false);
+      assert.equal(res.isSpikeOrRecalibration, false);
+      assert.equal(res.uploadSpeed, 1000); // 2000 bytes / 2s
+      assert.equal(res.downloadSpeed, 2000); // 4000 bytes / 2s
+    });
+
+    it("guarantees finite non-negative numbers for all speeds", () => {
+      const prev = { totalUploaded: 1000, totalDownloaded: 1000, timestamp: 1000 };
+      const current = { totalUploaded: 1000, totalDownloaded: 1000 };
+
+      const res = calculateSpeedFromDelta(current, prev, 2000);
+      assert.equal(res.skipped, false);
+      assert.equal(res.uploadSpeed, 0);
+      assert.equal(res.downloadSpeed, 0);
+      assert.equal(Number.isFinite(res.uploadSpeed), true);
+      assert.equal(Number.isFinite(res.downloadSpeed), true);
     });
   });
 });

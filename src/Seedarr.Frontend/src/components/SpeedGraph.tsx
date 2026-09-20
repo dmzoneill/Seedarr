@@ -60,6 +60,78 @@ export const PADDING = CANVAS_PADDING;
 export const UPLOAD_COLOR = "#3498db";
 export const DOWNLOAD_COLOR = "#2ecc71";
 
+export const MAX_PHYSICAL_SPEED_BYTES_PER_SEC = 10 * 1024 * 1024 * 1024; // 10 GB/s
+export const MIN_TIME_DELTA_SEC = 0.2;
+export const ZERO_DECAY_THRESHOLD_MS = 1500;
+export const ZERO_DECAY_INTERVAL_MS = 1000;
+
+export interface SpeedDeltaResult {
+  uploadSpeed: number;
+  downloadSpeed: number;
+  isSpikeOrRecalibration: boolean;
+  skipped: boolean;
+}
+
+export function calculateSpeedFromDelta(
+  current: { totalUploaded: number; totalDownloaded: number },
+  prev: { totalUploaded: number; totalDownloaded: number; timestamp: number },
+  now: number,
+  maxPhysicalSpeed: number = MAX_PHYSICAL_SPEED_BYTES_PER_SEC,
+): SpeedDeltaResult {
+  const timeDelta = (now - prev.timestamp) / 1000;
+
+  // Protect against non-finite or negative time deltas (e.g. clock drift, out-of-order packets)
+  if (!Number.isFinite(timeDelta) || timeDelta < 0) {
+    return {
+      uploadSpeed: 0,
+      downloadSpeed: 0,
+      isSpikeOrRecalibration: true,
+      skipped: true,
+    };
+  }
+
+  // Protect against division by near-zero time deltas (< 0.2s)
+  if (timeDelta < MIN_TIME_DELTA_SEC) {
+    return {
+      uploadSpeed: 0,
+      downloadSpeed: 0,
+      isSpikeOrRecalibration: false,
+      skipped: true,
+    };
+  }
+
+  const rawUploadDelta = current.totalUploaded - prev.totalUploaded;
+  const rawDownloadDelta = current.totalDownloaded - prev.totalDownloaded;
+
+  const rawUpload = rawUploadDelta / timeDelta;
+  const rawDownload = rawDownloadDelta / timeDelta;
+
+  // Counter reset (negative delta) or impossible physical transfer speed (torrent ingestion spike > 10 GB/s)
+  if (
+    rawUploadDelta < 0 ||
+    rawDownloadDelta < 0 ||
+    rawUpload > maxPhysicalSpeed ||
+    rawDownload > maxPhysicalSpeed
+  ) {
+    return {
+      uploadSpeed: 0,
+      downloadSpeed: 0,
+      isSpikeOrRecalibration: true,
+      skipped: true,
+    };
+  }
+
+  const uploadSpeed = Number.isFinite(rawUpload) ? Math.max(0, rawUpload) : 0;
+  const downloadSpeed = Number.isFinite(rawDownload) ? Math.max(0, rawDownload) : 0;
+
+  return {
+    uploadSpeed,
+    downloadSpeed,
+    isSpikeOrRecalibration: false,
+    skipped: false,
+  };
+}
+
 function safeRequestAnimationFrame(callback: FrameRequestCallback): number {
   if (
     typeof window !== "undefined" &&
@@ -179,6 +251,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
     totalDownloaded: number;
     timestamp: number;
   } | null>(null);
+  const lastStatsUpdateRef = useRef<number>(Date.now());
 
   const { data: serverHistory } = useSpeedHistory();
   const { data: stats } = useSeedingStats();
@@ -331,6 +404,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
         totalDownloaded: last.totalDownloaded,
         timestamp: new Date(last.timestamp).getTime(),
       };
+      lastStatsUpdateRef.current = Date.now();
 
       let initialMax = 0;
       for (const p of initialPoints) {
@@ -349,29 +423,30 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
     if (!stats) return;
 
     const now = Date.now();
+    lastStatsUpdateRef.current = now;
     const prev = prevRef.current;
 
     if (prev) {
-      const timeDelta = (now - prev.timestamp) / 1000;
-      if (timeDelta >= 0.5) {
-        const uploadSpeed = Math.max(
-          0,
-          (stats.totalUploaded - prev.totalUploaded) / timeDelta,
-        );
-        const downloadSpeed = Math.max(
-          0,
-          (stats.totalDownloaded - prev.totalDownloaded) / timeDelta,
-        );
-
-        ringBufferRef.current.push(now, uploadSpeed, downloadSpeed);
-        setHistory(ringBufferRef.current.getPoints(currentRangeConfig.points));
-
-        prevRef.current = {
-          totalUploaded: stats.totalUploaded,
-          totalDownloaded: stats.totalDownloaded,
-          timestamp: now,
-        };
+      const result = calculateSpeedFromDelta(stats, prev, now);
+      if (result.skipped) {
+        if (result.isSpikeOrRecalibration) {
+          prevRef.current = {
+            totalUploaded: stats.totalUploaded,
+            totalDownloaded: stats.totalDownloaded,
+            timestamp: now,
+          };
+        }
+        return;
       }
+
+      ringBufferRef.current.push(now, result.uploadSpeed, result.downloadSpeed);
+      setHistory(ringBufferRef.current.getPoints(currentRangeConfig.points));
+
+      prevRef.current = {
+        totalUploaded: stats.totalUploaded,
+        totalDownloaded: stats.totalDownloaded,
+        timestamp: now,
+      };
     } else {
       prevRef.current = {
         totalUploaded: stats.totalUploaded,
@@ -380,6 +455,25 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
       };
     }
   }, [stats, currentRangeConfig.points]);
+
+  // Zero-decay timer: when telemetry is idle or no stats arrive for >= 1.5s,
+  // append 0-speed sample points so the graph naturally decays toward 0 B/s and scrolls leftward.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (
+        (prevRef.current !== null || seededRef.current) &&
+        now - lastStatsUpdateRef.current >= ZERO_DECAY_THRESHOLD_MS
+      ) {
+        ringBufferRef.current.push(now, 0, 0);
+        setHistory(ringBufferRef.current.getPoints(currentRangeConfig.points));
+      }
+    }, ZERO_DECAY_INTERVAL_MS);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [currentRangeConfig.points]);
 
   const handleRangeChange = (range: TimeRange) => {
     setSelectedRange(range);
