@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.SignalR;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
@@ -18,11 +19,13 @@ public class MessageHub : Hub
 {
     private static readonly HashSet<string> Connections = new();
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
 
-    public MessageHub(IConfigFileProvider configFileProvider = null)
+    public MessageHub(IConfigFileProvider configFileProvider = null, ITorrentService torrentService = null)
     {
         _configFileProvider = configFileProvider;
+        _torrentService = torrentService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -61,17 +64,18 @@ public class MessageHub : Hub
         }
     }
 
-    public override Task OnConnectedAsync()
+    public override async Task OnConnectedAsync()
     {
         var httpContext = Context.GetHttpContext();
-        var config = _configFileProvider ?? (httpContext?.RequestServices.GetService(typeof(IConfigFileProvider)) as IConfigFileProvider);
+        var config = _configFileProvider ?? (httpContext?.RequestServices?.GetService(typeof(IConfigFileProvider)) as IConfigFileProvider);
 
         if (config != null && config.AuthenticationEnabled)
         {
             var isAuth = Context.User?.Identity?.IsAuthenticated == true;
+            var masterApiKey = config.ApiKey;
+
             if (!isAuth && httpContext != null)
             {
-                var masterApiKey = config.ApiKey;
                 if (!string.IsNullOrWhiteSpace(masterApiKey))
                 {
                     if (httpContext.Request.Headers.TryGetValue("Authorization", out var authHeader))
@@ -138,13 +142,124 @@ public class MessageHub : Hub
                         isAuth = true;
                     }
                 }
+
+                if (!isAuth)
+                {
+                    try
+                    {
+                        var defaultAuth = await httpContext.AuthenticateAsync();
+                        if (defaultAuth?.Succeeded == true && defaultAuth.Principal?.Identity?.IsAuthenticated == true)
+                        {
+                            isAuth = true;
+                            httpContext.User = defaultAuth.Principal;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "Default AuthenticateAsync failed for SignalR connection");
+                    }
+                }
+
+                if (!isAuth && httpContext.Request.Query.TryGetValue("access_token", out var queryAccessToken) &&
+                    !string.IsNullOrWhiteSpace(queryAccessToken))
+                {
+                    var tokenStr = queryAccessToken.ToString().Trim();
+                    if (!string.IsNullOrWhiteSpace(masterApiKey) && FixedTimeEquals(tokenStr, masterApiKey))
+                    {
+                        isAuth = true;
+                    }
+                    else
+                    {
+                        var schemeProvider = httpContext.RequestServices?.GetService(typeof(IAuthenticationSchemeProvider)) as IAuthenticationSchemeProvider;
+                        if (schemeProvider != null)
+                        {
+                            var originalAuth = httpContext.Request.Headers["Authorization"].ToString();
+                            var hadAuth = httpContext.Request.Headers.ContainsKey("Authorization");
+                            httpContext.Request.Headers["Authorization"] = $"Bearer {tokenStr}";
+
+                            try
+                            {
+                                var schemes = await schemeProvider.GetAllSchemesAsync();
+                                foreach (var scheme in schemes)
+                                {
+                                    if (string.Equals(scheme.Name, "ApiKey", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        continue;
+                                    }
+
+                                    try
+                                    {
+                                        var result = await httpContext.AuthenticateAsync(scheme.Name);
+                                        if (result?.Succeeded == true && result.Principal?.Identity?.IsAuthenticated == true)
+                                        {
+                                            isAuth = true;
+                                            httpContext.User = result.Principal;
+                                            break;
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        // Ignore scheme failures
+                                    }
+                                }
+                            }
+                            finally
+                            {
+                                if (hadAuth)
+                                {
+                                    httpContext.Request.Headers["Authorization"] = originalAuth;
+                                }
+                                else if (!isAuth)
+                                {
+                                    httpContext.Request.Headers.Remove("Authorization");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!isAuth)
+                {
+                    var schemeProvider = httpContext.RequestServices?.GetService(typeof(IAuthenticationSchemeProvider)) as IAuthenticationSchemeProvider;
+                    if (schemeProvider != null)
+                    {
+                        var schemes = await schemeProvider.GetAllSchemesAsync();
+                        foreach (var scheme in schemes)
+                        {
+                            if (string.Equals(scheme.Name, "ApiKey", StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+
+                            try
+                            {
+                                var result = await httpContext.AuthenticateAsync(scheme.Name);
+                                if (result?.Succeeded == true && result.Principal?.Identity?.IsAuthenticated == true)
+                                {
+                                    isAuth = true;
+                                    httpContext.User = result.Principal;
+                                    break;
+                                }
+                            }
+                            catch
+                            {
+                                // Ignore scheme failures
+                            }
+                        }
+                    }
+                }
+
+                if (!isAuth && Context.User?.Identity?.IsAuthenticated == true)
+                {
+                    isAuth = true;
+                }
             }
 
             if (!isAuth)
             {
                 _logger.Warn("Rejecting unauthenticated SignalR connection: {0}", Context.ConnectionId);
                 Context.Abort();
-                return Task.CompletedTask;
+                return;
             }
         }
 
@@ -161,7 +276,7 @@ public class MessageHub : Hub
             Body = new { Version = BuildInfo.Version.ToString() },
         };
 
-        return Clients.Caller.SendAsync("receiveMessage", message);
+        await Clients.Caller.SendAsync("receiveMessage", message);
     }
 
     public override Task OnDisconnectedAsync(Exception exception)
@@ -225,6 +340,62 @@ public class MessageHub : Hub
         }
 
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"channel-{channel.ToLowerInvariant()}");
+    }
+
+    public virtual async Task<StateSnapshotResource> RequestStateSnapshot()
+    {
+        var httpContext = Context.GetHttpContext();
+        var torrentService = _torrentService ?? (httpContext?.RequestServices?.GetService(typeof(ITorrentService)) as ITorrentService);
+
+        var torrents = torrentService?.GetAll() ?? new List<Torrent>();
+
+        long totalDownloadSpeed = 0;
+        long totalUploadSpeed = 0;
+        var summaries = new List<TorrentSnapshotResource>(torrents.Count);
+
+        foreach (var t in torrents)
+        {
+            totalDownloadSpeed += t.DownloadSpeed;
+            totalUploadSpeed += t.UploadSpeed;
+
+            summaries.Add(new TorrentSnapshotResource
+            {
+                Id = t.Id,
+                Name = t.Name,
+                Status = t.Status.ToString(),
+                Progress = t.Progress,
+                DownloadSpeed = t.DownloadSpeed,
+                UploadSpeed = t.UploadSpeed,
+                Eta = t.Eta,
+                Size = t.TotalSize,
+                TotalSize = t.TotalSize,
+                Active = t.Active
+            });
+        }
+
+        var snapshot = new StateSnapshotResource
+        {
+            Torrents = summaries,
+            DownloadSpeed = totalDownloadSpeed,
+            UploadSpeed = totalUploadSpeed,
+            ActiveCount = torrents.FindAll(t => t.Active).Count,
+            TotalCount = torrents.Count,
+            TimestampUtc = DateTime.UtcNow
+        };
+
+        if (Clients?.Caller != null)
+        {
+            try
+            {
+                await Clients.Caller.SendAsync("stateSnapshot", snapshot);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to send stateSnapshot event to caller");
+            }
+        }
+
+        return snapshot;
     }
 }
 

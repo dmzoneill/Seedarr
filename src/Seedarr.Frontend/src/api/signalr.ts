@@ -13,6 +13,28 @@ import { useAppStore } from "../store/app";
 
 export type ConnectionStatus = "connected" | "disconnected" | "reconnecting";
 
+export interface TorrentSnapshot {
+  id: number;
+  name: string;
+  status: string;
+  progress: number;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  eta: number;
+  size: number;
+  totalSize?: number;
+  active?: boolean;
+}
+
+export interface StateSnapshot {
+  torrents: TorrentSnapshot[];
+  downloadSpeed: number;
+  uploadSpeed: number;
+  activeCount?: number;
+  totalCount?: number;
+  timestampUtc: string;
+}
+
 /**
  * Checks if the given error indicates an authentication / authorization failure (HTTP 401 or 403).
  */
@@ -96,6 +118,42 @@ let connection: HubConnection | null = null;
 let startPromise: Promise<void> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 const statusListeners = new Set<(status: ConnectionStatus) => void>();
+const snapshotListeners = new Set<(snapshot: StateSnapshot) => void>();
+
+export function onStateSnapshot(
+  callback: (snapshot: StateSnapshot) => void,
+): () => void {
+  snapshotListeners.add(callback);
+  return () => {
+    snapshotListeners.delete(callback);
+  };
+}
+
+export function notifySnapshot(snapshot: StateSnapshot) {
+  snapshotListeners.forEach((listener) => {
+    try {
+      listener(snapshot);
+    } catch (err) {
+      console.error("Error in SignalR snapshot listener:", err);
+    }
+  });
+}
+
+export async function requestStateSnapshot(): Promise<StateSnapshot | null> {
+  const conn = getSignalRConnection();
+  if (conn.state === HubConnectionState.Connected) {
+    try {
+      const snapshot = await conn.invoke<StateSnapshot>("RequestStateSnapshot");
+      if (snapshot) {
+        notifySnapshot(snapshot);
+      }
+      return snapshot;
+    } catch (err) {
+      console.warn("Failed to request state snapshot:", err);
+    }
+  }
+  return null;
+}
 
 function notifyStatus(status: ConnectionStatus) {
   statusListeners.forEach((listener) => {
@@ -187,9 +245,22 @@ export function getSignalRConnection(): HubConnection {
       .build();
 
     connection.onreconnecting(() => notifyStatus("reconnecting"));
-    connection.onreconnected(() => {
+    connection.onreconnected(async () => {
       notifyStatus("connected");
       resubscribeActiveGroups();
+      try {
+        const snapshot = await connection?.invoke<StateSnapshot>("RequestStateSnapshot");
+        if (snapshot) {
+          notifySnapshot(snapshot);
+        }
+      } catch (err) {
+        console.warn("Failed to request state snapshot on reconnect:", err);
+      }
+    });
+    connection.on("stateSnapshot", (snapshot: StateSnapshot) => {
+      if (snapshot) {
+        notifySnapshot(snapshot);
+      }
     });
     connection.onclose((error) => {
       notifyStatus("disconnected");
@@ -213,8 +284,11 @@ export function getSignalRConnection(): HubConnection {
   (connection as any).unsubscribeFromTorrent = unsubscribeFromTorrent;
   (connection as any).subscribeToChannel = subscribeToChannel;
   (connection as any).unsubscribeFromChannel = unsubscribeFromChannel;
+  (connection as any).requestStateSnapshot = requestStateSnapshot;
   return connection;
 }
+
+export const createSignalRConnection = getSignalRConnection;
 
 export async function startSignalR(): Promise<void> {
   if (reconnectTimer) {
@@ -386,12 +460,45 @@ export function useSignalR(queryClient?: QueryClient) {
       startSignalR();
     }
 
-    const handleReconnected = () => {
+    const handleReconnected = async () => {
       const qc = queryClientRef.current;
-      if (qc) {
-        qc.invalidateQueries({ queryKey: ["torrents"] });
-        qc.invalidateQueries({ queryKey: ["seeding", "stats"] });
-        qc.invalidateQueries({ queryKey: ["health"] });
+      try {
+        const snapshot = await conn.invoke<StateSnapshot>("RequestStateSnapshot");
+        if (snapshot) {
+          notifySnapshot(snapshot);
+          if (qc) {
+            if (snapshot.torrents) {
+              qc.setQueryData(["torrents"], (old: any) => {
+                if (Array.isArray(old)) {
+                  const snapMap = new Map(snapshot.torrents.map((t) => [t.id, t]));
+                  return old.map((item) => {
+                    const snap = snapMap.get(item.id);
+                    return snap ? { ...item, ...snap } : item;
+                  });
+                }
+                return snapshot.torrents;
+              });
+            }
+            if (snapshot.downloadSpeed !== undefined && snapshot.uploadSpeed !== undefined) {
+              qc.setQueryData(["seeding", "stats"], (old: any) => {
+                return {
+                  ...(old || {}),
+                  downloadSpeed: snapshot.downloadSpeed,
+                  uploadSpeed: snapshot.uploadSpeed,
+                  activeTorrents: snapshot.activeCount ?? old?.activeTorrents,
+                  totalTorrents: snapshot.totalCount ?? old?.totalTorrents,
+                };
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to reconcile state snapshot on reconnect:", err);
+        if (qc) {
+          qc.invalidateQueries({ queryKey: ["torrents"] });
+          qc.invalidateQueries({ queryKey: ["seeding", "stats"] });
+          qc.invalidateQueries({ queryKey: ["health"] });
+        }
       }
     };
 
@@ -418,6 +525,7 @@ export function useSignalR(queryClient?: QueryClient) {
     connected: status === "connected",
     isReconnecting: status === "reconnecting",
     reconnect: reconnectSignalR,
+    requestStateSnapshot,
     subscribeToTorrent,
     unsubscribeFromTorrent,
     subscribeToChannel,
