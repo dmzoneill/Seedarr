@@ -58,6 +58,7 @@ export interface Torrent {
   source?: string | null;
   isVpnPaused?: boolean;
   errorMessage?: string | null;
+  magnetLink?: string | null;
 }
 
 export interface TrackerMetric {
