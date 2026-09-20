@@ -425,6 +425,60 @@ public class IndexerControllerTest
     }
 
     [Test]
+    public void Search_with_structured_parameters_sends_tvsearch_and_records_success()
+    {
+        var xml = @"<?xml version=""1.0""?><rss version=""2.0""><channel></channel></rss>";
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(xml)
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 4,
+            Name = "Torznab 4",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "mykey",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
+
+        var result = controller.Search(
+            query: "Breaking Bad",
+            searchType: "tvsearch",
+            season: 1,
+            ep: 3,
+            tvdbId: "81189");
+
+        Assert.That(result, Is.Not.Null);
+        _indexerStatusService.Received(1).RecordSuccess(4);
+        Assert.That(handler.SentRequest, Is.Not.Null);
+        var uri = handler.SentRequest.RequestUri.OriginalString;
+        Assert.That(uri, Does.Contain("t=tvsearch"));
+        Assert.That(uri, Does.Contain("q=Breaking%20Bad"));
+        Assert.That(uri, Does.Contain("season=1"));
+        Assert.That(uri, Does.Contain("ep=3"));
+        Assert.That(uri, Does.Contain("tvdbid=81189"));
+    }
+
+    [Test]
     public void TestConnection_when_indexer_fails_records_failure_with_status_code()
     {
         var handler = new FakeHttpMessageHandler

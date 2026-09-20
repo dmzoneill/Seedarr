@@ -171,6 +171,11 @@ public class ProwlarrIndexer : IIndexer
         }
     }
 
+    public List<ReleaseInfo> Search(IndexerDefinition definition, TorznabSearchCriteria criteria)
+    {
+        return Search(definition, criteria?.ToSearchQuery());
+    }
+
     public List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery)
     {
         if (definition == null || searchQuery == null)
@@ -178,13 +183,46 @@ public class ProwlarrIndexer : IIndexer
             return new List<ReleaseInfo>();
         }
 
+        var mode = searchQuery.Mode;
+        if (mode == SearchMode.Default)
+        {
+            if (searchQuery.Season.HasValue || searchQuery.Episode.HasValue || !string.IsNullOrWhiteSpace(searchQuery.TvdbId) || !string.IsNullOrWhiteSpace(searchQuery.Rid))
+            {
+                mode = SearchMode.TvSearch;
+            }
+            else if (!string.IsNullOrWhiteSpace(searchQuery.ImdbId) || !string.IsNullOrWhiteSpace(searchQuery.TmdbId))
+            {
+                mode = SearchMode.Movie;
+            }
+            else if (!string.IsNullOrWhiteSpace(searchQuery.Artist) || !string.IsNullOrWhiteSpace(searchQuery.Album))
+            {
+                mode = SearchMode.Music;
+            }
+            else if (!string.IsNullOrWhiteSpace(searchQuery.Author))
+            {
+                mode = SearchMode.Book;
+            }
+        }
+
         var query = !string.IsNullOrWhiteSpace(searchQuery.Query) ? searchQuery.Query : searchQuery.Title;
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            if (!string.IsNullOrWhiteSpace(searchQuery.Artist))
+            {
+                query = !string.IsNullOrWhiteSpace(searchQuery.Album) ? $"{searchQuery.Artist} {searchQuery.Album}" : searchQuery.Artist;
+            }
+            else if (!string.IsNullOrWhiteSpace(searchQuery.Author))
+            {
+                query = searchQuery.Author;
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(query))
         {
             return new List<ReleaseInfo>();
         }
 
-        if (searchQuery.Mode == SearchMode.TvSearch && searchQuery.Season.HasValue)
+        if (mode == SearchMode.TvSearch && searchQuery.Season.HasValue)
         {
             if (searchQuery.Episode.HasValue)
             {
@@ -196,7 +234,8 @@ public class ProwlarrIndexer : IIndexer
             }
         }
 
-        return Search(definition, query, searchQuery.Category, searchQuery.Offset, searchQuery.Limit);
+        var cat = !string.IsNullOrWhiteSpace(searchQuery.Category) ? searchQuery.Category : searchQuery.Categories;
+        return Search(definition, query, cat, searchQuery.Offset, searchQuery.Limit);
     }
 
     public List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null, int offset = 0, int limit = 50)
