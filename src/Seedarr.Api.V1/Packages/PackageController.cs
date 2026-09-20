@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using NzbDrone.Core.Packages;
@@ -21,11 +23,16 @@ public class PackageController : ControllerBase
 
     private readonly IPackageExportService _packageExportService;
     private readonly ITorrentService _torrentService;
+    private readonly IPackageImportService _packageImportService;
 
-    public PackageController(IPackageExportService packageExportService, ITorrentService torrentService)
+    public PackageController(
+        IPackageExportService packageExportService,
+        ITorrentService torrentService,
+        IPackageImportService packageImportService = null)
     {
         _packageExportService = packageExportService ?? throw new ArgumentNullException(nameof(packageExportService));
         _torrentService = torrentService ?? throw new ArgumentNullException(nameof(torrentService));
+        _packageImportService = packageImportService;
     }
 
     [HttpGet("export")]
@@ -72,6 +79,58 @@ public class PackageController : ControllerBase
             cancellationToken);
 
         return new EmptyResult();
+    }
+
+    [HttpPost("import")]
+    [HttpPost("/api/v1/package/import")]
+    public async Task<IActionResult> Import(
+        IFormFile file = null,
+        [FromQuery] string destinationPath = null)
+    {
+        if (_packageImportService == null)
+        {
+            return StatusCode(StatusCodes.Status501NotImplemented, new { message = "Package import service is not available." });
+        }
+
+        if (file == null && Request?.HasFormContentType == true && Request.Form.Files.Count > 0)
+        {
+            file = Request.Form.Files[0];
+        }
+
+        Stream archiveStream = null;
+        if (file != null && file.Length > 0)
+        {
+            archiveStream = file.OpenReadStream();
+        }
+        else if (Request?.Body != null && (Request.ContentLength.GetValueOrDefault() > 0 || Request.Body.CanRead))
+        {
+            archiveStream = Request.Body;
+        }
+
+        if (archiveStream == null || (archiveStream.CanSeek && archiveStream.Length == 0))
+        {
+            return BadRequest(new { message = "No package archive file provided." });
+        }
+
+        try
+        {
+            var options = new PackageImportOptions
+            {
+                DestinationPath = destinationPath
+            };
+
+            var cancellationToken = HttpContext?.RequestAborted ?? default;
+            var result = await _packageImportService.ImportPackageAsync(archiveStream, options, cancellationToken);
+            return Ok(result);
+        }
+        catch (SecurityException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     public static List<int> ParseTorrentIds(string torrentIdsParam, StringValues queryValues)
