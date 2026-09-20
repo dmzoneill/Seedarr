@@ -196,7 +196,11 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
         </span>
         <span className="status-bar-item">
           {t("statusBar.ratio", undefined, "Ratio")}{" "}
-          {formatRatio(stats?.averageRatio ?? 0)}
+          {formatRatio(
+            stats?.totalDownloaded && stats.totalDownloaded > 0
+              ? stats.totalUploaded / stats.totalDownloaded
+              : (stats?.averageRatio ?? 0)
+          )}
         </span>
         <span className="status-bar-item">
           <WifiIcon size={14} /> {t("statusBar.ip", undefined, "Ip")}{" "}
