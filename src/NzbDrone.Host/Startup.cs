@@ -25,6 +25,7 @@ using NzbDrone.Core.Security;
 using NzbDrone.SignalR;
 using Seedarr.Http.Authentication;
 using Seedarr.Http.Security;
+using Seedarr.Http.Terminal;
 
 namespace NzbDrone.Host;
 
@@ -446,6 +447,7 @@ public class Startup
 
         app.MapControllers();
         app.MapHub<MessageHub>("/signalr/messages");
+        app.MapHub<TerminalHub>("/signalr/terminal");
         app.MapGet("/swagger-custom.css", () => Microsoft.AspNetCore.Http.Results.Content(SwaggerTheme.Css, "text/css")).AllowAnonymous();
 
         app.MapFallbackToFile("{*path:nonfile:regex(^(?!(api|signalr|swagger|fixtures)).*$)}", "index.html");
