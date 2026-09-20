@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using DryIoc;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -75,6 +76,7 @@ public class Startup
         services.AddHttpClient();
         services.AddSingleton<ICertificateManager, CertificateManager>();
         services.AddSingleton<IRpcSessionStore, RpcSessionStore>();
+        services.AddSingleton<ISessionRevocationService, SessionRevocationService>();
 
         var configFileProvider = this._container.Resolve<IConfigFileProvider>();
         if (configFileProvider.EnableSsl && configFileProvider.RedirectHttpToHttps)
@@ -177,6 +179,30 @@ public class Startup
             options.SlidingExpiration = true;
             options.LoginPath = "/login";
             options.AccessDeniedPath = "/login?accessDenied=true";
+            options.Events = new CookieAuthenticationEvents
+            {
+                OnValidatePrincipal = async context =>
+                {
+                    var revocationService = context.HttpContext.RequestServices.GetService<ISessionRevocationService>();
+                    if (revocationService == null)
+                    {
+                        return;
+                    }
+
+                    var issuedUtc = context.Properties.IssuedUtc?.UtcDateTime ?? DateTime.MinValue;
+                    var sessionId = context.Principal?.FindFirst("SessionId")?.Value;
+                    var username = context.Principal?.Identity?.Name;
+
+                    var isRevoked = (!string.IsNullOrWhiteSpace(sessionId) && revocationService.IsSessionRevoked(sessionId, issuedUtc)) ||
+                                    (!string.IsNullOrWhiteSpace(username) && revocationService.IsSessionRevoked(username, issuedUtc));
+
+                    if (isRevoked)
+                    {
+                        context.RejectPrincipal();
+                        await context.HttpContext.SignOutAsync("Cookies");
+                    }
+                },
+            };
         })
         .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
             ApiKeyAuthenticationOptions.DefaultScheme, _ => { })

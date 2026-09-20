@@ -4,6 +4,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -19,6 +20,7 @@ public class AuthControllerTest
 {
     private IIdentityProviderService _identityProviderService;
     private IConfigFileProvider _configFileProvider;
+    private ISessionRevocationService _sessionRevocationService;
     private AuthController _controller;
 
     [SetUp]
@@ -26,7 +28,8 @@ public class AuthControllerTest
     {
         _identityProviderService = Substitute.For<IIdentityProviderService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
-        _controller = new AuthController(_identityProviderService, _configFileProvider);
+        _sessionRevocationService = Substitute.For<ISessionRevocationService>();
+        _controller = new AuthController(_identityProviderService, _configFileProvider, _sessionRevocationService);
     }
 
     [Test]
@@ -203,6 +206,141 @@ public class AuthControllerTest
         Assert.That(list.Count, Is.EqualTo(1));
         Assert.That(list[0].ProviderId, Is.EqualTo("oidc1"));
         Assert.That(list[0].ButtonText, Is.EqualTo("Login with OIDC"));
+    }
+
+    [Test]
+    public void GetProviders_WithReturnUrl_PreservesReturnUrlInLoginUrl()
+    {
+        var providers = new List<IdentityProviderDefinition>
+        {
+            new() { Id = 1, ProviderId = "keycloak", Name = "Keycloak", ProviderType = IdentityProviderType.Oidc },
+        };
+        _identityProviderService.GetEnabled().Returns(providers);
+
+        var actionResult = _controller.GetProviders("/torrents/details?id=42");
+
+        Assert.That(actionResult.Result, Is.TypeOf<OkObjectResult>());
+        var ok = (OkObjectResult)actionResult.Result;
+        var list = ok.Value as List<AuthProviderResource>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list[0].LoginUrl, Is.EqualTo("/api/v1/auth/login/keycloak?returnUrl=%2Ftorrents%2Fdetails%3Fid%3D42"));
+    }
+
+    [Test]
+    public void GetProviders_WithMaliciousReturnUrl_SanitizesReturnUrlInLoginUrl()
+    {
+        var providers = new List<IdentityProviderDefinition>
+        {
+            new() { Id = 1, ProviderId = "google", Name = "Google", ProviderType = IdentityProviderType.Oidc },
+        };
+        _identityProviderService.GetEnabled().Returns(providers);
+
+        var actionResult = _controller.GetProviders("http://evil.com");
+
+        Assert.That(actionResult.Result, Is.TypeOf<OkObjectResult>());
+        var ok = (OkObjectResult)actionResult.Result;
+        var list = ok.Value as List<AuthProviderResource>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list[0].LoginUrl, Is.EqualTo("/api/v1/auth/login/google?returnUrl=%2F"));
+    }
+
+    [Test]
+    public async Task Logout_WhenUserIsAuthenticated_RevokesSessionAndUsername()
+    {
+        var httpContext = new DefaultHttpContext();
+        var authService = Substitute.For<IAuthenticationService>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IAuthenticationService)).Returns(authService);
+        httpContext.RequestServices = serviceProvider;
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Name, "testuser"),
+            new("SessionId", "session-xyz-123"),
+        };
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Cookies"));
+
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = await _controller.Logout();
+
+        Assert.That(result, Is.TypeOf<OkObjectResult>());
+        _sessionRevocationService.Received(1).RevokeSession("session-xyz-123");
+        _sessionRevocationService.Received(1).RevokeSession("testuser");
+        await authService.Received(1).SignOutAsync(httpContext, "Cookies", Arg.Any<AuthenticationProperties>());
+    }
+
+    [Test]
+    public void SessionRevocationService_RevokesAndIdentifiesRevokedSession()
+    {
+        var service = new SessionRevocationService();
+        var now = DateTime.UtcNow;
+
+        service.RevokeSession("session-1", now);
+
+        Assert.That(service.IsSessionRevoked("session-1", now.AddMinutes(-10)), Is.True);
+        Assert.That(service.IsSessionRevoked("session-1", now), Is.True);
+        Assert.That(service.IsSessionRevoked("session-1", now.AddMinutes(5)), Is.False);
+        Assert.That(service.IsSessionRevoked("session-2", now.AddMinutes(-10)), Is.False);
+    }
+
+    [Test]
+    public void SessionRevocationService_ClearExpired_RemovesOldEntries()
+    {
+        var service = new SessionRevocationService();
+        var oldTime = DateTime.UtcNow.AddDays(-40);
+
+        service.RevokeSession("session-old", oldTime);
+        Assert.That(service.IsSessionRevoked("session-old", oldTime), Is.True);
+
+        service.ClearExpired(TimeSpan.FromDays(30));
+
+        Assert.That(service.IsSessionRevoked("session-old", oldTime), Is.False);
+    }
+
+    [Test]
+    public async Task OnValidatePrincipal_WhenSessionIsRevoked_RejectsPrincipalAndSignsOut()
+    {
+        var revocationService = new SessionRevocationService();
+        revocationService.RevokeSession("session-123");
+
+        var httpContext = new DefaultHttpContext();
+        var authService = Substitute.For<IAuthenticationService>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(ISessionRevocationService)).Returns(revocationService);
+        serviceProvider.GetService(typeof(IAuthenticationService)).Returns(authService);
+        httpContext.RequestServices = serviceProvider;
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Name, "testuser"),
+            new("SessionId", "session-123"),
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "Cookies"));
+        var authProps = new AuthenticationProperties
+        {
+            IssuedUtc = DateTimeOffset.UtcNow.AddMinutes(-10),
+        };
+        var ticket = new AuthenticationTicket(principal, authProps, "Cookies");
+        var scheme = new AuthenticationScheme("Cookies", "Cookies", typeof(CookieAuthenticationHandler));
+        var options = new CookieAuthenticationOptions();
+        var context = new CookieValidatePrincipalContext(httpContext, scheme, options, ticket);
+
+        var issuedUtc = context.Properties.IssuedUtc?.UtcDateTime ?? DateTime.MinValue;
+        var sessionId = context.Principal?.FindFirst("SessionId")?.Value;
+        var username = context.Principal?.Identity?.Name;
+
+        var isRevoked = (!string.IsNullOrWhiteSpace(sessionId) && revocationService.IsSessionRevoked(sessionId, issuedUtc)) ||
+                        (!string.IsNullOrWhiteSpace(username) && revocationService.IsSessionRevoked(username, issuedUtc));
+
+        if (isRevoked)
+        {
+            context.RejectPrincipal();
+            await context.HttpContext.SignOutAsync("Cookies");
+        }
+
+        Assert.That(context.Principal, Is.Null);
+        await authService.Received(1).SignOutAsync(httpContext, "Cookies", Arg.Any<AuthenticationProperties>());
     }
 
     [TestCase("/")]
