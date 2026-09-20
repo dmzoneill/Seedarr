@@ -12,6 +12,11 @@ using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Update;
 
+public class InstallUpdateRequest
+{
+    public string Version { get; set; }
+}
+
 [V1ApiController("update")]
 public class UpdateController : Controller
 {
@@ -19,17 +24,20 @@ public class UpdateController : Controller
     private readonly IPostUpdateVerificationService _postUpdateVerificationService;
     private readonly IUpdatePackageProvider _updatePackageProvider;
     private readonly IConfigService _configService;
+    private readonly IInstallUpdateService _installUpdateService;
 
     public UpdateController(
         IUpdateService updateService = null,
         IPostUpdateVerificationService postUpdateVerificationService = null,
         IUpdatePackageProvider updatePackageProvider = null,
-        IConfigService configService = null)
+        IConfigService configService = null,
+        IInstallUpdateService installUpdateService = null)
     {
         _updateService = updateService ?? new UpdateService();
         _postUpdateVerificationService = postUpdateVerificationService;
         _updatePackageProvider = updatePackageProvider ?? new UpdatePackageProvider();
         _configService = configService;
+        _installUpdateService = installUpdateService ?? new InstallUpdateService(_updateService, _updatePackageProvider, _postUpdateVerificationService);
     }
 
     [HttpGet("status")]
@@ -58,7 +66,51 @@ public class UpdateController : Controller
             PackageUrl = state.PackageUrl ?? _updateService?.CachedUpdateInfo?.PackageUrl,
             PackageFileName = state.PackageFileName ?? _updateService?.CachedUpdateInfo?.PackageFileName,
             ReleaseChannel = channel,
+            InstallProgress = _installUpdateService?.GetProgress(),
         });
+    }
+
+    [HttpGet("progress")]
+    public ActionResult<UpdateInstallProgress> GetProgress()
+    {
+        var progress = _installUpdateService?.GetProgress() ?? new UpdateInstallProgress
+        {
+            Stage = UpdateInstallStage.Idle,
+            Percentage = 0,
+        };
+
+        return Ok(progress);
+    }
+
+    [HttpPost("install")]
+    public async Task<ActionResult<UpdateInstallProgress>> Install(
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] InstallUpdateRequest request = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (_installUpdateService == null)
+        {
+            return StatusCode(500, new { message = "Install update service is unavailable." });
+        }
+
+        if (_installUpdateService.IsContainerized)
+        {
+            return BadRequest(new { message = "In-app updates are not supported in container environments. Please update via container image." });
+        }
+
+        try
+        {
+            var targetVersion = request?.Version;
+            await _installUpdateService.InstallUpdateAsync(targetVersion, cancellationToken).ConfigureAwait(false);
+            return Ok(_installUpdateService.GetProgress());
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message, progress = _installUpdateService.GetProgress() });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = ex.Message, progress = _installUpdateService.GetProgress() });
+        }
     }
 
     [HttpGet]

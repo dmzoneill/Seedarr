@@ -895,6 +895,22 @@ export interface UpdateEntry {
   isContainerized?: boolean;
 }
 
+export type UpdateInstallStage =
+  | "Idle"
+  | "Downloading"
+  | "Verifying"
+  | "Extracting"
+  | "Installing"
+  | "RestartRequired"
+  | "Failed";
+
+export interface UpdateInstallProgress {
+  stage: UpdateInstallStage;
+  percentage: number;
+  errorMessage?: string | null;
+  targetVersion?: string | null;
+}
+
 export interface LogFile {
   filename: string;
   lastWriteTime: string;

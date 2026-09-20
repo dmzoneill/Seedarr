@@ -18,6 +18,7 @@ public class UpdateControllerTest
 {
     private IUpdateService _updateService;
     private IPostUpdateVerificationService _postUpdateVerificationService;
+    private IInstallUpdateService _installUpdateService;
     private UpdateController _controller;
 
     [SetUp]
@@ -25,7 +26,8 @@ public class UpdateControllerTest
     {
         _updateService = Substitute.For<IUpdateService>();
         _postUpdateVerificationService = Substitute.For<IPostUpdateVerificationService>();
-        _controller = new UpdateController(_updateService, _postUpdateVerificationService);
+        _installUpdateService = Substitute.For<IInstallUpdateService>();
+        _controller = new UpdateController(_updateService, _postUpdateVerificationService, installUpdateService: _installUpdateService);
     }
 
     private static bool InvokeAreVersionsEqual(Version a, Version b)
@@ -372,5 +374,86 @@ public class UpdateControllerTest
         Assert.That(status, Is.Not.Null);
         Assert.That(status.Mechanism, Is.EqualTo("Docker"));
         Assert.That(status.ReleaseChannel, Is.EqualTo("develop"));
+    }
+
+    [Test]
+    public void GetProgress_should_return_progress_from_install_service()
+    {
+        var expected = new UpdateInstallProgress(UpdateInstallStage.Downloading, 30, targetVersion: "2.0.0");
+        _installUpdateService.GetProgress().Returns(expected);
+
+        var actionResult = _controller.GetProgress();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var progress = okResult.Value as UpdateInstallProgress;
+        Assert.That(progress, Is.Not.Null);
+        Assert.That(progress.Stage, Is.EqualTo(UpdateInstallStage.Downloading));
+        Assert.That(progress.Percentage, Is.EqualTo(30));
+        Assert.That(progress.TargetVersion, Is.EqualTo("2.0.0"));
+    }
+
+    [Test]
+    public async Task Install_should_return_bad_request_when_containerized()
+    {
+        _installUpdateService.IsContainerized.Returns(true);
+
+        var actionResult = await _controller.Install(new InstallUpdateRequest { Version = "2.0.0" });
+        var badRequestResult = actionResult.Result as BadRequestObjectResult;
+        Assert.That(badRequestResult, Is.Not.Null);
+
+        await _installUpdateService.DidNotReceive().InstallUpdateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Install_should_invoke_service_with_specified_version_and_return_progress()
+    {
+        var expectedProgress = new UpdateInstallProgress(UpdateInstallStage.RestartRequired, 100, targetVersion: "2.1.0");
+        _installUpdateService.IsContainerized.Returns(false);
+        _installUpdateService.InstallUpdateAsync("2.1.0", Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
+        _installUpdateService.GetProgress().Returns(expectedProgress);
+
+        var actionResult = await _controller.Install(new InstallUpdateRequest { Version = "2.1.0" });
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var progress = okResult.Value as UpdateInstallProgress;
+        Assert.That(progress, Is.Not.Null);
+        Assert.That(progress.Stage, Is.EqualTo(UpdateInstallStage.RestartRequired));
+        Assert.That(progress.Percentage, Is.EqualTo(100));
+
+        await _installUpdateService.Received(1).InstallUpdateAsync("2.1.0", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Install_should_invoke_service_with_null_version_when_empty_request_provided()
+    {
+        var expectedProgress = new UpdateInstallProgress(UpdateInstallStage.RestartRequired, 100, targetVersion: "3.0.0");
+        _installUpdateService.IsContainerized.Returns(false);
+        _installUpdateService.InstallUpdateAsync(null, Arg.Any<CancellationToken>()).Returns(Task.FromResult(true));
+        _installUpdateService.GetProgress().Returns(expectedProgress);
+
+        var actionResult = await _controller.Install(null);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var progress = okResult.Value as UpdateInstallProgress;
+        Assert.That(progress, Is.Not.Null);
+        Assert.That(progress.Stage, Is.EqualTo(UpdateInstallStage.RestartRequired));
+
+        await _installUpdateService.Received(1).InstallUpdateAsync(null, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Install_should_return_bad_request_when_service_throws_invalid_operation_exception()
+    {
+        _installUpdateService.IsContainerized.Returns(false);
+        _installUpdateService.InstallUpdateAsync("2.0.0", Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<bool>(new InvalidOperationException("SHA-256 verification failed")));
+        _installUpdateService.GetProgress().Returns(new UpdateInstallProgress(UpdateInstallStage.Failed, 40, "SHA-256 verification failed", "2.0.0"));
+
+        var actionResult = await _controller.Install(new InstallUpdateRequest { Version = "2.0.0" });
+        var badRequestResult = actionResult.Result as BadRequestObjectResult;
+        Assert.That(badRequestResult, Is.Not.Null);
     }
 }
