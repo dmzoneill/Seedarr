@@ -1108,7 +1108,10 @@ export function useDeleteTag() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiClient.delete(`/tag/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tags"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
   });
 }
 

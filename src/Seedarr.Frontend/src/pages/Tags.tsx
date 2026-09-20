@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   useTags,
   useCreateTag,
@@ -7,7 +7,7 @@ import {
   useTorrents,
   useCategories,
 } from "../api/hooks";
-import type { Tag } from "../api/types";
+import type { Tag, Torrent } from "../api/types";
 
 const COLOR_PRESETS = [
   "#3b82f6", // Blue
@@ -28,6 +28,41 @@ function formatTime(seconds?: number): string {
   return `${(seconds / 86400).toFixed(1)}d`;
 }
 
+export function calculateTagUsageCounts(
+  torrents?: Torrent[] | null,
+  selectedCategory: string = "All",
+  tags?: Tag[] | null,
+): Record<number, number> {
+  const counts: Record<number, number> = {};
+  if (torrents) {
+    for (const t of torrents) {
+      if (selectedCategory !== "All") {
+        const cat = t.category?.trim() || "Uncategorized";
+        if (cat !== selectedCategory) continue;
+      }
+      const ids = t.tagIds ?? (t as any).tags ?? [];
+      for (const id of ids) {
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+      // Also support legacy t.label match if tag.label matches, for backward compatibility
+      if (t.label && tags) {
+        const labels = t.label
+          .split(",")
+          .map((s) => s.trim().toLowerCase());
+        for (const tag of tags) {
+          if (
+            labels.includes(tag.label.toLowerCase()) &&
+            !ids.includes(tag.id)
+          ) {
+            counts[tag.id] = (counts[tag.id] ?? 0) + 1;
+          }
+        }
+      }
+    }
+  }
+  return counts;
+}
+
 function Tags() {
   const { data: tags, isLoading, isError } = useTags();
   const { data: torrents } = useTorrents();
@@ -40,34 +75,33 @@ function Tags() {
   const [deletingTag, setDeletingTag] = useState<Tag | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
+  const tagList = tags ?? [];
+
+  const tagUsageCounts = useMemo(() => {
+    return calculateTagUsageCounts(torrents, selectedCategory, tags);
+  }, [torrents, selectedCategory, tags]);
+
   const getTagUsageCount = (tag: Tag) => {
-    if (!torrents) return 0;
-    let count = 0;
-    for (const t of torrents) {
-      if (selectedCategory !== "All") {
-        const cat = t.category?.trim() || "Uncategorized";
-        if (cat !== selectedCategory) continue;
-      }
-      const hasTagId = t.tagIds?.includes(tag.id);
-      const hasLabel = t.label
-        ? t.label
-            .split(",")
-            .map((s) => s.trim().toLowerCase())
-            .includes(tag.label.toLowerCase())
-        : false;
-      if (hasTagId || hasLabel) {
-        count++;
-      }
+    if (selectedCategory === "All" && !torrents && tag.torrentCount !== undefined) {
+      return tag.torrentCount;
     }
-    return count;
+    return tagUsageCounts[tag.id] ?? 0;
   };
+
+  function handleDelete(id: number) {
+    const target = tagList.find((t) => t.id === id);
+    if (target) {
+      setDeletingTag(target);
+    }
+  }
 
   function handleSaveModal() {
     if (!modalTag || !modalTag.label?.trim()) return;
 
+    const trimmedLabel = modalTag.label.trim();
     const payload: Partial<Tag> = {
       ...modalTag,
-      label: modalTag.label.trim(),
+      label: trimmedLabel,
       color: modalTag.color?.trim() || undefined,
       uploadLimitKbps: modalTag.uploadLimitKbps ? Number(modalTag.uploadLimitKbps) : undefined,
       downloadLimitKbps: modalTag.downloadLimitKbps ? Number(modalTag.downloadLimitKbps) : undefined,
@@ -88,12 +122,23 @@ function Tags() {
 
   function confirmDeleteTag() {
     if (!deletingTag) return;
-    deleteTag.mutate(deletingTag.id, {
-      onSuccess: () => setDeletingTag(null),
+    const deletedId = deletingTag.id;
+    const deletedLabel = deletingTag.label;
+    deleteTag.mutate(deletedId, {
+      onSuccess: () => {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("seedarr:tag-deleted", {
+              detail: { id: deletedId, label: deletedLabel },
+            }),
+          );
+        }
+        setDeletingTag(null);
+      },
     });
   }
 
-  const tagList = tags ?? [];
+
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
@@ -259,9 +304,7 @@ function Tags() {
                       </td>
                       <td>
                         <span style={{ fontWeight: 600 }}>
-                          {selectedCategory === "All" && tag.torrentCount !== undefined
-                            ? tag.torrentCount
-                            : getTagUsageCount(tag)}
+                          {getTagUsageCount(tag)}
                         </span>{" "}
                         <span
                           style={{
@@ -286,7 +329,7 @@ function Tags() {
                           </button>
                           <button
                             className="btn btn-danger btn-small"
-                            onClick={() => setDeletingTag(tag)}
+                            onClick={() => handleDelete(tag.id)}
                           >
                             Delete
                           </button>

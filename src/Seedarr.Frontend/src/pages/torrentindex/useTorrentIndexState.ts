@@ -75,6 +75,61 @@ export function useTorrentIndexState() {
     setSelectedTagIds(new Set());
     setSelectedTag("All");
   }, []);
+
+  // Listen for tag deletion events and synchronize filter state
+  useEffect(() => {
+    const handleTagDeleted = (e: Event) => {
+      const customEvent = e as CustomEvent<{ id: number; label?: string }>;
+      const deletedId = customEvent.detail?.id;
+      const deletedLabel = customEvent.detail?.label;
+
+      if (deletedId !== undefined) {
+        setSelectedTagIds((prev) => {
+          if (prev.has(deletedId)) {
+            const next = new Set(prev);
+            next.delete(deletedId);
+            return next;
+          }
+          return prev;
+        });
+      }
+
+      if (deletedLabel) {
+        setSelectedTag((prev) => (prev === deletedLabel ? "All" : prev));
+      }
+    };
+
+    window.addEventListener("seedarr:tag-deleted", handleTagDeleted);
+    return () => {
+      window.removeEventListener("seedarr:tag-deleted", handleTagDeleted);
+    };
+  }, []);
+
+  // Synchronize filter state when tags query data updates (e.g. tag deleted)
+  useEffect(() => {
+    if (!tags) return;
+    const validIds = new Set(tags.map((t) => t.id));
+    const validLabels = new Set(tags.map((t) => t.label));
+
+    if (selectedTag !== "All" && selectedTag !== "Untagged") {
+      if (!validLabels.has(selectedTag)) {
+        setSelectedTag("All");
+      }
+    }
+
+    setSelectedTagIds((prev) => {
+      let hasInvalid = false;
+      const next = new Set<number>();
+      for (const id of prev) {
+        if (validIds.has(id)) {
+          next.add(id);
+        } else {
+          hasInvalid = true;
+        }
+      }
+      return hasInvalid ? next : prev;
+    });
+  }, [tags, selectedTag]);
   const [selectedTorrentId, setSelectedTorrentId] = useState<number | null>(
     () => {
       const select = searchParams.get("select");
