@@ -6,6 +6,121 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.10.1](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.1) - 2026-09-20
+
+### ✨ Features
+- feat(queue): implement active slot bounds and automatic promotion of Queued torrents in SeedingEngine (Closes #287)
+- feat(webseed): implement WebSeedClient with HTTP Range requests and 206 Partial Content validation (Closes #293)
+- feat(queue): implement stalled and slow download detection with queue slot bypass (Closes #288)
+- feat(webseed): parse BEP 19 url-list metainfo fields and magnet ws parameters (Closes #292)
+- feat(dht): implement K-bucket replacement cache, ping-before-evict, and periodic bucket refresh (Closes #320)
+- feat(telemetry): migrate SpeedGraph to HTML5 Canvas with HiDPI Retina scaling, requestAnimationFrame, and clean lifecycle teardown (Closes #310)
+- feat(remotepath): implement RemotePathMappingService, repository, migrations, and REST API for multi-host path translation (Closes #301)
+- feat(notifications): support port 465 implicit SSL/TLS and custom certificate validation in EmailNotificationSender (Closes #325)
+- feat(diagnostics): add real-time CPU percentage telemetry derived from elapsed process CPU time deltas (Closes #330)
+- feat(recheck): implement asynchronous TorrentRecheckService with status transitions and real-time SignalR progress broadcasting (Closes #342)
+- feat(downloadclients): implement remote torrent management actions (pause, resume, delete) and aggregated multi-client view (Closes #319)
+- feat(bandwidth): implement lock-free hierarchical TokenBucket rate limiter with burst clamping and sub-millisecond precision (Closes #331)
+- feat(ui): add bulk tag assignment and removal actions to TorrentToolbar and wrap backend in atomic transaction (Closes #358)
+- feat(jobs): track scheduled task failures, record LastError in database, and display diagnostics in UI (Closes #316)
+- feat(jobs): implement PUT /api/v1/system/task/{id} to configure intervals and enable/disable background tasks (Closes #317)
+- feat(diagnostics): add open file descriptor and socket handle telemetry (/proc/self/fd / HandleCount) to prevent descriptor exhaustion (Closes #332)
+- feat(scripts): detect missing execute permissions (+x) on POSIX and inspect shebang interpreter fallback (Closes #337)
+- feat(diagnostics): expose GC generational collection counts and total allocated bytes in SystemStatus (Closes #335)
+- feat(terminal): implement cross-platform PTY process supervision with ConPTY/forkpty, window resizing (SIGWINCH), and orphan process teardown (Closes #396)
+- feat(ui): implement subtitle track switching, stream lifecycle cleanup, and codec error recovery in MediaPlayerModal (Closes #375)
+- feat(integrity): implement cross-file piece boundary assembly and multi-file SHA-1 hash verification engine (Closes #345)
+- feat(ui): implement multi-tag filtering with AND/OR matching semantics and bind to Torrent.tagIds (Closes #356)
+- feat(palette): implement weighted fuzzy search scoring, multi-word matching, and memoized history indexing in CommandPalette (Closes #355)
+- feat(trackers): implement background TrackerScrapeService to periodically refresh swarm availability metrics (Closes #352)
+- feat(peers): implement BEP 21 lt_donthave partial seed extension and unchoke slot protection (Closes #399)
+- feat(bep52): implement BitTorrent v2 piece layer and file root validation in torrent parsing (Closes #387)
+- feat(packages): implement memory-efficient streaming tar.gz archive export for torrent packages (.seedarr) (Closes #420)
+- feat(bep52): implement hash_request, hashes, and hash_reject peer wire messages for Merkle tree exchange (Closes #392)
+- feat(indexers): implement Torznab & Newznab structured search modes with season/episode and ID parameters (Closes #360)
+- feat(superseeding): track swarm piece propagation and penalize selfish non-sharing leechers (Closes #425)
+- feat(auth): implement idle session timeout with countdown modal and token refresh retry (Closes #378)
+- feat(indexers): parse standard Torznab media IDs and seeding attributes (Closes #362)
+- feat(ui): persist table sort column, direction, and page size to localStorage with reset option (Closes #365)
+- feat(ui): add dedicated Column Customizer button and dialog accessible from TorrentToolbar (Closes #366)
+- feat(superseeding): implement progressive piecewise revelation and empty bitfield handshake masking in PeerServer (Closes #424)
+- feat(auth): add cross-tab authentication synchronization via BroadcastChannel on login/logout (Closes #379)
+- feat(indexers): parse Torznab /api?t=caps XML for dynamic category hierarchy and handle HTTP 429 Retry-After rate limits (Closes #395)
+- feat(blocklist): implement BlocklistController and integrate peer blocklist configuration into SecurityTab (Closes #384)
+- feat(signalr): implement state snapshot reconciliation protocol and validate JWT/session tokens on WebSocket handshake (Closes #428)
+- feat(portmapping): implement Port Control Protocol (PCP - RFC 6887) client for dual-stack IPv4 and IPv6 pinhole mapping (Closes #419)
+- feat(bep52): support BEP 52 multihash magnet links (urn:btmh) and 80-byte v2 peer handshake negotiation (Closes #390)
+- feat(signalr): implement channel-based selective subscription and per-torrent group routing in MessageHub (Closes #427)
+- feat(indexers): implement ProwlarrIndexerSyncService for automated discovery and synchronization of managed indexers (Closes #394)
+- feat(subtitles): implement subtitle track discovery, WebVTT conversion, and character encoding detection (Closes #373)
+- feat(mediainspection): implement FFprobe process wrapper for accurate container stream inspection, audio bitrates, and video dimensions (Closes #371)
+- feat(bep52): implement SHA-256 Merkle tree verification engine with 16 KiB block-level corruption isolation (Closes #388)
+- feat(rss): implement comprehensive auto-grab rule evaluator with quality/codec parsing, category path mapping, and grab history logging (Closes #415)
+
+### 🐛 Bug Fixes
+- fix(seeding): only continue downloads during seeding when torrent has existing download progress
+- fix(seeding): prevent download simulation in ProcessSeeding and update webhook Rename test
+- fix(trackers): exempt loopback/mock trackers from rate limiting and fix webhook test event type
+- fix(di): make test constructors internal to prevent DryIoc ctor resolution errors
+- fix(ci): break circular DI dependency between TorrentService and TorrentRecheckService via Lazy resolution
+- fix(ci): resolve DryIoc circular dependency, DHT replacement tests, and test regressions across core services
+- fix(ui): ensure status bar ratio strictly defaults to 0 when totalDownloaded is 0
+- fix(ui): calculate status bar ratio from total uploaded divided by total downloaded
+- fix(ci): add missing blank line in QueueServiceTest to resolve SA1513 (Fixes CI)
+- fix(ci): resolve EditorConfig padding, DryIoc circular dependency, and path mapping test regressions (Fixes CI)
+- fix(scheduling): distribute download bandwidth only to active torrents and enforce priority weights under unlimited limits in SpeedPolicy (Closes #290)
+- fix(ci): resolve StyleCop SA1507 blank line and EditorConfig left-padding in RoutingTable (Fixes CI)
+- fix(deluge): implement hash/id and category filtering, files array projection, and accurate total_done in core.get_torrents_status (Closes #296)
+- fix(emulation): remap local paths in Deluge/Transmission emulation RPC (Closes #302)
+- fix(telemetry): implement zero-decay timer in SpeedGraph and eliminate NaN/Infinity corruption (Closes #309)
+- fix(simulation): enforce authentic alphanumeric Peer ID generation, dynamic BEP handshake bits, and per-torrent seed duration limits (Closes #314)
+- fix(telemetry): align Y-axis scale nice rounding with binary units and eliminate fractional unit label artifacts in SpeedGraph.tsx (Closes #311)
+- fix(indexers): prevent false success reporting on HTTP 4xx/5xx and parallelize multi-indexer searches with timeout (Closes #307)
+- fix(mse): buffer marker synchronization and message payload boundary alignment in MessageStreamEncryption (Closes #343)
+- fix(ui): track grabbed releases in AddTorrentForm, detect existing library torrents, and display persistent test error diagnostics (Closes #308)
+- fix(telemetry): compute true time-weighted moving average speed in SeedingEngine and SpeedHistoryService instead of unweighted arithmetic averages on irregular ticks (Closes #312)
+- fix(diagnostics): report OS architecture, git commit hash, and actionable peer port binding conflicts in system diagnostics (Closes #328)
+- fix(downloadclients): prevent swallowed auth/network errors, implement exponential backoff circuit breaker, and expose client health status (Closes #318)
+- fix(recheck): pause active peer transfers and enforce thread-safe file isolation during hash verification (Closes #344)
+- fix(ui): add image error fallback handling to prevent broken poster cards in TorrentGrid and DetailsTab (Closes #340)
+- fix(onboarding): add input validation, error handling, and core download directory configuration to GettingStartedModal (Closes #327)
+- fix(scripts): prevent unbounded pipe memory allocation and task leakage on stream drain timeout in CustomScriptService (Closes #334)
+- fix(ui): calculate tag usage from torrent.tagIds instead of t.label in Tags page and sync filter state on deletion (Closes #359)
+- fix(notifications): return actionable HTTP diagnostics from NotificationController test endpoint and parse X-RateLimit-Reset-After (Closes #326)
+- fix(peers): implement plaintext fallback on outgoing connections and immediately reject unencrypted handshakes in RequireEncrypted mode (Closes #341)
+- fix(utp): replace TickCount64 with high-resolution Stopwatch clock and implement LEDBAT congestion window rate pacing (Closes #333)
+- fix(auth): implement 401 redirect interception, returnUrl preservation, and session revocation on logout (Closes #368)
+- fix(seeding): implement piece boundary masking for selective downloads and compute Progress based on wanted file size (Closes #350)
+- fix(lifecycle): implement sidecar process supervisor and terminate orphaned child processes on ApplicationShutdownRequested (Closes #376)
+- fix(arr): support Downloaded / Renamed webhook events and maintain per-Arr category routing (Closes #385)
+- fix(emulation): protect active seeding torrents during Arr post-import deletion and implement category persistence (Closes #386)
+
+### 🔧 Maintenance & Improvements
+- test(transport): optimize uTP loopback test payload size to eliminate 12-minute CI bottleneck
+- security(cors): eliminate SetIsOriginAllowed wildcard with AllowCredentials to prevent cross-site data theft (Closes #283)
+- security(auth): enforce CSRF protection on mutation endpoints and constant-time credential comparison (Closes #285)
+- security(dht): enforce strict private torrent safeguards across DHT query and announcement paths (Closes #322)
+- security(headers): implement SecurityHeadersMiddleware with X-Frame-Options, X-Content-Type-Options, and Referrer-Policy (Closes #284)
+- security(dht): bind info_hash and port to cryptographic token generation (Closes #321)
+- chore(deps-dev): bump fast-uri in /src/Seedarr.Frontend (#102)
+- perf(datastore): add pagination to PeerConnectionLogRepository and chunked deletions for log purges (Closes #305)
+- perf(signalr): eliminate 1Hz torrent refetch in SignalRProvider and bound hub buffer capacity (Closes #300)
+- perf(datastore): add missing database indexes on Torrents.Status, DownloadHistory.InfoHash, and composite lookup columns (Closes #304)
+- security(trackers): prevent leakage of simulated upload bytes to external trackers and align announce PeerId with client profile (Closes #313)
+- a11y(table): enable keyboard navigation, row focusability, and ARIA state in TorrentTable and TorrentGrid (Closes #349)
+- a11y(ui): add aria-live status regions to Toast container and descriptive aria-labels to toolbar icon controls (Closes #351)
+- a11y(modals): implement focus trapping, initial focus management, and focus restoration across modal dialogs (Closes #347)
+- security(scripts): prevent shell command injection in Windows cmd wrapper and adopt ProcessStartInfo.ArgumentList (Closes #336)
+- perf(mediacover): implement HTTP Cache-Control, ETag, and 304 Not Modified in MediaCoverController (Closes #338)
+- security(mediaenrichment): prevent SSRF and credential exposure in CacheArtworkAsync remote artwork downloader (Closes #339)
+- security(trackers): enforce MinAnnounceInterval guards on manual reannounce to prevent tracker flooding and client bans (Closes #353)
+- security(packages): prevent Zip-Slip path traversal, symlink poisoning, and archive bombs during package import (Closes #422)
+- perf(datastore): implement periodic WAL checkpointing and shutdown truncate to prevent WAL checkpoint starvation (Closes #369)
+- security(auth): enforce remote IP validation against trusted proxies in ForwardAuthHandler and dynamic scheme selector (Closes #367)
+- perf(datastore): implement atomic batch insertion for torrent files and trackers to eliminate N-connection lock churn (Closes #374)
+- perf(blocklist): implement memory-safe HTTP streaming decompression for multi-megabyte GZip and Zip blocklist archives (Closes #380)
+- perf(bandwidth): implement dynamic BDP socket buffer sizing and micro-burst packet pacing in PeerConnection and UtpConnection (Closes #389)
+
 ## [v1.10.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.0) - 2026-09-20
 
 ### ✨ Features
