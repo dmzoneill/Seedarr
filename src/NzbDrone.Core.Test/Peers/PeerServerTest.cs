@@ -652,6 +652,47 @@ public class PeerServerTest
     }
 
     [Test]
+    public void HandlePieceRequest_should_send_reject_request_for_invalid_request_when_fast_extension_supported()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.SupportsFastExtension = true;
+        clientConn.MessageReadTimeoutMs = 1000;
+
+        // 1. Invalid length <= 0
+        var payloadZeroLength = BuildRequestPayload(0, 0, 0);
+        InvokeHandlePieceRequest(serverConn, payloadZeroLength);
+
+        var rejectMsg = clientConn.ReceiveMessage();
+        Assert.That(rejectMsg, Is.Not.Null);
+        Assert.That(rejectMsg.Type, Is.EqualTo(PeerMessageType.RejectRequest));
+        Assert.That(rejectMsg.Payload?.Length, Is.EqualTo(12));
+
+        // 2. Invalid length > MaxBlockSize (32768)
+        var payloadOverLength = BuildRequestPayload(0, 0, 32769);
+        InvokeHandlePieceRequest(serverConn, payloadOverLength);
+
+        rejectMsg = clientConn.ReceiveMessage();
+        Assert.That(rejectMsg, Is.Not.Null);
+        Assert.That(rejectMsg.Type, Is.EqualTo(PeerMessageType.RejectRequest));
+
+        // 3. Invalid negative index
+        var payloadNegIndex = BuildRequestPayload(-1, 0, 16384);
+        InvokeHandlePieceRequest(serverConn, payloadNegIndex);
+
+        rejectMsg = clientConn.ReceiveMessage();
+        Assert.That(rejectMsg, Is.Not.Null);
+        Assert.That(rejectMsg.Type, Is.EqualTo(PeerMessageType.RejectRequest));
+
+        // 4. Invalid negative begin
+        var payloadNegBegin = BuildRequestPayload(0, -1, 16384);
+        InvokeHandlePieceRequest(serverConn, payloadNegBegin);
+
+        rejectMsg = clientConn.ReceiveMessage();
+        Assert.That(rejectMsg, Is.Not.Null);
+        Assert.That(rejectMsg.Type, Is.EqualTo(PeerMessageType.RejectRequest));
+    }
+
+    [Test]
     public void HandlePieceRequest_should_encode_index_and_begin_in_response()
     {
         var (clientConn, serverConn) = CreateTestPair();
@@ -2188,6 +2229,33 @@ public class PeerServerTest
         Assert.That(reassigned.PieceIndex, Is.EqualTo(block.PieceIndex));
         Assert.That(reassigned.Begin, Is.EqualTo(block.Begin));
         Assert.That(reassigned.RequestedFrom, Is.EqualTo(otherConn));
+    }
+
+    [Test]
+    public void HandleMessage_reject_request_with_fast_extension_decrements_pending_request_count_and_releases_reservation()
+    {
+        var conn = CreateTestConnection();
+        conn.SupportsFastExtension = true;
+        conn.PeerChoking = false;
+        conn.PeerPieces = new bool[5];
+        conn.PeerPieces[0] = true;
+
+        var picker = _server.PiecePicker;
+        picker.AddActivePiece(0, 32768, 16384);
+
+        var block = picker.RequestBlock(conn, 0);
+        Assert.That(block, Is.Not.Null);
+        Assert.That(block.IsRequested, Is.True);
+        Assert.That(block.RequestedFrom, Is.EqualTo(conn));
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(1));
+
+        var payload = BuildRequestPayload(block.PieceIndex, block.Begin, block.Length);
+        var message = new PeerMessage { Type = PeerMessageType.RejectRequest, Payload = payload };
+        InvokeHandleMessage(conn, message);
+
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(0));
+        Assert.That(block.IsRequested, Is.False);
+        Assert.That(block.RequestedFrom, Is.Null);
     }
 
     [Test]

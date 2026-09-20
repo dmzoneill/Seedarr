@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -7,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
@@ -28,6 +30,7 @@ public interface IChokeManager
     bool CanUnchoke(string infoHash);
     bool IsTorrentSeeding(string infoHash);
     void SetTorrentSeeding(string infoHash, bool isSeeding);
+    void Choke(PeerConnection connection);
 }
 
 public class ChokeManager : BackgroundService, IChokeManager
@@ -49,6 +52,7 @@ public class ChokeManager : BackgroundService, IChokeManager
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
     private readonly IRandomNumberGenerator _random;
+    private readonly IFastExtensionHandler _fastExtensionHandler;
     private readonly Logger _logger;
     private readonly object _lock = new();
     private readonly HashSet<string> _explicitSeedingTorrents = new(StringComparer.OrdinalIgnoreCase);
@@ -61,12 +65,14 @@ public class ChokeManager : BackgroundService, IChokeManager
         IConnectionManager connectionManager,
         IConfigService configService,
         ITorrentService torrentService = null,
-        IRandomNumberGenerator random = null)
+        IRandomNumberGenerator random = null,
+        IFastExtensionHandler fastExtensionHandler = null)
     {
         _connectionManager = connectionManager;
         _configService = configService;
         _torrentService = torrentService;
         _random = random ?? new RandomNumberGenerator();
+        _fastExtensionHandler = fastExtensionHandler;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -937,8 +943,13 @@ public class ChokeManager : BackgroundService, IChokeManager
         }
     }
 
-    private void Choke(PeerConnection connection)
+    public void Choke(PeerConnection connection)
     {
+        if (connection == null)
+        {
+            return;
+        }
+
         if (!connection.AmChoking)
         {
             connection.AmChoking = true;
@@ -950,6 +961,69 @@ public class ChokeManager : BackgroundService, IChokeManager
             catch (Exception ex)
             {
                 _logger.Debug(ex, "Failed to send choke to {0}:{1}", connection.RemoteIp, connection.RemotePort);
+            }
+
+            if (connection.SupportsFastExtension)
+            {
+                RejectPendingRequestsNotAllowedFast(connection);
+            }
+        }
+    }
+
+    private void RejectPendingRequestsNotAllowedFast(PeerConnection connection)
+    {
+        if (connection == null || !connection.SupportsFastExtension)
+        {
+            return;
+        }
+
+        var allowedFast = new HashSet<int>();
+        if (_fastExtensionHandler != null)
+        {
+            allowedFast.UnionWith(_fastExtensionHandler.GetAllowedFastSet(connection));
+        }
+
+        if (connection.AllowedFastPieces != null)
+        {
+            allowedFast.UnionWith(connection.AllowedFastPieces);
+        }
+
+        if (connection.RemoteAllowedFastPieces != null)
+        {
+            allowedFast.UnionWith(connection.RemoteAllowedFastPieces);
+        }
+
+        lock (connection.PendingIncomingRequests)
+        {
+            if (connection.PendingIncomingRequests.Count == 0)
+            {
+                return;
+            }
+
+            var toReject = connection.PendingIncomingRequests.Where(r => !allowedFast.Contains(r.PieceIndex)).ToList();
+            foreach (var req in toReject)
+            {
+                try
+                {
+                    var payload = new byte[12];
+                    BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), req.PieceIndex);
+                    BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), req.Begin);
+                    BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(8, 4), req.Length);
+
+                    connection.SendMessage(new PeerMessage
+                    {
+                        Type = PeerMessageType.RejectRequest,
+                        Payload = payload
+                    });
+
+                    _logger.Trace("Sent REJECT_REQUEST to peer {0}:{1} for choked piece {2}", connection.RemoteIp, connection.RemotePort, req.PieceIndex);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to send reject request to {0}:{1}", connection.RemoteIp, connection.RemotePort);
+                }
+
+                connection.PendingIncomingRequests.Remove(req);
             }
         }
     }
