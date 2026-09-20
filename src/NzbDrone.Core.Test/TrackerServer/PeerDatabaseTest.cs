@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.TrackerServer;
@@ -15,6 +16,12 @@ public class PeerDatabaseTest
     public void Setup()
     {
         _peerDatabase = new PeerDatabase();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _peerDatabase?.Dispose();
     }
 
     [Test]
@@ -376,5 +383,105 @@ public class PeerDatabaseTest
 
         Assert.That(peers[0].LastAnnounce, Is.GreaterThanOrEqualTo(before));
         Assert.That(peers[0].LastAnnounce, Is.LessThanOrEqualTo(after));
+    }
+
+    [Test]
+    public void PruneStalePeers_should_remove_expired_peers_from_abandoned_swarms()
+    {
+        _peerDatabase.AddPeer("abandoned1", "192.168.1.1", 6881, "peer1");
+        _peerDatabase.AddPeer("abandoned1", "192.168.1.2", 6882, "peer2");
+
+        var peers = _peerDatabase.GetPeers("abandoned1");
+        peers[0].LastAnnounce = DateTime.UtcNow.AddMinutes(-50);
+        peers[1].LastAnnounce = DateTime.UtcNow.AddMinutes(-50);
+
+        Assert.That(_peerDatabase.ContainsSwarm("abandoned1"), Is.True);
+
+        var evictedCount = _peerDatabase.PruneStalePeers();
+
+        Assert.That(evictedCount, Is.EqualTo(2));
+        Assert.That(_peerDatabase.GetPeers("abandoned1"), Is.Empty);
+    }
+
+    [Test]
+    public void PruneStalePeers_should_remove_empty_swarms_from_peers()
+    {
+        _peerDatabase.AddPeer("abandoned1", "192.168.1.1", 6881, "peer1");
+        _peerDatabase.AddPeer("abandoned2", "192.168.1.2", 6882, "peer2");
+
+        _peerDatabase.GetPeers("abandoned1")[0].LastAnnounce = DateTime.UtcNow.AddMinutes(-60);
+        _peerDatabase.GetPeers("abandoned2")[0].LastAnnounce = DateTime.UtcNow.AddMinutes(-60);
+
+        Assert.That(_peerDatabase.ContainsSwarm("abandoned1"), Is.True);
+        Assert.That(_peerDatabase.ContainsSwarm("abandoned2"), Is.True);
+
+        var evictedCount = _peerDatabase.PruneStalePeers();
+
+        Assert.That(evictedCount, Is.EqualTo(2));
+        Assert.That(_peerDatabase.ContainsSwarm("abandoned1"), Is.False);
+        Assert.That(_peerDatabase.ContainsSwarm("abandoned2"), Is.False);
+        Assert.That(_peerDatabase.GetAllInfoHashes(), Is.Empty);
+    }
+
+    [Test]
+    public void PruneStalePeers_should_retain_active_peers_within_ttl()
+    {
+        _peerDatabase.AddPeer("swarm1", "192.168.1.1", 6881, "expired_peer");
+        _peerDatabase.AddPeer("swarm1", "192.168.1.2", 6882, "active_peer");
+        _peerDatabase.AddPeer("swarm2", "192.168.1.3", 6883, "another_active_peer");
+
+        var peers = _peerDatabase.GetPeers("swarm1");
+        peers.First(p => p.PeerId == "expired_peer").LastAnnounce = DateTime.UtcNow.AddMinutes(-50);
+
+        var evictedCount = _peerDatabase.PruneStalePeers();
+
+        Assert.That(evictedCount, Is.EqualTo(1));
+        Assert.That(_peerDatabase.ContainsSwarm("swarm1"), Is.True);
+        Assert.That(_peerDatabase.ContainsSwarm("swarm2"), Is.True);
+
+        var swarm1Peers = _peerDatabase.GetPeers("swarm1");
+        Assert.That(swarm1Peers, Has.Count.EqualTo(1));
+        Assert.That(swarm1Peers[0].PeerId, Is.EqualTo("active_peer"));
+
+        var swarm2Peers = _peerDatabase.GetPeers("swarm2");
+        Assert.That(swarm2Peers, Has.Count.EqualTo(1));
+        Assert.That(swarm2Peers[0].PeerId, Is.EqualTo("another_active_peer"));
+    }
+
+    [Test]
+    public async Task Periodic_eviction_timer_should_evict_stale_peers_automatically()
+    {
+        using var db = new PeerDatabase(TimeSpan.FromMilliseconds(50));
+
+        db.AddPeer("auto_prune_swarm", "192.168.1.1", 6881, "peer1");
+        db.GetPeers("auto_prune_swarm")[0].LastAnnounce = DateTime.UtcNow.AddMinutes(-50);
+
+        Assert.That(db.ContainsSwarm("auto_prune_swarm"), Is.True);
+
+        var evicted = false;
+        for (var i = 0; i < 20; i++)
+        {
+            if (!db.ContainsSwarm("auto_prune_swarm"))
+            {
+                evicted = true;
+                break;
+            }
+
+            await Task.Delay(50);
+        }
+
+        Assert.That(evicted, Is.True);
+        Assert.That(db.GetPeers("auto_prune_swarm"), Is.Empty);
+    }
+
+    [Test]
+    public void Dispose_should_cleanly_dispose_eviction_timer()
+    {
+        var db = new PeerDatabase(TimeSpan.FromMinutes(5));
+
+        Assert.DoesNotThrow(() => db.Dispose());
+        Assert.DoesNotThrow(() => db.Dispose());
+
+        Assert.That(db.PruneStalePeers(), Is.EqualTo(0));
     }
 }
