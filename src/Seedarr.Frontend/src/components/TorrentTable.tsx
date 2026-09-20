@@ -31,169 +31,24 @@ import DeleteTorrentModal from "./DeleteTorrentModal";
 import TrackerFavicon from "./TrackerFavicon";
 import type { Torrent } from "../api/types";
 
-type ColumnKey =
-  | "#"
-  | "queuePosition"
-  | "name"
-  | "status"
-  | "totalSize"
-  | "uploaded"
-  | "downloaded"
-  | "ratio"
-  | "progress"
-  | "seeders"
-  | "leechers"
-  | "trackerUrl"
-  | "dateAdded"
-  | "lastActive"
-  | "pieceCount"
-  | "pieceLength"
-  | "comment"
-  | "createdBy"
-  | "creationDate"
-  | "isPrivate"
-  | "infoHash"
-  | "priority"
-  | "uploadLimit"
-  | "downloadLimit"
-  | "superSeeding"
-  | "forceStart"
-  | "label"
-  | "sequentialDownload"
-  | "announceInterval"
-  | "nextUpdate"
-  | "sessionUploaded"
-  | "sessionDownloaded"
-  | "uploadSpeed"
-  | "downloadSpeed"
-  | "active"
-  | "availability"
-  | "eta"
-  | "threshold"
-  | "smallTorrentLimit";
+import {
+  ALL_COLUMNS,
+  COLUMN_I18N_KEYS,
+  DEFAULT_VISIBLE,
+  loadVisibleColumns,
+  saveVisibleColumns,
+  ColumnKey,
+  ColumnDef,
+} from "../pages/torrentindex/columnPreferences";
 
-interface ColumnDef {
-  key: ColumnKey;
-  label: string;
-  sortable: boolean;
-}
-
-export const COLUMN_I18N_KEYS: Record<ColumnKey, string> = {
-  "#": "torrents.table.index",
-  queuePosition: "torrents.table.queuePosition",
-  name: "torrents.table.name",
-  status: "torrents.table.status",
-  progress: "torrents.table.progress",
-  totalSize: "torrents.table.size",
-  uploaded: "torrents.table.uploaded",
-  downloaded: "torrents.table.downloaded",
-  sessionUploaded: "torrents.table.sessionUploaded",
-  sessionDownloaded: "torrents.table.sessionDownloaded",
-  uploadSpeed: "torrents.table.uploadSpeed",
-  downloadSpeed: "torrents.table.downloadSpeed",
-  ratio: "torrents.table.ratio",
-  seeders: "torrents.table.seeders",
-  leechers: "torrents.table.leechers",
-  trackerUrl: "torrents.table.tracker",
-  announceInterval: "torrents.table.announceInterval",
-  nextUpdate: "torrents.table.nextUpdate",
-  priority: "torrents.table.priority",
-  label: "torrents.table.label",
-  active: "torrents.table.active",
-  uploadLimit: "torrents.table.uploadLimit",
-  downloadLimit: "torrents.table.downloadLimit",
-  superSeeding: "torrents.table.superSeeding",
-  sequentialDownload: "torrents.table.sequentialDownload",
-  forceStart: "torrents.table.forceStart",
-  availability: "torrents.table.availability",
-  eta: "torrents.table.eta",
-  threshold: "torrents.table.threshold",
-  smallTorrentLimit: "torrents.table.smallTorrentLimit",
-  dateAdded: "torrents.table.added",
-  lastActive: "torrents.table.lastActive",
-  creationDate: "torrents.table.creationDate",
-  createdBy: "torrents.table.createdBy",
-  comment: "torrents.table.comment",
-  pieceCount: "torrents.table.pieceCount",
-  pieceLength: "torrents.table.pieceLength",
-  isPrivate: "torrents.table.isPrivate",
-  infoHash: "torrents.table.infoHash",
+export {
+  ALL_COLUMNS,
+  COLUMN_I18N_KEYS,
+  DEFAULT_VISIBLE,
+  loadVisibleColumns,
+  saveVisibleColumns,
 };
-
-const ALL_COLUMNS: ColumnDef[] = [
-  { key: "#", label: "#", sortable: true },
-  { key: "queuePosition", label: "Queue #", sortable: true },
-  { key: "name", label: "Name", sortable: true },
-  { key: "status", label: "Status", sortable: true },
-  { key: "progress", label: "Progress", sortable: true },
-  { key: "totalSize", label: "Size", sortable: true },
-  { key: "uploaded", label: "Total Uploaded", sortable: true },
-  { key: "downloaded", label: "Total Downloaded", sortable: true },
-  { key: "sessionUploaded", label: "Session Uploaded", sortable: true },
-  { key: "sessionDownloaded", label: "Session Downloaded", sortable: true },
-  { key: "uploadSpeed", label: "Upload Speed", sortable: true },
-  { key: "downloadSpeed", label: "Download Speed", sortable: true },
-  { key: "ratio", label: "Ratio", sortable: true },
-  { key: "seeders", label: "Seeders", sortable: true },
-  { key: "leechers", label: "Leechers", sortable: true },
-  { key: "trackerUrl", label: "Tracker", sortable: true },
-  { key: "announceInterval", label: "Announce Interval", sortable: true },
-  { key: "nextUpdate", label: "Next Update", sortable: true },
-  { key: "priority", label: "Priority", sortable: true },
-  { key: "label", label: "Label", sortable: true },
-  { key: "active", label: "Active", sortable: true },
-  { key: "uploadLimit", label: "Upload Limit", sortable: true },
-  { key: "downloadLimit", label: "Download Limit", sortable: true },
-  { key: "superSeeding", label: "Super Seeding", sortable: true },
-  { key: "sequentialDownload", label: "Sequential", sortable: true },
-  { key: "forceStart", label: "Force Start", sortable: true },
-  { key: "availability", label: "Availability", sortable: true },
-  { key: "eta", label: "ETA", sortable: true },
-  { key: "threshold", label: "Threshold", sortable: true },
-  { key: "smallTorrentLimit", label: "Small Torrent Limit", sortable: true },
-  { key: "dateAdded", label: "Added", sortable: true },
-  { key: "lastActive", label: "Last Active", sortable: true },
-  { key: "creationDate", label: "Created", sortable: true },
-  { key: "createdBy", label: "Created By", sortable: true },
-  { key: "comment", label: "Comment", sortable: true },
-  { key: "pieceCount", label: "Pieces", sortable: true },
-  { key: "pieceLength", label: "Piece Length", sortable: true },
-  { key: "isPrivate", label: "Private", sortable: true },
-  { key: "infoHash", label: "Info Hash", sortable: true },
-];
-
-const STORAGE_KEY = "seedarr-visible-columns-v2";
-
-const DEFAULT_VISIBLE: Set<string> = new Set([
-  "#",
-  "name",
-  "status",
-  "totalSize",
-  "uploaded",
-  "ratio",
-  "progress",
-  "uploadSpeed",
-  "downloadSpeed",
-  "seeders",
-  "leechers",
-]);
-
-function loadVisibleColumns(): Set<string> {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as string[];
-      if (Array.isArray(parsed) && parsed.length > 0) return new Set(parsed);
-    }
-  } catch (err) {
-    console.warn("Failed to parse localStorage:", err);
-  }
-  return new Set(DEFAULT_VISIBLE);
-}
-
-function saveVisibleColumns(cols: Set<string>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...cols]));
-}
+export type { ColumnKey, ColumnDef };
 
 type SortKey = ColumnKey;
 
@@ -256,7 +111,7 @@ function getSortValue(
   }
 }
 
-interface TorrentTableProps {
+export interface TorrentTableProps {
   filter?: string;
   stateFilter?: string;
   trackerFilter?: string;
@@ -271,6 +126,8 @@ interface TorrentTableProps {
   onSelectMultiple?: (ids: Set<number>) => void;
   onDeleteSelected?: () => void;
   onToggleActive?: () => void;
+  visibleColumns?: Set<string>;
+  onToggleColumn?: (key: string) => void;
 }
 
 function TorrentTable({
@@ -288,6 +145,8 @@ function TorrentTable({
   onSelectMultiple,
   onDeleteSelected,
   onToggleActive,
+  visibleColumns: propVisibleColumns,
+  onToggleColumn: propToggleColumn,
 }: TorrentTableProps) {
   const { t } = useTranslation();
   const { data: torrents, isLoading, isError } = useTorrents();
@@ -311,8 +170,9 @@ function TorrentTable({
     ids: number[];
     torrentName?: string;
   } | null>(null);
-  const [visibleColumns, setVisibleColumns] =
+  const [internalVisibleColumns, setInternalVisibleColumns] =
     useState<Set<string>>(loadVisibleColumns);
+  const visibleColumns = propVisibleColumns ?? internalVisibleColumns;
 
   const { data: history } = useDownloadHistory();
   const { data: arrConnections } = useArrConnections();
@@ -618,7 +478,11 @@ function TorrentTable({
   );
 
   function toggleColumn(key: string) {
-    setVisibleColumns((prev) => {
+    if (propToggleColumn) {
+      propToggleColumn(key);
+      return;
+    }
+    setInternalVisibleColumns((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
         if (next.size > 1) next.delete(key);
