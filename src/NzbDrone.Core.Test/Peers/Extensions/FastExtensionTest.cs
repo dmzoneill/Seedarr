@@ -54,6 +54,54 @@ public class FastExtensionTest
     }
 
     [Test]
+    public void ComputeAllowedFastSet_should_compute_correct_deterministic_piece_indices_for_ipv6_according_to_bep6()
+    {
+        // IPv6 peer: 2001:db8:85a3::8a2e:370:7334 masked to /64 (2001:db8:85a3::)
+        // 1313 pieces, infohash: 20 bytes of 0xaa
+        var ip = IPAddress.Parse("2001:db8:85a3::8a2e:370:7334");
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xAA);
+
+        var result7 = _handler.ComputeAllowedFastSet(infoHash, ip, 1313, 7);
+        var expected7 = new[] { 939, 379, 604, 1289, 1092, 995, 229 };
+        Assert.That(result7.Count, Is.EqualTo(7));
+        Assert.That(result7, Is.EquivalentTo(expected7));
+
+        // String overload should match
+        var resultStringOverload = _handler.ComputeAllowedFastSet("2001:db8:85a3::8a2e:370:7334", infoHash, 1313, 7);
+        Assert.That(resultStringOverload, Is.EquivalentTo(expected7));
+
+        // Another address in the same /64 subnet should produce the exact same set
+        var sameSubnetResult = _handler.ComputeAllowedFastSet("2001:db8:85a3:0000:ffff:ffff:ffff:ffff", infoHash, 1313, 7);
+        Assert.That(sameSubnetResult, Is.EquivalentTo(expected7));
+    }
+
+    [Test]
+    public void ComputeAllowedFastSet_should_use_unsigned_uint_modulo_arithmetic_not_signed_31bit_mask()
+    {
+        // For IPv4 80.4.4.200 + infohash 20x 0xAA:
+        // Chunk 0 is 0x873AD9E3 = 2,268,781,027 (high bit set, >= 0x80000000)
+        // BEP 6 unsigned modulo: 2268781027 % 1313 = 1059
+        // Divergent signed 31-bit mask (& 0x7FFFFFFF): 121293283 % 1313 = 1210
+        var ip4 = IPAddress.Parse("80.4.4.200");
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xAA);
+
+        var resultIpv4 = _handler.ComputeAllowedFastSet(infoHash, ip4, 1313, 7);
+        Assert.That(resultIpv4, Contains.Item(1059));
+        Assert.That(resultIpv4, Does.Not.Contain(1210));
+
+        // For IPv6 2001:db8:85a3::8a2e:370:7334 + infohash 20x 0xAA:
+        // Chunk 1 is 0x81BC473D = 2,176,599,869 (high bit set, >= 0x80000000)
+        // BEP 6 unsigned modulo: 2176599869 % 1313 = 379
+        // Divergent signed 31-bit mask (& 0x7FFFFFFF): 29116221 % 1313 = 1047
+        var ip6 = IPAddress.Parse("2001:db8:85a3::8a2e:370:7334");
+        var resultIpv6 = _handler.ComputeAllowedFastSet(infoHash, ip6, 1313, 7);
+        Assert.That(resultIpv6, Contains.Item(379));
+        Assert.That(resultIpv6, Does.Not.Contain(1047));
+    }
+
+    [Test]
     public void HandleMessage_suggest_piece_should_add_index_to_suggested_pieces()
     {
         using var connection = CreateConnection();

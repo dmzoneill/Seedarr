@@ -88,7 +88,7 @@ public class FastExtensionHandler : IFastExtensionHandler
         // BEP 6 algorithm: generate a deterministic set of allowed-fast piece indices
         // from the peer's IP address and the torrent's infohash.
         //
-        // 1. Mask the IP to /24 (set last octet to zero).
+        // 1. Mask the IP to /24 (IPv4) or /64 (IPv6).
         // 2. x = SHA-1(masked_ip + infohash)
         // 3. For each 4-byte chunk of x, derive a piece index.
         //    When all 5 chunks are consumed, x = SHA-1(x) and repeat.
@@ -99,7 +99,8 @@ public class FastExtensionHandler : IFastExtensionHandler
             return allowedSet;
         }
 
-        if (peerIp.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+        var ipBytes = MaskIpToSubnet(peerIp);
+        if (ipBytes == null)
         {
             return allowedSet;
         }
@@ -111,10 +112,7 @@ public class FastExtensionHandler : IFastExtensionHandler
 
         k = Math.Min(k, totalPieces);
 
-        var ipBytes = peerIp.GetAddressBytes();
-        ipBytes[3] = 0;
-
-        // x = SHA-1(ip[0..3] + infohash)
+        // x = SHA-1(masked_ip + infohash)
         var input = new byte[ipBytes.Length + infoHash.Length];
         Array.Copy(ipBytes, 0, input, 0, ipBytes.Length);
         Array.Copy(infoHash, 0, input, ipBytes.Length, infoHash.Length);
@@ -126,8 +124,8 @@ public class FastExtensionHandler : IFastExtensionHandler
             for (var i = 0; i < 5 && allowedSet.Count < k; i++)
             {
                 var offset = i * 4;
-                var y = BinaryPrimitives.ReadUInt32BigEndian(x.AsSpan(offset, 4));
-                var pieceIndex = (int)(y % (uint)totalPieces);
+                var index = BinaryPrimitives.ReadUInt32BigEndian(x.AsSpan(offset, 4));
+                var pieceIndex = (int)(index % (uint)totalPieces);
                 allowedSet.Add(pieceIndex);
             }
 
@@ -475,21 +473,42 @@ public class FastExtensionHandler : IFastExtensionHandler
         }
     }
 
-    private static byte[] MaskIpToSubnet(string ipAddress)
+    internal static byte[] MaskIpToSubnet(string ipAddress)
     {
-        if (!IPAddress.TryParse(ipAddress, out var address))
+        if (string.IsNullOrWhiteSpace(ipAddress) || !IPAddress.TryParse(ipAddress, out var address))
         {
             return null;
         }
 
-        if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+        return MaskIpToSubnet(address);
+    }
+
+    internal static byte[] MaskIpToSubnet(IPAddress address)
+    {
+        if (address == null)
         {
             return null;
         }
 
-        var bytes = address.GetAddressBytes();
-        bytes[3] = 0;
-        return bytes;
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            var bytes = address.GetAddressBytes();
+            bytes[3] = 0;
+            return bytes;
+        }
+
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            var bytes = address.GetAddressBytes();
+            for (var i = 8; i < 16; i++)
+            {
+                bytes[i] = 0;
+            }
+
+            return bytes;
+        }
+
+        return null;
     }
 
     private static void WriteInt32BigEndian(byte[] buffer, int offset, int value)
