@@ -237,6 +237,15 @@ public class AppLifetime : IHostedService, IDisposable
         {
             try
             {
+                _mainDatabase.Optimize();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error optimizing database on shutdown");
+            }
+
+            try
+            {
                 _mainDatabase.Checkpoint();
             }
             catch (Exception ex)

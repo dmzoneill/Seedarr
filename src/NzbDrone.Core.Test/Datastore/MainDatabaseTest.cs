@@ -1,4 +1,5 @@
 using System;
+using System.Data;
 using System.IO;
 using NSubstitute;
 using NUnit.Framework;
@@ -358,5 +359,48 @@ public class MainDatabaseTest
         var configBackups = Directory.GetFiles(_tempDir, "config.xml.bak-*");
         Assert.That(configBackups.Length, Is.EqualTo(1));
         Assert.That(File.ReadAllText(configBackups[0]), Is.EqualTo("postgres-old-config"));
+    }
+
+    [Test]
+    public void Optimize_should_delegate_to_underlying_database()
+    {
+        var mockDb = Substitute.For<IDatabase>();
+        mockDb.DatabaseType.Returns(DatabaseType.SQLite);
+        _dbFactory.Create(Arg.Any<DatabaseType>(), Arg.Any<string>()).Returns(mockDb);
+
+        var mainDatabase = new MainDatabase(_dbFactory, _connectionStringFactory, _appFolderInfo);
+        mainDatabase.Optimize();
+
+        mockDb.Received(1).Optimize();
+    }
+
+    [Test]
+    public void Optimize_should_swallow_exception_when_underlying_database_fails()
+    {
+        var mockDb = Substitute.For<IDatabase>();
+        mockDb.DatabaseType.Returns(DatabaseType.SQLite);
+        mockDb.When(x => x.Optimize()).Do(_ => throw new InvalidOperationException("disk error"));
+        _dbFactory.Create(Arg.Any<DatabaseType>(), Arg.Any<string>()).Returns(mockDb);
+
+        var mainDatabase = new MainDatabase(_dbFactory, _connectionStringFactory, _appFolderInfo);
+
+        Assert.DoesNotThrow(() => mainDatabase.Optimize());
+    }
+
+    [Test]
+    public void Vacuum_should_execute_optimize_before_checkpoint()
+    {
+        var mockDb = Substitute.For<IDatabase>();
+        mockDb.DatabaseType.Returns(DatabaseType.SQLite);
+        var mockConn = Substitute.For<IDbConnection>();
+        var mockCmd = Substitute.For<IDbCommand>();
+        mockConn.CreateCommand().Returns(mockCmd);
+        mockDb.OpenConnection().Returns(mockConn);
+        _dbFactory.Create(Arg.Any<DatabaseType>(), Arg.Any<string>()).Returns(mockDb);
+
+        var mainDatabase = new MainDatabase(_dbFactory, _connectionStringFactory, _appFolderInfo);
+        mainDatabase.Vacuum();
+
+        mockDb.Received(1).Optimize();
     }
 }

@@ -92,6 +92,12 @@ public class DbFactoryTest
 
         var busyTimeout = conn.ExecuteScalar<int>("PRAGMA busy_timeout;");
         Assert.That(busyTimeout, Is.GreaterThanOrEqualTo(30000));
+
+        var tempStore = conn.ExecuteScalar<long>("PRAGMA temp_store;");
+        Assert.That(tempStore, Is.EqualTo(2));
+
+        var mmapSize = conn.ExecuteScalar<long>("PRAGMA mmap_size;");
+        Assert.That(mmapSize, Is.EqualTo(268435456));
     }
 
     [Test]
