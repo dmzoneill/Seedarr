@@ -266,4 +266,21 @@ public class SystemControllerTest
         Assert.That(status, Is.Not.Null);
         Assert.That(status.DatabaseMigration, Is.EqualTo(NzbDroneMigrationBase.LatestMigration.ToString()));
     }
+
+    [Test]
+    public void GetStatus_populates_valid_garbage_collection_telemetry()
+    {
+        var actionResult = _controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.GcGen0Collections, Is.GreaterThanOrEqualTo(0));
+        Assert.That(status.GcGen1Collections, Is.GreaterThanOrEqualTo(0));
+        Assert.That(status.GcGen2Collections, Is.GreaterThanOrEqualTo(0));
+        Assert.That(status.GcTotalAllocatedBytes, Is.GreaterThan(0));
+        Assert.That(status.GcHeapSizeBytes, Is.GreaterThan(0));
+        Assert.That(status.GcPauseTimePercentage, Is.GreaterThanOrEqualTo(0.0));
+    }
 }
