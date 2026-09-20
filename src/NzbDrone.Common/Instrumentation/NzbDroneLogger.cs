@@ -3,6 +3,7 @@ using System.IO;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using NLog.Targets.Wrappers;
 using NzbDrone.Common.EnvironmentInfo;
 
 namespace NzbDrone.Common.Instrumentation;
@@ -36,10 +37,15 @@ public static class NzbDroneLogger
         config.AddTarget(consoleTarget);
         config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget);
 
-        var ringBufferTarget = new RingBufferTarget(2048) { Name = "ringBuffer" };
+        var ringBufferTarget = new RingBufferTarget(2048) { Name = "ringBufferTarget" };
         RingBufferTarget.Instance = ringBufferTarget;
-        config.AddTarget(ringBufferTarget);
-        config.AddRule(LogLevel.Trace, LogLevel.Fatal, ringBufferTarget);
+
+        var asyncWrapper = new AsyncTargetWrapper(ringBufferTarget, 5000, AsyncTargetWrapperOverflowAction.Discard)
+        {
+            Name = "ringBuffer"
+        };
+        config.AddTarget(asyncWrapper);
+        config.AddRule(LogLevel.Trace, LogLevel.Fatal, asyncWrapper);
 
         try
         {

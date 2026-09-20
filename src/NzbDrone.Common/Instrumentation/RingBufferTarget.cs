@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
@@ -24,18 +25,18 @@ public class RingBufferTarget : TargetWithLayout
 
     protected override void Write(LogEventInfo logEvent)
     {
+        var entry = new LogEntryRecord
+        {
+            Time = logEvent.TimeStamp.ToUniversalTime(),
+            Level = logEvent.Level.Name,
+            Logger = logEvent.LoggerName,
+            Message = logEvent.FormattedMessage,
+            Exception = logEvent.Exception?.ToString()
+        };
+
         lock (_lock)
         {
-            var entry = new LogEntryRecord
-            {
-                Id = ++_currentId,
-                Time = logEvent.TimeStamp.ToUniversalTime(),
-                Level = logEvent.Level.Name,
-                Logger = logEvent.LoggerName,
-                Message = logEvent.FormattedMessage,
-                Exception = logEvent.Exception?.ToString()
-            };
-
+            entry.Id = ++_currentId;
             _buffer[_position] = entry;
             _position = (_position + 1) % Capacity;
 
@@ -48,48 +49,64 @@ public class RingBufferTarget : TargetWithLayout
 
     public List<LogEntryRecord> GetEntries(int count, LogLevel minimumLevel)
     {
+        if (count <= 0)
+        {
+            return new List<LogEntryRecord>();
+        }
+
+        LogEntryRecord[] snapshot;
+
         lock (_lock)
         {
-            var result = new List<LogEntryRecord>();
+            if (_count == 0)
+            {
+                return new List<LogEntryRecord>();
+            }
 
-            // Read entries in chronological order from the ring buffer
-            int start;
+            snapshot = new LogEntryRecord[_count];
 
             if (_count < Capacity)
             {
-                start = 0;
+                Array.Copy(_buffer, 0, snapshot, 0, _count);
             }
             else
             {
-                start = _position;
-            }
+                var rightLength = Capacity - _position;
+                Array.Copy(_buffer, _position, snapshot, 0, rightLength);
 
-            for (var i = 0; i < _count; i++)
-            {
-                var index = (start + i) % Capacity;
-                var entry = _buffer[index];
-
-                if (entry == null)
+                if (_position > 0)
                 {
-                    continue;
+                    Array.Copy(_buffer, 0, snapshot, rightLength, _position);
                 }
-
-                if (minimumLevel != null && LogLevel.FromString(entry.Level) < minimumLevel)
-                {
-                    continue;
-                }
-
-                result.Add(entry);
             }
-
-            // Take the last 'count' entries (most recent)
-            if (result.Count > count)
-            {
-                result = result.Skip(result.Count - count).ToList();
-            }
-
-            return result;
         }
+
+        var result = new List<LogEntryRecord>(Math.Min(snapshot.Length, count));
+
+        for (var i = 0; i < snapshot.Length; i++)
+        {
+            var entry = snapshot[i];
+
+            if (entry == null)
+            {
+                continue;
+            }
+
+            if (minimumLevel != null && LogLevel.FromString(entry.Level) < minimumLevel)
+            {
+                continue;
+            }
+
+            result.Add(entry);
+        }
+
+        // Take the last 'count' entries (most recent)
+        if (result.Count > count)
+        {
+            result = result.Skip(result.Count - count).ToList();
+        }
+
+        return result;
     }
 
     public static RingBufferTarget Instance { get; set; }
