@@ -817,6 +817,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             ParseCompactNodes(nodesData.Span);
         }
 
+        if (pending.InfoHash != null && IsPrivateTorrent(pending.InfoHash))
+        {
+            _logger.Debug("DHT get_peers response ignored for private torrent {0}", Convert.ToHexString(pending.InfoHash));
+            return;
+        }
+
         // Parse peer values from get_peers responses
         var discoveredPeers = new List<TrackerPeer>();
         if (response.ContainsKey("values"))
@@ -898,39 +904,48 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             ["token"] = new BString(token)
         };
 
-        var peers = _peerStore.GetPeers(infoHash);
-        var peers6 = _peerStore.GetPeers6(infoHash);
-        if (peers.Count > 0 || peers6.Count > 0)
+        if (IsPrivateTorrent(infoHash))
         {
-            if (peers.Count > 0)
-            {
-                var values = new BList();
-                foreach (var peer in peers.Take(50))
-                {
-                    values.Add(new BString(peer));
-                }
-
-                responseDict["values"] = values;
-            }
-
-            if (peers6.Count > 0)
-            {
-                var values6 = new BList();
-                foreach (var peer in peers6.Take(50))
-                {
-                    values6.Add(new BString(peer));
-                }
-
-                responseDict["values6"] = values6;
-            }
-
-            _logger.Debug("DHT get_peers from {0}: returning {1} IPv4 peers, {2} IPv6 peers for {3}", sender, peers.Count, peers6.Count, Convert.ToHexString(infoHash));
+            _logger.Debug("DHT get_peers rejected for private torrent {0} from {1}", Convert.ToHexString(infoHash), sender);
+            var closest = _routingTable.GetClosestNodes(infoHash);
+            responseDict["nodes"] = new BString(EncodeCompactNodes(closest));
         }
         else
         {
-            var closest = _routingTable.GetClosestNodes(infoHash);
-            responseDict["nodes"] = new BString(EncodeCompactNodes(closest));
-            _logger.Debug("DHT get_peers from {0}: no peers for {1}, returning {2} closest nodes", sender, Convert.ToHexString(infoHash), closest.Count);
+            var peers = _peerStore.GetPeers(infoHash);
+            var peers6 = _peerStore.GetPeers6(infoHash);
+            if (peers.Count > 0 || peers6.Count > 0)
+            {
+                if (peers.Count > 0)
+                {
+                    var values = new BList();
+                    foreach (var peer in peers.Take(50))
+                    {
+                        values.Add(new BString(peer));
+                    }
+
+                    responseDict["values"] = values;
+                }
+
+                if (peers6.Count > 0)
+                {
+                    var values6 = new BList();
+                    foreach (var peer in peers6.Take(50))
+                    {
+                        values6.Add(new BString(peer));
+                    }
+
+                    responseDict["values6"] = values6;
+                }
+
+                _logger.Debug("DHT get_peers from {0}: returning {1} IPv4 peers, {2} IPv6 peers for {3}", sender, peers.Count, peers6.Count, Convert.ToHexString(infoHash));
+            }
+            else
+            {
+                var closest = _routingTable.GetClosestNodes(infoHash);
+                responseDict["nodes"] = new BString(EncodeCompactNodes(closest));
+                _logger.Debug("DHT get_peers from {0}: no peers for {1}, returning {2} closest nodes", sender, Convert.ToHexString(infoHash), closest.Count);
+            }
         }
 
         var response = new BDictionary
@@ -961,6 +976,13 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
         var infoHash = hashStr.Value.ToArray();
         var receivedToken = tokenStr.Value.ToArray();
+
+        if (IsPrivateTorrent(infoHash))
+        {
+            _logger.Debug("DHT announce_peer rejected for private torrent {0} from {1}", Convert.ToHexString(infoHash), sender);
+            SendErrorResponse(sender, transactionId, 203, "Prohibited for private torrent");
+            return;
+        }
 
         if (!ValidateToken(receivedToken, sender, infoHash))
         {
@@ -1369,6 +1391,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     public Task SendGetPeers(IPEndPoint target, byte[] infoHash, CancellationToken ct = default)
     {
+        if (IsPrivateTorrent(infoHash))
+        {
+            _logger.Debug("DHT get_peers prohibited for private torrent {0}", infoHash != null ? Convert.ToHexString(infoHash) : string.Empty);
+            return Task.CompletedTask;
+        }
+
         return SendGetPeersInternal(target, infoHash, isAnnounce: false, port: 0, ct: ct);
     }
 
@@ -1379,6 +1407,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return Task.CompletedTask;
         }
 
+        if (IsPrivateTorrent(infoHash))
+        {
+            _logger.Debug("DHT get_peers prohibited for private torrent {0}", infoHash);
+            return Task.CompletedTask;
+        }
+
         return SendGetPeers(target, Convert.FromHexString(infoHash), ct);
     }
 
@@ -1386,6 +1420,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     {
         if (_udpClient == null || infoHash == null)
         {
+            return;
+        }
+
+        if (IsPrivateTorrent(infoHash))
+        {
+            _logger.Debug("DHT get_peers prohibited for private torrent {0}", Convert.ToHexString(infoHash));
             return;
         }
 
@@ -1434,6 +1474,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return Task.CompletedTask;
         }
 
+        if (IsPrivateTorrent(infoHash))
+        {
+            _logger.Debug("DHT announcement prohibited for private torrent {0}", infoHash);
+            return Task.CompletedTask;
+        }
+
         return SendAnnouncePeer(target, Convert.FromHexString(infoHash), port, token, impliedPort, ct);
     }
 
@@ -1441,6 +1487,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     {
         if (_udpClient == null || infoHash == null || token == null)
         {
+            return;
+        }
+
+        if (IsPrivateTorrent(infoHash))
+        {
+            _logger.Debug("DHT announcement prohibited for private torrent {0}", Convert.ToHexString(infoHash));
             return;
         }
 
@@ -1496,6 +1548,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return;
         }
 
+        if (IsPrivateTorrent(infoHash))
+        {
+            _logger.Debug("DHT announcement prohibited for private torrent {0}", infoHash);
+            return;
+        }
+
         byte[] infoHashBytes;
         try
         {
@@ -1514,6 +1572,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     {
         if (infoHash == null || infoHash.Length != 20 || _udpClient == null)
         {
+            return;
+        }
+
+        if (IsPrivateTorrent(infoHash))
+        {
+            _logger.Debug("DHT announcement prohibited for private torrent {0}", Convert.ToHexString(infoHash));
             return;
         }
 
@@ -1544,6 +1608,34 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                 _logger.Debug(ex, "DHT: error sending get_peers for announce to {0}", node.EndPoint);
             }
         }
+    }
+
+    private bool IsPrivateTorrent(string infoHashHex)
+    {
+        if (_torrentService == null || string.IsNullOrWhiteSpace(infoHashHex))
+        {
+            return false;
+        }
+
+        try
+        {
+            var torrent = _torrentService.GetByInfoHash(infoHashHex);
+            return torrent?.IsPrivate == true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool IsPrivateTorrent(byte[] infoHash)
+    {
+        if (infoHash == null || infoHash.Length == 0)
+        {
+            return false;
+        }
+
+        return IsPrivateTorrent(Convert.ToHexString(infoHash));
     }
 
     private void CleanupExpiredQueries()
