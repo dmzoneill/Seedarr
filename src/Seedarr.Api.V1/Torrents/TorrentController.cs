@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
@@ -13,6 +14,7 @@ using NLog;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Peers;
@@ -52,6 +54,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ISubtitleDiscoveryService _subtitleDiscoveryService;
     private readonly ISubtitleConversionService _subtitleConversionService;
     private readonly ISubtitleEncodingDetector _subtitleEncodingDetector;
+    private readonly IMainDatabase _mainDatabase;
 
     private readonly ConcurrentDictionary<int, (List<TrackerEntry> Trackers, DateTime Expiry)> _broadcastTrackersCache = new();
     private readonly ConcurrentDictionary<int, (TorrentMediaMetadata Metadata, DateTime Expiry)> _broadcastMediaMetaCache = new();
@@ -80,7 +83,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         ISubtitleDiscoveryService subtitleDiscoveryService = null,
         ISubtitleConversionService subtitleConversionService = null,
         ISubtitleEncodingDetector subtitleEncodingDetector = null,
-        ITrackerScrapeService trackerScrapeService = null)
+        ITrackerScrapeService trackerScrapeService = null,
+        IMainDatabase mainDatabase = null)
         : base(signalRBroadcaster, null, coalesceWindow)
     {
         _torrentService = torrentService;
@@ -103,6 +107,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _subtitleConversionService = subtitleConversionService ?? new SubtitleConversionService();
         _subtitleEncodingDetector = subtitleEncodingDetector ?? new SubtitleEncodingDetector();
         _trackerScrapeService = trackerScrapeService;
+        _mainDatabase = mainDatabase;
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -1635,21 +1640,78 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             }
         }
 
-        foreach (var id in resource.TorrentIds)
+        IDbConnection connection = null;
+        IDbTransaction tx = null;
+        if (_mainDatabase != null)
         {
             try
             {
-                ExecuteActionForTorrent(id, resource, resolvedCategoryName, resolvedCategory);
-                result.SucceededIds.Add(id);
-                result.SuccessCount++;
+                connection = _mainDatabase.OpenConnection();
+                tx = connection.BeginTransaction();
             }
             catch (Exception ex)
             {
-                result.FailedIds[id] = ex.Message;
-                result.FailedCount++;
-                result.Errors.Add($"Torrent {id}: {ex.Message}");
-                _logger.Error(ex, "Failed to execute bulk action '{0}' for torrent {1}", resource.Action, id);
+                _logger.Warn(ex, "Could not open database transaction for bulk action.");
             }
+        }
+
+        try
+        {
+            foreach (var id in resource.TorrentIds)
+            {
+                try
+                {
+                    ExecuteActionForTorrent(id, resource, resolvedCategoryName, resolvedCategory);
+                    result.SucceededIds.Add(id);
+                    result.SuccessCount++;
+                }
+                catch (Exception ex)
+                {
+                    result.FailedIds[id] = ex.Message;
+                    result.FailedCount++;
+                    result.Errors.Add($"Torrent {id}: {ex.Message}");
+                    _logger.Error(ex, "Failed to execute bulk action '{0}' for torrent {1}", resource.Action, id);
+                }
+            }
+
+            if (tx != null)
+            {
+                if (result.FailedCount > 0)
+                {
+                    tx.Rollback();
+                    result.SucceededIds.Clear();
+                    result.SuccessCount = 0;
+                    result.Errors.Add("Bulk action rolled back due to failures.");
+                }
+                else
+                {
+                    tx.Commit();
+                }
+            }
+
+            foreach (var id in result.SucceededIds)
+            {
+                InvalidateBroadcastCache(id);
+            }
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                tx?.Rollback();
+            }
+            catch
+            {
+                // best effort
+            }
+
+            _logger.Error(ex, "Failed to execute bulk action '{0}'", resource.Action);
+            throw;
+        }
+        finally
+        {
+            tx?.Dispose();
+            connection?.Dispose();
         }
 
         return Ok(result);

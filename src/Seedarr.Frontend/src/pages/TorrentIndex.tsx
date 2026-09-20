@@ -5,6 +5,7 @@ import TorrentGrid from "../components/TorrentGrid";
 import TorrentDetailPanel from "../components/TorrentDetailPanel";
 import AddTorrentModal from "../components/AddTorrentModal";
 import DeleteTorrentModal from "../components/DeleteTorrentModal";
+import BulkTagModal from "../components/BulkTagModal";
 import { QuickSettingsDrawer } from "../components/quicksettings";
 import { TorrentToolbar } from "./torrentindex/TorrentToolbar";
 import { TorrentFilterPanel } from "./torrentindex/TorrentFilterPanel";
@@ -59,6 +60,7 @@ function TorrentIndex() {
     setSelectedCategory,
     selectedTag,
     setSelectedTag,
+    tags,
     selectedTagIds,
     toggleTag,
     clearTags,
@@ -86,11 +88,65 @@ function TorrentIndex() {
   } = useTorrentIndexState();
 
   const [bulkPending, setBulkPending] = useState(false);
+  const [bulkTagModalState, setBulkTagModalState] = useState<{
+    isOpen: boolean;
+    mode: "add" | "remove";
+  } | null>(null);
   const [deleteModalState, setDeleteModalState] = useState<{
     isOpen: boolean;
     targetIds: number[];
     torrentName?: string;
   } | null>(null);
+
+  const handleBulkAddTags = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setBulkTagModalState({ isOpen: true, mode: "add" });
+  }, [selectedIds]);
+
+  const handleBulkRemoveTags = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setBulkTagModalState({ isOpen: true, mode: "remove" });
+  }, [selectedIds]);
+
+  const handleConfirmBulkTag = useCallback(
+    async (tagIds: number[]) => {
+      if (!bulkTagModalState || selectedIds.size === 0 || tagIds.length === 0) return;
+      const mode = bulkTagModalState.mode;
+      const ids = Array.from(selectedIds);
+      setBulkPending(true);
+      try {
+        const res = await bulkAction.mutateAsync({
+          torrentIds: ids,
+          action: mode === "add" ? "addtags" : "removetags",
+          tagIds,
+        });
+
+        if (res.failedCount === 0) {
+          showToast(
+            mode === "add"
+              ? `Successfully assigned tags to ${res.successCount} torrent(s).`
+              : `Successfully removed tags from ${res.successCount} torrent(s).`,
+            "success",
+          );
+        } else {
+          showToast(
+            `${res.successCount} succeeded, ${res.failedCount} failed`,
+            "warning",
+          );
+        }
+        setBulkTagModalState(null);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : `Failed to ${mode === "add" ? "assign" : "remove"} tags`;
+        showToast(msg, "error");
+      } finally {
+        setBulkPending(false);
+      }
+    },
+    [bulkTagModalState, selectedIds, bulkAction, showToast],
+  );
 
   const handleBulkStart = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -469,6 +525,8 @@ function TorrentIndex() {
         onBulkStop={handleBulkStop}
         onBulkDelete={handleBulkDelete}
         onBulkClear={() => setSelectedIds(new Set())}
+        onBulkAddTags={handleBulkAddTags}
+        onBulkRemoveTags={handleBulkRemoveTags}
         onBulkMoveQueue={handleBulkMoveQueue}
         isFilterCollapsed={isFilterCollapsed}
         onToggleFilter={toggleFilterCollapse}
@@ -578,6 +636,19 @@ function TorrentIndex() {
             if (!bulkPending) setDeleteModalState(null);
           }}
           onConfirm={handleConfirmBulkDelete}
+        />
+      )}
+      {bulkTagModalState?.isOpen && (
+        <BulkTagModal
+          isOpen={bulkTagModalState.isOpen}
+          mode={bulkTagModalState.mode}
+          selectedCount={selectedIds.size}
+          tags={tags ?? []}
+          isPending={bulkPending}
+          onClose={() => {
+            if (!bulkPending) setBulkTagModalState(null);
+          }}
+          onConfirm={handleConfirmBulkTag}
         />
       )}
     </div>

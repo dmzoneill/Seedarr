@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { SeedingConfig } from "../../api/types";
 import { formatSpeed } from "../../utils/formatters";
 import { useTranslation } from "../../i18n";
+import { TagIcon } from "../../components/icons/NavIcons";
 import {
   PlusIcon,
   PlayIcon,
@@ -44,6 +45,8 @@ interface TorrentToolbarProps {
   onBulkDelete: () => void;
   onBulkClear: () => void;
   onBulkMoveQueue?: (position: "top" | "up" | "down" | "bottom") => void;
+  onBulkAddTags?: () => void;
+  onBulkRemoveTags?: () => void;
   isFilterCollapsed?: boolean;
   onToggleFilter?: () => void;
   isQuickControlsOpen?: boolean;
@@ -81,6 +84,8 @@ export function TorrentToolbar({
   onBulkDelete,
   onBulkClear,
   onBulkMoveQueue,
+  onBulkAddTags,
+  onBulkRemoveTags,
   isFilterCollapsed = false,
   onToggleFilter,
   isQuickControlsOpen = false,
@@ -191,6 +196,30 @@ export function TorrentToolbar({
             >
               <StopIcon size={13} /> {t("torrents.stop", undefined, "Stop")}
             </button>
+            {onBulkAddTags && (
+              <button
+                type="button"
+                className="btn btn-outline bulk-add-tags-btn"
+                onClick={onBulkAddTags}
+                disabled={bulkPending}
+                title={t("torrents.bulkAddTags", undefined, "Assign Tags")}
+                style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+              >
+                <TagIcon size={13} /> {t("torrents.bulkAddTags", undefined, "Assign Tags")}
+              </button>
+            )}
+            {onBulkRemoveTags && (
+              <button
+                type="button"
+                className="btn btn-outline bulk-remove-tags-btn"
+                onClick={onBulkRemoveTags}
+                disabled={bulkPending}
+                title={t("torrents.bulkRemoveTags", undefined, "Remove Tags")}
+                style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+              >
+                <TagIcon size={13} /> {t("torrents.bulkRemoveTags", undefined, "Remove Tags")}
+              </button>
+            )}
             <button
               className="btn btn-danger"
               onClick={onBulkDelete}

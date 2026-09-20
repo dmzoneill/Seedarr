@@ -112,4 +112,38 @@ describe("TorrentToolbar accessibility attributes", () => {
     assert.ok(gridMatch, "Grid button found");
     assert.ok(gridMatch[0].includes('aria-pressed="true"'), "Grid button should be aria-pressed=true");
   });
+
+  it("renders bulk tag assignment and removal buttons when selectedCount > 0", () => {
+    let addTagsCalled = false;
+    let removeTagsCalled = false;
+    const html = renderToStaticMarkup(
+      React.createElement(TorrentToolbar, {
+        ...defaultProps,
+        selectedCount: 3,
+        onBulkAddTags: () => {
+          addTagsCalled = true;
+        },
+        onBulkRemoveTags: () => {
+          removeTagsCalled = true;
+        },
+      }),
+    );
+
+    assert.ok(
+      html.includes("bulk-add-tags-btn"),
+      "Assign tags button must be rendered in bulk actions",
+    );
+    assert.ok(
+      html.includes("bulk-remove-tags-btn"),
+      "Remove tags button must be rendered in bulk actions",
+    );
+    assert.ok(
+      html.includes("Assign Tags"),
+      "Assign Tags text should be present",
+    );
+    assert.ok(
+      html.includes("Remove Tags"),
+      "Remove Tags text should be present",
+    );
+  });
 });

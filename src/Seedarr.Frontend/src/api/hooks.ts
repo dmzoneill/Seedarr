@@ -405,6 +405,7 @@ export function useStartAllSeeding() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
       queryClient.invalidateQueries({ queryKey: ["seeding"] });
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
     },
   });
 }
@@ -416,6 +417,7 @@ export function useStopAllSeeding() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
       queryClient.invalidateQueries({ queryKey: ["seeding"] });
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
     },
   });
 }
@@ -428,6 +430,7 @@ export function useBulkTorrentAction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
       queryClient.invalidateQueries({ queryKey: ["seeding"] });
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
     },
   });
 }
