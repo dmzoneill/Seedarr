@@ -655,4 +655,45 @@ public class CategoryServiceTest
 
         Assert.That(result, Is.EqualTo("/default/path"));
     }
+
+    [Test]
+    public void CanDownload_bypasses_stalled_and_slow_downloading_torrents()
+    {
+        var category = new Category { Id = 1, Name = "Movies", MaxActiveDownloads = 1 };
+        _repository.GetByName("Movies").Returns(category);
+        _repository.All().Returns(new[] { category });
+
+        var stalledDl = new Torrent { Id = 1, Category = "Movies", Status = TorrentStatus.Downloading, DownloadSpeed = 0 };
+        var slowDl = new Torrent { Id = 2, Category = "Movies", Status = TorrentStatus.Downloading, DownloadSpeed = 5 * 1024 };
+        var candidate = new Torrent { Id = 3, Category = "Movies" };
+
+        // With ignoreSlowTorrents = true (default), stalled and slow active downloads do not block candidate
+        Assert.That(_subject.CanDownload(candidate, new[] { stalledDl }, 1), Is.True);
+        Assert.That(_subject.CanDownload(candidate, new[] { slowDl }, 1), Is.True);
+
+        // With ignoreSlowTorrents = false, stalled and slow active downloads do block candidate
+        Assert.That(_subject.CanDownload(candidate, new[] { stalledDl }, 1, ignoreSlowTorrents: false), Is.False);
+        Assert.That(_subject.CanDownload(candidate, new[] { slowDl }, 1, ignoreSlowTorrents: false), Is.False);
+    }
+
+    [Test]
+    public void EvaluateDownloadQueue_bypasses_slow_downloads_under_10kbps()
+    {
+        var cat = new Category { Id = 1, Name = "General" };
+        _repository.All().Returns(new[] { cat });
+        _repository.GetByName("General").Returns(cat);
+
+        var slowActive = new Torrent { Id = 1, Category = "General", Status = TorrentStatus.Downloading, DownloadSpeed = 9 * 1024 };
+        var queued = new Torrent { Id = 2, Category = "General", SortOrder = 1 };
+
+        // Global limit is 1, active has 1 slow download (< 10 KB/s). Queued should be promoted.
+        var promoted = _subject.EvaluateDownloadQueue(new[] { queued }, new[] { slowActive }, 1, ignoreSlowTorrents: true);
+
+        Assert.That(promoted.Select(t => t.Id), Is.EqualTo(new[] { 2 }));
+
+        // With ignoreSlowTorrents = false, slowActive consumes the slot.
+        var notPromoted = _subject.EvaluateDownloadQueue(new[] { queued }, new[] { slowActive }, 1, ignoreSlowTorrents: false);
+
+        Assert.That(notPromoted, Is.Empty);
+    }
 }
