@@ -6,6 +6,72 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.10.2](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.2) - 2026-09-20
+
+### ✨ Features
+- feat(endgame): implement Endgame Mode with duplicate block flooding and immediate CANCEL broadcasts (closes #234)
+- feat(media): implement HTTP 206 byte-range streaming for torrent media files (closes #256)
+- feat(history): provide totalCount in DownloadHistory API and add pagination controls in UI (closes #237)
+- feat(security): implement PeerBlocklistService with P2P, DAT, and CIDR format parsing and auto-refresh (closes #260)
+- feat(torrents): implement .torrent file export endpoint with dynamic BEP 3 bencoding synthesis (closes #245)
+- feat(mediainspection): implement binary header inspection for media containers (closes #258)
+- feat(update): implement in-app update package retrieval, SHA-256 verification, ETXTBSY executable staging, and UI install workflow (closes #257)
+- feat(storage): implement in-memory PieceCache with pre-flush SHA-1 verification (closes #277)
+- feat(ui): implement interactive column sorting, category selector, and pagination in Indexer Search (closes #306)
+- feat(webseed): coordinate WebSeeds with swarm fallback and enforce SHA-1 piece validation (closes #295)
+- feat(storage): implement disk space preallocation to prevent fragmentation and disk exhaustion (closes #275)
+- feat(speedschedule): implement interactive drag-to-select time-block painting in WeeklyCalendar (closes #278)
+- feat(utp): implement LEDBAT congestion control (RFC 6817) with base delay and dynamic congestion window (closes #266)
+- feat(dht): implement BEP 32 IPv6 DHT extension with dual-stack sockets and compact nodes6 parsing/encoding (closes #323)
+- feat(diagnostics): add container-aware memory metrics with cgroup limits and system resource telemetry (closes #282)
+- feat(queue): wire QueueConcurrencyCard settings to backend ConfigService and enforce MaxActiveDownloads and MaxActiveSeeds (closes #286)
+
+### 🐛 Bug Fixes
+- fix(seeding): simulate active leechers in SwarmSnapshot to prevent swarm pause on zero leechers
+- fix(seeding): allow simulated uploading when tracker reports zero leechers, remove force recheck from UI, and fix blocklist tests
+- fix(utp): allow non-owned UdpClient to drain incoming ACKs and fix column reorder/resize
+- fix(torrents): resolve SQLite deadlock in BulkAction, address CA1849 warnings, and fix unit test suites
+- fix(tests): add missing using System.Threading.Tasks to SystemControllerTest
+- fix(api): remove explicit default value initialization on MaxActiveTorrents (CA1805)
+- fix(peers): use disambiguated piece index variables in PeerServer Have and Request handlers
+- fix(api): remove undefined ModelNotFoundException in ExportTorrent
+- fix(lint): fix indentation to multiple of 4 and disambiguate switch case variable names
+- fix(ci): resolve super-linter indentation and compilation analyzer errors
+- fix(seeding): propagate tracker swarm stats and prevent overwriting leechers with internal peer db
+- fix(torrents): delete downloaded payload files when deleteFiles is true with strict path boundary validation (closes #222)
+- fix(piecemap): prevent false 100% verified piece grid when torrent status is Seeding but progress is incomplete (closes #207)
+- fix(indexers): resolve Torznab XML pagination, invariant pubDate, and categories parsing (closes #231)
+- fix(lpd): enable socket ReuseAddress, add IPv6 multicast support, and validate infohash and port (closes #229)
+- fix(pex): implement BEP 11 Peer Exchange flags (ut_pex) filtering and IPv6 support (closes #226)
+- fix(trackerserver): track seeder/leecher status and include complete/incomplete in announce response (closes #239)
+- fix(ui): add multi-tracker magnet link encoding, clipboard HTTP fallback, and copy confirmation toast (closes #248)
+- fix(trackerserver): support multi-infohash scrape requests and full scrape under BEP 48 (closes #240)
+- fix(lifecycle): prevent process lock on graceful shutdown and flush pending database writes (closes #255)
+- fix(restore): prevent database corruption on backup restore and preserve WAL/SHM staging (closes #252)
+- fix(trackerboost): resolve harvest counter on existing trackers and HTTP 405 in probe (closes #244)
+- fix(fast): reject hanging pending requests on choking peer and reject invalid block requests (closes #254)
+- fix(magnet): support hybrid v1/v2 magnet links, strip base32 padding, eliminate double URL decoding, and validate 40-char hex infoHash (closes #246)
+- fix(bencode): handle piece length overflows, validate piece string byte alignment, and sanitize multi-file paths against directory traversal (closes #247)
+- fix(torrent): resolve SourcePath vs SavePath inversion in setLocation and implement disk file relocation (closes #289)
+- fix(health): resolve camelCase enum mismatch masking health alerts and broadcast via SignalR (closes #281)
+- fix(storage): enforce FileShare.ReadWrite and thread-safe file handle pooling to prevent concurrent I/O collisions (closes #276)
+- fix(webseed): implement HTTP error handling, Retry-After backoff, and dead web seed circuit breaker (closes #294)
+- fix(speedschedule): broadcast SignalR updates on schedule mutations and invalidate active speed limits on Turtle Mode toggle (closes #280)
+- fix(peers): enforce IP blocklist on inbound, outbound, and peer discovery (closes #262)
+- fix(logging): initialize FileTarget during host startup (closes #267)
+- fix(tags): enforce case-insensitive uniqueness and return 404 on missing update (closes #273)
+
+### 🔧 Maintenance & Improvements
+- security(integrity): store piece SHA-1 hashes and validate piece data against corruption (closes #235)
+- perf(trackerserver): add background stale peer eviction timer in PeerDatabase (closes #242)
+- security(fast): separate local and remote allowed fast sets to prevent choke bypass (closes #249)
+- perf(peers): replace blocking socket IO with async ValueTask streaming and buffer pooling (closes #479)
+- perf(ui): virtualize log rendering and debounce search input in SystemLogs (closes #269)
+- perf(security): implement O(log N) binary search interval tree with atomic swap for blocklist matching (closes #261)
+- perf(logging): prevent thread pool lock contention in RingBufferTarget with asynchronous write buffering and snapshot reads (closes #265)
+- security(torrents): implement QBittorrent renameFile endpoint and sanitize directory traversal (closes #291)
+- chore(container): rename docker-entrypoint.sh to container-entrypoint.sh
+
 ## [v1.10.1](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.1) - 2026-09-20
 
 ### ✨ Features
