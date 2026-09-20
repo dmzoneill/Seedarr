@@ -197,7 +197,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
                             if (!string.IsNullOrWhiteSpace(item.OutputPath))
                             {
-                                var remappedPath = _remotePathMappingService.RemapRemoteToLocal(definition.Host, item.OutputPath);
+                                var remappedPath = RemapRemotePath(definition.Host, item.OutputPath);
                                 if (string.IsNullOrEmpty(torrent.SavePath))
                                 {
                                     torrent.SavePath = remappedPath;
@@ -251,7 +251,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             var total = parsed.TotalSize > 0 ? parsed.TotalSize : item.TotalSize;
                             var remaining = item.RemainingSize;
                             var downloaded = Math.Max(0, total - remaining);
-                            var remappedPath = _remotePathMappingService.RemapRemoteToLocal(definition.Host, item.OutputPath);
+                            var remappedPath = RemapRemotePath(definition.Host, item.OutputPath);
                             var initialProgress = total > 0 ? (double)(total - remaining) / total : (remaining == 0 ? 1.0 : 0.0);
 
                             torrent = new Torrent
@@ -501,7 +501,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             torrentBytes = SearchIndexersForTorrent(normalizedHash);
         }
 
-        var remappedPath = _remotePathMappingService.RemapRemoteToLocal(definition?.Host, matchingItem?.OutputPath);
+        var remappedPath = RemapRemotePath(definition?.Host, matchingItem?.OutputPath);
 
         Torrent torrent;
         if (torrentBytes != null && torrentBytes.Length > 0)
@@ -864,6 +864,28 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         }
 
         return null;
+    }
+
+    private string RemapRemotePath(string host, string remotePath)
+    {
+        if (string.IsNullOrWhiteSpace(remotePath) || _remotePathMappingService == null)
+        {
+            return remotePath;
+        }
+
+        var remapped = _remotePathMappingService.Remap(host, remotePath);
+        if (!string.IsNullOrEmpty(remapped) && !string.Equals(remapped, remotePath, StringComparison.Ordinal))
+        {
+            return remapped;
+        }
+
+        var remappedLocal = _remotePathMappingService.RemapRemoteToLocal(host, remotePath);
+        if (!string.IsNullOrEmpty(remappedLocal))
+        {
+            return remappedLocal;
+        }
+
+        return remapped ?? remotePath;
     }
 
     protected virtual IIndexer CreateIndexer(IndexerDefinition definition)

@@ -108,9 +108,9 @@ public static class RpcAuthenticationHelper
                     var username = parts[0];
                     var password = parts.Length > 1 ? parts[1] : string.Empty;
 
-                    if (!string.IsNullOrWhiteSpace(masterApiKey) &&
-                        (FixedTimeEquals(password, masterApiKey) ||
-                         FixedTimeEquals(username, masterApiKey)))
+                    var passwordMatches = FixedTimeEquals(password, masterApiKey);
+                    var usernameMatches = FixedTimeEquals(username, masterApiKey);
+                    if (!string.IsNullOrWhiteSpace(masterApiKey) && (passwordMatches || usernameMatches))
                     {
                         return true;
                     }

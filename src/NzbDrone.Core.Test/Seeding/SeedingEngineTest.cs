@@ -2373,13 +2373,13 @@ public class SeedingEngineTest
 
         _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(
             e => e.Torrent.Id == 42 &&
-                 e.OldStatus == TorrentStatus.Downloading &&
-                 e.NewStatus == TorrentStatus.StalledNoSeeds));
+                e.OldStatus == TorrentStatus.Downloading &&
+                e.NewStatus == TorrentStatus.StalledNoSeeds));
 
         _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentPieceExtinctionEvent>(
             e => e.Torrent.Id == 42 &&
-                 e.ExtinctPieceCount == 1 &&
-                 e.TotalPieces == 2));
+                e.ExtinctPieceCount == 1 &&
+                e.TotalPieces == 2));
     }
 
     [Test]
@@ -2418,8 +2418,8 @@ public class SeedingEngineTest
 
         _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(
             e => e.Torrent.Id == 43 &&
-                 e.OldStatus == TorrentStatus.StalledNoSeeds &&
-                 e.NewStatus == TorrentStatus.Downloading));
+                e.OldStatus == TorrentStatus.StalledNoSeeds &&
+                e.NewStatus == TorrentStatus.Downloading));
     }
 
     [Test]

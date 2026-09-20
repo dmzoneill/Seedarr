@@ -671,7 +671,7 @@ public class RemotePathMappingServiceTest
         Assert.That(tvResult, Is.EqualTo("/mnt/storage/tv/Show/ep1.mkv"));
 
         // General path matches the shorter prefix
-        var genResult = service.RemapRemoteToLocal("remote-server", @"D:\Downloads\Moviesilm.mkv");
+        var genResult = service.RemapRemoteToLocal("remote-server", @"D:\Downloads\Movies\film.mkv");
         Assert.That(genResult, Is.EqualTo("/mnt/storage/downloads/Movies/film.mkv"));
     }
 }
