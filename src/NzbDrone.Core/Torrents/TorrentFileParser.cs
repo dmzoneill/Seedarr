@@ -14,6 +14,8 @@ public class ParsedTorrent
 {
     public string Name { get; set; }
     public string InfoHash { get; set; }
+    public string InfoHashV2 { get; set; }
+    public int MetaVersion { get; set; } = 1;
     public long TotalSize { get; set; }
     public long ContentSize { get; set; }
     public int PieceCount { get; set; }
@@ -27,6 +29,7 @@ public class ParsedTorrent
     public List<ParsedTorrentFile> Files { get; set; }
     public List<string> HttpSeeds { get; set; } = new();
     public List<string> UrlList { get; set; } = new();
+    public Dictionary<string, byte[]> PieceLayers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public class ParsedTorrentFile
@@ -34,6 +37,13 @@ public class ParsedTorrentFile
     public string Path { get; set; }
     public long Size { get; set; }
     public bool IsPaddingFile { get; set; }
+    public byte[] PiecesRoot { get; set; }
+
+    public string PiecesRootHex
+    {
+        get => PiecesRoot != null ? Convert.ToHexString(PiecesRoot).ToLowerInvariant() : null;
+        set => PiecesRoot = value != null ? Convert.FromHexString(value) : null;
+    }
 }
 
 public interface ITorrentFileParser
@@ -133,15 +143,59 @@ public class TorrentFileParser : ITorrentFileParser
                 throw new InvalidTorrentFileException($"Invalid piece length: {pieceLength}. Must be a power of two between 16 KiB and 64 MiB.");
             }
 
-            if (!info.ContainsKey("pieces") || info["pieces"] is not BString piecesStr)
+            var hasPiecesKey = info.ContainsKey("pieces");
+            BString piecesStr = null;
+            if (hasPiecesKey)
+            {
+                if (info["pieces"] is not BString ps)
+                {
+                    throw new InvalidTorrentFileException("Malformed torrent file: missing or invalid 'pieces'.");
+                }
+
+                piecesStr = ps;
+            }
+
+            var hasFileTreeKey = info.ContainsKey("file tree");
+            BDictionary fileTree = null;
+            if (hasFileTreeKey)
+            {
+                if (info["file tree"] is not BDictionary ft)
+                {
+                    throw new InvalidTorrentFileException("Malformed torrent file: 'file tree' is not a dictionary.");
+                }
+
+                fileTree = ft;
+            }
+
+            var hasMetaVersion2 = info.ContainsKey("meta version") && (info["meta version"] as BNumber)?.Value == 2;
+
+            if (!hasPiecesKey && !hasFileTreeKey)
             {
                 throw new InvalidTorrentFileException("Malformed torrent file: missing or invalid 'pieces'.");
             }
 
-            var pieceCount = piecesStr.Value.Length / 20;
-            if (pieceCount <= 0 || pieceCount > MaxPermittedPieces)
+            int metaVersion;
+            if (hasPiecesKey && (hasFileTreeKey || hasMetaVersion2))
             {
-                throw new InvalidTorrentFileException($"Piece count {pieceCount} exceeds maximum permitted limit of {MaxPermittedPieces}.");
+                metaVersion = 3;
+            }
+            else if (hasFileTreeKey || hasMetaVersion2)
+            {
+                metaVersion = 2;
+            }
+            else
+            {
+                metaVersion = 1;
+            }
+
+            var pieceCount = 0;
+            if (piecesStr != null)
+            {
+                pieceCount = piecesStr.Value.Length / 20;
+                if (pieceCount <= 0 || pieceCount > MaxPermittedPieces)
+                {
+                    throw new InvalidTorrentFileException($"Piece count {pieceCount} exceeds maximum permitted limit of {MaxPermittedPieces}.");
+                }
             }
 
             var torrentName = GetStringWithUtf8Fallback(info, "name") ?? GetStringWithUtf8Fallback(torrent, "name");
@@ -188,9 +242,33 @@ public class TorrentFileParser : ITorrentFileParser
                 announceUrl = announceListParsed[0][0];
             }
 
-            var infoHash = TryExtractRawInfoBytes(bytes, out var rawInfoBytes)
-                ? InfoHashCalculator.Calculate(rawInfoBytes)
-                : InfoHashCalculator.Calculate(info);
+            var hasRawInfo = TryExtractRawInfoBytes(bytes, out var rawInfoBytes);
+            string infoHash = null;
+            string infoHashV2 = null;
+
+            if (metaVersion == 1)
+            {
+                infoHash = hasRawInfo
+                    ? InfoHashCalculator.Calculate(rawInfoBytes)
+                    : InfoHashCalculator.Calculate(info);
+            }
+            else if (metaVersion == 3)
+            {
+                if (hasRawInfo)
+                {
+                    InfoHashCalculator.Calculate(rawInfoBytes, out infoHash, out infoHashV2);
+                }
+                else
+                {
+                    InfoHashCalculator.Calculate(info, out infoHash, out infoHashV2);
+                }
+            }
+            else
+            {
+                infoHashV2 = hasRawInfo
+                    ? InfoHashCalculator.CalculateV2(rawInfoBytes)
+                    : InfoHashCalculator.CalculateV2(info);
+            }
 
             var httpSeeds = new List<string>();
             ExtractUrlList(torrent, "httpseeds", httpSeeds);
@@ -204,6 +282,8 @@ public class TorrentFileParser : ITorrentFileParser
             {
                 Name = torrentName,
                 InfoHash = infoHash,
+                InfoHashV2 = infoHashV2,
+                MetaVersion = metaVersion,
                 PieceLength = (int)pieceLengthNum.Value,
                 PieceCount = pieceCount,
                 Comment = GetStringWithUtf8Fallback(torrent, "comment"),
@@ -221,7 +301,28 @@ public class TorrentFileParser : ITorrentFileParser
                 result.CreationDate = DateTimeOffset.FromUnixTimeSeconds(creationDateNum.Value).UtcDateTime;
             }
 
-            if (info.ContainsKey("files") && info["files"] is BList files)
+            if (fileTree != null)
+            {
+                var currentPath = new List<string>();
+                TraverseFileTree(fileTree, currentPath, result.Files);
+
+                if (result.Files.Count == 0)
+                {
+                    throw new InvalidTorrentFileException("Malformed torrent file: 'file tree' contains no files.");
+                }
+
+                if (metaVersion == 2)
+                {
+                    var calculatedPieceCount = result.Files.Sum(f => f.Size == 0 ? 0L : (f.Size + pieceLength - 1) / pieceLength);
+                    if (calculatedPieceCount > MaxPermittedPieces)
+                    {
+                        throw new InvalidTorrentFileException($"Piece count {calculatedPieceCount} exceeds maximum permitted limit of {MaxPermittedPieces}.");
+                    }
+
+                    result.PieceCount = (int)calculatedPieceCount;
+                }
+            }
+            else if (info.ContainsKey("files") && info["files"] is BList files)
             {
                 var rootDirName = result.Name?.Replace('\\', '/').Trim('/', '\\')?.Normalize(NormalizationForm.FormC);
 
@@ -311,6 +412,12 @@ public class TorrentFileParser : ITorrentFileParser
             result.TotalSize = result.Files.Sum(f => f.Size);
             result.ContentSize = result.Files.Where(f => !f.IsPaddingFile).Sum(f => f.Size);
 
+            ExtractPieceLayers(torrent, result.PieceLayers);
+            if (result.PieceLayers.Count == 0)
+            {
+                ExtractPieceLayers(info, result.PieceLayers);
+            }
+
             return result;
         }
         catch (InvalidTorrentFileException)
@@ -320,6 +427,124 @@ public class TorrentFileParser : ITorrentFileParser
         catch (Exception ex)
         {
             throw new InvalidTorrentFileException($"Failed to parse torrent file: {ex.Message}", ex);
+        }
+    }
+
+    private static void TraverseFileTree(BDictionary tree, List<string> currentPath, List<ParsedTorrentFile> files, int depth = 0)
+    {
+        if (depth > MaxRecursionDepth)
+        {
+            throw new InvalidTorrentFileException($"Torrent file exceeds maximum recursion depth limit of {MaxRecursionDepth}.");
+        }
+
+        if (tree.ContainsKey(""))
+        {
+            if (tree[""] is not BDictionary fileNode)
+            {
+                throw new InvalidTorrentFileException("Malformed torrent file: file tree leaf node is not a dictionary.");
+            }
+
+            if (!fileNode.ContainsKey("length") || fileNode["length"] is not BNumber lengthNum)
+            {
+                throw new InvalidTorrentFileException("Malformed torrent file: file tree leaf node missing or invalid 'length'.");
+            }
+
+            if (lengthNum.Value < 0)
+            {
+                throw new InvalidTorrentFileException($"Malformed torrent file: negative file length {lengthNum.Value}.");
+            }
+
+            byte[] piecesRoot = null;
+            if (fileNode.TryGetValue("pieces root", out var piecesRootObj))
+            {
+                if (piecesRootObj is not BString piecesRootStr)
+                {
+                    throw new InvalidTorrentFileException("Malformed torrent file: file tree 'pieces root' is not a byte string.");
+                }
+
+                if (piecesRootStr.Value.Length != 32)
+                {
+                    throw new InvalidTorrentFileException("Malformed torrent file: 'pieces root' must be 32 bytes.");
+                }
+
+                piecesRoot = piecesRootStr.Value.ToArray();
+            }
+            else if (lengthNum.Value > 0)
+            {
+                throw new InvalidTorrentFileException("Malformed torrent file: file tree missing 'pieces root' for non-empty file.");
+            }
+
+            var relativePath = currentPath.Count > 0 ? string.Join("/", currentPath) : null;
+            if (string.IsNullOrWhiteSpace(relativePath))
+            {
+                throw new InvalidTorrentFileException("Malformed torrent file: empty file path in file tree.");
+            }
+
+            files.Add(new ParsedTorrentFile
+            {
+                Path = relativePath.Normalize(NormalizationForm.FormC),
+                Size = lengthNum.Value,
+                PiecesRoot = piecesRoot,
+                IsPaddingFile = IsPadding(fileNode, relativePath)
+            });
+        }
+
+        foreach (var kvp in tree)
+        {
+            var segment = DecodeBString(kvp.Key)?.Replace('\\', '/').Trim('/', '\\');
+            if (string.IsNullOrEmpty(segment))
+            {
+                continue;
+            }
+
+            if (kvp.Value is BDictionary subDict)
+            {
+                currentPath.Add(segment.Normalize(NormalizationForm.FormC));
+                TraverseFileTree(subDict, currentPath, files, depth + 1);
+                currentPath.RemoveAt(currentPath.Count - 1);
+            }
+            else
+            {
+                throw new InvalidTorrentFileException("Malformed torrent file: file tree node is not a dictionary.");
+            }
+        }
+    }
+
+    private static void ExtractPieceLayers(BDictionary dict, Dictionary<string, byte[]> pieceLayers)
+    {
+        if (dict == null || !dict.ContainsKey("piece layers") || dict["piece layers"] is not BDictionary layersDict)
+        {
+            return;
+        }
+
+        foreach (var kvp in layersDict)
+        {
+            if (kvp.Value is not BString hashesStr)
+            {
+                throw new InvalidTorrentFileException("Malformed torrent file: 'piece layers' entry value must be a byte string.");
+            }
+
+            if (hashesStr.Value.Length % 32 != 0)
+            {
+                throw new InvalidTorrentFileException("Malformed torrent file: piece layer hashes length must be a multiple of 32 bytes.");
+            }
+
+            var keySpan = kvp.Key.Value.Span;
+            string hexKey;
+            if (keySpan.Length == 32)
+            {
+                hexKey = Convert.ToHexString(keySpan).ToLowerInvariant();
+            }
+            else if (keySpan.Length == 64)
+            {
+                hexKey = (DecodeBString(kvp.Key) ?? Convert.ToHexString(keySpan)).ToLowerInvariant();
+            }
+            else
+            {
+                hexKey = Convert.ToHexString(keySpan).ToLowerInvariant();
+            }
+
+            pieceLayers[hexKey] = hashesStr.Value.ToArray();
         }
     }
 

@@ -1237,4 +1237,406 @@ public class TorrentFileParserTest
         Assert.That(result.UrlList[0], Is.EqualTo("http://webseed1.example.com/files/"));
         Assert.That(result.UrlList[1], Is.EqualTo("http://webseed2.example.com/files/"));
     }
+
+    [Test]
+    public void Parse_should_identify_pure_v1_torrent_and_set_meta_version_1()
+    {
+        var torrentDict = CreateMinimalTorrent("file.iso", 2048, 16384);
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.MetaVersion, Is.EqualTo(1));
+        Assert.That(result.InfoHash, Is.Not.Null);
+        Assert.That(result.InfoHash, Has.Length.EqualTo(40));
+        Assert.That(result.InfoHashV2, Is.Null);
+        Assert.That(result.PieceLayers, Is.Empty);
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].PiecesRoot, Is.Null);
+        Assert.That(result.Files[0].PiecesRootHex, Is.Null);
+    }
+
+    [Test]
+    public void Parse_should_parse_pure_v2_torrent_with_nested_directories_in_file_tree()
+    {
+        var rootA = new byte[32];
+        var rootB = new byte[32];
+        new Random(101).NextBytes(rootA);
+        new Random(202).NextBytes(rootB);
+
+        var fileTree = new BDictionary
+        {
+            ["docs"] = new BDictionary
+            {
+                ["sub"] = new BDictionary
+                {
+                    ["readme.txt"] = new BDictionary
+                    {
+                        [""] = new BDictionary
+                        {
+                            ["length"] = new BNumber(25000),
+                            ["pieces root"] = new BString(rootA)
+                        }
+                    }
+                },
+                ["guide.pdf"] = new BDictionary
+                {
+                    [""] = new BDictionary
+                    {
+                        ["length"] = new BNumber(35000),
+                        ["pieces root"] = new BString(rootB)
+                    }
+                }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            ["name"] = new BString("docs-bundle"),
+            ["piece length"] = new BNumber(16384),
+            ["meta version"] = new BNumber(2),
+            ["file tree"] = fileTree
+        };
+
+        var torrentDict = new BDictionary { ["info"] = info };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.MetaVersion, Is.EqualTo(2));
+        Assert.That(result.InfoHash, Is.Null);
+        Assert.That(result.InfoHashV2, Is.Not.Null);
+        Assert.That(result.InfoHashV2, Has.Length.EqualTo(64));
+        Assert.That(result.Name, Is.EqualTo("docs-bundle"));
+        Assert.That(result.PieceLength, Is.EqualTo(16384));
+        Assert.That(result.PieceCount, Is.EqualTo(5));
+        Assert.That(result.TotalSize, Is.EqualTo(60000));
+        Assert.That(result.ContentSize, Is.EqualTo(60000));
+
+        Assert.That(result.Files, Has.Count.EqualTo(2));
+
+        var file1 = result.Files.FirstOrDefault(f => f.Path == "docs/sub/readme.txt");
+        Assert.That(file1, Is.Not.Null);
+        Assert.That(file1.Size, Is.EqualTo(25000));
+        Assert.That(file1.PiecesRoot, Is.EqualTo(rootA));
+        Assert.That(file1.PiecesRootHex, Is.EqualTo(Convert.ToHexString(rootA).ToLowerInvariant()));
+
+        var file2 = result.Files.FirstOrDefault(f => f.Path == "docs/guide.pdf");
+        Assert.That(file2, Is.Not.Null);
+        Assert.That(file2.Size, Is.EqualTo(35000));
+        Assert.That(file2.PiecesRoot, Is.EqualTo(rootB));
+        Assert.That(file2.PiecesRootHex, Is.EqualTo(Convert.ToHexString(rootB).ToLowerInvariant()));
+    }
+
+    [Test]
+    public void Parse_should_parse_hybrid_torrent_and_calculate_both_info_hashes()
+    {
+        var pieces = new byte[40];
+        new Random(42).NextBytes(pieces);
+
+        var rootHash = new byte[32];
+        new Random(43).NextBytes(rootHash);
+
+        var fileTree = new BDictionary
+        {
+            ["video.mp4"] = new BDictionary
+            {
+                [""] = new BDictionary
+                {
+                    ["length"] = new BNumber(32000),
+                    ["pieces root"] = new BString(rootHash)
+                }
+            }
+        };
+
+        var files = new BList
+        {
+            new BDictionary
+            {
+                ["length"] = new BNumber(32000),
+                ["path"] = new BList { new BString("video.mp4") }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            ["name"] = new BString("hybrid-collection"),
+            ["piece length"] = new BNumber(16384),
+            ["pieces"] = new BString(pieces),
+            ["meta version"] = new BNumber(2),
+            ["file tree"] = fileTree,
+            ["files"] = files
+        };
+
+        var torrentDict = new BDictionary { ["info"] = info };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.MetaVersion, Is.EqualTo(3));
+        Assert.That(result.InfoHash, Is.Not.Null);
+        Assert.That(result.InfoHash, Has.Length.EqualTo(40));
+        Assert.That(result.InfoHashV2, Is.Not.Null);
+        Assert.That(result.InfoHashV2, Has.Length.EqualTo(64));
+
+        var encodedInfo = info.EncodeAsBytes();
+        var expectedV1 = Convert.ToHexString(SHA1.HashData(encodedInfo)).ToLowerInvariant();
+        var expectedV2 = Convert.ToHexString(SHA256.HashData(encodedInfo)).ToLowerInvariant();
+
+        Assert.That(result.InfoHash, Is.EqualTo(expectedV1));
+        Assert.That(result.InfoHashV2, Is.EqualTo(expectedV2));
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("video.mp4"));
+        Assert.That(result.Files[0].PiecesRoot, Is.EqualTo(rootHash));
+        Assert.That(result.Files[0].PiecesRootHex, Is.EqualTo(Convert.ToHexString(rootHash).ToLowerInvariant()));
+    }
+
+    [Test]
+    public void Parse_should_extract_piece_layers_dictionary()
+    {
+        var rootHash = new byte[32];
+        new Random(50).NextBytes(rootHash);
+
+        var pieceHashes = new byte[64];
+        new Random(51).NextBytes(pieceHashes);
+
+        var fileTree = new BDictionary
+        {
+            ["largefile.dat"] = new BDictionary
+            {
+                [""] = new BDictionary
+                {
+                    ["length"] = new BNumber(32768),
+                    ["pieces root"] = new BString(rootHash)
+                }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            ["name"] = new BString("v2-with-layers"),
+            ["piece length"] = new BNumber(16384),
+            ["meta version"] = new BNumber(2),
+            ["file tree"] = fileTree
+        };
+
+        var pieceLayers = new BDictionary
+        {
+            [new BString(rootHash)] = new BString(pieceHashes)
+        };
+
+        var torrentDict = new BDictionary
+        {
+            ["info"] = info,
+            ["piece layers"] = pieceLayers
+        };
+
+        using var stream = CreateTorrentStream(torrentDict);
+        var result = _subject.Parse(stream);
+
+        var rootHex = Convert.ToHexString(rootHash).ToLowerInvariant();
+        Assert.That(result.PieceLayers, Contains.Key(rootHex));
+        Assert.That(result.PieceLayers[rootHex], Is.EqualTo(pieceHashes));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_missing_both_pieces_and_file_tree()
+    {
+        var info = new BDictionary
+        {
+            ["name"] = new BString("broken-torrent"),
+            ["piece length"] = new BNumber(16384),
+            ["length"] = new BNumber(1024)
+        };
+
+        var torrentDict = new BDictionary { ["info"] = info };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("missing or invalid 'pieces'"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_file_tree_is_not_dictionary()
+    {
+        var info = new BDictionary
+        {
+            ["name"] = new BString("bad-file-tree"),
+            ["piece length"] = new BNumber(16384),
+            ["meta version"] = new BNumber(2),
+            ["file tree"] = new BString("not a dictionary")
+        };
+
+        var torrentDict = new BDictionary { ["info"] = info };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("'file tree' is not a dictionary"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_file_tree_leaf_missing_length()
+    {
+        var root = new byte[32];
+        var info = new BDictionary
+        {
+            ["name"] = new BString("missing-length"),
+            ["piece length"] = new BNumber(16384),
+            ["file tree"] = new BDictionary
+            {
+                ["file.txt"] = new BDictionary
+                {
+                    [""] = new BDictionary
+                    {
+                        ["pieces root"] = new BString(root)
+                    }
+                }
+            }
+        };
+
+        var torrentDict = new BDictionary { ["info"] = info };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("missing or invalid 'length'"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_file_tree_leaf_has_negative_length()
+    {
+        var root = new byte[32];
+        var info = new BDictionary
+        {
+            ["name"] = new BString("negative-length"),
+            ["piece length"] = new BNumber(16384),
+            ["file tree"] = new BDictionary
+            {
+                ["file.txt"] = new BDictionary
+                {
+                    [""] = new BDictionary
+                    {
+                        ["length"] = new BNumber(-10),
+                        ["pieces root"] = new BString(root)
+                    }
+                }
+            }
+        };
+
+        var torrentDict = new BDictionary { ["info"] = info };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("negative file length"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_file_tree_non_empty_file_missing_pieces_root()
+    {
+        var info = new BDictionary
+        {
+            ["name"] = new BString("missing-root"),
+            ["piece length"] = new BNumber(16384),
+            ["file tree"] = new BDictionary
+            {
+                ["file.txt"] = new BDictionary
+                {
+                    [""] = new BDictionary
+                    {
+                        ["length"] = new BNumber(1024)
+                    }
+                }
+            }
+        };
+
+        var torrentDict = new BDictionary { ["info"] = info };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("missing 'pieces root'"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_file_tree_pieces_root_not_32_bytes()
+    {
+        var badRoot = new byte[20];
+        var info = new BDictionary
+        {
+            ["name"] = new BString("short-root"),
+            ["piece length"] = new BNumber(16384),
+            ["file tree"] = new BDictionary
+            {
+                ["file.txt"] = new BDictionary
+                {
+                    [""] = new BDictionary
+                    {
+                        ["length"] = new BNumber(1024),
+                        ["pieces root"] = new BString(badRoot)
+                    }
+                }
+            }
+        };
+
+        var torrentDict = new BDictionary { ["info"] = info };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("'pieces root' must be 32 bytes"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_file_tree_has_no_files()
+    {
+        var info = new BDictionary
+        {
+            ["name"] = new BString("empty-tree"),
+            ["piece length"] = new BNumber(16384),
+            ["file tree"] = new BDictionary()
+        };
+
+        var torrentDict = new BDictionary { ["info"] = info };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("contains no files"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_piece_layers_hashes_not_multiple_of_32()
+    {
+        var rootHash = new byte[32];
+        var badHashes = new byte[35];
+
+        var fileTree = new BDictionary
+        {
+            ["file.dat"] = new BDictionary
+            {
+                [""] = new BDictionary
+                {
+                    ["length"] = new BNumber(32768),
+                    ["pieces root"] = new BString(rootHash)
+                }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            ["name"] = new BString("bad-layers"),
+            ["piece length"] = new BNumber(16384),
+            ["file tree"] = fileTree
+        };
+
+        var torrentDict = new BDictionary
+        {
+            ["info"] = info,
+            ["piece layers"] = new BDictionary
+            {
+                [new BString(rootHash)] = new BString(badHashes)
+            }
+        };
+
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("multiple of 32 bytes"));
+    }
 }

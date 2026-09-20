@@ -43,9 +43,10 @@ public class TorrentImportService : ITorrentImportService
             throw new InvalidOperationException("Failed to parse torrent file");
         }
 
-        ValidateInfoHash(parsed.InfoHash);
+        var primaryHash = parsed.InfoHash ?? parsed.InfoHashV2;
+        ValidateInfoHash(primaryHash);
 
-        var existing = _torrentService.GetByInfoHash(parsed.InfoHash);
+        var existing = _torrentService.GetByInfoHash(primaryHash);
         if (existing != null)
         {
             var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
@@ -94,7 +95,8 @@ public class TorrentImportService : ITorrentImportService
         var torrent = new Torrent
         {
             Name = parsed.Name,
-            InfoHash = parsed.InfoHash,
+            InfoHash = parsed.InfoHash ?? parsed.InfoHashV2,
+            InfoHashV2 = parsed.InfoHashV2,
             TotalSize = parsed.TotalSize,
             PieceCount = parsed.PieceCount,
             PieceLength = parsed.PieceLength,
