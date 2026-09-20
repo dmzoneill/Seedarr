@@ -633,6 +633,220 @@ public class RoutingTableTests
         }
     }
 
+
+    // ── Replacement Cache & BEP 5 Enhancements ──────────────────────
+
+    [Test]
+    public void DhtNode_node_states_should_distinguish_good_questionable_and_bad()
+    {
+        var node = new DhtNode
+        {
+            NodeId = new byte[20],
+            EndPoint = new IPEndPoint(IPAddress.Loopback, 6881),
+            LastSeen = DateTime.UtcNow,
+            FailCount = 0
+        };
+
+        Assert.That(node.IsGood, Is.True);
+        Assert.That(node.IsQuestionable, Is.False);
+        Assert.That(node.IsBad, Is.False);
+
+        // Seen 20 minutes ago -> Questionable
+        node.LastSeen = DateTime.UtcNow.AddMinutes(-20);
+        Assert.That(node.IsGood, Is.False);
+        Assert.That(node.IsQuestionable, Is.True);
+        Assert.That(node.IsBad, Is.False);
+
+        // FailCount >= 3 -> Bad
+        node.FailCount = 3;
+        Assert.That(node.IsGood, Is.False);
+        Assert.That(node.IsQuestionable, Is.False);
+        Assert.That(node.IsBad, Is.True);
+    }
+
+    [Test]
+    public void AddNode_should_add_to_replacement_cache_when_bucket_is_full_of_good_nodes()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 2, replacementBucketSize: 2);
+        var baseId = new byte[20];
+        baseId[0] = 0x80;
+
+        var node1 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.1"));
+        node1.NodeId[19] = 1;
+        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.2"));
+        node2.NodeId[19] = 2;
+        var node3 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.3"));
+        node3.NodeId[19] = 3;
+
+        table.AddNode(node1);
+        table.AddNode(node2);
+        table.AddNode(node3);
+
+        Assert.That(table.NodeCount, Is.EqualTo(2));
+        Assert.That(table.ReplacementNodeCount, Is.EqualTo(1));
+
+        var bucketIndex = table.GetBucketIndex(node3.NodeId);
+        var replacements = table.GetReplacementNodes(bucketIndex);
+        Assert.That(replacements.Count, Is.EqualTo(1));
+        Assert.That(replacements[0].NodeId[19], Is.EqualTo(3));
+    }
+
+    [Test]
+    public void AddNode_should_trigger_PingBeforeEvict_when_bucket_is_full()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 2);
+        var baseId = new byte[20];
+        baseId[0] = 0x80;
+
+        var node1 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.1"));
+        node1.NodeId[19] = 1;
+        node1.LastSeen = DateTime.UtcNow.AddMinutes(-10);
+
+        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.2"));
+        node2.NodeId[19] = 2;
+        node2.LastSeen = DateTime.UtcNow.AddMinutes(-5);
+
+        table.AddNode(node1);
+        table.AddNode(node2);
+
+        DhtNode pingedNode = null;
+        var pingedBucket = -1;
+        table.PingBeforeEvict += (bucketIndex, node) =>
+        {
+            pingedBucket = bucketIndex;
+            pingedNode = node;
+        };
+
+        var node3 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.3"));
+        node3.NodeId[19] = 3;
+        table.AddNode(node3);
+
+        Assert.That(pingedNode, Is.Not.Null);
+        Assert.That(pingedNode.NodeId[19], Is.EqualTo(1));
+        Assert.That(pingedBucket, Is.EqualTo(table.GetBucketIndex(node1.NodeId)));
+    }
+
+    [Test]
+    public void EvictBadNodes_should_evict_bad_node_and_promote_replacement_candidate()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 2, replacementBucketSize: 2);
+        var baseId = new byte[20];
+        baseId[0] = 0x80;
+
+        var node1 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.1"));
+        node1.NodeId[19] = 1;
+        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.2"));
+        node2.NodeId[19] = 2;
+        var node3 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.3"));
+        node3.NodeId[19] = 3;
+
+        table.AddNode(node1);
+        table.AddNode(node2);
+        table.AddNode(node3); // goes to replacement
+
+        Assert.That(table.NodeCount, Is.EqualTo(2));
+        Assert.That(table.ReplacementNodeCount, Is.EqualTo(1));
+
+        // Node 1 becomes bad
+        node1.FailCount = 3;
+        var evicted = table.EvictBadNodes();
+
+        Assert.That(evicted, Is.EqualTo(1));
+        Assert.That(table.NodeCount, Is.EqualTo(2));
+        Assert.That(table.ReplacementNodeCount, Is.EqualTo(0));
+
+        var allNodes = table.GetAllNodes();
+        Assert.That(allNodes.Any(n => n.NodeId[19] == 1), Is.False);
+        Assert.That(allNodes.Any(n => n.NodeId[19] == 3), Is.True);
+    }
+
+    [Test]
+    public void RecordFailure_should_increment_FailCount_and_evict_when_bad()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 2, replacementBucketSize: 2);
+        var baseId = new byte[20];
+        baseId[0] = 0x80;
+
+        var node1 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.1"));
+        node1.NodeId[19] = 1;
+        var node2 = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.2"));
+        node2.NodeId[19] = 2;
+        var replacement = CreateNode((byte[])baseId.Clone(), IPAddress.Parse("8.1.1.3"));
+        replacement.NodeId[19] = 3;
+
+        table.AddNode(node1);
+        table.AddNode(node2);
+        table.AddNode(replacement);
+
+        // Record 2 failures -> not evicted yet
+        table.RecordFailure(node1.EndPoint);
+        table.RecordFailure(node1.EndPoint);
+        Assert.That(node1.FailCount, Is.EqualTo(2));
+        Assert.That(table.NodeCount, Is.EqualTo(2));
+        Assert.That(table.ReplacementNodeCount, Is.EqualTo(1));
+
+        // 3rd failure -> evicted and replacement promoted
+        table.RecordFailure(node1.EndPoint);
+        Assert.That(table.NodeCount, Is.EqualTo(2));
+        Assert.That(table.ReplacementNodeCount, Is.EqualTo(0));
+
+        var allNodes = table.GetAllNodes();
+        Assert.That(allNodes.Any(n => n.NodeId[19] == 3), Is.True);
+        Assert.That(allNodes.Any(n => n.NodeId[19] == 1), Is.False);
+    }
+
+    [Test]
+    public void GetClosestNodes_should_include_questionable_nodes()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 8);
+        var target = new byte[20];
+        target[0] = 0x01;
+
+        var questionableId = new byte[20];
+        questionableId[0] = 0x80;
+        var node = CreateNode(questionableId);
+        node.LastSeen = DateTime.UtcNow.AddMinutes(-30); // Questionable (> 15 min)
+        table.AddNode(node);
+
+        var closest = table.GetClosestNodes(target);
+
+        Assert.That(closest.Count, Is.EqualTo(1));
+        Assert.That(closest[0].IsQuestionable, Is.True);
+        Assert.That(closest[0].IsGood, Is.False);
+    }
+
+    [Test]
+    public void GenerateRandomIdForBucket_should_produce_id_in_expected_bucket_prefix_range()
+    {
+        var table = new RoutingTable(_localNodeId);
+
+        for (var bucketIndex = 0; bucketIndex < 160; bucketIndex++)
+        {
+            var randomId = table.GenerateRandomIdForBucket(bucketIndex);
+            Assert.That(randomId.Length, Is.EqualTo(20));
+            Assert.That(table.GetBucketIndex(randomId), Is.EqualTo(bucketIndex));
+        }
+    }
+
+    [Test]
+    public void GetStaleBucketIndices_and_TouchBucket_should_track_bucket_staleness()
+    {
+        var table = new RoutingTable(_localNodeId);
+
+        // Initially all buckets last changed are UtcNow, so threshold of 10s should return empty
+        var stale = table.GetStaleBucketIndices(TimeSpan.FromSeconds(10));
+        Assert.That(stale.Count, Is.EqualTo(0));
+
+        // Zero threshold should consider all buckets stale
+        stale = table.GetStaleBucketIndices(TimeSpan.Zero);
+        Assert.That(stale.Count, Is.EqualTo(160));
+
+        // Touch bucket 5
+        table.TouchBucket(5);
+        var lastChanged = table.GetBucketLastChanged(5);
+        Assert.That((DateTime.UtcNow - lastChanged).TotalSeconds, Is.LessThan(2));
+    }
+
     private static DhtNode CreateNode(byte[] nodeId, IPAddress ip = null)
     {
         if (ip == null)

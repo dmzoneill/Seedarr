@@ -18,4 +18,6 @@ public interface IDhtService
     Task AnnounceTorrent(byte[] infoHash, int port, CancellationToken ct = default);
     Task AnnounceTorrent(string infoHash, int port, CancellationToken ct = default);
     Task Bootstrap(IPEndPoint endpoint, CancellationToken ct = default);
+    Task SendPing(IPEndPoint target, CancellationToken ct = default);
+    Task RefreshStaleBucketsAsync(CancellationToken ct = default);
 }

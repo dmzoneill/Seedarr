@@ -3,20 +3,30 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 namespace NzbDrone.Core.Dht;
 
 /// <summary>
-/// Kademlia DHT routing table with bucket-based node management and Sybil/Eclipse protection.
+/// Kademlia DHT routing table with bucket-based node management, replacement cache, and Sybil/Eclipse protection.
 /// </summary>
 public class RoutingTable
 {
     private readonly int _bucketSize;
     private readonly int _idBits;
     private readonly int _maxNodes;
+    private readonly int _replacementBucketSize;
     private readonly byte[] _localNodeId;
     private readonly List<List<DhtNode>> _buckets;
+    private readonly List<List<DhtNode>> _replacementBuckets;
+    private readonly DateTime[] _bucketLastChanged;
     private readonly object _lock = new();
+
+    /// <summary>
+    /// Event triggered when a candidate node arrives for a full bucket, signaling that the least-recently-seen node should be probed before eviction.
+    /// Parameters: (int bucketIndex, DhtNode nodeToProbe).
+    /// </summary>
+    public event Action<int, DhtNode> PingBeforeEvict;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="RoutingTable"/> class.
@@ -26,18 +36,26 @@ public class RoutingTable
     /// <param name="idBits">The bit length of node IDs (default 160).</param>
     /// <param name="maxNodes">The maximum total nodes across all buckets (0 for unlimited).</param>
     /// <param name="allowLocal">Whether to allow loopback and link-local IP addresses (default false).</param>
-    public RoutingTable(byte[] localNodeId, int bucketSize = 8, int idBits = 160, int maxNodes = 0, bool allowLocal = false)
+    /// <param name="replacementBucketSize">The maximum number of candidates per replacement bucket (default 8).</param>
+    public RoutingTable(byte[] localNodeId, int bucketSize = 8, int idBits = 160, int maxNodes = 0, bool allowLocal = false, int replacementBucketSize = 8)
     {
         _localNodeId = localNodeId ?? throw new ArgumentNullException(nameof(localNodeId));
         _bucketSize = bucketSize;
         _idBits = idBits;
         _maxNodes = maxNodes;
         AllowLocal = allowLocal;
+        _replacementBucketSize = replacementBucketSize;
 
         _buckets = new List<List<DhtNode>>();
+        _replacementBuckets = new List<List<DhtNode>>();
+        _bucketLastChanged = new DateTime[_idBits];
+
+        var now = DateTime.UtcNow;
         for (var i = 0; i < _idBits; i++)
         {
             _buckets.Add(new List<DhtNode>());
+            _replacementBuckets.Add(new List<DhtNode>());
+            _bucketLastChanged[i] = now;
         }
     }
 
@@ -61,7 +79,21 @@ public class RoutingTable
     }
 
     /// <summary>
-    /// Adds a node to the routing table, enforcing IP uniqueness and subnet diversity per bucket.
+    /// Gets the total number of candidate nodes stored across all replacement buckets.
+    /// </summary>
+    public int ReplacementNodeCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _replacementBuckets.Sum(b => b.Count);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds a node to the routing table, enforcing IP uniqueness, subnet diversity per bucket, and replacement cache.
     /// </summary>
     /// <param name="node">The DHT node to add.</param>
     public void AddNode(DhtNode node)
@@ -71,10 +103,14 @@ public class RoutingTable
             return;
         }
 
+        DhtNode pingCandidate = null;
+        var pingBucketIndex = -1;
+
         lock (_lock)
         {
             var bucketIndex = GetBucketIndex(node.NodeId);
             var bucket = _buckets[bucketIndex];
+            var replacement = _replacementBuckets[bucketIndex];
 
             var existing = bucket.FirstOrDefault(n => n.NodeId.SequenceEqual(node.NodeId));
             if (existing != null)
@@ -84,6 +120,20 @@ public class RoutingTable
                 if (node.EndPoint != null)
                 {
                     existing.EndPoint = node.EndPoint;
+                }
+
+                _bucketLastChanged[bucketIndex] = DateTime.UtcNow;
+                return;
+            }
+
+            var existingReplacement = replacement.FirstOrDefault(n => n.NodeId.SequenceEqual(node.NodeId));
+            if (existingReplacement != null)
+            {
+                existingReplacement.LastSeen = DateTime.UtcNow;
+                existingReplacement.FailCount = 0;
+                if (node.EndPoint != null)
+                {
+                    existingReplacement.EndPoint = node.EndPoint;
                 }
 
                 return;
@@ -118,21 +168,66 @@ public class RoutingTable
             if (bucket.Count < _bucketSize)
             {
                 bucket.Add(node);
+                _bucketLastChanged[bucketIndex] = DateTime.UtcNow;
                 return;
             }
 
             // Evict bad nodes
-            var bad = bucket.FirstOrDefault(n => !n.IsGood);
+            var bad = bucket.FirstOrDefault(n => n.IsBad);
             if (bad != null)
             {
                 bucket.Remove(bad);
-                bucket.Add(node);
+                if (replacement.Count > 0)
+                {
+                    var promoted = replacement[0];
+                    replacement.RemoveAt(0);
+                    bucket.Add(promoted);
+                    if (replacement.Count < _replacementBucketSize)
+                    {
+                        replacement.Add(node);
+                    }
+                }
+                else
+                {
+                    bucket.Add(node);
+                }
+
+                _bucketLastChanged[bucketIndex] = DateTime.UtcNow;
+                return;
             }
+
+            // Bucket is full of good/questionable nodes. Add node to replacement cache if room.
+            if (replacement.Count < _replacementBucketSize)
+            {
+                replacement.Add(node);
+            }
+            else
+            {
+                var badReplacement = replacement.FirstOrDefault(n => n.IsBad);
+                if (badReplacement != null)
+                {
+                    replacement.Remove(badReplacement);
+                    replacement.Add(node);
+                }
+            }
+
+            // Identify least recently seen node in bucket for ping-before-evict
+            var leastRecentlySeen = bucket.OrderBy(n => n.LastSeen).FirstOrDefault();
+            if (leastRecentlySeen != null)
+            {
+                pingCandidate = leastRecentlySeen;
+                pingBucketIndex = bucketIndex;
+            }
+        }
+
+        if (pingCandidate != null && pingBucketIndex >= 0)
+        {
+            PingBeforeEvict?.Invoke(pingBucketIndex, pingCandidate);
         }
     }
 
     /// <summary>
-    /// Gets the closest good nodes to a target ID, ordered by XOR distance.
+    /// Gets the closest nodes (both good and questionable, excluding bad) to a target ID, ordered by XOR distance.
     /// </summary>
     /// <param name="targetId">The target 20-byte ID.</param>
     /// <param name="count">The maximum number of nodes to return (0 for bucket size).</param>
@@ -154,7 +249,7 @@ public class RoutingTable
 
             foreach (var node in _buckets[targetBucketIndex])
             {
-                if (node.IsGood)
+                if (!node.IsBad)
                 {
                     candidates.Add(node);
                 }
@@ -172,7 +267,7 @@ public class RoutingTable
                     {
                         foreach (var node in _buckets[left])
                         {
-                            if (node.IsGood)
+                            if (!node.IsBad)
                             {
                                 candidates.Add(node);
                             }
@@ -190,7 +285,7 @@ public class RoutingTable
                     {
                         foreach (var node in _buckets[right])
                         {
-                            if (node.IsGood)
+                            if (!node.IsBad)
                             {
                                 candidates.Add(node);
                             }
@@ -216,6 +311,289 @@ public class RoutingTable
             return candidates;
         }
     }
+
+    /// <summary>
+    /// Evicts bad nodes (FailCount >= 3) from the bucket and promotes candidates from the replacement cache.
+    /// </summary>
+    public int EvictBadNodes(int bucketIndex)
+    {
+        if (bucketIndex < 0 || bucketIndex >= _idBits)
+        {
+            return 0;
+        }
+
+        lock (_lock)
+        {
+            return EvictBadNodesInternal(bucketIndex);
+        }
+    }
+
+    /// <summary>
+    /// Evicts bad nodes (FailCount >= 3) across all buckets and promotes replacement candidates.
+    /// </summary>
+    public int EvictBadNodes()
+    {
+        lock (_lock)
+        {
+            var count = 0;
+            for (var i = 0; i < _idBits; i++)
+            {
+                count += EvictBadNodesInternal(i);
+            }
+
+            return count;
+        }
+    }
+
+    private int EvictBadNodesInternal(int bucketIndex)
+    {
+        var bucket = _buckets[bucketIndex];
+        var replacement = _replacementBuckets[bucketIndex];
+        var evicted = 0;
+
+        for (var i = bucket.Count - 1; i >= 0; i--)
+        {
+            if (bucket[i].IsBad)
+            {
+                bucket.RemoveAt(i);
+                evicted++;
+
+                while (replacement.Count > 0)
+                {
+                    var candidate = replacement[0];
+                    replacement.RemoveAt(0);
+                    if (!candidate.IsBad)
+                    {
+                        bucket.Add(candidate);
+                        break;
+                    }
+                }
+
+                _bucketLastChanged[bucketIndex] = DateTime.UtcNow;
+            }
+        }
+
+        return evicted;
+    }
+
+    /// <summary>
+    /// Records a failed query for a node by endpoint, incrementing FailCount.
+    /// If FailCount reaches 3, the node is evicted and a replacement is promoted.
+    /// </summary>
+    public void RecordFailure(IPEndPoint endPoint)
+    {
+        if (endPoint == null)
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            for (var i = 0; i < _idBits; i++)
+            {
+                var node = _buckets[i].FirstOrDefault(n => n.EndPoint != null && n.EndPoint.Equals(endPoint));
+                if (node != null)
+                {
+                    node.FailCount++;
+                    if (node.IsBad)
+                    {
+                        EvictBadNodesInternal(i);
+                    }
+
+                    return;
+                }
+
+                var replacementNode = _replacementBuckets[i].FirstOrDefault(n => n.EndPoint != null && n.EndPoint.Equals(endPoint));
+                if (replacementNode != null)
+                {
+                    replacementNode.FailCount++;
+                    if (replacementNode.IsBad)
+                    {
+                        _replacementBuckets[i].Remove(replacementNode);
+                    }
+
+                    return;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Records a failed query for a node by node ID, incrementing FailCount.
+    /// If FailCount reaches 3, the node is evicted and a replacement is promoted.
+    /// </summary>
+    public void RecordFailure(byte[] nodeId)
+    {
+        if (nodeId == null)
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            var bucketIndex = GetBucketIndex(nodeId);
+            var node = _buckets[bucketIndex].FirstOrDefault(n => n.NodeId.SequenceEqual(nodeId));
+            if (node != null)
+            {
+                node.FailCount++;
+                if (node.IsBad)
+                {
+                    EvictBadNodesInternal(bucketIndex);
+                }
+
+                return;
+            }
+
+            var replacementNode = _replacementBuckets[bucketIndex].FirstOrDefault(n => n.NodeId.SequenceEqual(nodeId));
+            if (replacementNode != null)
+            {
+                replacementNode.FailCount++;
+                if (replacementNode.IsBad)
+                {
+                    _replacementBuckets[bucketIndex].Remove(replacementNode);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the least recently seen node in the specified bucket, or null if the bucket is empty.
+    /// </summary>
+    public DhtNode GetLeastRecentlySeenNode(int bucketIndex)
+    {
+        if (bucketIndex < 0 || bucketIndex >= _idBits)
+        {
+            return null;
+        }
+
+        lock (_lock)
+        {
+            var bucket = _buckets[bucketIndex];
+            if (bucket.Count == 0)
+            {
+                return null;
+            }
+
+            return bucket.OrderBy(n => n.LastSeen).FirstOrDefault();
+        }
+    }
+
+    /// <summary>
+    /// Gets replacement nodes for the specified bucket.
+    /// </summary>
+    public List<DhtNode> GetReplacementNodes(int bucketIndex)
+    {
+        if (bucketIndex < 0 || bucketIndex >= _idBits)
+        {
+            return new List<DhtNode>();
+        }
+
+        lock (_lock)
+        {
+            return _replacementBuckets[bucketIndex].ToList();
+        }
+    }
+
+    /// <summary>
+    /// Gets all candidate nodes stored across all replacement buckets.
+    /// </summary>
+    public List<DhtNode> GetAllReplacementNodes()
+    {
+        lock (_lock)
+        {
+            return _replacementBuckets.SelectMany(b => b).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Gets the last changed timestamp for a bucket.
+    /// </summary>
+    public DateTime GetBucketLastChanged(int bucketIndex)
+    {
+        if (bucketIndex < 0 || bucketIndex >= _idBits)
+        {
+            return DateTime.MinValue;
+        }
+
+        lock (_lock)
+        {
+            return _bucketLastChanged[bucketIndex];
+        }
+    }
+
+    /// <summary>
+    /// Marks the specified bucket as changed now.
+    /// </summary>
+    public void TouchBucket(int bucketIndex)
+    {
+        if (bucketIndex >= 0 && bucketIndex < _idBits)
+        {
+            lock (_lock)
+            {
+                _bucketLastChanged[bucketIndex] = DateTime.UtcNow;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the indices of buckets that have not changed within the specified threshold (default 15 minutes).
+    /// </summary>
+    public List<int> GetStaleBucketIndices(TimeSpan? threshold = null)
+    {
+        var limit = threshold ?? TimeSpan.FromMinutes(15);
+        var now = DateTime.UtcNow;
+        var stale = new List<int>();
+
+        lock (_lock)
+        {
+            for (var i = 0; i < _idBits; i++)
+            {
+                if (now - _bucketLastChanged[i] >= limit)
+                {
+                    stale.Add(i);
+                }
+            }
+        }
+
+        return stale;
+    }
+
+    public List<int> GetStaleBucketIndices(TimeSpan threshold) => GetStaleBucketIndices((TimeSpan?)threshold);
+
+    /// <summary>
+    /// Generates a random 20-byte node ID falling into the prefix range of the specified bucket index.
+    /// </summary>
+    public byte[] GenerateRandomIdForBucket(int bucketIndex)
+    {
+        if (bucketIndex < 0 || bucketIndex >= _idBits)
+        {
+            throw new ArgumentOutOfRangeException(nameof(bucketIndex));
+        }
+
+        var result = new byte[_idBits / 8];
+        RandomNumberGenerator.Fill(result);
+
+        var diffBit = (_idBits - 1) - bucketIndex;
+        var byteIndex = diffBit / 8;
+        var bitOffset = 7 - (diffBit % 8);
+
+        for (var i = 0; i < byteIndex; i++)
+        {
+            result[i] = _localNodeId[i];
+        }
+
+        var prefixMask = (byte)(0xFF << (bitOffset + 1));
+        var diffMask = (byte)(1 << bitOffset);
+        var suffixMask = (byte)((1 << bitOffset) - 1);
+
+        result[byteIndex] = (byte)((_localNodeId[byteIndex] & prefixMask) |
+                                  ((_localNodeId[byteIndex] ^ diffMask) & diffMask) |
+                                  (result[byteIndex] & suffixMask));
+
+        return result;
+    }
+
+    public byte[] GetRandomNodeIdForBucket(int bucketIndex) => GenerateRandomIdForBucket(bucketIndex);
 
     /// <summary>
     /// Compares the XOR distance of two node IDs relative to a target ID without allocating memory.
@@ -390,7 +768,7 @@ public class RoutingTable
         return address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
     }
 
-    private int GetBucketIndex(byte[] nodeId)
+    public int GetBucketIndex(byte[] nodeId)
     {
         // Compute XOR distance from local node
         for (var i = 0; i < nodeId.Length && i < _localNodeId.Length && i < _idBits / 8; i++)
