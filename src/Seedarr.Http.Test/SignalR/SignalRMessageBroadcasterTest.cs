@@ -397,4 +397,36 @@ public class SignalRMessageBroadcasterTest
         await groupManager.DidNotReceive().AddToGroupAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         await groupManager.DidNotReceive().RemoveFromGroupAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
+
+    [Test]
+    public void BroadcastMessage_broadcasts_SeedingStatsUpdated_for_seeding_telemetry()
+    {
+        var seedingMsg = new SignalRMessage
+        {
+            Name = "Seeding",
+            Body = new { DownloadSpeed = 1024, UploadSpeed = 2048 }
+        };
+
+        _broadcaster.BroadcastMessage(seedingMsg);
+
+        _clientProxy.Received(1).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        _clientProxy.Received(1).SendCoreAsync("SeedingStatsUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void HubOptions_configuration_sets_bounded_capacity_and_timeouts()
+    {
+        var options = new HubOptions
+        {
+            StreamBufferCapacity = 10,
+            MaximumParallelInvocationsPerClient = 5,
+            ClientTimeoutInterval = TimeSpan.FromSeconds(30),
+            KeepAliveInterval = TimeSpan.FromSeconds(10)
+        };
+
+        Assert.That(options.StreamBufferCapacity, Is.EqualTo(10));
+        Assert.That(options.MaximumParallelInvocationsPerClient, Is.EqualTo(5));
+        Assert.That(options.ClientTimeoutInterval, Is.EqualTo(TimeSpan.FromSeconds(30)));
+        Assert.That(options.KeepAliveInterval, Is.EqualTo(TimeSpan.FromSeconds(10)));
+    }
 }

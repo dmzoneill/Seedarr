@@ -64,7 +64,13 @@ public class Startup
                 }
             });
 
-        services.AddSignalR();
+        services.AddSignalR(options =>
+        {
+            options.StreamBufferCapacity = 10;
+            options.MaximumParallelInvocationsPerClient = 5;
+            options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+            options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+        });
 
         var appFolderInfo = this._container?.Resolve<IAppFolderInfo>();
         var keysFolder = Path.Combine(appFolderInfo?.AppDataFolder ?? AppContext.BaseDirectory, "DataProtection-Keys");

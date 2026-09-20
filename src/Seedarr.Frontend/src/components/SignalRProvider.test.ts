@@ -69,6 +69,11 @@ describe("SignalRProvider: configuration maps", () => {
     const torrentUpdatedKeys = EVENT_INVALIDATION_MAP.TorrentUpdated.map((k) => k.join("/"));
     assert.ok(torrentUpdatedKeys.includes("torrents"));
     assert.ok(torrentUpdatedKeys.includes("trackerboost"));
+
+    // Ensure 1Hz seeding tick events ONLY invalidate seeding stats and NOT torrents
+    const seedingKeys = EVENT_INVALIDATION_MAP.SeedingStatsUpdated.map((k) => k.join("/"));
+    assert.ok(seedingKeys.includes("seeding/stats"));
+    assert.equal(seedingKeys.includes("torrents"), false);
   });
 
   it("RECONNECT_QUERY_KEYS includes essential caches for reconnect resynchronization", () => {
