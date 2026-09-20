@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -10,6 +11,22 @@ using NLog;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.WebSeeds;
+
+public class WebSeedHostState
+{
+    public string Host { get; }
+    public bool IsDead { get; set; }
+    public string DeadReason { get; set; }
+    public int ConsecutiveFailures { get; set; }
+    public int CircuitBreakerTripCount { get; set; }
+    public DateTime? CooldownUntil { get; set; }
+    public string CooldownReason { get; set; }
+
+    public WebSeedHostState(string host)
+    {
+        Host = host;
+    }
+}
 
 public class WebSeedFileInfo
 {
@@ -46,11 +63,240 @@ public class WebSeedClient : IWebSeedClient
 {
     public const int ChunkSize = 16 * 1024;
 
+    public static readonly TimeSpan[] DefaultCircuitBreakerBackoffs =
+    {
+        TimeSpan.FromSeconds(15),
+        TimeSpan.FromSeconds(30),
+        TimeSpan.FromSeconds(60),
+        TimeSpan.FromSeconds(300)
+    };
+
     private readonly HttpClient _httpClient;
     private readonly IWebSeedRedirectHandler _redirectHandler;
     private readonly Logger _logger;
+    private readonly ConcurrentDictionary<string, WebSeedHostState> _hosts = new(StringComparer.OrdinalIgnoreCase);
 
     public long? PieceLength { get; set; }
+    public int CircuitBreakerThreshold { get; set; } = 5;
+    public TimeSpan DefaultRetryAfterCooldown { get; set; } = TimeSpan.FromSeconds(30);
+    public IList<TimeSpan> CircuitBreakerBackoffs { get; set; } = new List<TimeSpan>(DefaultCircuitBreakerBackoffs);
+    public Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
+
+    public static string GetHostKey(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return string.Empty;
+        }
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return uri.Authority.ToLowerInvariant();
+        }
+
+        return url.Trim().ToLowerInvariant();
+    }
+
+    public bool IsSeedDead(string url)
+    {
+        var host = GetHostKey(url);
+        if (_hosts.TryGetValue(host, out var state))
+        {
+            lock (state)
+            {
+                return state.IsDead;
+            }
+        }
+
+        return false;
+    }
+
+    public bool IsWebSeedDead(string url) => IsSeedDead(url);
+
+    public bool IsSeedCoolingDown(string url)
+    {
+        var host = GetHostKey(url);
+        if (_hosts.TryGetValue(host, out var state))
+        {
+            lock (state)
+            {
+                if (state.CooldownUntil.HasValue)
+                {
+                    if (state.CooldownUntil.Value > UtcNow())
+                    {
+                        return true;
+                    }
+
+                    state.CooldownUntil = null;
+                    state.CooldownReason = null;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public bool IsWebSeedCoolingDown(string url) => IsSeedCoolingDown(url);
+
+    public bool IsSeedAvailable(string url) => !IsSeedDead(url) && !IsSeedCoolingDown(url);
+
+    public bool IsWebSeedAvailable(string url) => IsSeedAvailable(url);
+
+    public TimeSpan? GetCooldownRemaining(string url)
+    {
+        var host = GetHostKey(url);
+        if (_hosts.TryGetValue(host, out var state))
+        {
+            lock (state)
+            {
+                if (state.CooldownUntil.HasValue)
+                {
+                    var diff = state.CooldownUntil.Value - UtcNow();
+                    return diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public int GetConsecutiveFailures(string url)
+    {
+        var host = GetHostKey(url);
+        return _hosts.TryGetValue(host, out var state) ? state.ConsecutiveFailures : 0;
+    }
+
+    public int GetCircuitBreakerTripCount(string url)
+    {
+        var host = GetHostKey(url);
+        return _hosts.TryGetValue(host, out var state) ? state.CircuitBreakerTripCount : 0;
+    }
+
+    public WebSeedHostState GetHostState(string url)
+    {
+        var host = GetHostKey(url);
+        return _hosts.TryGetValue(host, out var state) ? state : null;
+    }
+
+    public void MarkDead(string url, string reason = null)
+    {
+        var host = GetHostKey(url);
+        var state = _hosts.GetOrAdd(host, h => new WebSeedHostState(h));
+        lock (state)
+        {
+            state.IsDead = true;
+            state.DeadReason = reason ?? "Marked dead";
+        }
+    }
+
+    public void Reset(string url = null)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _hosts.Clear();
+        }
+        else
+        {
+            var host = GetHostKey(url);
+            _hosts.TryRemove(host, out _);
+        }
+    }
+
+    private TimeSpan CalculateRetryAfterCooldown(HttpResponseHeaders headers)
+    {
+        if (headers?.RetryAfter != null)
+        {
+            if (headers.RetryAfter.Delta.HasValue)
+            {
+                return headers.RetryAfter.Delta.Value > TimeSpan.Zero ? headers.RetryAfter.Delta.Value : TimeSpan.FromSeconds(1);
+            }
+
+            if (headers.RetryAfter.Date.HasValue)
+            {
+                var diff = headers.RetryAfter.Date.Value - UtcNow();
+                return diff > TimeSpan.Zero ? diff : TimeSpan.FromSeconds(1);
+            }
+        }
+
+        if (headers != null && headers.TryGetValues("Retry-After", out var values))
+        {
+            var val = values.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(val))
+            {
+                if (int.TryParse(val, out var seconds))
+                {
+                    return seconds > 0 ? TimeSpan.FromSeconds(seconds) : TimeSpan.FromSeconds(1);
+                }
+
+                if (DateTimeOffset.TryParse(val, out var date))
+                {
+                    var diff = date - UtcNow();
+                    return diff > TimeSpan.Zero ? diff : TimeSpan.FromSeconds(1);
+                }
+            }
+        }
+
+        return DefaultRetryAfterCooldown;
+    }
+
+    private TimeSpan CalculateCircuitBreakerCooldown(int tripCount)
+    {
+        var backoffs = CircuitBreakerBackoffs;
+        if (backoffs == null || backoffs.Count == 0)
+        {
+            return TimeSpan.FromSeconds(15);
+        }
+
+        var index = Math.Clamp(tripCount - 1, 0, backoffs.Count - 1);
+        return backoffs[index];
+    }
+
+    private void RecordTransientFailure(string host, string error)
+    {
+        var state = _hosts.GetOrAdd(host, h => new WebSeedHostState(h));
+        lock (state)
+        {
+            state.ConsecutiveFailures++;
+            if (state.ConsecutiveFailures >= CircuitBreakerThreshold)
+            {
+                state.CircuitBreakerTripCount++;
+                var cooldown = CalculateCircuitBreakerCooldown(state.CircuitBreakerTripCount);
+                state.CooldownUntil = UtcNow().Add(cooldown);
+                state.CooldownReason = $"Circuit breaker tripped after {state.ConsecutiveFailures} consecutive failures (trip #{state.CircuitBreakerTripCount}): {error}";
+
+                _logger.Warn(
+                    "Circuit breaker tripped for web seed '{0}': {1} consecutive failures (trip #{2}). Cooling down for {3}s until {4:O}.",
+                    host,
+                    state.ConsecutiveFailures,
+                    state.CircuitBreakerTripCount,
+                    cooldown.TotalSeconds,
+                    state.CooldownUntil);
+            }
+            else
+            {
+                _logger.Warn(
+                    "Web seed '{0}' recorded failure {1}/{2}: {3}",
+                    host,
+                    state.ConsecutiveFailures,
+                    CircuitBreakerThreshold,
+                    error);
+            }
+        }
+    }
+
+    private void RecordSuccess(string host)
+    {
+        if (_hosts.TryGetValue(host, out var state))
+        {
+            lock (state)
+            {
+                state.ConsecutiveFailures = 0;
+                state.CircuitBreakerTripCount = 0;
+                state.CooldownUntil = null;
+                state.CooldownReason = null;
+            }
+        }
+    }
 
     public WebSeedClient(IWebSeedHttpClientFactory httpClientFactory)
         : this(httpClientFactory, new WebSeedRedirectHandler(), null)
@@ -174,6 +420,37 @@ public class WebSeedClient : IWebSeedClient
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        var host = GetHostKey(url);
+        var state = _hosts.GetOrAdd(host, h => new WebSeedHostState(h));
+
+        lock (state)
+        {
+            if (state.IsDead)
+            {
+                _logger.Warn("Web seed request to '{0}' aborted: host '{1}' is marked dead ({2}).", url, host, state.DeadReason);
+                throw new WebSeedException($"Web seed '{host}' is permanently disabled/dead ({state.DeadReason}).");
+            }
+
+            if (state.CooldownUntil.HasValue)
+            {
+                var now = UtcNow();
+                if (state.CooldownUntil.Value > now)
+                {
+                    var remaining = state.CooldownUntil.Value - now;
+                    _logger.Warn(
+                        "Web seed request to '{0}' aborted: host '{1}' is cooling down for another {2:F1}s ({3}).",
+                        url,
+                        host,
+                        remaining.TotalSeconds,
+                        state.CooldownReason);
+                    throw new WebSeedException($"Web seed '{host}' is cooling down for another {remaining.TotalSeconds:F1}s until {state.CooldownUntil.Value:O} ({state.CooldownReason}).");
+                }
+
+                state.CooldownUntil = null;
+                state.CooldownReason = null;
+            }
+        }
+
         var endByte = startByte + length - 1;
         var resolvedUrl = _redirectHandler.GetResolvedUrl(url);
 
@@ -182,53 +459,143 @@ public class WebSeedClient : IWebSeedClient
         request.Version = HttpVersion.Version20;
         request.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
 
-        using var response = await _redirectHandler.SendWithRedirectsAsync(
-            _httpClient,
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken);
-
-        if (response.StatusCode == HttpStatusCode.OK)
+        HttpResponseMessage response;
+        try
         {
-            _logger.Warn("Server does not support byte ranges; returned 200 OK for {0}", url);
-            throw new WebSeedException("Server does not support byte ranges; returned 200 OK");
+            response = await _redirectHandler.SendWithRedirectsAsync(
+                _httpClient,
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            RecordTransientFailure(host, $"Network error: {ex.Message}");
+            throw;
         }
 
-        if (response.StatusCode != HttpStatusCode.PartialContent)
+        using (response)
         {
-            throw new HttpRequestException(
-                $"Web seed request to '{url}' failed with status code {response.StatusCode} ({response.ReasonPhrase}). Expected 206 Partial Content.",
-                null,
-                response.StatusCode);
-        }
-
-        if (response.Content.Headers.ContentLength.HasValue && response.Content.Headers.ContentLength.Value != length)
-        {
-            throw new WebSeedException($"Unexpected Content-Length from web seed: expected {length} bytes, but server indicated {response.Content.Headers.ContentLength.Value} bytes.");
-        }
-
-        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-
-        var payload = new byte[length];
-        var totalBytesRead = 0;
-
-        while (totalBytesRead < length)
-        {
-            var bytesRead = await stream.ReadAsync(payload.AsMemory(totalBytesRead, length - totalBytesRead), cancellationToken);
-            if (bytesRead == 0)
+            if (response.StatusCode == HttpStatusCode.OK)
             {
-                break;
+                _logger.Warn("Server does not support byte ranges; returned 200 OK for {0}", url);
+                throw new WebSeedException("Server does not support byte ranges; returned 200 OK");
             }
 
-            totalBytesRead += bytesRead;
-        }
+            // Permanent errors: 401 Unauthorized, 403 Forbidden, 404 Not Found, 410 Gone
+            if (response.StatusCode is HttpStatusCode.Unauthorized
+                or HttpStatusCode.Forbidden
+                or HttpStatusCode.NotFound
+                or HttpStatusCode.Gone)
+            {
+                var reason = $"Received permanent HTTP error: {(int)response.StatusCode} {response.ReasonPhrase}";
+                lock (state)
+                {
+                    state.IsDead = true;
+                    state.DeadReason = reason;
+                }
 
-        if (totalBytesRead != length)
-        {
-            throw new InvalidOperationException($"Incomplete block received from web seed: expected {length} bytes, but received {totalBytesRead} bytes.");
-        }
+                _logger.Warn("Web seed '{0}' permanently disabled due to {1}", host, reason);
 
-        return payload;
+                throw new HttpRequestException(
+                    $"Web seed request to '{url}' failed with status code {response.StatusCode} ({response.ReasonPhrase}). Expected 206 Partial Content.",
+                    null,
+                    response.StatusCode);
+            }
+
+            // Rate-limit errors: 429 Too Many Requests, 503 Service Unavailable with Retry-After
+            if (response.StatusCode is (HttpStatusCode)429 ||
+                (response.StatusCode == HttpStatusCode.ServiceUnavailable && (response.Headers.RetryAfter != null || response.Headers.Contains("Retry-After"))))
+            {
+                var cooldown = CalculateRetryAfterCooldown(response.Headers);
+                var reason = $"Rate limited: HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+
+                lock (state)
+                {
+                    state.CooldownUntil = UtcNow().Add(cooldown);
+                    state.CooldownReason = reason;
+                }
+
+                _logger.Warn(
+                    "Web seed '{0}' rate limited ({1}). Cooling down for {2}s until {3:O}.",
+                    host,
+                    reason,
+                    cooldown.TotalSeconds,
+                    state.CooldownUntil);
+
+                throw new HttpRequestException(
+                    $"Web seed request to '{url}' failed with status code {response.StatusCode} ({response.ReasonPhrase}). Expected 206 Partial Content.",
+                    null,
+                    response.StatusCode);
+            }
+
+            // Server errors: 5xx
+            if ((int)response.StatusCode >= 500 && (int)response.StatusCode <= 599)
+            {
+                RecordTransientFailure(host, $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+
+                throw new HttpRequestException(
+                    $"Web seed request to '{url}' failed with status code {response.StatusCode} ({response.ReasonPhrase}). Expected 206 Partial Content.",
+                    null,
+                    response.StatusCode);
+            }
+
+            // 416 Range Not Satisfiable
+            if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
+            {
+                throw new HttpRequestException(
+                    $"Web seed request to '{url}' failed with status code 416 (Requested Range Not Satisfiable). The requested range [{startByte}..{endByte}] may exceed file boundaries or remote file size differs from torrent metainfo.",
+                    null,
+                    response.StatusCode);
+            }
+
+            if (response.StatusCode != HttpStatusCode.PartialContent)
+            {
+                throw new HttpRequestException(
+                    $"Web seed request to '{url}' failed with status code {response.StatusCode} ({response.ReasonPhrase}). Expected 206 Partial Content.",
+                    null,
+                    response.StatusCode);
+            }
+
+            if (response.Content.Headers.ContentLength.HasValue && response.Content.Headers.ContentLength.Value != length)
+            {
+                throw new WebSeedException($"Unexpected Content-Length from web seed: expected {length} bytes, but server indicated {response.Content.Headers.ContentLength.Value} bytes.");
+            }
+
+            byte[] payload;
+            try
+            {
+                using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+
+                payload = new byte[length];
+                var totalBytesRead = 0;
+
+                while (totalBytesRead < length)
+                {
+                    var bytesRead = await stream.ReadAsync(payload.AsMemory(totalBytesRead, length - totalBytesRead), cancellationToken);
+                    if (bytesRead == 0)
+                    {
+                        break;
+                    }
+
+                    totalBytesRead += bytesRead;
+                }
+
+                if (totalBytesRead != length)
+                {
+                    throw new InvalidOperationException($"Incomplete block received from web seed: expected {length} bytes, but received {totalBytesRead} bytes.");
+                }
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested && ex is not WebSeedException && ex is not InvalidOperationException)
+            {
+                RecordTransientFailure(host, $"Stream read error: {ex.Message}");
+                throw;
+            }
+
+            RecordSuccess(host);
+
+            return payload;
+        }
     }
 
     public Task<byte[]> DownloadBlockAsync(
