@@ -633,4 +633,239 @@ public class DelugeJsonRpcControllerTest
         Assert.That(torrent.SavePath, Is.EqualTo("/downloads/music"));
         _torrentService.Received(1).Update(torrent);
     }
+
+    [Test]
+    public async Task CoreGetTorrentsStatus_FiltersByIdAndHash_SingleAndArray()
+    {
+        var t1 = new Torrent
+        {
+            Id = 1,
+            InfoHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            Name = "Torrent One",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.5,
+            TotalSize = 1000,
+        };
+        var t2 = new Torrent
+        {
+            Id = 2,
+            InfoHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            Name = "Torrent Two",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            TotalSize = 2000,
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { t1, t2 });
+
+        // Filter by id array (case-insensitive)
+        var jsonIdArray = "{"method": "core.get_torrents_status", "params": [{"id": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]}, ["name"]], "id": 101}";
+        using (var doc = JsonDocument.Parse(jsonIdArray))
+        {
+            var actionResult = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)actionResult;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            var result = resDoc.RootElement.GetProperty("result");
+
+            Assert.That(result.TryGetProperty("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", out _), Is.True);
+            Assert.That(result.TryGetProperty("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", out _), Is.False);
+        }
+
+        // Filter by single string id
+        var jsonIdSingle = "{"method": "core.get_torrents_status", "params": [{"id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, ["name"]], "id": 102}";
+        using (var doc = JsonDocument.Parse(jsonIdSingle))
+        {
+            var actionResult = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)actionResult;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            var result = resDoc.RootElement.GetProperty("result");
+
+            Assert.That(result.TryGetProperty("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", out _), Is.False);
+            Assert.That(result.TryGetProperty("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", out _), Is.True);
+        }
+
+        // Filter by hash array
+        var jsonHashArray = "{"method": "core.get_torrents_status", "params": [{"hash": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}, ["name"]], "id": 103}";
+        using (var doc = JsonDocument.Parse(jsonHashArray))
+        {
+            var actionResult = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)actionResult;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            var result = resDoc.RootElement.GetProperty("result");
+
+            Assert.That(result.TryGetProperty("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", out _), Is.True);
+            Assert.That(result.TryGetProperty("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", out _), Is.False);
+        }
+
+        // Filter by empty id array -> returns 0 torrents
+        var jsonEmptyId = "{"method": "core.get_torrents_status", "params": [{"id": []}, ["name"]], "id": 104}";
+        using (var doc = JsonDocument.Parse(jsonEmptyId))
+        {
+            var actionResult = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)actionResult;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            var result = resDoc.RootElement.GetProperty("result");
+
+            Assert.That(result.EnumerateObject().Count(), Is.EqualTo(0));
+        }
+    }
+
+    [Test]
+    public async Task CoreGetTorrentsStatus_FiltersByCategoryAndLabel()
+    {
+        var t1 = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1111111111111111111111111111111111111111",
+            Name = "TV Show",
+            Category = "tv-sonarr",
+            Label = "tv-sonarr",
+            TotalSize = 1000,
+        };
+        var t2 = new Torrent
+        {
+            Id = 2,
+            InfoHash = "2222222222222222222222222222222222222222",
+            Name = "Movie",
+            Category = "radarr",
+            Label = "radarr",
+            TotalSize = 2000,
+        };
+        var t3 = new Torrent
+        {
+            Id = 3,
+            InfoHash = "3333333333333333333333333333333333333333",
+            Name = "Uncategorized",
+            TotalSize = 3000,
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { t1, t2, t3 });
+
+        // Filter by category string
+        var jsonCat = "{"method": "core.get_torrents_status", "params": [{"category": "tv-sonarr"}, ["name"]], "id": 201}";
+        using (var doc = JsonDocument.Parse(jsonCat))
+        {
+            var actionResult = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)actionResult;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            var result = resDoc.RootElement.GetProperty("result");
+
+            Assert.That(result.TryGetProperty("1111111111111111111111111111111111111111", out _), Is.True);
+            Assert.That(result.TryGetProperty("2222222222222222222222222222222222222222", out _), Is.False);
+        }
+
+        // Filter by category array
+        var jsonCatArray = "{"method": "core.get_torrents_status", "params": [{"category": ["tv-sonarr", "radarr"]}, ["name"]], "id": 202}";
+        using (var doc = JsonDocument.Parse(jsonCatArray))
+        {
+            var actionResult = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)actionResult;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            var result = resDoc.RootElement.GetProperty("result");
+
+            Assert.That(result.TryGetProperty("1111111111111111111111111111111111111111", out _), Is.True);
+            Assert.That(result.TryGetProperty("2222222222222222222222222222222222222222", out _), Is.True);
+            Assert.That(result.TryGetProperty("3333333333333333333333333333333333333333", out _), Is.False);
+        }
+
+        // Filter by label "None"
+        var jsonNone = "{"method": "core.get_torrents_status", "params": [{"label": "None"}, ["name"]], "id": 203}";
+        using (var doc = JsonDocument.Parse(jsonNone))
+        {
+            var actionResult = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)actionResult;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            var result = resDoc.RootElement.GetProperty("result");
+
+            Assert.That(result.TryGetProperty("3333333333333333333333333333333333333333", out _), Is.True);
+            Assert.That(result.TryGetProperty("1111111111111111111111111111111111111111", out _), Is.False);
+        }
+    }
+
+    [Test]
+    public async Task CoreGetTorrentsStatus_AccurateTotalDone_AndFilesProjection()
+    {
+        var hash = "cccccccccccccccccccccccccccccccccccccccc";
+        var torrent = new Torrent
+        {
+            Id = 99,
+            InfoHash = hash,
+            Name = "Imported Seeding Torrent",
+            TotalSize = 50_000_000_000L,
+            Downloaded = 0L, // 0 network bytes downloaded, but already complete!
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding,
+        };
+
+        var file1 = new TorrentFile
+        {
+            Id = 201,
+            TorrentId = 99,
+            Path = "season1/ep01.mkv",
+            Size = 25_000_000_000L,
+            BytesCompleted = 0L,
+            Priority = 1,
+            Wanted = true,
+            ByteOffset = 0L,
+        };
+
+        var file2 = new TorrentFile
+        {
+            Id = 202,
+            TorrentId = 99,
+            Path = "season1/ep02.mkv",
+            Size = 25_000_000_000L,
+            BytesCompleted = 0L,
+            Priority = 1,
+            Wanted = true,
+            ByteOffset = 25_000_000_000L,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(99).Returns(new List<TorrentFile> { file1, file2 });
+
+        var json = "{"method": "core.get_torrents_status", "params": [{}, ["total_done", "total_remaining", "is_finished", "num_files", "files", "file_progress", "file_priorities"]], "id": 301}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var resObj = resDoc.RootElement.GetProperty("result");
+        var torrentObj = resObj.GetProperty(hash);
+
+        Assert.That(torrentObj.GetProperty("total_done").GetInt64(), Is.EqualTo(50_000_000_000L));
+        Assert.That(torrentObj.GetProperty("total_remaining").GetInt64(), Is.EqualTo(0L));
+        Assert.That(torrentObj.GetProperty("is_finished").GetBoolean(), Is.True);
+        Assert.That(torrentObj.GetProperty("num_files").GetInt32(), Is.EqualTo(2));
+
+        var filesElem = torrentObj.GetProperty("files");
+        Assert.That(filesElem.GetArrayLength(), Is.EqualTo(2));
+        var f0 = filesElem[0];
+        Assert.That(f0.GetProperty("index").GetInt32(), Is.EqualTo(0));
+        Assert.That(f0.GetProperty("path").GetString(), Is.EqualTo("season1/ep01.mkv"));
+        Assert.That(f0.GetProperty("size").GetInt64(), Is.EqualTo(25_000_000_000L));
+        Assert.That(f0.GetProperty("offset").GetInt64(), Is.EqualTo(0L));
+
+        var f1 = filesElem[1];
+        Assert.That(f1.GetProperty("index").GetInt32(), Is.EqualTo(1));
+        Assert.That(f1.GetProperty("path").GetString(), Is.EqualTo("season1/ep02.mkv"));
+        Assert.That(f1.GetProperty("size").GetInt64(), Is.EqualTo(25_000_000_000L));
+        Assert.That(f1.GetProperty("offset").GetInt64(), Is.EqualTo(25_000_000_000L));
+
+        var progressElem = torrentObj.GetProperty("file_progress");
+        Assert.That(progressElem.GetArrayLength(), Is.EqualTo(2));
+        Assert.That(progressElem[0].GetDouble(), Is.EqualTo(1.0).Within(0.001));
+        Assert.That(progressElem[1].GetDouble(), Is.EqualTo(1.0).Within(0.001));
+
+        var prioElem = torrentObj.GetProperty("file_priorities");
+        Assert.That(prioElem.GetArrayLength(), Is.EqualTo(2));
+        Assert.That(prioElem[0].GetInt32(), Is.EqualTo(1));
+        Assert.That(prioElem[1].GetInt32(), Is.EqualTo(1));
+    }
 }
