@@ -80,6 +80,17 @@ public class TrackerEntryServiceTest
     }
 
     [Test]
+    public void AddMany_should_handle_empty_or_null_gracefully()
+    {
+        Assert.DoesNotThrow(() => _subject.AddMany((IList<TrackerEntry>)null));
+        Assert.DoesNotThrow(() => _subject.AddMany((IEnumerable<TrackerEntry>)null));
+        Assert.DoesNotThrow(() => _subject.AddMany(new List<TrackerEntry>()));
+        Assert.DoesNotThrow(() => _subject.AddMany(System.Array.Empty<TrackerEntry>()));
+
+        _repository.DidNotReceive().InsertMany(Arg.Any<IList<TrackerEntry>>());
+    }
+
+    [Test]
     public void Update_should_delegate_to_repository()
     {
         var entry = new TrackerEntry { Id = 5, TorrentId = 1, Url = "http://tracker.example.com/announce" };

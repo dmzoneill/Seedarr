@@ -46,12 +46,24 @@ public class TrackerEntryService : ITrackerEntryService
 
     public void AddMany(IList<TrackerEntry> trackerEntries)
     {
+        if (trackerEntries == null || trackerEntries.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Debug("Adding {0} tracker entries", trackerEntries.Count);
         _repository.InsertMany(trackerEntries);
     }
 
     public void AddMany(IEnumerable<TrackerEntry> trackerEntries)
     {
-        _repository.InsertMany(trackerEntries);
+        if (trackerEntries == null)
+        {
+            return;
+        }
+
+        var list = trackerEntries as IList<TrackerEntry> ?? trackerEntries.ToList();
+        AddMany(list);
     }
 
     public TrackerEntry Update(TrackerEntry trackerEntry)
