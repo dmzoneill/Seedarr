@@ -1300,6 +1300,150 @@ public class PeerConnection : IDisposable
         LastActivity = DateTime.UtcNow;
     }
 
+    internal ArrayPool<byte> BufferPool { get; set; } = ArrayPool<byte>.Shared;
+    private int _bytesReadForCurrentMessage;
+
+    public virtual async ValueTask<PeerMessage> ReceiveMessageAsync(CancellationToken cancellationToken = default)
+    {
+        _bytesReadForCurrentMessage = 0;
+
+        if (_isDisposed)
+        {
+            return null;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        CancellationTokenSource timeoutCts = null;
+        var linkedToken = cancellationToken;
+
+        if (MessageReadTimeoutMs > 0)
+        {
+            if (_client?.Client != null)
+            {
+                _client.Client.ReceiveTimeout = MessageReadTimeoutMs;
+            }
+            else if (_activeStream.CanTimeout)
+            {
+                _activeStream.ReadTimeout = MessageReadTimeoutMs;
+            }
+
+            timeoutCts = cancellationToken.CanBeCanceled
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : new CancellationTokenSource();
+            timeoutCts.CancelAfter(MessageReadTimeoutMs);
+            linkedToken = timeoutCts.Token;
+        }
+
+        try
+        {
+            var lengthBuffer = BufferPool.Rent(4);
+            int length;
+            try
+            {
+                if (!await ReadExactAsync(lengthBuffer.AsMemory(0, 4), linkedToken))
+                {
+                    Dispose();
+                    return null;
+                }
+
+                length = (int)(((uint)lengthBuffer[0] << 24) | ((uint)lengthBuffer[1] << 16) |
+                    ((uint)lengthBuffer[2] << 8) | lengthBuffer[3]);
+            }
+            finally
+            {
+                BufferPool.Return(lengthBuffer);
+            }
+
+            if (length == 0)
+            {
+                LastActivity = DateTime.UtcNow;
+                return null; // keep-alive
+            }
+
+            if (length < 0 || length > MaxMessageLength)
+            {
+                _logger.Warn("Peer {0}:{1} sent message with length {2} exceeding max {3}, closing connection", RemoteIp, RemotePort, length, MaxMessageLength);
+                Dispose();
+                return null;
+            }
+
+            var messageBuffer = BufferPool.Rent(length);
+            try
+            {
+                if (!await ReadExactAsync(messageBuffer.AsMemory(0, length), linkedToken))
+                {
+                    Dispose();
+                    return null;
+                }
+
+                var message = new PeerMessage
+                {
+                    Type = (PeerMessageType)messageBuffer[0]
+                };
+
+                if (length > 1)
+                {
+                    message.Payload = new byte[length - 1];
+                    Array.Copy(messageBuffer, 1, message.Payload, 0, length - 1);
+                }
+
+                if (message.Type == PeerMessageType.Piece)
+                {
+                    var payloadSize = message.Payload != null ? message.Payload.Length : 0;
+                    var pieceDataSize = payloadSize > 8 ? payloadSize - 8 : 0;
+                    BytesDownloaded += pieceDataSize;
+                }
+
+                LastActivity = DateTime.UtcNow;
+                return message;
+            }
+            finally
+            {
+                BufferPool.Return(messageBuffer);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (_bytesReadForCurrentMessage > 0)
+            {
+                Dispose();
+            }
+
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            if (_bytesReadForCurrentMessage > 0)
+            {
+                _logger.Debug(ex, "Timeout or read error during partial message framing from {0}:{1}; terminating connection", RemoteIp, RemotePort);
+                Dispose();
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (IsTimeoutException(ex))
+        {
+            if (_bytesReadForCurrentMessage > 0)
+            {
+                _logger.Debug(ex, "Timeout or read error during partial message framing from {0}:{1}; terminating connection", RemoteIp, RemotePort);
+                Dispose();
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Error reading message from peer {0}:{1}", RemoteIp, RemotePort);
+            Dispose();
+            return null;
+        }
+        finally
+        {
+            timeoutCts?.Dispose();
+        }
+    }
+
     public PeerMessage ReceiveMessage()
     {
         var bytesReadForCurrentMessage = 0;
@@ -1966,6 +2110,43 @@ public class PeerConnection : IDisposable
         return (ex is SocketException se && se.SocketErrorCode == SocketError.TimedOut) ||
             (ex is IOException io && ((io.InnerException is SocketException innerSe && innerSe.SocketErrorCode == SocketError.TimedOut) || io.InnerException is TimeoutException)) ||
             ex is TimeoutException;
+    }
+
+    internal async ValueTask<bool> ReadExactAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+    {
+        var offset = 0;
+        var count = buffer.Length;
+        var chunkSize = _pacingChunkSize > 0 ? _pacingChunkSize : DefaultPacingChunkSize;
+        var hasDownloadLimit = _downloadRateLimit > 0 || (BandwidthLimiter != null && BandwidthLimiter.HasDownloadLimit(InfoHash, PeerId));
+
+        while (offset < count)
+        {
+            var toRead = count - offset;
+            if (hasDownloadLimit)
+            {
+                toRead = Math.Min(toRead, chunkSize);
+                if (BandwidthLimiter != null && BandwidthLimiter.HasDownloadLimit(InfoHash, PeerId))
+                {
+                    BandwidthLimiter.ConsumeDownload(InfoHash, PeerId, toRead);
+                }
+                else if (_downloadRateLimit > 0)
+                {
+                    var targetTicks = (long)((double)toRead * Stopwatch.Frequency / _downloadRateLimit);
+                    PaceWaitHandler(Stopwatch.GetTimestamp(), targetTicks);
+                }
+            }
+
+            var read = await _activeStream.ReadAsync(buffer.Slice(offset, toRead), cancellationToken);
+            if (read == 0)
+            {
+                return false;
+            }
+
+            offset += read;
+            _bytesReadForCurrentMessage += read;
+        }
+
+        return true;
     }
 
     private bool ReadExact(byte[] buffer, int count)
