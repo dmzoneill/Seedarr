@@ -100,6 +100,7 @@ public class TorrentImportService : ITorrentImportService
             TotalSize = parsed.TotalSize,
             PieceCount = parsed.PieceCount,
             PieceLength = parsed.PieceLength,
+            PieceHashes = parsed.PieceHashes,
             Comment = parsed.Comment,
             CreatedBy = parsed.CreatedBy,
             CreationDate = parsed.CreationDate,

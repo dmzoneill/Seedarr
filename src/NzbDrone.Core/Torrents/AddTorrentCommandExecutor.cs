@@ -91,6 +91,7 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
             TotalSize = parsed.TotalSize,
             PieceCount = parsed.PieceCount,
             PieceLength = parsed.PieceLength,
+            PieceHashes = parsed.PieceHashes,
             Comment = parsed.Comment,
             CreatedBy = parsed.CreatedBy,
             CreationDate = parsed.CreationDate,

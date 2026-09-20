@@ -522,6 +522,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 Downloaded = downloaded,
                 PieceCount = parsed.PieceCount,
                 PieceLength = parsed.PieceLength,
+                PieceHashes = parsed.PieceHashes,
                 Comment = parsed.Comment,
                 IsPrivate = parsed.IsPrivate,
                 TrackerUrl = parsed.AnnounceUrl,

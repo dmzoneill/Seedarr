@@ -51,6 +51,41 @@ public class TorrentService : ITorrentService,
     private readonly object _sortOrderLock = new();
     private readonly Logger _logger;
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _pieceHashesByHash = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, byte[]> _pieceHashesById = new();
+
+    private static void PopulatePieceHashes(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return;
+        }
+
+        if (torrent.PieceHashes != null && torrent.PieceHashes.Length > 0)
+        {
+            if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
+            {
+                _pieceHashesByHash[torrent.InfoHash] = torrent.PieceHashes;
+            }
+
+            if (torrent.Id > 0)
+            {
+                _pieceHashesById[torrent.Id] = torrent.PieceHashes;
+            }
+
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(torrent.InfoHash) && _pieceHashesByHash.TryGetValue(torrent.InfoHash, out var hashes))
+        {
+            torrent.PieceHashes = hashes;
+        }
+        else if (torrent.Id > 0 && _pieceHashesById.TryGetValue(torrent.Id, out var idHashes))
+        {
+            torrent.PieceHashes = idHashes;
+        }
+    }
+
     public IDiskSpaceService DiskSpaceService { get; set; }
     public IDiskAllocationService DiskAllocationService { get; set; }
 
@@ -75,7 +110,13 @@ public class TorrentService : ITorrentService,
 
     public List<Torrent> GetAll()
     {
-        return _repository.All().ToList();
+        var torrents = _repository.All().ToList();
+        foreach (var t in torrents)
+        {
+            PopulatePieceHashes(t);
+        }
+
+        return torrents;
     }
 
     public List<Torrent> GetByInfoHashes(IEnumerable<string> infoHashes)
@@ -85,12 +126,20 @@ public class TorrentService : ITorrentService,
             return new List<Torrent>();
         }
 
-        return _repository.GetByInfoHashes(infoHashes);
+        var results = _repository.GetByInfoHashes(infoHashes);
+        foreach (var t in results)
+        {
+            PopulatePieceHashes(t);
+        }
+
+        return results;
     }
 
     public Torrent Get(int id)
     {
-        return _repository.Get(id);
+        var torrent = _repository.Get(id);
+        PopulatePieceHashes(torrent);
+        return torrent;
     }
 
     public Torrent GetByInfoHash(string infoHash)
@@ -100,7 +149,9 @@ public class TorrentService : ITorrentService,
             return null;
         }
 
-        return _repository.GetByInfoHash(infoHash.Trim().ToLowerInvariant());
+        var torrent = _repository.GetByInfoHash(infoHash.Trim().ToLowerInvariant());
+        PopulatePieceHashes(torrent);
+        return torrent;
     }
 
     public Torrent FindByInfoHash(string infoHash)
@@ -133,6 +184,14 @@ public class TorrentService : ITorrentService,
             torrent.InfoHash = torrent.InfoHash.Trim().ToLowerInvariant();
         }
 
+        if (torrent.PieceHashes != null && torrent.PieceHashes.Length > 0)
+        {
+            if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
+            {
+                _pieceHashesByHash[torrent.InfoHash] = torrent.PieceHashes;
+            }
+        }
+
         _logger.Info("Adding torrent: {0}", torrent.Name);
 
         if (!string.IsNullOrWhiteSpace(torrent.InfoHash) && _repository.ExistsByInfoHash(torrent.InfoHash))
@@ -152,6 +211,16 @@ public class TorrentService : ITorrentService,
             added = _repository.Insert(torrent);
         }
 
+        if (torrent.PieceHashes != null && torrent.PieceHashes.Length > 0)
+        {
+            added.PieceHashes = torrent.PieceHashes;
+            _pieceHashesById[added.Id] = torrent.PieceHashes;
+        }
+        else
+        {
+            PopulatePieceHashes(added);
+        }
+
         _eventAggregator.PublishEvent(new TorrentAddedEvent(added));
         _eventAggregator.PublishEvent(new ModelEvent<Torrent>(added, ModelAction.Created));
         return added;
@@ -166,8 +235,26 @@ public class TorrentService : ITorrentService,
             torrent.InfoHash = torrent.InfoHash.Trim().ToLowerInvariant();
         }
 
+        if (torrent.PieceHashes != null && torrent.PieceHashes.Length > 0)
+        {
+            if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
+            {
+                _pieceHashesByHash[torrent.InfoHash] = torrent.PieceHashes;
+            }
+
+            if (torrent.Id > 0)
+            {
+                _pieceHashesById[torrent.Id] = torrent.PieceHashes;
+            }
+        }
+        else
+        {
+            PopulatePieceHashes(torrent);
+        }
+
         _logger.Debug("Updating torrent: {0}", torrent.Name);
         var updated = _repository.Update(torrent);
+        PopulatePieceHashes(updated);
         _eventAggregator.PublishEvent(new ModelEvent<Torrent>(updated, ModelAction.Updated));
         _eventAggregator.PublishEvent(new TorrentUpdatedEvent(updated));
         return updated;
@@ -229,6 +316,7 @@ public class TorrentService : ITorrentService,
         _torrentFileService.DeleteByTorrentId(id);
         _trackerEntryService.DeleteByTorrentId(id);
         _repository.Delete(id);
+        _pieceHashesById.TryRemove(id, out _);
 
         if (torrent != null)
         {

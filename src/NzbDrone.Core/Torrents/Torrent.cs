@@ -195,6 +195,11 @@ public class Torrent : ModelBase
             ClientProfile = updates.ClientProfile;
         }
 
+        if (updates.PieceHashes != null && updates.PieceHashes.Length > 0)
+        {
+            PieceHashes = updates.PieceHashes;
+        }
+
         if (updates.IsSimulated)
         {
             IsSimulated = updates.IsSimulated;

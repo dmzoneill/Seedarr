@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -4082,5 +4083,144 @@ public class PeerServerTest
 
         _peerDiscovery.Received(1).MarkAttempted(infoHash, candidate.Ip, candidate.Port, false);
         _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+    }
+
+    [Test]
+    public void HandleMessage_Piece_should_buffer_block_and_verify_valid_sha1_hash()
+    {
+        var pieceCache = new PieceCache();
+        _server.PieceCache = pieceCache;
+
+        var pieceData = new byte[16384];
+        new Random(42).NextBytes(pieceData);
+        var expectedHash = SHA1.HashData(pieceData);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "test-torrent",
+            InfoHash = "1111222233334444555566667777888899990000",
+            PieceCount = 1,
+            PieceLength = 16384,
+            TotalSize = 16384,
+            PieceHashes = expectedHash,
+            Status = TorrentStatus.Downloading
+        };
+
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, "127.0.0.1", 6881)
+        {
+            MatchedTorrent = torrent
+        };
+        _connections.Add(conn);
+
+        var payload = new byte[8 + pieceData.Length];
+        Buffer.BlockCopy(pieceData, 0, payload, 8, pieceData.Length);
+
+        var message = new PeerMessage
+        {
+            Type = PeerMessageType.Piece,
+            Payload = payload
+        };
+
+        InvokeHandleMessage(conn, message, torrent);
+
+        Assert.That(conn.CorruptionCount, Is.EqualTo(0));
+        Assert.That(pieceCache.IsPieceFlushed(torrent.Id, 0), Is.True);
+    }
+
+    [Test]
+    public void HandleMessage_Piece_corrupted_piece_data_fails_verification_and_increments_corruption_count()
+    {
+        var pieceCache = new PieceCache();
+        _server.PieceCache = pieceCache;
+
+        var pieceData = new byte[16384];
+        new Random(42).NextBytes(pieceData);
+        var expectedHash = SHA1.HashData(pieceData);
+
+        var torrent = new Torrent
+        {
+            Id = 2,
+            Name = "corrupted-torrent",
+            InfoHash = "2222333344445555666677778888999900001111",
+            PieceCount = 1,
+            PieceLength = 16384,
+            TotalSize = 16384,
+            PieceHashes = expectedHash,
+            Status = TorrentStatus.Downloading
+        };
+
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, "127.0.0.1", 6881)
+        {
+            MatchedTorrent = torrent
+        };
+        _connections.Add(conn);
+
+        var corruptedData = (byte[])pieceData.Clone();
+        corruptedData[0] ^= 0xFF;
+
+        var payload = new byte[8 + corruptedData.Length];
+        Buffer.BlockCopy(corruptedData, 0, payload, 8, corruptedData.Length);
+
+        var message = new PeerMessage
+        {
+            Type = PeerMessageType.Piece,
+            Payload = payload
+        };
+
+        InvokeHandleMessage(conn, message, torrent);
+
+        Assert.That(conn.CorruptionCount, Is.EqualTo(1));
+        Assert.That(pieceCache.ContainsPiece(torrent.Id, 0), Is.False);
+    }
+
+    [Test]
+    public void HandleMessage_Piece_exceeding_corruption_threshold_disconnects_peer()
+    {
+        var pieceCache = new PieceCache();
+        _server.PieceCache = pieceCache;
+
+        var pieceData = new byte[16384];
+        new Random(42).NextBytes(pieceData);
+        var expectedHash = SHA1.HashData(pieceData);
+
+        var torrent = new Torrent
+        {
+            Id = 3,
+            Name = "disconnect-torrent",
+            InfoHash = "3333444455556666777788889999000011112222",
+            PieceCount = 1,
+            PieceLength = 16384,
+            TotalSize = 16384,
+            PieceHashes = expectedHash,
+            Status = TorrentStatus.Downloading
+        };
+
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, "127.0.0.1", 6881)
+        {
+            MatchedTorrent = torrent,
+            CorruptionCount = 2
+        };
+        _connections.Add(conn);
+
+        var corruptedData = (byte[])pieceData.Clone();
+        corruptedData[0] ^= 0xFF;
+
+        var payload = new byte[8 + corruptedData.Length];
+        Buffer.BlockCopy(corruptedData, 0, payload, 8, corruptedData.Length);
+
+        var message = new PeerMessage
+        {
+            Type = PeerMessageType.Piece,
+            Payload = payload
+        };
+
+        InvokeHandleMessage(conn, message, torrent);
+
+        Assert.That(conn.CorruptionCount, Is.EqualTo(3));
+        _connectionManager.Received(1).Remove(conn);
     }
 }

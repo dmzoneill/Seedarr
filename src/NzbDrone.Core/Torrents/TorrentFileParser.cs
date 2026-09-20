@@ -37,7 +37,13 @@ public class ParsedTorrent
     }
 
     public Dictionary<string, byte[]> PieceLayers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-    public byte[] Pieces { get; set; }
+    public byte[] Pieces
+    {
+        get => PieceHashes;
+        set => PieceHashes = value;
+    }
+
+    public byte[] PieceHashes { get; set; }
 }
 
 public class ParsedTorrentFile
@@ -310,6 +316,7 @@ public class TorrentFileParser : ITorrentFileParser
                 PieceLength = (int)pieceLengthNum.Value,
                 PieceCount = pieceCount,
                 Pieces = piecesStr?.Value.ToArray(),
+                PieceHashes = piecesStr?.Value.ToArray(),
                 Comment = GetStringWithUtf8Fallback(torrent, "comment"),
                 CreatedBy = GetStringWithUtf8Fallback(torrent, "created by"),
                 IsPrivate = info.ContainsKey("private") && (info["private"] as BNumber)?.Value == 1,
