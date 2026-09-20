@@ -112,6 +112,16 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
 
         torrent.Status = initialStatus;
 
+        if (parsed.Files != null && parsed.Files.Count > 0)
+        {
+            torrent.Files = parsed.Files.Select(f => new TorrentFile
+            {
+                Path = f.Path,
+                Size = f.Size,
+                IsPaddingFile = f.IsPaddingFile
+            }).ToList();
+        }
+
         var added = _torrentService.Add(torrent);
 
         if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)

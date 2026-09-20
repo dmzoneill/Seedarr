@@ -44,6 +44,7 @@ public interface IConfigService
     bool WatchFolderDeleteAddedTorrents { get; }
     string TorrentSaveDirectory { get; }
     string DefaultSavePath { get; }
+    PreallocationMode PreallocationMode { get; set; }
 
     // Connection & Network
     int ListeningPort { get; }
@@ -461,6 +462,25 @@ public class ConfigService : IConfigService
     public bool WatchFolderDeleteAddedTorrents => GetValueBoolean("WatchFolderDeleteAddedTorrents", false);
     public string TorrentSaveDirectory => GetValue("TorrentSaveDirectory", "");
     public string DefaultSavePath => GetValue("DefaultSavePath", TorrentSaveDirectory);
+    public PreallocationMode PreallocationMode
+    {
+        get
+        {
+            var value = GetValue("PreallocationMode", nameof(PreallocationMode.Sparse));
+            if (Enum.TryParse<PreallocationMode>(value, true, out var mode))
+            {
+                return mode;
+            }
+
+            if (int.TryParse(value, out var intMode) && Enum.IsDefined(typeof(PreallocationMode), intMode))
+            {
+                return (PreallocationMode)intMode;
+            }
+
+            return PreallocationMode.Sparse;
+        }
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "PreallocationMode", value.ToString() } });
+    }
 
     // Connection & Network
     public int ListeningPort => GetValueInt("ListeningPort", 6881);
