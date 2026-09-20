@@ -80,16 +80,52 @@ const DEFAULT_SVG_WIDTH = 1000;
 const SVG_HEIGHT = 180;
 const PADDING = { top: 12, right: 24, bottom: 26, left: 75 };
 
-function getNiceMax(value: number): number {
-  if (value <= 0) return 1024;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
-  const normalized = value / magnitude;
-  let nice: number;
-  if (normalized <= 1) nice = 1;
-  else if (normalized <= 2) nice = 2;
-  else if (normalized <= 5) nice = 5;
-  else nice = 10;
-  return nice * magnitude;
+export function getNiceMax(value: number): number {
+  if (!Number.isFinite(value) || value <= 1024) return 1024;
+
+  // Sub-megabyte speeds (KiB scale): binary power-of-two increments (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 KiB)
+  const kib = value / 1024;
+  if (kib <= 1024) {
+    const p = Math.pow(2, Math.ceil(Math.log2(kib) - 1e-9));
+    return p * 1024;
+  }
+
+  // Megabyte and above (MiB, GiB, TiB scale): clean step multipliers on powers of 1024
+  let unit = 1024 * 1024;
+  while (value > unit * 1024) {
+    unit *= 1024;
+  }
+
+  const normalized = value / unit;
+  const MULTIPLIERS = [1, 2, 5, 10, 25, 50, 100, 250, 500];
+  for (const m of MULTIPLIERS) {
+    if (normalized <= m + 1e-9) {
+      return m * unit;
+    }
+  }
+  return 1024 * unit;
+}
+
+export function getGridLineCount(niceMax: number): number {
+  if (niceMax < 1024 * 1024) {
+    return 4;
+  }
+  let unit = 1024 * 1024;
+  while (niceMax >= unit * 1024) {
+    unit *= 1024;
+  }
+  const norm = Math.round(niceMax / unit);
+  if (
+    norm === 5 ||
+    norm === 10 ||
+    norm === 25 ||
+    norm === 50 ||
+    norm === 250 ||
+    norm === 500
+  ) {
+    return 5;
+  }
+  return 4;
 }
 
 function SpeedGraph({ maxPoints }: SpeedGraphProps) {
@@ -329,10 +365,10 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
 
   const niceMax = Math.max(1024, renderedMax);
 
-  const gridLineCount = 3;
+  const gridLineCount = getGridLineCount(targetNiceMax);
   const gridLines = Array.from({ length: gridLineCount + 1 }, (_, i) => {
-    const value = (niceMax / gridLineCount) * i;
-    const y = PADDING.top + chartHeight - (value / niceMax) * chartHeight;
+    const value = (targetNiceMax / gridLineCount) * i;
+    const y = PADDING.top + chartHeight - (i / gridLineCount) * chartHeight;
     return { value, y };
   });
 
