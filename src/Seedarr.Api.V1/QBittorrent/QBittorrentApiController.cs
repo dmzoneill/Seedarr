@@ -53,6 +53,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     private readonly IPiecePicker _piecePicker;
     private readonly ITorrentRelocationService _relocationService;
     private readonly IStopPolicy _stopPolicy;
+    private readonly ITorrentExporter _torrentExporter;
     private readonly Logger _logger;
 
     public QBittorrentApiController(
@@ -73,7 +74,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         IPieceStorage pieceStorage = null,
         IPiecePicker piecePicker = null,
         ITorrentRelocationService relocationService = null,
-        IStopPolicy stopPolicy = null)
+        IStopPolicy stopPolicy = null,
+        ITorrentExporter torrentExporter = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -92,6 +94,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         _piecePicker = piecePicker;
         _relocationService = relocationService;
         _stopPolicy = stopPolicy;
+        _torrentExporter = torrentExporter ?? new TorrentExporter(torrentFileService, trackerEntryService);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -1022,6 +1025,53 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         var stopPolicy = _stopPolicy ?? new StopPolicy(_configService, tagService: _tagService);
         return stopPolicy.ShouldStop(torrent);
+    }
+
+    [HttpGet("torrents/export")]
+    [HttpPost("torrents/export")]
+    public ActionResult Export(
+        [FromQuery] string hash = null,
+        [FromQuery] string hashes = null,
+        [FromForm(Name = "hash")] string hashForm = null,
+        [FromForm(Name = "hashes")] string hashesForm = null)
+    {
+        var targetHash = !string.IsNullOrWhiteSpace(hash) ? hash :
+            (!string.IsNullOrWhiteSpace(hashes) ? hashes :
+            (!string.IsNullOrWhiteSpace(hashForm) ? hashForm : hashesForm));
+
+        if (string.IsNullOrWhiteSpace(targetHash) && Request?.HasFormContentType == true)
+        {
+            if (Request.Form.TryGetValue("hash", out var fHash) && !string.IsNullOrWhiteSpace(fHash))
+            {
+                targetHash = fHash.ToString();
+            }
+            else if (Request.Form.TryGetValue("hashes", out var fHashes) && !string.IsNullOrWhiteSpace(fHashes))
+            {
+                targetHash = fHashes.ToString();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(targetHash))
+        {
+            return NotFound();
+        }
+
+        var torrent = _torrentService.GetAll().FirstOrDefault(t =>
+            string.Equals(t.InfoHash, targetHash.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (torrent == null)
+        {
+            torrent = ResolveTorrents(targetHash).FirstOrDefault();
+        }
+
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var bytes = _torrentExporter.ExportTorrent(torrent);
+        var fileName = !string.IsNullOrWhiteSpace(torrent.Name) ? $"{torrent.Name}.torrent" : $"{torrent.InfoHash}.torrent";
+        return File(bytes, "application/x-bittorrent", fileName);
     }
 
     [HttpGet("torrents/files")]
