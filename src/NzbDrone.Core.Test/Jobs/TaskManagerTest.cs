@@ -471,4 +471,75 @@ public class TaskManagerTest
         Assert.That(byId, Is.EqualTo(items));
         Assert.That(byName, Is.EqualTo(items));
     }
+
+    [Test]
+    public void Update_should_update_interval_and_enabled_state()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 5,
+            TypeName = "TestTask",
+            Interval = 15,
+            IsEnabled = true,
+            LastExecution = DateTime.UtcNow
+        };
+        _repository.Get(5).Returns(task);
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        _subject.Update(5, 45, false);
+
+        Assert.That(task.Interval, Is.EqualTo(45));
+        Assert.That(task.IsEnabled, Is.False);
+        _repository.Received(1).Update(task);
+    }
+
+    [Test]
+    public void Update_should_clamp_interval_to_minimum_one()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 5,
+            TypeName = "TestTask",
+            Interval = 15,
+            IsEnabled = true,
+            LastExecution = DateTime.UtcNow
+        };
+        _repository.Get(5).Returns(task);
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        _subject.Update(5, 0, true);
+
+        Assert.That(task.Interval, Is.EqualTo(1));
+        Assert.That(task.IsEnabled, Is.True);
+        _repository.Received(1).Update(task);
+    }
+
+    [Test]
+    public void Update_should_do_nothing_when_task_not_found()
+    {
+        _repository.Get(99).Returns((ScheduledTask)null);
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        _subject.Update(99, 30, true);
+
+        _repository.DidNotReceive().Update(Arg.Any<ScheduledTask>());
+    }
+
+    [Test]
+    public void GetNextScheduled_should_ignore_disabled_tasks()
+    {
+        var now = DateTime.UtcNow;
+        var tasks = new List<ScheduledTask>
+        {
+            new() { Id = 1, TypeName = "DisabledSooner", Interval = 5, IsEnabled = false, LastExecution = now.AddMinutes(-30) },
+            new() { Id = 2, TypeName = "EnabledLater", Interval = 15, IsEnabled = true, LastExecution = now.AddMinutes(-10) }
+        };
+        _repository.All().Returns(tasks);
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var result = _subject.GetNextScheduled();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeName, Is.EqualTo("EnabledLater"));
+    }
 }

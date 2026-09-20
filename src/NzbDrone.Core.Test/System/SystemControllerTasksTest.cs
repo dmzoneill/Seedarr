@@ -447,4 +447,87 @@ public class SystemControllerTasksTest
             m.Name == "TaskStarted" &&
             m.Action == NzbDrone.Core.Datastore.ModelAction.Created));
     }
+
+    [Test]
+    public void UpdateTask_returns_ok_with_updated_resource_when_valid()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 3,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 15,
+            IsEnabled = true,
+            LastExecution = DateTime.UtcNow
+        };
+        var updatedTask = new ScheduledTask
+        {
+            Id = 3,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 60,
+            IsEnabled = false,
+            LastExecution = task.LastExecution
+        };
+
+        _taskManager.GetAll().Returns(
+            new List<ScheduledTask> { task },
+            new List<ScheduledTask> { updatedTask });
+
+        var request = new UpdateScheduledTaskRequest
+        {
+            Interval = 60,
+            IsEnabled = false
+        };
+
+        var actionResult = _controller.UpdateTask(3, request);
+        var okResult = actionResult.Result as OkObjectResult;
+
+        Assert.That(okResult, Is.Not.Null);
+        var resource = okResult.Value as ScheduledTaskResource;
+        Assert.That(resource, Is.Not.Null);
+        Assert.That(resource.Id, Is.EqualTo(3));
+        Assert.That(resource.Interval, Is.EqualTo(60));
+        Assert.That(resource.IsEnabled, Is.False);
+        _taskManager.Received(1).Update(3, 60, false);
+    }
+
+    [Test]
+    public void UpdateTask_returns_bad_request_when_request_is_null()
+    {
+        var actionResult = _controller.UpdateTask(1, null);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _taskManager.DidNotReceive().Update(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<bool>());
+    }
+
+    [Test]
+    public void UpdateTask_returns_bad_request_when_interval_is_less_than_one()
+    {
+        var request = new UpdateScheduledTaskRequest
+        {
+            Interval = 0,
+            IsEnabled = true
+        };
+
+        var actionResult = _controller.UpdateTask(1, request);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _taskManager.DidNotReceive().Update(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<bool>());
+    }
+
+    [Test]
+    public void UpdateTask_returns_not_found_when_task_does_not_exist()
+    {
+        _taskManager.GetAll().Returns(new List<ScheduledTask>());
+
+        var request = new UpdateScheduledTaskRequest
+        {
+            Interval = 30,
+            IsEnabled = true
+        };
+
+        var actionResult = _controller.UpdateTask(99, request);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<NotFoundObjectResult>());
+        _taskManager.DidNotReceive().Update(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<bool>());
+    }
 }

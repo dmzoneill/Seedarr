@@ -89,6 +89,12 @@ public class Scheduler : BackgroundService
 
                 if (next != null)
                 {
+                    if (!next.IsEnabled)
+                    {
+                        await Task.Delay(50, stoppingToken);
+                        continue;
+                    }
+
                     var isUninitialized = next.LastExecution == DateTime.MinValue || next.LastExecution <= DateTime.MinValue.AddDays(1);
                     var dueAt = isUninitialized
                         ? DateTime.UtcNow
