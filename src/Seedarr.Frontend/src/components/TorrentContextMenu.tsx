@@ -3,6 +3,8 @@ import { useNavigate } from "react-router";
 import { useArrConnections, useDownloadHistory } from "../api/hooks";
 import { getMediaDeepLink } from "../utils/arrLinks";
 import { useTranslation } from "../i18n";
+import { useToast } from "../context/ToastContext";
+import { copyToClipboard } from "../utils/clipboard";
 import { COLUMN_I18N_KEYS } from "./TorrentTable";
 import PromptModal from "./PromptModal";
 import type { Torrent } from "../api/types";
@@ -40,9 +42,30 @@ export interface TorrentContextMenuProps {
   onSearchIndexers?: (query: string) => void;
 }
 
-function buildMagnetLink(t: Torrent): string {
+export function buildMagnetLink(t: Torrent): string {
+  if (t.magnetLink && t.magnetLink.trim()) {
+    return t.magnetLink;
+  }
+
   let magnet = `magnet:?xt=urn:btih:${t.infoHash}&dn=${encodeURIComponent(t.name)}`;
-  if (t.trackerUrl) magnet += `&tr=${encodeURIComponent(t.trackerUrl)}`;
+  const trackerSet = new Set<string>();
+
+  if (Array.isArray(t.trackers)) {
+    for (const tr of t.trackers) {
+      if (tr && typeof tr === "string" && tr.trim()) {
+        trackerSet.add(tr.trim());
+      }
+    }
+  }
+
+  if (t.trackerUrl && typeof t.trackerUrl === "string" && t.trackerUrl.trim()) {
+    trackerSet.add(t.trackerUrl.trim());
+  }
+
+  for (const tr of trackerSet) {
+    magnet += `&tr=${encodeURIComponent(tr)}`;
+  }
+
   return magnet;
 }
 
@@ -73,6 +96,7 @@ function TorrentContextMenu({
   onSearchIndexers,
 }: TorrentContextMenuProps) {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const [promptConfig, setPromptConfig] = useState<{
     title: string;
@@ -120,10 +144,22 @@ function TorrentContextMenu({
     };
   }, [onClose, promptConfig]);
 
-  function handleCopy(text: string) {
-    navigator.clipboard
-      .writeText(text)
-      .catch((err) => console.warn("Clipboard write failed:", err));
+  async function handleCopy(text: string, label?: string) {
+    try {
+      const success = await copyToClipboard(text);
+      if (success) {
+        if (label) {
+          const count = isMulti ? ` (${effectiveTorrents.length})` : "";
+          showToast(`Copied ${label}${count} to clipboard`, "success");
+        } else {
+          showToast("Copied to clipboard", "success");
+        }
+      } else {
+        showToast("Failed to copy to clipboard", "error");
+      }
+    } catch {
+      showToast("Failed to copy to clipboard", "error");
+    }
     onClose();
   }
 
@@ -474,6 +510,7 @@ function TorrentContextMenu({
                     onClick={() =>
                       handleCopy(
                         effectiveTorrents.map((t) => t.name).join("\n"),
+                        t("common.name", undefined, "Name"),
                       )
                     }
                   >
@@ -485,6 +522,7 @@ function TorrentContextMenu({
                     onClick={() =>
                       handleCopy(
                         effectiveTorrents.map((t) => t.infoHash).join("\n"),
+                        t("torrents.table.infoHash", undefined, "Info Hash"),
                       )
                     }
                   >
@@ -498,6 +536,11 @@ function TorrentContextMenu({
                         effectiveTorrents
                           .map((t) => buildMagnetLink(t))
                           .join("\n"),
+                        t(
+                          "modals.addTorrent.byMagnet",
+                          undefined,
+                          "Magnet Link",
+                        ),
                       )
                     }
                   >
@@ -507,7 +550,12 @@ function TorrentContextMenu({
                   {!isMulti && ct && (
                     <button
                       className="context-menu-item"
-                      onClick={() => handleCopy(ct.trackerUrl ?? "")}
+                      onClick={() =>
+                        handleCopy(
+                          ct.trackerUrl ?? "",
+                          t("torrents.table.tracker", undefined, "Tracker URL"),
+                        )
+                      }
                     >
                       {t("torrents.table.tracker", undefined, "Tracker URL")}
                     </button>
