@@ -9,6 +9,7 @@ public interface IDownloadHistoryRepository : IBasicRepository<DownloadHistory>
     DownloadHistory FindByTorrentId(int torrentId);
     Dictionary<string, DownloadHistory> GetLatestByInfoHashes(IEnumerable<string> infoHashes);
     List<DownloadHistory> GetHistory(string query = null, string status = null, int limit = 500, int offset = 0);
+    int GetCount(string query = null, string status = null);
     int DeleteOlderThan(global::System.DateTime cutoffDate);
     int DeleteOlderThan(global::System.DateTime cutoffDate, int batchSize);
     void DeleteAll();

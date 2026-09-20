@@ -1102,6 +1102,14 @@ export interface DownloadHistoryEntry {
   isPrivate?: boolean;
 }
 
+export interface DownloadHistoryResponse extends Array<DownloadHistoryEntry> {
+  records?: DownloadHistoryEntry[];
+  totalCount?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
+}
+
 export interface ReleaseInfo {
   guid?: string;
   title: string;

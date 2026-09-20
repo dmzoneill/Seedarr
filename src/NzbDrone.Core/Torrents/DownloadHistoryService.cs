@@ -145,6 +145,11 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
         return _historyRepository.GetHistory(query, status, limit, offset);
     }
 
+    public int GetCount(string query = null, string status = null)
+    {
+        return _historyRepository.GetCount(query, status);
+    }
+
     public DownloadHistory Get(int id)
     {
         return _historyRepository.Get(id);

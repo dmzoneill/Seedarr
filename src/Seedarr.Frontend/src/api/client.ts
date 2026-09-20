@@ -119,6 +119,56 @@ class ApiClient {
     return this.request<T>(endpoint, { ...options, method: "GET" });
   }
 
+  async getWithHeaders<T>(
+    endpoint: string,
+    options?: RequestInit & { responseType?: "blob" | "json" },
+  ): Promise<{ data: T; headers: Headers }> {
+    const isBlob = options?.responseType === "blob";
+    const headers: HeadersInit = {
+      ...(isBlob ? {} : { "Content-Type": "application/json" }),
+      ...options?.headers,
+    };
+
+    if (this.apiKey) {
+      (headers as Record<string, string>)["X-Api-Key"] = this.apiKey;
+    }
+
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      method: "GET",
+      headers,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 && !endpoint.includes("/auth/login")) {
+        broadcastSessionExpired();
+        if (
+          typeof window !== "undefined" &&
+          window.location.pathname !== "/login"
+        ) {
+          const returnUrl = window.location.pathname + window.location.search;
+          window.location.href = `/login?returnUrl=${encodeURIComponent(returnUrl)}`;
+        }
+      }
+      const errorMsg = await this.parseError(response);
+      throw new Error(errorMsg);
+    }
+
+    let data: T;
+    if (
+      response.status === 204 ||
+      response.headers.get("content-length") === "0"
+    ) {
+      data = null as unknown as T;
+    } else if (isBlob) {
+      data = (await response.blob()) as unknown as T;
+    } else {
+      data = await response.json();
+    }
+
+    return { data, headers: response.headers };
+  }
+
   post<T>(endpoint: string, body?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: "POST",

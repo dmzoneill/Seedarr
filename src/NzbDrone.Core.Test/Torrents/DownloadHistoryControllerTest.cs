@@ -24,7 +24,13 @@ public class DownloadHistoryControllerTest
     {
         _historyService = Substitute.For<IDownloadHistoryService>();
         _metadataEnricherService = Substitute.For<IArrMetadataEnricherService>();
-        _controller = new DownloadHistoryController(_historyService, _metadataEnricherService);
+        _controller = new DownloadHistoryController(_historyService, _metadataEnricherService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
+            }
+        };
     }
 
     [TestCase("=1+1", "\"'=1+1\"")]
@@ -143,11 +149,35 @@ public class DownloadHistoryControllerTest
             new() { Id = 1, Title = "Filtered Item" }
         };
 
+        _historyService.GetCount("search", "completed").Returns(1);
         _historyService.GetAll("search", "completed", 50, 10).Returns(entries);
 
         var result = _controller.GetAll("search", "completed", 50, 10);
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _historyService.Received(1).GetAll("search", "completed", 50, 10);
+        _historyService.Received(1).GetCount("search", "completed");
+        Assert.That(_controller.Response.Headers["X-Total-Count"].ToString(), Is.EqualTo("1"));
+        Assert.That(_controller.Response.Headers["X-Page-Count"].ToString(), Is.EqualTo("1"));
+    }
+
+    [Test]
+    public void GetAll_with_page_and_pageSize_calculates_effective_limit_and_offset()
+    {
+        var entries = new List<DownloadHistory>
+        {
+            new() { Id = 10, Title = "Page 2 Item" }
+        };
+
+        _historyService.GetCount("linux", "Active").Returns(125);
+        _historyService.GetAll("linux", "Active", 25, 25).Returns(entries);
+
+        var result = _controller.GetAll("linux", "Active", page: 2, pageSize: 25);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _historyService.Received(1).GetAll("linux", "Active", 25, 25);
+        _historyService.Received(1).GetCount("linux", "Active");
+        Assert.That(_controller.Response.Headers["X-Total-Count"].ToString(), Is.EqualTo("125"));
+        Assert.That(_controller.Response.Headers["X-Page-Count"].ToString(), Is.EqualTo("5"));
     }
 }

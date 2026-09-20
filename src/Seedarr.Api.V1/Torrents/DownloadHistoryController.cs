@@ -32,9 +32,26 @@ public class DownloadHistoryController : Controller
         [FromQuery] string query = null,
         [FromQuery] string status = null,
         [FromQuery] int limit = 500,
-        [FromQuery] int offset = 0)
+        [FromQuery] int offset = 0,
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null)
     {
-        var records = _historyService.GetAll(query, status, limit, offset);
+        var effectiveLimit = limit;
+        var effectiveOffset = offset;
+        if (page.HasValue && page.Value > 0)
+        {
+            var size = pageSize.HasValue && pageSize.Value > 0 ? pageSize.Value : 50;
+            effectiveLimit = size;
+            effectiveOffset = (page.Value - 1) * size;
+        }
+
+        var totalCount = _historyService.GetCount(query, status);
+        var records = _historyService.GetAll(query, status, effectiveLimit, effectiveOffset);
+
+        var pageCount = effectiveLimit > 0 ? (int)Math.Ceiling((double)totalCount / effectiveLimit) : 1;
+        Response.Headers["X-Total-Count"] = totalCount.ToString();
+        Response.Headers["X-Page-Count"] = pageCount.ToString();
+
         return Ok(records.Select(ToResource).ToList());
     }
 
