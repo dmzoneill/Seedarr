@@ -322,9 +322,58 @@ public class IndexerController : Controller
     }
 
     [HttpGet("search")]
-    public ActionResult<List<ReleaseInfo>> Search([FromQuery] string query, [FromQuery] string category = null, [FromQuery] int? indexerId = null, [FromQuery] int offset = 0, [FromQuery] int limit = 50)
+    public ActionResult<List<ReleaseInfo>> Search(
+        [FromQuery] string query = null,
+        [FromQuery] string category = null,
+        [FromQuery] int? indexerId = null,
+        [FromQuery] int offset = 0,
+        [FromQuery] int limit = 50,
+        [FromQuery] string searchType = "search",
+        [FromQuery] int? season = null,
+        [FromQuery] int? ep = null,
+        [FromQuery] string imdbId = null,
+        [FromQuery] string tmdbId = null,
+        [FromQuery] string tvdbId = null,
+        [FromQuery] string rid = null,
+        [FromQuery] string artist = null,
+        [FromQuery] string album = null,
+        [FromQuery] string author = null,
+        [FromQuery] string title = null,
+        [FromQuery] int? year = null,
+        [FromQuery] string categories = null)
     {
-        if (string.IsNullOrWhiteSpace(query))
+        var criteria = new TorznabSearchCriteria
+        {
+            SearchType = searchType,
+            Query = query,
+            Category = category,
+            Categories = categories,
+            Offset = offset,
+            Limit = limit,
+            Season = season,
+            Episode = ep,
+            ImdbId = imdbId,
+            TmdbId = tmdbId,
+            TvdbId = tvdbId,
+            Rid = rid,
+            Artist = artist,
+            Album = album,
+            Author = author,
+            Title = title,
+            Year = year
+        };
+
+        if (string.IsNullOrWhiteSpace(criteria.Query) &&
+            !criteria.Season.HasValue &&
+            !criteria.Episode.HasValue &&
+            string.IsNullOrWhiteSpace(criteria.ImdbId) &&
+            string.IsNullOrWhiteSpace(criteria.TmdbId) &&
+            string.IsNullOrWhiteSpace(criteria.TvdbId) &&
+            string.IsNullOrWhiteSpace(criteria.Rid) &&
+            string.IsNullOrWhiteSpace(criteria.Artist) &&
+            string.IsNullOrWhiteSpace(criteria.Album) &&
+            string.IsNullOrWhiteSpace(criteria.Author) &&
+            string.IsNullOrWhiteSpace(criteria.Title))
         {
             return Ok(new List<ReleaseInfo>());
         }
@@ -343,7 +392,7 @@ public class IndexerController : Controller
             try
             {
                 var indexer = CreateIndexer(def);
-                var results = indexer.Search(def, query, category, offset, limit);
+                var results = indexer.Search(def, criteria);
                 _indexerStatusService.RecordSuccess(def.Id);
                 if (results != null && results.Count > 0)
                 {

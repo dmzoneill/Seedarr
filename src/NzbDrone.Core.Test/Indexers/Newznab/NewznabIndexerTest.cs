@@ -237,6 +237,175 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
         }
 
         [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_build_tvsearch_url_with_season_episode_and_ids()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local",
+                ApiKey = "nzbkey",
+                ApiPath = "/api"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                SearchType = "tvsearch",
+                Query = "Simpsons",
+                Season = 3,
+                Episode = 10,
+                TvdbId = "71663",
+                TmdbId = "456",
+                Year = 1991
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=tvsearch"));
+            Assert.That(url, Does.Contain("q=Simpsons"));
+            Assert.That(url, Does.Contain("season=3"));
+            Assert.That(url, Does.Contain("ep=10"));
+            Assert.That(url, Does.Contain("tvdbid=71663"));
+            Assert.That(url, Does.Contain("tmdbid=456"));
+            Assert.That(url, Does.Contain("year=1991"));
+            Assert.That(url, Does.Contain("apikey=nzbkey"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_infer_tvsearch_when_season_present()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                Query = "Simpsons",
+                Season = 3,
+                Episode = 10
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=tvsearch"));
+            Assert.That(url, Does.Contain("season=3"));
+            Assert.That(url, Does.Contain("ep=10"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_build_movie_url_with_parameters()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                SearchType = "movie",
+                Query = "Matrix",
+                ImdbId = "tt0133093",
+                TmdbId = "603",
+                Year = 1999
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=movie"));
+            Assert.That(url, Does.Contain("q=Matrix"));
+            Assert.That(url, Does.Contain("imdbid=tt0133093"));
+            Assert.That(url, Does.Contain("tmdbid=603"));
+            Assert.That(url, Does.Contain("year=1999"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_infer_movie_when_imdb_present()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                ImdbId = "tt0133093"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=movie"));
+            Assert.That(url, Does.Contain("imdbid=tt0133093"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_build_music_url_with_parameters()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                SearchType = "music",
+                Artist = "Beatles",
+                Album = "Abbey Road",
+                Year = 1969
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=music"));
+            Assert.That(url, Does.Contain("artist=Beatles"));
+            Assert.That(url, Does.Contain("album=Abbey%20Road"));
+            Assert.That(url, Does.Contain("year=1969"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_build_book_url_with_parameters()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                SearchType = "book",
+                Author = "Asimov",
+                Title = "Foundation",
+                Year = 1951
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=book"));
+            Assert.That(url, Does.Contain("author=Asimov"));
+            Assert.That(url, Does.Contain("title=Foundation"));
+            Assert.That(url, Does.Contain("year=1951"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_support_backward_compatibility_search()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local",
+                ApiKey = "nzbkey"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                Query = "Linux ISO"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=search"));
+            Assert.That(url, Does.Contain("q=Linux%20ISO"));
+            Assert.That(url, Does.Contain("apikey=nzbkey"));
+        }
+
+        [Test]
         public void ParseResponse_should_decode_html_entities_and_normalize_whitespace_in_title_and_description()
         {
             var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>

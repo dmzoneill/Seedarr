@@ -914,6 +914,175 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
         }
 
         [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_build_tvsearch_url_with_season_episode_and_ids()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local",
+                ApiKey = "myapikey",
+                ApiPath = "/api"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                SearchType = "tvsearch",
+                Query = "Breaking Bad",
+                Season = 1,
+                Episode = 3,
+                TvdbId = "81189",
+                TmdbId = "1396",
+                Year = 2008
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=tvsearch"));
+            Assert.That(url, Does.Contain("q=Breaking%20Bad"));
+            Assert.That(url, Does.Contain("season=1"));
+            Assert.That(url, Does.Contain("ep=3"));
+            Assert.That(url, Does.Contain("tvdbid=81189"));
+            Assert.That(url, Does.Contain("tmdbid=1396"));
+            Assert.That(url, Does.Contain("year=2008"));
+            Assert.That(url, Does.Contain("apikey=myapikey"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_infer_tvsearch_when_season_present()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                Query = "Simpsons",
+                Season = 5,
+                Episode = 2
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=tvsearch"));
+            Assert.That(url, Does.Contain("season=5"));
+            Assert.That(url, Does.Contain("ep=2"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_build_movie_url_with_imdb_and_tmdb()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                SearchType = "movie",
+                Query = "The Dark Knight",
+                ImdbId = "tt0468569",
+                TmdbId = "155",
+                Year = 2008
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=movie"));
+            Assert.That(url, Does.Contain("q=The%20Dark%20Knight"));
+            Assert.That(url, Does.Contain("imdbid=tt0468569"));
+            Assert.That(url, Does.Contain("tmdbid=155"));
+            Assert.That(url, Does.Contain("year=2008"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_infer_movie_when_imdb_present()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                ImdbId = "tt0468569"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=movie"));
+            Assert.That(url, Does.Contain("imdbid=tt0468569"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_build_music_url_with_artist_and_album()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                SearchType = "music",
+                Artist = "Daft Punk",
+                Album = "Discovery",
+                Year = 2001
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=music"));
+            Assert.That(url, Does.Contain("artist=Daft%20Punk"));
+            Assert.That(url, Does.Contain("album=Discovery"));
+            Assert.That(url, Does.Contain("year=2001"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_build_book_url_with_author_and_title()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                SearchType = "book",
+                Author = "Frank Herbert",
+                Title = "Dune",
+                Year = 1965
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=book"));
+            Assert.That(url, Does.Contain("author=Frank%20Herbert"));
+            Assert.That(url, Does.Contain("title=Dune"));
+            Assert.That(url, Does.Contain("year=1965"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_with_TorznabSearchCriteria_should_support_backward_compatibility_search()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local",
+                ApiKey = "key123"
+            };
+
+            var criteria = new TorznabSearchCriteria
+            {
+                Query = "Ubuntu 22.04"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, criteria);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=search"));
+            Assert.That(url, Does.Contain("q=Ubuntu%2022.04"));
+            Assert.That(url, Does.Contain("apikey=key123"));
+        }
+
+        [Test]
         public void ParseResponse_should_decode_html_entities_and_normalize_whitespace_in_title_and_description()
         {
             var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
