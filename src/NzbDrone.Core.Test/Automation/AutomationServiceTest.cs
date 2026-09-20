@@ -457,4 +457,60 @@ for (var i = 0; i < 2000; i++) {
         connectionManager.Received(1).Remove(activeConnection);
         _eventAggregator.Received(1).PublishEvent(Arg.Is<PeerBannedEvent>(e => e.PeerIp == "192.168.1.100" && e.InfoHash == "peerhash"));
     }
+
+    [Test]
+    public void ExecuteScript_should_route_torrent_removal_through_torrent_service_with_DeleteDataOnRemove_true()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var subject = new AutomationService(
+            _scriptRepository,
+            _torrentRepository,
+            _tagService,
+            _eventAggregator,
+            torrentService: torrentService);
+
+        var torrent = new Torrent { Id = 42, Name = "Remove Torrent" };
+        var script = new AutomationScript
+        {
+            Id = 10,
+            Name = "Remove With Data Script",
+            Language = AutomationLanguage.JavaScript,
+            Code = "torrent.remove(true);",
+        };
+
+        var result = subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ShouldRemove, Is.True);
+        Assert.That(result.DeleteDataOnRemove, Is.True);
+        torrentService.Received(1).Delete(42, true);
+    }
+
+    [Test]
+    public void ExecuteScript_should_route_torrent_removal_through_torrent_service_with_DeleteDataOnRemove_false()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var subject = new AutomationService(
+            _scriptRepository,
+            _torrentRepository,
+            _tagService,
+            _eventAggregator,
+            torrentService: torrentService);
+
+        var torrent = new Torrent { Id = 42, Name = "Remove Torrent" };
+        var script = new AutomationScript
+        {
+            Id = 11,
+            Name = "Remove Without Data Script",
+            Language = AutomationLanguage.JavaScript,
+            Code = "torrent.remove(false);",
+        };
+
+        var result = subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ShouldRemove, Is.True);
+        Assert.That(result.DeleteDataOnRemove, Is.False);
+        torrentService.Received(1).Delete(42, false);
+    }
 }

@@ -45,6 +45,7 @@ public class AutomationService : IAutomationService
     private readonly ITrackerAnnounceService? _trackerAnnounceService;
     private readonly IConnectionManager? _connectionManager;
     private readonly IConfigService? _configService;
+    private readonly ITorrentService? _torrentService;
     private readonly Logger _logger;
     private readonly JintScriptRunner _jintRunner;
     private readonly YamlScriptRunner _yamlRunner;
@@ -63,7 +64,8 @@ public class AutomationService : IAutomationService
         ITrackerBoostService? trackerBoostService = null,
         ITrackerAnnounceService? trackerAnnounceService = null,
         IConnectionManager? connectionManager = null,
-        IConfigService? configService = null)
+        IConfigService? configService = null,
+        ITorrentService? torrentService = null)
     {
         _scriptRepository = scriptRepository;
         _torrentRepository = torrentRepository;
@@ -78,6 +80,7 @@ public class AutomationService : IAutomationService
         _trackerAnnounceService = trackerAnnounceService;
         _connectionManager = connectionManager;
         _configService = configService;
+        _torrentService = torrentService;
         _logger = LogManager.GetCurrentClassLogger();
         _jintRunner = new JintScriptRunner(commandQueue, configFileProvider, configService);
         _yamlRunner = new YamlScriptRunner(commandQueue);
@@ -861,9 +864,16 @@ public class AutomationService : IAutomationService
         if (result.ShouldRemove)
         {
             _logger.Info("Automation script requested removal of torrent '{0}' (deleteData={1})", torrent.Name, result.DeleteDataOnRemove);
-            _torrentRepository.Delete(torrent.Id);
-            _eventAggregator.PublishEvent(new TorrentDeletedEvent(torrent.Id, torrent));
-            _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
+            if (_torrentService != null)
+            {
+                _torrentService.Delete(torrent.Id, result.DeleteDataOnRemove);
+            }
+            else
+            {
+                _torrentRepository.Delete(torrent.Id);
+                _eventAggregator.PublishEvent(new TorrentDeletedEvent(torrent.Id, torrent));
+                _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
+            }
             return;
         }
 

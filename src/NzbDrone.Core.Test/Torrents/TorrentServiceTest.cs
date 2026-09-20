@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -355,6 +356,233 @@ namespace NzbDrone.Core.Test.Torrents
 
             Assert.DoesNotThrow(() => _subject.Delete(1, true));
             _repository.Received(1).Delete(1);
+        }
+
+        [Test]
+        public void Delete_should_delete_payload_files_and_source_file_when_deleteFiles_is_true()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "seedarr_test_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            try
+            {
+                var sourceFile = Path.Combine(tempDir, "test.torrent");
+                var payloadFile = Path.Combine(tempDir, "payload.mkv");
+                File.WriteAllText(sourceFile, "dummy torrent file");
+                File.WriteAllText(payloadFile, "dummy video file");
+
+                var torrent = new Torrent
+                {
+                    Id = 1,
+                    Name = "TestTorrent",
+                    SavePath = tempDir,
+                    SourcePath = sourceFile
+                };
+                var file = new TorrentFile
+                {
+                    TorrentId = 1,
+                    Path = "payload.mkv"
+                };
+
+                _repository.Get(1).Returns(torrent);
+                _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+                _subject.Delete(1, deleteFiles: true);
+
+                Assert.That(File.Exists(sourceFile), Is.False);
+                Assert.That(File.Exists(payloadFile), Is.False);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+        }
+
+        [Test]
+        public void Delete_should_preserve_payload_files_when_deleteFiles_is_false()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "seedarr_test_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            try
+            {
+                var sourceFile = Path.Combine(tempDir, "test.torrent");
+                var payloadFile = Path.Combine(tempDir, "payload.mkv");
+                File.WriteAllText(sourceFile, "dummy torrent file");
+                File.WriteAllText(payloadFile, "dummy video file");
+
+                var torrent = new Torrent
+                {
+                    Id = 1,
+                    Name = "TestTorrent",
+                    SavePath = tempDir,
+                    SourcePath = sourceFile
+                };
+                var file = new TorrentFile
+                {
+                    TorrentId = 1,
+                    Path = "payload.mkv"
+                };
+
+                _repository.Get(1).Returns(torrent);
+                _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+                _subject.Delete(1, deleteFiles: false);
+
+                Assert.That(File.Exists(sourceFile), Is.True);
+                Assert.That(File.Exists(payloadFile), Is.True);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+        }
+
+        [Test]
+        public void Delete_should_reject_and_guard_against_path_traversal_in_files()
+        {
+            var tempBase = Path.Combine(Path.GetTempPath(), "seedarr_test_" + Guid.NewGuid().ToString("N"));
+            var saveDir = Path.Combine(tempBase, "save_dir");
+            var outsideDir = Path.Combine(tempBase, "outside");
+            Directory.CreateDirectory(saveDir);
+            Directory.CreateDirectory(outsideDir);
+
+            try
+            {
+                var sensitiveFile = Path.Combine(outsideDir, "sensitive.txt");
+                File.WriteAllText(sensitiveFile, "secret data");
+
+                var torrent = new Torrent
+                {
+                    Id = 1,
+                    Name = "TestTorrent",
+                    SavePath = saveDir
+                };
+                var traversalFile = new TorrentFile
+                {
+                    TorrentId = 1,
+                    Path = "../outside/sensitive.txt"
+                };
+
+                _repository.Get(1).Returns(torrent);
+                _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { traversalFile });
+
+                _subject.Delete(1, deleteFiles: true);
+
+                Assert.That(File.Exists(sensitiveFile), Is.True);
+            }
+            finally
+            {
+                if (Directory.Exists(tempBase))
+                {
+                    Directory.Delete(tempBase, true);
+                }
+            }
+        }
+
+        [Test]
+        public void Delete_should_not_delete_root_save_path()
+        {
+            var torrent = new Torrent
+            {
+                Id = 1,
+                Name = "RootTorrent",
+                SavePath = "/"
+            };
+            _repository.Get(1).Returns(torrent);
+
+            Assert.DoesNotThrow(() => _subject.Delete(1, deleteFiles: true));
+            _repository.Received(1).Delete(1);
+        }
+
+        [Test]
+        public void Delete_should_preserve_shared_download_root_when_deleting_single_file_torrent()
+        {
+            var rootDir = Path.Combine(Path.GetTempPath(), "seedarr_downloads_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(rootDir);
+            try
+            {
+                var payloadFile = Path.Combine(rootDir, "single_movie.mkv");
+                var otherFile = Path.Combine(rootDir, "other_movie.mkv");
+                File.WriteAllText(payloadFile, "movie data");
+                File.WriteAllText(otherFile, "other movie data");
+
+                var torrent = new Torrent
+                {
+                    Id = 1,
+                    Name = "single_movie.mkv",
+                    SavePath = rootDir
+                };
+                var file = new TorrentFile
+                {
+                    TorrentId = 1,
+                    Path = "single_movie.mkv"
+                };
+
+                _repository.Get(1).Returns(torrent);
+                _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+                _subject.Delete(1, deleteFiles: true);
+
+                Assert.That(File.Exists(payloadFile), Is.False);
+                Assert.That(File.Exists(otherFile), Is.True);
+                Assert.That(Directory.Exists(rootDir), Is.True);
+            }
+            finally
+            {
+                if (Directory.Exists(rootDir))
+                {
+                    Directory.Delete(rootDir, true);
+                }
+            }
+        }
+
+        [Test]
+        public void Delete_should_cleanup_empty_subdirectory_for_multi_file_torrent_without_deleting_root()
+        {
+            var rootDir = Path.Combine(Path.GetTempPath(), "seedarr_downloads_" + Guid.NewGuid().ToString("N"));
+            var subDir = Path.Combine(rootDir, "MyShow");
+            Directory.CreateDirectory(subDir);
+            try
+            {
+                var file1 = Path.Combine(subDir, "ep1.mkv");
+                var file2 = Path.Combine(subDir, "ep2.mkv");
+                File.WriteAllText(file1, "ep1 data");
+                File.WriteAllText(file2, "ep2 data");
+
+                var torrent = new Torrent
+                {
+                    Id = 1,
+                    Name = "MyShow",
+                    SavePath = rootDir
+                };
+                var files = new List<TorrentFile>
+                {
+                    new TorrentFile { TorrentId = 1, Path = Path.Combine("MyShow", "ep1.mkv") },
+                    new TorrentFile { TorrentId = 1, Path = Path.Combine("MyShow", "ep2.mkv") }
+                };
+
+                _repository.Get(1).Returns(torrent);
+                _torrentFileService.GetByTorrentId(1).Returns(files);
+
+                _subject.Delete(1, deleteFiles: true);
+
+                Assert.That(File.Exists(file1), Is.False);
+                Assert.That(File.Exists(file2), Is.False);
+                Assert.That(Directory.Exists(subDir), Is.False);
+                Assert.That(Directory.Exists(rootDir), Is.True);
+            }
+            finally
+            {
+                if (Directory.Exists(rootDir))
+                {
+                    Directory.Delete(rootDir, true);
+                }
+            }
         }
 
         [Test]

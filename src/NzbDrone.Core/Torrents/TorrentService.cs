@@ -295,8 +295,28 @@ public class TorrentService : ITorrentService,
         _logger.Info("Deleting torrent {0} (deleteFiles={1})", id, deleteFiles);
 
         var torrent = _repository.Get(id);
+        var files = _torrentFileService?.GetByTorrentId(id);
 
-        if (deleteFiles && torrent != null && !string.IsNullOrEmpty(torrent.SourcePath))
+        if (deleteFiles && torrent != null)
+        {
+            DeleteTorrentFiles(torrent, files);
+        }
+
+        _eventAggregator.PublishEvent(new TorrentDeletedEvent(id, torrent));
+        _torrentFileService.DeleteByTorrentId(id);
+        _trackerEntryService.DeleteByTorrentId(id);
+        _repository.Delete(id);
+        _pieceHashesById.TryRemove(id, out _);
+
+        if (torrent != null)
+        {
+            _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
+        }
+    }
+
+    private void DeleteTorrentFiles(Torrent torrent, List<TorrentFile> files)
+    {
+        if (!string.IsNullOrWhiteSpace(torrent.SourcePath))
         {
             try
             {
@@ -312,15 +332,185 @@ public class TorrentService : ITorrentService,
             }
         }
 
-        _eventAggregator.PublishEvent(new TorrentDeletedEvent(id, torrent));
-        _torrentFileService.DeleteByTorrentId(id);
-        _trackerEntryService.DeleteByTorrentId(id);
-        _repository.Delete(id);
-        _pieceHashesById.TryRemove(id, out _);
-
-        if (torrent != null)
+        if (string.IsNullOrWhiteSpace(torrent.SavePath))
         {
-            _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
+            return;
+        }
+
+        var rawSavePath = torrent.SavePath.Trim();
+        if (rawSavePath == "/" || rawSavePath == @"\" || rawSavePath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        {
+            _logger.Warn("Refusing to delete files in invalid or root SavePath: {0}", torrent.SavePath);
+            return;
+        }
+
+        string fullSavePath;
+        try
+        {
+            fullSavePath = Path.GetFullPath(rawSavePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Invalid SavePath: {0}", torrent.SavePath);
+            return;
+        }
+
+        var pathRoot = Path.GetPathRoot(fullSavePath);
+        if (string.IsNullOrWhiteSpace(pathRoot) ||
+            string.Equals(fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                          pathRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                          StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.Warn("Refusing to delete files in root directory: {0}", fullSavePath);
+            return;
+        }
+
+        if (File.Exists(fullSavePath))
+        {
+            try
+            {
+                File.Delete(fullSavePath);
+                _logger.Info("Deleted payload file: {0}", fullSavePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to delete payload file: {0}", fullSavePath);
+            }
+            return;
+        }
+
+        if (!Directory.Exists(fullSavePath))
+        {
+            return;
+        }
+
+        var canonicalBase = fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+        if (files != null && files.Any())
+        {
+            var deletedFileDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var file in files)
+            {
+                if (string.IsNullOrWhiteSpace(file?.Path))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var combined = Path.Combine(fullSavePath, file.Path);
+                    var fullPath = Path.GetFullPath(combined);
+
+                    if (!fullPath.StartsWith(canonicalBase, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.Warn("Refusing to delete file outside torrent SavePath (path traversal detected): {0}", file.Path);
+                        continue;
+                    }
+
+                    if (File.Exists(fullPath))
+                    {
+                        File.Delete(fullPath);
+                        _logger.Info("Deleted payload file: {0}", fullPath);
+
+                        var dir = Path.GetDirectoryName(fullPath);
+                        if (!string.IsNullOrEmpty(dir))
+                        {
+                            deletedFileDirs.Add(dir);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to delete payload file: {0}", file.Path);
+                }
+            }
+
+            foreach (var dir in deletedFileDirs.OrderByDescending(d => d.Length))
+            {
+                var currentDir = dir;
+                while (!string.IsNullOrEmpty(currentDir) &&
+                       currentDir.StartsWith(canonicalBase, StringComparison.OrdinalIgnoreCase) &&
+                       currentDir.Length > canonicalBase.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length)
+                {
+                    try
+                    {
+                        if (Directory.Exists(currentDir) && !Directory.EnumerateFileSystemEntries(currentDir).Any())
+                        {
+                            Directory.Delete(currentDir);
+                            _logger.Info("Deleted empty subdirectory: {0}", currentDir);
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to remove empty subdirectory: {0}", currentDir);
+                        break;
+                    }
+
+                    currentDir = Path.GetDirectoryName(currentDir);
+                }
+            }
+
+            var saveDirName = Path.GetFileName(fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (!string.IsNullOrWhiteSpace(torrent.Name) &&
+                string.Equals(saveDirName, torrent.Name, StringComparison.OrdinalIgnoreCase) &&
+                Directory.Exists(fullSavePath) &&
+                !Directory.EnumerateFileSystemEntries(fullSavePath).Any())
+            {
+                try
+                {
+                    Directory.Delete(fullSavePath);
+                    _logger.Info("Deleted empty dedicated torrent directory: {0}", fullSavePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to remove empty dedicated directory: {0}", fullSavePath);
+                }
+            }
+        }
+        else
+        {
+            var saveDirName = Path.GetFileName(fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var isDedicatedDir = !string.IsNullOrWhiteSpace(torrent.Name) &&
+                (string.Equals(saveDirName, torrent.Name, StringComparison.OrdinalIgnoreCase) ||
+                 fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).EndsWith(Path.DirectorySeparatorChar + torrent.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (isDedicatedDir)
+            {
+                try
+                {
+                    Directory.Delete(fullSavePath, recursive: true);
+                    _logger.Info("Deleted dedicated torrent payload directory: {0}", fullSavePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to delete dedicated torrent directory: {0}", fullSavePath);
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(torrent.Name))
+            {
+                var matchingFile = Path.Combine(fullSavePath, torrent.Name);
+                if (File.Exists(matchingFile))
+                {
+                    try
+                    {
+                        File.Delete(matchingFile);
+                        _logger.Info("Deleted payload file matching torrent name: {0}", matchingFile);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to delete payload file: {0}", matchingFile);
+                    }
+                }
+                else
+                {
+                    _logger.Warn("SavePath '{0}' does not appear to be a dedicated torrent directory; skipping directory deletion to prevent deleting shared download root", fullSavePath);
+                }
+            }
         }
     }
 
