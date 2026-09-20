@@ -4,6 +4,7 @@ using System.Data;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
@@ -187,6 +188,8 @@ public class BackupService : IBackupService
                         {
                             zip.CreateEntryFromFile(configPath, ConfigFileName);
                         }
+
+                        CreateManifestEntry(zip, version, "SQLite", false, null);
                     }
                 }
                 finally
@@ -199,7 +202,8 @@ public class BackupService : IBackupService
             }
             else
             {
-                _logger.Info("Creating PostgreSQL backup: config exported (external database dump required)");
+                var warning = "PostgreSQL backup contains configuration only. External database tools (pg_dump / pg_restore) are required for database backup and restoration.";
+                _logger.Warn("Creating PostgreSQL backup: configuration only (IsConfigOnly = true). External database tools (pg_dump / pg_restore) are required for database restoration.");
 
                 using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
                 {
@@ -207,19 +211,23 @@ public class BackupService : IBackupService
                     {
                         zip.CreateEntryFromFile(configPath, ConfigFileName);
                     }
+
+                    CreateManifestEntry(zip, version, _connectionStringFactory.DatabaseType.ToString(), true, warning);
                 }
             }
 
             _logger.Info("Backup created: {0}", backupPath);
 
             var fileInfo = new FileInfo(backupPath);
+            var isPostgres = _connectionStringFactory.DatabaseType == DatabaseType.PostgreSQL;
 
             var backupInfo = new BackupInfo
             {
                 Name = fileInfo.Name,
                 Path = fileInfo.FullName,
                 Size = fileInfo.Length,
-                Time = fileInfo.CreationTimeUtc
+                Time = fileInfo.CreationTimeUtc,
+                IsConfigOnly = isPostgres
             };
 
             PruneBackups();
@@ -257,7 +265,8 @@ public class BackupService : IBackupService
                 Name = f.Name,
                 Path = f.FullName,
                 Size = f.Length,
-                Time = f.CreationTimeUtc
+                Time = f.CreationTimeUtc,
+                IsConfigOnly = DetermineIsConfigOnly(f.FullName)
             })
             .ToList();
     }
@@ -307,6 +316,13 @@ public class BackupService : IBackupService
         using var zip = ZipFile.OpenRead(filePath);
 
         var isSqlite = _connectionStringFactory == null || _connectionStringFactory.DatabaseType == DatabaseType.SQLite;
+        var isPostgres = !isSqlite && _connectionStringFactory?.DatabaseType == DatabaseType.PostgreSQL;
+
+        if (isPostgres)
+        {
+            _logger.Warn("Restoring PostgreSQL backup: this backup is configuration-only (IsConfigOnly = true). External database tools (pg_restore / pg_dump) are required for database restoration.");
+        }
+
         var dbEntry = zip.GetEntry(DbFileName);
 
         if (isSqlite && dbEntry == null)
@@ -462,12 +478,48 @@ public class BackupService : IBackupService
             SqliteConnection.ClearAllPools();
         }
     }
+
+    private static bool DetermineIsConfigOnly(string zipFilePath)
+    {
+        try
+        {
+            using var zip = ZipFile.OpenRead(zipFilePath);
+            var manifestEntry = zip.GetEntry("manifest.json");
+            if (manifestEntry != null)
+            {
+                using var stream = manifestEntry.Open();
+                using var reader = new StreamReader(stream);
+                var json = reader.ReadToEnd();
+                var manifest = JsonSerializer.Deserialize<BackupManifest>(json);
+                if (manifest != null)
+                {
+                    return manifest.IsConfigOnly;
+                }
+            }
+
+            return zip.GetEntry(DbFileName) == null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void CreateManifestEntry(ZipArchive zip, string version, string dbType, bool isConfigOnly, string warning)
+    {
+        var manifestEntry = zip.CreateEntry("manifest.json");
+        using var stream = manifestEntry.Open();
+        using var writer = new StreamWriter(stream);
+        var manifest = new BackupManifest
+        {
+            Version = version,
+            CreatedAt = DateTime.UtcNow,
+            DatabaseType = dbType,
+            IsConfigOnly = isConfigOnly,
+            Warning = warning
+        };
+        var json = JsonSerializer.Serialize(manifest);
+        writer.Write(json);
+    }
 }
 
-public class BackupInfo
-{
-    public string Name { get; set; }
-    public string Path { get; set; }
-    public long Size { get; set; }
-    public DateTime Time { get; set; }
-}

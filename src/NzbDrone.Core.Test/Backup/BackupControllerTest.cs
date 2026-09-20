@@ -239,4 +239,35 @@ public class BackupControllerTest
         var badRequest = (BadRequestObjectResult)result;
         Assert.That(badRequest.Value?.ToString(), Does.Contain("Database file not found in backup archive"));
     }
+
+    [Test]
+    public void RestoreBackup_when_unexpected_exception_should_return_bad_request()
+    {
+        var request = new RestoreRequest { FileName = "lock_error.zip" };
+        _backupService.When(s => s.RestoreBackup("lock_error.zip"))
+            .Do(_ => throw new Exception("Unexpected restore lock error"));
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value?.ToString(), Does.Contain("Unexpected restore lock error"));
+    }
+
+    [Test]
+    public void RestoreBackup_when_backup_is_config_only_should_return_warning_in_message()
+    {
+        var fileName = "seedarr_backup_postgres.zip";
+        var request = new RestoreRequest { FileName = fileName };
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = fileName, Size = 512, Time = DateTime.UtcNow, IsConfigOnly = true }
+        });
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        Assert.That(okResult.Value?.ToString(), Does.Contain("pg_restore"));
+    }
 }

@@ -182,6 +182,48 @@ public class BackupServiceTest
     }
 
     [Test]
+    public void CreateBackup_postgres_should_flag_is_config_only_and_include_manifest_with_warning()
+    {
+        _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        _connectionStringFactory.MainDbConnectionString.Returns("Host=localhost;Database=seedarr");
+        File.WriteAllText(Path.Combine(_tempDir, "config.xml"), "<config />");
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsConfigOnly, Is.True);
+
+        using var zip = ZipFile.OpenRead(result.Path);
+        var manifestEntry = zip.GetEntry("manifest.json");
+        Assert.That(manifestEntry, Is.Not.Null);
+
+        using var stream = manifestEntry.Open();
+        using var reader = new StreamReader(stream);
+        var manifestJson = reader.ReadToEnd();
+        Assert.That(manifestJson, Does.Contain("\"IsConfigOnly\":true"));
+        Assert.That(manifestJson, Does.Contain("pg_restore"));
+
+        var backups = _subject.GetBackups();
+        Assert.That(backups, Has.Count.EqualTo(1));
+        Assert.That(backups[0].IsConfigOnly, Is.True);
+    }
+
+    [Test]
+    public void CreateBackup_sqlite_should_flag_is_config_only_false()
+    {
+        CreateTestSqliteDatabase();
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsConfigOnly, Is.False);
+
+        var backups = _subject.GetBackups();
+        Assert.That(backups, Has.Count.EqualTo(1));
+        Assert.That(backups[0].IsConfigOnly, Is.False);
+    }
+
+    [Test]
     public void GetBackups_should_return_empty_list_when_folder_does_not_exist()
     {
         var result = _subject.GetBackups();

@@ -1,7 +1,6 @@
 using System;
 using System.Data;
 using System.IO;
-using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 
 namespace NzbDrone.Core.Datastore;
@@ -314,30 +313,36 @@ public class MainDatabase : IMainDatabase
     {
         _logger.Warn("Pending database restore found at {0}; applying before opening connections", dbRestorePath);
 
+        string backupPath = null;
+        string walBakPath = null;
+        string shmBakPath = null;
+        var walPath = dbPath + "-wal";
+        var shmPath = dbPath + "-shm";
         string walRestorePath = null;
         string shmRestorePath = null;
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
 
         try
         {
             if (File.Exists(dbPath))
             {
-                var backupPath = Path.Combine(appDataFolder, $"{DbFileName}.bak-{DateTime.UtcNow:yyyyMMddHHmmss}");
+                backupPath = Path.Combine(appDataFolder, $"{DbFileName}.bak-{timestamp}");
                 FileCopyAction(dbPath, backupPath, true);
                 _logger.Info("Created backup of existing database at {0}", backupPath);
             }
 
-            var walPath = dbPath + "-wal";
             if (File.Exists(walPath))
             {
-                FileDeleteAction(walPath);
-                _logger.Info("Deleted WAL file {0} prior to restore", walPath);
+                walBakPath = $"{walPath}.bak-{timestamp}";
+                MoveWithFallback(walPath, walBakPath);
+                _logger.Info("Staged existing WAL file to {0} prior to restore", walBakPath);
             }
 
-            var shmPath = dbPath + "-shm";
             if (File.Exists(shmPath))
             {
-                FileDeleteAction(shmPath);
-                _logger.Info("Deleted SHM file {0} prior to restore", shmPath);
+                shmBakPath = $"{shmPath}.bak-{timestamp}";
+                MoveWithFallback(shmPath, shmBakPath);
+                _logger.Info("Staged existing SHM file to {0} prior to restore", shmBakPath);
             }
 
             if (File.Exists(walPath + ".restore"))
@@ -372,41 +377,113 @@ public class MainDatabase : IMainDatabase
                 MoveWithFallback(shmRestorePath, shmPath);
                 _logger.Info("Database SHM restore applied successfully from {0}", shmRestorePath);
             }
+
+            if (walBakPath != null && File.Exists(walBakPath))
+            {
+                try
+                {
+                    FileDeleteAction(walBakPath);
+                    _logger.Info("Cleaned up WAL staging backup {0}", walBakPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to clean up WAL staging backup {0}", walBakPath);
+                }
+            }
+
+            if (shmBakPath != null && File.Exists(shmBakPath))
+            {
+                try
+                {
+                    FileDeleteAction(shmBakPath);
+                    _logger.Info("Cleaned up SHM staging backup {0}", shmBakPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to clean up SHM staging backup {0}", shmBakPath);
+                }
+            }
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to apply pending database restore from {0}; original database retained", dbRestorePath);
 
-            try
-            {
-                FileDeleteAction(dbRestorePath);
-            }
-            catch
-            {
-                // best-effort cleanup
-            }
-
-            if (walRestorePath != null)
+            if (backupPath != null && File.Exists(backupPath))
             {
                 try
                 {
-                    FileDeleteAction(walRestorePath);
+                    FileCopyAction(backupPath, dbPath, true);
+                    _logger.Info("Rolled back original database from {0} to {1}", backupPath, dbPath);
                 }
-                catch
+                catch (Exception rollbackEx)
                 {
-                    // best-effort cleanup
+                    _logger.Error(rollbackEx, "Failed to roll back original database from {0}", backupPath);
                 }
             }
 
-            if (shmRestorePath != null)
+            if (walBakPath != null && File.Exists(walBakPath))
             {
                 try
                 {
-                    FileDeleteAction(shmRestorePath);
+                    MoveWithFallback(walBakPath, walPath);
+                    _logger.Info("Restored original WAL file from {0} to {1}", walBakPath, walPath);
+                }
+                catch (Exception walEx)
+                {
+                    _logger.Error(walEx, "Failed to restore WAL file from {0}", walBakPath);
+                }
+            }
+
+            if (shmBakPath != null && File.Exists(shmBakPath))
+            {
+                try
+                {
+                    MoveWithFallback(shmBakPath, shmPath);
+                    _logger.Info("Restored original SHM file from {0} to {1}", shmBakPath, shmPath);
+                }
+                catch (Exception shmEx)
+                {
+                    _logger.Error(shmEx, "Failed to restore SHM file from {0}", shmBakPath);
+                }
+            }
+
+            if (File.Exists(dbRestorePath))
+            {
+                try
+                {
+                    var failedPath = dbRestorePath + ".failed";
+                    FileMoveAction(dbRestorePath, failedPath, true);
+                    _logger.Warn("Preserved failed database restore file at {0}", failedPath);
+                }
+                catch (Exception preserveEx)
+                {
+                    _logger.Warn(preserveEx, "Failed to rename {0} to .failed; retaining as is", dbRestorePath);
+                }
+            }
+
+            if (walRestorePath != null && File.Exists(walRestorePath))
+            {
+                try
+                {
+                    var failedWalPath = walRestorePath + ".failed";
+                    FileMoveAction(walRestorePath, failedWalPath, true);
                 }
                 catch
                 {
-                    // best-effort cleanup
+                    // retain as is
+                }
+            }
+
+            if (shmRestorePath != null && File.Exists(shmRestorePath))
+            {
+                try
+                {
+                    var failedShmPath = shmRestorePath + ".failed";
+                    FileMoveAction(shmRestorePath, failedShmPath, true);
+                }
+                catch
+                {
+                    // retain as is
                 }
             }
         }
