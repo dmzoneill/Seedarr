@@ -434,4 +434,127 @@ public class WebhookDispatcherTest
         Assert.That(handler.LastRequest.Headers.Authorization.Scheme, Is.EqualTo("Basic"));
         Assert.That(handler.LastRequest.Headers.Authorization.Parameter, Is.EqualTo("YWRtaW46cGFzc3dvcmQxMjM="));
     }
+
+    [Test]
+    public void ExtractRetryAfter_should_parse_x_ratelimit_reset_after_header()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+        response.Headers.TryAddWithoutValidation("X-RateLimit-Reset-After", "1.25");
+
+        var retryAfter = WebhookDispatcher.ExtractRetryAfter(response);
+
+        Assert.That(retryAfter, Is.Not.Null);
+        Assert.That(retryAfter.Value, Is.EqualTo(TimeSpan.FromSeconds(1.25)));
+    }
+
+    [Test]
+    public void ExtractRetryAfter_should_clamp_x_ratelimit_reset_after_to_60_seconds()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+        response.Headers.TryAddWithoutValidation("X-RateLimit-Reset-After", "120");
+
+        var retryAfter = WebhookDispatcher.ExtractRetryAfter(response);
+
+        Assert.That(retryAfter, Is.Not.Null);
+        Assert.That(retryAfter.Value, Is.EqualTo(TimeSpan.FromSeconds(60)));
+    }
+
+    [TestCase("invalid")]
+    [TestCase("-5")]
+    [TestCase("0")]
+    public void ExtractRetryAfter_should_ignore_invalid_or_non_positive_x_ratelimit_reset_after(string value)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+        response.Headers.TryAddWithoutValidation("X-RateLimit-Reset-After", value);
+
+        var retryAfter = WebhookDispatcher.ExtractRetryAfter(response);
+
+        Assert.That(retryAfter, Is.Null);
+    }
+
+    [TestCase(HttpStatusCode.BadRequest, "Bad Request", "{\"message\":\"Invalid Form Body\",\"code\":50035}")]
+    [TestCase(HttpStatusCode.Unauthorized, "Unauthorized", "{\"message\":\"401: Unauthorized\",\"code\":0}")]
+    [TestCase(HttpStatusCode.NotFound, "Not Found", "{\"message\":\"Unknown Webhook\",\"code\":10015}")]
+    [TestCase(HttpStatusCode.TooManyRequests, "Too Many Requests", "{\"message\":\"You are being rate limited.\",\"retry_after\":1.25}")]
+    [TestCase(HttpStatusCode.InternalServerError, "Internal Server Error", "{\"error\":\"Internal Server Error\"}")]
+    public async Task DispatchDetailedAsync_should_include_response_body_snippet_on_http_errors(
+        HttpStatusCode statusCode,
+        string reasonPhrase,
+        string responseBody)
+    {
+        var handler = new MockHttpMessageHandler();
+        for (var i = 0; i < 4; i++)
+        {
+            handler.Enqueue(statusCode, responseBody);
+        }
+
+        var client = new HttpClient(handler);
+        var retryPolicy = WebhookDispatcher.CreateRetryPolicy(
+            retryCount: 1,
+            sleepDurationProvider: _ => TimeSpan.Zero);
+
+        var dispatcher = new WebhookDispatcher(client, retryPolicy, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var result = await dispatcher.DispatchDetailedAsync("http://127.0.0.1/webhook", new { test = true });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.StatusCode, Is.EqualTo(statusCode));
+        Assert.That(result.ResponseBodySnippet, Is.EqualTo(responseBody));
+        Assert.That(result.Message, Does.Contain($"HTTP {(int)statusCode}"));
+        Assert.That(result.Message, Does.Contain(responseBody));
+        Assert.That(result.Message, Does.Contain(reasonPhrase));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_should_truncate_response_body_snippet_when_exceeding_256_chars()
+    {
+        var handler = new MockHttpMessageHandler();
+        var longBody = new string('A', 300);
+        handler.Enqueue(HttpStatusCode.BadRequest, longBody);
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var result = await dispatcher.DispatchDetailedAsync("http://127.0.0.1/webhook", new { test = true });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ResponseBodySnippet, Has.Length.EqualTo(259));
+        Assert.That(result.ResponseBodySnippet.EndsWith("..."), Is.True);
+        Assert.That(result.Message, Does.Contain(result.ResponseBodySnippet));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_should_sanitize_newlines_in_response_body_snippet()
+    {
+        var handler = new MockHttpMessageHandler();
+        var multiLineBody = "Line 1\r\nLine 2\nLine 3\rLine 4";
+        handler.Enqueue(HttpStatusCode.BadRequest, multiLineBody);
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var result = await dispatcher.DispatchDetailedAsync("http://127.0.0.1/webhook", new { test = true });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ResponseBodySnippet, Is.EqualTo("Line 1 Line 2 Line 3 Line 4"));
+        Assert.That(result.ResponseBodySnippet, Does.Not.Contain("\n"));
+        Assert.That(result.ResponseBodySnippet, Does.Not.Contain("\r"));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_empty_response_body_should_format_message_without_trailing_colon()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.NotFound, "");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var result = await dispatcher.DispatchDetailedAsync("http://127.0.0.1/webhook", new { test = true });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ResponseBodySnippet, Is.Empty);
+        Assert.That(result.Message, Does.EndWith("."));
+        Assert.That(result.Message, Does.Not.Contain(":"));
+    }
 }

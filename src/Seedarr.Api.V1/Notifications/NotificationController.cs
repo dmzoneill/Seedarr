@@ -497,6 +497,8 @@ public class NotificationController : Controller
             {
                 Success = result.Success,
                 Message = result.Message,
+                StatusCode = (int?)result.StatusCode,
+                ResponseBodySnippet = result.ResponseBodySnippet,
             });
         }
     }
