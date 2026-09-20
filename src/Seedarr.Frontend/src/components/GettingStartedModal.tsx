@@ -10,6 +10,12 @@ import {
   useTestDirectIndexer,
   useCreateArrConnection,
   useTestDirectArrConnection,
+  useCategories,
+  useCreateCategory,
+  useUpdateCategory,
+  useDiskSpace,
+  useGeneralConfig,
+  useSaveGeneralConfig,
 } from "../api/hooks";
 import type {
   DownloadClientDefinition,
@@ -30,7 +36,131 @@ import SeedarrText from "./icons/SeedarrText";
 import { LanguageSelector } from "./LanguageSelector";
 import { apiClient } from "../api/client";
 
+import { formatBytes } from "../utils/formatters";
+
 export const STORAGE_KEY_HIDE_GUIDE = "seedarr_hide_getting_started";
+
+export interface ValidationResult {
+  valid: boolean;
+  error?: string;
+}
+
+export function isValidHttpUrl(stringUrl?: string): boolean {
+  if (!stringUrl || !stringUrl.trim()) return false;
+  try {
+    const parsed = new URL(stringUrl.trim());
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function isValidAbsolutePath(path?: string): boolean {
+  if (!path || !path.trim()) return false;
+  const trimmed = path.trim();
+  if (trimmed.includes("\0") || trimmed.includes("..")) return false;
+  return (
+    trimmed.startsWith("/") ||
+    /^[A-Za-z]:[/\\]/.test(trimmed) ||
+    trimmed.startsWith("\\\\")
+  );
+}
+
+export function validateClientConfig(
+  client: Partial<DownloadClientDefinition>,
+): ValidationResult {
+  if (!client.host || !client.host.trim()) {
+    return {
+      valid: false,
+      error: "Host is required (e.g. localhost or 192.168.1.100).",
+    };
+  }
+  const port = Number(client.port);
+  if (isNaN(port) || port < 1 || port > 65535 || !Number.isInteger(port)) {
+    return {
+      valid: false,
+      error: "Port must be an integer between 1 and 65535.",
+    };
+  }
+  return { valid: true };
+}
+
+export function validateIndexerConfig(
+  indexer: Partial<IndexerDefinition>,
+  isLive = true,
+): ValidationResult {
+  if (!indexer.name || !indexer.name.trim()) {
+    return { valid: false, error: "Indexer name is required." };
+  }
+  if (!indexer.url || !indexer.url.trim()) {
+    return { valid: false, error: "URL is required." };
+  }
+  if (!isValidHttpUrl(indexer.url)) {
+    return {
+      valid: false,
+      error:
+        "URL must be a valid HTTP or HTTPS address (e.g. http://prowlarr:9696).",
+    };
+  }
+  if (isLive && (!indexer.apiKey || !indexer.apiKey.trim())) {
+    return {
+      valid: false,
+      error: "API Key is required to connect to Prowlarr.",
+    };
+  }
+  return { valid: true };
+}
+
+export function validateArrConfig(
+  arr: Partial<ArrConnection>,
+  isLive = true,
+): ValidationResult {
+  if (!arr.name || !arr.name.trim()) {
+    return { valid: false, error: "Connection name is required." };
+  }
+  if (!arr.url || !arr.url.trim()) {
+    return { valid: false, error: "URL is required." };
+  }
+  if (!isValidHttpUrl(arr.url)) {
+    return {
+      valid: false,
+      error: `URL must be a valid HTTP or HTTPS address (e.g. http://localhost:${arr.arrType === "Radarr" ? "7878" : arr.arrType === "Lidarr" ? "8686" : "8989"}).`,
+    };
+  }
+  if (isLive && (!arr.apiKey || !arr.apiKey.trim())) {
+    return {
+      valid: false,
+      error: `API Key is required to connect to ${arr.arrType || "service"}.`,
+    };
+  }
+  return { valid: true };
+}
+
+export function validateStorageConfig(storage: {
+  defaultDownloadPath?: string;
+  completedPath?: string;
+}): ValidationResult {
+  if (!storage.defaultDownloadPath || !storage.defaultDownloadPath.trim()) {
+    return { valid: false, error: "Default download directory is required." };
+  }
+  if (!isValidAbsolutePath(storage.defaultDownloadPath)) {
+    return {
+      valid: false,
+      error:
+        "Default download directory must be an absolute path (e.g. /downloads or C:\Downloads) and cannot contain '..' sequences.",
+    };
+  }
+  if (storage.completedPath && storage.completedPath.trim()) {
+    if (!isValidAbsolutePath(storage.completedPath)) {
+      return {
+        valid: false,
+        error:
+          "Completed directory must be an absolute path (e.g. /downloads/completed or C:\Downloads\Completed) and cannot contain '..' sequences.",
+      };
+    }
+  }
+  return { valid: true };
+}
 
 interface GettingStartedModalProps {
   isOpen: boolean;
@@ -132,8 +262,19 @@ export function GettingStartedModal({
         ),
       },
       {
-        id: "finish",
+        id: "storage",
         stepNum: 6,
+        icon: "💾",
+        shortName: t("gettingStarted.stepStorage", undefined, "Storage"),
+        title: t(
+          "gettingStarted.stepStorageTitle",
+          undefined,
+          "Storage & Downloads",
+        ),
+      },
+      {
+        id: "finish",
+        stepNum: 7,
         icon: "🎉",
         shortName: t("gettingStarted.stepFinished", undefined, "Finished"),
         title: t(
@@ -228,6 +369,56 @@ export function GettingStartedModal({
     useState<ArrTestResult | null>(null);
   const [lidarrSaved, setLidarrSaved] = useState(false);
 
+  // Category & Storage Hooks / State
+  const { data: categories } = useCategories();
+  const { data: diskSpace } = useDiskSpace();
+  const { data: generalConfig } = useGeneralConfig();
+  const createCategoryMutation = useCreateCategory();
+  const updateCategoryMutation = useUpdateCategory();
+  const saveGeneralConfigMutation = useSaveGeneralConfig();
+
+  const [storageForm, setStorageForm] = useState({
+    defaultDownloadPath: "/downloads",
+    completedPath: "/downloads/completed",
+    watchFolderPath: "",
+  });
+  const [isValidatingPath, setIsValidatingPath] = useState(false);
+  const [pathValidationResult, setPathValidationResult] = useState<{
+    success: boolean;
+    message?: string;
+  } | null>(null);
+  const [storageSaved, setStorageSaved] = useState(false);
+  const [isSavingStorage, setIsSavingStorage] = useState(false);
+  // Pre-fill storage paths if already configured in backend
+  useEffect(() => {
+    const defaultCat = categories?.find(
+      (c) => c.isDefault || c.name.toLowerCase() === "default",
+    );
+    if (defaultCat?.savePath) {
+      setStorageForm((prev) => ({
+        ...prev,
+        defaultDownloadPath: defaultCat.savePath || prev.defaultDownloadPath,
+      }));
+    }
+  }, [categories]);
+
+  useEffect(() => {
+    if (generalConfig?.watchFolderPath) {
+      setStorageForm((prev) => ({
+        ...prev,
+        watchFolderPath: generalConfig.watchFolderPath,
+      }));
+    }
+  }, [generalConfig?.watchFolderPath]);
+
+  // Per-step error banners
+  const [clientError, setClientError] = useState<string | null>(null);
+  const [indexerError, setIndexerError] = useState<string | null>(null);
+  const [sonarrError, setSonarrError] = useState<string | null>(null);
+  const [radarrError, setRadarrError] = useState<string | null>(null);
+  const [lidarrError, setLidarrError] = useState<string | null>(null);
+  const [storageError, setStorageError] = useState<string | null>(null);
+
   // API Mutations
   const testClientMutation = useTestDirectDownloadClient();
   const createClientMutation = useCreateDownloadClient();
@@ -244,18 +435,12 @@ export function GettingStartedModal({
   dontShowAgainRef.current = dontShowAgain;
 
   const handleClose = useCallback(
-    (explicitDismissal = false) => {
-      if (
-        dontShowAgainRef.current ||
-        explicitDismissal ||
-        currentStepRef.current === steps.length - 1
-      ) {
-        localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
-        setDontShowAgain(true);
-      }
+    (_explicitDismissal = false) => {
+      localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
+      setDontShowAgain(true);
       onClose();
     },
-    [onClose, steps.length],
+    [onClose],
   );
 
   useEffect(() => {
@@ -311,7 +496,17 @@ export function GettingStartedModal({
     }
   };
 
+  const clearAllErrors = () => {
+    setClientError(null);
+    setIndexerError(null);
+    setSonarrError(null);
+    setRadarrError(null);
+    setLidarrError(null);
+    setStorageError(null);
+  };
+
   const handleNext = () => {
+    clearAllErrors();
     if (currentStep < steps.length - 1) {
       setCurrentStep((p) => p + 1);
     } else {
@@ -322,6 +517,7 @@ export function GettingStartedModal({
   };
 
   const handlePrev = () => {
+    clearAllErrors();
     if (currentStep > 0) {
       setCurrentStep((p) => p - 1);
     }
@@ -338,7 +534,13 @@ export function GettingStartedModal({
 
   // Test Connection Handlers
   const handleTestClient = () => {
+    setClientError(null);
     setClientTestResult(null);
+    const validation = validateClientConfig(clientForm);
+    if (!validation.valid) {
+      setClientError(validation.error || "Invalid client configuration");
+      return;
+    }
     testClientMutation.mutate(clientForm, {
       onSuccess: (data) => setClientTestResult(data),
       onError: (err) =>
@@ -347,6 +549,12 @@ export function GettingStartedModal({
   };
 
   const handleSaveClient = () => {
+    setClientError(null);
+    const validation = validateClientConfig(clientForm);
+    if (!validation.valid) {
+      setClientError(validation.error || "Invalid client configuration");
+      return;
+    }
     createClientMutation.mutate(
       {
         ...clientForm,
@@ -362,12 +570,28 @@ export function GettingStartedModal({
           setClientSaved(true);
           handleNext();
         },
+        onError: (err) => {
+          setClientError(
+            err.message ||
+              t(
+                "gettingStarted.saveClientFailed",
+                undefined,
+                "Failed to save download client. Please verify connection parameters.",
+              ),
+          );
+        },
       },
     );
   };
 
   const handleTestIndexer = () => {
+    setIndexerError(null);
     setIndexerTestResult(null);
+    const validation = validateIndexerConfig(indexerForm, mode === "interactive");
+    if (!validation.valid) {
+      setIndexerError(validation.error || "Invalid indexer configuration");
+      return;
+    }
     testIndexerMutation.mutate(indexerForm, {
       onSuccess: (data) => setIndexerTestResult(data),
       onError: (err) =>
@@ -376,6 +600,12 @@ export function GettingStartedModal({
   };
 
   const handleSaveIndexer = () => {
+    setIndexerError(null);
+    const validation = validateIndexerConfig(indexerForm, mode === "interactive");
+    if (!validation.valid) {
+      setIndexerError(validation.error || "Invalid indexer configuration");
+      return;
+    }
     createIndexerMutation.mutate(
       {
         ...indexerForm,
@@ -388,6 +618,16 @@ export function GettingStartedModal({
           setIndexerSaved(true);
           handleNext();
         },
+        onError: (err) => {
+          setIndexerError(
+            err.message ||
+              t(
+                "gettingStarted.saveIndexerFailed",
+                undefined,
+                "Failed to save indexer. Please verify host and API key.",
+              ),
+          );
+        },
       },
     );
   };
@@ -395,8 +635,15 @@ export function GettingStartedModal({
   const handleTestArr = (
     form: Partial<ArrConnection>,
     setResult: (res: ArrTestResult | null) => void,
+    setError: (err: string | null) => void,
   ) => {
+    setError(null);
     setResult(null);
+    const validation = validateArrConfig(form, mode === "interactive");
+    if (!validation.valid) {
+      setError(validation.error || "Invalid connection configuration");
+      return;
+    }
     testArrMutation.mutate(form, {
       onSuccess: (data) => setResult(data),
       onError: (err) => setResult({ success: false, message: err.message }),
@@ -406,8 +653,15 @@ export function GettingStartedModal({
   const handleSaveArr = (
     form: Partial<ArrConnection>,
     setSaved: (saved: boolean) => void,
+    setError: (err: string | null) => void,
     arrType: string,
   ) => {
+    setError(null);
+    const validation = validateArrConfig(form, mode === "interactive");
+    if (!validation.valid) {
+      setError(validation.error || `Invalid ${arrType} configuration`);
+      return;
+    }
     createArrMutation.mutate(
       {
         ...form,
@@ -421,8 +675,111 @@ export function GettingStartedModal({
           setSaved(true);
           handleNext();
         },
+        onError: (err) => {
+          setError(
+            err.message ||
+              t(
+                "gettingStarted.saveArrFailed",
+                undefined,
+                `Failed to save ${arrType} connection. Please verify credentials.`,
+              ),
+          );
+        },
       },
     );
+  };
+
+  // Storage Handlers
+  const handleValidateStoragePath = async () => {
+    setPathValidationResult(null);
+    setStorageError(null);
+    const validation = validateStorageConfig(storageForm);
+    if (!validation.valid) {
+      setStorageError(validation.error || "Invalid storage path");
+      return;
+    }
+
+    setIsValidatingPath(true);
+    try {
+      const res = await apiClient.post<{ isValid: boolean; errorMessage?: string }>(
+        "/filesystem/validate",
+        {
+          path: storageForm.defaultDownloadPath.trim(),
+          testWrite: true,
+        },
+      );
+      if (res.isValid) {
+        setPathValidationResult({
+          success: true,
+          message: `Directory verified: write permissions confirmed for "${storageForm.defaultDownloadPath.trim()}"`,
+        });
+      } else {
+        setPathValidationResult({
+          success: false,
+          message: res.errorMessage || "Directory is not writable or cannot be accessed.",
+        });
+      }
+    } catch (err: any) {
+      setPathValidationResult({
+        success: false,
+        message: err?.message || "Validation failed or directory not found.",
+      });
+    } finally {
+      setIsValidatingPath(false);
+    }
+  };
+
+  const handleSaveStorage = async () => {
+    setStorageError(null);
+    const validation = validateStorageConfig(storageForm);
+    if (!validation.valid) {
+      setStorageError(validation.error || "Invalid storage configuration");
+      return;
+    }
+
+    setIsSavingStorage(true);
+    try {
+      const defaultCat = categories?.find(
+        (c) => c.isDefault || c.name.toLowerCase() === "default",
+      );
+      if (defaultCat) {
+        await updateCategoryMutation.mutateAsync({
+          id: defaultCat.id,
+          data: {
+            ...defaultCat,
+            savePath: storageForm.defaultDownloadPath.trim(),
+          },
+        });
+      } else {
+        await createCategoryMutation.mutateAsync({
+          name: "Default",
+          savePath: storageForm.defaultDownloadPath.trim(),
+          isDefault: true,
+        });
+      }
+
+      if (storageForm.watchFolderPath?.trim() && generalConfig) {
+        await saveGeneralConfigMutation.mutateAsync({
+          ...generalConfig,
+          watchFolderEnabled: true,
+          watchFolderPath: storageForm.watchFolderPath.trim(),
+        });
+      }
+
+      setStorageSaved(true);
+      handleNext();
+    } catch (err: any) {
+      setStorageError(
+        err?.message ||
+          t(
+            "gettingStarted.saveStorageFailed",
+            undefined,
+            "Failed to save storage configuration.",
+          ),
+      );
+    } finally {
+      setIsSavingStorage(false);
+    }
   };
 
   // Helper for rendering connection test feedback alert
@@ -519,6 +876,49 @@ export function GettingStartedModal({
     }
 
     return null;
+  };
+
+  const renderErrorBanner = (error: string | null) => {
+    if (!error) return null;
+    return (
+      <div
+        role="alert"
+        aria-live="assertive"
+        style={{
+          marginTop: "1rem",
+          padding: "0.75rem 1rem",
+          borderRadius: "6px",
+          fontSize: "0.875rem",
+          lineHeight: "1.4",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "0.65rem",
+          backgroundColor: "rgba(220, 53, 69, 0.15)",
+          color: "var(--danger, #dc3545)",
+          border: "1px solid rgba(220, 53, 69, 0.35)",
+        }}
+      >
+        <span
+          style={{ fontWeight: "bold", fontSize: "1.1rem", lineHeight: "1" }}
+        >
+          ✕
+        </span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600 }}>
+            {t("gettingStarted.validationErrorTitle", undefined, "Configuration Error")}
+          </div>
+          <div
+            style={{
+              marginTop: "0.25rem",
+              opacity: 0.95,
+              wordBreak: "break-word",
+            }}
+          >
+            {error}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -795,6 +1195,15 @@ export function GettingStartedModal({
                   )}
                 </strong>
               </div>
+              <div>
+                <strong>
+                  {t(
+                    "gettingStarted.welcomeStorage",
+                    undefined,
+                    "4. Storage & Downloads: Verifies payload directories and write permissions.",
+                  )}
+                </strong>
+              </div>
             </div>
 
             {/* Language Choice Selection Row */}
@@ -911,6 +1320,7 @@ export function GettingStartedModal({
               label={t("gettingStarted.host", undefined, "Host")}
               value={clientForm.host || ""}
               onChange={(v) => {
+                setClientError(null);
                 setClientTestResult(null);
                 setClientForm({ ...clientForm, host: v });
               }}
@@ -921,6 +1331,7 @@ export function GettingStartedModal({
               label={t("gettingStarted.port", undefined, "Port")}
               value={clientForm.port || 8080}
               onChange={(v) => {
+                setClientError(null);
                 setClientTestResult(null);
                 setClientForm({ ...clientForm, port: v });
               }}
@@ -985,6 +1396,8 @@ export function GettingStartedModal({
               clientTestResult,
               clientForm.host || "client",
             )}
+
+            {renderErrorBanner(clientError)}
 
             <div
               className="modal-actions"
@@ -1099,6 +1512,7 @@ export function GettingStartedModal({
               label={t("gettingStarted.url", undefined, "URL")}
               value={indexerForm.url || ""}
               onChange={(v) => {
+                setIndexerError(null);
                 setIndexerTestResult(null);
                 setIndexerForm({ ...indexerForm, url: v });
               }}
@@ -1113,6 +1527,7 @@ export function GettingStartedModal({
                   : indexerForm.apiKey || ""
               }
               onChange={(v) => {
+                setIndexerError(null);
                 setIndexerTestResult(null);
                 setIndexerForm({ ...indexerForm, apiKey: v });
               }}
@@ -1172,6 +1587,8 @@ export function GettingStartedModal({
               indexerTestResult,
               indexerForm.url || "Prowlarr",
             )}
+
+            {renderErrorBanner(indexerError)}
 
             <div
               className="modal-actions"
@@ -1364,6 +1781,8 @@ export function GettingStartedModal({
               sonarrForm.url || "Sonarr",
             )}
 
+            {renderErrorBanner(sonarrError)}
+
             <div
               className="modal-actions"
               style={{
@@ -1376,7 +1795,7 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => handleTestArr(sonarrForm, setSonarrTestResult)}
+                onClick={() => handleTestArr(sonarrForm, setSonarrTestResult, setSonarrError)}
                 disabled={testArrMutation.isPending || isReadOnly}
               >
                 {testArrMutation.isPending
@@ -1400,7 +1819,7 @@ export function GettingStartedModal({
                     type="button"
                     className="btn btn-primary btn-small"
                     onClick={() =>
-                      handleSaveArr(sonarrForm, setSonarrSaved, "Sonarr")
+                      handleSaveArr(sonarrForm, setSonarrSaved, setSonarrError, "Sonarr")
                     }
                     disabled={createArrMutation.isPending}
                   >
@@ -1557,6 +1976,8 @@ export function GettingStartedModal({
               radarrForm.url || "Radarr",
             )}
 
+            {renderErrorBanner(radarrError)}
+
             <div
               className="modal-actions"
               style={{
@@ -1569,7 +1990,7 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => handleTestArr(radarrForm, setRadarrTestResult)}
+                onClick={() => handleTestArr(radarrForm, setRadarrTestResult, setRadarrError)}
                 disabled={testArrMutation.isPending || isReadOnly}
               >
                 {testArrMutation.isPending
@@ -1593,7 +2014,7 @@ export function GettingStartedModal({
                     type="button"
                     className="btn btn-primary btn-small"
                     onClick={() =>
-                      handleSaveArr(radarrForm, setRadarrSaved, "Radarr")
+                      handleSaveArr(radarrForm, setRadarrSaved, setRadarrError, "Radarr")
                     }
                     disabled={createArrMutation.isPending}
                   >
@@ -1750,6 +2171,8 @@ export function GettingStartedModal({
               lidarrForm.url || "Lidarr",
             )}
 
+            {renderErrorBanner(lidarrError)}
+
             <div
               className="modal-actions"
               style={{
@@ -1762,7 +2185,7 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => handleTestArr(lidarrForm, setLidarrTestResult)}
+                onClick={() => handleTestArr(lidarrForm, setLidarrTestResult, setLidarrError)}
                 disabled={testArrMutation.isPending || isReadOnly}
               >
                 {testArrMutation.isPending
@@ -1786,7 +2209,7 @@ export function GettingStartedModal({
                     type="button"
                     className="btn btn-primary btn-small"
                     onClick={() =>
-                      handleSaveArr(lidarrForm, setLidarrSaved, "Lidarr")
+                      handleSaveArr(lidarrForm, setLidarrSaved, setLidarrError, "Lidarr")
                     }
                     disabled={createArrMutation.isPending}
                   >
@@ -1819,9 +2242,185 @@ export function GettingStartedModal({
         )}
 
         {/* ========================================================================= */}
-        {/* STEP 6: Finished */}
+        {/* STEP 6: Storage & Downloads Form */}
         {/* ========================================================================= */}
         {currentStep === 6 && (
+          <div>
+            <h3
+              className="modal-title"
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 700,
+                color: "var(--accent, #c8a84e)",
+                marginBottom: "0.75rem",
+              }}
+            >
+              💾 {t("gettingStarted.stepStorageTitle", undefined, "Storage & Downloads Configuration")}
+            </h3>
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-secondary)",
+                marginBottom: "1rem",
+                lineHeight: 1.5,
+              }}
+            >
+              {t(
+                "gettingStarted.storageDescription",
+                undefined,
+                "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
+              )}
+            </p>
+
+            <TextInput
+              label={t("gettingStarted.defaultDownloadPath", undefined, "Default Download Directory")}
+              value={storageForm.defaultDownloadPath || ""}
+              onChange={(v) => {
+                setStorageError(null);
+                setPathValidationResult(null);
+                setStorageForm({ ...storageForm, defaultDownloadPath: v });
+              }}
+              placeholder="/downloads"
+              hint={t(
+                "gettingStarted.defaultDownloadPathHint",
+                undefined,
+                "Absolute path where torrent payloads are actively downloaded",
+              )}
+              disabled={isReadOnly}
+            />
+
+            <TextInput
+              label={t("gettingStarted.completedPath", undefined, "Completed Downloads Directory (Optional)")}
+              value={storageForm.completedPath || ""}
+              onChange={(v) => {
+                setStorageError(null);
+                setPathValidationResult(null);
+                setStorageForm({ ...storageForm, completedPath: v });
+              }}
+              placeholder="/downloads/completed"
+              hint={t(
+                "gettingStarted.completedPathHint",
+                undefined,
+                "Target directory to relocate completed torrents for post-processing",
+              )}
+              disabled={isReadOnly}
+            />
+
+            <TextInput
+              label={t("gettingStarted.watchFolderPath", undefined, "Watch Folder Path (Optional)")}
+              value={storageForm.watchFolderPath || ""}
+              onChange={(v) => {
+                setStorageError(null);
+                setPathValidationResult(null);
+                setStorageForm({ ...storageForm, watchFolderPath: v });
+              }}
+              placeholder="/downloads/watch"
+              hint={t(
+                "gettingStarted.watchFolderPathHint",
+                undefined,
+                "Filesystem directory monitored for new .torrent files",
+              )}
+              disabled={isReadOnly}
+            />
+
+            {diskSpace && diskSpace.length > 0 && (
+              <div style={{ marginTop: "0.75rem", marginBottom: "0.75rem" }}>
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    color: "var(--text-secondary)",
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  {t("gettingStarted.detectedVolumes", undefined, "Detected Storage Volumes:")}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                  {diskSpace.map((d, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "0.25rem 0.5rem",
+                        borderRadius: "4px",
+                        backgroundColor: "rgba(255, 255, 255, 0.05)",
+                        border: "1px solid var(--border-light)",
+                        color: "var(--text-secondary)",
+                      }}
+                    >
+                      <strong>{d.path}</strong>: {formatBytes(d.freeSpace)} free of {formatBytes(d.totalSpace)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {renderTestAlert(
+              isValidatingPath,
+              pathValidationResult,
+              storageForm.defaultDownloadPath || "directory",
+            )}
+
+            {renderErrorBanner(storageError)}
+
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: "1.5rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline btn-small"
+                onClick={handleValidateStoragePath}
+                disabled={isValidatingPath || isReadOnly}
+              >
+                {isValidatingPath
+                  ? t("gettingStarted.validating", undefined, "Validating...")
+                  : t("gettingStarted.validateDirectory", undefined, "Validate Directory")}
+              </button>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-small"
+                  onClick={handlePrev}
+                >
+                  {t("gettingStarted.previous", undefined, "Previous")}
+                </button>
+                {mode === "interactive" ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-small"
+                    onClick={handleSaveStorage}
+                    disabled={isSavingStorage}
+                  >
+                    {isSavingStorage
+                      ? t("gettingStarted.saving", undefined, "Saving...")
+                      : storageSaved
+                        ? t("gettingStarted.savedNext", undefined, "Saved ✓ Next")
+                        : t("gettingStarted.saveAndNext", undefined, "Save & Next")}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-small"
+                    onClick={handleNext}
+                  >
+                    {t("gettingStarted.next", undefined, "Next")}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 7: Finished */}
+        {/* ========================================================================= */}
+        {currentStep === 7 && (
           <div style={{ textAlign: "center", padding: "1rem 0.5rem" }}>
             <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🎉</div>
             <p
