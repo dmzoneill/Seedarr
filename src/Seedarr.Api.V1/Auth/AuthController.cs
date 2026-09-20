@@ -86,9 +86,8 @@ public class AuthController : ControllerBase
         var enteredUser = request.Username?.Trim();
         var enteredPass = request.Password;
 
-        var isValid = !_configFileProvider.AuthenticationEnabled ||
-                      (!string.IsNullOrWhiteSpace(masterApiKey) &&
-                       FixedTimeEquals(enteredPass, masterApiKey));
+        var passwordMatches = !string.IsNullOrWhiteSpace(masterApiKey) && FixedTimeEquals(enteredPass, masterApiKey);
+        var isValid = !_configFileProvider.AuthenticationEnabled || passwordMatches;
 
         if (!isValid)
         {
@@ -96,10 +95,10 @@ public class AuthController : ControllerBase
             return Unauthorized(new { error = "Invalid credentials. Please verify your username and password or API key." });
         }
 
-        var username = string.IsNullOrWhiteSpace(enteredUser) ||
-                       (!string.IsNullOrWhiteSpace(masterApiKey) && FixedTimeEquals(enteredUser, masterApiKey))
-                       ? "admin"
-                       : enteredUser;
+        var usernameMatchesApiKey = !string.IsNullOrWhiteSpace(masterApiKey) && FixedTimeEquals(enteredUser, masterApiKey);
+        var username = string.IsNullOrWhiteSpace(enteredUser) || usernameMatchesApiKey
+            ? "admin"
+            : enteredUser;
         var sessionId = Guid.NewGuid().ToString("N");
         var claims = new List<Claim>
         {

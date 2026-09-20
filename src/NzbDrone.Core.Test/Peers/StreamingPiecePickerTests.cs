@@ -144,7 +144,7 @@ public class StreamingPiecePickerTests
 
         var streamService = new TorrentStreamService(
             new StreamingPiecePicker(),
-            torrentService,
+            new Lazy<ITorrentService>(() => torrentService),
             pieceStorage);
 
         var result = streamService.WaitForPieceAsync(1, 5, TimeSpan.FromSeconds(1)).GetAwaiter().GetResult();
@@ -213,7 +213,7 @@ public class StreamingPiecePickerTests
         var picker = new StreamingPiecePicker();
         var streamService = new TorrentStreamService(
             picker,
-            torrentService,
+            new Lazy<ITorrentService>(() => torrentService),
             eventAggregator: eventAggregator);
 
         // Stream position at 1 MB (offset 1048576, pieceLength 262144 -> head piece 4)

@@ -55,14 +55,13 @@ public class BasicAuthenticationHandler : AuthenticationHandler<BasicAuthenticat
 
             var configuredApiKey = _configFileProvider.ApiKey;
 
-            if (!_configFileProvider.AuthenticationEnabled ||
-                (!string.IsNullOrWhiteSpace(configuredApiKey) &&
-                 FixedTimeEquals(password, configuredApiKey)))
+            var isApiKeyValid = !string.IsNullOrWhiteSpace(configuredApiKey) && FixedTimeEquals(password, configuredApiKey);
+            if (!_configFileProvider.AuthenticationEnabled || isApiKeyValid)
             {
-                var safeUsername = string.IsNullOrWhiteSpace(username) ||
-                                   (!string.IsNullOrWhiteSpace(configuredApiKey) && FixedTimeEquals(username, configuredApiKey))
-                                   ? "Admin"
-                                   : username;
+                var usernameMatchesApiKey = !string.IsNullOrWhiteSpace(configuredApiKey) && FixedTimeEquals(username, configuredApiKey);
+                var safeUsername = string.IsNullOrWhiteSpace(username) || usernameMatchesApiKey
+                    ? "Admin"
+                    : username;
 
                 var claims = new[]
                 {

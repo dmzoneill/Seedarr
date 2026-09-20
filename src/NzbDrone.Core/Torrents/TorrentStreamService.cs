@@ -22,17 +22,18 @@ public interface ITorrentStreamService
 public class TorrentStreamService : ITorrentStreamService
 {
     private readonly StreamingPiecePicker _piecePicker;
-    private readonly ITorrentService _torrentService;
+    private readonly Lazy<ITorrentService> _torrentService;
     private readonly IPieceStorage _pieceStorage;
     private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<(int TorrentId, int PieceIndex), ConcurrentBag<TaskCompletionSource<bool>>> _waiters = new();
 
     public StreamingPiecePicker PiecePicker => _piecePicker;
+    private ITorrentService TorrentService => _torrentService?.Value;
 
     public TorrentStreamService(
         StreamingPiecePicker piecePicker = null,
-        ITorrentService torrentService = null,
+        Lazy<ITorrentService> torrentService = null,
         IPieceStorage pieceStorage = null,
         IEventAggregator eventAggregator = null)
     {
@@ -47,7 +48,7 @@ public class TorrentStreamService : ITorrentStreamService
     {
         if (pieceLength <= 0)
         {
-            var torrent = _torrentService?.Get(torrentId);
+            var torrent = TorrentService?.Get(torrentId);
             pieceLength = torrent?.PieceLength ?? 262144;
         }
 
@@ -76,7 +77,7 @@ public class TorrentStreamService : ITorrentStreamService
             return false;
         }
 
-        var torrent = _torrentService?.Get(torrentId);
+        var torrent = TorrentService?.Get(torrentId);
         if (torrent == null)
         {
             return false;
@@ -164,7 +165,7 @@ public class TorrentStreamService : ITorrentStreamService
             return;
         }
 
-        var torrent = _torrentService?.GetByInfoHash(infoHash);
+        var torrent = TorrentService?.GetByInfoHash(infoHash);
         if (torrent != null)
         {
             NotifyPieceCompleted(torrent.Id, pieceIndex);
