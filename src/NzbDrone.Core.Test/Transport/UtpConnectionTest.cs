@@ -1,6 +1,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -2644,5 +2645,232 @@ public class UtpConnectionTest
         conn.Send(data, 0, data.Length);
 
         Assert.That(pacedPackets, Is.Empty);
+    }
+
+    [Test]
+    public void GetMicroseconds_should_have_high_resolution_monotonic_progression_without_quantized_jumps()
+    {
+        var method = typeof(UtpConnection).GetMethod("GetMicroseconds", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        var timestamps = new List<uint>();
+        for (var i = 0; i < 50; i++)
+        {
+            var ts = (uint)method.Invoke(null, null)!;
+            timestamps.Add(ts);
+            var start = Stopwatch.GetTimestamp();
+            while (Stopwatch.GetTimestamp() - start < 50)
+            {
+            }
+        }
+
+        var sawDistinctValues = false;
+        var sawSubMillisecondDifference = false;
+        for (var i = 1; i < timestamps.Count; i++)
+        {
+            var diff = unchecked(timestamps[i] - timestamps[i - 1]);
+            Assert.That(diff, Is.LessThan(10_000u), "Step jump should not be quantized at 10-15ms (10,000+ microseconds)");
+            if (diff > 0)
+            {
+                sawDistinctValues = true;
+                if (diff < 1000)
+                {
+                    sawSubMillisecondDifference = true;
+                }
+            }
+        }
+
+        Assert.That(sawDistinctValues, Is.True, "High resolution clock should progress across consecutive loop iterations");
+        Assert.That(sawSubMillisecondDifference, Is.True, "High resolution clock should provide sub-millisecond precision");
+    }
+
+    [Test]
+    public void UpdateCongestionWindow_should_increase_cwnd_when_delay_is_below_target()
+    {
+        using var connection = new UtpConnection();
+        connection.ResetCongestionControl(3000);
+
+        connection.UpdateCongestionWindow(20_000, 1360);
+        var prevCwnd = connection.CongestionWindow;
+        connection.UpdateCongestionWindow(20_000, 1360);
+
+        Assert.That(connection.BaseDelay, Is.EqualTo(20_000u));
+        Assert.That(connection.QueuingDelay, Is.EqualTo(0u));
+        Assert.That(connection.CongestionWindow, Is.GreaterThan(prevCwnd));
+    }
+
+    [Test]
+    public void UpdateCongestionWindow_should_decrease_cwnd_when_queuing_delay_exceeds_target()
+    {
+        using var connection = new UtpConnection();
+        connection.ResetCongestionControl(5000);
+
+        connection.UpdateCongestionWindow(50_000, 0);
+        Assert.That(connection.BaseDelay, Is.EqualTo(50_000u));
+
+        var prevCwnd = connection.CongestionWindow;
+        connection.UpdateCongestionWindow(200_000, 1360);
+
+        Assert.That(connection.QueuingDelay, Is.EqualTo(150_000u));
+        Assert.That(connection.CongestionWindow, Is.LessThan(prevCwnd));
+    }
+
+    [Test]
+    public void UpdateCongestionWindow_should_update_base_delay_to_new_minimum()
+    {
+        using var connection = new UtpConnection();
+        connection.ResetCongestionControl(3000);
+
+        connection.UpdateCongestionWindow(100_000, 0);
+        Assert.That(connection.BaseDelay, Is.EqualTo(100_000u));
+
+        connection.UpdateCongestionWindow(45_000, 0);
+        Assert.That(connection.BaseDelay, Is.EqualTo(45_000u));
+    }
+
+    [Test]
+    public void UpdateCongestionWindow_should_not_drop_cwnd_below_min_window()
+    {
+        using var connection = new UtpConnection();
+        connection.ResetCongestionControl(200);
+
+        connection.UpdateCongestionWindow(10_000, 0);
+        connection.UpdateCongestionWindow(5_000_000, 1000);
+
+        Assert.That(connection.CongestionWindow, Is.GreaterThanOrEqualTo(UtpConnection.MinCongestionWindow));
+    }
+
+    [Test]
+    public void Send_should_gate_on_effective_window_minimum_of_cwnd_and_remote_wnd()
+    {
+        using var connection = new UtpConnection();
+        SetConnected(connection, true);
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        connection.RemoteWindowSize = 65535;
+        connection.CongestionWindow = 1360;
+
+        Assert.That(connection.EffectiveCwnd, Is.EqualTo(1360u));
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            var type = (UtpPacketType)(data[0] >> 4);
+            if (type == UtpPacketType.Data)
+            {
+                lock (sentPackets)
+                {
+                    sentPackets.Add(data.ToArray());
+                }
+            }
+
+            return true;
+        };
+
+        var sendData = new byte[2720];
+        var sendTask = Task.Run(() => connection.Send(sendData, 0, sendData.Length));
+
+        Thread.Sleep(50);
+
+        lock (sentPackets)
+        {
+            Assert.That(sentPackets.Count, Is.EqualTo(1), "Should gate outbound packets against congestion window");
+        }
+
+        var ackPacket = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 1);
+        BinaryPrimitives.WriteUInt32BigEndian(ackPacket.AsSpan(8, 4), 20_000);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        var completed = sendTask.Wait(TimeSpan.FromSeconds(2));
+        Assert.That(completed, Is.True, "Send should unblock after ACK reduces in-flight bytes");
+        Assert.That(sendTask.Result, Is.EqualTo(2720));
+
+        lock (sentPackets)
+        {
+            Assert.That(sentPackets.Count, Is.EqualTo(2), "Both packets should be sent after window opened");
+        }
+    }
+
+    [Test]
+    public void Send_should_gate_on_remote_wnd_when_remote_wnd_is_smaller_than_cwnd()
+    {
+        using var connection = new UtpConnection();
+        SetConnected(connection, true);
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54322);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        connection.RemoteWindowSize = 1360;
+        connection.CongestionWindow = 10000;
+
+        Assert.That(connection.EffectiveCwnd, Is.EqualTo(1360u));
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            var type = (UtpPacketType)(data[0] >> 4);
+            if (type == UtpPacketType.Data)
+            {
+                lock (sentPackets)
+                {
+                    sentPackets.Add(data.ToArray());
+                }
+            }
+
+            return true;
+        };
+
+        var sendData = new byte[2720];
+        var sendTask = Task.Run(() => connection.Send(sendData, 0, sendData.Length));
+
+        Thread.Sleep(50);
+
+        lock (sentPackets)
+        {
+            Assert.That(sentPackets.Count, Is.EqualTo(1), "Should gate outbound packets against remote window size");
+        }
+
+        var ackPacket = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 1);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        var completed = sendTask.Wait(TimeSpan.FromSeconds(2));
+        Assert.That(completed, Is.True, "Send should complete after ACK");
+        Assert.That(sendTask.Result, Is.EqualTo(2720));
+
+        lock (sentPackets)
+        {
+            Assert.That(sentPackets.Count, Is.EqualTo(2));
+        }
+    }
+
+    [Test]
+    public void Incoming_packet_with_timestamp_diff_should_adjust_congestion_window()
+    {
+        using var connection = new UtpConnection();
+        SetConnected(connection, true);
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54323);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var inFlight = new UtpConnection.InFlightPacket
+        {
+            SequenceNumber = 1,
+            PacketData = new byte[20 + 1360],
+            PayloadLength = 1360,
+            SentTimestamp = Environment.TickCount64,
+            Retries = 0
+        };
+        connection.InFlightPackets[1] = inFlight;
+
+        connection.ResetCongestionControl(3000);
+        var initialCwnd = connection.CongestionWindow;
+
+        var baselinePacket = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 0);
+        BinaryPrimitives.WriteUInt32BigEndian(baselinePacket.AsSpan(8, 4), 30_000);
+        connection.HandleIncomingPacket(baselinePacket, remoteEp);
+
+        var ackPacket = CreatePacket(UtpPacketType.State, connection.ReceiveId, 2, 1);
+        BinaryPrimitives.WriteUInt32BigEndian(ackPacket.AsSpan(8, 4), 30_000);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        Assert.That(connection.CongestionWindow, Is.GreaterThan(initialCwnd), "Congestion window should increase on ACK with low queuing delay");
     }
 }
