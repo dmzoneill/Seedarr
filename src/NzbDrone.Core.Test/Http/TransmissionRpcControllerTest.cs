@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Blocklist;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Tags;
@@ -1055,5 +1056,48 @@ public class TransmissionRpcControllerTest
         Assert.That(args, Is.Not.Null);
         Assert.That(args["path"], Is.EqualTo("/"));
         Assert.That((long)args["size-bytes"], Is.GreaterThan(0L));
+    }
+
+    [Test]
+    public async Task HandleRpc_BlocklistUpdate_Triggers_Sync_And_Returns_Size()
+    {
+        var blocklistSyncService = Substitute.For<IPeerBlocklistSyncService>();
+        blocklistSyncService.RuleCount.Returns(42100);
+
+        var controller = new TransmissionRpcController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _configFileProvider,
+            categoryService: _categoryService,
+            blocklistSyncService: blocklistSyncService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-Transmission-Session-Id"] = TransmissionRpcController.CurrentSessionId;
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext,
+        };
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "blocklist-update",
+            Tag = JsonDocument.Parse("456").RootElement,
+        };
+
+        var result = await controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        var args = response.Arguments as Dictionary<string, object>;
+        Assert.That(args, Is.Not.Null);
+        Assert.That(args["blocklist-size"], Is.EqualTo(42100));
+        await blocklistSyncService.Received(1).SyncBlocklistAsync();
     }
 }
