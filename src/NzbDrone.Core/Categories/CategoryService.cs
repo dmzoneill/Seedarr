@@ -52,7 +52,7 @@ public interface ICategoryService
     List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> allTorrents, int? globalMaxActiveDownloads = null);
 }
 
-public class CategoryService : ICategoryService
+public class CategoryService : ICategoryService, IQueueService
 {
     private static readonly Category NotFoundCategory = new();
 
@@ -683,7 +683,9 @@ public class CategoryService : ICategoryService
             return false;
         }
 
-        var activeList = activeTorrents as IList<Torrent> ?? activeTorrents?.ToList() ?? new List<Torrent>();
+        var activeList = (activeTorrents as IList<Torrent> ?? activeTorrents?.ToList() ?? new List<Torrent>())
+            .Where(t => !t.IsExtinct && t.Status != TorrentStatus.StalledNoSeeds)
+            .ToList();
 
         if (globalMaxActiveDownloads.HasValue && globalMaxActiveDownloads.Value > 0 && activeList.Count >= globalMaxActiveDownloads.Value)
         {
@@ -812,7 +814,7 @@ public class CategoryService : ICategoryService
         }
 
         var list = allTorrents.ToList();
-        var activeTorrents = list.Where(t => t.Status == TorrentStatus.Downloading).ToList();
+        var activeTorrents = list.Where(t => t.Status == TorrentStatus.Downloading && !t.IsExtinct).ToList();
         var queuedTorrents = list.Where(t => t.Status == TorrentStatus.Queued).OrderBy(t => t.SortOrder).ThenBy(t => t.Id).ToList();
 
         return EvaluateDownloadQueue(queuedTorrents, activeTorrents, globalMaxActiveDownloads);
@@ -832,7 +834,9 @@ public class CategoryService : ICategoryService
             return promoted;
         }
 
-        var activeList = activeTorrents?.ToList() ?? new List<Torrent>();
+        var activeList = activeTorrents?
+            .Where(t => !t.IsExtinct && t.Status != TorrentStatus.StalledNoSeeds)
+            .ToList() ?? new List<Torrent>();
         var totalActiveCount = activeList.Count;
 
         // Map active counts by category

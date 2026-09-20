@@ -2098,6 +2098,7 @@ public class DelugeJsonRpcController : ControllerBase
             TorrentStatus.Checking => "Checking",
             TorrentStatus.QueuedForChecking => "Checking",
             TorrentStatus.Downloading => "Downloading",
+            TorrentStatus.StalledNoSeeds => "Downloading",
             TorrentStatus.Seeding => "Seeding",
             TorrentStatus.Paused => "Paused",
             TorrentStatus.Stopped => "Paused",

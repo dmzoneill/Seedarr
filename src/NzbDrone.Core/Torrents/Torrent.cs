@@ -57,6 +57,15 @@ public class Torrent : ModelBase
     public int? DownloadClientId { get; set; }
 
     [Ignore]
+    public bool IsExtinct { get; set; }
+
+    [Ignore]
+    public int StallDurationSeconds { get; set; }
+
+    [Ignore]
+    public DateTime? LastActiveTransferTime { get; set; }
+
+    [Ignore]
     public string MagnetUrl { get; set; }
 
     [Ignore]

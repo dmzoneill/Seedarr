@@ -9,6 +9,7 @@ using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Dht;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding.Distribution;
@@ -18,6 +19,7 @@ using NzbDrone.Core.Simulation.Swarm;
 using NzbDrone.Core.Simulation.Traffic;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 using NzbDrone.Core.TrackerServer;
 
 namespace NzbDrone.Core.Seeding;
@@ -55,7 +57,11 @@ public class SeedingEngine : BackgroundService
     private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _uploadSpeedHistory = new();
     private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _downloadSpeedHistory = new();
     private readonly HashSet<int> _stalledTorrentIds = new();
+    private readonly HashSet<int> _extinctNotifiedTorrentIds = new();
     private readonly HashSet<int> _seedingTimeReachedTorrentIds = new();
+    private readonly IPieceStorage _pieceStorage;
+    private readonly IDhtService _dhtService;
+    private readonly ITrackerAnnounceService _trackerAnnounceService;
     private bool _speedThresholdExceededState;
     private long _lastTickTimestamp;
 
@@ -80,7 +86,10 @@ public class SeedingEngine : BackgroundService
         ISwarmAnalyzer swarmAnalyzer = null,
         ICategoryService categoryService = null,
         ITagService tagService = null,
-        ITorrentRepository torrentRepository = null)
+        ITorrentRepository torrentRepository = null,
+        IPieceStorage pieceStorage = null,
+        IDhtService dhtService = null,
+        ITrackerAnnounceService trackerAnnounceService = null)
     {
         _torrentService = torrentService;
         _torrentRepository = torrentRepository;
@@ -100,6 +109,9 @@ public class SeedingEngine : BackgroundService
         _clientBehaviorSimulator = clientBehaviorSimulator;
         _categoryService = categoryService;
         _tagService = tagService;
+        _pieceStorage = pieceStorage;
+        _dhtService = dhtService;
+        _trackerAnnounceService = trackerAnnounceService;
         _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService, tagService);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -264,6 +276,10 @@ public class SeedingEngine : BackgroundService
 
         var isAnyPrivate = allTorrents.Any(t => t.IsPrivate && (t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading));
 
+        var stalledTorrents = allTorrents
+            .Where(t => t.Status == TorrentStatus.StalledNoSeeds && (autoStart || t.ForceStart))
+            .ToList();
+
         if (string.IsNullOrEmpty(_localPeerId))
         {
             if (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled)
@@ -285,7 +301,7 @@ public class SeedingEngine : BackgroundService
                 _localPeerId = prefix + new string(suffix);
             }
         }
-        else if (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && downloadingTorrents.Count == 0 && seedingTorrents.Count == 0)
+        else if (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && downloadingTorrents.Count == 0 && seedingTorrents.Count == 0 && stalledTorrents.Count == 0)
         {
             var activeProfile = _clientBehaviorSimulator.GetActiveProfile(isAnyPrivate);
             if (activeProfile != null)
@@ -294,7 +310,7 @@ public class SeedingEngine : BackgroundService
             }
         }
 
-        if (downloadingTorrents.Count == 0 && seedingTorrents.Count == 0)
+        if (downloadingTorrents.Count == 0 && seedingTorrents.Count == 0 && stalledTorrents.Count == 0)
         {
             var idleToUpdate = new List<Torrent>();
             foreach (var t in allTorrents)
@@ -354,10 +370,10 @@ public class SeedingEngine : BackgroundService
 
         var thresholdPercent = _configService.DownloadThresholdPercent;
         var activeTorrents = allTorrents
-            .Where(t => t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading)
+            .Where(t => t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.StalledNoSeeds)
             .ToList();
 
-        UpdateComputedFields(activeTorrents, thresholdPercent);
+        var recoveredTorrents = UpdateComputedFields(activeTorrents, thresholdPercent);
 
         var dirtyTorrents = new List<Torrent>();
         dirtyTorrents.AddRange(activeTorrents);
@@ -375,7 +391,7 @@ public class SeedingEngine : BackgroundService
             }
         }
 
-        foreach (var t in allTorrents.Where(t => t.Status != TorrentStatus.Seeding && t.Status != TorrentStatus.Downloading))
+        foreach (var t in allTorrents.Where(t => t.Status != TorrentStatus.Seeding && t.Status != TorrentStatus.Downloading && t.Status != TorrentStatus.StalledNoSeeds))
         {
             var statusChanged = initialStatuses.TryGetValue(t.Id, out var initialStatus) && initialStatus != t.Status;
             if (t.UploadSpeed != 0 || t.DownloadSpeed != 0 || t.Active || statusChanged)
@@ -408,10 +424,11 @@ public class SeedingEngine : BackgroundService
             _uploadSpeedHistory.Remove(id);
             _downloadSpeedHistory.Remove(id);
             _stalledTorrentIds.Remove(id);
+            _extinctNotifiedTorrentIds.Remove(id);
             _seedingTimeReachedTorrentIds.Remove(id);
         }
 
-        var totalActive = downloadingTorrents.Count + seedingTorrents.Count;
+        var totalActive = downloadingTorrents.Count + seedingTorrents.Count + stalledTorrents.Count;
         _eventAggregator.PublishEvent(new SeedingTickEvent(totalActive));
 
         // Resolve previously stalled torrents that are no longer stalled or downloading
@@ -419,7 +436,7 @@ public class SeedingEngine : BackgroundService
         foreach (var stalledId in _stalledTorrentIds)
         {
             var torrent = activeTorrents.FirstOrDefault(t => t.Id == stalledId);
-            if (torrent == null || torrent.Status != TorrentStatus.Downloading || torrent.DownloadSpeed > 0 || torrent.Progress >= 1.0 || torrent.IsVpnPaused)
+            if (torrent == null || (torrent.Status != TorrentStatus.Downloading && torrent.Status != TorrentStatus.StalledNoSeeds) || torrent.DownloadSpeed > 0 || torrent.Progress >= 1.0 || torrent.IsVpnPaused)
             {
                 stalledIdsToRemove.Add(stalledId);
             }
@@ -467,12 +484,49 @@ public class SeedingEngine : BackgroundService
             totalDlSpeed += torrent.DownloadSpeed;
             totalUlSpeed += torrent.UploadSpeed;
 
-            if (!torrent.IsVpnPaused && torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed == 0 && torrent.Progress < 1.0)
+            if (!torrent.IsVpnPaused && (torrent.Status == TorrentStatus.Downloading || torrent.Status == TorrentStatus.StalledNoSeeds) && torrent.Progress < 1.0)
             {
-                var stalledMinutes = (int)(_clock.UtcNow - torrent.DateAdded).TotalMinutes;
+                if (torrent.DownloadSpeed > 0)
+                {
+                    torrent.StallDurationSeconds = 0;
+                    torrent.LastActiveTransferTime = _clock.UtcNow;
+                }
+                else if (torrent.Status == TorrentStatus.Downloading && !recoveredTorrents.Contains(torrent.Id))
+                {
+                    torrent.StallDurationSeconds += (int)Math.Max(1, actualDelta.TotalSeconds);
+                }
+                else if (recoveredTorrents.Contains(torrent.Id))
+                {
+                    torrent.StallDurationSeconds = 0;
+                }
+
+                var stalledMinutes = torrent.StallDurationSeconds / 60;
                 if (stalledMinutes >= 5 && _stalledTorrentIds.Add(torrent.Id))
                 {
                     _eventAggregator.PublishEvent(new TorrentStalledEvent(torrent, stalledMinutes));
+                }
+
+                var timeout = _configService.StalledNoSeedsTimeoutSeconds;
+                if (timeout <= 0)
+                {
+                    timeout = 60;
+                }
+
+                if (torrent.Status == TorrentStatus.Downloading && torrent.IsExtinct && torrent.StallDurationSeconds >= timeout)
+                {
+                    var oldStatus = torrent.Status;
+                    torrent.Status = TorrentStatus.StalledNoSeeds;
+                    _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.StalledNoSeeds));
+
+                    if (_extinctNotifiedTorrentIds.Add(torrent.Id))
+                    {
+                        var verified = _pieceStorage?.GetVerifiedPieces(torrent.InfoHash);
+                        var peers = _connectionManager?.GetConnections(torrent.InfoHash)?.Where(p => p != null).ToList() ?? new List<PeerConnection>();
+                        var (_, _, extinctCount) = CalculateSwarmAvailability(torrent, peers, verified);
+                        _eventAggregator.PublishEvent(new TorrentPieceExtinctionEvent(torrent, extinctCount, torrent.PieceCount));
+                    }
+
+                    TriggerDiscoveryRetry(torrent);
                 }
             }
 
@@ -536,10 +590,11 @@ public class SeedingEngine : BackgroundService
         return Math.Max(0, avg);
     }
 
-    private void UpdateComputedFields(List<Torrent> activeTorrents, int thresholdPercent)
+    private HashSet<int> UpdateComputedFields(List<Torrent> activeTorrents, int thresholdPercent)
     {
         var tickSeconds = TickInterval.TotalSeconds;
         var now = _clock.UtcNow;
+        var recoveredTorrents = new HashSet<int>();
 
         foreach (var torrent in activeTorrents)
         {
@@ -600,8 +655,19 @@ public class SeedingEngine : BackgroundService
                 torrent.Eta = 0;
             }
 
-            torrent.Availability = torrent.Progress >= 1.0 ? 1.0 : torrent.Progress;
+            if (torrent.Status == TorrentStatus.StalledNoSeeds)
+            {
+                torrent.DownloadSpeed = 0;
+                torrent.Eta = 0;
+            }
+
+            if (UpdateAvailabilityAndExtinction(torrent))
+            {
+                recoveredTorrents.Add(torrent.Id);
+            }
         }
+
+        return recoveredTorrents;
     }
 
     private bool HasForceStartTorrents()
@@ -763,6 +829,208 @@ public class SeedingEngine : BackgroundService
                     _logger.Debug(ex, "Error sending full availability to peer {0}:{1} after exiting super-seeding", peer?.RemoteIp, peer?.RemotePort);
                 }
             }
+        }
+    }
+
+    public static bool LocalHasPiece(Torrent torrent, bool[] verified, int pieceIndex)
+    {
+        if (verified != null && pieceIndex >= 0 && pieceIndex < verified.Length)
+        {
+            return verified[pieceIndex];
+        }
+
+        if (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding)
+        {
+            return true;
+        }
+
+        if (torrent.Progress > 0.0 && torrent.PieceCount > 0)
+        {
+            var verifiedCount = (int)Math.Round(torrent.Progress * torrent.PieceCount);
+            return pieceIndex < verifiedCount;
+        }
+
+        return false;
+    }
+
+    public static (double Availability, bool IsExtinct, int ExtinctPieceCount) CalculateSwarmAvailability(
+        Torrent torrent,
+        IEnumerable<PeerConnection> peers,
+        bool[] verifiedPieces)
+    {
+        if (torrent == null)
+        {
+            return (0.0, false, 0);
+        }
+
+        if (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding)
+        {
+            return (1.0, false, 0);
+        }
+
+        var peerList = peers?.Where(p => p != null).ToList() ?? new List<PeerConnection>();
+        var hasSeed = peerList.Any(p => p.IsSeed || p.Progress >= 1.0);
+
+        if (torrent.PieceCount <= 0)
+        {
+            if (hasSeed)
+            {
+                return (1.0, false, 0);
+            }
+
+            var sumProgress = peerList.Sum(p => Math.Clamp(p.Progress, 0.0, 1.0));
+            var totalAvail = Math.Min(1.0, torrent.Progress + sumProgress);
+            var isExt = totalAvail < 1.0 && (peerList.Count == 0 || sumProgress == 0);
+            return (totalAvail, isExt, isExt ? 1 : 0);
+        }
+
+        var pieceCount = torrent.PieceCount;
+        var localPieces = new bool[pieceCount];
+        var localCount = 0;
+        for (var i = 0; i < pieceCount; i++)
+        {
+            if (LocalHasPiece(torrent, verifiedPieces, i))
+            {
+                localPieces[i] = true;
+                localCount++;
+            }
+        }
+
+        if (localCount == pieceCount)
+        {
+            return (1.0, false, 0);
+        }
+
+        var missingCount = pieceCount - localCount;
+
+        if (hasSeed)
+        {
+            return (1.0, false, 0);
+        }
+
+        var copyCount = new int[pieceCount];
+        for (var i = 0; i < pieceCount; i++)
+        {
+            if (localPieces[i])
+            {
+                copyCount[i] = 1;
+            }
+        }
+
+        foreach (var peer in peerList)
+        {
+            if (peer.PeerPieces != null && peer.PeerPieces.Length > 0)
+            {
+                var len = Math.Min(pieceCount, peer.PeerPieces.Length);
+                for (var i = 0; i < len; i++)
+                {
+                    if (peer.PeerPieces[i])
+                    {
+                        copyCount[i]++;
+                    }
+                }
+            }
+        }
+
+        var extinctPieceCount = 0;
+        for (var i = 0; i < pieceCount; i++)
+        {
+            if (!localPieces[i] && copyCount[i] == 0)
+            {
+                extinctPieceCount++;
+            }
+        }
+
+        var coveredPieces = copyCount.Count(c => c > 0);
+        var availability = (double)coveredPieces / pieceCount;
+        var allMissingExtinct = missingCount > 0 && extinctPieceCount == missingCount;
+
+        return (availability, allMissingExtinct, extinctPieceCount);
+    }
+
+    private bool UpdateAvailabilityAndExtinction(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return false;
+        }
+
+        if (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding)
+        {
+            torrent.IsExtinct = false;
+            torrent.StallDurationSeconds = 0;
+            torrent.Availability = Math.Max(1.0, torrent.Availability);
+            return false;
+        }
+
+        var peers = _connectionManager?.GetConnections(torrent.InfoHash);
+        var peerList = peers?.Where(p => p != null).ToList() ?? new List<PeerConnection>();
+        var verified = _pieceStorage?.GetVerifiedPieces(torrent.InfoHash);
+
+        var (availability, isExtinct, _) = CalculateSwarmAvailability(torrent, peerList, verified);
+        torrent.Availability = availability;
+
+        var wasExtinct = torrent.IsExtinct;
+        torrent.IsExtinct = isExtinct;
+        var recovered = false;
+
+        if (isExtinct)
+        {
+            if (torrent.LastActiveTransferTime == null && torrent.DownloadSpeed > 0)
+            {
+                torrent.LastActiveTransferTime = _clock.UtcNow;
+            }
+        }
+        else if (wasExtinct)
+        {
+            _extinctNotifiedTorrentIds.Remove(torrent.Id);
+            if (torrent.Status == TorrentStatus.StalledNoSeeds)
+            {
+                torrent.Status = TorrentStatus.Downloading;
+                torrent.StallDurationSeconds = 0;
+                recovered = true;
+                _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.StalledNoSeeds, TorrentStatus.Downloading));
+            }
+        }
+
+        return recovered;
+    }
+
+    private void TriggerDiscoveryRetry(Torrent torrent)
+    {
+        if (torrent == null || string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            return;
+        }
+
+        if (_dhtService != null)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _dhtService.AnnounceTorrent(torrent.InfoHash, LocalPeerPort);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to dispatch DHT announce for extinct torrent {0}", torrent.Name);
+                }
+            });
+        }
+
+        if (_trackerAnnounceService != null)
+        {
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    _trackerAnnounceService.AnnounceTorrent(torrent, force: true);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to dispatch tracker re-announce for extinct torrent {0}", torrent.Name);
+                }
+            });
         }
     }
 }
