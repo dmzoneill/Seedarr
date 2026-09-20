@@ -181,4 +181,84 @@ public class InfoHashCalculatorTest
     {
         Assert.Throws<ArgumentNullException>(() => InfoHashCalculator.Calculate(null as BDictionary));
     }
+
+    [Test]
+    public void CalculateV2_should_return_sha256_hex_string_for_known_input()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("hello") }
+        };
+
+        var result = InfoHashCalculator.CalculateV2(info);
+
+        var encoded = info.EncodeAsBytes();
+        var expectedHash = SHA256.HashData(encoded);
+        var expected = Convert.ToHexString(expectedHash).ToLowerInvariant();
+
+        Assert.That(result, Is.EqualTo(expected));
+        Assert.That(result, Has.Length.EqualTo(64));
+        Assert.That(result, Does.Match("^[0-9a-f]{64}$"));
+    }
+
+    [Test]
+    public void CalculateV2_raw_bytes_should_return_sha256_hex_string()
+    {
+        var rawBytes = "d4:name5:helloe"u8;
+        var expectedHash = Convert.ToHexString(SHA256.HashData(rawBytes)).ToLowerInvariant();
+
+        var result = InfoHashCalculator.CalculateV2(rawBytes);
+
+        Assert.That(result, Is.EqualTo(expectedHash));
+        Assert.That(result, Has.Length.EqualTo(64));
+    }
+
+    [Test]
+    public void CalculateV2_dictionary_should_throw_when_null()
+    {
+        Assert.Throws<ArgumentNullException>(() => InfoHashCalculator.CalculateV2(null as BDictionary));
+    }
+
+    [Test]
+    public void Calculate_with_out_params_should_return_both_v1_and_v2_hashes()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("hybrid-torrent") },
+            { "piece length", new BNumber(32768) }
+        };
+
+        InfoHashCalculator.Calculate(info, out var v1Hash, out var v2Hash);
+
+        var encoded = info.EncodeAsBytes();
+        var expectedV1 = Convert.ToHexString(SHA1.HashData(encoded)).ToLowerInvariant();
+        var expectedV2 = Convert.ToHexString(SHA256.HashData(encoded)).ToLowerInvariant();
+
+        Assert.That(v1Hash, Is.EqualTo(expectedV1));
+        Assert.That(v1Hash, Has.Length.EqualTo(40));
+        Assert.That(v2Hash, Is.EqualTo(expectedV2));
+        Assert.That(v2Hash, Has.Length.EqualTo(64));
+    }
+
+    [Test]
+    public void Calculate_raw_bytes_with_out_params_should_return_both_v1_and_v2_hashes()
+    {
+        var rawBytes = "d4:name6:hybrid12:piece lengthi16384ee"u8;
+
+        InfoHashCalculator.Calculate(rawBytes, out var v1Hash, out var v2Hash);
+
+        var expectedV1 = Convert.ToHexString(SHA1.HashData(rawBytes)).ToLowerInvariant();
+        var expectedV2 = Convert.ToHexString(SHA256.HashData(rawBytes)).ToLowerInvariant();
+
+        Assert.That(v1Hash, Is.EqualTo(expectedV1));
+        Assert.That(v1Hash, Has.Length.EqualTo(40));
+        Assert.That(v2Hash, Is.EqualTo(expectedV2));
+        Assert.That(v2Hash, Has.Length.EqualTo(64));
+    }
+
+    [Test]
+    public void Calculate_with_out_params_dictionary_should_throw_when_null()
+    {
+        Assert.Throws<ArgumentNullException>(() => InfoHashCalculator.Calculate(null as BDictionary, out _, out _));
+    }
 }
