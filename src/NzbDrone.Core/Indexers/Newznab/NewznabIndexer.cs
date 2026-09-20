@@ -3,9 +3,11 @@ using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Xml;
 using NLog;
 using NzbDrone.Core.Indexers.Torznab;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Indexers.Newznab;
 
@@ -636,6 +638,16 @@ public class NewznabIndexer : IIndexer
                 var guidNode = item.SelectSingleNode("guid");
 
                 var downloadUrl = enclosureNode?.Attributes?["url"]?.Value ?? linkNode?.InnerText;
+                var magnetUrl = string.Empty;
+
+                if (!string.IsNullOrEmpty(downloadUrl) && downloadUrl.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
+                {
+                    magnetUrl = downloadUrl;
+                }
+                else if (linkNode != null && !string.IsNullOrEmpty(linkNode.InnerText) && linkNode.InnerText.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
+                {
+                    magnetUrl = linkNode.InnerText;
+                }
 
                 var rawTitle = titleNode?.InnerText ?? string.Empty;
                 var decodedTitle = TorznabIndexer.DecodeAndNormalize(rawTitle);
@@ -655,6 +667,7 @@ public class NewznabIndexer : IIndexer
                     Description = decodedDescription,
                     Comments = decodedComments,
                     DownloadUrl = downloadUrl,
+                    MagnetUrl = magnetUrl,
                     ResponseOffset = responseOffset,
                     ResponseTotal = responseTotal,
                     DownloadVolumeFactor = 1.0,
@@ -671,9 +684,16 @@ public class NewznabIndexer : IIndexer
                     release.Size = sVal;
                 }
 
-                if (pubDateNode != null && DateTime.TryParse(pubDateNode.InnerText, out var pDate))
+                if (pubDateNode != null && !string.IsNullOrWhiteSpace(pubDateNode.InnerText))
                 {
-                    release.PublishDate = pDate;
+                    if (DateTime.TryParse(pubDateNode.InnerText, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var pDate))
+                    {
+                        release.PublishDate = DateTime.SpecifyKind(pDate, DateTimeKind.Utc);
+                    }
+                    else if (DateTimeOffset.TryParse(pubDateNode.InnerText.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
+                    {
+                        release.PublishDate = dto.UtcDateTime;
+                    }
                 }
 
                 var attrNodes = item.SelectNodes("*[local-name()='attr']");
@@ -694,6 +714,42 @@ public class NewznabIndexer : IIndexer
                         else if (name == "guid" && string.IsNullOrEmpty(release.Guid))
                         {
                             release.Guid = val;
+                        }
+                        else if (name == "magneturl")
+                        {
+                            release.MagnetUrl = val;
+                        }
+                        else if (name == "infohash")
+                        {
+                            release.InfoHash = val;
+                        }
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(release.InfoHash) && !string.IsNullOrWhiteSpace(release.MagnetUrl))
+                {
+                    try
+                    {
+                        release.InfoHash = MagnetLinkParser.Parse(release.MagnetUrl)?.InfoHash;
+                    }
+                    catch
+                    {
+                        var match = Regex.Match(release.MagnetUrl, @"xt=urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})", RegexOptions.IgnoreCase);
+                        if (match.Success)
+                        {
+                            var hash = match.Groups[1].Value;
+                            if (hash.Length == 32)
+                            {
+                                var bytes = MagnetLinkParser.Base32Decode(hash);
+                                if (bytes != null && bytes.Length == 20)
+                                {
+                                    release.InfoHash = Convert.ToHexString(bytes).ToLowerInvariant();
+                                }
+                            }
+                            else
+                            {
+                                release.InfoHash = hash.ToLowerInvariant();
+                            }
                         }
                     }
                 }

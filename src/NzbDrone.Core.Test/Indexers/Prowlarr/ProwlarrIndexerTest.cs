@@ -347,6 +347,108 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
             Assert.That(results[0].InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
         }
 
+        [Test]
+        public void Search_should_map_friendly_category_to_standard_numeric_ids()
+        {
+            var handler = new ProwlarrTestHttpMessageHandler
+            {
+                Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]")
+                }
+            };
+            var indexer = new ProwlarrIndexer(new HttpClient(handler));
+            var definition = new IndexerDefinition
+            {
+                Id = 18,
+                Name = "Prowlarr Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "valid-key"
+            };
+
+            indexer.Search(definition, "Inception", category: "movies");
+
+            Assert.That(handler.SentRequests.Count, Is.EqualTo(1));
+            var requestUri = handler.SentRequests[0].RequestUri?.ToString();
+            Assert.That(requestUri, Does.Contain("categories="));
+            Assert.That(requestUri, Does.Contain("2000"));
+        }
+
+        [Test]
+        public void Search_should_fall_back_to_definition_categories_when_category_is_null_or_empty()
+        {
+            var handler = new ProwlarrTestHttpMessageHandler
+            {
+                Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]")
+                }
+            };
+            var indexer = new ProwlarrIndexer(new HttpClient(handler));
+            var definition = new IndexerDefinition
+            {
+                Id = 19,
+                Name = "Prowlarr Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "valid-key",
+                Categories = "tv"
+            };
+
+            indexer.Search(definition, "Breaking Bad", category: null);
+
+            Assert.That(handler.SentRequests.Count, Is.EqualTo(1));
+            var requestUri = handler.SentRequests[0].RequestUri?.ToString();
+            Assert.That(requestUri, Does.Contain("categories="));
+            Assert.That(requestUri, Does.Contain("5000"));
+        }
+
+        [Test]
+        public void Search_should_parse_download_and_upload_volume_factors()
+        {
+            var searchJson = @"[
+                {
+                    ""guid"": ""guid-vol-1"",
+                    ""title"": ""Freeleech.Torrent.2026"",
+                    ""size"": 1073741824,
+                    ""downloadVolumeFactor"": 0.0,
+                    ""uploadVolumeFactor"": 2.0
+                },
+                {
+                    ""guid"": ""guid-vol-2"",
+                    ""title"": ""Normal.Torrent.2026"",
+                    ""size"": 2147483648,
+                    ""downloadVolumeFactor"": null,
+                    ""uploadVolumeFactor"": null
+                }
+            ]";
+
+            var handler = new ProwlarrTestHttpMessageHandler
+            {
+                Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(searchJson)
+                }
+            };
+            var indexer = new ProwlarrIndexer(new HttpClient(handler));
+            var definition = new IndexerDefinition
+            {
+                Id = 20,
+                Name = "Prowlarr Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "valid-key"
+            };
+
+            var results = indexer.Search(definition, "torrent");
+
+            Assert.That(results.Count, Is.EqualTo(2));
+            Assert.That(results[0].DownloadVolumeFactor, Is.EqualTo(0.0));
+            Assert.That(results[0].UploadVolumeFactor, Is.EqualTo(2.0));
+            Assert.That(results[0].IsFreeleech, Is.True);
+
+            Assert.That(results[1].DownloadVolumeFactor, Is.Null);
+            Assert.That(results[1].UploadVolumeFactor, Is.Null);
+        }
+
         private class ProwlarrTestHttpMessageHandler : HttpMessageHandler
         {
             public List<HttpRequestMessage> SentRequests { get; } = new();

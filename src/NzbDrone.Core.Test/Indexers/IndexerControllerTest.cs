@@ -899,6 +899,50 @@ public class IndexerControllerTest
             m.TvdbId == "73545"));
     }
 
+    [Test]
+    public void DownloadRelease_with_torznab_indexer_records_history_with_torznab_source()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 101, Name = "Test Torznab Release" });
+
+        var torznabDef = new IndexerDefinition
+        {
+            Id = 55,
+            Name = "IPTorrents",
+            IndexerType = "Torznab"
+        };
+        _indexerFactory.Get(55).Returns(torznabDef);
+
+        var controller = new IndexerController(
+            _indexerFactory,
+            torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository);
+
+        var request = new DownloadReleaseRequest
+        {
+            Title = "Test Torznab Release",
+            MagnetUrl = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Test.Torznab.Release",
+            IndexerId = 55,
+            IndexerName = "IPTorrents"
+        };
+
+        var response = controller.DownloadRelease(request);
+
+        Assert.That(response.Result, Is.InstanceOf<OkObjectResult>());
+        _downloadHistoryService.Received(1).RecordTorrentAdded(
+            Arg.Any<Torrent>(),
+            source: Arg.Is<string>(s => s.Contains("Torznab")),
+            magnetUrl: Arg.Any<string>(),
+            downloadUrl: Arg.Any<string>(),
+            indexerName: "IPTorrents");
+    }
+
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
         public HttpRequestMessage SentRequest { get; private set; }

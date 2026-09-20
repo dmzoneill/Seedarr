@@ -711,6 +711,58 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
             statusService.Received(1).RecordFailure(42, 429, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Is<TimeSpan?>(t => t.HasValue && t.Value.TotalSeconds >= 280.0));
         }
 
+        [Test]
+        public void ParseResponse_should_parse_rfc822_pubdate_with_invariant_culture()
+        {
+            var prevCulture = System.Threading.Thread.CurrentThread.CurrentCulture;
+            try
+            {
+                System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+
+                var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:newznab=""http://www.newznab.com/DTD/2010/feeds/attributes/"">
+    <channel>
+        <title>Newznab Feed</title>
+        <item>
+            <title>Ubuntu.Linux.ISO</title>
+            <link>https://newznab.local/nzb/123.nzb</link>
+            <pubDate>Mon, 05 May 2025 14:30:00 +0000</pubDate>
+        </item>
+    </channel>
+</rss>";
+
+                var results = _subject.ParseResponse(xml);
+
+                Assert.That(results, Has.Count.EqualTo(1));
+                Assert.That(results[0].PublishDate, Is.EqualTo(new DateTime(2025, 5, 5, 14, 30, 0, DateTimeKind.Utc)));
+            }
+            finally
+            {
+                System.Threading.Thread.CurrentThread.CurrentCulture = prevCulture;
+            }
+        }
+
+        [Test]
+        public void ParseResponse_should_extract_infohash_from_magnet_url_when_infohash_attr_is_missing()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:newznab=""http://www.newznab.com/DTD/2010/feeds/attributes/"">
+    <channel>
+        <title>Newznab Feed</title>
+        <item>
+            <title>Ubuntu.Linux.Magnet</title>
+            <link>magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&amp;dn=Ubuntu.Linux.Magnet</link>
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
+            Assert.That(results[0].MagnetUrl, Does.Contain("0123456789abcdef0123456789abcdef01234567"));
+        }
+
         private class NewznabTestHttpMessageHandler : HttpMessageHandler
         {
             public List<HttpRequestMessage> SentRequests { get; } = new();

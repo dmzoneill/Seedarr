@@ -9,6 +9,7 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Xml;
 using NLog;
+using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Indexers.Torznab;
@@ -1002,7 +1003,11 @@ public class TorznabIndexer : IIndexer
                 if (pubDateNode != null && !string.IsNullOrWhiteSpace(pubDateNode.InnerText))
                 {
                     var dateText = pubDateNode.InnerText.Trim();
-                    if (DateTimeOffset.TryParse(dateText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
+                    if (DateTime.TryParse(pubDateNode.InnerText, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out var pDate))
+                    {
+                        release.PublishDate = DateTime.SpecifyKind(pDate, DateTimeKind.Utc);
+                    }
+                    else if (DateTimeOffset.TryParse(dateText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
                     {
                         release.PublishDate = dto.UtcDateTime;
                     }
@@ -1014,9 +1019,9 @@ public class TorznabIndexer : IIndexer
                         {
                             release.PublishDate = dtoStripped.UtcDateTime;
                         }
-                        else if (DateTime.TryParse(dateText, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var pDate))
+                        else if (DateTime.TryParse(dateText, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var pDateFallback))
                         {
-                            release.PublishDate = DateTime.SpecifyKind(pDate, DateTimeKind.Utc);
+                            release.PublishDate = DateTime.SpecifyKind(pDateFallback, DateTimeKind.Utc);
                         }
                     }
                 }
@@ -1062,6 +1067,10 @@ public class TorznabIndexer : IIndexer
                         else if (name == "magneturl")
                         {
                             release.MagnetUrl = val;
+                        }
+                        else if (name == "size" && release.Size == 0 && long.TryParse(val, out var aSize))
+                        {
+                            release.Size = aSize;
                         }
                         else if (name == "category" && !string.IsNullOrEmpty(val))
                         {
@@ -1143,6 +1152,34 @@ public class TorznabIndexer : IIndexer
                     if (!explicitLeechers && rawPeers.HasValue)
                     {
                         release.Leechers = Math.Max(0, rawPeers.Value - (release.Seeders ?? 0));
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(release.InfoHash) && !string.IsNullOrWhiteSpace(release.MagnetUrl))
+                {
+                    try
+                    {
+                        release.InfoHash = MagnetLinkParser.Parse(release.MagnetUrl)?.InfoHash;
+                    }
+                    catch
+                    {
+                        var match = Regex.Match(release.MagnetUrl, @"xt=urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})", RegexOptions.IgnoreCase);
+                        if (match.Success)
+                        {
+                            var hash = match.Groups[1].Value;
+                            if (hash.Length == 32)
+                            {
+                                var bytes = MagnetLinkParser.Base32Decode(hash);
+                                if (bytes != null && bytes.Length == 20)
+                                {
+                                    release.InfoHash = Convert.ToHexString(bytes).ToLowerInvariant();
+                                }
+                            }
+                            else
+                            {
+                                release.InfoHash = hash.ToLowerInvariant();
+                            }
+                        }
                     }
                 }
 
