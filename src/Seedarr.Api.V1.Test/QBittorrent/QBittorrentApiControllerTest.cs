@@ -733,4 +733,45 @@ public class QBittorrentApiControllerTest
         Assert.That(torrent.SavePath, Is.EqualTo("/downloads/movies"));
         _torrentService.Received(1).Update(torrent);
     }
+
+    [Test]
+    public void SetLocation_WithRelocationService_Invokes_RelocateTorrentAsync()
+    {
+        var relocationService = Substitute.For<ITorrentRelocationService>();
+        var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
+        remotePathMappingService.RemapRemoteToLocal("192.168.1.50", @"X:\Downloads\movies")
+            .Returns("/downloads/movies");
+
+        var controller = new QBittorrentApiController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _tagService,
+            _configFileProvider,
+            relocationService: relocationService,
+            remotePathMappingService: remotePathMappingService,
+            categoryService: _categoryService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.50");
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "aabbccddeeff00112233aabbccddeeff00112233",
+            Name = "MyMovie",
+            SourcePath = "/downloads/old",
+            SavePath = "/downloads/old",
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var actionResult = controller.SetLocation("aabbccddeeff00112233aabbccddeeff00112233", @"X:\Downloads\movies");
+        Assert.That(actionResult, Is.InstanceOf<ContentResult>());
+        relocationService.Received(1).RelocateTorrentAsync(1, "/downloads/movies");
+    }
 }
+

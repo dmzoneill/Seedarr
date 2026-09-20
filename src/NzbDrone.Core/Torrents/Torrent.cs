@@ -145,6 +145,12 @@ public class Torrent : ModelBase
         if (updates.SavePath != null)
         {
             SavePath = updates.SavePath;
+            SourcePath = updates.SavePath;
+        }
+        else if (updates.SourcePath != null)
+        {
+            SourcePath = updates.SourcePath;
+            SavePath = updates.SourcePath;
         }
 
         if (updates.TagIds != null)

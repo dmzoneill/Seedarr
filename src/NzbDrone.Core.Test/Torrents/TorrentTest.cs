@@ -161,6 +161,27 @@ public class TorrentTest
     }
 
     [Test]
+    public void ApplyUserFields_should_synchronize_SavePath_and_SourcePath()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            SavePath = "/downloads/old",
+            SourcePath = "/downloads/old"
+        };
+
+        var updates = new Torrent
+        {
+            SavePath = "/downloads/new"
+        };
+
+        torrent.ApplyUserFields(updates);
+
+        Assert.That(torrent.SavePath, Is.EqualTo("/downloads/new"));
+        Assert.That(torrent.SourcePath, Is.EqualTo("/downloads/new"));
+    }
+
+    [Test]
     public void ApplyUserFields_should_preserve_engine_managed_stats()
     {
         var torrent = new Torrent

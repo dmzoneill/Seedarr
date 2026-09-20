@@ -911,4 +911,56 @@ public class TransmissionRpcControllerTest
         Assert.That(torrent.SavePath, Is.EqualTo("/downloads/tv"));
         _torrentService.Received(1).Update(torrent);
     }
+
+    [Test]
+    public async Task TorrentSetLocation_WithMoveTrue_AndRelocationService_Invokes_RelocateTorrentAsync()
+    {
+        var relocationService = Substitute.For<ITorrentRelocationService>();
+        var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
+        remotePathMappingService.RemapRemoteToLocal("192.168.1.60", @"Z:\Downloads\tv")
+            .Returns("/downloads/tv");
+
+        var controller = new TransmissionRpcController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _configFileProvider,
+            relocationService: relocationService,
+            remotePathMappingService: remotePathMappingService,
+            categoryService: _categoryService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.60");
+        httpContext.Request.Headers[TransmissionRpcController.SessionHeaderName] = TransmissionRpcController.CurrentSessionId;
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 10,
+            InfoHash = "1234567890123456789012345678901234567890",
+            Name = "Show.S01E01",
+            SourcePath = "/downloads/old",
+            SavePath = "/downloads/old",
+        };
+        _torrentService.Get(10).Returns(torrent);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-set-location",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[10]").RootElement,
+                ["location"] = JsonDocument.Parse("\"Z:\\\\Downloads\\\\tv\"").RootElement,
+                ["move"] = JsonDocument.Parse("true").RootElement,
+            },
+        };
+
+        var result = await controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        relocationService.Received(1).RelocateTorrentAsync(10, "/downloads/tv");
+    }
 }
+

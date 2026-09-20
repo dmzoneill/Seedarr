@@ -696,6 +696,34 @@ function TorrentContextMenu({
               </button>
             )}
 
+            {/* Set Location */}
+            <button
+              className="context-menu-item"
+              onClick={() => {
+                setPromptConfig({
+                  title: `${t("torrents.setLocation", undefined, "Set Location")}${countSuffix}`,
+                  description: "Enter new save path directory:",
+                  initialValue: !isMulti ? (ct?.savePath || ct?.sourcePath || "") : "",
+                  inputType: "text",
+                  validate: (val) =>
+                    !val.trim() ? "Location cannot be empty" : null,
+                  onConfirm: (loc) => {
+                    const trimmed = loc.trim();
+                    if (trimmed) {
+                      handleUpdateAll((t) => ({
+                        ...t,
+                        savePath: trimmed,
+                        sourcePath: trimmed,
+                      }));
+                    }
+                  },
+                });
+              }}
+            >
+              {t("torrents.setLocation", undefined, "Set Location...")}
+              {countSuffix}
+            </button>
+
             {/* Label / Tag */}
             <button
               className="context-menu-item"

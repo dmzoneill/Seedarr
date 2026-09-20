@@ -2391,8 +2391,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 }
                 else
                 {
-                    t.SourcePath = remappedLocation;
                     t.SavePath = remappedLocation;
+                    t.SourcePath = remappedLocation;
                     _torrentService.Update(t);
                 }
             }
