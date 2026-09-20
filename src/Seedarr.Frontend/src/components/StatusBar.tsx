@@ -199,7 +199,7 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
           {formatRatio(
             stats?.totalDownloaded && stats.totalDownloaded > 0
               ? stats.totalUploaded / stats.totalDownloaded
-              : (stats?.averageRatio ?? 0)
+              : 0
           )}
         </span>
         <span className="status-bar-item">
