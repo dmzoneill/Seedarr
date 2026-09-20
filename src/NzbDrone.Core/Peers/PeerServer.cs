@@ -2729,6 +2729,12 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 HandleExtendedMessage(connection, message, torrent);
                 break;
 
+            case PeerMessageType.HashRequest:
+            case PeerMessageType.Hashes:
+            case PeerMessageType.HashReject:
+                connection?.HandleMessage(message);
+                break;
+
             default:
                 _logger.Trace("Ignoring message type {0} from {1}", message.Type, connection.RemoteIp);
                 break;

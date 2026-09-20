@@ -79,6 +79,9 @@ public class PeerMessageTest
     [TestCase(PeerMessageType.Cancel)]
     [TestCase(PeerMessageType.Port)]
     [TestCase(PeerMessageType.Extended)]
+    [TestCase(PeerMessageType.HashRequest)]
+    [TestCase(PeerMessageType.Hashes)]
+    [TestCase(PeerMessageType.HashReject)]
     public void Type_should_store_all_message_types(PeerMessageType type)
     {
         var message = new PeerMessage { Type = type };

@@ -376,6 +376,96 @@ public class MerkleTree : IMerkleTreeService
         return proof;
     }
 
+    public byte[] GetHashesForRequest(int baseLayer, int index, int length, int proofLayers)
+    {
+        return GetHashesForRequest(LeafHashes, baseLayer, index, length, proofLayers);
+    }
+
+    public static byte[] GetHashesForRequest(IReadOnlyList<byte[]> leafHashes, int baseLayer, int index, int length, int proofLayers)
+    {
+        if (baseLayer < 0 || index < 0 || length < 2 || proofLayers < 0)
+        {
+            return null;
+        }
+
+        if ((length & (length - 1)) != 0 || (index % length) != 0)
+        {
+            return null;
+        }
+
+        if (leafHashes == null || leafHashes.Count == 0)
+        {
+            return null;
+        }
+
+        var leafCount = RoundUpToPowerOfTwo(leafHashes.Count);
+        var layers = new List<byte[][]>();
+        var currentLayer = new byte[leafCount][];
+        for (var i = 0; i < leafCount; i++)
+        {
+            currentLayer[i] = i < leafHashes.Count ? leafHashes[i] : new byte[HashSize];
+        }
+
+        layers.Add(currentLayer);
+
+        Span<byte> concatBuffer = stackalloc byte[64];
+        while (currentLayer.Length > 1)
+        {
+            var nextLayer = new byte[currentLayer.Length / 2][];
+            for (var i = 0; i < nextLayer.Length; i++)
+            {
+                currentLayer[i * 2].CopyTo(concatBuffer[..32]);
+                currentLayer[(i * 2) + 1].CopyTo(concatBuffer[32..]);
+                nextLayer[i] = SHA256.HashData(concatBuffer);
+            }
+
+            layers.Add(nextLayer);
+            currentLayer = nextLayer;
+        }
+
+        if (baseLayer >= layers.Count)
+        {
+            return null;
+        }
+
+        var targetLayerNodes = layers[baseLayer];
+        if (index + length > targetLayerNodes.Length)
+        {
+            return null;
+        }
+
+        var resultList = new List<byte[]>(length + proofLayers);
+        for (var i = index; i < index + length; i++)
+        {
+            resultList.Add(targetLayerNodes[i]);
+        }
+
+        var impliedLayers = BitOperations.TrailingZeroCount(length);
+        for (var p = impliedLayers; p <= proofLayers; p++)
+        {
+            var layerIdx = baseLayer + p;
+            if (layerIdx >= layers.Count)
+            {
+                break;
+            }
+
+            var nodeIdx = index >> p;
+            var siblingIdx = nodeIdx ^ 1;
+            if (siblingIdx < layers[layerIdx].Length)
+            {
+                resultList.Add(layers[layerIdx][siblingIdx]);
+            }
+        }
+
+        var totalBytes = new byte[resultList.Count * HashSize];
+        for (var i = 0; i < resultList.Count; i++)
+        {
+            Array.Copy(resultList[i], 0, totalBytes, i * HashSize, HashSize);
+        }
+
+        return totalBytes;
+    }
+
     public static byte[] GenerateBlockProofForPiece(IReadOnlyList<byte[]> leafHashes, int blockIndex, int pieceLength)
     {
         if (pieceLength < BlockSize || (pieceLength & (pieceLength - 1)) != 0)

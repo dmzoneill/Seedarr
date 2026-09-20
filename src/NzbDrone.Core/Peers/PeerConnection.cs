@@ -14,8 +14,10 @@ using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Peers.Encryption;
+using NzbDrone.Core.Peers.Messages;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Torrents.Merkle;
 
 namespace NzbDrone.Core.Peers;
 
@@ -99,8 +101,51 @@ public class PeerConnection : IDisposable
     public bool SupportsExtensionProtocol { get; private set; }
     public bool SupportsFastExtension { get; set; }
     public bool SupportsDht { get; private set; }
-    public bool SupportsV2 { get; private set; }
+    public bool SupportsV2 { get; set; }
     public bool SupportsBep52 => SupportsV2;
+    public bool SupportsV2Protocol
+    {
+        get => SupportsV2;
+        set => SupportsV2 = value;
+    }
+
+    public event EventHandler<HashRequestMessage> HashRequestReceived;
+    public event EventHandler<HashesMessage> HashesReceived;
+    public event EventHandler<HashRejectMessage> HashRejectReceived;
+    public Action<HashRequestMessage> OnHashRequestReceived { get; set; }
+    public Action<HashesMessage> OnHashesReceived { get; set; }
+    public Action<HashRejectMessage> OnHashRejectReceived { get; set; }
+
+    public ConcurrentDictionary<string, MerkleTree> MerkleTrees { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Func<byte[], MerkleTree> MerkleTreeProvider { get; set; }
+
+    public void RegisterMerkleTree(byte[] piecesRoot, MerkleTree tree)
+    {
+        if (piecesRoot != null && tree != null)
+        {
+            MerkleTrees[Convert.ToHexString(piecesRoot)] = tree;
+        }
+    }
+
+    public MerkleTree GetMerkleTree(byte[] piecesRoot)
+    {
+        if (piecesRoot == null)
+        {
+            return null;
+        }
+
+        if (MerkleTreeProvider != null)
+        {
+            var tree = MerkleTreeProvider(piecesRoot);
+            if (tree != null)
+            {
+                return tree;
+            }
+        }
+
+        return MerkleTrees.TryGetValue(Convert.ToHexString(piecesRoot), out var t) ? t : null;
+    }
+
     public ConcurrentDictionary<string, int> RemoteExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public int? RemoteUtPexId
@@ -1156,6 +1201,116 @@ public class PeerConnection : IDisposable
     public virtual void SendBitfield(ReadOnlyMemory<byte> bitfield)
     {
         SendBitfield(bitfield.ToArray());
+    }
+
+    public virtual void SendHashRequest(HashRequestMessage request)
+    {
+        if (request != null)
+        {
+            SendMessage(request.ToPeerMessage());
+        }
+    }
+
+    public virtual void SendHashRequest(byte[] piecesRoot, int baseLayer, int index, int length, int proofLayers)
+    {
+        SendHashRequest(new HashRequestMessage(piecesRoot, baseLayer, index, length, proofLayers));
+    }
+
+    public virtual void SendHashes(HashesMessage hashes)
+    {
+        if (hashes != null)
+        {
+            SendMessage(hashes.ToPeerMessage());
+        }
+    }
+
+    public virtual void SendHashes(byte[] piecesRoot, int baseLayer, int index, int length, int proofLayers, byte[] hashes)
+    {
+        SendHashes(new HashesMessage(piecesRoot, baseLayer, index, length, proofLayers, hashes));
+    }
+
+    public virtual void SendHashReject(HashRejectMessage reject)
+    {
+        if (reject != null)
+        {
+            SendMessage(reject.ToPeerMessage());
+        }
+    }
+
+    public virtual void SendHashReject(byte[] piecesRoot, int baseLayer, int index, int length, int proofLayers)
+    {
+        SendHashReject(new HashRejectMessage(piecesRoot, baseLayer, index, length, proofLayers));
+    }
+
+    public virtual void SendHashReject(HashRequestMessage request)
+    {
+        SendHashReject(new HashRejectMessage(request));
+    }
+
+    public virtual void HandleMessage(PeerMessage message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+
+        switch (message.Type)
+        {
+            case PeerMessageType.HashRequest:
+                try
+                {
+                    var req = HashRequestMessage.FromPeerMessage(message);
+                    HashRequestReceived?.Invoke(this, req);
+                    OnHashRequestReceived?.Invoke(req);
+
+                    var tree = GetMerkleTree(req.PiecesRoot);
+                    if (tree != null && req.IsValid())
+                    {
+                        var hashes = tree.GetHashesForRequest(req.BaseLayer, req.Index, req.Length, req.ProofLayers);
+                        if (hashes != null)
+                        {
+                            SendHashes(new HashesMessage(req.PiecesRoot, req.BaseLayer, req.Index, req.Length, req.ProofLayers, hashes));
+                            break;
+                        }
+                    }
+
+                    SendHashReject(new HashRejectMessage(req));
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to handle HashRequest from peer {0}:{1}", RemoteIp, RemotePort);
+                }
+
+                break;
+
+            case PeerMessageType.Hashes:
+                try
+                {
+                    var hashesMsg = HashesMessage.FromPeerMessage(message);
+                    HashesReceived?.Invoke(this, hashesMsg);
+                    OnHashesReceived?.Invoke(hashesMsg);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to handle Hashes from peer {0}:{1}", RemoteIp, RemotePort);
+                }
+
+                break;
+
+            case PeerMessageType.HashReject:
+                try
+                {
+                    var rej = HashRejectMessage.FromPeerMessage(message);
+                    HashRejectReceived?.Invoke(this, rej);
+                    OnHashRejectReceived?.Invoke(rej);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to handle HashReject from peer {0}:{1}", RemoteIp, RemotePort);
+                }
+
+                break;
+        }
     }
 
     public virtual void SendHave(int pieceIndex)

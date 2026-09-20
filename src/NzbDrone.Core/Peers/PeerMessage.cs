@@ -17,7 +17,10 @@ public enum PeerMessageType : byte
     HaveNone = 15,
     RejectRequest = 16,
     AllowedFast = 17,
-    Extended = 20
+    Extended = 20,
+    HashRequest = 21,
+    Hashes = 22,
+    HashReject = 23
 }
 
 public class PeerMessage
