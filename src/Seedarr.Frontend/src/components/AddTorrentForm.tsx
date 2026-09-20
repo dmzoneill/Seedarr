@@ -79,6 +79,101 @@ export function getReleaseButtonState({
   return { label: "+ Add", disabled: false, className: "btn btn-success" };
 }
 
+export const TORZNAB_CATEGORIES = [
+  { id: "", name: "All Categories" },
+  { id: "2000", name: "Movies (2000)" },
+  { id: "5000", name: "TV (5000)" },
+  { id: "3000", name: "Audio (3000)" },
+  { id: "4000", name: "Software (4000)" },
+  { id: "1000", name: "Games (1000)" },
+  { id: "7000", name: "Books (7000)" },
+  { id: "5070", name: "Anime (5070)" },
+] as const;
+
+export type SearchSortField = "title" | "size" | "peers" | "seeders" | "date";
+export type SearchSortDirection = "asc" | "desc";
+
+export function sortReleases(
+  releases: ReleaseInfo[] | undefined,
+  sortField: SearchSortField | null | undefined,
+  sortDirection: SearchSortDirection,
+): ReleaseInfo[] {
+  if (!releases || releases.length === 0) return [];
+  if (!sortField) return [...releases];
+
+  return [...releases].sort((a, b) => {
+    let cmp = 0;
+    switch (sortField) {
+      case "title":
+        cmp = (a.title || "").localeCompare(b.title || "", undefined, {
+          sensitivity: "base",
+          numeric: true,
+        });
+        break;
+      case "size":
+        cmp = (a.size ?? 0) - (b.size ?? 0);
+        break;
+      case "peers":
+      case "seeders": {
+        const seedersA = a.seeders ?? 0;
+        const seedersB = b.seeders ?? 0;
+        if (seedersA !== seedersB) {
+          cmp = seedersA - seedersB;
+        } else {
+          cmp = (a.leechers ?? 0) - (b.leechers ?? 0);
+        }
+        break;
+      }
+      case "date": {
+        const timeA = a.publishDate ? new Date(a.publishDate).getTime() : 0;
+        const timeB = b.publishDate ? new Date(b.publishDate).getTime() : 0;
+        cmp = timeA - timeB;
+        break;
+      }
+      default:
+        cmp = 0;
+    }
+
+    if (cmp !== 0) {
+      return sortDirection === "asc" ? cmp : -cmp;
+    }
+
+    // Deterministic tie-breaker
+    return (a.guid || a.title || "").localeCompare(b.guid || b.title || "");
+  });
+}
+
+export function paginateReleases(
+  releases: ReleaseInfo[] | undefined,
+  page: number,
+  pageSize: number,
+): {
+  items: ReleaseInfo[];
+  totalPages: number;
+  currentPage: number;
+  startIndex: number;
+  endIndex: number;
+  totalCount: number;
+} {
+  const allItems = releases ?? [];
+  const totalCount = allItems.length;
+  const safePageSize = Math.max(1, pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const startIndex = totalCount === 0 ? 0 : (currentPage - 1) * safePageSize;
+  const endIndex = Math.min(startIndex + safePageSize, totalCount);
+  const items = allItems.slice(startIndex, endIndex);
+
+  return {
+    items,
+    totalPages,
+    currentPage,
+    startIndex,
+    endIndex,
+    totalCount,
+  };
+}
+
 export function AddTorrentForm({
   initialMode = "file",
   initialQuery = "",
@@ -123,6 +218,11 @@ export function AddTorrentForm({
   const [selectedIndexerId, setSelectedIndexerId] = useState<
     number | undefined
   >(undefined);
+  const [searchCategory, setSearchCategory] = useState<string>("");
+  const [sortField, setSortField] = useState<SearchSortField>("peers");
+  const [sortDirection, setSortDirection] = useState<SearchSortDirection>("desc");
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25);
   const [downloadingGuid, setDownloadingGuid] = useState<string | null>(null);
 
   const { data: indexers } = useIndexers();
@@ -132,9 +232,38 @@ export function AddTorrentForm({
     {
       query: activeSearchTerm,
       indexerId: selectedIndexerId,
+      category: searchCategory || undefined,
     },
     mode === "search" && Boolean(activeSearchTerm.trim()),
   );
+
+  const sortedResults = useMemo(
+    () => sortReleases(searchResults.data, sortField, sortDirection),
+    [searchResults.data, sortField, sortDirection],
+  );
+
+  const pagination = useMemo(
+    () => paginateReleases(sortedResults, page, pageSize),
+    [sortedResults, page, pageSize],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeSearchTerm, selectedIndexerId, searchCategory]);
+
+  const handleSort = (field: SearchSortField) => {
+    if (
+      sortField === field ||
+      (field === "peers" && sortField === "seeders") ||
+      (field === "seeders" && sortField === "peers")
+    ) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDirection(field === "title" ? "asc" : "desc");
+    }
+    setPage(1);
+  };
 
   const downloadReleaseMutation = useDownloadIndexerRelease();
 
@@ -933,6 +1062,26 @@ export function AddTorrentForm({
                     ))}
                   </select>
                 )}
+                <select
+                  aria-label="Filter by Category"
+                  className="form-control"
+                  value={searchCategory}
+                  onChange={(e) => setSearchCategory(e.target.value)}
+                  style={{
+                    backgroundColor: "var(--bg-primary)",
+                    color: "inherit",
+                    border: "1px solid var(--border-light)",
+                    borderRadius: "6px",
+                    padding: "0.5rem 0.85rem",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  {TORZNAB_CATEGORIES.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="submit"
                   className="btn btn-primary"
@@ -1026,7 +1175,17 @@ export function AddTorrentForm({
                             zIndex: 2,
                           }}
                         >
-                          <th style={{ padding: "0.65rem 0.85rem" }}>Title</th>
+                          <th
+                            onClick={() => handleSort("title")}
+                            style={{
+                              padding: "0.65rem 0.85rem",
+                              cursor: "pointer",
+                              userSelect: "none",
+                            }}
+                            title="Sort by Title"
+                          >
+                            Title {sortField === "title" && (sortDirection === "asc" ? "▲" : "▼")}
+                          </th>
                           <th
                             style={{
                               padding: "0.65rem 0.85rem",
@@ -1036,28 +1195,40 @@ export function AddTorrentForm({
                             Indexer
                           </th>
                           <th
+                            onClick={() => handleSort("size")}
                             style={{
                               padding: "0.65rem 0.85rem",
                               width: "100px",
+                              cursor: "pointer",
+                              userSelect: "none",
                             }}
+                            title="Sort by Size"
                           >
-                            Size
+                            Size {sortField === "size" && (sortDirection === "asc" ? "▲" : "▼")}
                           </th>
                           <th
+                            onClick={() => handleSort("peers")}
                             style={{
                               padding: "0.65rem 0.85rem",
                               width: "95px",
+                              cursor: "pointer",
+                              userSelect: "none",
                             }}
+                            title="Sort by Peers / Seeders"
                           >
-                            Peers
+                            Peers {(sortField === "peers" || sortField === "seeders") && (sortDirection === "asc" ? "▲" : "▼")}
                           </th>
                           <th
+                            onClick={() => handleSort("date")}
                             style={{
                               padding: "0.65rem 0.85rem",
                               width: "100px",
+                              cursor: "pointer",
+                              userSelect: "none",
                             }}
+                            title="Sort by Date"
                           >
-                            Date
+                            Date {sortField === "date" && (sortDirection === "asc" ? "▲" : "▼")}
                           </th>
                           <th
                             style={{
@@ -1071,7 +1242,7 @@ export function AddTorrentForm({
                         </tr>
                       </thead>
                       <tbody>
-                        {searchResults.data?.map((rel) => {
+                        {pagination.items.map((rel) => {
                           const itemKey = rel.guid || rel.infoHash || rel.title;
                           const isDownloading = downloadingGuid === itemKey;
                           const isAlreadyInLibrary = isReleaseInLibrary(rel, existingHashes);
@@ -1239,6 +1410,118 @@ export function AddTorrentForm({
                     </table>
                   )}
               </div>
+
+              {/* Pagination Controls */}
+              {pagination.totalCount > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.65rem 0.25rem 0.25rem",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                    fontSize: "0.85rem",
+                    color: "var(--text-muted)",
+                    flexShrink: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                    }}
+                  >
+                    <span>
+                      Showing {pagination.startIndex + 1}–{pagination.endIndex}{" "}
+                      of {pagination.totalCount} results
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.8rem" }}>Per page:</span>
+                      <select
+                        aria-label="Items per page"
+                        className="form-control"
+                        value={pageSize}
+                        onChange={(e) => {
+                          setPageSize(Number(e.target.value));
+                          setPage(1);
+                        }}
+                        style={{
+                          padding: "0.2rem 0.4rem",
+                          fontSize: "0.8rem",
+                          backgroundColor: "var(--bg-primary)",
+                          color: "inherit",
+                          border: "1px solid var(--border-light)",
+                          borderRadius: "4px",
+                          width: "auto",
+                        }}
+                      >
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={pagination.currentPage <= 1}
+                      style={{
+                        padding: "0.25rem 0.65rem",
+                        fontSize: "0.8rem",
+                        borderRadius: "4px",
+                        cursor:
+                          pagination.currentPage <= 1 ? "default" : "pointer",
+                        opacity: pagination.currentPage <= 1 ? 0.5 : 1,
+                      }}
+                    >
+                      ◀ Previous
+                    </button>
+                    <span style={{ fontWeight: 500 }}>
+                      Page {pagination.currentPage} of {pagination.totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() =>
+                        setPage((p) => Math.min(pagination.totalPages, p + 1))
+                      }
+                      disabled={pagination.currentPage >= pagination.totalPages}
+                      style={{
+                        padding: "0.25rem 0.65rem",
+                        fontSize: "0.8rem",
+                        borderRadius: "4px",
+                        cursor:
+                          pagination.currentPage >= pagination.totalPages
+                            ? "default"
+                            : "pointer",
+                        opacity:
+                          pagination.currentPage >= pagination.totalPages
+                            ? 0.5
+                            : 1,
+                      }}
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
