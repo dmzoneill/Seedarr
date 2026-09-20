@@ -50,6 +50,30 @@ namespace NzbDrone.Core.Test.Network
         }
 
         [Test]
+        public void GetStatus_should_bypass_upnp_and_use_cached_ip_when_proxy_enabled()
+        {
+            _proxySettings.IsEnabled.Returns(true);
+            _upnpService.ExternalIp.Returns("203.0.113.10");
+            _externalIpService.CachedIp.Returns("198.51.100.99");
+
+            var result = _subject.GetStatus();
+
+            Assert.That(result.ExternalIp, Is.EqualTo("198.51.100.99"));
+        }
+
+        [Test]
+        public void GetStatus_should_bypass_upnp_and_use_cached_ip_when_force_proxy_active()
+        {
+            _configService.ForceProxy.Returns(true);
+            _upnpService.ExternalIp.Returns("203.0.113.10");
+            _externalIpService.CachedIp.Returns("198.51.100.99");
+
+            var result = _subject.GetStatus();
+
+            Assert.That(result.ExternalIp, Is.EqualTo("198.51.100.99"));
+        }
+
+        [Test]
         public void GetStatus_should_fall_back_to_cached_ip_when_upnp_empty()
         {
             _upnpService.ExternalIp.Returns(string.Empty);

@@ -6,7 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Network;
+using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Test.TestHelpers;
 
 namespace NzbDrone.Core.Test.Network;
@@ -395,5 +397,205 @@ public class ExternalIpServiceTest
 
         Assert.That(results[0], Is.EqualTo("93.184.216.34"));
         Assert.That(results[1], Is.EqualTo("93.184.216.34"));
+    }
+
+    [Test]
+    public async Task GetExternalIpAsync_when_vpn_fail_closed_active_aborts_without_network_call()
+    {
+        var configService = Substitute.For<IConfigService>();
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.IsFailClosedActive.Returns(true);
+
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "198.51.100.1");
+
+        var subject = new ExternalIpService(configService, vpnService, null, new HttpClient(handler));
+
+        var result = await subject.GetExternalIpAsync();
+
+        Assert.That(result, Is.EqualTo(string.Empty));
+        Assert.That(handler.Requests.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task GetExternalIpAsync_when_vpn_fail_closed_active_returns_existing_cached_ip_without_network_call()
+    {
+        var configService = Substitute.For<IConfigService>();
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.IsFailClosedActive.Returns(true);
+
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "198.51.100.1");
+
+        var subject = new ExternalIpService(configService, vpnService, null, new HttpClient(handler));
+        SetCache(subject, "203.0.113.50", DateTime.UtcNow.AddHours(-2));
+
+        var result = await subject.GetExternalIpAsync();
+
+        Assert.That(result, Is.EqualTo("203.0.113.50"));
+        Assert.That(handler.Requests.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task GetExternalIpAsync_when_bind_interface_specified_but_ip_cannot_be_resolved_aborts_to_prevent_leak()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BindInterface.Returns("tun0");
+
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.IsFailClosedActive.Returns(false);
+        vpnService.GetVpnInterfaceIpAddress(Arg.Any<System.Net.Sockets.AddressFamily>()).Returns((IPAddress)null);
+
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "198.51.100.1");
+
+        var subject = new ExternalIpService(configService, vpnService, null, new HttpClient(handler))
+        {
+            InterfaceIpResolver = _ => null
+        };
+
+        var result = await subject.GetExternalIpAsync();
+
+        Assert.That(result, Is.EqualTo(string.Empty));
+        Assert.That(handler.Requests.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task GetExternalIpAsync_when_force_proxy_active_but_proxy_not_enabled_aborts_to_prevent_leak()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.ForceProxy.Returns(true);
+
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(false);
+
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "198.51.100.1");
+
+        var subject = new ExternalIpService(configService, null, proxySettings, new HttpClient(handler));
+
+        var result = await subject.GetExternalIpAsync();
+
+        Assert.That(result, Is.EqualTo(string.Empty));
+        Assert.That(handler.Requests.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void CreateHandler_when_bind_interface_specified_and_resolves_ip_configures_connect_callback()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BindInterface.Returns("tun0");
+
+        var subject = new ExternalIpService(configService, null, null)
+        {
+            InterfaceIpResolver = iface => IPAddress.Parse("10.8.0.2")
+        };
+
+        var handler = subject.CreateHandler() as SocketsHttpHandler;
+
+        Assert.That(handler, Is.Not.Null);
+        Assert.That(handler.ConnectCallback, Is.Not.Null);
+    }
+
+    [Test]
+    public void CreateHandler_when_bind_interface_is_direct_ip_configures_connect_callback()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BindInterface.Returns("10.8.0.15");
+
+        var subject = new ExternalIpService(configService, null, null);
+
+        var handler = subject.CreateHandler() as SocketsHttpHandler;
+
+        Assert.That(handler, Is.Not.Null);
+        Assert.That(handler.ConnectCallback, Is.Not.Null);
+    }
+
+    [TestCase("Any")]
+    [TestCase("all")]
+    [TestCase("*")]
+    [TestCase("0.0.0.0")]
+    [TestCase("::")]
+    [TestCase("")]
+    [TestCase(null)]
+    public void CreateHandler_when_bind_interface_is_wildcard_or_empty_connect_callback_is_null(string bindIface)
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BindInterface.Returns(bindIface);
+
+        var subject = new ExternalIpService(configService, null, null);
+
+        var handler = subject.CreateHandler() as SocketsHttpHandler;
+
+        Assert.That(handler, Is.Not.Null);
+        Assert.That(handler.ConnectCallback, Is.Null);
+    }
+
+    [Test]
+    public void CreateBoundHandler_creates_sockets_http_handler_with_connect_callback()
+    {
+        var handler = ExternalIpService.CreateBoundHandler("tun0", IPAddress.Parse("10.8.0.2"));
+
+        Assert.That(handler, Is.Not.Null);
+        Assert.That(handler.ConnectCallback, Is.Not.Null);
+        Assert.That(handler.PooledConnectionLifetime, Is.EqualTo(TimeSpan.FromMinutes(10)));
+    }
+
+    [Test]
+    public void CreateHandler_when_proxy_enabled_returns_proxy_handler()
+    {
+        var configService = Substitute.For<IConfigService>();
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(true);
+
+        var expectedHandler = new SocketsHttpHandler();
+        proxySettings.CreateHandler().Returns(expectedHandler);
+
+        var subject = new ExternalIpService(configService, null, proxySettings);
+
+        var handler = subject.CreateHandler();
+
+        proxySettings.Received(1).CreateHandler();
+        Assert.That(handler, Is.SameAs(expectedHandler));
+    }
+
+    [Test]
+    public void CreateHandler_when_proxy_enabled_preempts_interface_binding()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BindInterface.Returns("tun0");
+
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(true);
+
+        var expectedHandler = new SocketsHttpHandler();
+        proxySettings.CreateHandler().Returns(expectedHandler);
+
+        var subject = new ExternalIpService(configService, null, proxySettings)
+        {
+            InterfaceIpResolver = _ => IPAddress.Parse("10.8.0.2")
+        };
+
+        var handler = subject.CreateHandler();
+
+        proxySettings.Received(1).CreateHandler();
+        Assert.That(handler, Is.SameAs(expectedHandler));
+    }
+
+    [Test]
+    public void ResolveBindIp_resolves_ip_from_vpn_kill_switch_service()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BindInterface.Returns("tun0");
+
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.IsFailClosedActive.Returns(false);
+        vpnService.GetVpnInterfaceIpAddress(System.Net.Sockets.AddressFamily.InterNetwork).Returns(IPAddress.Parse("10.8.0.44"));
+
+        var subject = new ExternalIpService(configService, vpnService, null);
+
+        var ip = subject.ResolveBindIp("tun0");
+
+        Assert.That(ip, Is.EqualTo(IPAddress.Parse("10.8.0.44")));
     }
 }
