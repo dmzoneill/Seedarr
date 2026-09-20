@@ -350,6 +350,93 @@ export function resetTablePageSize(): void {
   }
 }
 
+export const COL_ORDER_STORAGE = "seedarr_col_order_v1";
+export const COL_WIDTHS_STORAGE = "seedarr_col_widths_v1";
+
+export function loadColumnOrder(): ColumnKey[] {
+  try {
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem(COL_ORDER_STORAGE);
+      if (stored) {
+        const parsed = JSON.parse(stored) as ColumnKey[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const known = new Set(ALL_COLUMNS.map((c) => c.key));
+          const valid = parsed.filter((key) => known.has(key));
+          if (valid.length > 0) {
+            const inStored = new Set(valid);
+            for (const col of ALL_COLUMNS) {
+              if (!inStored.has(col.key)) {
+                valid.push(col.key);
+              }
+            }
+            return valid;
+          }
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return ALL_COLUMNS.map((c) => c.key);
+}
+
+export function saveColumnOrder(order: ColumnKey[]): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(COL_ORDER_STORAGE, JSON.stringify(order));
+    }
+  } catch (err) {
+    console.warn("Failed to save column order to localStorage:", err);
+  }
+}
+
+export function resetColumnOrder(): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(COL_ORDER_STORAGE);
+    }
+  } catch (err) {
+    console.warn("Failed to reset column order from localStorage:", err);
+  }
+}
+
+export function loadColumnWidths(): Record<string, number> {
+  try {
+    if (typeof localStorage !== "undefined") {
+      const stored = localStorage.getItem(COL_WIDTHS_STORAGE);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parsed as Record<string, number>;
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
+export function saveColumnWidths(widths: Record<string, number>): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(COL_WIDTHS_STORAGE, JSON.stringify(widths));
+    }
+  } catch (err) {
+    console.warn("Failed to save column widths to localStorage:", err);
+  }
+}
+
+export function resetColumnWidths(): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem(COL_WIDTHS_STORAGE);
+    }
+  } catch (err) {
+    console.warn("Failed to reset column widths from localStorage:", err);
+  }
+}
+
 export type PresetName = "default" | "compact" | "all";
 
 export interface ColumnPreferencesHook {
@@ -367,10 +454,18 @@ export interface ColumnPreferencesHook {
   sortAsc: boolean;
   setSort: (key: ColumnKey | null, asc?: boolean) => void;
   resetSort: () => void;
+  columnOrder: ColumnKey[];
+  setColumnOrder: (orderOrUpdater: ColumnKey[] | ((prev: ColumnKey[]) => ColumnKey[])) => void;
+  resetColumnOrder: () => void;
+  columnWidths: Record<string, number>;
+  setColumnWidths: (widthsOrUpdater: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  resetColumnWidths: () => void;
 }
 
 export function useColumnPreferences(): ColumnPreferencesHook {
   const [visibleColumns, setVisibleColumnsState] = useState<Set<string>>(loadVisibleColumns);
+  const [columnOrder, setColumnOrderState] = useState<ColumnKey[]>(loadColumnOrder);
+  const [columnWidths, setColumnWidthsState] = useState<Record<string, number>>(loadColumnWidths);
   const [sortState, setSortState] = useState<{
     sortKey: ColumnKey | null;
     sortAsc: boolean;
@@ -423,12 +518,57 @@ export function useColumnPreferences(): ColumnPreferencesHook {
     });
   }, []);
 
+  const setColumnOrder = useCallback(
+    (orderOrUpdater: ColumnKey[] | ((prev: ColumnKey[]) => ColumnKey[])) => {
+      setColumnOrderState((prev) => {
+        const next =
+          typeof orderOrUpdater === "function"
+            ? orderOrUpdater(prev)
+            : orderOrUpdater;
+        saveColumnOrder(next);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const resetColumnOrderCb = useCallback(() => {
+    const defaultOrder = ALL_COLUMNS.map((c) => c.key);
+    setColumnOrderState(defaultOrder);
+    resetColumnOrder();
+  }, []);
+
+  const setColumnWidths = useCallback(
+    (
+      widthsOrUpdater:
+        | Record<string, number>
+        | ((prev: Record<string, number>) => Record<string, number>),
+    ) => {
+      setColumnWidthsState((prev) => {
+        const next =
+          typeof widthsOrUpdater === "function"
+            ? widthsOrUpdater(prev)
+            : widthsOrUpdater;
+        saveColumnWidths(next);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const resetColumnWidthsCb = useCallback(() => {
+    setColumnWidthsState({});
+    resetColumnWidths();
+  }, []);
+
   const resetToDefaults = useCallback(() => {
     const defaults = new Set(DEFAULT_VISIBLE);
     setVisibleColumnsState(defaults);
     saveVisibleColumns(defaults);
     resetSort();
-  }, [resetSort]);
+    resetColumnOrderCb();
+    resetColumnWidthsCb();
+  }, [resetSort, resetColumnOrderCb, resetColumnWidthsCb]);
 
   const selectAll = useCallback(() => {
     const all = new Set(ALL_COLUMNS.map((c) => c.key));
@@ -500,6 +640,10 @@ export function useColumnPreferences(): ColumnPreferencesHook {
         }
       } else if (e.key === SORT_KEY_STORAGE || e.key === SORT_ASC_STORAGE) {
         setSortState(loadTableSortPreferences());
+      } else if (e.key === COL_ORDER_STORAGE) {
+        setColumnOrderState(loadColumnOrder());
+      } else if (e.key === COL_WIDTHS_STORAGE) {
+        setColumnWidthsState(loadColumnWidths());
       }
     }
     window.addEventListener("storage", handleStorage);
@@ -527,5 +671,11 @@ export function useColumnPreferences(): ColumnPreferencesHook {
     sortAsc: sortState.sortAsc,
     setSort,
     resetSort,
+    columnOrder,
+    setColumnOrder,
+    resetColumnOrder: resetColumnOrderCb,
+    columnWidths,
+    setColumnWidths,
+    resetColumnWidths: resetColumnWidthsCb,
   };
 }

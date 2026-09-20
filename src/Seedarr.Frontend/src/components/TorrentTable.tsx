@@ -41,6 +41,10 @@ import {
   loadTableSortPreferences,
   saveTableSortPreferences,
   resetTableSortPreferences,
+  loadColumnOrder,
+  saveColumnOrder,
+  loadColumnWidths,
+  saveColumnWidths,
   SORT_KEY_STORAGE,
   SORT_ASC_STORAGE,
   ColumnKey,
@@ -142,6 +146,10 @@ export interface TorrentTableProps {
   onToggleActive?: () => void;
   visibleColumns?: Set<string>;
   onToggleColumn?: (key: string) => void;
+  columnOrder?: ColumnKey[];
+  onColumnOrderChange?: (order: ColumnKey[]) => void;
+  columnWidths?: Record<string, number>;
+  onColumnWidthsChange?: (widths: Record<string, number>) => void;
   sortKey?: ColumnKey | null;
   sortAsc?: boolean;
   onSortChange?: (key: ColumnKey | null, asc: boolean) => void;
@@ -168,6 +176,10 @@ function TorrentTable({
   onToggleActive,
   visibleColumns: propVisibleColumns,
   onToggleColumn: propToggleColumn,
+  columnOrder: propColumnOrder,
+  onColumnOrderChange: propOnColumnOrderChange,
+  columnWidths: propColumnWidths,
+  onColumnWidthsChange: propOnColumnWidthsChange,
   sortKey: propSortKey,
   sortAsc: propSortAsc,
   onSortChange: propOnSortChange,
@@ -215,6 +227,80 @@ function TorrentTable({
   const [internalVisibleColumns, setInternalVisibleColumns] =
     useState<Set<string>>(loadVisibleColumns);
   const visibleColumns = propVisibleColumns ?? internalVisibleColumns;
+
+  const [internalColumnOrder, setInternalColumnOrder] =
+    useState<ColumnKey[]>(loadColumnOrder);
+  const [internalColumnWidths, setInternalColumnWidths] =
+    useState<Record<string, number>>(loadColumnWidths);
+
+  const columnOrder = propColumnOrder ?? internalColumnOrder;
+  const columnWidths = propColumnWidths ?? internalColumnWidths;
+
+  const updateColumnOrder = useCallback(
+    (next: ColumnKey[] | ((prev: ColumnKey[]) => ColumnKey[])) => {
+      if (propOnColumnOrderChange) {
+        const resolved = typeof next === "function" ? next(columnOrder) : next;
+        propOnColumnOrderChange(resolved);
+      } else {
+        setInternalColumnOrder((prev) => {
+          const resolved = typeof next === "function" ? next(prev) : next;
+          saveColumnOrder(resolved);
+          return resolved;
+        });
+      }
+    },
+    [propOnColumnOrderChange, columnOrder],
+  );
+
+  const updateColumnWidths = useCallback(
+    (
+      next:
+        | Record<string, number>
+        | ((prev: Record<string, number>) => Record<string, number>),
+    ) => {
+      if (propOnColumnWidthsChange) {
+        const resolved =
+          typeof next === "function" ? next(columnWidths) : next;
+        propOnColumnWidthsChange(resolved);
+      } else {
+        setInternalColumnWidths((prev) => {
+          const resolved = typeof next === "function" ? next(prev) : next;
+          saveColumnWidths(resolved);
+          return resolved;
+        });
+      }
+    },
+    [propOnColumnWidthsChange, columnWidths],
+  );
+
+  // Drag-to-reorder state
+  const dragColRef = useRef<ColumnKey | null>(null);
+  const dragOverColRef = useRef<ColumnKey | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<ColumnKey | null>(null);
+
+  // Column resize state
+  const resizeStateRef = useRef<{
+    key: string;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+  const resizeListenersRef = useRef<{
+    move: (e: MouseEvent) => void;
+    up: (e: MouseEvent) => void;
+  } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resizeListenersRef.current) {
+        document.removeEventListener(
+          "mousemove",
+          resizeListenersRef.current.move,
+        );
+        document.removeEventListener("mouseup", resizeListenersRef.current.up);
+        resizeListenersRef.current = null;
+      }
+    };
+  }, []);
 
   const { data: history } = useDownloadHistory();
   const { data: arrConnections } = useArrConnections();
@@ -592,11 +678,140 @@ function TorrentTable({
     propOnSortChange?.(nextKey, nextAsc);
   }
 
+  const colDefMap = useMemo(
+    () => new Map(ALL_COLUMNS.map((c) => [c.key, c])),
+    [],
+  );
   const columns = useMemo(() => {
-    const matched = ALL_COLUMNS.filter((col) => visibleColumns.has(col.key));
-    if (matched.length > 0) return matched;
-    return ALL_COLUMNS.filter((col) => DEFAULT_VISIBLE.has(col.key));
-  }, [visibleColumns]);
+    const ordered = columnOrder
+      .map((k) => colDefMap.get(k))
+      .filter(
+        (c): c is ColumnDef => c !== undefined && visibleColumns.has(c.key),
+      );
+    const inOrder = new Set(ordered.map((c) => c.key));
+    for (const c of ALL_COLUMNS) {
+      if (visibleColumns.has(c.key) && !inOrder.has(c.key)) ordered.push(c);
+    }
+    return ordered;
+  }, [columnOrder, visibleColumns, colDefMap]);
+
+  // --- Column drag-to-reorder ---
+  const handleColDragStart = useCallback((key: ColumnKey) => {
+    dragColRef.current = key;
+  }, []);
+
+  const handleColDragOver = useCallback(
+    (e: React.DragEvent, key: ColumnKey) => {
+      e.preventDefault();
+      dragOverColRef.current = key;
+      setDragOverKey(key);
+    },
+    [],
+  );
+
+  const handleColDrop = useCallback(
+    (e: React.DragEvent, targetKey: ColumnKey) => {
+      e.preventDefault();
+      const fromKey = dragColRef.current;
+      if (!fromKey || fromKey === targetKey) {
+        dragColRef.current = null;
+        dragOverColRef.current = null;
+        setDragOverKey(null);
+        return;
+      }
+
+      const visibleKeys = columns.map((c) => c.key);
+      const fromIdx = visibleKeys.indexOf(fromKey);
+      const toIdx = visibleKeys.indexOf(targetKey);
+      if (fromIdx === -1 || toIdx === -1) {
+        dragColRef.current = null;
+        dragOverColRef.current = null;
+        setDragOverKey(null);
+        return;
+      }
+
+      const newVisibleOrder = [...visibleKeys];
+      const [movedKey] = newVisibleOrder.splice(fromIdx, 1);
+      newVisibleOrder.splice(toIdx, 0, movedKey);
+
+      updateColumnOrder((prev) => {
+        const allKeys = ALL_COLUMNS.map((c) => c.key);
+        const fullBase = [...new Set([...prev, ...allKeys])];
+        const visibleSet = new Set(newVisibleOrder);
+        let visibleIdx = 0;
+        const next = fullBase.map((key) => {
+          if (visibleSet.has(key)) {
+            return newVisibleOrder[visibleIdx++];
+          }
+          return key;
+        });
+        saveColumnOrder(next);
+        return next;
+      });
+
+      dragColRef.current = null;
+      dragOverColRef.current = null;
+      setDragOverKey(null);
+    },
+    [columns, updateColumnOrder],
+  );
+
+  const handleColDragEnd = useCallback(() => {
+    dragColRef.current = null;
+    dragOverColRef.current = null;
+    setDragOverKey(null);
+  }, []);
+
+  // --- Column resize ---
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent, key: string, thEl: HTMLElement) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (resizeListenersRef.current) {
+        document.removeEventListener(
+          "mousemove",
+          resizeListenersRef.current.move,
+        );
+        document.removeEventListener("mouseup", resizeListenersRef.current.up);
+        resizeListenersRef.current = null;
+      }
+
+      const startWidth = thEl.getBoundingClientRect().width;
+      resizeStateRef.current = { key, startX: e.clientX, startWidth };
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!resizeStateRef.current) return;
+        const delta = ev.clientX - resizeStateRef.current.startX;
+        const newWidth = Math.max(
+          48,
+          resizeStateRef.current.startWidth + delta,
+        );
+        updateColumnWidths((prev) => ({
+          ...prev,
+          [resizeStateRef.current!.key]: newWidth,
+        }));
+      };
+
+      const onMouseUp = () => {
+        if (resizeStateRef.current) {
+          updateColumnWidths((prev) => {
+            saveColumnWidths(prev);
+            return prev;
+          });
+          resizeStateRef.current = null;
+        }
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        resizeListenersRef.current = null;
+      };
+
+      resizeListenersRef.current = { move: onMouseMove, up: onMouseUp };
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [updateColumnWidths],
+  );
 
   if (isLoading) {
     return (
@@ -606,7 +821,21 @@ function TorrentTable({
             <tr>
               <th className="torrent-table-th" style={{ width: 36 }} />
               {columns.map((c) => (
-                <th key={c.key} className="torrent-table-th">
+                <th
+                  key={c.key}
+                  className="torrent-table-th"
+                  style={{
+                    width: columnWidths[c.key]
+                      ? `${columnWidths[c.key]}px`
+                      : undefined,
+                    minWidth: columnWidths[c.key]
+                      ? `${columnWidths[c.key]}px`
+                      : undefined,
+                    maxWidth: columnWidths[c.key]
+                      ? `${columnWidths[c.key]}px`
+                      : undefined,
+                  }}
+                >
                   {t(
                     COLUMN_I18N_KEYS[c.key] || `torrents.table.${c.key}`,
                     undefined,
@@ -903,15 +1132,100 @@ function TorrentTable({
             {columns.map((col) => (
               <th
                 key={col.key}
+                draggable
+                onDragStart={() => handleColDragStart(col.key)}
+                onDragOver={(e) => handleColDragOver(e, col.key)}
+                onDrop={(e) => handleColDrop(e, col.key)}
+                onDragEnd={handleColDragEnd}
                 onClick={() => col.sortable && handleSort(col.key)}
                 className={`torrent-table-th${col.key === "#" ? " torrent-table-index" : ""}`}
+                style={{
+                  cursor: col.sortable ? "pointer" : "default",
+                  userSelect: "none",
+                  whiteSpace: "nowrap",
+                  position: "relative",
+                  width: columnWidths[col.key]
+                    ? `${columnWidths[col.key]}px`
+                    : undefined,
+                  minWidth: columnWidths[col.key]
+                    ? `${columnWidths[col.key]}px`
+                    : undefined,
+                  maxWidth: columnWidths[col.key]
+                    ? `${columnWidths[col.key]}px`
+                    : undefined,
+                  backgroundColor:
+                    dragOverKey === col.key
+                      ? "rgba(200, 168, 78, 0.12)"
+                      : undefined,
+                  borderLeft:
+                    dragOverKey === col.key
+                      ? "2px solid var(--accent, #ffd166)"
+                      : undefined,
+                  transition: "background-color 0.1s, border-color 0.1s",
+                }}
               >
-                {t(
-                  COLUMN_I18N_KEYS[col.key] || `torrents.table.${col.key}`,
-                  undefined,
-                  col.label,
-                )}
-                {sortKey === col.key && (sortAsc ? " ▲" : " ▼")}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    overflow: "hidden",
+                  }}
+                >
+                  <span
+                    title={t(
+                      "torrents.table.dragToReorder",
+                      undefined,
+                      "Drag to reorder",
+                    )}
+                    style={{
+                      cursor: "grab",
+                      opacity: 0.35,
+                      fontSize: "0.7rem",
+                      flexShrink: 0,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ⠿
+                  </span>
+                  <span
+                    style={{ overflow: "hidden", textOverflow: "ellipsis" }}
+                  >
+                    {t(
+                      COLUMN_I18N_KEYS[col.key] || `torrents.table.${col.key}`,
+                      undefined,
+                      col.label,
+                    )}
+                  </span>
+                  {sortKey === col.key && (
+                    <span style={{ flexShrink: 0 }}>
+                      {sortAsc ? " ▲" : " ▼"}
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  onMouseDown={(e) => {
+                    const th = e.currentTarget.parentElement as HTMLElement;
+                    handleResizeMouseDown(e, col.key, th);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  title={t(
+                    "torrents.table.dragToResize",
+                    undefined,
+                    "Drag to resize",
+                  )}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    right: 0,
+                    width: "5px",
+                    height: "100%",
+                    cursor: "col-resize",
+                    zIndex: 1,
+                    userSelect: "none",
+                  }}
+                />
               </th>
             ))}
           </tr>
