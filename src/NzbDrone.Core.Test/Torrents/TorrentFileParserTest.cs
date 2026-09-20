@@ -1725,4 +1725,236 @@ public class TorrentFileParserTest
         Assert.Throws<ArgumentException>(() =>
             TorrentFileParser.ResolveWebSeedUrl("https://webseed.example.com/downloads/", "Root", "../etc/passwd"));
     }
+
+    [Test]
+    public void Parse_should_throw_when_multi_file_path_segment_contains_directory_traversal()
+    {
+        var testCases = new[]
+        {
+            new[] { "..", "secret.txt" },
+            new[] { "folder", "..", "secret.txt" },
+            new[] { "../secret.txt" },
+            new[] { @"folder\..\secret.txt" },
+            new[] { "dir", "..", "file.txt" }
+        };
+
+        foreach (var segments in testCases)
+        {
+            var pieces = new byte[20];
+            new Random(42).NextBytes(pieces);
+
+            var pathList = new BList();
+            foreach (var seg in segments)
+            {
+                pathList.Add(new BString(seg));
+            }
+
+            var files = new BList
+            {
+                new BDictionary
+                {
+                    { "length", new BNumber(1000) },
+                    { "path", pathList }
+                }
+            };
+
+            var info = new BDictionary
+            {
+                { "name", new BString("my-torrent") },
+                { "piece length", new BNumber(16384) },
+                { "pieces", new BString(pieces) },
+                { "files", files }
+            };
+
+            var torrentDict = new BDictionary { { "info", info } };
+            using var stream = CreateTorrentStream(torrentDict);
+
+            var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+            Assert.That(ex.Message, Does.Contain("Path traversal attempt detected"));
+        }
+    }
+
+    [TestCase("../evil")]
+    [TestCase(@"..\evil")]
+    [TestCase("evil/..")]
+    public void Parse_should_throw_when_torrent_root_dir_contains_directory_traversal(string rootName)
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1000) },
+                { "path", new BList { new BString("file.txt") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString(rootName) },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "files", files }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("Path traversal attempt detected"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_file_tree_contains_directory_traversal()
+    {
+        var leaf = new BDictionary
+        {
+            { "length", new BNumber(1024) },
+            { "pieces root", new BString(new byte[32]) }
+        };
+        var inner = new BDictionary
+        {
+            { "", leaf }
+        };
+        var fileTree = new BDictionary
+        {
+            { "..", inner }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("v2-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "meta version", new BNumber(2) },
+            { "file tree", fileTree }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("Path traversal attempt detected"));
+    }
+
+    [Test]
+    public void Parse_should_sanitize_multi_file_paths_removing_dot_and_slashes()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1000) },
+                { "path", new BList { new BString("."), new BString("/sub/"), new BString("file.txt") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("clean-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "files", files }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("clean-torrent/sub/file.txt"));
+    }
+
+    [TestCase(1)]
+    [TestCase(19)]
+    [TestCase(21)]
+    [TestCase(25)]
+    [TestCase(39)]
+    [TestCase(41)]
+    public void Parse_should_throw_when_pieces_length_is_not_multiple_of_20(int pieceBytesLength)
+    {
+        var pieces = new byte[pieceBytesLength];
+        new Random(42).NextBytes(pieces);
+
+        var info = new BDictionary
+        {
+            { "name", new BString("test") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "length", new BNumber(1024) }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("multiple of 20 bytes"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_pieces_byte_array_is_empty()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("test") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(Array.Empty<byte>()) },
+            { "length", new BNumber(1024) }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("Piece count 0 exceeds maximum permitted limit"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_piece_length_overflows_int_max()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var info = new BDictionary
+        {
+            { "name", new BString("test") },
+            { "piece length", new BNumber((long)int.MaxValue + 1) },
+            { "pieces", new BString(pieces) },
+            { "length", new BNumber(1024) }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("Invalid piece length"));
+    }
+
+    [TestCase(-1L)]
+    [TestCase(-16384L)]
+    [TestCase(0L)]
+    public void Parse_should_throw_when_piece_length_is_non_positive(long invalidPieceLength)
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var info = new BDictionary
+        {
+            { "name", new BString("test") },
+            { "piece length", new BNumber(invalidPieceLength) },
+            { "pieces", new BString(pieces) },
+            { "length", new BNumber(1024) }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("Invalid piece length"));
+    }
 }
