@@ -822,8 +822,8 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                     }
                     else
                     {
-                        t.SourcePath = remappedLocation;
                         t.SavePath = remappedLocation;
+                        t.SourcePath = remappedLocation;
                         _torrentService.Update(t);
                     }
                 }
