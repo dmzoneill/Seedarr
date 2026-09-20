@@ -494,15 +494,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     [HttpGet("/api/v1/torrents/{id:int}/export")]
     public ActionResult ExportTorrent(int id)
     {
-        Torrent torrent = null;
-        try
-        {
-            torrent = _torrentService.Get(id);
-        }
-        catch (ModelNotFoundException)
-        {
-            return NotFound();
-        }
+        var torrent = _torrentService.Get(id);
 
         if (torrent == null)
         {
