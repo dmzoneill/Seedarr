@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net.Sockets;
 using System.Security;
 using System.Security.Cryptography;
 using System.Text;
@@ -87,7 +88,7 @@ public class MseHandshake
         // B's stream contains PadB (unknown length) followed by the encrypted response.
         // Synchronize by computing what ENCRYPT(VC) looks like and scanning for it.
         var vcMarker = ComputeEncryptedVcMarker(decKey);
-        ScanForMarker(stream, vcMarker);
+        stream = ScanForMarker(stream, vcMarker);
 
         // Found the VC marker. The real decryption cipher has already been initialized
         // and had 1024 bytes discarded. Advance it past the 8 VC bytes we just found.
@@ -123,6 +124,18 @@ public class MseHandshake
         return WrapStream(stream);
     }
 
+    public Stream NegotiateIncoming(
+        Stream stream,
+        Func<byte[], Torrent> infoHashValidator)
+    {
+        if (infoHashValidator == null)
+        {
+            throw new ArgumentNullException(nameof(infoHashValidator));
+        }
+
+        return NegotiateIncoming(stream, skeyHash => infoHashValidator(skeyHash) != null);
+    }
+
     public Stream NegotiateIncoming(Stream stream, Func<byte[], bool> infoHashValidator)
     {
         _keyDerivation = KeyPool?.Rent() ?? new MseKeyDerivation();
@@ -139,25 +152,26 @@ public class MseHandshake
         stream.Flush();
 
         // Step 3: B <- A: HASH('req1', S), HASH('req2', SKEY) XOR HASH('req3', S), ENCRYPT(...)
-        // Synchronize by scanning for HASH('req1', S) to skip past PadA
+        // Synchronize by scanning for HASH('req1', S) to skip past PadA, with false positive recovery
         var req1Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req1Prefix);
-        ScanForMarker(stream, req1Hash);
-
-        // Read the obfuscated SKEY hash (20 bytes)
-        var obfuscatedHash = ReadExact(stream, 20);
-
-        // Recover SKEY hash: obfuscatedHash XOR HASH('req3', S)
         var req3Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req3Prefix);
-        var skeyHash = new byte[20];
-        for (var i = 0; i < 20; i++)
-        {
-            skeyHash[i] = (byte)(obfuscatedHash[i] ^ req3Hash[i]);
-        }
 
-        if (!infoHashValidator(skeyHash))
-        {
-            throw new InvalidOperationException("Unknown info hash in MSE/PE handshake");
-        }
+        var (synchronizedStream, _) = ScanForMarker(
+            stream,
+            req1Hash,
+            20,
+            payload =>
+            {
+                var skeyHash = new byte[20];
+                for (var i = 0; i < 20; i++)
+                {
+                    skeyHash[i] = (byte)(payload[i] ^ req3Hash[i]);
+                }
+
+                return infoHashValidator(skeyHash);
+            });
+
+        stream = synchronizedStream;
 
         // Initialize RC4 ciphers (reversed roles for incoming side)
         var decKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyAPrefix);
@@ -346,25 +360,27 @@ public class MseHandshake
         await stream.FlushAsync(cancellationToken);
 
         // Step 3: B <- A: HASH('req1', S), HASH('req2', SKEY) XOR HASH('req3', S), ENCRYPT(...)
-        // Synchronize by scanning for HASH('req1', S) to skip past PadA
+        // Synchronize by scanning for HASH('req1', S) to skip past PadA, with false positive recovery
         var req1Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req1Prefix);
-        stream = await ScanForMarkerAsync(stream, req1Hash, cancellationToken);
-
-        // Read the obfuscated SKEY hash (20 bytes)
-        var obfuscatedHash = await ReadExactAsync(stream, 20, cancellationToken);
-
-        // Recover SKEY hash: obfuscatedHash XOR HASH('req3', S)
         var req3Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req3Prefix);
-        var skeyHash = new byte[20];
-        for (var i = 0; i < 20; i++)
-        {
-            skeyHash[i] = (byte)(obfuscatedHash[i] ^ req3Hash[i]);
-        }
 
-        if (!infoHashValidator(skeyHash))
-        {
-            throw new InvalidOperationException("Unknown info hash in MSE/PE handshake");
-        }
+        var (synchronizedStream, _) = await ScanForMarkerAsync(
+            stream,
+            req1Hash,
+            20,
+            payload =>
+            {
+                var skeyHash = new byte[20];
+                for (var i = 0; i < 20; i++)
+                {
+                    skeyHash[i] = (byte)(payload[i] ^ req3Hash[i]);
+                }
+
+                return infoHashValidator(skeyHash);
+            },
+            cancellationToken);
+
+        stream = synchronizedStream;
 
         // Initialize RC4 ciphers (reversed roles for incoming side)
         var decKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyAPrefix);
@@ -622,87 +638,281 @@ public class MseHandshake
         return vc;
     }
 
-    private static void ScanForMarker(Stream stream, byte[] marker)
+    private static Stream ScanForMarker(Stream stream, byte[] marker)
+    {
+        return ScanForMarker(stream, marker, 0, null).Stream;
+    }
+
+    private static (Stream Stream, byte[] Payload) ScanForMarker(
+        Stream stream,
+        byte[] marker,
+        int payloadLength,
+        Func<byte[], bool> payloadValidator)
     {
         var maxSearch = DhKeyLength + MaxPadLength + marker.Length;
-        var window = new byte[marker.Length];
-        var filled = 0;
+        var readBuffer = new byte[Math.Max(1024, maxSearch + payloadLength)];
+        var totalRead = 0;
+        var scanOffset = 0;
+        var anyCandidateTested = false;
+        const int chunkSize = 512;
 
-        for (var i = 0; i < maxSearch; i++)
+        while (true)
         {
-            var b = stream.ReadByte();
-            if (b == -1)
+            var needed = scanOffset + marker.Length + payloadLength;
+            while (totalRead < needed)
             {
-                throw new InvalidOperationException("Stream ended while searching for MSE/PE sync marker");
+                if (totalRead >= maxSearch + payloadLength)
+                {
+                    break;
+                }
+
+                if (anyCandidateTested && !ShouldReadMore(stream, anyCandidateTested))
+                {
+                    break;
+                }
+
+                if (totalRead + chunkSize > readBuffer.Length)
+                {
+                    Array.Resize(ref readBuffer, Math.Max(readBuffer.Length * 2, totalRead + chunkSize));
+                }
+
+                var toRead = Math.Min(chunkSize, readBuffer.Length - totalRead);
+                var read = stream.Read(readBuffer, totalRead, toRead);
+                if (read == 0)
+                {
+                    throw new InvalidOperationException("Stream ended while searching for MSE/PE sync marker");
+                }
+
+                totalRead += read;
             }
 
-            if (filled < marker.Length)
+            if (totalRead < needed)
             {
-                window[filled++] = (byte)b;
+                if (anyCandidateTested)
+                {
+                    throw new InvalidOperationException("Unknown info hash in MSE/PE handshake");
+                }
+
+                throw new InvalidOperationException("MSE/PE sync marker not found within search limit");
+            }
+
+            if (readBuffer.AsSpan(scanOffset, marker.Length).SequenceEqual(marker))
+            {
+                if (payloadValidator != null && payloadLength > 0)
+                {
+                    anyCandidateTested = true;
+                    var candidatePayload = new byte[payloadLength];
+                    Array.Copy(readBuffer, scanOffset + marker.Length, candidatePayload, 0, payloadLength);
+
+                    if (payloadValidator(candidatePayload))
+                    {
+                        var consumed = scanOffset + marker.Length + payloadLength;
+                        var remaining = totalRead - consumed;
+                        var resultStream = stream;
+                        if (remaining > 0)
+                        {
+                            var prefix = new byte[remaining];
+                            Array.Copy(readBuffer, consumed, prefix, 0, remaining);
+                            resultStream = new PrefixedStream(prefix, stream, ownsStream: false);
+                        }
+
+                        return (resultStream, candidatePayload);
+                    }
+
+                    scanOffset++;
+                }
+                else
+                {
+                    var consumed = scanOffset + marker.Length;
+                    var remaining = totalRead - consumed;
+                    var resultStream = stream;
+                    if (remaining > 0)
+                    {
+                        var prefix = new byte[remaining];
+                        Array.Copy(readBuffer, consumed, prefix, 0, remaining);
+                        resultStream = new PrefixedStream(prefix, stream, ownsStream: false);
+                    }
+
+                    return (resultStream, Array.Empty<byte>());
+                }
             }
             else
             {
-                Array.Copy(window, 1, window, 0, marker.Length - 1);
-                window[marker.Length - 1] = (byte)b;
+                scanOffset++;
             }
 
-            if (filled == marker.Length && BytesEqual(window, marker))
+            if (scanOffset >= maxSearch)
             {
-                return;
+                if (anyCandidateTested)
+                {
+                    throw new InvalidOperationException("Unknown info hash in MSE/PE handshake");
+                }
+
+                throw new InvalidOperationException("MSE/PE sync marker not found within search limit");
             }
         }
-
-        throw new InvalidOperationException("MSE/PE sync marker not found within search limit");
     }
 
     private static async ValueTask<Stream> ScanForMarkerAsync(Stream stream, byte[] marker, CancellationToken cancellationToken)
     {
-        var maxSearch = DhKeyLength + MaxPadLength + marker.Length;
-        var window = new byte[marker.Length];
-        var filled = 0;
-        var bytesInspected = 0;
-        var buffer = new byte[Math.Min(256, maxSearch)];
+        var (s, _) = await ScanForMarkerAsync(stream, marker, 0, null, cancellationToken).ConfigureAwait(false);
+        return s;
+    }
 
-        while (bytesInspected < maxSearch)
+    private static async ValueTask<(Stream Stream, byte[] Payload)> ScanForMarkerAsync(
+        Stream stream,
+        byte[] marker,
+        int payloadLength,
+        Func<byte[], bool> payloadValidator,
+        CancellationToken cancellationToken)
+    {
+        var maxSearch = DhKeyLength + MaxPadLength + marker.Length;
+        var readBuffer = new byte[Math.Max(1024, maxSearch + payloadLength)];
+        var totalRead = 0;
+        var scanOffset = 0;
+        var anyCandidateTested = false;
+        const int chunkSize = 512;
+
+        while (true)
         {
-            var toRead = Math.Min(buffer.Length, maxSearch - bytesInspected);
-            var read = await stream.ReadAsync(buffer.AsMemory(0, toRead), cancellationToken);
-            if (read == 0)
+            var needed = scanOffset + marker.Length + payloadLength;
+            while (totalRead < needed)
             {
-                throw new InvalidOperationException("Stream ended while searching for MSE/PE sync marker");
+                if (totalRead >= maxSearch + payloadLength)
+                {
+                    break;
+                }
+
+                if (anyCandidateTested && !ShouldReadMore(stream, anyCandidateTested))
+                {
+                    break;
+                }
+
+                if (totalRead + chunkSize > readBuffer.Length)
+                {
+                    Array.Resize(ref readBuffer, Math.Max(readBuffer.Length * 2, totalRead + chunkSize));
+                }
+
+                var toRead = Math.Min(chunkSize, readBuffer.Length - totalRead);
+                var read = await stream.ReadAsync(readBuffer.AsMemory(totalRead, toRead), cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    throw new InvalidOperationException("Stream ended while searching for MSE/PE sync marker");
+                }
+
+                totalRead += read;
             }
 
-            for (var i = 0; i < read; i++)
+            if (totalRead < needed)
             {
-                bytesInspected++;
-                var b = buffer[i];
-
-                if (filled < marker.Length)
+                if (anyCandidateTested)
                 {
-                    window[filled++] = b;
+                    throw new InvalidOperationException("Unknown info hash in MSE/PE handshake");
+                }
+
+                throw new InvalidOperationException("MSE/PE sync marker not found within search limit");
+            }
+
+            if (readBuffer.AsSpan(scanOffset, marker.Length).SequenceEqual(marker))
+            {
+                if (payloadValidator != null && payloadLength > 0)
+                {
+                    anyCandidateTested = true;
+                    var candidatePayload = new byte[payloadLength];
+                    Array.Copy(readBuffer, scanOffset + marker.Length, candidatePayload, 0, payloadLength);
+
+                    if (payloadValidator(candidatePayload))
+                    {
+                        var consumed = scanOffset + marker.Length + payloadLength;
+                        var remaining = totalRead - consumed;
+                        var resultStream = stream;
+                        if (remaining > 0)
+                        {
+                            var prefix = new byte[remaining];
+                            Array.Copy(readBuffer, consumed, prefix, 0, remaining);
+                            resultStream = new PrefixedStream(prefix, stream, ownsStream: false);
+                        }
+
+                        return (resultStream, candidatePayload);
+                    }
+
+                    scanOffset++;
                 }
                 else
                 {
-                    Array.Copy(window, 1, window, 0, marker.Length - 1);
-                    window[marker.Length - 1] = b;
-                }
-
-                if (filled == marker.Length && BytesEqual(window, marker))
-                {
-                    var remainingInBuffer = read - (i + 1);
-                    if (remainingInBuffer > 0)
+                    var consumed = scanOffset + marker.Length;
+                    var remaining = totalRead - consumed;
+                    var resultStream = stream;
+                    if (remaining > 0)
                     {
-                        var remaining = new byte[remainingInBuffer];
-                        Array.Copy(buffer, i + 1, remaining, 0, remainingInBuffer);
-                        return new PrefixedStream(remaining, stream, ownsStream: false);
+                        var prefix = new byte[remaining];
+                        Array.Copy(readBuffer, consumed, prefix, 0, remaining);
+                        resultStream = new PrefixedStream(prefix, stream, ownsStream: false);
                     }
 
-                    return stream;
+                    return (resultStream, Array.Empty<byte>());
                 }
             }
+            else
+            {
+                scanOffset++;
+            }
+
+            if (scanOffset >= maxSearch)
+            {
+                if (anyCandidateTested)
+                {
+                    throw new InvalidOperationException("Unknown info hash in MSE/PE handshake");
+                }
+
+                throw new InvalidOperationException("MSE/PE sync marker not found within search limit");
+            }
+        }
+    }
+
+    private static bool ShouldReadMore(Stream stream, bool anyCandidateTested)
+    {
+        if (!anyCandidateTested)
+        {
+            return true;
         }
 
-        throw new InvalidOperationException("MSE/PE sync marker not found within search limit");
+        if (stream.CanTimeout && stream.ReadTimeout > 0)
+        {
+            return true;
+        }
+
+        return HasPendingData(stream);
+    }
+
+    private static bool HasPendingData(Stream stream)
+    {
+        if (stream == null)
+        {
+            return false;
+        }
+
+        if (stream is NetworkStream ns)
+        {
+            return ns.DataAvailable;
+        }
+
+        if (stream is PrefixedStream ps)
+        {
+            return ps.DataAvailable;
+        }
+
+        if (stream is EncryptedStream es)
+        {
+            return es.DataAvailable;
+        }
+
+        if (stream.CanSeek)
+        {
+            return stream.Position < stream.Length;
+        }
+
+        return false;
     }
 
     private static bool BytesEqual(byte[] a, byte[] b)

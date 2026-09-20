@@ -862,6 +862,207 @@ public class MseHandshakeTests
     /// Combines a separate readable stream and a writable stream into one
     /// bidirectional stream, simulating a socket connection.
     /// </summary>
+    [Test]
+    public void NegotiateIncoming_should_synchronize_with_fragmented_stream()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var fragmentedSideB = new FragmentedStream(sideB, maxChunk: 5);
+
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        Stream outStream = null;
+        Stream inStream = null;
+
+        var taskA = Task.Run(() => outStream = outgoing.NegotiateOutgoing(sideA));
+        var taskB = Task.Run(() => inStream = incoming.NegotiateIncoming(fragmentedSideB, ValidateInfoHash));
+
+        Assert.That(Task.WhenAll(taskA, taskB).Wait(TimeSpan.FromSeconds(15)), Is.True, "Handshake timed out");
+        Assert.That(outgoing.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
+        Assert.That(incoming.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
+
+        var msg = Encoding.ASCII.GetBytes("ping");
+        outStream.Write(msg, 0, msg.Length);
+        outStream.Flush();
+
+        var buf = new byte[msg.Length];
+        var read = inStream.Read(buf, 0, buf.Length);
+        Assert.That(read, Is.EqualTo(msg.Length));
+        Assert.That(buf, Is.EqualTo(msg));
+    }
+
+    [Test]
+    public void NegotiateIncoming_should_recover_from_false_positive_marker_in_PadA()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var clientKeyDerivation = new MseKeyDerivation();
+        var ya = clientKeyDerivation.GetPublicKeyBytes();
+
+        Stream inStream = null;
+        var taskIncoming = Task.Run(() => inStream = incoming.NegotiateIncoming(sideB, ValidateInfoHash));
+
+        // Step 1: Send Ya
+        sideA.Write(ya, 0, ya.Length);
+        sideA.Flush();
+
+        // Step 2: Read Yb (96 bytes)
+        var yb = new byte[96];
+        var offset = 0;
+        while (offset < 96)
+        {
+            var r = sideA.Read(yb, offset, 96 - offset);
+            Assert.That(r, Is.GreaterThan(0));
+            offset += r;
+        }
+
+        var sharedSecret = clientKeyDerivation.ComputeSharedSecret(yb);
+        var req1Hash = MseKeyDerivation.DeriveKey(sharedSecret, Encoding.ASCII.GetBytes("req1"));
+        var req2Hash = MseKeyDerivation.DeriveKey(TestInfoHash, Encoding.ASCII.GetBytes("req2"));
+        var req3Hash = MseKeyDerivation.DeriveKey(sharedSecret, Encoding.ASCII.GetBytes("req3"));
+
+        var realObfuscatedHash = new byte[20];
+        for (var i = 0; i < 20; i++)
+        {
+            realObfuscatedHash[i] = (byte)(req2Hash[i] ^ req3Hash[i]);
+        }
+
+        // Construct payload with false positive marker in PadA
+        using var step3 = new MemoryStream();
+
+        // Fake marker (20 bytes req1Hash) + fake SKEY hash (20 bytes that fail ValidateInfoHash)
+        step3.Write(req1Hash, 0, req1Hash.Length);
+        var fakeSkey = new byte[20];
+        fakeSkey[0] = 0xFF;
+        step3.Write(fakeSkey, 0, fakeSkey.Length);
+
+        // Some extra padding bytes
+        var extraPad = new byte[] { 0x11, 0x22, 0x33, 0x44 };
+        step3.Write(extraPad, 0, extraPad.Length);
+
+        // Real marker + real obfuscated hash
+        step3.Write(req1Hash, 0, req1Hash.Length);
+        step3.Write(realObfuscatedHash, 0, realObfuscatedHash.Length);
+
+        // Encrypted payload: VC (8 zeros) + crypto_provide (4 bytes = 0x02) + len(PadC) (2 bytes = 0) + len(IA) (2 bytes = 0)
+        var encKey = MseKeyDerivation.DeriveKey(sharedSecret, Encoding.ASCII.GetBytes("keyA"));
+        var clientCipher = new Rc4StreamCipher(encKey);
+
+        var payload = new byte[8 + 4 + 2 + 2];
+        payload[11] = 0x02; // crypto_provide = Rc4 (big-endian)
+        clientCipher.ProcessInPlace(payload, 0, payload.Length);
+        step3.Write(payload, 0, payload.Length);
+
+        var step3Bytes = step3.ToArray();
+        sideA.Write(step3Bytes, 0, step3Bytes.Length);
+        sideA.Flush();
+
+        Assert.That(taskIncoming.Wait(TimeSpan.FromSeconds(15)), Is.True, "Handshake timed out on false positive recovery");
+        Assert.That(incoming.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
+        Assert.That(inStream, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task NegotiateIncomingAsync_should_recover_from_false_positive_marker_in_PadA()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var clientKeyDerivation = new MseKeyDerivation();
+        var ya = clientKeyDerivation.GetPublicKeyBytes();
+
+        var taskIncoming = incoming.NegotiateIncomingAsync(sideB, ValidateInfoHash).AsTask();
+
+        // Step 1: Send Ya
+        await sideA.WriteAsync(ya.AsMemory());
+        await sideA.FlushAsync();
+
+        // Step 2: Read Yb (96 bytes)
+        var yb = new byte[96];
+        var offset = 0;
+        while (offset < 96)
+        {
+            var r = await sideA.ReadAsync(yb.AsMemory(offset, 96 - offset));
+            Assert.That(r, Is.GreaterThan(0));
+            offset += r;
+        }
+
+        var sharedSecret = clientKeyDerivation.ComputeSharedSecret(yb);
+        var req1Hash = MseKeyDerivation.DeriveKey(sharedSecret, Encoding.ASCII.GetBytes("req1"));
+        var req2Hash = MseKeyDerivation.DeriveKey(TestInfoHash, Encoding.ASCII.GetBytes("req2"));
+        var req3Hash = MseKeyDerivation.DeriveKey(sharedSecret, Encoding.ASCII.GetBytes("req3"));
+
+        var realObfuscatedHash = new byte[20];
+        for (var i = 0; i < 20; i++)
+        {
+            realObfuscatedHash[i] = (byte)(req2Hash[i] ^ req3Hash[i]);
+        }
+
+        using var step3 = new MemoryStream();
+        await step3.WriteAsync(req1Hash.AsMemory());
+        var fakeSkey = new byte[20];
+        fakeSkey[0] = 0xAA;
+        await step3.WriteAsync(fakeSkey.AsMemory());
+
+        var extraPad = new byte[] { 0x55, 0x66, 0x77 };
+        await step3.WriteAsync(extraPad.AsMemory());
+
+        await step3.WriteAsync(req1Hash.AsMemory());
+        await step3.WriteAsync(realObfuscatedHash.AsMemory());
+
+        var encKey = MseKeyDerivation.DeriveKey(sharedSecret, Encoding.ASCII.GetBytes("keyA"));
+        var clientCipher = new Rc4StreamCipher(encKey);
+
+        var payload = new byte[8 + 4 + 2 + 2];
+        payload[11] = 0x02;
+        clientCipher.ProcessInPlace(payload, 0, payload.Length);
+        await step3.WriteAsync(payload.AsMemory());
+
+        var step3Bytes = step3.ToArray();
+        await sideA.WriteAsync(step3Bytes.AsMemory());
+        await sideA.FlushAsync();
+
+        var inStream = await taskIncoming;
+        Assert.That(incoming.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
+        Assert.That(inStream, Is.Not.Null);
+    }
+
+    private sealed class FragmentedStream : Stream
+    {
+        private readonly Stream _inner;
+        private readonly int _maxChunk;
+
+        public FragmentedStream(Stream inner, int maxChunk = 7)
+        {
+            _inner = inner;
+            _maxChunk = maxChunk;
+        }
+
+        public override bool CanRead => _inner.CanRead;
+        public override bool CanSeek => _inner.CanSeek;
+        public override bool CanWrite => _inner.CanWrite;
+        public override long Length => _inner.Length;
+        public override long Position { get => _inner.Position; set => _inner.Position = value; }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            _inner.Read(buffer, offset, Math.Min(count, _maxChunk));
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            _inner.ReadAsync(buffer[..Math.Min(buffer.Length, _maxChunk)], cancellationToken);
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            _inner.Write(buffer, offset, count);
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            _inner.WriteAsync(buffer, cancellationToken);
+
+        public override void Flush() => _inner.Flush();
+        public override Task FlushAsync(CancellationToken cancellationToken) => _inner.FlushAsync(cancellationToken);
+        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+        public override void SetLength(long value) => _inner.SetLength(value);
+    }
+
     private sealed class DuplexStream : Stream
     {
         private readonly Stream _reader;

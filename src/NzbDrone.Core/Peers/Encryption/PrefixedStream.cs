@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -28,6 +29,10 @@ public class PrefixedStream : Stream
     public override bool CanRead => _inner.CanRead;
     public override bool CanSeek => _inner.CanSeek;
     public override bool CanWrite => _inner.CanWrite;
+
+    public bool DataAvailable => (_prefix != null && _prefixOffset < _prefix.Length) ||
+        (_inner is NetworkStream ns && ns.DataAvailable) ||
+        (_inner is PrefixedStream ps && ps.DataAvailable);
 
     public override long Length => CanSeek
         ? (_inner.Length + Math.Max(0, _prefix.Length - _prefixOffset))

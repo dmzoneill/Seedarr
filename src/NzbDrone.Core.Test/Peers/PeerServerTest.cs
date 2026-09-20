@@ -153,12 +153,23 @@ public class PeerServerTest
         method.Invoke(null, new object[] { connection, payload });
     }
 
-    private bool InvokeValidateInfoHash(byte[] skeyHash)
+    private bool InvokeValidateInfoHash(byte[] skeyHash, PeerConnection connection = null)
     {
         var method = typeof(PeerServer).GetMethod(
             "ValidateInfoHash",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        return (bool)method.Invoke(_server, new object[] { skeyHash });
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(byte[]), typeof(PeerConnection) });
+
+        if (method != null)
+        {
+            return (bool)method.Invoke(_server, new object[] { skeyHash, connection });
+        }
+
+        var singleParam = typeof(PeerServer).GetMethod(
+            "ValidateInfoHash",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(byte[]) });
+        return (bool)singleParam.Invoke(_server, new object[] { skeyHash });
     }
 
     private ConcurrentDictionary<string, int> GetConnectionsPerIp(PeerServer server = null)
@@ -722,6 +733,32 @@ public class PeerServerTest
 
         Assert.That(result, Is.True);
         _mseSkeyRegistry.Received(1).TryMatchTorrent(skeyHash, out Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ValidateInfoHash_should_assign_matched_infohash_and_torrent_to_connection()
+    {
+        var infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent { InfoHash = infoHash };
+        var infoHashBytes = Convert.FromHexString(infoHash);
+        var skeyHash = MseKeyDerivation.DeriveKey(infoHashBytes, System.Text.Encoding.ASCII.GetBytes("req2"));
+
+        _mseSkeyRegistry.TryMatchTorrent(skeyHash, out Arg.Any<Torrent>()).Returns(x =>
+        {
+            x[1] = torrent;
+            return true;
+        });
+
+        var (clientConn, serverConn) = CreateTestPair();
+        using (clientConn)
+        using (serverConn)
+        {
+            var result = InvokeValidateInfoHash(skeyHash, serverConn);
+
+            Assert.That(result, Is.True);
+            Assert.That(serverConn.InfoHash, Is.EqualTo(infoHash));
+            Assert.That(serverConn.MatchedTorrent, Is.SameAs(torrent));
+        }
     }
 
     [Test]
