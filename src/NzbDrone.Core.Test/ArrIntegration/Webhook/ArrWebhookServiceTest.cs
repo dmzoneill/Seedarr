@@ -9,7 +9,10 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.ArrIntegration.Webhook;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Extraction;
+using NzbDrone.Core.MediaEnrichment;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Test.TestHelpers;
 using NzbDrone.Core.Torrents;
 using Polly;
@@ -50,14 +53,14 @@ public class ArrWebhookServiceTest
     }
 
     [Test]
-    public void ProcessWebhook_should_ignore_test_event()
+    public void ProcessWebhook_should_return_success_for_test_event()
     {
         var payload = new ArrWebhookPayload { EventType = "Test" };
 
         var result = _service.ProcessWebhook(payload);
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Message, Does.Contain("Test"));
+        Assert.That(result.Message, Is.EqualTo("Seedarr webhook connection test successful"));
     }
 
     [Test]
@@ -595,7 +598,7 @@ public class ArrWebhookServiceTest
         var result = _service.ProcessWebhook(payload);
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.Message, Does.Contain("Ignored"));
+        Assert.That(result.Message, Does.Contain("Processed Rename event"));
     }
 
     [Test]
@@ -1671,6 +1674,8 @@ public class ArrWebhookServiceTest
     [TestCase("SiteDelete")]
     [TestCase("PerformerDelete")]
     [TestCase("MovieDelete")]
+    [TestCase("EpisodeFileDelete")]
+    [TestCase("SeriesDelete")]
     public void ProcessWebhook_should_handle_whisparr_delete_events(string eventType)
     {
         var payload = new ArrWebhookPayload
@@ -1818,5 +1823,254 @@ public class ArrWebhookServiceTest
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Message, Does.Contain($"Handled {eventType} event"));
+    }
+
+    [Test]
+    public void ProcessWebhook_should_assign_category_and_save_path_on_grab()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.WatchFolderPath.Returns("/default/watch");
+
+        var service = new ArrWebhookService(
+            _connectionFactory,
+            _torrentService,
+            _torrentFileParser,
+            trackerEntryService: null,
+            torrentFileService: null,
+            downloadClientFactory: null,
+            downloadHistoryService: null,
+            archiveExtractorService: null,
+            client: null,
+            policy: ResiliencePipeline.Empty,
+            configService: configService)
+        {
+            EnrichDelayMs = 0
+        };
+
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new()
+            {
+                Name = "MySonarr",
+                ArrType = "Sonarr",
+                Enable = true,
+                Category = "tv-sonarr",
+                SavePath = "/downloads/tv"
+            }
+        });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Grab",
+            DownloadId = "0123456789abcdef0123456789abcdef01234567",
+            InstanceName = "Sonarr",
+            Release = new ArrWebhookRelease { ReleaseTitle = "Show.S01E01", Size = 1000 }
+        };
+
+        var result = service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Category == "tv-sonarr" &&
+            t.SavePath == "/downloads/tv"));
+    }
+
+    [Test]
+    public void ProcessWebhook_should_fallback_category_and_save_path_on_grab()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.WatchFolderPath.Returns("/default/watch");
+
+        var service = new ArrWebhookService(
+            _connectionFactory,
+            _torrentService,
+            _torrentFileParser,
+            trackerEntryService: null,
+            torrentFileService: null,
+            downloadClientFactory: null,
+            downloadHistoryService: null,
+            archiveExtractorService: null,
+            client: null,
+            policy: ResiliencePipeline.Empty,
+            configService: configService)
+        {
+            EnrichDelayMs = 0
+        };
+
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new()
+            {
+                Name = "MyRadarr",
+                ArrType = "Radarr",
+                Enable = true,
+                Category = null,
+                SavePath = null
+            }
+        });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Grab",
+            DownloadId = "0123456789abcdef0123456789abcdef01234567",
+            InstanceName = "Radarr",
+            Release = new ArrWebhookRelease { ReleaseTitle = "Movie.2024", Size = 2000 }
+        };
+
+        var result = service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Category == "radarr" &&
+            t.SavePath == "/default/watch"));
+    }
+
+    [Test]
+    public void ProcessWebhook_should_handle_download_event_and_update_metadata_and_publish_events()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.WatchFolderPath.Returns("/default/watch");
+        var metadataRepo = Substitute.For<ITorrentMediaMetadataRepository>();
+        var eventAggregator = Substitute.For<IEventAggregator>();
+
+        var service = new ArrWebhookService(
+            _connectionFactory,
+            _torrentService,
+            _torrentFileParser,
+            trackerEntryService: null,
+            torrentFileService: null,
+            downloadClientFactory: null,
+            downloadHistoryService: null,
+            archiveExtractorService: null,
+            client: null,
+            policy: ResiliencePipeline.Empty,
+            configService: configService,
+            mediaMetadataRepository: metadataRepo,
+            eventAggregator: eventAggregator)
+        {
+            EnrichDelayMs = 0
+        };
+
+        var existing = new Torrent
+        {
+            Id = 42,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Name = "Movie.2024",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.5
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { existing });
+
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new()
+            {
+                Name = "Radarr",
+                ArrType = "Radarr",
+                Enable = true,
+                Category = "movies",
+                SavePath = "/downloads/movies"
+            }
+        });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Download",
+            DownloadId = "0123456789abcdef0123456789abcdef01234567",
+            InstanceName = "Radarr",
+            Movie = new ArrWebhookMovie
+            {
+                Id = 101,
+                Title = "The Great Movie",
+                Year = 2024,
+                ImdbId = "tt1234567",
+                TmdbId = 99999
+            }
+        };
+
+        var result = service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(existing.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(existing.Progress, Is.EqualTo(1.0));
+        Assert.That(existing.Category, Is.EqualTo("movies"));
+        Assert.That(existing.SavePath, Is.EqualTo("/downloads/movies"));
+        _torrentService.Received().Update(existing);
+
+        metadataRepo.Received(1).Upsert(Arg.Is<TorrentMediaMetadata>(m =>
+            m.TorrentId == 42 &&
+            m.ArrType == "Radarr" &&
+            m.ArrMediaId == 101 &&
+            m.Title == "The Great Movie" &&
+            m.Year == 2024 &&
+            m.ImdbId == "tt1234567" &&
+            m.TmdbId == "99999"));
+
+        eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentImportedEvent>(e =>
+            e.Torrent.Id == 42 && e.ArrType == "Radarr"));
+        eventAggregator.Received(1).PublishEvent(Arg.Is<ArrImportCompletedEvent>(e =>
+            e.Torrent.Id == 42));
+    }
+
+    [Test]
+    public void ProcessWebhook_should_handle_rename_event_and_update_paths()
+    {
+        var torrentFileService = Substitute.For<ITorrentFileService>();
+
+        var service = new ArrWebhookService(
+            _connectionFactory,
+            _torrentService,
+            _torrentFileParser,
+            trackerEntryService: null,
+            torrentFileService: torrentFileService,
+            downloadClientFactory: null,
+            downloadHistoryService: null,
+            archiveExtractorService: null,
+            client: null,
+            policy: ResiliencePipeline.Empty)
+        {
+            EnrichDelayMs = 0
+        };
+
+        var existing = new Torrent
+        {
+            Id = 55,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Name = "Show.S01E01",
+            SavePath = "/downloads/tv/Show.S01"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { existing });
+
+        var file = new TorrentFile
+        {
+            Id = 1,
+            TorrentId = 55,
+            Path = "/downloads/tv/Show.S01/Show.S01E01.mkv"
+        };
+        torrentFileService.GetByTorrentId(55).Returns(new List<TorrentFile> { file });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Rename",
+            DownloadId = "0123456789abcdef0123456789abcdef01234567",
+            SourcePath = "/downloads/tv/Show.S01",
+            DestinationPath = "/downloads/tv/Season 01",
+            RenamedFiles = new List<ArrWebhookRenamedFile>
+            {
+                new()
+                {
+                    PreviousPath = "/downloads/tv/Show.S01/Show.S01E01.mkv",
+                    Path = "/downloads/tv/Season 01/Show - S01E01 - Pilot.mkv"
+                }
+            }
+        };
+
+        var result = service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(existing.SavePath, Is.EqualTo("/downloads/tv/Season 01"));
+        Assert.That(file.Path, Is.EqualTo("/downloads/tv/Season 01/Show - S01E01 - Pilot.mkv"));
+        _torrentService.Received(1).Update(existing);
+        torrentFileService.Received().Update(file);
     }
 }

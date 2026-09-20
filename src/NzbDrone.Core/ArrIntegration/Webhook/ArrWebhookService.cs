@@ -9,9 +9,12 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Extraction;
 using NzbDrone.Core.Http;
+using NzbDrone.Core.MediaEnrichment;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
 using Polly;
@@ -52,6 +55,9 @@ public class ArrWebhookService : IArrWebhookService
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly IDownloadHistoryService _downloadHistoryService;
     private readonly IArchiveExtractorService _archiveExtractorService;
+    private readonly IConfigService _configService;
+    private readonly ITorrentMediaMetadataRepository _mediaMetadataRepository;
+    private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
 
     public ArrWebhookService(
@@ -63,7 +69,7 @@ public class ArrWebhookService : IArrWebhookService
         IDownloadClientFactory downloadClientFactory = null,
         IDownloadHistoryService downloadHistoryService = null,
         IArchiveExtractorService archiveExtractorService = null)
-        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, downloadHistoryService, archiveExtractorService, null, null)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, downloadHistoryService, archiveExtractorService, null, null, null, null, null)
     {
     }
 
@@ -73,7 +79,7 @@ public class ArrWebhookService : IArrWebhookService
         ITorrentFileParser torrentFileParser,
         HttpClient client,
         ResiliencePipeline policy)
-        : this(connectionFactory, torrentService, torrentFileParser, null, null, null, null, null, client, policy)
+        : this(connectionFactory, torrentService, torrentFileParser, null, null, null, null, null, client, policy, null, null, null)
     {
     }
 
@@ -86,7 +92,7 @@ public class ArrWebhookService : IArrWebhookService
         IDownloadClientFactory downloadClientFactory,
         HttpClient client,
         ResiliencePipeline policy)
-        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, null, null, client, policy)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, null, null, client, policy, null, null, null)
     {
     }
 
@@ -100,7 +106,7 @@ public class ArrWebhookService : IArrWebhookService
         IDownloadHistoryService downloadHistoryService,
         HttpClient client,
         ResiliencePipeline policy)
-        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, downloadHistoryService, null, client, policy)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, downloadHistoryService, null, client, policy, null, null, null)
     {
     }
 
@@ -115,6 +121,24 @@ public class ArrWebhookService : IArrWebhookService
         IArchiveExtractorService archiveExtractorService,
         HttpClient client,
         ResiliencePipeline policy)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, downloadHistoryService, archiveExtractorService, client, policy, null, null, null)
+    {
+    }
+
+    public ArrWebhookService(
+        IArrConnectionFactory connectionFactory,
+        ITorrentService torrentService,
+        ITorrentFileParser torrentFileParser,
+        ITrackerEntryService trackerEntryService,
+        ITorrentFileService torrentFileService,
+        IDownloadClientFactory downloadClientFactory,
+        IDownloadHistoryService downloadHistoryService,
+        IArchiveExtractorService archiveExtractorService,
+        HttpClient client,
+        ResiliencePipeline policy,
+        IConfigService configService = null,
+        ITorrentMediaMetadataRepository mediaMetadataRepository = null,
+        IEventAggregator eventAggregator = null)
     {
         _connectionFactory = connectionFactory;
         _torrentService = torrentService;
@@ -124,6 +148,9 @@ public class ArrWebhookService : IArrWebhookService
         _downloadClientFactory = downloadClientFactory;
         _downloadHistoryService = downloadHistoryService;
         _archiveExtractorService = archiveExtractorService;
+        _configService = configService;
+        _mediaMetadataRepository = mediaMetadataRepository;
+        _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
         _client = client ?? SharedClient;
         _policy = policy ?? SharedPolicy;
@@ -135,13 +162,32 @@ public class ArrWebhookService : IArrWebhookService
 
     public ArrWebhookResult ProcessWebhook(ArrWebhookPayload payload)
     {
+        if (payload == null)
+        {
+            return new ArrWebhookResult { Success = false, Message = "Payload is null" };
+        }
+
+        if (string.Equals(payload.EventType, "Test", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.Info("Webhook: handled test event");
+            return new ArrWebhookResult
+            {
+                Success = true,
+                Message = "Seedarr webhook connection test successful"
+            };
+        }
+
         if (string.Equals(payload.EventType, "SiteDelete", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(payload.EventType, "PerformerDelete", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(payload.EventType, "MovieDelete", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "MovieFileDelete", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "EpisodeFileDelete", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "SeriesDelete", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(payload.EventType, "TrackFileDelete", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(payload.EventType, "ArtistDelete", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(payload.EventType, "BookFileDelete", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(payload.EventType, "AuthorDelete", StringComparison.OrdinalIgnoreCase))
+            string.Equals(payload.EventType, "AuthorDelete", StringComparison.OrdinalIgnoreCase) ||
+            (payload.EventType != null && payload.EventType.EndsWith("Delete", StringComparison.OrdinalIgnoreCase)))
         {
             _logger.Info("Webhook: handled delete event '{0}'", payload.EventType);
             return new ArrWebhookResult { Success = true, Message = $"Handled {payload.EventType} event" };
@@ -153,7 +199,12 @@ public class ArrWebhookService : IArrWebhookService
             string.Equals(payload.EventType, "EpisodeDownload", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(payload.EventType, "Download", StringComparison.OrdinalIgnoreCase))
         {
-            return ProcessMovieDownload(payload);
+            return ProcessDownload(payload);
+        }
+
+        if (string.Equals(payload.EventType, "Rename", StringComparison.OrdinalIgnoreCase))
+        {
+            return ProcessRename(payload);
         }
 
         var isGrab = string.Equals(payload.EventType, "Grab", StringComparison.OrdinalIgnoreCase) ||
@@ -221,6 +272,16 @@ public class ArrWebhookService : IArrWebhookService
                     ? $"{payload.Author.Name} - {payload.Book.Title}"
                     : payload.Book.Title;
             }
+            else if (payload.Movie != null && !string.IsNullOrWhiteSpace(payload.Movie.Title))
+            {
+                releaseTitle = payload.Movie.Year > 0
+                    ? $"{payload.Movie.Title} ({payload.Movie.Year})"
+                    : payload.Movie.Title;
+            }
+            else if (payload.Series != null && !string.IsNullOrWhiteSpace(payload.Series.Title))
+            {
+                releaseTitle = payload.Series.Title;
+            }
         }
 
         _logger.Info(
@@ -230,6 +291,9 @@ public class ArrWebhookService : IArrWebhookService
             payload.Release?.Indexer);
 
         var connection = FindConnection(payload);
+        var category = connection?.Category ?? connection?.ArrType?.ToLowerInvariant();
+        var savePath = connection?.SavePath ?? _configService?.WatchFolderPath;
+
         if (connection != null && !connection.EnableAutomaticAdd)
         {
             _logger.Info(
@@ -246,7 +310,9 @@ public class ArrWebhookService : IArrWebhookService
                     InfoHash = infoHash,
                     TotalSize = payload.Release?.Size ?? 0,
                     DateAdded = DateTime.UtcNow,
-                    Status = TorrentStatus.Queued
+                    Status = TorrentStatus.Queued,
+                    Category = category,
+                    SavePath = savePath
                 };
 
                 _downloadHistoryService.RecordTorrentAdded(
@@ -269,7 +335,9 @@ public class ArrWebhookService : IArrWebhookService
             InfoHash = infoHash,
             TotalSize = payload.Release?.Size ?? 0,
             DateAdded = DateTime.UtcNow,
-            Status = TorrentStatus.Queued
+            Status = TorrentStatus.Queued,
+            Category = category,
+            SavePath = savePath
         };
 
         _torrentService.Add(torrent);
@@ -283,7 +351,7 @@ public class ArrWebhookService : IArrWebhookService
         return new ArrWebhookResult { Success = true, Message = "Added with basic metadata", InfoHash = infoHash };
     }
 
-    private ArrWebhookResult ProcessMovieDownload(ArrWebhookPayload payload)
+    private ArrWebhookResult ProcessDownload(ArrWebhookPayload payload)
     {
         var downloadId = payload.DownloadId;
         if (string.IsNullOrEmpty(downloadId))
@@ -318,8 +386,144 @@ public class ArrWebhookService : IArrWebhookService
 
         existing.Status = TorrentStatus.Seeding;
         existing.Progress = 1.0;
+
+        var connection = FindConnection(payload);
+        if (connection != null)
+        {
+            if (string.IsNullOrEmpty(existing.Category))
+            {
+                existing.Category = connection.Category ?? connection.ArrType?.ToLowerInvariant();
+            }
+
+            if (string.IsNullOrEmpty(existing.SavePath))
+            {
+                existing.SavePath = connection.SavePath ?? _configService?.WatchFolderPath;
+            }
+        }
+
         _torrentService.Update(existing);
-        _logger.Info("Webhook {0}: marked torrent '{1}' as Seeding", payload.EventType, existing.Name);
+        _logger.Info("Webhook {0}: marked torrent '{1}' as Seeding (imported)", payload.EventType, existing.Name);
+
+        if (_mediaMetadataRepository != null)
+        {
+            try
+            {
+                var meta = _mediaMetadataRepository.GetByTorrentId(existing.Id) ?? new TorrentMediaMetadata { TorrentId = existing.Id };
+                var hasMetadataChanges = false;
+
+                if (payload.Movie != null)
+                {
+                    meta.ArrType = "Radarr";
+                    if (payload.Movie.Id > 0)
+                    {
+                        meta.ArrMediaId = payload.Movie.Id;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(payload.Movie.Title))
+                    {
+                        meta.Title = payload.Movie.Title;
+                    }
+
+                    if (payload.Movie.Year > 0)
+                    {
+                        meta.Year = payload.Movie.Year;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(payload.Movie.ImdbId))
+                    {
+                        meta.ImdbId = payload.Movie.ImdbId;
+                    }
+
+                    if (payload.Movie.TmdbId > 0)
+                    {
+                        meta.TmdbId = payload.Movie.TmdbId.ToString();
+                    }
+
+                    hasMetadataChanges = true;
+                }
+                else if (payload.Series != null)
+                {
+                    meta.ArrType = "Sonarr";
+                    if (payload.Series.Id > 0)
+                    {
+                        meta.ArrMediaId = payload.Series.Id;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(payload.Series.Title))
+                    {
+                        meta.SeriesName = payload.Series.Title;
+                        meta.Title = payload.Series.Title;
+                    }
+
+                    if (payload.Series.Year > 0)
+                    {
+                        meta.Year = payload.Series.Year;
+                    }
+
+                    if (payload.Series.TvdbId > 0)
+                    {
+                        meta.TvdbId = payload.Series.TvdbId.ToString();
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(payload.Series.ImdbId))
+                    {
+                        meta.ImdbId = payload.Series.ImdbId;
+                    }
+
+                    hasMetadataChanges = true;
+                }
+                else if (payload.Album != null || payload.Artist != null)
+                {
+                    meta.ArrType = "Lidarr";
+                    if (payload.Artist != null && !string.IsNullOrWhiteSpace(payload.Artist.Name))
+                    {
+                        meta.ArtistName = payload.Artist.Name;
+                    }
+
+                    if (payload.Album != null && !string.IsNullOrWhiteSpace(payload.Album.Title))
+                    {
+                        meta.AlbumTitle = payload.Album.Title;
+                    }
+
+                    if (payload.Album?.Id > 0)
+                    {
+                        meta.ArrMediaId = payload.Album.Id;
+                    }
+
+                    hasMetadataChanges = true;
+                }
+                else if (payload.Book != null || payload.Author != null)
+                {
+                    meta.ArrType = "Readarr";
+                    if (payload.Author != null && !string.IsNullOrWhiteSpace(payload.Author.Name))
+                    {
+                        meta.Author = payload.Author.Name;
+                    }
+
+                    if (payload.Book != null && !string.IsNullOrWhiteSpace(payload.Book.Title))
+                    {
+                        meta.BookTitle = payload.Book.Title;
+                    }
+
+                    if (payload.Book?.Id > 0)
+                    {
+                        meta.ArrMediaId = payload.Book.Id;
+                    }
+
+                    hasMetadataChanges = true;
+                }
+
+                if (hasMetadataChanges)
+                {
+                    _mediaMetadataRepository.Upsert(meta);
+                    _logger.Info("Webhook {0}: updated TorrentMediaMetadata for '{1}'", payload.EventType, existing.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Webhook {0}: failed to update TorrentMediaMetadata for '{1}'", payload.EventType, existing.Name);
+            }
+        }
 
         if (EnablePostImportCleanup && _archiveExtractorService != null)
         {
@@ -337,7 +541,19 @@ public class ArrWebhookService : IArrWebhookService
             }
         }
 
-        var connection = FindConnection(payload);
+        if (_eventAggregator != null)
+        {
+            try
+            {
+                _eventAggregator.PublishEvent(new TorrentImportedEvent(existing, connection?.ArrType, payload.InstanceName));
+                _eventAggregator.PublishEvent(new ArrImportCompletedEvent(existing, payload.InstanceName ?? connection?.Name ?? "Arr", payload.Episodes?.Count ?? 1));
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Webhook {0}: failed to publish import events for torrent '{1}'", payload.EventType, existing.Name);
+            }
+        }
+
         if (connection != null)
         {
             _ = EnrichTorrentFromHistoryAsync(existing.Id, infoHash, downloadId.Trim(), connection, payload.InstanceName, CancellationToken.None);
@@ -348,6 +564,127 @@ public class ArrWebhookService : IArrWebhookService
             Success = true,
             Message = $"Processed {payload.EventType} event",
             InfoHash = infoHash
+        };
+    }
+
+    private ArrWebhookResult ProcessMovieDownload(ArrWebhookPayload payload)
+    {
+        return ProcessDownload(payload);
+    }
+
+    private ArrWebhookResult ProcessRename(ArrWebhookPayload payload)
+    {
+        _logger.Info("Webhook: processing Rename event for {0}", payload.InstanceName ?? "Arr");
+
+        Torrent existing = null;
+        if (!string.IsNullOrEmpty(payload.DownloadId) && IsValidInfoHash(payload.DownloadId))
+        {
+            var infoHash = payload.DownloadId.Trim().ToLowerInvariant();
+            existing = _torrentService.GetAll().FirstOrDefault(t =>
+                string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (existing == null)
+        {
+            var title = payload.Movie?.Title ?? payload.Series?.Title;
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                existing = _torrentService.GetAll().FirstOrDefault(t =>
+                    t.Name != null && t.Name.Contains(title, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        if (existing != null)
+        {
+            var updated = false;
+
+            if (!string.IsNullOrEmpty(payload.SourcePath) && !string.IsNullOrEmpty(payload.DestinationPath))
+            {
+                if (string.Equals(existing.SavePath, payload.SourcePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    existing.SavePath = payload.DestinationPath;
+                    updated = true;
+                }
+            }
+
+            if (_torrentFileService != null)
+            {
+                var files = _torrentFileService.GetByTorrentId(existing.Id);
+                if (files != null && files.Count > 0)
+                {
+                    var renamedList = new List<ArrWebhookRenamedFile>();
+                    if (payload.RenamedFiles != null)
+                    {
+                        renamedList.AddRange(payload.RenamedFiles);
+                    }
+
+                    if (payload.RenamedEpisodeFiles != null)
+                    {
+                        renamedList.AddRange(payload.RenamedEpisodeFiles);
+                    }
+
+                    if (payload.RenamedMovieFiles != null)
+                    {
+                        renamedList.AddRange(payload.RenamedMovieFiles);
+                    }
+
+                    if (renamedList.Count > 0)
+                    {
+                        foreach (var rf in renamedList)
+                        {
+                            var targetFile = files.FirstOrDefault(f =>
+                                (!string.IsNullOrEmpty(rf.PreviousPath) && string.Equals(f.Path, rf.PreviousPath, StringComparison.OrdinalIgnoreCase)) ||
+                                (!string.IsNullOrEmpty(rf.PreviousRelativePath) && string.Equals(f.Path, rf.PreviousRelativePath, StringComparison.OrdinalIgnoreCase)) ||
+                                (!string.IsNullOrEmpty(rf.PreviousRelativePath) && f.Path != null && f.Path.EndsWith(rf.PreviousRelativePath, StringComparison.OrdinalIgnoreCase)));
+
+                            if (targetFile != null)
+                            {
+                                targetFile.Path = rf.Path ?? rf.RelativePath ?? targetFile.Path;
+                                _torrentFileService.Update(targetFile);
+                                updated = true;
+                            }
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(payload.SourcePath) && !string.IsNullOrEmpty(payload.DestinationPath))
+                    {
+                        foreach (var file in files)
+                        {
+                            if (string.Equals(file.Path, payload.SourcePath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                file.Path = payload.DestinationPath;
+                                _torrentFileService.Update(file);
+                                updated = true;
+                            }
+                            else if (file.Path != null && file.Path.StartsWith(payload.SourcePath, StringComparison.OrdinalIgnoreCase))
+                            {
+                                file.Path = string.Concat(payload.DestinationPath, file.Path.AsSpan(payload.SourcePath.Length));
+                                _torrentFileService.Update(file);
+                                updated = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (updated)
+            {
+                _torrentService.Update(existing);
+                _logger.Info("Webhook: updated paths for torrent '{0}' on Rename event", existing.Name);
+            }
+
+            return new ArrWebhookResult
+            {
+                Success = true,
+                Message = "Processed Rename event",
+                InfoHash = existing.InfoHash
+            };
+        }
+
+        return new ArrWebhookResult
+        {
+            Success = true,
+            Message = "Processed Rename event"
         };
     }
 
@@ -614,6 +951,42 @@ public class ArrWebhookService : IArrWebhookService
                 (!string.IsNullOrEmpty(d.Name) && payload.InstanceName.Contains(d.Name, StringComparison.OrdinalIgnoreCase)) ||
                 (!string.IsNullOrEmpty(d.Name) && d.Name.Contains(payload.InstanceName, StringComparison.OrdinalIgnoreCase)));
 
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        if (payload.Series != null || string.Equals(payload.EventType, "EpisodeDownload", StringComparison.OrdinalIgnoreCase) || string.Equals(payload.EventType, "EpisodeFileDelete", StringComparison.OrdinalIgnoreCase) || string.Equals(payload.EventType, "SeriesDelete", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = enabled.FirstOrDefault(d => string.Equals(d.ArrType, "Sonarr", StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        if (payload.Movie != null || string.Equals(payload.EventType, "MovieDownload", StringComparison.OrdinalIgnoreCase) || string.Equals(payload.EventType, "MovieDelete", StringComparison.OrdinalIgnoreCase) || string.Equals(payload.EventType, "MovieFileDelete", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = enabled.FirstOrDefault(d => string.Equals(d.ArrType, "Radarr", StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        if (payload.Album != null || payload.Artist != null || string.Equals(payload.EventType, "AlbumDownload", StringComparison.OrdinalIgnoreCase) || string.Equals(payload.EventType, "TrackFileDelete", StringComparison.OrdinalIgnoreCase) || string.Equals(payload.EventType, "ArtistDelete", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = enabled.FirstOrDefault(d => string.Equals(d.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                return match;
+            }
+        }
+
+        if (payload.Book != null || payload.Author != null || string.Equals(payload.EventType, "BookDownload", StringComparison.OrdinalIgnoreCase) || string.Equals(payload.EventType, "BookFileDelete", StringComparison.OrdinalIgnoreCase) || string.Equals(payload.EventType, "AuthorDelete", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = enabled.FirstOrDefault(d => string.Equals(d.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase));
             if (match != null)
             {
                 return match;

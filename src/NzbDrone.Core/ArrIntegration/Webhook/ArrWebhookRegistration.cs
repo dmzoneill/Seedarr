@@ -92,9 +92,9 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                 implementation = "Webhook",
                 configContract = "WebhookSettings",
                 onGrab = true,
-                onDownload = false,
+                onDownload = true,
                 onUpgrade = false,
-                onRename = false,
+                onRename = true,
                 onHealthIssue = false,
                 includeHealthWarnings = false,
                 fields
