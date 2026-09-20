@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import {
   useAddTorrent,
+  useTorrents,
   useCategories,
   useIndexers,
   useIndexerSearch,
@@ -27,6 +28,56 @@ export interface AddTorrentFormProps {
 }
 
 export type InputMode = "file" | "magnet" | "search";
+
+export function buildExistingHashesSet(
+  torrents?: Array<{ infoHash?: string | null }>,
+): Set<string> {
+  return new Set(
+    torrents
+      ?.map((t) => t.infoHash?.toLowerCase())
+      .filter((hash): hash is string => Boolean(hash)),
+  );
+}
+
+export function isReleaseInLibrary(
+  release: Pick<ReleaseInfo, "infoHash">,
+  existingHashes: Set<string>,
+): boolean {
+  if (!release.infoHash) return false;
+  return existingHashes.has(release.infoHash.toLowerCase());
+}
+
+export function isReleaseAdded(
+  release: Pick<ReleaseInfo, "guid" | "infoHash" | "title">,
+  addedKeys: Set<string>,
+): boolean {
+  const itemKey = release.guid || release.infoHash || release.title;
+  if (addedKeys.has(itemKey)) return true;
+  if (release.infoHash && addedKeys.has(release.infoHash.toLowerCase())) return true;
+  if (release.guid && addedKeys.has(release.guid)) return true;
+  return false;
+}
+
+export function getReleaseButtonState({
+  isDownloading,
+  isAdded,
+  isInLibrary,
+}: {
+  isDownloading: boolean;
+  isAdded: boolean;
+  isInLibrary: boolean;
+}): { label: string; disabled: boolean; className: string } {
+  if (isDownloading) {
+    return { label: "Adding...", disabled: true, className: "btn btn-success" };
+  }
+  if (isAdded) {
+    return { label: "✓ Added", disabled: true, className: "btn btn-secondary" };
+  }
+  if (isInLibrary) {
+    return { label: "In Library", disabled: true, className: "btn btn-secondary" };
+  }
+  return { label: "+ Add", disabled: false, className: "btn btn-success" };
+}
 
 export function AddTorrentForm({
   initialMode = "file",
@@ -57,6 +108,14 @@ export function AddTorrentForm({
     () => categories?.find((c) => c.name === selectedCategory),
     [categories, selectedCategory],
   );
+
+  // Library Torrents Cache & Tracked Grabs
+  const { data: torrents } = useTorrents();
+  const existingHashes = useMemo(
+    () => buildExistingHashesSet(torrents),
+    [torrents],
+  );
+  const [addedKeys, setAddedKeys] = useState<Set<string>>(new Set());
 
   // Indexer Search State
   const [searchQuery, setSearchQuery] = useState(initialQuery);
@@ -248,6 +307,13 @@ export function AddTorrentForm({
         onSuccess: () => {
           trackReleaseGrab(release.title, release.indexer);
           setDownloadingGuid(null);
+          setAddedKeys((prev) => {
+            const next = new Set(prev);
+            next.add(itemKey);
+            if (release.infoHash) next.add(release.infoHash.toLowerCase());
+            if (release.guid) next.add(release.guid);
+            return next;
+          });
           showToast(
             `Added "${release.title}" to active seeding library`,
             "success",
@@ -1008,6 +1074,13 @@ export function AddTorrentForm({
                         {searchResults.data?.map((rel) => {
                           const itemKey = rel.guid || rel.infoHash || rel.title;
                           const isDownloading = downloadingGuid === itemKey;
+                          const isAlreadyInLibrary = isReleaseInLibrary(rel, existingHashes);
+                          const isAdded = isReleaseAdded(rel, addedKeys);
+                          const buttonState = getReleaseButtonState({
+                            isDownloading,
+                            isAdded,
+                            isInLibrary: isAlreadyInLibrary,
+                          });
 
                           return (
                             <tr
@@ -1027,32 +1100,49 @@ export function AddTorrentForm({
                                 >
                                   {rel.title}
                                 </div>
-                                {rel.categories &&
-                                  rel.categories.length > 0 && (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        gap: "0.3rem",
-                                        marginTop: "0.25rem",
-                                      }}
-                                    >
-                                      {rel.categories
-                                        .slice(0, 3)
-                                        .map((c, i) => (
-                                          <span
-                                            key={i}
-                                            className="badge badge-secondary"
-                                            style={{
-                                              fontSize: "0.65rem",
-                                              padding: "0.1rem 0.35rem",
-                                              borderRadius: "3px",
-                                            }}
-                                          >
-                                            {c}
-                                          </span>
-                                        ))}
-                                    </div>
-                                  )}
+                                {(isAlreadyInLibrary ||
+                                  (rel.categories && rel.categories.length > 0)) && (
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      gap: "0.3rem",
+                                      marginTop: "0.25rem",
+                                      flexWrap: "wrap",
+                                      alignItems: "center",
+                                    }}
+                                  >
+                                    {isAlreadyInLibrary && (
+                                      <span
+                                        className="badge badge-info"
+                                        style={{
+                                          fontSize: "0.65rem",
+                                          padding: "0.1rem 0.35rem",
+                                          borderRadius: "3px",
+                                          backgroundColor: "rgba(56, 189, 248, 0.2)",
+                                          color: "#38bdf8",
+                                          border: "1px solid rgba(56, 189, 248, 0.4)",
+                                        }}
+                                      >
+                                        Already in Library
+                                      </span>
+                                    )}
+                                    {rel.categories
+                                      ?.slice(0, 3)
+                                      .map((c, i) => (
+                                        <span
+                                          key={i}
+                                          className="badge badge-secondary"
+                                          style={{
+                                            fontSize: "0.65rem",
+                                            padding: "0.1rem 0.35rem",
+                                            borderRadius: "3px",
+                                          }}
+                                        >
+                                          {c}
+                                        </span>
+                                      ))}
+                                  </div>
+                                )}
                               </td>
 
                               <td style={{ padding: "0.65rem 0.85rem" }}>
@@ -1121,16 +1211,25 @@ export function AddTorrentForm({
                               >
                                 <button
                                   type="button"
-                                  className="btn btn-success"
+                                  className={buttonState.className}
                                   style={{
                                     fontSize: "0.78rem",
                                     padding: "0.3rem 0.65rem",
                                     borderRadius: "4px",
+                                    opacity: buttonState.disabled && !isDownloading ? 0.75 : 1,
+                                    cursor: buttonState.disabled ? "default" : "pointer",
                                   }}
                                   onClick={() => handleAddRelease(rel)}
-                                  disabled={isDownloading}
+                                  disabled={buttonState.disabled}
+                                  title={
+                                    isAdded
+                                      ? "Release grabbed"
+                                      : isAlreadyInLibrary
+                                        ? "Already in library"
+                                        : "Add release"
+                                  }
                                 >
-                                  {isDownloading ? "Adding..." : "+ Add"}
+                                  {buttonState.label}
                                 </button>
                               </td>
                             </tr>
