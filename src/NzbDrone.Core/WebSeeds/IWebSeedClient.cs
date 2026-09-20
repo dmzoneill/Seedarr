@@ -20,4 +20,19 @@ public interface IWebSeedClient
         int offset,
         int length,
         CancellationToken cancellationToken = default);
+
+    Task<byte[]> DownloadBlockAsync(
+        string baseUrl,
+        byte[] infoHash,
+        int pieceIndex,
+        long pieceLength,
+        int offset,
+        int length,
+        CancellationToken cancellationToken = default);
+
+    Task<byte[]> DownloadBlockAsync(
+        string url,
+        long startByte,
+        int length,
+        CancellationToken cancellationToken = default);
 }
