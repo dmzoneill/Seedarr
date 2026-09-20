@@ -88,7 +88,11 @@ import {
 } from "./i18n";
 import LanguageSelector from "./components/LanguageSelector";
 import { SETTINGS_GROUPS } from "./pages/settings/settingsNavData";
-import { trackPageView, trackThemeChange } from "./utils/analytics";
+import {
+  trackPageView,
+  trackThemeChange,
+  setAnalyticsInstanceUuid,
+} from "./utils/analytics";
 
 const systemSubItems = [
   { path: "/system/status", label: "Status" },
@@ -305,6 +309,12 @@ function App() {
       }
     }
   }, [generalConfig?.uiLanguage]);
+
+  useEffect(() => {
+    if (generalConfig?.instanceUuid) {
+      setAnalyticsInstanceUuid(generalConfig.instanceUuid);
+    }
+  }, [generalConfig?.instanceUuid]);
   const { data: downloadClients } = useDownloadClients();
   const { showToast } = useToast();
   const [showApiKey, setShowApiKey] = useState(false);
