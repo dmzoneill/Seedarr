@@ -76,9 +76,9 @@ public class Ipv6IntervalTree
 
         if (address.AddressFamily == AddressFamily.InterNetwork)
         {
-            if (_ipv4Tree != null)
+            if (_ipv4Tree != null && _ipv4Tree.Contains(address))
             {
-                return _ipv4Tree.Contains(address);
+                return true;
             }
 
             return Contains(address.MapToIPv6().ToUInt128());
@@ -95,6 +95,14 @@ public class Ipv6IntervalTree
     public static Ipv6Range FromCidr(IPAddress baseAddress, int prefixLength)
     {
         ArgumentNullException.ThrowIfNull(baseAddress);
+
+        if (baseAddress.IsIPv4MappedToIPv6)
+        {
+            if (prefixLength >= 0 && prefixLength <= 32)
+            {
+                return FromCidr(baseAddress.ToUInt128(), 96 + prefixLength);
+            }
+        }
 
         if (baseAddress.AddressFamily == AddressFamily.InterNetwork)
         {
@@ -161,6 +169,23 @@ public class Ipv6IntervalTree
 
             if (TryExtractIp(ipPart, out var ip))
             {
+                if (ip.IsIPv4MappedToIPv6)
+                {
+                    if (prefix >= 0 && prefix <= 32)
+                    {
+                        range = FromCidr(ip.ToUInt128(), 96 + prefix);
+                        return true;
+                    }
+
+                    if (prefix >= 96 && prefix <= 128)
+                    {
+                        range = FromCidr(ip.ToUInt128(), prefix);
+                        return true;
+                    }
+
+                    return false;
+                }
+
                 if (ip.AddressFamily == AddressFamily.InterNetworkV6 && prefix >= 0 && prefix <= 128)
                 {
                     range = FromCidr(ip, prefix);
@@ -222,6 +247,9 @@ public class Ipv6IntervalTree
             return new Ipv6IntervalTree(v6Ranges);
         }
 
+        var v4MappedBase = IPAddress.Parse("::ffff:0.0.0.0").ToUInt128();
+        var v4MappedMax = IPAddress.Parse("::ffff:255.255.255.255").ToUInt128();
+
         foreach (var rule in rules)
         {
             if (string.IsNullOrWhiteSpace(rule))
@@ -245,21 +273,22 @@ public class Ipv6IntervalTree
                 var mappedEnd = v4Range.End.ToIPv4Address().MapToIPv6().ToUInt128();
                 v6Ranges.Add(new Ipv6Range(mappedStart, mappedEnd));
             }
-
-            // Check if it parses as IPv6 rule
-            if (TryParse(trimmed, out var v6Range))
+            else if (TryParse(trimmed, out var v6Range))
             {
                 v6Ranges.Add(v6Range);
 
-                // If IPv6 rule was within IPv4-mapped range ::ffff:0:0/96, also extract IPv4 range
-                var v4MappedBase = IPAddress.Parse("::ffff:0.0.0.0").ToUInt128();
-                var v4MappedMax = IPAddress.Parse("::ffff:255.255.255.255").ToUInt128();
-
-                if (v6Range.Start >= v4MappedBase && v6Range.End <= v4MappedMax)
+                // If IPv6 rule overlaps IPv4-mapped range ::ffff:0:0/96, also extract IPv4 range
+                if (v6Range.Start <= v4MappedMax && v6Range.End >= v4MappedBase)
                 {
-                    var v4Start = (uint)(v6Range.Start - v4MappedBase);
-                    var v4End = (uint)(v6Range.End - v4MappedBase);
-                    v4Ranges.Add(new Ipv4Range(v4Start, v4End));
+                    var intersectStart = v6Range.Start > v4MappedBase ? v6Range.Start : v4MappedBase;
+                    var intersectEnd = v6Range.End < v4MappedMax ? v6Range.End : v4MappedMax;
+
+                    if (intersectStart <= intersectEnd)
+                    {
+                        var v4Start = (uint)(intersectStart - v4MappedBase);
+                        var v4End = (uint)(intersectEnd - v4MappedBase);
+                        v4Ranges.Add(new Ipv4Range(v4Start, v4End));
+                    }
                 }
             }
         }
@@ -275,7 +304,12 @@ public class Ipv6IntervalTree
             return Array.Empty<Ipv6Range>();
         }
 
-        var list = new List<Ipv6Range>(ranges);
+        var list = new List<Ipv6Range>();
+        foreach (var r in ranges)
+        {
+            list.Add(r.Start <= r.End ? r : new Ipv6Range(r.End, r.Start));
+        }
+
         if (list.Count == 0)
         {
             return Array.Empty<Ipv6Range>();

@@ -75,6 +75,17 @@ public class Ipv4IntervalTree
     public static Ipv4Range FromCidr(IPAddress baseAddress, int prefixLength)
     {
         ArgumentNullException.ThrowIfNull(baseAddress);
+
+        if (baseAddress.IsIPv4MappedToIPv6)
+        {
+            baseAddress = baseAddress.MapToIPv4();
+        }
+
+        if (baseAddress.AddressFamily != AddressFamily.InterNetwork)
+        {
+            throw new ArgumentException($"Cannot convert non-IPv4 address to IPv4 CIDR: {baseAddress}", nameof(baseAddress));
+        }
+
         if (prefixLength < 0 || prefixLength > 32)
         {
             throw new ArgumentOutOfRangeException(nameof(prefixLength), "Prefix length must be between 0 and 32.");
@@ -97,6 +108,10 @@ public class Ipv4IntervalTree
         }
 
         var trimmed = rule.Trim();
+        if (trimmed.StartsWith('#') || trimmed.StartsWith("//", StringComparison.Ordinal))
+        {
+            return false;
+        }
 
         // Check if rule has name prefix "name:ip"
         var colonIdx = trimmed.IndexOf(':');
@@ -104,15 +119,26 @@ public class Ipv4IntervalTree
         {
             trimmed = trimmed[(colonIdx + 1)..].Trim();
         }
+        else
+        {
+            var spaceIdx = trimmed.IndexOf(' ');
+            if (spaceIdx > 0)
+            {
+                var candidate = trimmed[(spaceIdx + 1)..].Trim();
+                if (candidate.Length > 0 && (char.IsAsciiDigit(candidate[0]) || candidate[0] == ':'))
+                {
+                    trimmed = candidate;
+                }
+            }
+        }
 
-        // CIDR notation: 1.2.3.0/24
+        // CIDR notation: 1.2.3.0/24 or ::ffff:1.2.3.0/24
         var slashIdx = trimmed.IndexOf('/');
         if (slashIdx >= 0)
         {
             var ipStr = trimmed[..slashIdx].Trim();
             var prefixStr = trimmed[(slashIdx + 1)..].Trim();
-            if (IPAddress.TryParse(ipStr, out var ip) &&
-                ip.AddressFamily == AddressFamily.InterNetwork &&
+            if (TryParseIPv4(ipStr, out var ip) &&
                 int.TryParse(prefixStr, out var prefix) &&
                 prefix >= 0 && prefix <= 32)
             {
@@ -129,10 +155,8 @@ public class Ipv4IntervalTree
         {
             var startStr = trimmed[..dashIdx].Trim();
             var endStr = trimmed[(dashIdx + 1)..].Trim();
-            if (IPAddress.TryParse(startStr, out var startIp) &&
-                startIp.AddressFamily == AddressFamily.InterNetwork &&
-                IPAddress.TryParse(endStr, out var endIp) &&
-                endIp.AddressFamily == AddressFamily.InterNetwork)
+            if (TryParseIPv4(startStr, out var startIp) &&
+                TryParseIPv4(endStr, out var endIp))
             {
                 var startVal = startIp.ToUInt32();
                 var endVal = endIp.ToUInt32();
@@ -149,13 +173,29 @@ public class Ipv4IntervalTree
         }
 
         // Single IP: 1.2.3.4
-        if (IPAddress.TryParse(trimmed, out var singleIp) && singleIp.AddressFamily == AddressFamily.InterNetwork)
+        if (TryParseIPv4(trimmed, out var singleIp))
         {
             var val = singleIp.ToUInt32();
             range = new Ipv4Range(val, val);
             return true;
         }
 
+        return false;
+    }
+
+    private static bool TryParseIPv4(string input, out IPAddress ip)
+    {
+        if (IPAddress.TryParse(input, out ip))
+        {
+            if (ip.IsIPv4MappedToIPv6)
+            {
+                ip = ip.MapToIPv4();
+            }
+
+            return ip.AddressFamily == AddressFamily.InterNetwork;
+        }
+
+        ip = null;
         return false;
     }
 
@@ -166,7 +206,12 @@ public class Ipv4IntervalTree
             return Array.Empty<Ipv4Range>();
         }
 
-        var list = new List<Ipv4Range>(ranges);
+        var list = new List<Ipv4Range>();
+        foreach (var r in ranges)
+        {
+            list.Add(r.Start <= r.End ? r : new Ipv4Range(r.End, r.Start));
+        }
+
         if (list.Count == 0)
         {
             return Array.Empty<Ipv4Range>();
