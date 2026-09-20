@@ -588,6 +588,7 @@ export function useSaveSeedingConfig() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["config", "seeding"] });
+      queryClient.invalidateQueries({ queryKey: ["speedschedule", "active"] });
     },
   });
 }
