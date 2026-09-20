@@ -152,7 +152,7 @@ public class Scheduler : BackgroundService
                         catch (Exception ex)
                         {
                             _logger.Error(ex, "Scheduled task failed: {0}", next.TypeName);
-                            _taskManager.RecordTaskFailed(next.TypeName, startTime, ex, ScheduledTaskTriggerSource.Scheduler);
+                            _taskManager.RecordTaskFailed(next.TypeName, startTime, ex.Message);
                         }
                         finally
                         {

@@ -426,6 +426,64 @@ public class TaskManagerTest
     }
 
     [Test]
+    public void RecordTaskFailed_should_persist_failed_status_and_error_message_to_scheduled_task()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 42,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20),
+            LastStatus = TaskExecutionStatus.None
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var startTime = DateTime.UtcNow.AddSeconds(-2);
+        _subject.RecordTaskStarted("TestTask", ScheduledTaskTriggerSource.Scheduler);
+        _subject.RecordTaskFailed("TestTask", startTime, "Simulated network timeout");
+
+        Assert.That(task.LastStatus, Is.EqualTo(TaskExecutionStatus.Failed));
+        Assert.That(task.LastErrorMessage, Is.EqualTo("Simulated network timeout"));
+        _repository.Received().Update(Arg.Is<ScheduledTask>(t =>
+            t.TypeName == "TestTask" &&
+            t.LastStatus == TaskExecutionStatus.Failed &&
+            t.LastErrorMessage == "Simulated network timeout"));
+
+        // RecordTaskFinished should not overwrite Failed status with Success
+        _subject.RecordTaskFinished("TestTask", startTime);
+        Assert.That(task.LastStatus, Is.EqualTo(TaskExecutionStatus.Failed));
+        Assert.That(task.LastErrorMessage, Is.EqualTo("Simulated network timeout"));
+    }
+
+    [Test]
+    public void RecordTaskFinished_on_successful_execution_should_set_status_to_success_and_clear_error()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 42,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20),
+            LastStatus = TaskExecutionStatus.Failed,
+            LastErrorMessage = "Previous error"
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var startTime = DateTime.UtcNow;
+        _subject.RecordTaskStarted("TestTask", ScheduledTaskTriggerSource.Scheduler);
+        _subject.RecordTaskFinished("TestTask", startTime);
+
+        Assert.That(task.LastStatus, Is.EqualTo(TaskExecutionStatus.Success));
+        Assert.That(task.LastErrorMessage, Is.Null);
+        _repository.Received().Update(Arg.Is<ScheduledTask>(t =>
+            t.TypeName == "TestTask" &&
+            t.LastStatus == TaskExecutionStatus.Success &&
+            t.LastErrorMessage == null));
+    }
+
+    [Test]
     public void RecordTaskFinished_after_cancel_should_save_history_record_with_canceled_status()
     {
         var task = new ScheduledTask

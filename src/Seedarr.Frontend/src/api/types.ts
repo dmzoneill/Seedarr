@@ -1506,6 +1506,8 @@ export interface ScheduledTaskResource {
   lastDuration: string | null;
   nextExecution: string | null;
   isRunning?: boolean;
+  lastStatus?: "None" | "Success" | "Failed" | string;
+  lastErrorMessage?: string | null;
 }
 
 export interface UpdateScheduledTaskRequest {

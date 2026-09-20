@@ -119,6 +119,7 @@ public class SchedulerTest
         await Task.Delay(500);
 
         _taskManager.Received().UpdateLastExecution(typeof(ThrowingScheduledTask).FullName);
+        _taskManager.Received().RecordTaskFailed(typeof(ThrowingScheduledTask).FullName, Arg.Any<DateTime>(), "Task failed");
     }
 
     [Test]

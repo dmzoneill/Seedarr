@@ -14,6 +14,8 @@ interface ScheduledTask {
   lastDuration: string | null;
   nextExecution: string | null;
   isRunning?: boolean;
+  lastStatus?: "None" | "Success" | "Failed" | string;
+  lastErrorMessage?: string | null;
 }
 
 interface ScheduledTaskHistoryItem {
@@ -1065,6 +1067,22 @@ function SystemTasks() {
                         <strong style={{ color: "var(--text-primary)" }}>
                           {formatTaskName(task.typeName)}
                         </strong>
+                        {task.lastStatus === "Failed" && task.lastErrorMessage && (
+                          <div
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "#e74c3c",
+                              marginTop: "0.2rem",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              maxWidth: "280px",
+                            }}
+                            title={task.lastErrorMessage}
+                          >
+                            ⚠️ {task.lastErrorMessage}
+                          </div>
+                        )}
                       </td>
                       <td>
                         {running ? (
@@ -1080,6 +1098,21 @@ function SystemTasks() {
                             style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem", opacity: 0.7 }}
                           >
                             ⏸️ Disabled
+                          </span>
+                        ) : task.lastStatus === "Failed" ? (
+                          <span
+                            className="badge badge-error"
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.5rem",
+                              cursor: task.lastErrorMessage ? "help" : "default",
+                              backgroundColor: "rgba(231, 76, 60, 0.2)",
+                              color: "#e74c3c",
+                              borderColor: "#e74c3c",
+                            }}
+                            title={task.lastErrorMessage ? `Error: ${task.lastErrorMessage}` : "Task failed during last execution"}
+                          >
+                            ✕ Failed
                           </span>
                         ) : (
                           <span

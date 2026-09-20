@@ -14,4 +14,6 @@ public class ScheduledTaskResource
     public TimeSpan? LastDuration { get; set; }
     public DateTime? NextExecution { get; set; }
     public bool IsRunning { get; set; }
+    public string LastStatus { get; set; }
+    public string LastErrorMessage { get; set; }
 }

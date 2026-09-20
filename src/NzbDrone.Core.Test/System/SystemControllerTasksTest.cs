@@ -219,6 +219,32 @@ public class SystemControllerTasksTest
     }
 
     [Test]
+    public void GetTasks_includes_last_status_and_last_error_message()
+    {
+        var failedTask = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-10),
+            LastStatus = TaskExecutionStatus.Failed,
+            LastErrorMessage = "Database is locked"
+        };
+        _taskManager.GetAll().Returns(new List<ScheduledTask> { failedTask });
+
+        var actionResult = _controller.GetTasks();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var resources = okResult.Value as List<ScheduledTaskResource>;
+        Assert.That(resources, Has.Count.EqualTo(1));
+        var resource = resources[0];
+
+        Assert.That(resource.LastStatus, Is.EqualTo("Failed"));
+        Assert.That(resource.LastErrorMessage, Is.EqualTo("Database is locked"));
+    }
+
+    [Test]
     public void CancelCommand_cancels_queued_or_started_command()
     {
         var cmd = new CommandModel { Id = 5, Name = "Sample", Status = CommandStatus.Queued };
