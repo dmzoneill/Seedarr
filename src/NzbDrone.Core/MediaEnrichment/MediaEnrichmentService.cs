@@ -54,6 +54,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
 
     private readonly ITorrentMediaMetadataRepository _repository;
     private readonly IMediaContainerInspector _inspector;
+    private readonly IFFprobeMediaInspector _ffprobeInspector;
     private readonly IConfigService _configService;
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IEventAggregator _eventAggregator;
@@ -89,10 +90,12 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         IArrConnectionFactory connectionFactory = null,
         ITmdbMetadataProvider tmdbProvider = null,
         IMediaFilterService mediaFilterService = null,
-        HttpClient httpClient = null)
+        HttpClient httpClient = null,
+        IFFprobeMediaInspector ffprobeInspector = null)
     {
         _repository = repository;
-        _inspector = inspector ?? new MediaContainerInspector();
+        _ffprobeInspector = ffprobeInspector ?? new FFprobeMediaInspector();
+        _inspector = inspector ?? new MediaContainerInspector(_ffprobeInspector);
         _configService = configService;
         _appFolderInfo = appFolderInfo;
         _eventAggregator = eventAggregator;
@@ -130,6 +133,8 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         : this(repository, inspector, configService, appFolderInfo, eventAggregator, arrRepository, connectionFactory, null, null, httpClient)
     {
     }
+
+    public IFFprobeMediaInspector FFprobeInspector => _ffprobeInspector;
 
     public async Task<TorrentMediaMetadata> EnrichTorrentAsync(Torrent torrent, string filePath = null, CancellationToken cancellationToken = default)
     {
