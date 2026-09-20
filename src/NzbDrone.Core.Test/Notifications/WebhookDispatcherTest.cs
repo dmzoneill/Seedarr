@@ -255,6 +255,56 @@ public class WebhookDispatcherTest
     }
 
     [Test]
+    public void SanitizeUrlForLogging_should_redact_apikey_query_parameter()
+    {
+        var url = "https://indexer.example.com/api?apikey=secret_apikey_12345&t=search";
+        var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
+        Assert.That(sanitized, Is.EqualTo("https://indexer.example.com/api?apikey=[REDACTED]&t=search"));
+    }
+
+    [Test]
+    public void SanitizeUrlForLogging_should_redact_api_key_query_parameter()
+    {
+        var url = "https://example.com/notify?api_key=my_api_key_value";
+        var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
+        Assert.That(sanitized, Is.EqualTo("https://example.com/notify?api_key=[REDACTED]"));
+    }
+
+    [Test]
+    public void SanitizeUrlForLogging_should_redact_token_and_passkey_query_parameters()
+    {
+        var url = "https://tracker.example.com/announce?passkey=secret_passkey_abc&token=secret_token_xyz&downloaded=0";
+        var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
+        Assert.That(sanitized, Is.EqualTo("https://tracker.example.com/announce?passkey=[REDACTED]&token=[REDACTED]&downloaded=0"));
+    }
+
+    [Test]
+    public void SanitizeUrlForLogging_should_redact_telegram_bot_token_without_colon()
+    {
+        var url = "https://api.telegram.org/botABCDEF123456789/sendMessage";
+        var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
+        Assert.That(sanitized, Is.EqualTo("https://api.telegram.org/bot[REDACTED]/sendMessage"));
+    }
+
+    [Test]
+    public void SanitizeUrlForLogging_should_redact_basic_auth_credentials()
+    {
+        var url = "https://myuser:secretpassword123@example.com/webhook";
+        var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
+        Assert.That(sanitized, Is.EqualTo("https://myuser:[REDACTED]@example.com/webhook"));
+    }
+
+    [Test]
+    public void RedactHeadersForLogging_should_strip_header_values_and_retain_keys()
+    {
+        var headers = "Authorization: Bearer secret-bearer-token\r\nX-Api-Key: my-secret-api-key";
+        var redacted = WebhookDispatcher.RedactHeadersForLogging(headers);
+        Assert.That(redacted, Is.EqualTo("Authorization, X-Api-Key"));
+        Assert.That(redacted, Does.Not.Contain("secret-bearer-token"));
+        Assert.That(redacted, Does.Not.Contain("my-secret-api-key"));
+    }
+
+    [Test]
     public async Task DispatchDetailedAsync_when_telegram_returns_cant_parse_entities_retries_without_parse_mode_and_succeeds()
     {
         var handler = new MockHttpMessageHandler();

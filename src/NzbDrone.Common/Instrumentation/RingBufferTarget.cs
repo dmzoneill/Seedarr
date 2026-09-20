@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using NLog;
 using NLog.Targets;
 
@@ -9,6 +10,30 @@ namespace NzbDrone.Common.Instrumentation;
 [Target("RingBuffer")]
 public class RingBufferTarget : TargetWithLayout
 {
+    private static readonly Regex TelegramBotPathRegex = new(
+        @"(api\.telegram\.org/bot)[^/?#\s]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex TelegramBotTokenRegex = new(
+        @"\bbot\d+:[A-Za-z0-9_-]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex DiscordWebhookRegex = new(
+        @"/api/webhooks/(?<id>\d+)/[^/?#\s]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex SlackWebhookRegex = new(
+        @"/services/T[A-Za-z0-9]+/B[A-Za-z0-9]+/[A-Za-z0-9]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex SensitiveParamRegex = new(
+        @"((?:^|[?&,\s""';])(?:api[_-]?key|bot[_-]?token|token|passkey|secret|password|access[_-]?token)=)[^&\s""';]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex BasicAuthRegex = new(
+        @"(https?://[^:/@\s]+:)([^@/\s]+)(@)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private readonly object _lock = new();
     private readonly LogEntryRecord[] _buffer;
     private int _position;
@@ -23,6 +48,23 @@ public class RingBufferTarget : TargetWithLayout
         _buffer = new LogEntryRecord[capacity];
     }
 
+    public static string Sanitize(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            return input;
+        }
+
+        var result = TelegramBotPathRegex.Replace(input, "$1[REDACTED]");
+        result = TelegramBotTokenRegex.Replace(result, "bot[REDACTED]");
+        result = DiscordWebhookRegex.Replace(result, "/api/webhooks/${id}/[REDACTED]");
+        result = SlackWebhookRegex.Replace(result, "/services/[REDACTED]");
+        result = SensitiveParamRegex.Replace(result, "$1[REDACTED]");
+        result = BasicAuthRegex.Replace(result, "$1[REDACTED]$3");
+
+        return result;
+    }
+
     protected override void Write(LogEventInfo logEvent)
     {
         var entry = new LogEntryRecord
@@ -30,8 +72,8 @@ public class RingBufferTarget : TargetWithLayout
             Time = logEvent.TimeStamp.ToUniversalTime(),
             Level = logEvent.Level.Name,
             Logger = logEvent.LoggerName,
-            Message = logEvent.FormattedMessage,
-            Exception = logEvent.Exception?.ToString()
+            Message = Sanitize(logEvent.FormattedMessage),
+            Exception = Sanitize(logEvent.Exception?.ToString())
         };
 
         lock (_lock)

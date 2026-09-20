@@ -92,6 +92,30 @@ public class WebhookDispatcher : IWebhookDispatcher
         return UrlValidator.IsSafeHost(uri.Host, allowLoopback);
     }
 
+    private static readonly Regex TelegramBotPathRegex = new(
+        @"(api\.telegram\.org/bot)[^/?#\s]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex TelegramBotTokenRegex = new(
+        @"\bbot\d+:[A-Za-z0-9_-]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex DiscordWebhookRegex = new(
+        @"/api/webhooks/(?<id>\d+)/[^/?#\s]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex SlackWebhookRegex = new(
+        @"/services/T[A-Za-z0-9]+/B[A-Za-z0-9]+/[A-Za-z0-9]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex QueryParamTokenRegex = new(
+        @"((?:[?&]|^)(?:api[_-]?key|bot[_-]?token|token|passkey|secret|password|auth|access[_-]?token)=)[^&#\s]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex BasicAuthRegex = new(
+        @"(https?://[^:/@\s]+:)([^@/\s]+)(@)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public static string SanitizeUrlForLogging(string url)
     {
         if (string.IsNullOrWhiteSpace(url))
@@ -99,9 +123,12 @@ public class WebhookDispatcher : IWebhookDispatcher
             return string.Empty;
         }
 
-        var sanitized = Regex.Replace(url, @"bot\d+:[A-Za-z0-9_-]+", "bot[REDACTED]", RegexOptions.IgnoreCase);
-        sanitized = Regex.Replace(sanitized, @"/api/webhooks/(?<id>\d+)/[A-Za-z0-9_-]+", "/api/webhooks/${id}/[REDACTED]", RegexOptions.IgnoreCase);
-        sanitized = Regex.Replace(sanitized, @"/services/T[A-Za-z0-9]+/B[A-Za-z0-9]+/[A-Za-z0-9]+", "/services/[REDACTED]", RegexOptions.IgnoreCase);
+        var sanitized = TelegramBotPathRegex.Replace(url, "$1[REDACTED]");
+        sanitized = TelegramBotTokenRegex.Replace(sanitized, "bot[REDACTED]");
+        sanitized = DiscordWebhookRegex.Replace(sanitized, "/api/webhooks/${id}/[REDACTED]");
+        sanitized = SlackWebhookRegex.Replace(sanitized, "/services/[REDACTED]");
+        sanitized = QueryParamTokenRegex.Replace(sanitized, "$1[REDACTED]");
+        sanitized = BasicAuthRegex.Replace(sanitized, "$1[REDACTED]$3");
 
         return sanitized;
     }
@@ -385,7 +412,14 @@ public class WebhookDispatcher : IWebhookDispatcher
 
             var bodySnippet = await ExtractBodySnippetAsync(response, cancellationToken).ConfigureAwait(false);
             var reason = response.ReasonPhrase ?? response.StatusCode.ToString();
-            _logger.Warn("Webhook dispatch to {0} returned non-success status code: {1}", SanitizeUrlForLogging(targetUrl), response.StatusCode);
+            if ((int)response.StatusCode >= 300 && (int)response.StatusCode <= 399 && response.Headers.Location != null)
+            {
+                _logger.Warn("Webhook dispatch to {0} returned redirect status code {1} to {2}", SanitizeUrlForLogging(targetUrl), response.StatusCode, SanitizeUrlForLogging(response.Headers.Location.ToString()));
+            }
+            else
+            {
+                _logger.Warn("Webhook dispatch to {0} returned non-success status code: {1}", SanitizeUrlForLogging(targetUrl), response.StatusCode);
+            }
             return new WebhookDispatchResult
             {
                 Success = false,
