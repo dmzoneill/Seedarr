@@ -19,20 +19,38 @@ public interface IPeerExchange
     PexData ParsePexMessage(byte[] data, bool isPrivate = false);
 }
 
+public static class PexFlags
+{
+    public const byte EncryptionPreferred = 0x01;
+    public const byte UploadOnly = 0x02;
+    public const byte Seeder = 0x02;
+    public const byte UtpSupported = 0x04;
+    public const byte HolepunchSupported = 0x08;
+}
+
 public class PeerInfo
 {
+    public const byte FlagEncryptionPreferred = 0x01;
+    public const byte FlagUploadOnly = 0x02;
+    public const byte FlagSeeder = 0x02;
+    public const byte FlagUtpSupported = 0x04;
+    public const byte FlagHolepunchSupported = 0x08;
+
     public string Ip { get; set; }
     public int Port { get; set; }
     public byte Flags { get; set; }
-    public bool IsSeeder => (Flags & 0x02) != 0;
-    public bool PrefersEncryption => (Flags & 0x01) != 0;
-    public bool SupportsUtp => (Flags & 0x04) != 0;
+    public bool PrefersEncryption => (Flags & FlagEncryptionPreferred) != 0;
+    public bool IsSeeder => (Flags & FlagSeeder) != 0;
+    public bool SupportsUtp => (Flags & FlagUtpSupported) != 0;
+    public bool SupportsHolepunch => (Flags & FlagHolepunchSupported) != 0;
 }
 
 public class PexData
 {
     public List<PeerInfo> Added { get; set; } = new();
     public List<PeerInfo> Dropped { get; set; } = new();
+    public List<PeerInfo> Added6 { get; set; } = new();
+    public List<PeerInfo> Dropped6 { get; set; } = new();
 }
 
 public class PeerExchange : IPeerExchange
@@ -119,11 +137,29 @@ public class PeerExchange : IPeerExchange
         var stride = isIPv6 ? 18 : 6;
         var ipLen = isIPv6 ? 16 : 4;
 
-        for (var i = 0; i + stride <= data.Length; i += stride)
+        if (data.IsEmpty || data.Length < stride)
+        {
+            return peers;
+        }
+
+        var trailing = data.Length % stride;
+        if (trailing != 0)
+        {
+            data = data.Slice(0, data.Length - trailing);
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < data.Length; i += stride)
         {
             var peerIndex = i / stride;
             var ip = new IPAddress(data.Slice(i, ipLen));
             var port = (data[i + ipLen] << 8) | data[i + ipLen + 1];
+
+            if (port <= 0 || port > 65535)
+            {
+                continue;
+            }
 
             if (!IsRoutablePublicPeer(ip, port))
             {
@@ -131,6 +167,12 @@ public class PeerExchange : IPeerExchange
             }
 
             if (listeningPort > 0 && port == listeningPort && (IPAddress.IsLoopback(ip) || LocalPeerDiscovery.IsLocalAddress(ip)))
+            {
+                continue;
+            }
+
+            var endpoint = isIPv6 ? $"[{ip}]:{port}" : $"{ip}:{port}";
+            if (!seen.Add(endpoint))
             {
                 continue;
             }
@@ -203,9 +245,47 @@ public class PeerExchange : IPeerExchange
             return Array.Empty<byte>();
         }
 
+        var uniqueAdded = new List<PeerInfo>();
+        var seenAdded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (added != null)
+        {
+            foreach (var peer in added)
+            {
+                if (peer == null || string.IsNullOrWhiteSpace(peer.Ip))
+                {
+                    continue;
+                }
+
+                var key = $"{peer.Ip}:{peer.Port}";
+                if (seenAdded.Add(key))
+                {
+                    uniqueAdded.Add(peer);
+                }
+            }
+        }
+
+        var uniqueDropped = new List<PeerInfo>();
+        var seenDropped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (dropped != null)
+        {
+            foreach (var peer in dropped)
+            {
+                if (peer == null || string.IsNullOrWhiteSpace(peer.Ip))
+                {
+                    continue;
+                }
+
+                var key = $"{peer.Ip}:{peer.Port}";
+                if (!seenAdded.Contains(key) && seenDropped.Add(key))
+                {
+                    uniqueDropped.Add(peer);
+                }
+            }
+        }
+
         var maxPeers = _configService != null && _configService.PexMaxPeersPerMessage > 0 ? _configService.PexMaxPeersPerMessage : 50;
-        var cappedAdded = added.Count > maxPeers ? added.Take(maxPeers).ToList() : added;
-        var cappedDropped = dropped.Count > maxPeers ? dropped.Take(maxPeers).ToList() : dropped;
+        var cappedAdded = uniqueAdded.Count > maxPeers ? uniqueAdded.Take(maxPeers).ToList() : uniqueAdded;
+        var cappedDropped = uniqueDropped.Count > maxPeers ? uniqueDropped.Take(maxPeers).ToList() : uniqueDropped;
 
         var ipv4Added = cappedAdded
             .Where(p => IPAddress.TryParse(p.Ip, out var addr) && addr.AddressFamily == AddressFamily.InterNetwork)
@@ -253,7 +333,7 @@ public class PeerExchange : IPeerExchange
 
     public PexData ParsePexMessage(byte[] data, bool isPrivate = false)
     {
-        if (!_configService.EnablePex || isPrivate)
+        if (!_configService.EnablePex || isPrivate || data == null || data.Length == 0)
         {
             return new PexData();
         }
@@ -287,7 +367,9 @@ public class PeerExchange : IPeerExchange
             if (dict.ContainsKey("added6"))
             {
                 var added6Bytes = ((BString)dict["added6"]).Value;
-                result.Added.AddRange(ParseCompactPeers(added6Bytes.Span, added6Flags, isIPv6: true, listeningPort));
+                var peers6 = ParseCompactPeers(added6Bytes.Span, added6Flags, isIPv6: true, listeningPort);
+                result.Added.AddRange(peers6);
+                result.Added6.AddRange(peers6);
             }
 
             if (dict.ContainsKey("dropped"))
@@ -299,8 +381,16 @@ public class PeerExchange : IPeerExchange
             if (dict.ContainsKey("dropped6"))
             {
                 var dropped6Bytes = ((BString)dict["dropped6"]).Value;
-                result.Dropped.AddRange(ParseCompactPeers(dropped6Bytes.Span, isIPv6: true, listeningPort));
+                var dropped6Peers = ParseCompactPeers(dropped6Bytes.Span, isIPv6: true, listeningPort);
+                result.Dropped.AddRange(dropped6Peers);
+                result.Dropped6.AddRange(dropped6Peers);
             }
+
+            var seenAdded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            result.Added = result.Added.Where(p => seenAdded.Add($"{p.Ip}:{p.Port}")).ToList();
+
+            var seenDropped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            result.Dropped = result.Dropped.Where(p => seenDropped.Add($"{p.Ip}:{p.Port}")).ToList();
 
             return result;
         }
