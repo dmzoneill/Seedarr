@@ -31,4 +31,8 @@ public interface IPeerBlocklistSyncService
     void ResetBackoff();
 
     void SetActiveRules(IEnumerable<string> rules);
+
+    bool IsBlocked(IPAddress address);
+
+    bool IsBlocked(string ip);
 }

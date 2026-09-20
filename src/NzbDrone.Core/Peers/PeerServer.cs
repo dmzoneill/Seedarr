@@ -13,6 +13,7 @@ using BencodeNET.Parsing;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Blocklist;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network;
@@ -65,6 +66,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private readonly ConcurrentDictionary<string, SwarmPieceHistogram> _swarmHistograms = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ISuperSeedingTracker> _superSeedingTrackers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ISuperSeedingTracker _superSeedingTracker;
+    private readonly IPeerBlocklistSyncService _blocklistService;
     private readonly Logger _logger;
     private readonly object _listenerLock = new();
     private readonly SemaphoreSlim _rebindSignal = new(0, 1);
@@ -323,7 +325,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         PiecePicker.PiecePicker piecePicker = null,
         IPieceStorage pieceStorage = null,
         Extensions.IPexService pexService = null,
-        ISuperSeedingTracker superSeedingTracker = null)
+        ISuperSeedingTracker superSeedingTracker = null,
+        IPeerBlocklistSyncService blocklistService = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -350,6 +353,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _piecePicker = piecePicker ?? new PiecePicker.PiecePicker(_sequentialPicker, _rarestFirstPicker);
         _pieceStorage = pieceStorage;
         _superSeedingTracker = superSeedingTracker;
+        _blocklistService = blocklistService;
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -1323,6 +1327,16 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                         continue;
                     }
 
+                    if (_configService.BlocklistEnabled && _blocklistService != null)
+                    {
+                        if (client.Client?.RemoteEndPoint is IPEndPoint endpoint && _blocklistService.IsBlocked(endpoint.Address))
+                        {
+                            _logger.Debug("PeerServer: rejected incoming connection from blocklisted IP {0}", endpoint.Address);
+                            client.Dispose();
+                            continue;
+                        }
+                    }
+
                     _ = Task.Run(
                         async () =>
                         {
@@ -1392,6 +1406,13 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             if (_connectionManager?.IsPeerBanned(clientIp) == true)
             {
                 _logger.Debug("PeerServer: rejected incoming connection from banned peer {0}", clientIp);
+                client.Dispose();
+                return;
+            }
+
+            if (_configService.BlocklistEnabled && _blocklistService != null && _blocklistService.IsBlocked(endpoint.Address))
+            {
+                _logger.Debug("PeerServer: rejected incoming connection from blocklisted peer {0}", clientIp);
                 client.Dispose();
                 return;
             }
@@ -1745,6 +1766,13 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         if (_connectionManager?.IsPeerBanned(candidate.Ip) == true)
         {
             _logger.Debug("PeerServer: rejected outgoing connection to banned peer {0}:{1}", candidate.Ip, candidate.Port);
+            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+            return;
+        }
+
+        if (_configService.BlocklistEnabled && _blocklistService != null && _blocklistService.IsBlocked(candIp))
+        {
+            _logger.Debug("PeerServer: rejected outgoing connection to blocklisted peer {0}:{1}", candidate.Ip, candidate.Port);
             _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
             return;
         }
@@ -2129,6 +2157,21 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
             var endpoint = conn.RemoteEndPoint;
             clientIp = endpoint.Address.ToString();
+
+            if (_connectionManager?.IsPeerBanned(clientIp) == true)
+            {
+                _logger.Debug("PeerServer: rejected incoming uTP connection from banned peer {0}", clientIp);
+                conn.Dispose();
+                return;
+            }
+
+            if (_configService.BlocklistEnabled && _blocklistService != null && _blocklistService.IsBlocked(endpoint.Address))
+            {
+                _logger.Debug("PeerServer: rejected incoming uTP connection from blocklisted IP {0}", clientIp);
+                conn.Dispose();
+                return;
+            }
+
             var maxPerIp = _configService.MaxConnectionsPerIp > 0 ? _configService.MaxConnectionsPerIp : 5;
             var currentCount = _connectionsPerIp.AddOrUpdate(clientIp, 1, (_, count) => count + 1);
             ipReserved = true;

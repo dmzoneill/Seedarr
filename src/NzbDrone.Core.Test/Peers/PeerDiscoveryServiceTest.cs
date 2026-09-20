@@ -3,7 +3,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Blocklist;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Torrents;
@@ -429,5 +432,109 @@ public class PeerDiscoveryServiceTest
         Assert.That(candidates[0].IsSeeder, Is.True);
         Assert.That(candidates[1].Ip, Is.EqualTo("93.184.216.35"));
         Assert.That(candidates[1].IsSeeder, Is.False);
+    }
+
+    [Test]
+    public void AddPeers_should_filter_out_blocklisted_peer_ips()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BlocklistEnabled.Returns(true);
+
+        var blocklistService = Substitute.For<IPeerBlocklistSyncService>();
+        blocklistService.IsBlocked("1.2.3.4").Returns(true);
+        blocklistService.IsBlocked("5.6.7.8").Returns(false);
+
+        var service = new PeerDiscoveryService(configService, blocklistService);
+
+        var peers = new[]
+        {
+            new TrackerPeer { Ip = "1.2.3.4", Port = 5001 },
+            new TrackerPeer { Ip = "5.6.7.8", Port = 5002 }
+        };
+
+        service.AddPeers(InfoHash, peers, "tracker");
+
+        var candidates = service.GetPeers(InfoHash, 10);
+        Assert.That(candidates.Count, Is.EqualTo(1));
+        Assert.That(candidates[0].Ip, Is.EqualTo("5.6.7.8"));
+        Assert.That(service.PeerCount(InfoHash), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void AddPeers_should_not_filter_when_blocklist_disabled()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BlocklistEnabled.Returns(false);
+
+        var blocklistService = Substitute.For<IPeerBlocklistSyncService>();
+        blocklistService.IsBlocked(Arg.Any<string>()).Returns(true);
+
+        var service = new PeerDiscoveryService(configService, blocklistService);
+
+        var peers = new[]
+        {
+            new TrackerPeer { Ip = "1.2.3.4", Port = 5001 },
+            new TrackerPeer { Ip = "5.6.7.8", Port = 5002 }
+        };
+
+        service.AddPeers(InfoHash, peers, "tracker");
+
+        var candidates = service.GetPeers(InfoHash, 10);
+        Assert.That(candidates.Count, Is.EqualTo(2));
+        Assert.That(service.PeerCount(InfoHash), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void GetPeers_should_filter_out_peers_when_blocklist_updated_after_discovery()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BlocklistEnabled.Returns(true);
+
+        var blocklistService = Substitute.For<IPeerBlocklistSyncService>();
+        blocklistService.IsBlocked(Arg.Any<string>()).Returns(false);
+
+        var service = new PeerDiscoveryService(configService, blocklistService);
+
+        var peers = new[]
+        {
+            new TrackerPeer { Ip = "1.2.3.4", Port = 5001 },
+            new TrackerPeer { Ip = "5.6.7.8", Port = 5002 }
+        };
+
+        service.AddPeers(InfoHash, peers, "tracker");
+        Assert.That(service.GetPeers(InfoHash, 10).Count, Is.EqualTo(2));
+
+        // Now block 1.2.3.4
+        blocklistService.IsBlocked("1.2.3.4").Returns(true);
+
+        var updatedCandidates = service.GetPeers(InfoHash, 10);
+        Assert.That(updatedCandidates.Count, Is.EqualTo(1));
+        Assert.That(updatedCandidates[0].Ip, Is.EqualTo("5.6.7.8"));
+        Assert.That(service.PeerCount(InfoHash), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void AddPeers_with_PeerInfo_should_filter_out_blocklisted_peer_ips()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BlocklistEnabled.Returns(true);
+
+        var blocklistService = Substitute.For<IPeerBlocklistSyncService>();
+        blocklistService.IsBlocked("10.0.0.1").Returns(true);
+        blocklistService.IsBlocked("10.0.0.2").Returns(false);
+
+        var service = new PeerDiscoveryService(configService, blocklistService);
+
+        var peerInfos = new[]
+        {
+            new PeerInfo { Ip = "10.0.0.1", Port = 6881 },
+            new PeerInfo { Ip = "10.0.0.2", Port = 6882 }
+        };
+
+        service.AddPeers(InfoHash, peerInfos, "pex");
+
+        var candidates = service.GetPeers(InfoHash, 10);
+        Assert.That(candidates.Count, Is.EqualTo(1));
+        Assert.That(candidates[0].Ip, Is.EqualTo("10.0.0.2"));
     }
 }
