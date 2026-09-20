@@ -260,6 +260,12 @@ export interface SystemStatus {
   databaseVersion: string;
   databaseMigration: string;
   uptimeSeconds: number;
+  gcGen0Collections?: number;
+  gcGen1Collections?: number;
+  gcGen2Collections?: number;
+  gcTotalAllocatedBytes?: number;
+  gcHeapSizeBytes?: number;
+  gcPauseTimePercentage?: number;
 }
 
 export interface DiskSpaceInfo {

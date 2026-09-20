@@ -80,6 +80,7 @@ public class SystemController : ControllerBase
 #endif
 
         var dbType = _mainDatabase?.DatabaseType.ToString() ?? "SQLite";
+        var gcInfo = GC.GetGCMemoryInfo();
 
         return Ok(new SystemResource
         {
@@ -102,6 +103,12 @@ public class SystemController : ControllerBase
             DatabaseVersion = dbType,
             DatabaseMigration = GetDatabaseMigrationVersion(),
             UptimeSeconds = (DateTime.UtcNow - StartTime).TotalSeconds,
+            GcGen0Collections = GC.CollectionCount(0),
+            GcGen1Collections = GC.CollectionCount(1),
+            GcGen2Collections = GC.CollectionCount(2),
+            GcTotalAllocatedBytes = GC.GetTotalAllocatedBytes(),
+            GcHeapSizeBytes = gcInfo.HeapSizeBytes,
+            GcPauseTimePercentage = gcInfo.PauseTimePercentage,
         });
     }
 

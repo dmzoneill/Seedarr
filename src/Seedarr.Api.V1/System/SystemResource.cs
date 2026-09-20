@@ -102,4 +102,34 @@ public class SystemResource : RestResource
     /// Gets or sets the application uptime in seconds.
     /// </summary>
     public double UptimeSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Gen 0 garbage collection count.
+    /// </summary>
+    public int GcGen0Collections { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Gen 1 garbage collection count.
+    /// </summary>
+    public int GcGen1Collections { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Gen 2 garbage collection count.
+    /// </summary>
+    public int GcGen2Collections { get; set; }
+
+    /// <summary>
+    /// Gets or sets the lifetime total allocated bytes by the managed runtime.
+    /// </summary>
+    public long GcTotalAllocatedBytes { get; set; }
+
+    /// <summary>
+    /// Gets or sets the managed heap size in bytes.
+    /// </summary>
+    public long GcHeapSizeBytes { get; set; }
+
+    /// <summary>
+    /// Gets or sets the percentage of time spent in GC pauses.
+    /// </summary>
+    public double GcPauseTimePercentage { get; set; }
 }

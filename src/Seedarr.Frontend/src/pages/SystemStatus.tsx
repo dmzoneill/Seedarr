@@ -770,6 +770,82 @@ function SystemStatus() {
           </div>
         )}
 
+        {/* .NET Managed Runtime & Memory Card */}
+        {status && (
+          <div
+            className="card"
+            style={{
+              borderRadius: "8px",
+              border: "1px solid var(--border-light)",
+              boxShadow:
+                "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+              padding: "1.25rem",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "1.05rem",
+                fontWeight: 600,
+                color: "var(--accent, #c8a84e)",
+                marginTop: 0,
+                marginBottom: "0.85rem",
+              }}
+            >
+              .NET Managed Runtime &amp; Memory
+            </h2>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.6rem",
+              }}
+            >
+              <div className="status-row">
+                <span className="status-label">Gen 0 Collections</span>
+                <span className="status-value">
+                  {status.gcGen0Collections?.toLocaleString() ?? 0}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">Gen 1 Collections</span>
+                <span className="status-value">
+                  {status.gcGen1Collections?.toLocaleString() ?? 0}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">Gen 2 Collections</span>
+                <span className="status-value">
+                  {status.gcGen2Collections?.toLocaleString() ?? 0}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">Heap Size</span>
+                <span className="status-value">
+                  {status.gcHeapSizeBytes != null
+                    ? formatBytes(status.gcHeapSizeBytes)
+                    : "0 B"}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">Lifetime Allocated Memory</span>
+                <span className="status-value">
+                  {status.gcTotalAllocatedBytes != null
+                    ? formatBytes(status.gcTotalAllocatedBytes)
+                    : "0 B"}
+                </span>
+              </div>
+              <div className="status-row">
+                <span className="status-label">GC Pause Time Percentage</span>
+                <span className="status-value">
+                  {status.gcPauseTimePercentage != null
+                    ? `${status.gcPauseTimePercentage.toFixed(2)}%`
+                    : "0.00%"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Resources & Links Card */}
         <div
           className="card"
