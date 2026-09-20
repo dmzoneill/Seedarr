@@ -68,5 +68,9 @@ public interface IConfigFileProvider
 
     string TrustedProxies { get; }
 
+    string AllowedOrigins { get; }
+
+    List<string> AllowedOriginsList { get; }
+
     void SaveConfigDictionary(Dictionary<string, object> configValues);
 }

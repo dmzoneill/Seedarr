@@ -290,7 +290,7 @@ public class Startup
         {
             options.AddDefaultPolicy(builder =>
             {
-                builder.SetIsOriginAllowed(_ => true)
+                builder.SetIsOriginAllowed(origin => CorsSecurityHelper.IsOriginAllowed(origin, configFileProvider))
                     .AllowAnyMethod()
                     .AllowAnyHeader()
                     .AllowCredentials();
@@ -298,6 +298,16 @@ public class Startup
         });
 
         services.AddHostedService<AppLifetime>();
+    }
+
+    public static bool IsOriginAllowed(string origin, IConfigFileProvider configFileProvider)
+    {
+        return CorsSecurityHelper.IsOriginAllowed(origin, configFileProvider);
+    }
+
+    public static bool IsOriginAllowed(string origin, string allowedOrigins)
+    {
+        return CorsSecurityHelper.IsOriginAllowed(origin, allowedOrigins);
     }
 
     public void Configure(WebApplication app)

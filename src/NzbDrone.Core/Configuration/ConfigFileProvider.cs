@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
 using NLog;
@@ -130,6 +131,26 @@ public class ConfigFileProvider : IConfigFileProvider
     public int PeerTos => GetValueInt("PeerTos", 0);
 
     public string TrustedProxies => GetValue("TrustedProxies", string.Empty);
+
+    public string AllowedOrigins => GetValue("AllowedOrigins", string.Empty);
+
+    public List<string> AllowedOriginsList
+    {
+        get
+        {
+            var allowedOrigins = AllowedOrigins;
+            if (string.IsNullOrWhiteSpace(allowedOrigins))
+            {
+                return new List<string>();
+            }
+
+            return allowedOrigins
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(o => o.Trim())
+                .Where(o => !string.IsNullOrEmpty(o))
+                .ToList();
+        }
+    }
 
     private void LoadFromFile()
     {

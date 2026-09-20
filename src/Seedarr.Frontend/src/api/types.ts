@@ -369,6 +369,7 @@ export interface GeneralConfig {
   csrfProtectionEnabled?: boolean;
   hostHeaderValidationEnabled?: boolean;
   allowedHosts?: string;
+  allowedOrigins?: string;
   terminalAccessEnabled?: boolean;
   enableSsl?: boolean;
   sslPort?: number;
