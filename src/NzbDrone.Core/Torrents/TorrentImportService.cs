@@ -50,6 +50,7 @@ public class TorrentImportService : ITorrentImportService
         {
             var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
             var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
+            var trackersToMerge = new List<TrackerEntry>();
 
             if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
             {
@@ -59,7 +60,7 @@ public class TorrentImportService : ITorrentImportService
                     {
                         if (!string.IsNullOrWhiteSpace(url) && existingUrls.Add(url))
                         {
-                            _trackerEntryService.Add(new TrackerEntry
+                            trackersToMerge.Add(new TrackerEntry
                             {
                                 TorrentId = existing.Id,
                                 Url = url,
@@ -72,13 +73,18 @@ public class TorrentImportService : ITorrentImportService
             }
             else if (!string.IsNullOrWhiteSpace(parsed.AnnounceUrl) && existingUrls.Add(parsed.AnnounceUrl))
             {
-                _trackerEntryService.Add(new TrackerEntry
+                trackersToMerge.Add(new TrackerEntry
                 {
                     TorrentId = existing.Id,
                     Url = parsed.AnnounceUrl,
                     Tier = 0,
                     Enabled = true,
                 });
+            }
+
+            if (trackersToMerge.Count > 0)
+            {
+                _trackerEntryService.AddMany(trackersToMerge);
             }
 
             _eventLogService.Info(existing.Id, "Update", $"Torrent '{existing.Name}' updated with new trackers from file '{fileName}'");
@@ -101,30 +107,13 @@ public class TorrentImportService : ITorrentImportService
             DateAdded = DateTime.UtcNow
         };
 
-        var addedTorrent = _torrentService.Add(torrent);
-
-        var streamLength = 0L;
-        try
-        {
-            if (stream.CanSeek)
-            {
-                streamLength = stream.Length;
-            }
-        }
-        catch
-        {
-            // ignored
-        }
-
-        _eventLogService.Info(addedTorrent.Id, "Add", $"Torrent '{parsed.Name}' added from file '{fileName}' ({streamLength} bytes)");
-
-        if (parsed.Files != null)
+        var filesToAdd = new List<TorrentFile>();
+        if (parsed.Files != null && parsed.Files.Count > 0)
         {
             foreach (var f in parsed.Files)
             {
-                _torrentFileService.Add(new TorrentFile
+                filesToAdd.Add(new TorrentFile
                 {
-                    TorrentId = addedTorrent.Id,
                     Path = f.Path,
                     Size = f.Size,
                     IsPaddingFile = f.IsPaddingFile
@@ -132,6 +121,7 @@ public class TorrentImportService : ITorrentImportService
             }
         }
 
+        var trackersToAdd = new List<TrackerEntry>();
         if (parsed.AnnounceList != null)
         {
             var tier = 0;
@@ -142,9 +132,8 @@ public class TorrentImportService : ITorrentImportService
                 {
                     if (!string.IsNullOrWhiteSpace(url) && addedUrls.Add(url))
                     {
-                        _trackerEntryService.Add(new TrackerEntry
+                        trackersToAdd.Add(new TrackerEntry
                         {
-                            TorrentId = addedTorrent.Id,
                             Url = url,
                             Tier = tier,
                             Enabled = true
@@ -157,16 +146,72 @@ public class TorrentImportService : ITorrentImportService
         }
         else if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
         {
-            _trackerEntryService.Add(new TrackerEntry
+            trackersToAdd.Add(new TrackerEntry
             {
-                TorrentId = addedTorrent.Id,
                 Url = parsed.AnnounceUrl,
                 Tier = 0,
                 Enabled = true
             });
         }
 
-        return addedTorrent;
+        Torrent addedTorrent = null;
+        try
+        {
+            addedTorrent = _torrentService.Add(torrent);
+
+            var streamLength = 0L;
+            try
+            {
+                if (stream.CanSeek)
+                {
+                    streamLength = stream.Length;
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            _eventLogService.Info(addedTorrent.Id, "Add", $"Torrent '{parsed.Name}' added from file '{fileName}' ({streamLength} bytes)");
+
+            if (filesToAdd.Count > 0)
+            {
+                foreach (var f in filesToAdd)
+                {
+                    f.TorrentId = addedTorrent.Id;
+                }
+
+                _torrentFileService.AddMany(filesToAdd);
+            }
+
+            if (trackersToAdd.Count > 0)
+            {
+                foreach (var t in trackersToAdd)
+                {
+                    t.TorrentId = addedTorrent.Id;
+                }
+
+                _trackerEntryService.AddMany(trackersToAdd);
+            }
+
+            return addedTorrent;
+        }
+        catch
+        {
+            if (addedTorrent != null)
+            {
+                try
+                {
+                    _torrentService.Delete(addedTorrent.Id, false);
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.Warn(cleanupEx, "Failed to clean up torrent {0} after file import error", addedTorrent.Id);
+                }
+            }
+
+            throw;
+        }
     }
 
     public Torrent ImportFromMagnet(string magnetLink)
@@ -188,12 +233,13 @@ public class TorrentImportService : ITorrentImportService
 
             if (parsed.Trackers != null && parsed.Trackers.Length > 0)
             {
+                var trackersToMerge = new List<TrackerEntry>();
                 var tier = 0;
                 foreach (var url in parsed.Trackers)
                 {
                     if (!string.IsNullOrWhiteSpace(url) && existingUrls.Add(url))
                     {
-                        _trackerEntryService.Add(new TrackerEntry
+                        trackersToMerge.Add(new TrackerEntry
                         {
                             TorrentId = existing.Id,
                             Url = url,
@@ -203,6 +249,11 @@ public class TorrentImportService : ITorrentImportService
                     }
 
                     tier++;
+                }
+
+                if (trackersToMerge.Count > 0)
+                {
+                    _trackerEntryService.AddMany(trackersToMerge);
                 }
             }
 
@@ -219,10 +270,8 @@ public class TorrentImportService : ITorrentImportService
             DateAdded = DateTime.UtcNow
         };
 
-        var added = _torrentService.Add(torrent);
-        _eventLogService.Info(added.Id, "Add", $"Torrent '{parsed.Name}' added from magnet link");
-
-        if (parsed.Trackers != null)
+        var trackersToAddForNewTorrent = new List<TrackerEntry>();
+        if (parsed.Trackers != null && parsed.Trackers.Length > 0)
         {
             var tier = 0;
             var addedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -230,9 +279,8 @@ public class TorrentImportService : ITorrentImportService
             {
                 if (!string.IsNullOrWhiteSpace(url) && addedUrls.Add(url))
                 {
-                    _trackerEntryService.Add(new TrackerEntry
+                    trackersToAddForNewTorrent.Add(new TrackerEntry
                     {
-                        TorrentId = added.Id,
                         Url = url,
                         Tier = tier,
                         Enabled = true
@@ -243,7 +291,40 @@ public class TorrentImportService : ITorrentImportService
             }
         }
 
-        return added;
+        Torrent added = null;
+        try
+        {
+            added = _torrentService.Add(torrent);
+            _eventLogService.Info(added.Id, "Add", $"Torrent '{parsed.Name}' added from magnet link");
+
+            if (trackersToAddForNewTorrent.Count > 0)
+            {
+                foreach (var tracker in trackersToAddForNewTorrent)
+                {
+                    tracker.TorrentId = added.Id;
+                }
+
+                _trackerEntryService.AddMany(trackersToAddForNewTorrent);
+            }
+
+            return added;
+        }
+        catch
+        {
+            if (added != null)
+            {
+                try
+                {
+                    _torrentService.Delete(added.Id, false);
+                }
+                catch (Exception cleanupEx)
+                {
+                    _logger.Warn(cleanupEx, "Failed to clean up torrent {0} after magnet import error", added.Id);
+                }
+            }
+
+            throw;
+        }
     }
 
     private void ValidateInfoHash(string infoHash)

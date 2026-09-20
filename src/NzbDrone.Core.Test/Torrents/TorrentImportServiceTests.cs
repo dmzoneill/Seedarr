@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Torrents;
@@ -81,8 +82,9 @@ public class TorrentImportServiceTests
 
         Assert.That(result, Is.SameAs(existing));
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 55 && t.Url == "http://tracker2.example.com/announce" && t.Tier == 0 && t.Enabled));
-        _trackerEntryService.DidNotReceive().Add(Arg.Is<TrackerEntry>(t => t.Url == "http://tracker1.example.com/announce"));
+        _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(list =>
+            list.Any(t => t.TorrentId == 55 && t.Url == "http://tracker2.example.com/announce" && t.Tier == 0 && t.Enabled) &&
+            !list.Any(t => t.Url == "http://tracker1.example.com/announce")));
         _eventLogService.Received(1).Info(55, "Update", Arg.Is<string>(msg => msg.Contains("Existing Torrent") && msg.Contains("updated with new trackers")));
     }
 
@@ -119,8 +121,9 @@ public class TorrentImportServiceTests
         var result = _subject.ImportFromFile(stream, "test.torrent");
 
         Assert.That(result, Is.SameAs(existing));
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 60 && t.Url == "http://tier1.example.com/announce" && t.Tier == 1));
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 60 && t.Url == "http://tier2.example.com/announce" && t.Tier == 2));
+        _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(list =>
+            list.Any(t => t.TorrentId == 60 && t.Url == "http://tier1.example.com/announce" && t.Tier == 1) &&
+            list.Any(t => t.TorrentId == 60 && t.Url == "http://tier2.example.com/announce" && t.Tier == 2)));
     }
 
     [Test]
@@ -149,7 +152,8 @@ public class TorrentImportServiceTests
         var result = _subject.ImportFromFile(stream, "test.torrent");
 
         Assert.That(result, Is.SameAs(existing));
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 65 && t.Url == "http://newtracker.example.com/announce" && t.Tier == 0 && t.Enabled));
+        _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(list =>
+            list.Any(t => t.TorrentId == 65 && t.Url == "http://newtracker.example.com/announce" && t.Tier == 0 && t.Enabled)));
     }
 
     [Test]
@@ -197,12 +201,14 @@ public class TorrentImportServiceTests
         Assert.That(result.InfoHash, Is.EqualTo(parsed.InfoHash));
         Assert.That(result.Status, Is.EqualTo(TorrentStatus.Queued));
 
-        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f => f.TorrentId == 42 && f.Path == "ubuntu.iso" && f.Size == 900000));
-        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f => f.TorrentId == 42 && f.Path == "ubuntu.md5" && f.Size == 100000));
+        _torrentFileService.Received(1).AddMany(Arg.Is<IList<TorrentFile>>(files =>
+            files.Any(f => f.TorrentId == 42 && f.Path == "ubuntu.iso" && f.Size == 900000) &&
+            files.Any(f => f.TorrentId == 42 && f.Path == "ubuntu.md5" && f.Size == 100000)));
 
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 42 && t.Url == "http://tracker1.example.com/announce" && t.Tier == 0 && t.Enabled));
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 42 && t.Url == "http://tracker1-backup.example.com/announce" && t.Tier == 0 && t.Enabled));
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 42 && t.Url == "http://tracker2.example.com/announce" && t.Tier == 1 && t.Enabled));
+        _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(trackers =>
+            trackers.Any(t => t.TorrentId == 42 && t.Url == "http://tracker1.example.com/announce" && t.Tier == 0 && t.Enabled) &&
+            trackers.Any(t => t.TorrentId == 42 && t.Url == "http://tracker1-backup.example.com/announce" && t.Tier == 0 && t.Enabled) &&
+            trackers.Any(t => t.TorrentId == 42 && t.Url == "http://tracker2.example.com/announce" && t.Tier == 1 && t.Enabled)));
 
         _eventLogService.Received(1).Info(42, "Add", Arg.Is<string>(msg => msg.Contains("Ubuntu Linux") && msg.Contains("ubuntu.torrent")));
     }
@@ -231,7 +237,8 @@ public class TorrentImportServiceTests
         var result = _subject.ImportFromFile(stream, "single.torrent");
 
         Assert.That(result, Is.Not.Null);
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 10 && t.Url == "http://single-tracker.example.com/announce" && t.Tier == 0 && t.Enabled));
+        _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(trackers =>
+            trackers.Any(t => t.TorrentId == 10 && t.Url == "http://single-tracker.example.com/announce" && t.Tier == 0 && t.Enabled)));
     }
 
     [TestCase(null)]
@@ -269,8 +276,9 @@ public class TorrentImportServiceTests
 
         Assert.That(result, Is.SameAs(existing));
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 88 && t.Url == "http://tracker2.org/announce" && t.Tier == 1 && t.Enabled));
-        _trackerEntryService.DidNotReceive().Add(Arg.Is<TrackerEntry>(t => t.Url == "http://tracker1.org/announce"));
+        _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(trackers =>
+            trackers.Any(t => t.TorrentId == 88 && t.Url == "http://tracker2.org/announce" && t.Tier == 1 && t.Enabled) &&
+            !trackers.Any(t => t.Url == "http://tracker1.org/announce")));
         _eventLogService.Received(1).Info(88, "Update", Arg.Is<string>(msg => msg.Contains("Duplicate") && msg.Contains("updated with new trackers")));
     }
 
@@ -295,9 +303,80 @@ public class TorrentImportServiceTests
         Assert.That(result.TrackerUrl, Is.EqualTo("http://tracker1.org/announce"));
         Assert.That(result.Status, Is.EqualTo(TorrentStatus.Queued));
 
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 77 && t.Url == "http://tracker1.org/announce" && t.Tier == 0 && t.Enabled));
-        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 77 && t.Url == "http://tracker2.org/announce" && t.Tier == 1 && t.Enabled));
+        _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(trackers =>
+            trackers.Any(t => t.TorrentId == 77 && t.Url == "http://tracker1.org/announce" && t.Tier == 0 && t.Enabled) &&
+            trackers.Any(t => t.TorrentId == 77 && t.Url == "http://tracker2.org/announce" && t.Tier == 1 && t.Enabled)));
 
         _eventLogService.Received(1).Info(77, "Add", Arg.Is<string>(msg => msg.Contains("My Linux Distro") && msg.Contains("magnet link")));
+    }
+
+    [Test]
+    public void ImportFromFile_should_cleanup_torrent_and_throw_when_file_insertion_fails()
+    {
+        using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var parsed = new ParsedTorrent
+        {
+            Name = "Failing File Torrent",
+            InfoHash = "4a5c6d7e8f901234567890abcdef1234567890ab",
+            Files = new List<ParsedTorrentFile>
+            {
+                new() { Path = "broken.bin", Size = 100 }
+            }
+        };
+
+        _parser.Parse(stream).Returns(parsed);
+        _torrentService.ExistsByInfoHash(parsed.InfoHash).Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo =>
+        {
+            var t = callInfo.Arg<Torrent>();
+            t.Id = 42;
+            return t;
+        });
+        _torrentFileService.When(x => x.AddMany(Arg.Any<IList<TorrentFile>>())).Do(_ => throw new InvalidOperationException("Disk error"));
+
+        Assert.Throws<InvalidOperationException>(() => _subject.ImportFromFile(stream, "failing.torrent"));
+        _torrentService.Received(1).Delete(42, false);
+    }
+
+    [Test]
+    public void ImportFromFile_should_cleanup_torrent_and_throw_when_tracker_insertion_fails()
+    {
+        using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var parsed = new ParsedTorrent
+        {
+            Name = "Failing Tracker Torrent",
+            InfoHash = "4a5c6d7e8f901234567890abcdef1234567890ab",
+            AnnounceUrl = "http://tracker.example.com/announce"
+        };
+
+        _parser.Parse(stream).Returns(parsed);
+        _torrentService.ExistsByInfoHash(parsed.InfoHash).Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo =>
+        {
+            var t = callInfo.Arg<Torrent>();
+            t.Id = 42;
+            return t;
+        });
+        _trackerEntryService.When(x => x.AddMany(Arg.Any<IList<TrackerEntry>>())).Do(_ => throw new InvalidOperationException("DB error"));
+
+        Assert.Throws<InvalidOperationException>(() => _subject.ImportFromFile(stream, "failing.torrent"));
+        _torrentService.Received(1).Delete(42, false);
+    }
+
+    [Test]
+    public void ImportFromMagnet_should_cleanup_torrent_and_throw_when_tracker_insertion_fails()
+    {
+        var magnetUri = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=FailingMagnet&tr=http%3A%2F%2Ftracker1.org%2Fannounce";
+        _torrentService.ExistsByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo =>
+        {
+            var t = callInfo.Arg<Torrent>();
+            t.Id = 77;
+            return t;
+        });
+        _trackerEntryService.When(x => x.AddMany(Arg.Any<IList<TrackerEntry>>())).Do(_ => throw new InvalidOperationException("DB error"));
+
+        Assert.Throws<InvalidOperationException>(() => _subject.ImportFromMagnet(magnetUri));
+        _torrentService.Received(1).Delete(77, false);
     }
 }

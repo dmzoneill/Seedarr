@@ -147,4 +147,37 @@ public class TorrentFileRepositoryTest
         Assert.That(result[0].TorrentId, Is.EqualTo(1));
         Assert.That(result[0].IsPaddingFile, Is.False);
     }
+
+    [Test]
+    public void InsertMany_inserts_many_files_in_a_single_batch()
+    {
+        var files = Enumerable.Range(1, 500)
+            .Select(i => MakeFile(1, $"path/to/file_{i:D4}.dat", size: i * 1024))
+            .ToList();
+
+        _subject.InsertMany(files);
+
+        var retrieved = _subject.GetByTorrentId(1);
+        Assert.That(retrieved, Has.Count.EqualTo(500));
+        Assert.That(retrieved[0].Path, Is.EqualTo("path/to/file_0001.dat"));
+        Assert.That(retrieved[499].Path, Is.EqualTo("path/to/file_0500.dat"));
+    }
+
+    [Test]
+    public void InsertMany_rolls_back_atomically_when_error_occurs()
+    {
+        _subject.Insert(MakeFile(1, "existing.mkv"));
+
+        var files = new[]
+        {
+            MakeFile(1, "batch1.mkv"),
+            new TorrentFile { TorrentId = 1, Path = null } // Path NOT NULL constraint violation
+        };
+
+        Assert.Throws<SqliteException>(() => _subject.InsertMany(files));
+
+        var retrieved = _subject.GetByTorrentId(1);
+        Assert.That(retrieved, Has.Count.EqualTo(1));
+        Assert.That(retrieved[0].Path, Is.EqualTo("existing.mkv"));
+    }
 }

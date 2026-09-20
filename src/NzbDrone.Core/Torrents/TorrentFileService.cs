@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using NLog;
 
 namespace NzbDrone.Core.Torrents;
@@ -36,12 +37,24 @@ public class TorrentFileService : ITorrentFileService
 
     public void AddMany(IList<TorrentFile> torrentFiles)
     {
+        if (torrentFiles == null || torrentFiles.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Debug("Adding {0} torrent files", torrentFiles.Count);
         _repository.InsertMany(torrentFiles);
     }
 
     public void AddMany(IEnumerable<TorrentFile> torrentFiles)
     {
-        _repository.InsertMany(torrentFiles);
+        if (torrentFiles == null)
+        {
+            return;
+        }
+
+        var list = torrentFiles as IList<TorrentFile> ?? torrentFiles.ToList();
+        AddMany(list);
     }
 
     public void DeleteByTorrentId(int torrentId)
