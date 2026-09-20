@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
+using Microsoft.Win32.SafeHandles;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Torrents;
@@ -35,6 +37,8 @@ public class MultiFilePieceStorageTests
     [TearDown]
     public void TearDown()
     {
+        _storage?.Dispose();
+
         if (Directory.Exists(_tempDir))
         {
             try
@@ -237,5 +241,232 @@ public class MultiFilePieceStorageTests
         _pieceStorage.Received(1).MarkPieceCorrupted("info789", 0);
         _piecePicker.Received(1).MarkPieceInactive("info789", 0);
         _pieceStorage.DidNotReceive().MarkPieceVerified(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<long>());
+    }
+
+    [Test]
+    public void FileHandlePool_reuses_open_handles_for_same_file()
+    {
+        using var pool = new FileHandlePool(maxCapacity: 10);
+        var testFile = Path.Combine(_tempDir, "reuse_test.bin");
+        File.WriteAllBytes(testFile, new byte[100]);
+
+        var handle1 = pool.GetOrCreateHandle(testFile, writeAccess: true);
+        var handle2 = pool.GetOrCreateHandle(testFile, writeAccess: false);
+
+        Assert.That(pool.Count, Is.EqualTo(1));
+        Assert.That(ReferenceEquals(handle1, handle2), Is.True);
+        Assert.That(handle1.IsClosed, Is.False);
+        Assert.That(handle1.IsInvalid, Is.False);
+    }
+
+    [Test]
+    public void FileHandlePool_evicts_least_recently_used_handle_when_capacity_exceeded()
+    {
+        using var pool = new FileHandlePool(maxCapacity: 2);
+        var f1 = Path.Combine(_tempDir, "lru1.bin");
+        var f2 = Path.Combine(_tempDir, "lru2.bin");
+        var f3 = Path.Combine(_tempDir, "lru3.bin");
+
+        File.WriteAllBytes(f1, new byte[10]);
+        File.WriteAllBytes(f2, new byte[10]);
+        File.WriteAllBytes(f3, new byte[10]);
+
+        var h1 = pool.GetOrCreateHandle(f1, writeAccess: true);
+        var h2 = pool.GetOrCreateHandle(f2, writeAccess: true);
+
+        Assert.That(pool.Count, Is.EqualTo(2));
+        Assert.That(pool.Contains(f1), Is.True);
+        Assert.That(pool.Contains(f2), Is.True);
+        Assert.That(h1.IsClosed, Is.False);
+
+        // Accessing f3 should evict f1 (least recently used)
+        var h3 = pool.GetOrCreateHandle(f3, writeAccess: true);
+
+        Assert.That(pool.Count, Is.EqualTo(2));
+        Assert.That(pool.Contains(f1), Is.False);
+        Assert.That(pool.Contains(f2), Is.True);
+        Assert.That(pool.Contains(f3), Is.True);
+        Assert.That(h1.IsClosed, Is.True);
+        Assert.That(h2.IsClosed, Is.False);
+        Assert.That(h3.IsClosed, Is.False);
+    }
+
+    [Test]
+    public void FileHandlePool_promotes_recently_used_handle_preventing_its_eviction()
+    {
+        using var pool = new FileHandlePool(maxCapacity: 2);
+        var f1 = Path.Combine(_tempDir, "promote1.bin");
+        var f2 = Path.Combine(_tempDir, "promote2.bin");
+        var f3 = Path.Combine(_tempDir, "promote3.bin");
+
+        File.WriteAllBytes(f1, new byte[10]);
+        File.WriteAllBytes(f2, new byte[10]);
+        File.WriteAllBytes(f3, new byte[10]);
+
+        var h1 = pool.GetOrCreateHandle(f1, writeAccess: true);
+        var h2 = pool.GetOrCreateHandle(f2, writeAccess: true);
+
+        // Re-accessing f1 moves it to MRU, so f2 becomes the LRU
+        var h1Reaccessed = pool.GetOrCreateHandle(f1, writeAccess: false);
+        Assert.That(ReferenceEquals(h1, h1Reaccessed), Is.True);
+
+        // Accessing f3 should evict f2, not f1
+        var h3 = pool.GetOrCreateHandle(f3, writeAccess: true);
+
+        Assert.That(pool.Count, Is.EqualTo(2));
+        Assert.That(pool.Contains(f1), Is.True);
+        Assert.That(pool.Contains(f2), Is.False);
+        Assert.That(pool.Contains(f3), Is.True);
+        Assert.That(h2.IsClosed, Is.True);
+        Assert.That(h1.IsClosed, Is.False);
+        Assert.That(h3.IsClosed, Is.False);
+    }
+
+    [Test]
+    public void MultiFilePieceStorage_with_limited_handle_pool_handles_LRU_eviction_seamlessly()
+    {
+        using var pool = new FileHandlePool(maxCapacity: 2);
+        using var storage = new MultiFilePieceStorage(_resolver, pool);
+
+        var torrent = new Torrent
+        {
+            InfoHash = "pool_lru_test",
+            PieceLength = 100,
+            TotalSize = 400,
+            SavePath = _tempDir
+        };
+
+        var files = new List<TorrentFile>
+        {
+            new TorrentFile { Path = "f1.dat", Size = 100 },
+            new TorrentFile { Path = "f2.dat", Size = 100 },
+            new TorrentFile { Path = "f3.dat", Size = 100 },
+            new TorrentFile { Path = "f4.dat", Size = 100 }
+        };
+
+        var data = new byte[400];
+        for (var i = 0; i < data.Length; i++)
+        {
+            data[i] = (byte)(i & 0xFF);
+        }
+
+        // Write piece 0 (f1), piece 1 (f2), piece 2 (f3), piece 3 (f4) -> triggers LRU evictions in pool of size 2
+        storage.WritePiece(torrent, files, 0, data.AsMemory(0, 100));
+        storage.WritePiece(torrent, files, 1, data.AsMemory(100, 100));
+        storage.WritePiece(torrent, files, 2, data.AsMemory(200, 100));
+        storage.WritePiece(torrent, files, 3, data.AsMemory(300, 100));
+
+        Assert.That(pool.Count, Is.EqualTo(2));
+
+        // Read all pieces back and verify data integrity
+        for (var p = 0; p < 4; p++)
+        {
+            var readBuf = new byte[100];
+            var bytesRead = storage.ReadPiece(torrent, files, p, readBuf);
+            Assert.That(bytesRead, Is.EqualTo(100));
+            Assert.That(readBuf, Is.EqualTo(data.AsSpan(p * 100, 100).ToArray()));
+        }
+
+        Assert.That(pool.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void MultiFilePieceStorage_concurrent_thread_safe_reads_and_writes()
+    {
+        using var pool = new FileHandlePool(maxCapacity: 4);
+        using var storage = new MultiFilePieceStorage(_resolver, pool);
+
+        var torrent = new Torrent
+        {
+            InfoHash = "concurrent_io_test",
+            PieceLength = 256,
+            TotalSize = 1024,
+            SavePath = _tempDir
+        };
+
+        var files = new List<TorrentFile>
+        {
+            new TorrentFile { Path = "conc/f1.dat", Size = 256 },
+            new TorrentFile { Path = "conc/f2.dat", Size = 256 },
+            new TorrentFile { Path = "conc/f3.dat", Size = 256 },
+            new TorrentFile { Path = "conc/f4.dat", Size = 256 }
+        };
+
+        // Write initial data for all 4 pieces
+        for (var p = 0; p < 4; p++)
+        {
+            var buf = new byte[256];
+            Array.Fill(buf, (byte)(p + 1));
+            storage.WritePiece(torrent, files, p, buf);
+        }
+
+        // Run concurrent reads and writes across all 4 pieces from multiple threads
+        Parallel.For(0, 50, i =>
+        {
+            var pieceIndex = i % 4;
+            if (i % 2 == 0)
+            {
+                var writeBuf = new byte[256];
+                Array.Fill(writeBuf, (byte)(pieceIndex + 1));
+                storage.WritePiece(torrent, files, pieceIndex, writeBuf);
+            }
+            else
+            {
+                var readBuf = new byte[256];
+                var read = storage.ReadPiece(torrent, files, pieceIndex, readBuf);
+                Assert.That(read, Is.EqualTo(256));
+                Assert.That(readBuf[0], Is.EqualTo((byte)(pieceIndex + 1)));
+            }
+        });
+    }
+
+    [Test]
+    public void FileShare_ReadWrite_allows_concurrent_external_access()
+    {
+        var testFile = Path.Combine(_tempDir, "share_test.bin");
+        var initialData = new byte[] { 1, 2, 3, 4, 5 };
+        File.WriteAllBytes(testFile, initialData);
+
+        using var pool = new FileHandlePool(maxCapacity: 10);
+        var pooledHandle = pool.GetOrCreateHandle(testFile, writeAccess: true);
+
+        // Open externally with FileShare.ReadWrite concurrently
+        using var externalHandle = File.OpenHandle(testFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+
+        var readBuffer = new byte[5];
+        var read = RandomAccess.Read(externalHandle, readBuffer, 0);
+        Assert.That(read, Is.EqualTo(5));
+        Assert.That(readBuffer, Is.EqualTo(initialData));
+
+        var updateBytes = new byte[] { 9, 9 };
+        RandomAccess.Write(externalHandle, updateBytes, 0);
+
+        var pooledReadBuffer = new byte[2];
+        RandomAccess.Read(pooledHandle, pooledReadBuffer, 0);
+        Assert.That(pooledReadBuffer, Is.EqualTo(updateBytes));
+    }
+
+    [Test]
+    public void FileHandlePool_Dispose_closes_all_handles()
+    {
+        var pool = new FileHandlePool(maxCapacity: 5);
+        var f1 = Path.Combine(_tempDir, "disp1.bin");
+        var f2 = Path.Combine(_tempDir, "disp2.bin");
+        File.WriteAllBytes(f1, new byte[10]);
+        File.WriteAllBytes(f2, new byte[10]);
+
+        var h1 = pool.GetOrCreateHandle(f1, writeAccess: true);
+        var h2 = pool.GetOrCreateHandle(f2, writeAccess: true);
+
+        Assert.That(h1.IsClosed, Is.False);
+        Assert.That(h2.IsClosed, Is.False);
+        Assert.That(pool.Count, Is.EqualTo(2));
+
+        pool.Dispose();
+
+        Assert.That(h1.IsClosed, Is.True);
+        Assert.That(h2.IsClosed, Is.True);
+        Assert.That(pool.Count, Is.EqualTo(0));
+        Assert.Throws<ObjectDisposedException>(() => pool.GetOrCreateHandle(f1, writeAccess: false));
     }
 }

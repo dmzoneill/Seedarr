@@ -2,16 +2,32 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Win32.SafeHandles;
 
 namespace NzbDrone.Core.Torrents;
 
 public class MultiFilePieceStorage : IMultiFilePieceStorage
 {
     private readonly IPieceBoundaryResolver _resolver;
+    private readonly IFileHandlePool _handlePool;
+    private readonly bool _ownsHandlePool;
+    private bool _disposed;
 
-    public MultiFilePieceStorage(IPieceBoundaryResolver resolver = null)
+    public IFileHandlePool HandlePool => _handlePool;
+
+    public MultiFilePieceStorage(IPieceBoundaryResolver resolver = null, IFileHandlePool handlePool = null)
     {
         _resolver = resolver ?? new PieceBoundaryResolver();
+        if (handlePool != null)
+        {
+            _handlePool = handlePool;
+            _ownsHandlePool = false;
+        }
+        else
+        {
+            _handlePool = new FileHandlePool();
+            _ownsHandlePool = true;
+        }
     }
 
     public int ReadPiece(Torrent torrent, IList<TorrentFile> files, int pieceIndex, Memory<byte> destinationBuffer, string baseDirectory = null)
@@ -67,31 +83,20 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage
 
             try
             {
-                using var handle = File.OpenHandle(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                var fileLength = RandomAccess.GetLength(handle);
-
-                if (slice.FileOffset < fileLength)
+                var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: false);
+                totalBytesRead += ReadSlice(handle, destinationBuffer, slice, sliceLen);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Handle may have been evicted and closed under high concurrency; retry once with a fresh handle
+                try
                 {
-                    var available = fileLength - slice.FileOffset;
-                    var bytesToRead = (int)Math.Min((long)sliceLen, available);
-                    var read = 0;
-
-                    while (read < bytesToRead)
-                    {
-                        var n = RandomAccess.Read(
-                            handle,
-                            destinationBuffer.Slice(slice.BufferOffset + read, bytesToRead - read).Span,
-                            slice.FileOffset + read);
-
-                        if (n <= 0)
-                        {
-                            break;
-                        }
-
-                        read += n;
-                    }
-
-                    totalBytesRead += read;
+                    var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: false);
+                    totalBytesRead += ReadSlice(handle, destinationBuffer, slice, sliceLen);
+                }
+                catch (Exception)
+                {
+                    // Gracefully ignore file read errors and treat missing bytes as zeros
                 }
             }
             catch (Exception)
@@ -156,9 +161,48 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage
                 Directory.CreateDirectory(directory);
             }
 
-            using var handle = File.OpenHandle(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite);
-            RandomAccess.Write(handle, sourceBuffer.Slice(slice.BufferOffset, sliceLen).Span, slice.FileOffset);
+            try
+            {
+                var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: true);
+                RandomAccess.Write(handle, sourceBuffer.Slice(slice.BufferOffset, sliceLen).Span, slice.FileOffset);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Handle may have been evicted and closed under high concurrency; retry once with a fresh handle
+                var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: true);
+                RandomAccess.Write(handle, sourceBuffer.Slice(slice.BufferOffset, sliceLen).Span, slice.FileOffset);
+            }
         }
+    }
+
+    private static int ReadSlice(SafeFileHandle handle, Memory<byte> destinationBuffer, TorrentSlice slice, int sliceLen)
+    {
+        var fileLength = RandomAccess.GetLength(handle);
+        if (slice.FileOffset >= fileLength)
+        {
+            return 0;
+        }
+
+        var available = fileLength - slice.FileOffset;
+        var bytesToRead = (int)Math.Min((long)sliceLen, available);
+        var read = 0;
+
+        while (read < bytesToRead)
+        {
+            var n = RandomAccess.Read(
+                handle,
+                destinationBuffer.Slice(slice.BufferOffset + read, bytesToRead - read).Span,
+                slice.FileOffset + read);
+
+            if (n <= 0)
+            {
+                break;
+            }
+
+            read += n;
+        }
+
+        return read;
     }
 
     private static string ResolveFilePath(string baseDirectory, Torrent torrent, string filePath)
@@ -178,5 +222,17 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage
             : (!string.IsNullOrWhiteSpace(torrent?.SavePath) ? torrent.SavePath : string.Empty);
 
         return string.IsNullOrEmpty(basePath) ? filePath : Path.Combine(basePath, filePath);
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+            if (_ownsHandlePool)
+            {
+                _handlePool.Dispose();
+            }
+        }
     }
 }
