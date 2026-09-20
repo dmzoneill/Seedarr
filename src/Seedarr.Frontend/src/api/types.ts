@@ -185,6 +185,21 @@ export interface TorrentFileInfo {
   bytesCompleted?: number;
 }
 
+export interface SubtitleTrack {
+  trackId: number;
+  fileId?: number;
+  title: string;
+  language: string;
+  twoLetterCode: string;
+  format: string;
+  path: string;
+  isExternal: boolean;
+  isForced: boolean;
+  isHearingImpaired: boolean;
+  isDefault: boolean;
+  url: string;
+}
+
 export interface PieceMapSpan {
   count: number;
   state: number;

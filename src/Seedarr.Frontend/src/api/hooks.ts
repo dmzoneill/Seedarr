@@ -7,6 +7,7 @@ import type {
   BulkActionResult,
   Category,
   TorrentFileInfo,
+  SubtitleTrack,
   PieceMapResource,
   SeedingStats,
   SpeedSnapshot,
@@ -144,6 +145,14 @@ export function useTorrentFiles(torrentId: number) {
     queryKey: ["torrents", torrentId, "files"],
     queryFn: () => apiClient.get(`/torrent/${torrentId}/files`),
     enabled: torrentId > 0,
+  });
+}
+
+export function useTorrentFileSubtitles(torrentId?: number, fileId?: number) {
+  return useQuery<SubtitleTrack[]>({
+    queryKey: ["torrents", torrentId, "files", fileId, "subtitles"],
+    queryFn: () => apiClient.get(`/torrent/${torrentId}/files/${fileId}/subtitles`),
+    enabled: typeof torrentId === "number" && torrentId > 0 && typeof fileId === "number" && fileId > 0,
   });
 }
 
