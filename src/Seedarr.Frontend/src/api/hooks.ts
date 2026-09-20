@@ -68,6 +68,7 @@ import type {
   NotificationResource,
   NotificationTestResult,
   RssRule,
+  RssGrabHistory,
   AutomationScript,
   AutomationExecutionResult,
   AutomationMarketplaceTemplate,
@@ -1681,7 +1682,29 @@ export function useSyncRss() {
     mutationFn: () => apiClient.post("/rssrules/sync"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["rssrules-history"] });
     },
+  });
+}
+
+export function useRssGrabHistory(ruleId?: number, status?: string) {
+  return useQuery<RssGrabHistory[]>({
+    queryKey: ["rssrules-history", ruleId, status],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (ruleId) params.append("ruleId", ruleId.toString());
+      if (status && status !== "all") params.append("status", status);
+      const queryStr = params.toString();
+      return apiClient.get(queryStr ? `/rssrules/history?${queryStr}` : "/rssrules/history");
+    },
+  });
+}
+
+export function useClearRssGrabHistory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete("/rssrules/history"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rssrules-history"] }),
   });
 }
 

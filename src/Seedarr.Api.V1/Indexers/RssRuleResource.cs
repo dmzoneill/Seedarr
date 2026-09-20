@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Seedarr.Http.REST;
@@ -60,6 +61,46 @@ public class RssRuleResource : RestResource
         get => _tags;
         set => _tags = value ?? new List<int>();
     }
+
+    [JsonConverter(typeof(IntListOrCommaSeparatedConverter))]
+    public List<int> TagIds
+    {
+        get => Tags;
+        set => Tags = value ?? new List<int>();
+    }
+
+    private List<string> _allowedResolutions = new();
+
+    [JsonConverter(typeof(StringListOrCommaSeparatedConverter))]
+    public List<string> AllowedResolutions
+    {
+        get => _allowedResolutions;
+        set => _allowedResolutions = value ?? new List<string>();
+    }
+
+    private List<string> _allowedSources = new();
+
+    [JsonConverter(typeof(StringListOrCommaSeparatedConverter))]
+    public List<string> AllowedSources
+    {
+        get => _allowedSources;
+        set => _allowedSources = value ?? new List<string>();
+    }
+
+    private List<string> _allowedCodecs = new();
+
+    [JsonConverter(typeof(StringListOrCommaSeparatedConverter))]
+    public List<string> AllowedCodecs
+    {
+        get => _allowedCodecs;
+        set => _allowedCodecs = value ?? new List<string>();
+    }
+
+    public string SavePath { get; set; }
+
+    public bool SequentialDownload { get; set; }
+
+    public string InitialStatus { get; set; }
 }
 
 public class IntListOrCommaSeparatedConverter : JsonConverter<List<int>>
@@ -142,6 +183,73 @@ public class IntListOrCommaSeparatedConverter : JsonConverter<List<int>>
         foreach (var item in value)
         {
             writer.WriteNumberValue(item);
+        }
+
+        writer.WriteEndArray();
+    }
+}
+
+public class StringListOrCommaSeparatedConverter : JsonConverter<List<string>>
+{
+    public override bool HandleNull => true;
+
+    public override List<string> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return new List<string>();
+        }
+
+        if (reader.TokenType == JsonTokenType.StartArray)
+        {
+            var list = new List<string>();
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndArray)
+                {
+                    break;
+                }
+
+                if (reader.TokenType == JsonTokenType.String)
+                {
+                    var val = reader.GetString()?.Trim();
+                    if (!string.IsNullOrWhiteSpace(val))
+                    {
+                        list.Add(val);
+                    }
+                }
+            }
+
+            return list;
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var str = reader.GetString();
+            if (string.IsNullOrWhiteSpace(str))
+            {
+                return new List<string>();
+            }
+
+            return str.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        }
+
+        return new List<string>();
+    }
+
+    public override void Write(Utf8JsonWriter writer, List<string> value, JsonSerializerOptions options)
+    {
+        if (value == null)
+        {
+            writer.WriteStartArray();
+            writer.WriteEndArray();
+            return;
+        }
+
+        writer.WriteStartArray();
+        foreach (var item in value)
+        {
+            writer.WriteStringValue(item);
         }
 
         writer.WriteEndArray();

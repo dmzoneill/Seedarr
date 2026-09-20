@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Indexers;
 
@@ -25,6 +26,16 @@ public interface IRssSyncService
     void RecordSeenBatch(int indexerId, IEnumerable<ReleaseInfo> releases, RssSeenStatus status);
 
     int PurgeSeenReleases(TimeSpan age);
+
+    RssGrabResult GrabRelease(ReleaseInfo release, RssRule rule, string indexerName = null);
+}
+
+public class RssGrabResult
+{
+    public bool Success { get; set; }
+    public Torrent Torrent { get; set; }
+    public RssGrabHistory GrabHistory { get; set; }
+    public string ErrorMessage { get; set; }
 }
 
 public class RssSyncService : IRssSyncService
@@ -32,15 +43,21 @@ public class RssSyncService : IRssSyncService
     private readonly IRssRuleEvaluator _ruleEvaluator;
     private readonly IIndexerStatusService _indexerStatusService;
     private readonly IRssSeenReleaseRepository _seenReleaseRepository;
+    private readonly ITorrentService _torrentService;
+    private readonly IRssGrabHistoryRepository _grabHistoryRepository;
 
     public RssSyncService(
         IRssRuleEvaluator ruleEvaluator = null,
         IIndexerStatusService indexerStatusService = null,
-        IRssSeenReleaseRepository seenReleaseRepository = null)
+        IRssSeenReleaseRepository seenReleaseRepository = null,
+        ITorrentService torrentService = null,
+        IRssGrabHistoryRepository grabHistoryRepository = null)
     {
         _ruleEvaluator = ruleEvaluator ?? new RssRuleEvaluator();
         _indexerStatusService = indexerStatusService;
         _seenReleaseRepository = seenReleaseRepository;
+        _torrentService = torrentService;
+        _grabHistoryRepository = grabHistoryRepository;
     }
 
     public bool MatchesRule(RssRule rule, ReleaseInfo release, DateTime? now = null)
@@ -263,5 +280,113 @@ public class RssSyncService : IRssSyncService
         }
 
         return indexers.Where(i => ShouldSyncIndexer(i, isManual, now)).ToList();
+    }
+
+    public RssGrabResult GrabRelease(ReleaseInfo release, RssRule rule, string indexerName = null)
+    {
+        if (release == null || rule == null)
+        {
+            return new RssGrabResult { Success = false, ErrorMessage = "Release or rule cannot be null" };
+        }
+
+        var history = new RssGrabHistory
+        {
+            ReleaseTitle = release.Title,
+            IndexerName = !string.IsNullOrWhiteSpace(indexerName) ? indexerName : release.Indexer,
+            RuleId = rule.Id,
+            RuleName = rule.Name,
+            InfoHash = release.InfoHash,
+            Size = release.Size,
+            GrabTimestamp = DateTime.UtcNow
+        };
+
+        try
+        {
+            if (_torrentService == null)
+            {
+                history.Status = RssGrabHistory.StatusFailed;
+                history.ErrorMessage = "Torrent service is not configured";
+                _grabHistoryRepository?.Insert(history);
+                return new RssGrabResult { Success = false, GrabHistory = history, ErrorMessage = history.ErrorMessage };
+            }
+
+            var infoHash = release.InfoHash;
+            string trackerUrl = null;
+            if (!string.IsNullOrWhiteSpace(release.MagnetUrl) || (!string.IsNullOrWhiteSpace(release.DownloadUrl) && release.DownloadUrl.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase)))
+            {
+                var magnetStr = !string.IsNullOrWhiteSpace(release.MagnetUrl) ? release.MagnetUrl : release.DownloadUrl;
+                try
+                {
+                    var parsedMagnet = MagnetLinkParser.Parse(magnetStr);
+                    if (string.IsNullOrWhiteSpace(infoHash))
+                    {
+                        infoHash = parsedMagnet.InfoHash;
+                    }
+
+                    if (parsedMagnet.Trackers.Length > 0)
+                    {
+                        trackerUrl = parsedMagnet.Trackers[0];
+                    }
+                }
+                catch
+                {
+                    // Fallback if parsing fails
+                }
+            }
+
+            history.InfoHash = infoHash;
+
+            if (!string.IsNullOrWhiteSpace(infoHash) && _torrentService.ExistsByInfoHash(infoHash))
+            {
+                history.Status = RssGrabHistory.StatusFailed;
+                history.ErrorMessage = "Torrent with this info hash already exists in active library";
+                _grabHistoryRepository?.Insert(history);
+                RecordSeen(release.IndexerId, release, RssSeenStatus.Grabbed, rule.Id);
+                return new RssGrabResult { Success = false, GrabHistory = history, ErrorMessage = history.ErrorMessage };
+            }
+
+            var torrent = new Torrent
+            {
+                Name = release.Title,
+                InfoHash = infoHash,
+                TrackerUrl = trackerUrl,
+                TotalSize = release.Size,
+                DateAdded = DateTime.UtcNow,
+                SavePath = rule.SavePath,
+                TagIds = rule.Tags != null ? new List<int>(rule.Tags) : new List<int>(),
+                SequentialDownload = rule.SequentialDownload,
+                Status = rule.InitialStatus ?? TorrentStatus.Queued,
+                Category = rule.CategoryId > 0 ? rule.CategoryId.ToString() : null,
+                Seeders = release.Seeders ?? 0,
+                Leechers = release.Leechers ?? 0
+            };
+
+            var added = _torrentService.Add(torrent);
+
+            history.Status = RssGrabHistory.StatusGrabbed;
+            _grabHistoryRepository?.Insert(history);
+            RecordSeen(release.IndexerId, release, RssSeenStatus.Grabbed, rule.Id);
+
+            return new RssGrabResult
+            {
+                Success = true,
+                Torrent = added,
+                GrabHistory = history
+            };
+        }
+        catch (Exception ex)
+        {
+            history.Status = RssGrabHistory.StatusFailed;
+            history.ErrorMessage = ex.Message;
+            _grabHistoryRepository?.Insert(history);
+            RecordSeen(release.IndexerId, release, RssSeenStatus.Rejected, rule.Id);
+
+            return new RssGrabResult
+            {
+                Success = false,
+                GrabHistory = history,
+                ErrorMessage = ex.Message
+            };
+        }
     }
 }

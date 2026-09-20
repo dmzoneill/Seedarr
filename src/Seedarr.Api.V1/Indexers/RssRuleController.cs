@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Indexers;
+using NzbDrone.Core.Torrents;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Indexers;
@@ -20,6 +21,10 @@ public class RssRuleController : Controller
     private readonly IRssRuleRepository _rssRuleRepository;
     private readonly IIndexerRepository _indexerRepository;
     private readonly ICategoryService _categoryService;
+    private readonly IRssGrabHistoryRepository _rssGrabHistoryRepository;
+    private readonly IRssSyncService _rssSyncService;
+    private readonly ITorrentService _torrentService;
+    private readonly IIndexerFactory _indexerFactory;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     private static readonly object _syncLock = new();
@@ -30,11 +35,19 @@ public class RssRuleController : Controller
     public RssRuleController(
         IRssRuleRepository rssRuleRepository,
         IIndexerRepository indexerRepository = null,
-        ICategoryService categoryService = null)
+        ICategoryService categoryService = null,
+        IRssGrabHistoryRepository rssGrabHistoryRepository = null,
+        IRssSyncService rssSyncService = null,
+        ITorrentService torrentService = null,
+        IIndexerFactory indexerFactory = null)
     {
         _rssRuleRepository = rssRuleRepository;
         _indexerRepository = indexerRepository;
         _categoryService = categoryService;
+        _rssGrabHistoryRepository = rssGrabHistoryRepository;
+        _rssSyncService = rssSyncService;
+        _torrentService = torrentService;
+        _indexerFactory = indexerFactory;
     }
 
     /// <summary>
@@ -133,6 +146,49 @@ public class RssRuleController : Controller
     }
 
     /// <summary>
+    /// Retrieves execution audit history of grabbed/failed RSS releases with pagination.
+    /// </summary>
+    [HttpGet("history")]
+    public ActionResult<List<RssGrabHistoryResource>> GetHistory(
+        [FromQuery] int? ruleId = null,
+        [FromQuery] string status = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50,
+        [FromQuery] int limit = 50,
+        [FromQuery] int offset = 0)
+    {
+        if (_rssGrabHistoryRepository == null)
+        {
+            return Ok(new List<RssGrabHistoryResource>());
+        }
+
+        var effectiveLimit = limit;
+        var effectiveOffset = offset;
+        if (page > 0 && pageSize > 0 && limit == 50 && offset == 0)
+        {
+            effectiveLimit = pageSize;
+            effectiveOffset = (page - 1) * pageSize;
+        }
+
+        var total = _rssGrabHistoryRepository.GetCount(ruleId, status);
+        var records = _rssGrabHistoryRepository.GetHistory(ruleId, status, effectiveLimit, effectiveOffset);
+
+        Response.Headers["X-Total-Count"] = total.ToString();
+
+        return Ok(records.Select(ToHistoryResource).ToList());
+    }
+
+    /// <summary>
+    /// Clears the RSS grab execution audit history.
+    /// </summary>
+    [HttpDelete("history")]
+    public ActionResult ClearHistory()
+    {
+        _rssGrabHistoryRepository?.ClearHistory();
+        return Ok();
+    }
+
+    /// <summary>
     /// Triggers an immediate RSS sync cycle across configured indexers.
     /// </summary>
     [HttpPost("sync")]
@@ -213,6 +269,12 @@ public class RssRuleController : Controller
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(resource.InitialStatus) &&
+            !Enum.TryParse<TorrentStatus>(resource.InitialStatus, true, out _))
+        {
+            return BadRequest(new { message = $"Invalid InitialStatus '{resource.InitialStatus}'. Must be a valid TorrentStatus such as Queued or Paused." });
+        }
+
         return null;
     }
 
@@ -264,12 +326,18 @@ public class RssRuleController : Controller
             CategoryId = model.CategoryId,
             IndexerIds = model.IndexerIds ?? new List<int>(),
             Tags = model.Tags ?? new List<int>(),
+            AllowedResolutions = model.AllowedResolutions ?? new List<string>(),
+            AllowedSources = model.AllowedSources ?? new List<string>(),
+            AllowedCodecs = model.AllowedCodecs ?? new List<string>(),
+            SavePath = model.SavePath,
+            SequentialDownload = model.SequentialDownload,
+            InitialStatus = model.InitialStatus?.ToString(),
         };
     }
 
     private static RssRule ToModel(RssRuleResource resource)
     {
-        return new RssRule
+        var rule = new RssRule
         {
             Id = resource.Id,
             Name = resource.Name,
@@ -285,7 +353,42 @@ public class RssRuleController : Controller
             FreeleechOnly = resource.FreeleechOnly,
             CategoryId = resource.CategoryId,
             IndexerIds = resource.IndexerIds ?? new List<int>(),
-            Tags = resource.Tags ?? new List<int>(),
+            Tags = (resource.TagIds != null && resource.TagIds.Count > 0) ? resource.TagIds : (resource.Tags ?? new List<int>()),
+            AllowedResolutions = resource.AllowedResolutions ?? new List<string>(),
+            AllowedSources = resource.AllowedSources ?? new List<string>(),
+            AllowedCodecs = resource.AllowedCodecs ?? new List<string>(),
+            SavePath = resource.SavePath,
+            SequentialDownload = resource.SequentialDownload,
+        };
+
+        if (!string.IsNullOrWhiteSpace(resource.InitialStatus) &&
+            Enum.TryParse<TorrentStatus>(resource.InitialStatus, true, out var parsedStatus))
+        {
+            rule.InitialStatus = parsedStatus;
+        }
+
+        return rule;
+    }
+
+    private static RssGrabHistoryResource ToHistoryResource(RssGrabHistory model)
+    {
+        if (model == null)
+        {
+            return null;
+        }
+
+        return new RssGrabHistoryResource
+        {
+            Id = model.Id,
+            ReleaseTitle = model.ReleaseTitle,
+            IndexerName = model.IndexerName,
+            RuleId = model.RuleId,
+            RuleName = model.RuleName,
+            InfoHash = model.InfoHash,
+            Size = model.Size,
+            GrabTimestamp = model.GrabTimestamp,
+            Status = model.Status,
+            ErrorMessage = model.ErrorMessage,
         };
     }
 }

@@ -14,8 +14,11 @@ import {
   useCategories,
   useDownloadClients,
   useTags,
+  useRssGrabHistory,
+  useClearRssGrabHistory,
 } from "../../api/hooks";
-import type { IndexerDefinition, IndexerTestResult, RssRule } from "../../api/types";
+import type { IndexerDefinition, IndexerTestResult, RssRule, RssGrabHistory } from "../../api/types";
+import { formatBytes, formatDate } from "../../utils/formatters";
 import { TextInput, SelectInput, Toggle, NumberInput, SectionCard } from "./shared";
 import { useToast } from "../../context/ToastContext";
 
@@ -46,6 +49,9 @@ export function IndexersTab() {
   const syncRssMutation = useSyncRss();
   const [editingRule, setEditingRule] = useState<Partial<RssRule> | null>(null);
   const [syncCooldownRemaining, setSyncCooldownRemaining] = useState<number>(0);
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<string>("all");
+  const { data: grabHistory, isLoading: isGrabHistoryLoading } = useRssGrabHistory(undefined, historyStatusFilter);
+  const clearGrabHistoryMutation = useClearRssGrabHistory();
 
   const defaultIndexer: Partial<IndexerDefinition> = {
     name: "Prowlarr",
@@ -75,6 +81,12 @@ export function IndexersTab() {
     indexerIds: [],
     tags: [],
     priority: 0,
+    allowedResolutions: [],
+    allowedSources: [],
+    allowedCodecs: [],
+    savePath: "",
+    sequentialDownload: false,
+    initialStatus: "Queued",
   };
 
   const categoryOptions = useMemo(() => {
@@ -204,6 +216,13 @@ export function IndexersTab() {
       categoryId: Number(editingRule.categoryId) || 0,
       indexerIds: editingRule.indexerIds || [],
       tags: editingRule.tags || [],
+      tagIds: editingRule.tags || [],
+      allowedResolutions: editingRule.allowedResolutions || [],
+      allowedSources: editingRule.allowedSources || [],
+      allowedCodecs: editingRule.allowedCodecs || [],
+      savePath: editingRule.savePath?.trim() || "",
+      sequentialDownload: Boolean(editingRule.sequentialDownload),
+      initialStatus: editingRule.initialStatus || "Queued",
     };
 
     if (editingRule.id) {
@@ -443,6 +462,31 @@ export function IndexersTab() {
                     {rule.tags.length} {rule.tags.length === 1 ? "Tag" : "Tags"}
                   </span>
                 )}
+                {rule.allowedResolutions && rule.allowedResolutions.length > 0 && (
+                  <span className="provider-card-badge provider-card-badge-blue">
+                    Res: {rule.allowedResolutions.join(", ")}
+                  </span>
+                )}
+                {rule.allowedSources && rule.allowedSources.length > 0 && (
+                  <span className="provider-card-badge provider-card-badge-blue">
+                    Src: {rule.allowedSources.join(", ")}
+                  </span>
+                )}
+                {rule.allowedCodecs && rule.allowedCodecs.length > 0 && (
+                  <span className="provider-card-badge provider-card-badge-blue">
+                    Codec: {rule.allowedCodecs.join(", ")}
+                  </span>
+                )}
+                {rule.sequentialDownload && (
+                  <span className="provider-card-badge provider-card-badge-blue">
+                    Sequential
+                  </span>
+                )}
+                {rule.initialStatus === "Paused" && (
+                  <span className="provider-card-badge provider-card-badge-gold">
+                    Paused
+                  </span>
+                )}
                 <span className="provider-card-badge provider-card-badge-blue">
                   {rule.indexerIds && rule.indexerIds.length > 0
                     ? `${rule.indexerIds.length} Indexers`
@@ -460,6 +504,11 @@ export function IndexersTab() {
                     <strong>Must Not Contain:</strong> <code>{rule.mustNotContain}</code>
                   </div>
                 )}
+                {rule.savePath && (
+                  <div style={{ wordBreak: "break-all" }}>
+                    <strong>Save Path:</strong> <code>{rule.savePath}</code>
+                  </div>
+                )}
                 {!rule.mustContain && !rule.mustNotContain && (
                   <div>Catch-all rule (matches all releases)</div>
                 )}
@@ -474,6 +523,171 @@ export function IndexersTab() {
             <span className="provider-card-add-icon">+</span>
           </div>
         </div>
+      </SectionCard>
+
+      <SectionCard
+        title="RSS Grab History"
+        description="Audit execution trail of releases evaluated and grabbed by automated RSS rules"
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+            flexWrap: "wrap",
+            gap: "0.5rem",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>Filter Status:</span>
+            <select
+              className="form-select"
+              value={historyStatusFilter}
+              onChange={(e) => setHistoryStatusFilter(e.target.value)}
+              style={{
+                padding: "0.3rem 0.6rem",
+                borderRadius: "4px",
+                border: "1px solid var(--border-color)",
+                backgroundColor: "var(--bg-secondary)",
+                color: "var(--text-primary)",
+                fontSize: "0.85rem",
+              }}
+            >
+              <option value="all">All Releases</option>
+              <option value="Grabbed">Grabbed Only</option>
+              <option value="Failed">Failed Only</option>
+            </select>
+          </div>
+
+          {grabHistory && grabHistory.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-outline btn-small"
+              onClick={() => {
+                if (window.confirm("Are you sure you want to clear RSS grab history?")) {
+                  clearGrabHistoryMutation.mutate(undefined, {
+                    onSuccess: () => showToast("RSS grab history cleared", "info"),
+                    onError: (err: any) => showToast(err?.message || "Failed to clear history", "error"),
+                  });
+                }
+              }}
+              disabled={clearGrabHistoryMutation.isPending}
+            >
+              Clear History
+            </button>
+          )}
+        </div>
+
+        {isGrabHistoryLoading ? (
+          <div style={{ padding: "1rem", color: "var(--text-muted)", textAlign: "center" }}>
+            Loading grab history...
+          </div>
+        ) : !grabHistory || grabHistory.length === 0 ? (
+          <div
+            style={{
+              padding: "2rem",
+              textAlign: "center",
+              color: "var(--text-muted)",
+              backgroundColor: "var(--bg-secondary)",
+              borderRadius: "6px",
+              border: "1px dashed var(--border-light)",
+            }}
+          >
+            No RSS grab history recorded yet. Releases grabbed or rejected during RSS sync will appear here.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              className="table"
+              style={{
+                width: "100%",
+                fontSize: "0.85rem",
+                borderCollapse: "collapse",
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: "1px solid var(--border-color)",
+                    textAlign: "left",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  <th style={{ padding: "0.5rem" }}>Time</th>
+                  <th style={{ padding: "0.5rem" }}>Release Title</th>
+                  <th style={{ padding: "0.5rem" }}>Indexer</th>
+                  <th style={{ padding: "0.5rem" }}>Rule</th>
+                  <th style={{ padding: "0.5rem" }}>Size</th>
+                  <th style={{ padding: "0.5rem" }}>Status</th>
+                  <th style={{ padding: "0.5rem" }}>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grabHistory.map((item) => (
+                  <tr
+                    key={item.id}
+                    style={{
+                      borderBottom: "1px solid var(--border-light)",
+                    }}
+                  >
+                    <td style={{ padding: "0.5rem", whiteSpace: "nowrap", color: "var(--text-muted)" }}>
+                      {formatDate(item.grabTimestamp)}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.5rem",
+                        fontWeight: 500,
+                        maxWidth: "320px",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {item.releaseTitle}
+                    </td>
+                    <td style={{ padding: "0.5rem", whiteSpace: "nowrap" }}>
+                      {item.indexerName || "-"}
+                    </td>
+                    <td style={{ padding: "0.5rem", whiteSpace: "nowrap" }}>
+                      {item.ruleName ? (
+                        <span className="badge badge-secondary" style={{ fontSize: "0.78rem" }}>
+                          {item.ruleName}
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td style={{ padding: "0.5rem", whiteSpace: "nowrap" }}>
+                      {item.size ? formatBytes(item.size) : "-"}
+                    </td>
+                    <td style={{ padding: "0.5rem", whiteSpace: "nowrap" }}>
+                      <span
+                        className={`provider-card-badge ${
+                          item.status === "Grabbed"
+                            ? "provider-card-badge-green"
+                            : "provider-card-badge-red"
+                        }`}
+                        style={{ fontSize: "0.78rem" }}
+                      >
+                        {item.status}
+                      </span>
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.5rem",
+                        fontSize: "0.8rem",
+                        color: item.errorMessage ? "var(--danger, #dc3545)" : "var(--text-muted)",
+                        maxWidth: "240px",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {item.errorMessage || (item.infoHash ? <code>{item.infoHash.slice(0, 10)}...</code> : "Success")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </SectionCard>
 
       {editing && (
@@ -1004,6 +1218,127 @@ export function IndexersTab() {
               placeholder="e.g. 1, 2 (leave blank for all indexers)"
               hint="Comma-separated IDs of specific indexers this rule applies to"
             />
+            <div className="form-group" style={{ marginBottom: "0.85rem" }}>
+              <label className="form-label">Allowed Resolutions</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", padding: "0.3rem 0" }}>
+                {["2160p", "1080p", "720p", "SD"].map((res) => {
+                  const current = editingRule.allowedResolutions || [];
+                  const isSelected = current.includes(res);
+                  return (
+                    <button
+                      key={res}
+                      type="button"
+                      className={`badge ${isSelected ? "badge-primary" : "badge-secondary"}`}
+                      style={{
+                        cursor: "pointer",
+                        padding: "0.25rem 0.55rem",
+                        fontSize: "0.82rem",
+                        borderRadius: "4px",
+                        border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border-light)",
+                        background: isSelected ? undefined : "transparent",
+                      }}
+                      onClick={() => {
+                        const updated = isSelected ? current.filter((r) => r !== res) : [...current, res];
+                        setEditingRule({ ...editingRule, allowedResolutions: updated });
+                      }}
+                    >
+                      {isSelected ? "✓ " : "+ "}{res === "2160p" ? "2160p (4K)" : res === "SD" ? "SD (480p/576p)" : res}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="form-hint">Leave unselected to allow all resolutions</span>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: "0.85rem" }}>
+              <label className="form-label">Allowed Sources</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", padding: "0.3rem 0" }}>
+                {["Remux", "BluRay", "WEB-DL", "WEBRip", "HDTV", "DVD"].map((src) => {
+                  const current = editingRule.allowedSources || [];
+                  const isSelected = current.includes(src);
+                  return (
+                    <button
+                      key={src}
+                      type="button"
+                      className={`badge ${isSelected ? "badge-primary" : "badge-secondary"}`}
+                      style={{
+                        cursor: "pointer",
+                        padding: "0.25rem 0.55rem",
+                        fontSize: "0.82rem",
+                        borderRadius: "4px",
+                        border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border-light)",
+                        background: isSelected ? undefined : "transparent",
+                      }}
+                      onClick={() => {
+                        const updated = isSelected ? current.filter((s) => s !== src) : [...current, src];
+                        setEditingRule({ ...editingRule, allowedSources: updated });
+                      }}
+                    >
+                      {isSelected ? "✓ " : "+ "}{src}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="form-hint">Leave unselected to allow all sources</span>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: "0.85rem" }}>
+              <label className="form-label">Allowed Codecs</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", padding: "0.3rem 0" }}>
+                {["HEVC", "AVC", "AV1", "XviD"].map((cod) => {
+                  const current = editingRule.allowedCodecs || [];
+                  const isSelected = current.includes(cod);
+                  return (
+                    <button
+                      key={cod}
+                      type="button"
+                      className={`badge ${isSelected ? "badge-primary" : "badge-secondary"}`}
+                      style={{
+                        cursor: "pointer",
+                        padding: "0.25rem 0.55rem",
+                        fontSize: "0.82rem",
+                        borderRadius: "4px",
+                        border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border-light)",
+                        background: isSelected ? undefined : "transparent",
+                      }}
+                      onClick={() => {
+                        const updated = isSelected ? current.filter((c) => c !== cod) : [...current, cod];
+                        setEditingRule({ ...editingRule, allowedCodecs: updated });
+                      }}
+                    >
+                      {isSelected ? "✓ " : "+ "}{cod === "HEVC" ? "HEVC / x265" : cod === "AVC" ? "AVC / x264" : cod}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="form-hint">Leave unselected to allow all video codecs</span>
+            </div>
+
+            <TextInput
+              label="Save Path (Custom Destination Folder)"
+              value={editingRule.savePath || ""}
+              onChange={(v) => setEditingRule({ ...editingRule, savePath: v })}
+              placeholder="e.g. /downloads/movies"
+              hint="Custom destination directory for torrents matched by this rule"
+            />
+
+            <SelectInput
+              label="Initial Status"
+              value={editingRule.initialStatus || "Queued"}
+              onChange={(v) => setEditingRule({ ...editingRule, initialStatus: v })}
+              options={[
+                { value: "Queued", label: "Queued (Start download immediately)" },
+                { value: "Paused", label: "Paused (Add in paused state)" },
+              ]}
+              hint="Initial torrent status when grabbed"
+            />
+
+            <Toggle
+              label="Sequential Download"
+              checked={editingRule.sequentialDownload ?? false}
+              onChange={(v) => setEditingRule({ ...editingRule, sequentialDownload: v })}
+            />
+
             <Toggle
               label="Freeleech Only"
               checked={editingRule.freeleechOnly ?? false}

@@ -722,6 +722,26 @@ export interface RssRule {
   categoryId: number;
   indexerIds: number[];
   tags?: number[];
+  tagIds?: number[];
+  allowedResolutions?: string[];
+  allowedSources?: string[];
+  allowedCodecs?: string[];
+  savePath?: string;
+  sequentialDownload?: boolean;
+  initialStatus?: string;
+}
+
+export interface RssGrabHistory {
+  id: number;
+  releaseTitle: string;
+  indexerName?: string;
+  ruleId?: number;
+  ruleName?: string;
+  infoHash?: string;
+  size: number;
+  grabTimestamp: string;
+  status: string;
+  errorMessage?: string;
 }
 
 export interface TrackerEntry {

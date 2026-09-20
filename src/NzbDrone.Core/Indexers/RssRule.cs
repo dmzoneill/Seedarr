@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Indexers;
 
@@ -37,6 +38,25 @@ public class RssRule : ModelBase
 
     public int Priority { get; set; }
 
+    public List<string> AllowedResolutions { get; set; } = new();
+
+    public List<string> AllowedSources { get; set; } = new();
+
+    public List<string> AllowedCodecs { get; set; } = new();
+
+    public string SavePath { get; set; }
+
+    [Ignore]
+    public List<int> TagIds
+    {
+        get => Tags;
+        set => Tags = value ?? new();
+    }
+
+    public bool SequentialDownload { get; set; }
+
+    public TorrentStatus? InitialStatus { get; set; }
+
     public bool Matches(ReleaseInfo release, DateTime? now = null)
     {
         if (release == null || !IsEnabled)
@@ -60,6 +80,31 @@ public class RssRule : ModelBase
         if (FreeleechOnly && !release.IsFreeleech)
         {
             return false;
+        }
+
+        if ((AllowedResolutions != null && AllowedResolutions.Count > 0) ||
+            (AllowedSources != null && AllowedSources.Count > 0) ||
+            (AllowedCodecs != null && AllowedCodecs.Count > 0))
+        {
+            var quality = ReleaseQualityParser.Parse(release.Title);
+
+            if (AllowedResolutions != null && AllowedResolutions.Count > 0 &&
+                !ReleaseQualityParser.MatchesResolution(quality.Resolution, AllowedResolutions))
+            {
+                return false;
+            }
+
+            if (AllowedSources != null && AllowedSources.Count > 0 &&
+                !ReleaseQualityParser.MatchesSource(quality.Source, AllowedSources))
+            {
+                return false;
+            }
+
+            if (AllowedCodecs != null && AllowedCodecs.Count > 0 &&
+                !ReleaseQualityParser.MatchesCodec(quality.Codec, AllowedCodecs))
+            {
+                return false;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(MustContain) && !IsTitleMatch(MustContain, release.Title))
