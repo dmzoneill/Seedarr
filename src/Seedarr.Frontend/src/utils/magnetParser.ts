@@ -70,9 +70,9 @@ export function parseMagnetUri(uri: string): ParsedMagnetUri {
     // If no v2 found, check for v1 btih (40 hex or 32 base32 characters)
     if (!infoHash) {
       for (const xt of xtList) {
-        const v1Match = xt.match(/^urn:btih:([0-9a-fA-F]{40}|[2-7a-zA-Z]{32})/i);
-        if (v1Match) {
-          infoHash = v1Match[1];
+        const cleaned = xt.replace(/^urn:btih:/i, "").trim().replace(/=+$/, "");
+        if (/^[0-9a-fA-F]{40}$/i.test(cleaned) || /^[2-7a-zA-Z]{32}$/i.test(cleaned)) {
+          infoHash = cleaned;
           isV2 = false;
           break;
         }

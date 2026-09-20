@@ -72,6 +72,18 @@ public static class TorrentResourceMapper
             resource.Trackers = new List<string> { model.TrackerUrl };
         }
 
+        if (!string.IsNullOrWhiteSpace(model.InfoHash))
+        {
+            try
+            {
+                resource.MagnetLink = MagnetLinkParser.BuildMagnetLink(model.InfoHash, model.Name, resource.Trackers);
+            }
+            catch (ArgumentException)
+            {
+                // Invalid info hash format, leave MagnetLink null
+            }
+        }
+
         return resource;
     }
 

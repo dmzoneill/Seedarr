@@ -1,6 +1,7 @@
 using System.IO;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Torrents;
 
 namespace Seedarr.Api.V1.Test.Torrents;
@@ -143,5 +144,24 @@ public class TorrentResourceMapperTest
         Assert.That(res.Flags, Does.Contain("H"));
         Assert.That(res.Flags, Does.Contain("O"));
         Assert.That(res.Flags, Does.Contain("S"));
+    }
+
+    [Test]
+    public void ToResource_should_set_canonical_magnet_link()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Ubuntu 22.04",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            TrackerUrl = "https://tracker.example.com/announce"
+        };
+
+        var resource = TorrentResourceMapper.ToResource(torrent);
+
+        Assert.That(resource.MagnetLink, Is.Not.Null);
+        Assert.That(resource.MagnetLink, Does.StartWith("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"));
+        Assert.That(resource.MagnetLink, Does.Contain("&dn=Ubuntu%2022.04"));
+        Assert.That(resource.MagnetLink, Does.Contain("&tr=https%3A%2F%2Ftracker.example.com%2Fannounce"));
     }
 }

@@ -11,7 +11,7 @@ import {
 } from "../api/hooks";
 import { formatBytes, formatDate } from "../utils/formatters";
 import { useToast } from "../context/ToastContext";
-import { validateTorrentFile, parseMagnetUri } from "../utils/magnetParser";
+import { validateTorrentFile } from "../utils/magnetParser";
 import type { ReleaseInfo } from "../api/types";
 import {
   trackTorrentAdd,
@@ -28,6 +28,61 @@ export interface AddTorrentFormProps {
 }
 
 export type InputMode = "file" | "magnet" | "search";
+
+export interface MagnetPreviewInfo {
+  name?: string;
+  hash?: string;
+  trackerCount: number;
+  isV2?: boolean;
+}
+
+export function parseMagnetPreview(uri: string): MagnetPreviewInfo | null {
+  const trimmed = uri.trim();
+  if (!trimmed.toLowerCase().startsWith("magnet:?")) return null;
+  try {
+    const rawParams = trimmed.substring(8);
+    const params = new URLSearchParams(rawParams);
+    const xtList = params.getAll("xt");
+    let hash: string | undefined;
+    let isV2 = false;
+
+    // Check for BEP 52 v2 multihash (urn:btmh:)
+    for (const xt of xtList) {
+      const v2Match = xt.match(/^urn:btmh:(?:1220)?([0-9a-fA-F]{64})/i);
+      if (v2Match) {
+        hash = v2Match[1].toLowerCase();
+        isV2 = true;
+        break;
+      }
+    }
+
+    // Check for v1 btih (40 hex or 32 base32 characters, stripping trailing '=' padding)
+    for (const xt of xtList) {
+      if (xt.toLowerCase().startsWith("urn:btih:")) {
+        const cleaned = xt.replace(/^urn:btih:/i, "").trim().replace(/=+$/, "");
+        if (/^[0-9a-fA-F]{40}$/i.test(cleaned) || /^[2-7a-zA-Z]{32}$/i.test(cleaned)) {
+          if (!isV2) {
+            hash = cleaned;
+          }
+          break;
+        }
+      }
+    }
+
+    const name = params.get("dn") || undefined;
+    const trackers = params.getAll("tr");
+    if (!hash && !name && trackers.length === 0) return null;
+
+    return {
+      name: name ? decodeURIComponent(name.replace(/\+/g, " ")) : undefined,
+      hash,
+      trackerCount: trackers.length,
+      isV2,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export function buildExistingHashesSet(
   torrents?: Array<{ infoHash?: string | null }>,
@@ -459,26 +514,11 @@ export function AddTorrentForm({
     );
   };
 
-  const parsedMagnet = useMemo(
-    () => parseMagnetUri(magnetLink),
+  const magnetPreview = useMemo(
+    () => parseMagnetPreview(magnetLink),
     [magnetLink],
   );
-  const isMagnetValid = parsedMagnet.valid;
-  const magnetPreview = useMemo(() => {
-    if (
-      !parsedMagnet.valid &&
-      !parsedMagnet.name &&
-      parsedMagnet.trackers.length === 0
-    ) {
-      return null;
-    }
-    return {
-      name: parsedMagnet.name,
-      hash: parsedMagnet.infoHash,
-      trackerCount: parsedMagnet.trackers.length,
-      isV2: parsedMagnet.isV2,
-    };
-  }, [parsedMagnet]);
+  const isMagnetValid = Boolean(magnetPreview?.hash);
   const canSubmit =
     (mode === "file" && files.length > 0) ||
     (mode === "magnet" && isMagnetValid);
