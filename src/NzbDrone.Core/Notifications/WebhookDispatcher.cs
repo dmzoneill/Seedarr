@@ -22,6 +22,7 @@ public class WebhookDispatchResult
     public bool Success { get; set; }
     public HttpStatusCode? StatusCode { get; set; }
     public string Message { get; set; }
+    public string ResponseBodySnippet { get; set; }
 }
 
 public interface IWebhookDispatcher
@@ -208,6 +209,17 @@ public class WebhookDispatcher : IWebhookDispatcher
                 }
             }
 
+            if (response.Headers.TryGetValues("X-RateLimit-Reset-After", out var resetValues))
+            {
+                var resetStr = resetValues.FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(resetStr) &&
+                    double.TryParse(resetStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var resetSeconds) &&
+                    resetSeconds > 0)
+                {
+                    return ClampRetryAfter(TimeSpan.FromSeconds(resetSeconds));
+                }
+            }
+
             if (response.Content != null)
             {
                 // Inspect buffered content in memory without synchronous blocking on network content streams
@@ -357,21 +369,31 @@ public class WebhookDispatcher : IWebhookDispatcher
                     }
 
                     _logger.Warn("Webhook plain text retry to {0} returned non-success status code: {1}", SanitizeUrlForLogging(targetUrl), fallbackResponse.StatusCode);
+                    var fallbackSnippet = await ExtractBodySnippetAsync(fallbackResponse, cancellationToken).ConfigureAwait(false);
+                    var fallbackReason = fallbackResponse.ReasonPhrase ?? fallbackResponse.StatusCode.ToString();
                     return new WebhookDispatchResult
                     {
                         Success = false,
                         StatusCode = fallbackResponse.StatusCode,
-                        Message = $"Webhook endpoint returned HTTP {(int)fallbackResponse.StatusCode} ({fallbackResponse.ReasonPhrase ?? fallbackResponse.StatusCode.ToString()}).",
+                        ResponseBodySnippet = fallbackSnippet,
+                        Message = string.IsNullOrEmpty(fallbackSnippet)
+                            ? $"Webhook endpoint returned HTTP {(int)fallbackResponse.StatusCode} ({fallbackReason})."
+                            : $"Webhook endpoint returned HTTP {(int)fallbackResponse.StatusCode} ({fallbackReason}): {fallbackSnippet}",
                     };
                 }
             }
 
+            var bodySnippet = await ExtractBodySnippetAsync(response, cancellationToken).ConfigureAwait(false);
+            var reason = response.ReasonPhrase ?? response.StatusCode.ToString();
             _logger.Warn("Webhook dispatch to {0} returned non-success status code: {1}", SanitizeUrlForLogging(targetUrl), response.StatusCode);
             return new WebhookDispatchResult
             {
                 Success = false,
                 StatusCode = response.StatusCode,
-                Message = $"Webhook endpoint returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase ?? response.StatusCode.ToString()}).",
+                ResponseBodySnippet = bodySnippet,
+                Message = string.IsNullOrEmpty(bodySnippet)
+                    ? $"Webhook endpoint returned HTTP {(int)response.StatusCode} ({reason})."
+                    : $"Webhook endpoint returned HTTP {(int)response.StatusCode} ({reason}): {bodySnippet}",
             };
         }
         catch (HttpRequestException ex)
@@ -658,5 +680,33 @@ public class WebhookDispatcher : IWebhookDispatcher
         {
             _logger.Warn("Failed to add custom header '{0}' to outgoing request", key);
         }
+    }
+
+    private static async Task<string> ExtractBodySnippetAsync(HttpResponseMessage response, CancellationToken cancellationToken = default)
+    {
+        if (response?.Content == null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                var bodySnippet = raw.Trim().Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
+                if (bodySnippet.Length > 256)
+                {
+                    bodySnippet = string.Concat(bodySnippet.AsSpan(0, 256), "...");
+                }
+
+                return bodySnippet;
+            }
+        }
+        catch
+        {
+        }
+
+        return string.Empty;
     }
 }

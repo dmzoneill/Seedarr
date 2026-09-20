@@ -53,4 +53,8 @@ public class NotificationTestResult
     public bool Success { get; set; }
 
     public string Message { get; set; }
+
+    public int? StatusCode { get; set; }
+
+    public string ResponseBodySnippet { get; set; }
 }

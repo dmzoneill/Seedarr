@@ -864,6 +864,39 @@ public class NotificationControllerTest
         Assert.That(testResult.Message, Does.Contain("HTTP 500"));
     }
 
+    [Test]
+    public async Task Test_Webhook_should_forward_status_code_and_response_body_snippet_in_test_result()
+    {
+        var publicUrl = "https://93.184.216.34/webhook";
+        var snippet = "{\"message\": \"Invalid Form Body\", \"code\": 50035}";
+        _dispatcher.DispatchDetailedAsync(Arg.Is(publicUrl), Arg.Any<object>(), Arg.Any<string>())
+            .Returns(new WebhookDispatchResult
+            {
+                Success = false,
+                StatusCode = HttpStatusCode.BadRequest,
+                ResponseBodySnippet = snippet,
+                Message = $"Webhook endpoint returned HTTP 400 (Bad Request): {snippet}",
+            });
+
+        var resource = new NotificationResource
+        {
+            Implementation = "Webhook",
+            Settings = $"{{\"url\":\"{publicUrl}\"}}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.StatusCode, Is.EqualTo(400));
+        Assert.That(testResult.ResponseBodySnippet, Is.EqualTo(snippet));
+        Assert.That(testResult.Message, Does.Contain("HTTP 400 (Bad Request)"));
+        Assert.That(testResult.Message, Does.Contain(snippet));
+    }
+
     [TestCase("127.0.0.1")]
     [TestCase("localhost")]
     [TestCase("169.254.169.254")]
