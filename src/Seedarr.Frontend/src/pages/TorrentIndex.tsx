@@ -9,6 +9,7 @@ import { QuickSettingsDrawer } from "../components/quicksettings";
 import { TorrentToolbar } from "./torrentindex/TorrentToolbar";
 import { TorrentFilterPanel } from "./torrentindex/TorrentFilterPanel";
 import { useTorrentIndexState } from "./torrentindex/useTorrentIndexState";
+import { useColumnPreferences } from "./torrentindex/columnPreferences";
 import {
   useAnnounceTorrent,
   useRecheckTorrent,
@@ -25,6 +26,15 @@ function TorrentIndex() {
   const recheckTorrent = useRecheckTorrent();
   const bulkAction = useBulkTorrentAction();
   const { modalCount } = useModalStack();
+  const {
+    visibleColumns,
+    toggleColumn,
+    resetToDefaults: resetColumns,
+    selectAll: selectAllColumns,
+    deselectAll: deselectAllColumns,
+    applyPreset: applyColumnPreset,
+    toggleCategory: toggleCategoryColumns,
+  } = useColumnPreferences();
   const {
     torrents,
     filteredTorrents,
@@ -457,6 +467,13 @@ function TorrentIndex() {
         onToggleFilter={toggleFilterCollapse}
         isQuickControlsOpen={isQuickControlsOpen}
         onToggleQuickControls={toggleQuickControls}
+        visibleColumns={visibleColumns}
+        onToggleColumn={toggleColumn}
+        onResetColumns={resetColumns}
+        onSelectAllColumns={selectAllColumns}
+        onDeselectAllColumns={deselectAllColumns}
+        onApplyColumnPreset={applyColumnPreset}
+        onToggleCategoryColumns={toggleCategoryColumns}
       />
       <QuickSettingsDrawer
         isOpen={isQuickControlsOpen}
@@ -499,6 +516,8 @@ function TorrentIndex() {
                   onSelectMultiple={setSelectedIds}
                   onDeleteSelected={handleBulkDelete}
                   onToggleActive={handleToggleActiveSelected}
+                  visibleColumns={visibleColumns}
+                  onToggleColumn={toggleColumn}
                 />
               ) : (
                 <TorrentGrid
