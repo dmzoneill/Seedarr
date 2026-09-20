@@ -2936,7 +2936,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                             var peerKey = GetPeerKey(connection);
                             if (tracker != null)
                             {
-                                var result = tracker.RecordPieceHave(peerKey, pieceIndex);
+                                var result = tracker.RecordPieceHave(peerKey, havePieceIndex);
                                 if (result.NewlyPropagated && !string.IsNullOrEmpty(result.FreedPeerId))
                                 {
                                     var peers = _connectionManager?.GetConnections(torrent.InfoHash);
@@ -3131,14 +3131,14 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                         {
                             var lengthVal = (int)(((uint)message.Payload[8] << 24) | ((uint)message.Payload[9] << 16) | ((uint)message.Payload[10] << 8) | message.Payload[11]);
                             connection.AssignedPieceBytesUploaded += lengthVal;
-                            var pieceSize = (torrent.PieceLength > 0 && torrent.TotalSize > 0 && pieceIndex == torrent.PieceCount - 1)
-                                ? (int)(torrent.TotalSize - ((long)pieceIndex * torrent.PieceLength))
+                            var pieceSize = (torrent.PieceLength > 0 && torrent.TotalSize > 0 && reqPieceIndex == torrent.PieceCount - 1)
+                                ? (int)(torrent.TotalSize - ((long)reqPieceIndex * torrent.PieceLength))
                                 : (torrent.PieceLength > 0 ? torrent.PieceLength : 16384);
 
                             if (connection.AssignedPieceBytesUploaded >= pieceSize)
                             {
                                 var tracker = GetOrCreateTracker(torrent);
-                                tracker?.RecordPieceUploaded(GetPeerKey(connection), pieceIndex);
+                                tracker?.RecordPieceUploaded(GetPeerKey(connection), reqPieceIndex);
                             }
                         }
                     }
