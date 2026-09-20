@@ -2813,4 +2813,14 @@ public class SeedingEngineTest
         Assert.That(normalHigh.Status, Is.EqualTo(TorrentStatus.Downloading));
         Assert.That(normalLow.Status, Is.EqualTo(TorrentStatus.Queued));
     }
+
+    [Test]
+    public void Handle_ApplicationShutdownRequested_should_set_shutdown_state()
+    {
+        _engine.Handle(new ApplicationShutdownRequested());
+
+        var field = typeof(SeedingEngine).GetField("_shutdownRequested", BindingFlags.NonPublic | BindingFlags.Instance);
+        var isShutdown = (bool)field.GetValue(_engine);
+        Assert.That(isShutdown, Is.True);
+    }
 }

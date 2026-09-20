@@ -7,6 +7,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
+using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
@@ -26,6 +27,10 @@ namespace Seedarr.Api.V1.System;
 public class SystemController : ControllerBase
 {
     private static readonly DateTime StartTime = DateTime.UtcNow;
+    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+    internal Action<ProcessStartInfo> ProcessStarter { get; set; } = psi => Process.Start(psi);
+    internal int RestartDelayMs { get; set; } = 500;
 
     private readonly ITaskManager _taskManager;
     private readonly IEnumerable<IScheduledTask> _scheduledTasks;
@@ -635,8 +640,43 @@ public class SystemController : ControllerBase
 
         global::System.Threading.Tasks.Task.Run(async () =>
         {
-            await global::System.Threading.Tasks.Task.Delay(500);
-            _lifetime.StopApplication();
+            if (RestartDelayMs > 0)
+            {
+                await global::System.Threading.Tasks.Task.Delay(RestartDelayMs);
+            }
+
+            try
+            {
+                var isContainer = EnvironmentProvider.CheckIsDocker() ||
+                    string.Equals(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true", StringComparison.OrdinalIgnoreCase) ||
+                    global::System.IO.File.Exists("/.dockerenv");
+
+                if (!isContainer)
+                {
+                    var processPath = Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0];
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = processPath,
+                        WorkingDirectory = Environment.CurrentDirectory,
+                        UseShellExecute = false
+                    };
+
+                    _logger.Info("Restarting application: spawning new process {0}", processPath);
+                    ProcessStarter(startInfo);
+                }
+                else
+                {
+                    _logger.Info("Restarting application in container environment: stopping application to allow container runtime to restart");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to spawn process on restart");
+            }
+            finally
+            {
+                _lifetime.StopApplication();
+            }
         });
 
         return Ok(new { message = "Restarting..." });

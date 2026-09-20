@@ -386,4 +386,40 @@ public class AppLifetimeTest
 
         _mainDatabase.Received(1).Checkpoint(WalCheckpointMode.Truncate);
     }
+
+    [Test]
+    public async Task StopAsync_should_publish_ApplicationShutdownRequested()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        await _subject.StopAsync(CancellationToken.None);
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<ApplicationShutdownRequested>());
+    }
+
+    [Test]
+    public async Task StopAsync_should_checkpoint_wal_via_maintenance_service_when_main_database_is_null()
+    {
+        var maintenanceService = Substitute.For<IDatabaseMaintenanceService>();
+        var subject = new AppLifetime(
+            _eventAggregator,
+            null,
+            _torrentService,
+            _configService,
+            _diskSpaceService,
+            _upnpService,
+            _fastResumeService,
+            _trackerAnnounceService,
+            _connectionManager,
+            _pieceStorage,
+            null,
+            _peerServer,
+            maintenanceService);
+
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        await subject.StopAsync(CancellationToken.None);
+
+        maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Truncate);
+    }
 }

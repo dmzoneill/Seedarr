@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
@@ -32,6 +33,7 @@ public class AppLifetime : IHostedService, IDisposable
     private readonly IPieceStorage _pieceStorage;
     private readonly IMainDatabase _mainDatabase;
     private readonly IPeerServer _peerServer;
+    private readonly IDatabaseMaintenanceService _databaseMaintenanceService;
     private readonly Logger _logger;
     private readonly HashSet<int> _stalledTorrentIds = new();
     private bool _speedThresholdExceededState;
@@ -51,7 +53,8 @@ public class AppLifetime : IHostedService, IDisposable
         IConnectionManager connectionManager = null,
         IPieceStorage pieceStorage = null,
         IMainDatabase mainDatabase = null,
-        IPeerServer peerServer = null)
+        IPeerServer peerServer = null,
+        IDatabaseMaintenanceService databaseMaintenanceService = null)
     {
         _eventAggregator = eventAggregator;
         _dynamicAuthManager = dynamicAuthManager;
@@ -65,6 +68,7 @@ public class AppLifetime : IHostedService, IDisposable
         _pieceStorage = pieceStorage;
         _mainDatabase = mainDatabase;
         _peerServer = peerServer;
+        _databaseMaintenanceService = databaseMaintenanceService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -246,6 +250,15 @@ public class AppLifetime : IHostedService, IDisposable
 
             try
             {
+                SqliteConnection.ClearAllPools();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error clearing SQLite connection pool prior to checkpoint");
+            }
+
+            try
+            {
                 var checkpointResult = _mainDatabase.Checkpoint(WalCheckpointMode.Truncate);
                 if (checkpointResult != null && !checkpointResult.Success)
                 {
@@ -259,6 +272,55 @@ public class AppLifetime : IHostedService, IDisposable
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Error checkpointing database on shutdown");
+            }
+
+            try
+            {
+                SqliteConnection.ClearAllPools();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error clearing SQLite connection pool on shutdown");
+            }
+        }
+        else if (_databaseMaintenanceService != null)
+        {
+            try
+            {
+                SqliteConnection.ClearAllPools();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error clearing SQLite connection pool prior to checkpoint");
+            }
+
+            try
+            {
+                _databaseMaintenanceService.CheckpointWal(WalCheckpointMode.Truncate);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error checkpointing database via maintenance service on shutdown");
+            }
+
+            try
+            {
+                SqliteConnection.ClearAllPools();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error clearing SQLite connection pool on shutdown");
+            }
+        }
+        else
+        {
+            try
+            {
+                SqliteConnection.ClearAllPools();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error clearing SQLite connection pool on shutdown");
             }
         }
     }

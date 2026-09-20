@@ -64,6 +64,7 @@ function SystemUpdates() {
 
   const handleRestart = async () => {
     setIsRestarting(true);
+    window.dispatchEvent(new CustomEvent("seedarr:restarting"));
     try {
       await apiClient.post("/system/restart");
       setRestartDone(true);

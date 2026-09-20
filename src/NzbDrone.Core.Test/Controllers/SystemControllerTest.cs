@@ -45,7 +45,11 @@ public class SystemControllerTest
             _commandQueueManager,
             _appFolderInfo,
             _lifetime,
-            _configService);
+            _configService)
+        {
+            ProcessStarter = psi => { },
+            RestartDelayMs = 0
+        };
     }
 
     [Test]
@@ -131,6 +135,66 @@ public class SystemControllerTest
         var result = _controller.Restart();
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
+    }
+
+    [Test]
+    public async Task Restart_spawns_process_with_correct_start_info_and_stops_application()
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.Name, "adminUser"),
+            new Claim(ClaimTypes.Role, "Admin")
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var principal = new ClaimsPrincipal(identity);
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = principal }
+        };
+
+        System.Diagnostics.ProcessStartInfo capturedStartInfo = null;
+        _controller.ProcessStarter = psi => capturedStartInfo = psi;
+        _controller.RestartDelayMs = 10;
+
+        var result = _controller.Restart();
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        await Task.Delay(100);
+
+        _lifetime.Received(1).StopApplication();
+        Assert.That(capturedStartInfo, Is.Not.Null);
+        var expectedPath = Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0];
+        Assert.That(capturedStartInfo.FileName, Is.EqualTo(expectedPath));
+        Assert.That(capturedStartInfo.WorkingDirectory, Is.EqualTo(Environment.CurrentDirectory));
+        Assert.That(capturedStartInfo.UseShellExecute, Is.False);
+    }
+
+    [Test]
+    public async Task Restart_handles_process_spawn_exception_gracefully_and_still_stops_application()
+    {
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.Name, "adminUser"),
+            new Claim(ClaimTypes.Role, "Admin")
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var principal = new ClaimsPrincipal(identity);
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = principal }
+        };
+
+        _controller.ProcessStarter = psi => throw new InvalidOperationException("Process spawn forbidden");
+        _controller.RestartDelayMs = 10;
+
+        var result = _controller.Restart();
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        await Task.Delay(100);
+
+        _lifetime.Received(1).StopApplication();
     }
 
     [Test]

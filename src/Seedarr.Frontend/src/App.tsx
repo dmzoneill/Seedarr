@@ -148,6 +148,51 @@ function App() {
   const [currentUser, setCurrentUser] = useState<import("./api/types").CurrentUser | null>(null);
   const [isManuallyLocked, setIsManuallyLocked] = useState(false);
   const [lockReason, setLockReason] = useState<"idle" | "expired">("idle");
+  const [isRestarting, setIsRestarting] = useState(false);
+
+  const startRestartPolling = useCallback(() => {
+    setIsRestarting(true);
+    setTimeout(() => {
+      const pollInterval = setInterval(async () => {
+        try {
+          const res = await fetch("/api/v1/system/status");
+          if (res.ok) {
+            clearInterval(pollInterval);
+            window.location.reload();
+          }
+        } catch {
+          // Backend is restarting; continue polling
+        }
+      }, 1500);
+    }, 1500);
+  }, []);
+
+  const handleRestart = useCallback(async () => {
+    if (
+      !confirm(
+        t("topbar.restartConfirm", undefined, "Restart Seedarr?"),
+      )
+    ) {
+      return;
+    }
+
+    startRestartPolling();
+    try {
+      await apiClient.post("/system/restart");
+    } catch (err) {
+      console.error("System restart trigger failed:", err);
+    }
+  }, [t, startRestartPolling]);
+
+  useEffect(() => {
+    const onRestartEvent = () => {
+      startRestartPolling();
+    };
+    window.addEventListener("seedarr:restarting", onRestartEvent);
+    return () => {
+      window.removeEventListener("seedarr:restarting", onRestartEvent);
+    };
+  }, [startRestartPolling]);
 
   const {
     isIdle,
@@ -327,6 +372,7 @@ function App() {
       showShortcutsModal ||
       showGettingStartedModal ||
       showCommandPalette ||
+      isRestarting ||
       isLocked ||
       isWarning
     ) {
@@ -348,6 +394,7 @@ function App() {
     showGettingStartedModal,
     showCommandPalette,
     modalCount,
+    isRestarting,
     isLocked,
     isWarning,
   ]);
@@ -1298,31 +1345,7 @@ function App() {
                   <button
                     className="topbar-dropdown-item"
                     role="menuitem"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          t(
-                            "topbar.restartConfirm",
-                            undefined,
-                            "Restart Seedarr?",
-                          ),
-                        )
-                      ) {
-                        apiClient
-                          .post("/system/restart")
-                          .catch((err) => {
-                            console.error("System action failed:", err);
-                            showToast(
-                              t(
-                                "topbar.actionFailed",
-                                undefined,
-                                "System action failed",
-                              ),
-                              "error",
-                            );
-                          });
-                      }
-                    }}
+                    onClick={handleRestart}
                   >
                     {t("topbar.restart", undefined, "Restart")}
                   </button>
@@ -1504,6 +1527,84 @@ function App() {
         }}
         onLogout={handleLogout}
       />
+      {isRestarting && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          style={{
+            zIndex: 99999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="modal"
+            style={{
+              maxWidth: 420,
+              width: "90%",
+              textAlign: "center",
+              padding: "2.5rem 2rem",
+              borderRadius: "12px",
+              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ marginBottom: "1.25rem" }}>
+              <SeedarrLogo size={48} />
+            </div>
+            <h2
+              style={{
+                margin: "0 0 0.5rem",
+                fontSize: "1.35rem",
+                fontWeight: 600,
+                color: "var(--text-primary)",
+              }}
+            >
+              Seedarr is restarting...
+            </h2>
+            <p
+              style={{
+                margin: "0 0 1.5rem",
+                fontSize: "0.875rem",
+                color: "var(--text-secondary)",
+                lineHeight: 1.5,
+              }}
+            >
+              Please wait while the system restarts and re-establishes connection.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                color: "var(--accent, #ffd166)",
+                fontSize: "0.9rem",
+                fontWeight: 500,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: "18px",
+                  height: "18px",
+                  border: "2px solid rgba(255, 255, 255, 0.2)",
+                  borderTopColor: "currentColor",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                }}
+              />
+              <span>Reconnecting to server...</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -42,6 +42,7 @@ function SystemStatus() {
   const handleRestart = async () => {
     setIsRestarting(true);
     setShowRestartModal(false);
+    window.dispatchEvent(new CustomEvent("seedarr:restarting"));
     try {
       await apiClient.post("/system/restart");
       showToast("System is restarting. Waiting for reconnection...", "info");
