@@ -320,6 +320,7 @@ public class Startup
 
         app.UseCors();
 
+        app.UseMiddleware<SecurityHeadersMiddleware>();
         app.UseMiddleware<HostHeaderValidationMiddleware>();
         app.UseMiddleware<CsrfProtectionMiddleware>();
 
