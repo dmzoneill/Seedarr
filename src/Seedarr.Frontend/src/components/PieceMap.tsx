@@ -51,12 +51,149 @@ const FILE_PALETTE = [
   "#6c5ce7",
 ];
 
+export interface PieceBlock {
+  index: number;
+  status: "complete" | "missing" | "active";
+}
+
+export const NUM_BLOCKS = 120;
+
+export function calculateBlocks(
+  progressOrNumBlocks: number = 0,
+  isSeedingOrTotalPieces: boolean | number = false,
+  progressArg?: number,
+  isSeedingArg?: boolean,
+): PieceBlock[] {
+  let numBlocks = NUM_BLOCKS;
+  let totalPieces = 100;
+  let progress = 0;
+  let isSeeding = false;
+
+  if (typeof isSeedingOrTotalPieces === "boolean") {
+    // calculateBlocks(progress, isSeeding)
+    progress = progressOrNumBlocks;
+    isSeeding = isSeedingOrTotalPieces;
+  } else if (typeof isSeedingOrTotalPieces === "number") {
+    // calculateBlocks(numBlocks, totalPieces, progress, isSeeding)
+    numBlocks = progressOrNumBlocks;
+    totalPieces = isSeedingOrTotalPieces;
+    progress = progressArg ?? 0;
+    isSeeding = isSeedingArg ?? false;
+  } else {
+    progress = progressOrNumBlocks;
+  }
+
+  const blocks: PieceBlock[] = [];
+  for (let i = 0; i < numBlocks; i++) {
+    const blockProgress = (i + 0.5) / numBlocks;
+    const isComplete =
+      progress >= 1.0 ||
+      (isSeeding && progress >= 1.0) ||
+      blockProgress <= progress;
+    let status: "complete" | "missing" | "active" = "missing";
+
+    if (isComplete) {
+      status = "complete";
+    } else if (
+      blockProgress <= progress + 0.05 &&
+      progress > 0 &&
+      progress < 1
+    ) {
+      status = "active";
+    }
+
+    blocks.push({
+      index: Math.floor((i / numBlocks) * totalPieces),
+      status,
+    });
+  }
+
+  return blocks;
+}
+
+export interface PieceMapStats {
+  verified: number;
+  inFlight: number;
+  corrupted: number;
+  missing: number;
+  completeCount: number;
+  remainingCount: number;
+  verifiedPercent: string;
+}
+
+export function calculatePieceStats(
+  pieceStates: Uint8Array,
+  totalPieces: number,
+  progress: number,
+): PieceMapStats {
+  let verified = 0;
+  let inFlight = 0;
+  let corrupted = 0;
+  let missing = 0;
+  for (let i = 0; i < totalPieces; i++) {
+    const s = pieceStates[i];
+    if (s === 2) verified++;
+    else if (s === 1) inFlight++;
+    else if (s === 3) corrupted++;
+    else missing++;
+  }
+  return {
+    verified,
+    inFlight,
+    corrupted,
+    missing,
+    completeCount: verified,
+    remainingCount: totalPieces - verified,
+    verifiedPercent: (progress * 100).toFixed(1),
+  };
+}
+
+export function calculatePieceStates(
+  totalPieces: number,
+  progress: number,
+  isSeeding: boolean = false,
+  pieceMapData?: {
+    spans?: { count: number; state: number }[];
+    rleSpans?: [number, number][];
+  } | null,
+): Uint8Array {
+  const states = new Uint8Array(totalPieces);
+  if (pieceMapData?.rleSpans && pieceMapData.rleSpans.length > 0) {
+    let offset = 0;
+    for (const [count, state] of pieceMapData.rleSpans) {
+      states.fill(state, offset, Math.min(totalPieces, offset + count));
+      offset += count;
+    }
+  } else if (pieceMapData?.spans && pieceMapData.spans.length > 0) {
+    let offset = 0;
+    for (const span of pieceMapData.spans) {
+      states.fill(span.state, offset, Math.min(totalPieces, offset + span.count));
+      offset += span.count;
+    }
+  } else {
+    // Fallback simulation when API piece data is not yet loaded
+    const completed = Math.floor(progress * totalPieces);
+    const isComplete = progress >= 1.0 || (isSeeding && progress >= 1.0);
+    for (let i = 0; i < totalPieces; i++) {
+      const pieceProgress = (i + 0.5) / totalPieces;
+      if (isComplete || i < completed || pieceProgress <= progress) {
+        states[i] = 2; // Completed
+      } else if (i === completed && progress > 0 && progress < 1) {
+        states[i] = 1; // In-flight
+      } else {
+        states[i] = 0; // Missing
+      }
+    }
+  }
+  return states;
+}
+
 export function PieceMap({
   torrentId,
   pieceCount,
   pieceLength,
   progress,
-  isSeeding = true,
+  isSeeding = false,
   className = "",
   files: propFiles,
 }: PieceMapProps) {
@@ -103,33 +240,7 @@ export function PieceMap({
 
   // Decompress states array: 0=Missing, 1=In-flight, 2=Completed/Verified, 3=Corrupted
   const pieceStates = useMemo(() => {
-    const states = new Uint8Array(totalPieces);
-    if (pieceMapData?.rleSpans && pieceMapData.rleSpans.length > 0) {
-      let offset = 0;
-      for (const [count, state] of pieceMapData.rleSpans) {
-        states.fill(state, offset, Math.min(totalPieces, offset + count));
-        offset += count;
-      }
-    } else if (pieceMapData?.spans && pieceMapData.spans.length > 0) {
-      let offset = 0;
-      for (const span of pieceMapData.spans) {
-        states.fill(span.state, offset, Math.min(totalPieces, offset + span.count));
-        offset += span.count;
-      }
-    } else {
-      // Fallback simulation when API piece data is not yet loaded
-      const completed = Math.floor(progress * totalPieces);
-      for (let i = 0; i < totalPieces; i++) {
-        if (progress >= 1.0 || isSeeding || i < completed) {
-          states[i] = 2; // Completed
-        } else if (i === completed && progress > 0 && progress < 1) {
-          states[i] = 1; // In-flight
-        } else {
-          states[i] = 0; // Missing
-        }
-      }
-    }
-    return states;
+    return calculatePieceStates(totalPieces, progress, isSeeding, pieceMapData);
   }, [pieceMapData, totalPieces, progress, isSeeding]);
 
   // Decompress rarity array (peer availability count)
@@ -145,7 +256,7 @@ export function PieceMap({
       }
     } else {
       // Fallback swarm availability
-      const defaultAvail = isSeeding ? 3 : progress >= 1.0 ? 5 : 1;
+      const defaultAvail = isSeeding && progress >= 1.0 ? 3 : progress >= 1.0 ? 5 : 1;
       rarity.fill(defaultAvail);
     }
     return rarity;
@@ -478,19 +589,8 @@ export function PieceMap({
 
   // Stats calculation
   const stats = useMemo(() => {
-    let verified = 0;
-    let inFlight = 0;
-    let corrupted = 0;
-    let missing = 0;
-    for (let i = 0; i < totalPieces; i++) {
-      const s = pieceStates[i];
-      if (s === 2) verified++;
-      else if (s === 1) inFlight++;
-      else if (s === 3) corrupted++;
-      else missing++;
-    }
-    return { verified, inFlight, corrupted, missing };
-  }, [pieceStates, totalPieces]);
+    return calculatePieceStats(pieceStates, totalPieces, progress);
+  }, [pieceStates, totalPieces, progress]);
 
   return (
     <div
@@ -781,6 +881,9 @@ export function PieceMap({
             <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
               <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#282520" }} />
               Missing ({stats.missing})
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+              {stats.completeCount} / {totalPieces} Complete
             </span>
           </div>
         )}
