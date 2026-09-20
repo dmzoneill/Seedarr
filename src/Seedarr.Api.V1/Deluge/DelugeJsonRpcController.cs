@@ -1973,15 +1973,18 @@ public class DelugeJsonRpcController : ControllerBase
             file.ByteOffset = offset;
             runningOffset += file.Size;
 
-            fileList.Add(new
+            fileList.Add(new Dictionary<string, object>
             {
-                index = i,
-                path = file.Path ?? string.Empty,
-                size = file.Size,
-                offset = file.ByteOffset,
+                ["index"] = i,
+                ["path"] = file.Path ?? string.Empty,
+                ["size"] = file.Size,
+                ["offset"] = file.ByteOffset,
             });
-            fileProgressList.Add(file.Size > 0 ? (double)file.BytesCompleted / file.Size : 0.0);
-            filePrioritiesList.Add(file.Priority);
+            var fileProg = (t.Progress >= 1.0 || t.Status == TorrentStatus.Seeding)
+                ? 1.0
+                : (file.Size > 0 && file.BytesCompleted > 0 ? (double)file.BytesCompleted / file.Size : t.Progress);
+            fileProgressList.Add(fileProg);
+            filePrioritiesList.Add(file.Priority > 0 ? file.Priority : (file.Wanted ? 1 : 0));
         }
 
         var trackerList = new List<object>();
@@ -2010,12 +2013,14 @@ public class DelugeJsonRpcController : ControllerBase
             }
         }
 
+        var totalDone = (t.Progress >= 1.0 || t.Status == TorrentStatus.Seeding) ? t.TotalSize : (long)(t.TotalSize * t.Progress);
+
         var status = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             ["hash"] = (t.InfoHash ?? string.Empty).ToLowerInvariant(),
             ["name"] = t.Name ?? string.Empty,
             ["total_size"] = t.TotalSize,
-            ["total_remaining"] = Math.Max(0L, t.TotalSize - (t.Progress >= 1.0 ? t.TotalSize : (long)(t.TotalSize * t.Progress))),
+            ["total_remaining"] = Math.Max(0L, t.TotalSize - totalDone),
             ["progress"] = t.Progress * 100.0,
             ["state"] = MapToDelugeState(t.Status, t.Progress),
             ["download_payload_rate"] = t.DownloadSpeed,
@@ -2026,7 +2031,7 @@ public class DelugeJsonRpcController : ControllerBase
             ["total_seeds"] = t.Seeders,
             ["num_peers"] = t.Leechers,
             ["total_peers"] = t.Leechers,
-            ["total_done"] = t.Downloaded,
+            ["total_done"] = totalDone,
             ["total_uploaded"] = t.Uploaded,
             ["total_payload_download"] = t.Downloaded,
             ["total_payload_upload"] = t.Uploaded,
@@ -2037,7 +2042,7 @@ public class DelugeJsonRpcController : ControllerBase
             ["label"] = t.Label ?? string.Empty,
             ["time_since_transfer"] = 0,
             ["time_added"] = new DateTimeOffset(t.DateAdded).ToUnixTimeSeconds(),
-            ["is_finished"] = t.Progress >= 1.0,
+            ["is_finished"] = t.Progress >= 1.0 || t.Status == TorrentStatus.Seeding,
             ["is_auto_managed"] = true,
             ["stop_at_ratio"] = false,
             ["stop_ratio"] = 2.0,
@@ -2165,6 +2170,35 @@ public class DelugeJsonRpcController : ControllerBase
         return (filterObj, keys);
     }
 
+    private static List<string> ExtractFilterStrings(JsonElement element)
+    {
+        var list = new List<string>();
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var str = element.GetString();
+            if (str != null)
+            {
+                list.Add(str.Trim());
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String)
+                {
+                    var str = item.GetString();
+                    if (str != null)
+                    {
+                        list.Add(str.Trim());
+                    }
+                }
+            }
+        }
+
+        return list;
+    }
+
     private static List<Torrent> FilterTorrents(List<Torrent> torrents, JsonElement filterObj)
     {
         if (filterObj.ValueKind != JsonValueKind.Object)
@@ -2174,21 +2208,119 @@ public class DelugeJsonRpcController : ControllerBase
 
         var result = torrents.AsEnumerable();
 
-        if (filterObj.TryGetProperty("state", out var stateProp) && stateProp.ValueKind == JsonValueKind.String)
+        var hasIdFilter = filterObj.TryGetProperty("id", out var idProp);
+        var hasHashFilter = filterObj.TryGetProperty("hash", out var hashProp);
+
+        if (hasIdFilter || hasHashFilter)
         {
-            var targetState = stateProp.GetString();
-            if (!string.IsNullOrEmpty(targetState) && !string.Equals(targetState, "All", StringComparison.OrdinalIgnoreCase))
+            var targetHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (hasIdFilter)
             {
-                result = result.Where(t => string.Equals(MapToDelugeState(t.Status, t.Progress), targetState, StringComparison.OrdinalIgnoreCase));
+                foreach (var h in ExtractFilterStrings(idProp))
+                {
+                    targetHashes.Add(h);
+                }
+            }
+
+            if (hasHashFilter)
+            {
+                foreach (var h in ExtractFilterStrings(hashProp))
+                {
+                    targetHashes.Add(h);
+                }
+            }
+
+            result = result.Where(t => !string.IsNullOrEmpty(t.InfoHash) && targetHashes.Contains(t.InfoHash));
+        }
+
+        if (filterObj.TryGetProperty("state", out var stateProp))
+        {
+            var rawStates = ExtractFilterStrings(stateProp);
+            var targetStates = rawStates.Where(s => !string.Equals(s, "All", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (rawStates.Count > 0 && targetStates.Count == 0)
+            {
+                // Only "All" was specified, do not filter state
+            }
+            else if (rawStates.Count > 0 || stateProp.ValueKind == JsonValueKind.Array)
+            {
+                var stateSet = new HashSet<string>(targetStates, StringComparer.OrdinalIgnoreCase);
+                result = result.Where(t => stateSet.Contains(MapToDelugeState(t.Status, t.Progress)));
             }
         }
 
-        if (filterObj.TryGetProperty("label", out var labelProp) && labelProp.ValueKind == JsonValueKind.String)
+        var hasLabelFilter = filterObj.TryGetProperty("label", out var labelProp);
+        var hasCategoryFilter = filterObj.TryGetProperty("category", out var catProp);
+
+        if (hasLabelFilter || hasCategoryFilter)
         {
-            var targetLabel = labelProp.GetString();
-            if (!string.IsNullOrEmpty(targetLabel) && !string.Equals(targetLabel, "All", StringComparison.OrdinalIgnoreCase))
+            var rawLabels = new List<string>();
+            var hasSpecifiedFilter = false;
+
+            if (hasLabelFilter)
             {
-                result = result.Where(t => string.Equals(t.Label, targetLabel, StringComparison.OrdinalIgnoreCase));
+                hasSpecifiedFilter = true;
+                rawLabels.AddRange(ExtractFilterStrings(labelProp));
+            }
+
+            if (hasCategoryFilter)
+            {
+                hasSpecifiedFilter = true;
+                rawLabels.AddRange(ExtractFilterStrings(catProp));
+            }
+
+            var filterLabels = rawLabels.Where(l => !string.Equals(l, "All", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (rawLabels.Count > 0 && filterLabels.Count == 0)
+            {
+                // Only "All" was specified, do not filter by label/category
+            }
+            else if (hasSpecifiedFilter)
+            {
+                var matchNoLabel = filterLabels.Any(l =>
+                    string.Equals(l, "None", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(l, "no_label", StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(l));
+
+                var labelSet = new HashSet<string>(
+                    filterLabels.Where(l =>
+                        !string.Equals(l, "None", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(l, "no_label", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(l)),
+                    StringComparer.OrdinalIgnoreCase);
+
+                result = result.Where(t =>
+                {
+                    var isNoLabel = string.IsNullOrWhiteSpace(t.Label) && string.IsNullOrWhiteSpace(t.Category);
+                    if (matchNoLabel && isNoLabel)
+                    {
+                        return true;
+                    }
+
+                    if (labelSet.Count > 0)
+                    {
+                        if (!string.IsNullOrEmpty(t.Label) && labelSet.Contains(t.Label))
+                        {
+                            return true;
+                        }
+
+                        if (!string.IsNullOrEmpty(t.Category) && labelSet.Contains(t.Category))
+                        {
+                            return true;
+                        }
+
+                        if (!string.IsNullOrEmpty(t.Label) && (t.Label.Contains(',') || t.Label.Contains(';')))
+                        {
+                            var parts = t.Label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Any(p => labelSet.Contains(p.Trim())))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+
+                    return false;
+                });
             }
         }
 
