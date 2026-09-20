@@ -181,6 +181,7 @@ public class WebSeedClientTest
             {
                 Content = new ByteArrayContent(payload)
             };
+            response.Content.Headers.ContentLength = 16384;
             return Task.FromResult(response);
         });
 

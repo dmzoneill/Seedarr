@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
@@ -20,7 +21,7 @@ public class TorrentStateMachineTest
     {
         _eventLogService = Substitute.For<ITorrentEventLogService>();
         _torrentService = Substitute.For<ITorrentService>();
-        _subject = new TorrentStateMachine(_eventLogService, null, _torrentService);
+        _subject = new TorrentStateMachine(_eventLogService, null, new Lazy<ITorrentService>(() => _torrentService));
     }
 
     [Test]
@@ -262,7 +263,7 @@ public class TorrentStateMachineTest
     {
         var categoryService = Substitute.For<ICategoryService>();
         categoryService.GetByName("Movies").Returns(new Category { Name = "Movies", TargetRatio = 1.75 });
-        var subject = new TorrentStateMachine(_eventLogService, null, _torrentService, categoryService);
+        var subject = new TorrentStateMachine(_eventLogService, null, new Lazy<ITorrentService>(() => _torrentService), categoryService);
 
         var torrent = new Torrent
         {
@@ -286,7 +287,7 @@ public class TorrentStateMachineTest
     {
         var categoryService = Substitute.For<ICategoryService>();
         categoryService.GetByName("TV").Returns(new Category { Name = "TV", TargetSeedTimeMinutes = 60 });
-        var subject = new TorrentStateMachine(_eventLogService, null, _torrentService, categoryService);
+        var subject = new TorrentStateMachine(_eventLogService, null, new Lazy<ITorrentService>(() => _torrentService), categoryService);
 
         var torrent = new Torrent
         {
@@ -310,7 +311,7 @@ public class TorrentStateMachineTest
     public void ApplyRatioLimit_publishes_seeding_time_reached_event_when_seed_time_limit_reached()
     {
         var eventAggregator = Substitute.For<IEventAggregator>();
-        var subject = new TorrentStateMachine(_eventLogService, eventAggregator, _torrentService);
+        var subject = new TorrentStateMachine(_eventLogService, eventAggregator, new Lazy<ITorrentService>(() => _torrentService));
 
         var torrent = new Torrent
         {

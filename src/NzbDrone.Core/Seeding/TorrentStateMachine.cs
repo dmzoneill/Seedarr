@@ -11,20 +11,23 @@ public class TorrentStateMachine : ITorrentStateMachine
 {
     private readonly ITorrentEventLogService _eventLogService;
     private readonly IEventAggregator _eventAggregator;
-    private readonly ITorrentService _torrentService;
+    private readonly Lazy<ITorrentService> _torrentService;
     private readonly ICategoryService _categoryService;
+    private readonly HashSet<int> _seedingTimeReachedTorrentIds;
     private readonly Logger _logger;
 
     public TorrentStateMachine(
         ITorrentEventLogService eventLogService,
         IEventAggregator eventAggregator = null,
-        ITorrentService torrentService = null,
-        ICategoryService categoryService = null)
+        Lazy<ITorrentService> torrentService = null,
+        ICategoryService categoryService = null,
+        HashSet<int> seedingTimeReachedTorrentIds = null)
     {
         _eventLogService = eventLogService;
         _eventAggregator = eventAggregator;
         _torrentService = torrentService;
         _categoryService = categoryService;
+        _seedingTimeReachedTorrentIds = seedingTimeReachedTorrentIds ?? new HashSet<int>();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -151,7 +154,7 @@ public class TorrentStateMachine : ITorrentStateMachine
                     _eventAggregator?.PublishEvent(new TorrentRatioReachedEvent(torrent, torrent.Ratio));
                 }
 
-                if (timeReached)
+                if (timeReached && _seedingTimeReachedTorrentIds.Add(torrent.Id))
                 {
                     _eventAggregator?.PublishEvent(new TorrentSeedingTimeReachedEvent(torrent, TimeSpan.FromSeconds(torrent.SeedingTime)));
                 }
@@ -160,11 +163,11 @@ public class TorrentStateMachine : ITorrentStateMachine
 
                 if (string.Equals(effectiveAction, "RemoveTorrent", StringComparison.OrdinalIgnoreCase))
                 {
-                    _torrentService?.Delete(torrent.Id, false);
+                    _torrentService?.Value?.Delete(torrent.Id, false);
                 }
                 else if (string.Equals(effectiveAction, "RemoveTorrentAndData", StringComparison.OrdinalIgnoreCase))
                 {
-                    _torrentService?.Delete(torrent.Id, true);
+                    _torrentService?.Value?.Delete(torrent.Id, true);
                 }
                 else
                 {

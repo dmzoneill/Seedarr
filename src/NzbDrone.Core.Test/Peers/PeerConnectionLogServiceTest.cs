@@ -243,7 +243,7 @@ public class PeerConnectionLogServiceTest
 
         _service.Purge(before);
 
-        _repository.Received(1).Purge(before, 50000);
+        _repository.Received(1).Purge(before, 50000, 1000);
     }
 
     [Test]
@@ -253,7 +253,7 @@ public class PeerConnectionLogServiceTest
 
         _service.Purge(before, 10000);
 
-        _repository.Received(1).Purge(before, 10000);
+        _repository.Received(1).Purge(before, 10000, 1000);
     }
 
     [Test]
