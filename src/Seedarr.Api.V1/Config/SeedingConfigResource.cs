@@ -29,7 +29,7 @@ public class SeedingConfigResource : RestResource
     public bool PreserveSeedingOnArrDelete { get; set; } = true;
     public int MaxActiveDownloads { get; set; } = 5;
     public int MaxActiveSeeds { get; set; } = 10;
-    public int MaxActiveTorrents { get; set; } = 0;
+    public int MaxActiveTorrents { get; set; }
     public bool IgnoreSlowTorrents { get; set; } = true;
     public int SlowTorrentThresholdKbps { get; set; } = 10;
 }
