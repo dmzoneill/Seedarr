@@ -268,21 +268,168 @@ public class SeedingEngine : BackgroundService
 
         EvaluateSuperSeeding(allTorrents.Where(t => (t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading) && t.SuperSeeding));
 
-        if (_categoryService != null && autoStart)
+        var queuedForceStart = allTorrents
+            .Where(t => t.Status == TorrentStatus.Queued && t.ForceStart)
+            .ToList();
+
+        if (queuedForceStart.Count > 0)
         {
-            var queuedTorrents = allTorrents
-                .Where(t => t.Status == TorrentStatus.Queued)
-                .OrderBy(t => t.SortOrder)
+            foreach (var torrent in queuedForceStart)
+            {
+                var newStatus = torrent.Progress >= 1.0 ? TorrentStatus.Seeding : TorrentStatus.Downloading;
+                torrent.Status = newStatus;
+                torrent.LastActive = _clock.UtcNow;
+                _torrentService.Update(torrent);
+                if (newStatus == TorrentStatus.Downloading)
+                {
+                    downloadingTorrents.Add(torrent);
+                }
+                else
+                {
+                    seedingTorrents.Add(torrent);
+                }
+
+                _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Queued, newStatus) { IsQueueManagerInternal = true });
+            }
+        }
+
+        var maxActiveDownloads = _configService.MaxActiveDownloads;
+        var maxActiveSeeds = _configService.MaxActiveSeeds > 0 ? _configService.MaxActiveSeeds : _configService.MaxActiveUploads;
+        var maxActiveTorrents = _configService.MaxActiveTorrents > 0 ? _configService.MaxActiveTorrents : _configService.GetValueInt("MaxActiveLimit", 0);
+
+        if (autoStart)
+        {
+            // 1. Demotion: If non-forced active torrents exceed configured limits, demote excess lowest-priority/highest-SortOrder torrents
+            if (maxActiveDownloads > 0)
+            {
+                var nonForcedDl = downloadingTorrents.Where(t => !t.ForceStart).ToList();
+                if (nonForcedDl.Count > maxActiveDownloads)
+                {
+                    var dlToDemote = nonForcedDl
+                        .OrderBy(t => t.Priority)
+                        .ThenByDescending(t => t.SortOrder)
+                        .ThenByDescending(t => t.Id)
+                        .Take(nonForcedDl.Count - maxActiveDownloads)
+                        .ToList();
+
+                    foreach (var torrent in dlToDemote)
+                    {
+                        torrent.Status = TorrentStatus.Queued;
+                        torrent.Active = false;
+                        torrent.UploadSpeed = 0;
+                        torrent.DownloadSpeed = 0;
+                        downloadingTorrents.Remove(torrent);
+                        _torrentService.Update(torrent);
+                        _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Downloading, TorrentStatus.Queued) { IsQueueManagerInternal = true });
+                    }
+                }
+            }
+
+            if (maxActiveSeeds > 0)
+            {
+                var nonForcedSeeds = seedingTorrents.Where(t => !t.ForceStart).ToList();
+                if (nonForcedSeeds.Count > maxActiveSeeds)
+                {
+                    var seedsToDemote = nonForcedSeeds
+                        .OrderBy(t => t.Priority)
+                        .ThenByDescending(t => t.SortOrder)
+                        .ThenByDescending(t => t.Id)
+                        .Take(nonForcedSeeds.Count - maxActiveSeeds)
+                        .ToList();
+
+                    foreach (var torrent in seedsToDemote)
+                    {
+                        torrent.Status = TorrentStatus.Queued;
+                        torrent.Active = false;
+                        torrent.UploadSpeed = 0;
+                        torrent.DownloadSpeed = 0;
+                        seedingTorrents.Remove(torrent);
+                        _torrentService.Update(torrent);
+                        _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Seeding, TorrentStatus.Queued) { IsQueueManagerInternal = true });
+                    }
+                }
+            }
+
+            if (maxActiveTorrents > 0)
+            {
+                var nonForcedActive = downloadingTorrents.Where(t => !t.ForceStart)
+                    .Concat(seedingTorrents.Where(t => !t.ForceStart))
+                    .ToList();
+
+                if (nonForcedActive.Count > maxActiveTorrents)
+                {
+                    var excess = nonForcedActive.Count - maxActiveTorrents;
+                    var activeToDemote = nonForcedActive
+                        .OrderBy(t => t.Priority)
+                        .ThenByDescending(t => t.SortOrder)
+                        .ThenByDescending(t => t.Id)
+                        .Take(excess)
+                        .ToList();
+
+                    foreach (var torrent in activeToDemote)
+                    {
+                        var oldStatus = torrent.Status;
+                        torrent.Status = TorrentStatus.Queued;
+                        torrent.Active = false;
+                        torrent.UploadSpeed = 0;
+                        torrent.DownloadSpeed = 0;
+                        if (oldStatus == TorrentStatus.Downloading)
+                        {
+                            downloadingTorrents.Remove(torrent);
+                        }
+                        else if (oldStatus == TorrentStatus.Seeding)
+                        {
+                            seedingTorrents.Remove(torrent);
+                        }
+
+                        _torrentService.Update(torrent);
+                        _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Queued) { IsQueueManagerInternal = true });
+                    }
+                }
+            }
+
+            // 2. Promotion: If autoStart is true, evaluate download and seed queue slots
+            var remainingTotalSlots = maxActiveTorrents > 0
+                ? Math.Max(0, maxActiveTorrents - (downloadingTorrents.Count(t => !t.ForceStart) + seedingTorrents.Count(t => !t.ForceStart)))
+                : int.MaxValue;
+
+            // A. Download Queue Promotion (Progress < 1.0)
+            var availableDlSlots = maxActiveDownloads > 0
+                ? Math.Max(0, maxActiveDownloads - downloadingTorrents.Count(t => !t.ForceStart))
+                : int.MaxValue;
+            availableDlSlots = Math.Min(availableDlSlots, remainingTotalSlots);
+
+            var queuedDownloads = allTorrents
+                .Where(t => t.Status == TorrentStatus.Queued && !t.ForceStart && t.Progress < 1.0)
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.SortOrder)
                 .ThenBy(t => t.Id)
                 .ToList();
 
-            if (queuedTorrents.Count > 0)
+            if (queuedDownloads.Count > 0 && availableDlSlots > 0)
             {
-                var globalMaxDl = _configService.MaxActiveDownloads > 0 ? (int?)_configService.MaxActiveDownloads : null;
-                var toPromote = _categoryService.EvaluateDownloadQueue(queuedTorrents, downloadingTorrents, globalMaxDl);
-                if (toPromote.Count > 0)
+                var toPromoteDl = new List<Torrent>();
+                if (_categoryService != null)
                 {
-                    foreach (var torrent in toPromote)
+                    var currentNonForcedDl = downloadingTorrents.Count(t => !t.ForceStart);
+                    var effectiveDlLimit = maxActiveDownloads > 0
+                        ? (maxActiveTorrents > 0 ? (int?)Math.Min(maxActiveDownloads, currentNonForcedDl + availableDlSlots) : maxActiveDownloads)
+                        : (maxActiveTorrents > 0 ? (int?)(currentNonForcedDl + availableDlSlots) : (int?)null);
+
+                    toPromoteDl = _categoryService.EvaluateDownloadQueue(queuedDownloads, downloadingTorrents, effectiveDlLimit);
+                    if (toPromoteDl.Count > availableDlSlots)
+                    {
+                        toPromoteDl = toPromoteDl.Take(availableDlSlots).ToList();
+                    }
+                }
+                else
+                {
+                    toPromoteDl = queuedDownloads.Take(availableDlSlots).ToList();
+                }
+
+                if (toPromoteDl.Count > 0)
+                {
+                    foreach (var torrent in toPromoteDl)
                     {
                         torrent.Status = TorrentStatus.Downloading;
                         torrent.LastActive = _clock.UtcNow;
@@ -290,6 +437,47 @@ public class SeedingEngine : BackgroundService
                         downloadingTorrents.Add(torrent);
                         _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Queued, TorrentStatus.Downloading) { IsQueueManagerInternal = true });
                     }
+                }
+            }
+
+            // Re-calculate remaining total active slots after download promotions
+            remainingTotalSlots = maxActiveTorrents > 0
+                ? Math.Max(0, maxActiveTorrents - (downloadingTorrents.Count(t => !t.ForceStart) + seedingTorrents.Count(t => !t.ForceStart)))
+                : int.MaxValue;
+
+            // B. Seeding Queue Promotion (Progress >= 1.0)
+            var availableSeedSlots = maxActiveSeeds > 0
+                ? Math.Max(0, maxActiveSeeds - seedingTorrents.Count(t => !t.ForceStart))
+                : int.MaxValue;
+            availableSeedSlots = Math.Min(availableSeedSlots, remainingTotalSlots);
+
+            var queuedSeeds = allTorrents
+                .Where(t => t.Status == TorrentStatus.Queued && !t.ForceStart && t.Progress >= 1.0)
+                .OrderByDescending(t => t.Priority)
+                .ThenBy(t => t.SortOrder)
+                .ThenBy(t => t.Id)
+                .ToList();
+
+            if (queuedSeeds.Count > 0 && availableSeedSlots > 0)
+            {
+                foreach (var torrent in queuedSeeds)
+                {
+                    if (availableSeedSlots <= 0)
+                    {
+                        break;
+                    }
+
+                    if (_categoryService != null && !_categoryService.CanUpload(torrent, seedingTorrents, maxActiveSeeds > 0 ? (int?)maxActiveSeeds : null))
+                    {
+                        continue;
+                    }
+
+                    torrent.Status = TorrentStatus.Seeding;
+                    torrent.LastActive = _clock.UtcNow;
+                    _torrentService.Update(torrent);
+                    seedingTorrents.Add(torrent);
+                    _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Queued, TorrentStatus.Seeding) { IsQueueManagerInternal = true });
+                    availableSeedSlots--;
                 }
             }
         }
