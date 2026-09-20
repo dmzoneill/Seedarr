@@ -6,12 +6,29 @@ export const PLAYABLE_EXTENSIONS = [
   ".webm",
   ".avi",
   ".mov",
+  ".m4v",
+  ".ts",
+  ".m2ts",
   ".mp3",
   ".flac",
+  ".aac",
+  ".ogg",
+  ".oga",
+  ".opus",
+  ".wav",
   ".m4a",
 ] as const;
 
-export const AUDIO_EXTENSIONS = [".mp3", ".flac", ".m4a"] as const;
+export const AUDIO_EXTENSIONS = [
+  ".mp3",
+  ".flac",
+  ".aac",
+  ".ogg",
+  ".oga",
+  ".opus",
+  ".wav",
+  ".m4a",
+] as const;
 
 export function isPlayableFile(filename?: string | null): boolean {
   if (!filename) return false;

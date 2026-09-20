@@ -563,11 +563,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var rangeStart = ParseRangeStart();
         _torrentStreamService?.NotifyStreamPosition(torrentId, rangeStart);
 
-        var files = _torrentFileService.GetByTorrentId(torrentId)
+        var files = (torrent.Files?.Count > 0 ? torrent.Files : _torrentFileService?.GetByTorrentId(torrentId))?
             .Where(f => !f.IsPaddingFile)
             .ToList();
 
-        if (files.Count == 0)
+        if (files == null || files.Count == 0)
         {
             return NotFound("No streamable files found in torrent.");
         }
@@ -586,8 +586,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
-        var files = _torrentFileService.GetByTorrentId(torrentId);
-        var file = files.FirstOrDefault(f => f.Id == fileId);
+        var files = torrent.Files?.Count > 0 ? torrent.Files : _torrentFileService?.GetByTorrentId(torrentId);
+        var file = files?.FirstOrDefault(f => f.Id == fileId);
         if (file == null)
         {
             return NotFound();
@@ -610,8 +610,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
-        var files = _torrentFileService.GetByTorrentId(torrentId);
-        var file = files.FirstOrDefault(f => f.Id == fileId);
+        var files = torrent.Files?.Count > 0 ? torrent.Files : _torrentFileService?.GetByTorrentId(torrentId);
+        var file = files?.FirstOrDefault(f => f.Id == fileId);
         if (file == null)
         {
             return NotFound();
@@ -627,38 +627,42 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is validated against torrent save directory")]
     private ActionResult ServeTorrentFile(Torrent torrent, TorrentFile file, bool download)
     {
-        var basePath = torrent.SavePath;
-        if (string.IsNullOrWhiteSpace(basePath))
+        var baseDir = !string.IsNullOrWhiteSpace(torrent.SavePath)
+            ? torrent.SavePath
+            : torrent.SourcePath;
+
+        if (string.IsNullOrWhiteSpace(baseDir))
         {
-            basePath = _configService?.DefaultSavePath ?? string.Empty;
+            return NotFound("Torrent save path not available");
         }
 
-        if (string.IsNullOrWhiteSpace(basePath) || string.IsNullOrWhiteSpace(file?.Path))
+        if (string.IsNullOrWhiteSpace(file?.Path))
         {
-            return NotFound("File path not configured.");
+            return BadRequest("Invalid file path");
         }
 
-        var fullBasePath = Path.GetFullPath(basePath);
-        var baseDirWithSep = fullBasePath.EndsWith(Path.DirectorySeparatorChar)
-            ? fullBasePath
-            : fullBasePath + Path.DirectorySeparatorChar;
+        var fullPath = Path.GetFullPath(Path.Combine(baseDir, file.Path));
+        var canonicalBase = Path.GetFullPath(baseDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
-        var fullPath = Path.GetFullPath(Path.Combine(fullBasePath, file.Path));
-        if (!fullPath.StartsWith(baseDirWithSep, StringComparison.OrdinalIgnoreCase) && !string.Equals(fullPath, fullBasePath, StringComparison.OrdinalIgnoreCase))
+        if (!fullPath.StartsWith(canonicalBase, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(fullPath, Path.GetFullPath(baseDir), StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest("Invalid file path");
         }
 
         if (!global::System.IO.File.Exists(fullPath))
         {
-            return NotFound("File not found on disk.");
+            return NotFound("File not found on disk");
         }
 
-        var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         var contentType = GetContentType(file.Path);
-        var downloadName = download ? Path.GetFileName(file.Path) : null;
+        if (download)
+        {
+            var downloadName = Path.GetFileName(file.Path);
+            return PhysicalFile(fullPath, contentType, downloadName, enableRangeProcessing: true);
+        }
 
-        return File(stream, contentType, fileDownloadName: downloadName, enableRangeProcessing: true);
+        return PhysicalFile(fullPath, contentType, enableRangeProcessing: true);
     }
 
     [HttpGet("{torrentId:int}/files/{fileId:int}/subtitles")]
@@ -865,12 +869,16 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             ".mkv" => "video/x-matroska",
             ".webm" => "video/webm",
             ".avi" => "video/x-msvideo",
+            ".m4v" => "video/x-m4v",
+            ".ts" or ".m2ts" => "video/mp2t",
             ".mov" => "video/quicktime",
             ".mp3" => "audio/mpeg",
             ".flac" => "audio/flac",
             ".aac" => "audio/aac",
-            ".ogg" => "audio/ogg",
+            ".ogg" or ".oga" => "audio/ogg",
+            ".opus" => "audio/opus",
             ".wav" => "audio/wav",
+            ".m4a" => "audio/mp4",
             ".vtt" => "text/vtt; charset=utf-8",
             ".srt" => "text/plain; charset=utf-8",
             ".sub" => "text/plain; charset=utf-8",
