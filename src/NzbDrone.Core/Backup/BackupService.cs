@@ -522,4 +522,3 @@ public class BackupService : IBackupService
         writer.Write(json);
     }
 }
-

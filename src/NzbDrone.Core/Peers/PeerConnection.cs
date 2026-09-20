@@ -2167,7 +2167,7 @@ public class PeerConnection : IDisposable
                 toRead = Math.Min(toRead, chunkSize);
                 if (BandwidthLimiter != null && BandwidthLimiter.HasDownloadLimit(InfoHash, PeerId))
                 {
-                    BandwidthLimiter.ConsumeDownload(InfoHash, PeerId, toRead);
+                    await BandwidthLimiter.ConsumeDownloadAsync(InfoHash, PeerId, toRead, cancellationToken);
                 }
                 else if (_downloadRateLimit > 0)
                 {

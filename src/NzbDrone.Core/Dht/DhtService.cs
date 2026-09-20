@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using BencodeNET.Objects;
+using BencodeNET.Parsing;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
@@ -679,11 +680,12 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             var parser = new BencodeParser();
             var message = parser.Parse<BDictionary>(data);
 
-            if (!message.ContainsKey("y") || message["y"] is not BString yStr)
+            if (!message.ContainsKey("y") || message["y"] is not BString)
             {
                 return;
             }
 
+            var yStr = (BString)message["y"];
             var messageType = yStr.ToString();
 
             switch (messageType)
@@ -1152,8 +1154,8 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         else
         {
             var isIPv6Sender = sender?.Address != null &&
-                               sender.AddressFamily == AddressFamily.InterNetworkV6 &&
-                               !sender.Address.IsIPv4MappedToIPv6;
+                sender.AddressFamily == AddressFamily.InterNetworkV6 &&
+                !sender.Address.IsIPv4MappedToIPv6;
 
             if (isIPv6Sender)
             {

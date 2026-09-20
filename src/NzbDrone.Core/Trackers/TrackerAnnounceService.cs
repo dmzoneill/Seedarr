@@ -553,6 +553,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 torrent.Seeders = response.Complete;
                 torrent.Leechers = response.Incomplete;
             }
+
             _torrentService?.Update(torrent);
             _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Working));
 

@@ -376,6 +376,7 @@ public class TorrentService : ITorrentService,
             {
                 _logger.Warn(ex, "Failed to delete payload file: {0}", fullSavePath);
             }
+
             return;
         }
 
@@ -767,7 +768,7 @@ public class TorrentService : ITorrentService,
 
         ValidateDiskSpaceForTorrent(torrent);
 
-        var files = _torrentFileService?.GetFilesByTorrentId(torrent.Id) ?? torrent.Files;
+        var files = _torrentFileService?.GetByTorrentId(torrent.Id) ?? torrent.Files;
         DiskAllocationService?.PreallocateFiles(torrent, files);
 
         torrent.Resume();

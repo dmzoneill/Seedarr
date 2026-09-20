@@ -255,7 +255,7 @@ public class InstallUpdateService : IInstallUpdateService
         }
     }
 
-    private async Task<(string targetVersion, UpdatePackage package)> ResolvePackageAsync(string version, CancellationToken cancellationToken)
+    private async Task<(string TargetVersion, UpdatePackage Package)> ResolvePackageAsync(string version, CancellationToken cancellationToken)
     {
         if (_updateService == null)
         {
@@ -311,7 +311,7 @@ public class InstallUpdateService : IInstallUpdateService
         long totalRead = 0;
         int bytesRead;
 
-        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) > 0)
+        while ((bytesRead = await contentStream.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
         {
             await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
             totalRead += bytesRead;
@@ -362,8 +362,8 @@ public class InstallUpdateService : IInstallUpdateService
         Directory.CreateDirectory(backupDir);
 
         var allFiles = Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories);
-        int totalFiles = allFiles.Length;
-        int processed = 0;
+        var totalFiles = allFiles.Length;
+        var processed = 0;
 
         foreach (var file in allFiles)
         {

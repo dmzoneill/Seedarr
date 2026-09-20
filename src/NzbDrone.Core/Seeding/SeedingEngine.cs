@@ -65,9 +65,9 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
     private readonly IDhtService _dhtService;
     private readonly ITrackerAnnounceService _trackerAnnounceService;
     private readonly Peers.IPeerServer _peerServer;
+    private readonly CancellationTokenSource _shutdownCts = new();
     private bool _speedThresholdExceededState;
     private long _lastTickTimestamp;
-    private readonly CancellationTokenSource _shutdownCts = new();
     private volatile bool _shutdownRequested;
 
     private string _localPeerId;
@@ -227,7 +227,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         _shutdownRequested = true;
         try
         {
-            _shutdownCts.Cancel();
+            await _shutdownCts.CancelAsync();
         }
         catch
         {
