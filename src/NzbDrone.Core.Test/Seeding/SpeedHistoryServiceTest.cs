@@ -355,6 +355,89 @@ public class SpeedHistoryServiceTest
         Assert.That(torrentHistory[2].UploadSpeed, Is.EqualTo(25_000));
     }
 
+    [Test]
+    public void RecordSnapshot_should_not_spike_when_resuming_torrent_after_delay()
+    {
+        var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Status = TorrentStatus.Seeding, Uploaded = 1000, Downloaded = 500 }
+        };
+        _torrentService.GetAll().Returns(torrents);
+
+        CallRecordSnapshot(baseTime);
+
+        // Torrent uploads 5000 bytes over 5 seconds
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Uploaded = 6000;
+        CallRecordSnapshot(baseTime);
+
+        // Torrent is paused
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Status = TorrentStatus.Paused;
+        CallRecordSnapshot(baseTime);
+
+        // 1 hour delay while paused, 50 MB accumulated
+        baseTime = baseTime.AddHours(1);
+        torrents[0].Status = TorrentStatus.Seeding;
+        torrents[0].Uploaded = 50_000_000;
+        CallRecordSnapshot(baseTime);
+
+        var history = _service.GetHistory();
+        var torrentHistory = _service.GetTorrentHistory(1);
+
+        // Neither aggregate nor per-torrent speed should spike to multi-MB/s
+        Assert.That(torrentHistory[3].UploadSpeed, Is.EqualTo(0));
+        Assert.That(history[3].UploadSpeed, Is.EqualTo(0));
+
+        // On the next normal snapshot interval (5s later), regular speed is calculated
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Uploaded = 50_010_000; // 10,000 bytes over 5s = 2000 B/s
+        CallRecordSnapshot(baseTime);
+
+        history = _service.GetHistory();
+        torrentHistory = _service.GetTorrentHistory(1);
+        Assert.That(torrentHistory[4].UploadSpeed, Is.EqualTo(2000));
+        Assert.That(history[4].UploadSpeed, Is.EqualTo(2000));
+    }
+
+    [Test]
+    public void RecordSnapshot_should_not_spike_when_torrent_is_paused_for_multiple_snapshots_and_resumed()
+    {
+        var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Status = TorrentStatus.Seeding, Uploaded = 1000, Downloaded = 500 }
+        };
+        _torrentService.GetAll().Returns(torrents);
+
+        CallRecordSnapshot(baseTime);
+
+        // Pause for several snapshot intervals
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Status = TorrentStatus.Paused;
+        torrents[0].Uploaded = 6000;
+        CallRecordSnapshot(baseTime);
+
+        baseTime = baseTime.AddSeconds(5);
+        CallRecordSnapshot(baseTime);
+
+        baseTime = baseTime.AddSeconds(5);
+        CallRecordSnapshot(baseTime);
+
+        // Resume with accumulated bytes
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Status = TorrentStatus.Seeding;
+        torrents[0].Uploaded = 100_000_000;
+        CallRecordSnapshot(baseTime);
+
+        var history = _service.GetHistory();
+        var torrentHistory = _service.GetTorrentHistory(1);
+
+        Assert.That(torrentHistory[4].UploadSpeed, Is.EqualTo(0));
+        Assert.That(history[4].UploadSpeed, Is.EqualTo(0));
+    }
+
     private void CallRecordSnapshot(DateTime? timestamp = null)
     {
         if (timestamp.HasValue)
