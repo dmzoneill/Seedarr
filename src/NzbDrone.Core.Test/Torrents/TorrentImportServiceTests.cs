@@ -379,4 +379,82 @@ public class TorrentImportServiceTests
         Assert.Throws<InvalidOperationException>(() => _subject.ImportFromMagnet(magnetUri));
         _torrentService.Received(1).Delete(77, false);
     }
+
+    [Test]
+    public void ImportFromFile_should_calculate_piece_offset_and_count_for_single_file_torrent()
+    {
+        using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var parsed = new ParsedTorrent
+        {
+            Name = "Single Torrent",
+            InfoHash = "singleimport1234567890123456789012345678",
+            TotalSize = 4000,
+            PieceCount = 4,
+            PieceLength = 1000,
+            Files = new List<ParsedTorrentFile>
+            {
+                new() { Path = "single.dat", Size = 4000 }
+            }
+        };
+
+        _parser.Parse(stream).Returns(parsed);
+        _torrentService.ExistsByInfoHash(parsed.InfoHash).Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo =>
+        {
+            var t = callInfo.Arg<Torrent>();
+            t.Id = 80;
+            return t;
+        });
+
+        var result = _subject.ImportFromFile(stream, "single.torrent");
+
+        Assert.That(result, Is.Not.Null);
+        _torrentFileService.Received(1).AddMany(Arg.Is<IList<TorrentFile>>(files =>
+            files.Count == 1 &&
+            files[0].TorrentId == 80 &&
+            files[0].Path == "single.dat" &&
+            files[0].PieceOffset == 0 &&
+            files[0].PieceCount == 4));
+    }
+
+    [Test]
+    public void ImportFromFile_should_calculate_piece_offset_and_count_for_multi_file_torrent()
+    {
+        using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var parsed = new ParsedTorrent
+        {
+            Name = "Multi Torrent",
+            InfoHash = "multiimport12345678901234567890123456789",
+            TotalSize = 5500,
+            PieceCount = 6,
+            PieceLength = 1000,
+            Files = new List<ParsedTorrentFile>
+            {
+                new() { Path = "part1.bin", Size = 1200 },
+                new() { Path = "part2.bin", Size = 2800 },
+                new() { Path = "part3.bin", Size = 1500 }
+            }
+        };
+
+        _parser.Parse(stream).Returns(parsed);
+        _torrentService.ExistsByInfoHash(parsed.InfoHash).Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo =>
+        {
+            var t = callInfo.Arg<Torrent>();
+            t.Id = 90;
+            return t;
+        });
+
+        var result = _subject.ImportFromFile(stream, "multi.torrent");
+
+        Assert.That(result, Is.Not.Null);
+        // File 1: 0..1200 -> pieces [0, 1] => offset 0, count 2
+        // File 2: 1200..4000 -> pieces [1, 2, 3] => offset 1, count 3
+        // File 3: 4000..5500 -> pieces [4, 5] => offset 4, count 2
+        _torrentFileService.Received(1).AddMany(Arg.Is<IList<TorrentFile>>(files =>
+            files.Count == 3 &&
+            files.Any(f => f.TorrentId == 90 && f.Path == "part1.bin" && f.PieceOffset == 0 && f.PieceCount == 2) &&
+            files.Any(f => f.TorrentId == 90 && f.Path == "part2.bin" && f.PieceOffset == 1 && f.PieceCount == 3) &&
+            files.Any(f => f.TorrentId == 90 && f.Path == "part3.bin" && f.PieceOffset == 4 && f.PieceCount == 2)));
+    }
 }

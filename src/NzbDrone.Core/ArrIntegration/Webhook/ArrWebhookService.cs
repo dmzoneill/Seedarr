@@ -768,13 +768,28 @@ public class ArrWebhookService : IArrWebhookService
                 var existingFiles = _torrentFileService.GetByTorrentId(torrentId);
                 if (existingFiles.Count == 0)
                 {
-                    var filesToAdd = parsed.Files.Select(f => new TorrentFile
+                    var pieceLength = parsed.PieceLength > 0 ? (long)parsed.PieceLength : 0L;
+                    var runningByteOffset = 0L;
+                    var filesToAdd = new List<TorrentFile>();
+
+                    foreach (var f in parsed.Files)
                     {
-                        TorrentId = torrentId,
-                        Path = f.Path,
-                        Size = f.Size,
-                        IsPaddingFile = f.IsPaddingFile
-                    }).ToList();
+                        var (pieceOffset, pieceCount) = TorrentPieceCalculator.CalculateForFile(runningByteOffset, f.Size, pieceLength);
+                        if (pieceLength > 0)
+                        {
+                            runningByteOffset += f.Size;
+                        }
+
+                        filesToAdd.Add(new TorrentFile
+                        {
+                            TorrentId = torrentId,
+                            Path = f.Path,
+                            Size = f.Size,
+                            PieceOffset = pieceOffset,
+                            PieceCount = pieceCount,
+                            IsPaddingFile = f.IsPaddingFile
+                        });
+                    }
                     _torrentFileService.AddMany(filesToAdd);
                 }
             }

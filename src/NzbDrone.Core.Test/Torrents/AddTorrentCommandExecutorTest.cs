@@ -290,4 +290,73 @@ public class AddTorrentCommandExecutorTest
         _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t =>
             t.TorrentId == 106 && t.Url == "http://single.example.com/announce" && t.Tier == 0));
     }
+
+    [Test]
+    public void Execute_should_calculate_piece_offset_and_count_for_single_file_torrent()
+    {
+        var command = new AddTorrentCommand { FilePath = "/path/to/single.torrent" };
+        var parsed = new ParsedTorrent
+        {
+            Name = "SingleFileTorrent",
+            InfoHash = "singlehash123",
+            TotalSize = 3500,
+            PieceLength = 1000,
+            PieceCount = 4,
+            Files = new List<ParsedTorrentFile>
+            {
+                new() { Path = "single.mkv", Size = 3500 }
+            }
+        };
+
+        _parser.Parse("/path/to/single.torrent").Returns(parsed);
+        _torrentService.ExistsByInfoHash("singlehash123").Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 107, Name = "SingleFileTorrent" });
+
+        _subject.Execute(command);
+
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 107 && f.Path == "single.mkv" && f.Size == 3500 &&
+            f.PieceOffset == 0 && f.PieceCount == 4));
+    }
+
+    [Test]
+    public void Execute_should_calculate_piece_offset_and_count_for_multi_file_torrent()
+    {
+        var command = new AddTorrentCommand { FilePath = "/path/to/multi.torrent" };
+        var parsed = new ParsedTorrent
+        {
+            Name = "MultiFileTorrent",
+            InfoHash = "multihash123",
+            TotalSize = 5000,
+            PieceLength = 1000,
+            PieceCount = 5,
+            Files = new List<ParsedTorrentFile>
+            {
+                new() { Path = "folder/file1.iso", Size = 1500 },
+                new() { Path = "folder/file2.iso", Size = 2500 },
+                new() { Path = "folder/file3.txt", Size = 1000 }
+            }
+        };
+
+        _parser.Parse("/path/to/multi.torrent").Returns(parsed);
+        _torrentService.ExistsByInfoHash("multihash123").Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 108, Name = "MultiFileTorrent" });
+
+        _subject.Execute(command);
+
+        // File 1: bytes 0..1500 -> pieces [0, 1] => offset 0, count 2
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 108 && f.Path == "folder/file1.iso" &&
+            f.PieceOffset == 0 && f.PieceCount == 2));
+
+        // File 2: bytes 1500..4000 -> pieces [1, 2, 3] => offset 1, count 3
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 108 && f.Path == "folder/file2.iso" &&
+            f.PieceOffset == 1 && f.PieceCount == 3));
+
+        // File 3: bytes 4000..5000 -> piece [4] => offset 4, count 1
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 108 && f.Path == "folder/file3.txt" &&
+            f.PieceOffset == 4 && f.PieceCount == 1));
+    }
 }

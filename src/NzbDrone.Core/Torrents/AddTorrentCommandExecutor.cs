@@ -115,25 +115,44 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
 
         if (parsed.Files != null && parsed.Files.Count > 0)
         {
-            torrent.Files = parsed.Files.Select(f => new TorrentFile
+            var pieceLength = parsed.PieceLength > 0 ? (long)parsed.PieceLength : 0L;
+            var runningByteOffset = 0L;
+            var files = new List<TorrentFile>();
+
+            foreach (var f in parsed.Files)
             {
-                Path = f.Path,
-                Size = f.Size,
-                IsPaddingFile = f.IsPaddingFile
-            }).ToList();
+                var (pieceOffset, pieceCount) = TorrentPieceCalculator.CalculateForFile(runningByteOffset, f.Size, pieceLength);
+                if (pieceLength > 0)
+                {
+                    runningByteOffset += f.Size;
+                }
+
+                files.Add(new TorrentFile
+                {
+                    Path = f.Path,
+                    Size = f.Size,
+                    PieceOffset = pieceOffset,
+                    PieceCount = pieceCount,
+                    IsPaddingFile = f.IsPaddingFile
+                });
+            }
+
+            torrent.Files = files;
         }
 
         var added = _torrentService.Add(torrent);
 
-        if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)
+        if (_torrentFileService != null && torrent.Files != null && torrent.Files.Count > 0)
         {
-            foreach (var file in parsed.Files)
+            foreach (var file in torrent.Files)
             {
                 _torrentFileService.Add(new TorrentFile
                 {
                     TorrentId = added.Id,
                     Path = file.Path,
                     Size = file.Size,
+                    PieceOffset = file.PieceOffset,
+                    PieceCount = file.PieceCount,
                     IsPaddingFile = file.IsPaddingFile
                 });
             }
