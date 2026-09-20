@@ -56,6 +56,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ISubtitleEncodingDetector _subtitleEncodingDetector;
     private readonly IMainDatabase _mainDatabase;
     private readonly ITorrentRecheckService _torrentRecheckService;
+    private readonly ITorrentExporter _torrentExporter;
 
     private readonly ConcurrentDictionary<int, (List<TrackerEntry> Trackers, DateTime Expiry)> _broadcastTrackersCache = new();
     private readonly ConcurrentDictionary<int, (TorrentMediaMetadata Metadata, DateTime Expiry)> _broadcastMediaMetaCache = new();
@@ -86,7 +87,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         ISubtitleEncodingDetector subtitleEncodingDetector = null,
         ITrackerScrapeService trackerScrapeService = null,
         IMainDatabase mainDatabase = null,
-        ITorrentRecheckService torrentRecheckService = null)
+        ITorrentRecheckService torrentRecheckService = null,
+        ITorrentExporter torrentExporter = null)
         : base(signalRBroadcaster, null, coalesceWindow)
     {
         _torrentService = torrentService;
@@ -111,6 +113,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _trackerScrapeService = trackerScrapeService;
         _mainDatabase = mainDatabase;
         _torrentRecheckService = torrentRecheckService;
+        _torrentExporter = torrentExporter ?? new TorrentExporter(_torrentFileService, _trackerEntryService);
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -483,6 +486,32 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         return MapTorrentToResource(torrent);
+    }
+
+    [HttpGet("{id:int}/torrent")]
+    [HttpGet("{id:int}/export")]
+    [HttpGet("/api/v1/torrents/{id:int}/torrent")]
+    [HttpGet("/api/v1/torrents/{id:int}/export")]
+    public ActionResult ExportTorrent(int id)
+    {
+        Torrent torrent = null;
+        try
+        {
+            torrent = _torrentService.Get(id);
+        }
+        catch (ModelNotFoundException)
+        {
+            return NotFound();
+        }
+
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var bytes = _torrentExporter.ExportTorrent(torrent);
+        var fileName = !string.IsNullOrWhiteSpace(torrent.Name) ? $"{torrent.Name}.torrent" : "torrent.torrent";
+        return File(bytes, "application/x-bittorrent", fileName);
     }
 
     [HttpGet("{torrentId:int}/media")]

@@ -773,5 +773,61 @@ public class QBittorrentApiControllerTest
         Assert.That(actionResult, Is.InstanceOf<ContentResult>());
         relocationService.Received(1).RelocateTorrentAsync(1, "/downloads/movies");
     }
+
+    [Test]
+    public void Export_returns_file_for_valid_hash()
+    {
+        var hash = "aabbccddeeff00112233aabbccddeeff00112233";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Name = "ExportMovie",
+            TotalSize = 54321
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.Export(hash: hash);
+
+        Assert.That(result, Is.InstanceOf<FileContentResult>());
+        var fileResult = (FileContentResult)result;
+        Assert.That(fileResult.ContentType, Is.EqualTo("application/x-bittorrent"));
+        Assert.That(fileResult.FileDownloadName, Is.EqualTo("ExportMovie.torrent"));
+        Assert.That(fileResult.FileContents, Is.Not.Null);
+        Assert.That(fileResult.FileContents.Length, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void Export_returns_404_for_unknown_hash()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var result = _controller.Export(hash: "unknownhash1122334455667788990011223344");
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void Export_returns_file_when_hashes_provided_as_form_parameter()
+    {
+        var hash = "aabbccddeeff00112233aabbccddeeff00112233";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Name = "ExportMovie2",
+            TotalSize = 1000
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.Export(hashesForm: hash);
+
+        Assert.That(result, Is.InstanceOf<FileContentResult>());
+        var fileResult = (FileContentResult)result;
+        Assert.That(fileResult.ContentType, Is.EqualTo("application/x-bittorrent"));
+        Assert.That(fileResult.FileDownloadName, Is.EqualTo("ExportMovie2.torrent"));
+    }
 }
 

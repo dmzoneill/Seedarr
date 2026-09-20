@@ -161,6 +161,7 @@ const en = {
     rename: "Rename...",
     setLocation: "Set Location...",
     setLabel: "Set Label...",
+    exportTorrent: "Export .torrent",
     superSeeding: "Super Seeding",
     sequentialDownload: "Sequential Download",
     removeTorrent: "Remove Torrent",

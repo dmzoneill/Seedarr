@@ -745,6 +745,27 @@ function TorrentContextMenu({
               {!isMulti && ct?.label ? ` (${ct.label})` : countSuffix}
             </button>
 
+            {/* Export .torrent */}
+            {ct && (
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  effectiveTorrents.forEach((t) => {
+                    const link = document.createElement("a");
+                    link.href = `/api/v1/torrent/${t.id}/torrent`;
+                    link.download = `${t.name}.torrent`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  });
+                  onClose();
+                }}
+              >
+                {t("torrents.exportTorrent", undefined, "Export .torrent")}
+                {countSuffix}
+              </button>
+            )}
+
             <div className="context-menu-separator" />
 
             {/* Toggles */}

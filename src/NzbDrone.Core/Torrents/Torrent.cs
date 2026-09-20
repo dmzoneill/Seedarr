@@ -116,6 +116,9 @@ public class Torrent : ModelBase
     [Ignore]
     public string Quality { get; set; }
 
+    [Ignore]
+    public byte[] PieceHashes { get; set; }
+
     /// <summary>
     /// Applies user-controllable updates while preserving engine-managed state invariants
     /// (such as Uploaded, Downloaded, Ratio, Speeds, Peer counts, and Session stats).

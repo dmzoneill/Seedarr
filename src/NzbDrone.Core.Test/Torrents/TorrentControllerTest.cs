@@ -1029,4 +1029,37 @@ public class TorrentControllerTest
         _torrentService.Received(1).Recheck(1);
         _torrentService.Received(1).Recheck(2);
     }
+
+    [Test]
+    public void ExportTorrent_returns_200_with_bittorrent_content_type()
+    {
+        var torrent = new Torrent
+        {
+            Id = 42,
+            Name = "MyTestTorrent",
+            InfoHash = "1122334455667788990011223344556677889900",
+            TotalSize = 12345
+        };
+
+        _torrentService.Get(42).Returns(torrent);
+
+        var result = _controller.ExportTorrent(42);
+
+        Assert.That(result, Is.InstanceOf<FileContentResult>());
+        var fileResult = (FileContentResult)result;
+        Assert.That(fileResult.ContentType, Is.EqualTo("application/x-bittorrent"));
+        Assert.That(fileResult.FileDownloadName, Is.EqualTo("MyTestTorrent.torrent"));
+        Assert.That(fileResult.FileContents, Is.Not.Null);
+        Assert.That(fileResult.FileContents.Length, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void ExportTorrent_returns_not_found_when_torrent_does_not_exist()
+    {
+        _torrentService.Get(999).Returns((Torrent)null);
+
+        var result = _controller.ExportTorrent(999);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
 }
