@@ -1,4 +1,7 @@
+import { useState, useEffect } from "react";
 import { useNetworkDiagnostics, useTestPort } from "../api/hooks";
+import { usePortMappingStatus, useRefreshPortMapping } from "../api/network";
+import { useToast } from "../context/ToastContext";
 
 function EncryptionDonut({
   encrypted,
@@ -168,9 +171,71 @@ function EncryptionDonut({
   );
 }
 
+function getProtocolBadge(protocol?: string): { label: string; className: string } {
+  const p = (protocol || "").toUpperCase();
+  if (p === "PCP") {
+    return { label: "PCP v2", className: "badge badge-primary" };
+  }
+  if (p === "NAT-PMP" || p === "NATPMP") {
+    return { label: "NAT-PMP", className: "badge badge-primary" };
+  }
+  if (p === "UPNP" || p === "UPNP-IGD") {
+    return { label: "UPnP-IGD", className: "badge badge-primary" };
+  }
+  return { label: "Inactive", className: "badge badge-stopped" };
+}
+
+function formatCountdown(expiryUtc: string | null | undefined, leaseSeconds?: number): string {
+  if (!expiryUtc) {
+    if (leaseSeconds && leaseSeconds > 0) {
+      const h = Math.floor(leaseSeconds / 3600);
+      const m = Math.floor((leaseSeconds % 3600) / 60);
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+    return "N/A";
+  }
+  const expiry = new Date(expiryUtc).getTime();
+  const now = Date.now();
+  const diffSec = Math.floor((expiry - now) / 1000);
+  if (diffSec <= 0) {
+    return "Expired";
+  }
+  const h = Math.floor(diffSec / 3600);
+  const m = Math.floor((diffSec % 3600) / 60);
+  const s = diffSec % 60;
+  if (h > 0) {
+    return `${h}h ${m}m`;
+  }
+  if (m > 0) {
+    return `${m}m ${s}s`;
+  }
+  return `${s}s`;
+}
+
 function SystemNetwork() {
   const { data: diag, isLoading, isError } = useNetworkDiagnostics();
   const testPortMutation = useTestPort();
+  const { data: portMapping } = usePortMappingStatus();
+  const refreshMappingsMutation = useRefreshPortMapping();
+  const { showToast } = useToast();
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleRefreshMappings = async () => {
+    try {
+      await refreshMappingsMutation.mutateAsync();
+      showToast("Port mappings refreshed successfully", "success");
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to refresh port mappings",
+        "error"
+      );
+    }
+  };
 
   if (isLoading) {
     return (
@@ -539,8 +604,8 @@ function SystemNetwork() {
         </div>
       </div>
 
-      {/* Port Mappings Card (if any) */}
-      {diag.portMappings.length > 0 && (
+      {/* Port Mappings Card */}
+      {((diag.portMappings && diag.portMappings.length > 0) || (portMapping?.mappings && portMapping.mappings.length > 0) || portMapping?.protocol) && (
         <div
           className="card"
           style={{
@@ -556,27 +621,69 @@ function SystemNetwork() {
             style={{
               padding: "1.1rem 1.25rem 0.85rem",
               borderBottom: "1px solid var(--border-light)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "0.75rem",
             }}
           >
-            <h2
-              style={{
-                fontSize: "1.05rem",
-                fontWeight: 600,
-                color: "var(--accent, #c8a84e)",
-                margin: 0,
-              }}
-            >
-              Active Port Mappings (UPnP / NAT-PMP)
-            </h2>
-            <div
-              style={{
-                fontSize: "0.8rem",
-                color: "var(--text-muted)",
-                marginTop: "0.2rem",
-              }}
-            >
-              Router port redirections negotiated by the BitTorrent networking
-              daemon
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <h2
+                  style={{
+                    fontSize: "1.05rem",
+                    fontWeight: 600,
+                    color: "var(--accent, #c8a84e)",
+                    margin: 0,
+                  }}
+                >
+                  Active Port Mappings
+                </h2>
+                <span
+                  className={getProtocolBadge(portMapping?.protocol).className}
+                  style={{ fontSize: "0.75rem", padding: "0.2rem 0.55rem" }}
+                >
+                  {getProtocolBadge(portMapping?.protocol).label}
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--text-muted)",
+                  marginTop: "0.3rem",
+                  display: "flex",
+                  gap: "1.25rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span>
+                  Gateway: <strong>{portMapping?.gatewayIp || "Auto-discovered"}</strong>
+                </span>
+                {portMapping?.routerModel && (
+                  <span>
+                    Router: <strong>{portMapping.routerModel}</strong>
+                  </span>
+                )}
+                {portMapping?.externalIp && (
+                  <span>
+                    External IP: <strong>{portMapping.externalIp}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: "0.82rem", padding: "0.35rem 0.75rem" }}
+                onClick={handleRefreshMappings}
+                disabled={refreshMappingsMutation.isPending}
+                title="Trigger an immediate gateway probe and lease refresh"
+              >
+                {refreshMappingsMutation.isPending ? "Refreshing..." : "Refresh Mappings"}
+              </button>
             </div>
           </div>
 
@@ -588,6 +695,7 @@ function SystemNetwork() {
                   <th className="torrent-table-th">Internal Port</th>
                   <th className="torrent-table-th">External Port</th>
                   <th className="torrent-table-th">Description</th>
+                  <th className="torrent-table-th">Expires In</th>
                   <th
                     className="torrent-table-th"
                     style={{ textAlign: "right" }}
@@ -597,7 +705,20 @@ function SystemNetwork() {
                 </tr>
               </thead>
               <tbody>
-                {diag.portMappings.map((pm, i) => (
+                {(portMapping?.mappings && portMapping.mappings.length > 0
+                  ? portMapping.mappings
+                  : diag.portMappings.map((pm) => ({
+                      internalPort: pm.internalPort,
+                      externalPort: pm.externalPort,
+                      protocol: pm.protocol,
+                      description: pm.description,
+                      leaseSeconds: (pm as { leaseSeconds?: number }).leaseSeconds || 7200,
+                      expiryUtc: (pm as { expiryUtc?: string }).expiryUtc || null,
+                      isActive: pm.isActive,
+                      status: pm.isActive ? "Active" : "Inactive",
+                      errorMessage: pm.errorMessage,
+                    }))
+                ).map((pm, i) => (
                   <tr key={i} className="torrent-table-row">
                     <td>
                       <span className="badge badge-primary">{pm.protocol}</span>
@@ -605,6 +726,9 @@ function SystemNetwork() {
                     <td>{pm.internalPort}</td>
                     <td>{pm.externalPort}</td>
                     <td>{pm.description}</td>
+                    <td style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                      {formatCountdown(pm.expiryUtc, pm.leaseSeconds)}
+                    </td>
                     <td style={{ textAlign: "right" }}>
                       <span
                         className={`badge ${pm.isActive ? "badge-seeding" : "badge-stopped"}`}
