@@ -358,8 +358,8 @@ public class TorrentService : ITorrentService,
         var pathRoot = Path.GetPathRoot(fullSavePath);
         if (string.IsNullOrWhiteSpace(pathRoot) ||
             string.Equals(fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                          pathRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                          StringComparison.OrdinalIgnoreCase))
+                pathRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase))
         {
             _logger.Warn("Refusing to delete files in root directory: {0}", fullSavePath);
             return;
@@ -431,8 +431,8 @@ public class TorrentService : ITorrentService,
             {
                 var currentDir = dir;
                 while (!string.IsNullOrEmpty(currentDir) &&
-                       currentDir.StartsWith(canonicalBase, StringComparison.OrdinalIgnoreCase) &&
-                       currentDir.Length > canonicalBase.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length)
+                    currentDir.StartsWith(canonicalBase, StringComparison.OrdinalIgnoreCase) &&
+                    currentDir.Length > canonicalBase.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Length)
                 {
                     try
                     {
@@ -478,7 +478,7 @@ public class TorrentService : ITorrentService,
             var saveDirName = Path.GetFileName(fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             var isDedicatedDir = !string.IsNullOrWhiteSpace(torrent.Name) &&
                 (string.Equals(saveDirName, torrent.Name, StringComparison.OrdinalIgnoreCase) ||
-                 fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).EndsWith(Path.DirectorySeparatorChar + torrent.Name, StringComparison.OrdinalIgnoreCase));
+                fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).EndsWith(Path.DirectorySeparatorChar + torrent.Name, StringComparison.OrdinalIgnoreCase));
 
             if (isDedicatedDir)
             {

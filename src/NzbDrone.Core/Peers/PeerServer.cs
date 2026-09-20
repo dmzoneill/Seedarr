@@ -928,7 +928,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 if (_endgameManager.IsInEndgame(missingCount, inFlightCount))
                 {
                     var canServe = !connection.PeerChoking ||
-                                   (connection.SupportsFastExtension && (pieceIndex >= 0 ? connection.RemoteAllowedFastPieces.Contains(pieceIndex) : connection.RemoteAllowedFastPieces.Count > 0));
+                        (connection.SupportsFastExtension && (pieceIndex >= 0 ? connection.RemoteAllowedFastPieces.Contains(pieceIndex) : connection.RemoteAllowedFastPieces.Count > 0));
 
                     if (canServe)
                     {
@@ -2903,7 +2903,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             case PeerMessageType.Have:
                 if (message.Payload != null && message.Payload.Length >= 4)
                 {
-                    var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
+                    var havePieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
                     if (torrent != null && torrent.PieceCount > 0)
                     {
                         if (connection.PeerPieces == null)
@@ -2911,14 +2911,14 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                             connection.PeerPieces = new bool[torrent.PieceCount];
                         }
 
-                        if (pieceIndex >= 0 && pieceIndex < connection.PeerPieces.Length)
+                        if (havePieceIndex >= 0 && havePieceIndex < connection.PeerPieces.Length)
                         {
-                            if (!connection.PeerPieces[pieceIndex])
+                            if (!connection.PeerPieces[havePieceIndex])
                             {
-                                connection.PeerPieces[pieceIndex] = true;
+                                connection.PeerPieces[havePieceIndex] = true;
                                 connection.HaveCount++;
                                 var histogram = GetOrCreateHistogram(torrent.InfoHash, torrent.PieceCount);
-                                histogram?.IncrementPiece(pieceIndex);
+                                histogram?.IncrementPiece(havePieceIndex);
                             }
 
                             connection.Progress = (double)connection.HaveCount / torrent.PieceCount;
@@ -3076,17 +3076,17 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
                 if (message.Payload != null && message.Payload.Length >= 12)
                 {
-                    var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
+                    var reqPieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
                     var begin = (int)(((uint)message.Payload[4] << 24) | ((uint)message.Payload[5] << 16) | ((uint)message.Payload[6] << 8) | message.Payload[7]);
                     var length = (int)(((uint)message.Payload[8] << 24) | ((uint)message.Payload[9] << 16) | ((uint)message.Payload[10] << 8) | message.Payload[11]);
 
                     if (torrent != null && torrent.SuperSeeding)
                     {
-                        if (connection.AssignedSuperSeedingPiece == null || connection.AssignedSuperSeedingPiece.Value != pieceIndex)
+                        if (connection.AssignedSuperSeedingPiece == null || connection.AssignedSuperSeedingPiece.Value != reqPieceIndex)
                         {
                             _logger.Debug(
                                 "Super-seeding active: rejecting request for piece {0} (assigned: {1}) from peer {2}:{3}",
-                                pieceIndex,
+                                reqPieceIndex,
                                 connection.AssignedSuperSeedingPiece,
                                 connection.RemoteIp,
                                 connection.RemotePort);
@@ -3104,11 +3104,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                         }
                     }
 
-                    var isAllowedFast = connection.SupportsFastExtension && _fastExtensionHandler != null && _fastExtensionHandler.GetAllowedFastSet(connection).Contains(pieceIndex);
+                    var isAllowedFast = connection.SupportsFastExtension && _fastExtensionHandler != null && _fastExtensionHandler.GetAllowedFastSet(connection).Contains(reqPieceIndex);
 
                     if (!connection.AmChoking || isAllowedFast || _chokeManager == null)
                     {
-                        var req = new PeerRequest(pieceIndex, begin, length);
+                        var req = new PeerRequest(reqPieceIndex, begin, length);
                         lock (connection.PendingIncomingRequests)
                         {
                             connection.PendingIncomingRequests.Add(req);
@@ -3244,17 +3244,16 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
                 if (message.Payload != null && message.Payload.Length >= 12)
                 {
-                    var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
+                    var rejectPieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
                     var begin = (int)(((uint)message.Payload[4] << 24) | ((uint)message.Payload[5] << 16) | ((uint)message.Payload[6] << 8) | message.Payload[7]);
                     var length = (int)(((uint)message.Payload[8] << 24) | ((uint)message.Payload[9] << 16) | ((uint)message.Payload[10] << 8) | message.Payload[11]);
 
-                    _piecePicker?.OnBlockRejected(connection, pieceIndex, begin, length);
+                    _piecePicker?.OnBlockRejected(connection, rejectPieceIndex, begin, length);
                 }
 
                 break;
 
             case PeerMessageType.Piece:
-            {
                 if (torrent != null && (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking))
                 {
                     _logger.Debug(
@@ -3385,7 +3384,6 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 }
 
                 break;
-            }
 
             case PeerMessageType.Extended:
                 HandleExtendedMessage(connection, message, torrent);
