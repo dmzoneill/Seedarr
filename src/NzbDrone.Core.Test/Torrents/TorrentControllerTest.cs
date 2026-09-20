@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -11,6 +12,7 @@ using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 using NzbDrone.SignalR;
 using Seedarr.Api.V1.Torrents;
 
@@ -29,6 +31,7 @@ public class TorrentControllerTest
     private IBroadcastSignalRMessage _signalRBroadcaster;
     private ICategoryService _categoryService;
     private TorrentResourceValidator _validator;
+    private ITrackerAnnounceService _trackerAnnounceService;
     private TorrentController _controller;
 
     [SetUp]
@@ -44,6 +47,7 @@ public class TorrentControllerTest
         _signalRBroadcaster = Substitute.For<IBroadcastSignalRMessage>();
         _categoryService = Substitute.For<ICategoryService>();
         _validator = new TorrentResourceValidator();
+        _trackerAnnounceService = Substitute.For<ITrackerAnnounceService>();
 
         _controller = new TorrentController(
             _torrentService,
@@ -55,6 +59,7 @@ public class TorrentControllerTest
             _configService,
             _signalRBroadcaster,
             _validator,
+            trackerAnnounceService: _trackerAnnounceService,
             categoryService: _categoryService);
     }
 
@@ -734,5 +739,94 @@ public class TorrentControllerTest
 
         var result = _controller.GetPieceMap("999");
         Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void Announce_returns_429_with_RetryAfter_header_when_all_trackers_are_rate_limited()
+    {
+        const int torrentId = 15;
+        var torrent = new Torrent
+        {
+            Id = torrentId,
+            Name = "RateLimited.Movie",
+            InfoHash = "1234567890123456789012345678901234567890"
+        };
+        _torrentService.Get(torrentId).Returns(torrent);
+
+        var httpContext = new DefaultHttpContext();
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext
+        };
+
+        var rateLimitedResults = new List<TrackerAnnounceResult>
+        {
+            new()
+            {
+                TrackerId = 1,
+                Url = "http://tracker.example.com/announce",
+                Success = false,
+                FailureReason = "Rate limited: minimum announce interval of 60s not elapsed (retry in 45s)",
+                RetryAfterSeconds = 45
+            }
+        };
+
+        _trackerAnnounceService.AnnounceTorrent(torrent, force: true).Returns(rateLimitedResults);
+
+        var result = _controller.Announce(torrentId);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(StatusCodes.Status429TooManyRequests));
+        Assert.That(httpContext.Response.Headers.ContainsKey("Retry-After"), Is.True);
+        Assert.That(httpContext.Response.Headers["Retry-After"].ToString(), Is.EqualTo("45"));
+    }
+
+    [Test]
+    public void AnnounceTracker_returns_429_with_RetryAfter_header_when_rate_limited()
+    {
+        const int torrentId = 16;
+        const int trackerId = 2;
+        var torrent = new Torrent
+        {
+            Id = torrentId,
+            Name = "SingleTracker.RateLimit",
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        };
+        var tracker = new TrackerEntry
+        {
+            Id = trackerId,
+            TorrentId = torrentId,
+            Url = "http://tracker.example.com/announce",
+            Enabled = true
+        };
+
+        _torrentService.Get(torrentId).Returns(torrent);
+        _trackerEntryService.GetByTorrentId(torrentId).Returns(new List<TrackerEntry> { tracker });
+
+        var httpContext = new DefaultHttpContext();
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext
+        };
+
+        var rateLimitedResult = new TrackerAnnounceResult
+        {
+            TrackerId = trackerId,
+            Url = tracker.Url,
+            Success = false,
+            FailureReason = "Rate limited: minimum announce interval of 120s not elapsed (retry in 60s)",
+            RetryAfterSeconds = 60
+        };
+
+        _trackerAnnounceService.AnnounceTracker(torrent, tracker, force: true).Returns(rateLimitedResult);
+
+        var result = _controller.AnnounceTracker(torrentId, trackerId);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(StatusCodes.Status429TooManyRequests));
+        Assert.That(httpContext.Response.Headers.ContainsKey("Retry-After"), Is.True);
+        Assert.That(httpContext.Response.Headers["Retry-After"].ToString(), Is.EqualTo("60"));
     }
 }

@@ -1529,6 +1529,23 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         var results = TriggerAnnounceInternal(torrent);
 
+        if (results.Count > 0 && results.All(r => !r.Success && r.RetryAfterSeconds > 0))
+        {
+            var retryAfter = results.Max(r => r.RetryAfterSeconds);
+            if (HttpContext?.Response != null)
+            {
+                Response.Headers["Retry-After"] = retryAfter.ToString();
+            }
+
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                success = false,
+                message = $"Rate limited: retry in {retryAfter}s",
+                retryAfter,
+                results
+            });
+        }
+
         var trackers = _trackerEntryService.GetByTorrentId(id);
         var successfulCount = results.Count(r => r.Success);
         var failedCount = results.Count(r => !r.Success);
@@ -1869,6 +1886,25 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         var results = TriggerAnnounceInternal(torrent, target);
         var res = results.FirstOrDefault();
+
+        if (results.Count > 0 && results.All(r => !r.Success && r.RetryAfterSeconds > 0))
+        {
+            var retryAfter = results.Max(r => r.RetryAfterSeconds);
+            if (HttpContext?.Response != null)
+            {
+                Response.Headers["Retry-After"] = retryAfter.ToString();
+            }
+
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                success = false,
+                message = $"Rate limited: retry in {retryAfter}s",
+                retryAfter,
+                results,
+                result = res
+            });
+        }
+
         return Ok(new
         {
             success = res?.Success ?? false,

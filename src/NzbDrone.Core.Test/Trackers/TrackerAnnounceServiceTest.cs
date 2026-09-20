@@ -1081,4 +1081,161 @@ public class TrackerAnnounceServiceTest
             !e.IsSuccess &&
             e.ErrorMessage == "Connection timed out"));
     }
+
+    [Test]
+    public void AnnounceTracker_should_return_rate_limited_failure_when_manual_announce_within_min_announce_interval()
+    {
+        var torrent = new Torrent
+        {
+            Id = 101,
+            Name = "RateLimit.Torrent",
+            InfoHash = "1111222233334444555566667777888899990000",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 101,
+            Url = "http://tracker.example.com/announce",
+            Enabled = true,
+            TotalAnnounces = 1,
+            LastAnnounce = DateTime.UtcNow.AddSeconds(-30),
+            MinAnnounceInterval = 120
+        };
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.RetryAfterSeconds, Is.GreaterThan(0));
+        Assert.That(result.FailureReason, Does.Contain("Rate limited: minimum announce interval of 120s not elapsed"));
+        _multiTracker.DidNotReceive().Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTracker_should_succeed_when_manual_announce_after_min_announce_interval()
+    {
+        var torrent = new Torrent
+        {
+            Id = 102,
+            Name = "Allowed.Torrent",
+            InfoHash = "2222333344445555666677778888999900001111",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 2,
+            TorrentId = 102,
+            Url = "http://tracker.example.com/announce",
+            Enabled = true,
+            TotalAnnounces = 1,
+            LastAnnounce = DateTime.UtcNow.AddSeconds(-130),
+            MinAnnounceInterval = 120
+        };
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true, Interval = 1800 });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.True);
+        _multiTracker.Received(1).Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTracker_should_not_block_first_announce()
+    {
+        var torrent = new Torrent
+        {
+            Id = 103,
+            Name = "FirstAnnounce.Torrent",
+            InfoHash = "3333444455556666777788889999000011112222",
+            Status = TorrentStatus.Downloading
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 3,
+            TorrentId = 103,
+            Url = "http://tracker.example.com/announce",
+            Enabled = true,
+            TotalAnnounces = 0,
+            LastAnnounce = null,
+            MinAnnounceInterval = 120
+        };
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true, Interval = 1800 });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.True);
+        _multiTracker.Received(1).Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_rate_limit_trackers_within_min_announce_interval()
+    {
+        var torrent = new Torrent
+        {
+            Id = 104,
+            Name = "MultiTracker.RateLimit",
+            InfoHash = "4444555566667777888899990000111122223333",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 4,
+            TorrentId = 104,
+            Url = "http://tracker.example.com/announce",
+            Enabled = true,
+            TotalAnnounces = 1,
+            LastAnnounce = DateTime.UtcNow.AddSeconds(-20),
+            MinAnnounceInterval = 60
+        };
+
+        _trackerEntryService.GetByTorrentId(104).Returns(new List<TrackerEntry> { tracker });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        Assert.That(results[0].Success, Is.False);
+        Assert.That(results[0].RetryAfterSeconds, Is.GreaterThan(0));
+        Assert.That(results[0].FailureReason, Does.Contain("Rate limited: minimum announce interval of 60s not elapsed"));
+        _multiTracker.DidNotReceive().Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_fallback_to_half_interval_or_60_when_min_interval_omitted()
+    {
+        var torrent = new Torrent
+        {
+            Id = 105,
+            Name = "FallbackInterval.Torrent",
+            InfoHash = "5555666677778888999900001111222233334444",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 5,
+            TorrentId = 105,
+            Url = "http://tracker.example.com/announce",
+            Enabled = true,
+            TotalAnnounces = 1,
+            LastAnnounce = DateTime.UtcNow.AddSeconds(-15),
+            MinAnnounceInterval = 0,
+            AnnounceInterval = 1800
+        };
+
+        _trackerEntryService.GetByTorrentId(105).Returns(new List<TrackerEntry> { tracker });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        Assert.That(results[0].Success, Is.False);
+        Assert.That(results[0].FailureReason, Does.Contain("Rate limited: minimum announce interval of 60s not elapsed"));
+    }
 }
