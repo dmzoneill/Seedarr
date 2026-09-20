@@ -54,6 +54,40 @@ const STORAGE_KEY = "seedarr_speedgraph_range";
 const SCALE_HOLD_DELAY_MS = 8000;
 const LERP_FACTOR = 0.15;
 
+export const CANVAS_HEIGHT = 180;
+export const CANVAS_PADDING = { top: 12, right: 24, bottom: 26, left: 75 };
+export const PADDING = CANVAS_PADDING;
+export const UPLOAD_COLOR = "#3498db";
+export const DOWNLOAD_COLOR = "#2ecc71";
+
+function safeRequestAnimationFrame(callback: FrameRequestCallback): number {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.requestAnimationFrame === "function"
+  ) {
+    return window.requestAnimationFrame(callback);
+  }
+  if (typeof requestAnimationFrame === "function") {
+    return requestAnimationFrame(callback);
+  }
+  return setTimeout(callback, 16) as unknown as number;
+}
+
+function safeCancelAnimationFrame(id: number): void {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.cancelAnimationFrame === "function"
+  ) {
+    window.cancelAnimationFrame(id);
+    return;
+  }
+  if (typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(id);
+    return;
+  }
+  clearTimeout(id);
+}
+
 function getInitialRange(propMaxPoints?: number): TimeRange {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -75,10 +109,6 @@ function getInitialRange(propMaxPoints?: number): TimeRange {
 interface SpeedGraphProps {
   maxPoints?: number;
 }
-
-const DEFAULT_SVG_WIDTH = 1000;
-const SVG_HEIGHT = 180;
-const PADDING = { top: 12, right: 24, bottom: 26, left: 75 };
 
 export function getNiceMax(value: number): number {
   if (!Number.isFinite(value) || value <= 1024) return 1024;
@@ -130,8 +160,11 @@ export function getGridLineCount(niceMax: number): number {
 
 function SpeedGraph({ maxPoints }: SpeedGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] =
-    useState<number>(DEFAULT_SVG_WIDTH);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const gridCacheRef = useRef<HTMLCanvasElement | null>(null);
+  const gridCacheKeyRef = useRef<string>("");
+
+  const [containerWidth, setContainerWidth] = useState<number>(1000);
   const [selectedRange, setSelectedRange] = useState<TimeRange>(() =>
     getInitialRange(maxPoints),
   );
@@ -230,26 +263,29 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
       const next = current + diff * LERP_FACTOR;
       setRenderedMax(next);
       renderedMaxRef.current = next;
-      animId = requestAnimationFrame(animate);
+      animId = safeRequestAnimationFrame(animate);
     };
 
     if (Math.abs(renderedMaxRef.current - targetNiceMax) >= 0.5) {
-      animId = requestAnimationFrame(animate);
+      animId = safeRequestAnimationFrame(animate);
     }
 
     return () => {
       if (animId) {
-        cancelAnimationFrame(animId);
+        safeCancelAnimationFrame(animId);
       }
     };
   }, [targetNiceMax]);
 
+  // ResizeObserver for Container Dimensions with clean disconnect
   useEffect(() => {
     if (!containerRef.current) return;
     const el = containerRef.current;
     if (el.clientWidth > 0) {
       setContainerWidth(el.clientWidth);
     }
+
+    if (typeof ResizeObserver === "undefined") return;
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -260,7 +296,16 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
     });
 
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  // Cleanup cached offscreen canvas on unmount
+  useEffect(() => {
+    return () => {
+      gridCacheRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -359,18 +404,10 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
     }
   };
 
-  const svgWidth = Math.max(300, containerWidth);
-  const chartWidth = Math.max(100, svgWidth - PADDING.left - PADDING.right);
-  const chartHeight = SVG_HEIGHT - PADDING.top - PADDING.bottom;
-
-  const niceMax = Math.max(1024, renderedMax);
-
-  const gridLineCount = getGridLineCount(targetNiceMax);
-  const gridLines = Array.from({ length: gridLineCount + 1 }, (_, i) => {
-    const value = (targetNiceMax / gridLineCount) * i;
-    const y = PADDING.top + chartHeight - (i / gridLineCount) * chartHeight;
-    return { value, y };
-  });
+  const chartWidth = Math.max(
+    100,
+    Math.max(300, containerWidth) - PADDING.left - PADDING.right,
+  );
 
   const indexedHistory = useMemo(() => {
     return history.map((pt, idx) => ({
@@ -406,64 +443,367 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
     );
   }, [indexedHistory, targetPoints]);
 
-  const windowPoints = currentRangeConfig.points;
-  const offset =
-    windowPoints > history.length ? windowPoints - history.length : 0;
+  // Render HTML5 Canvas Telemetry Layer via requestAnimationFrame
+  useEffect(() => {
+    let animId: number;
 
-  const toPoints = (
-    data: (SpeedDataPoint & { index: number })[],
-    key: "uploadSpeed" | "downloadSpeed",
-  ): string => {
-    if (data.length === 0) return "";
-    return data
-      .map((point) => {
-        const x =
-          PADDING.left +
-          ((offset + point.index) / Math.max(1, windowPoints - 1)) * chartWidth;
-        const y = Math.max(
-          PADDING.top,
-          PADDING.top + chartHeight - (point[key] / niceMax) * chartHeight,
+    const render = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const dpr =
+        typeof window !== "undefined" && window.devicePixelRatio
+          ? window.devicePixelRatio
+          : 1;
+
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(300, rect.width || containerWidth);
+      const height = rect.height || CANVAS_HEIGHT;
+
+      const targetWidth = Math.round(width * dpr);
+      const targetHeight = Math.round(height * dpr);
+
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+      }
+
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      ctx.imageSmoothingEnabled = true;
+      ctx.clearRect(0, 0, width, height);
+
+      const curChartWidth = Math.max(
+        100,
+        width - PADDING.left - PADDING.right,
+      );
+      const curChartHeight = height - PADDING.top - PADDING.bottom;
+      const niceMax = Math.max(1024, renderedMaxRef.current);
+
+      // --- Static Grid & Labels Layer (Double-buffering / OffscreenCanvas Cache) ---
+      const cacheKey = `${width}x${height}@${dpr}:${targetNiceMax}:${currentRangeConfig.value}`;
+      if (!gridCacheRef.current && typeof document !== "undefined") {
+        gridCacheRef.current = document.createElement("canvas");
+      }
+
+      let drawnFromCache = false;
+      if (gridCacheRef.current) {
+        const offCanvas = gridCacheRef.current;
+        if (gridCacheKeyRef.current !== cacheKey) {
+          offCanvas.width = targetWidth;
+          offCanvas.height = targetHeight;
+          const offCtx = offCanvas.getContext("2d");
+          if (offCtx) {
+            offCtx.setTransform(1, 0, 0, 1, 0, 0);
+            offCtx.scale(dpr, dpr);
+            offCtx.imageSmoothingEnabled = true;
+            offCtx.clearRect(0, 0, width, height);
+
+            // Background grid box
+            offCtx.fillStyle = "rgba(255, 255, 255, 0.015)";
+            offCtx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+            offCtx.lineWidth = 1;
+            offCtx.beginPath();
+            if (typeof offCtx.roundRect === "function") {
+              offCtx.roundRect(
+                PADDING.left,
+                PADDING.top,
+                curChartWidth,
+                curChartHeight,
+                4,
+              );
+            } else {
+              offCtx.rect(
+                PADDING.left,
+                PADDING.top,
+                curChartWidth,
+                curChartHeight,
+              );
+            }
+            offCtx.fill();
+            offCtx.stroke();
+
+            // Grid lines & speed tick labels
+            const gridLineCount = getGridLineCount(targetNiceMax);
+            offCtx.font =
+              '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            offCtx.textAlign = "right";
+            offCtx.textBaseline = "middle";
+
+            for (let i = 0; i <= gridLineCount; i++) {
+              const value = (targetNiceMax / gridLineCount) * i;
+              const y =
+                PADDING.top +
+                curChartHeight -
+                (i / gridLineCount) * curChartHeight;
+
+              offCtx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+              offCtx.lineWidth = 1;
+              offCtx.setLineDash(i === 0 ? [] : [3, 3]);
+              offCtx.beginPath();
+              offCtx.moveTo(PADDING.left, y);
+              offCtx.lineTo(width - PADDING.right, y);
+              offCtx.stroke();
+
+              offCtx.fillStyle = "rgba(160, 160, 160, 0.7)";
+              offCtx.fillText(formatSpeed(value), PADDING.left - 8, y);
+            }
+            offCtx.setLineDash([]);
+
+            // Time axis labels
+            offCtx.font =
+              '9.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            offCtx.fillStyle = "rgba(160, 160, 160, 0.7)";
+            offCtx.textBaseline = "alphabetic";
+
+            offCtx.textAlign = "left";
+            offCtx.fillText(
+              currentRangeConfig.startLabel,
+              PADDING.left,
+              height - 6,
+            );
+
+            offCtx.textAlign = "center";
+            offCtx.fillText(
+              currentRangeConfig.midLabel,
+              PADDING.left + curChartWidth / 2,
+              height - 6,
+            );
+
+            offCtx.textAlign = "right";
+            offCtx.fillText("now", width - PADDING.right, height - 6);
+
+            gridCacheKeyRef.current = cacheKey;
+          }
+        }
+        ctx.drawImage(offCanvas, 0, 0, width, height);
+        drawnFromCache = true;
+      }
+
+      if (!drawnFromCache) {
+        // Fallback direct draw if offscreen canvas is unavailable
+        ctx.fillStyle = "rgba(255, 255, 255, 0.015)";
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(
+            PADDING.left,
+            PADDING.top,
+            curChartWidth,
+            curChartHeight,
+            4,
+          );
+        } else {
+          ctx.rect(
+            PADDING.left,
+            PADDING.top,
+            curChartWidth,
+            curChartHeight,
+          );
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        const gridLineCount = getGridLineCount(targetNiceMax);
+        ctx.font =
+          '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+
+        for (let i = 0; i <= gridLineCount; i++) {
+          const value = (targetNiceMax / gridLineCount) * i;
+          const y =
+            PADDING.top +
+            curChartHeight -
+            (i / gridLineCount) * curChartHeight;
+
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash(i === 0 ? [] : [3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(PADDING.left, y);
+          ctx.lineTo(width - PADDING.right, y);
+          ctx.stroke();
+
+          ctx.fillStyle = "rgba(160, 160, 160, 0.7)";
+          ctx.fillText(formatSpeed(value), PADDING.left - 8, y);
+        }
+        ctx.setLineDash([]);
+
+        ctx.font =
+          '9.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = "rgba(160, 160, 160, 0.7)";
+        ctx.textBaseline = "alphabetic";
+
+        ctx.textAlign = "left";
+        ctx.fillText(
+          currentRangeConfig.startLabel,
+          PADDING.left,
+          height - 6,
         );
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
-  };
 
-  const toAreaPath = (
-    data: (SpeedDataPoint & { index: number })[],
-    key: "uploadSpeed" | "downloadSpeed",
-  ): string => {
-    if (data.length < 2) return "";
-    const bottom = PADDING.top + chartHeight;
-    const firstX =
-      PADDING.left +
-      ((offset + data[0].index) / Math.max(1, windowPoints - 1)) * chartWidth;
-    const lastX =
-      PADDING.left +
-      ((offset + data[data.length - 1].index) /
-        Math.max(1, windowPoints - 1)) *
-        chartWidth;
-
-    const linePoints = data
-      .map((point) => {
-        const x =
-          PADDING.left +
-          ((offset + point.index) / Math.max(1, windowPoints - 1)) * chartWidth;
-        const y = Math.max(
-          PADDING.top,
-          PADDING.top + chartHeight - (point[key] / niceMax) * chartHeight,
+        ctx.textAlign = "center";
+        ctx.fillText(
+          currentRangeConfig.midLabel,
+          PADDING.left + curChartWidth / 2,
+          height - 6,
         );
-        return `L ${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(" ");
 
-    return `M ${firstX.toFixed(1)} ${bottom.toFixed(1)} ${linePoints} L ${lastX.toFixed(1)} ${bottom.toFixed(1)} Z`;
-  };
+        ctx.textAlign = "right";
+        ctx.fillText("now", width - PADDING.right, height - 6);
+      }
 
-  const uploadPoints = toPoints(displayUpload, "uploadSpeed");
-  const downloadPoints = toPoints(displayDownload, "downloadSpeed");
-  const uploadArea = toAreaPath(displayUpload, "uploadSpeed");
-  const downloadArea = toAreaPath(displayDownload, "downloadSpeed");
+      // --- Dynamic Telemetry Line Paths & Dual-Channel Gradients ---
+      ctx.globalCompositeOperation = "source-over";
+
+      const windowPoints = currentRangeConfig.points;
+      const offset =
+        windowPoints > history.length ? windowPoints - history.length : 0;
+
+      const renderChannel = (
+        data: (SpeedDataPoint & { index: number })[],
+        key: "uploadSpeed" | "downloadSpeed",
+        strokeColor: string,
+        fillRgbaStart: string,
+        fillRgbaEnd: string,
+      ) => {
+        if (data.length === 0) return;
+
+        const bottom = PADDING.top + curChartHeight;
+
+        // Area fill
+        if (data.length >= 2) {
+          const firstX =
+            PADDING.left +
+            ((offset + data[0].index) / Math.max(1, windowPoints - 1)) *
+              curChartWidth;
+          const lastX =
+            PADDING.left +
+            ((offset + data[data.length - 1].index) /
+              Math.max(1, windowPoints - 1)) *
+              curChartWidth;
+
+          ctx.beginPath();
+          ctx.moveTo(firstX, bottom);
+          for (let i = 0; i < data.length; i++) {
+            const pt = data[i];
+            const px =
+              PADDING.left +
+              ((offset + pt.index) / Math.max(1, windowPoints - 1)) *
+                curChartWidth;
+            const py = Math.max(
+              PADDING.top,
+              PADDING.top +
+                curChartHeight -
+                (pt[key] / niceMax) * curChartHeight,
+            );
+            ctx.lineTo(px, py);
+          }
+          ctx.lineTo(lastX, bottom);
+          ctx.closePath();
+
+          const grad = ctx.createLinearGradient(0, PADDING.top, 0, bottom);
+          grad.addColorStop(0, fillRgbaStart);
+          grad.addColorStop(1, fillRgbaEnd);
+          ctx.fillStyle = grad;
+          ctx.fill();
+        }
+
+        // Line stroke
+        ctx.beginPath();
+        for (let i = 0; i < data.length; i++) {
+          const pt = data[i];
+          const px =
+            PADDING.left +
+            ((offset + pt.index) / Math.max(1, windowPoints - 1)) *
+              curChartWidth;
+          const py = Math.max(
+            PADDING.top,
+            PADDING.top +
+              curChartHeight -
+              (pt[key] / niceMax) * curChartHeight,
+          );
+          if (i === 0) {
+            ctx.moveTo(px, py);
+          } else {
+            ctx.lineTo(px, py);
+          }
+        }
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.stroke();
+
+        // Single point fallback dot
+        if (data.length === 1) {
+          const pt = data[0];
+          const px =
+            PADDING.left +
+            ((offset + pt.index) / Math.max(1, windowPoints - 1)) *
+              curChartWidth;
+          const py = Math.max(
+            PADDING.top,
+            PADDING.top +
+              curChartHeight -
+              (pt[key] / niceMax) * curChartHeight,
+          );
+          ctx.beginPath();
+          ctx.arc(px, py, 2, 0, Math.PI * 2);
+          ctx.fillStyle = strokeColor;
+          ctx.fill();
+        }
+      };
+
+      // Clip dynamic line paths to chart area
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(PADDING.left, PADDING.top, curChartWidth, curChartHeight);
+      ctx.clip();
+
+      // Download channel: stroke #2ecc71 (width 2), linear gradient fill #2ecc71 (alpha 0.25 fading to 0.0)
+      renderChannel(
+        displayDownload,
+        "downloadSpeed",
+        DOWNLOAD_COLOR,
+        "rgba(46, 204, 113, 0.25)",
+        "rgba(46, 204, 113, 0.0)",
+      );
+
+      // Upload channel: stroke #3498db (width 2), linear gradient fill #3498db (alpha 0.25 fading to 0.0)
+      renderChannel(
+        displayUpload,
+        "uploadSpeed",
+        UPLOAD_COLOR,
+        "rgba(52, 152, 219, 0.25)",
+        "rgba(52, 152, 219, 0.0)",
+      );
+
+      ctx.restore(); // restore clip
+      ctx.restore(); // restore transform
+    };
+
+    animId = safeRequestAnimationFrame(render);
+
+    return () => {
+      if (animId) {
+        safeCancelAnimationFrame(animId);
+      }
+    };
+  }, [
+    renderedMax,
+    displayUpload,
+    displayDownload,
+    targetNiceMax,
+    containerWidth,
+    currentRangeConfig,
+    history.length,
+  ]);
 
   const currentUpload =
     history.length > 0 ? history[history.length - 1].uploadSpeed : 0;
@@ -593,12 +933,12 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
                 width: 10,
                 height: 10,
                 borderRadius: "50%",
-                backgroundColor: "var(--accent, #c8a84e)",
+                backgroundColor: UPLOAD_COLOR,
                 display: "inline-block",
               }}
             />
             Upload:{" "}
-            <strong style={{ color: "var(--accent, #c8a84e)" }}>
+            <strong style={{ color: UPLOAD_COLOR }}>
               {formatSpeed(currentUpload)}
             </strong>
           </span>
@@ -617,12 +957,12 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
                 width: 10,
                 height: 10,
                 borderRadius: "50%",
-                backgroundColor: "#e74c3c",
+                backgroundColor: DOWNLOAD_COLOR,
                 display: "inline-block",
               }}
             />
             Download:{" "}
-            <strong style={{ color: "#e74c3c" }}>
+            <strong style={{ color: DOWNLOAD_COLOR }}>
               {formatSpeed(currentDownload)}
             </strong>
           </span>
@@ -632,121 +972,19 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
       <div
         className="speed-graph"
         ref={containerRef}
-        style={{ width: "100%", height: "180px", overflow: "hidden" }}
+        style={{
+          width: "100%",
+          height: `${CANVAS_HEIGHT}px`,
+          overflow: "hidden",
+          position: "relative",
+        }}
       >
-        <svg
-          width="100%"
-          height="100%"
-          viewBox={`0 0 ${svgWidth} ${SVG_HEIGHT}`}
-          preserveAspectRatio="none"
-          style={{ overflow: "visible", display: "block" }}
-        >
-          <defs>
-            <linearGradient id="speedUploadGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#c8a84e" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="#c8a84e" stopOpacity="0.0" />
-            </linearGradient>
-            <linearGradient id="speedDownloadGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#e74c3c" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#e74c3c" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
-
-          {/* Background grid box */}
-          <rect
-            x={PADDING.left}
-            y={PADDING.top}
-            width={chartWidth}
-            height={chartHeight}
-            fill="rgba(255, 255, 255, 0.015)"
-            stroke="rgba(255, 255, 255, 0.06)"
-            strokeWidth={1}
-            rx={4}
-          />
-
-          {/* Grid lines & values */}
-          {gridLines.map(({ value, y }, i) => (
-            <g key={i}>
-              <line
-                x1={PADDING.left}
-                y1={y}
-                x2={svgWidth - PADDING.right}
-                y2={y}
-                stroke="rgba(255, 255, 255, 0.06)"
-                strokeWidth={1}
-                strokeDasharray={i === 0 ? "none" : "3 3"}
-              />
-              <text
-                x={PADDING.left - 8}
-                y={y + 3.5}
-                textAnchor="end"
-                fill="var(--text-muted)"
-                fontSize={10}
-                fontFamily="inherit"
-              >
-                {formatSpeed(value)}
-              </text>
-            </g>
-          ))}
-
-          {/* Area Fills */}
-          {uploadArea && <path d={uploadArea} fill="url(#speedUploadGrad)" />}
-          {downloadArea && (
-            <path d={downloadArea} fill="url(#speedDownloadGrad)" />
-          )}
-
-          {/* Polylines */}
-          {uploadPoints && (
-            <polyline
-              points={uploadPoints}
-              fill="none"
-              stroke="#c8a84e"
-              strokeWidth={2}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          )}
-
-          {downloadPoints && (
-            <polyline
-              points={downloadPoints}
-              fill="none"
-              stroke="#e74c3c"
-              strokeWidth={1.8}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          )}
-
-          {/* Time axis labels */}
-          <text
-            x={PADDING.left}
-            y={SVG_HEIGHT - 6}
-            fill="var(--text-muted)"
-            fontSize={9.5}
-            textAnchor="start"
-          >
-            {currentRangeConfig.startLabel}
-          </text>
-          <text
-            x={PADDING.left + chartWidth / 2}
-            y={SVG_HEIGHT - 6}
-            fill="var(--text-muted)"
-            fontSize={9.5}
-            textAnchor="middle"
-          >
-            {currentRangeConfig.midLabel}
-          </text>
-          <text
-            x={svgWidth - PADDING.right}
-            y={SVG_HEIGHT - 6}
-            fill="var(--text-muted)"
-            fontSize={9.5}
-            textAnchor="end"
-          >
-            now
-          </text>
-        </svg>
+        <canvas
+          ref={canvasRef}
+          role="img"
+          aria-label="Transfer speed history graph"
+          style={{ width: "100%", height: "100%", display: "block" }}
+        />
       </div>
     </div>
   );

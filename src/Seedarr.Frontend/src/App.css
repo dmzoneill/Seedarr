@@ -2369,7 +2369,8 @@ body {
   margin-top: 0.25rem;
 }
 
-.speed-graph svg {
+.speed-graph svg,
+.speed-graph canvas {
   display: block;
 }
 
