@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useDeferredValue } from "react";
+import type { DownloadHistoryEntry } from "../api/types";
+import { filterAndRankItems } from "../utils/fuzzySearch";
 import { useNavigate } from "react-router";
 import { useModalRegistration } from "./ModalProvider";
 import {
@@ -48,6 +50,7 @@ export function CommandPalette({
   onOpenGettingStarted,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -113,6 +116,7 @@ export function CommandPalette({
   }, [isOpen, onClose]);
 
   const items = useMemo<CommandItem[]>(() => {
+    if (!isOpen) return [];
     const list: CommandItem[] = [];
 
     // 1. Navigation items
@@ -501,14 +505,24 @@ export function CommandPalette({
       },
     });
 
-    // 4. Live Torrents Search
+    // 4. Live Torrents Search (Pre-indexed O(1) history lookups)
+    const historyByHash = new Map<string, DownloadHistoryEntry>();
+    const historyByTitle = new Map<string, DownloadHistoryEntry>();
+    if (history) {
+      for (const h of history) {
+        if (h.infoHash) {
+          historyByHash.set(h.infoHash.toLowerCase(), h);
+        }
+        if (h.title) {
+          historyByTitle.set(h.title.toLowerCase(), h);
+        }
+      }
+    }
+
     (torrents ?? []).forEach((t) => {
-      const match = (history ?? []).find(
-        (h) =>
-          (t.infoHash &&
-            h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) ||
-          h.title?.toLowerCase() === t.name?.toLowerCase(),
-      );
+      const match =
+        (t.infoHash ? historyByHash.get(t.infoHash.toLowerCase()) : undefined) ??
+        (t.name ? historyByTitle.get(t.name.toLowerCase()) : undefined);
       const displayTitle = match?.metadata?.title || t.mediaTitle || t.name;
 
       list.push({
@@ -541,6 +555,7 @@ export function CommandPalette({
 
     return list;
   }, [
+    isOpen,
     torrents,
     history,
     generalConfig,
@@ -563,17 +578,8 @@ export function CommandPalette({
   ]);
 
   const filteredItems = useMemo(() => {
-    if (!query.trim()) return items.slice(0, 30);
-    const q = query.toLowerCase();
-    return items
-      .filter(
-        (i) =>
-          i.title.toLowerCase().includes(q) ||
-          (i.subtitle && i.subtitle.toLowerCase().includes(q)) ||
-          i.category.toLowerCase().includes(q),
-      )
-      .slice(0, 30);
-  }, [items, query]);
+    return filterAndRankItems(items, deferredQuery, 30);
+  }, [items, deferredQuery]);
 
   useEffect(() => {
     setSelectedIndex(0);
