@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace NzbDrone.Core.TrackerServer;
 
-public interface IPeerDatabase
+public interface IPeerDatabase : IDisposable
 {
     void AddPeer(string infoHash, string ip, int port, string peerId);
     void RemovePeer(string infoHash, string ip, int port);
@@ -19,6 +19,8 @@ public interface IPeerDatabase
     long TotalScrapes { get; }
     void IncrementAnnounces();
     void IncrementScrapes();
+    int PruneStalePeers();
+    bool ContainsSwarm(string infoHash);
 }
 
 public class TrackerPeerEntry
@@ -36,14 +38,41 @@ public class ScrapeStats
     public int Downloaded { get; set; }
 }
 
-public class PeerDatabase : IPeerDatabase
+public class PeerDatabase : IPeerDatabase, IDisposable
 {
     private const int PeerTtlMinutes = 45;
 
     private readonly Dictionary<string, List<TrackerPeerEntry>> _peers = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
+    private readonly Timer _evictionTimer;
+    private bool _disposed;
     private long _totalAnnounces;
     private long _totalScrapes;
+
+    public PeerDatabase()
+        : this(TimeSpan.FromMinutes(5))
+    {
+    }
+
+    public PeerDatabase(TimeSpan evictionInterval)
+    {
+        if (evictionInterval > TimeSpan.Zero)
+        {
+            _evictionTimer = new Timer(OnEvictionTimer, null, evictionInterval, evictionInterval);
+        }
+    }
+
+    private void OnEvictionTimer(object state)
+    {
+        try
+        {
+            PruneStalePeers();
+        }
+        catch (Exception)
+        {
+            // Prevent unhandled timer exceptions from terminating the process
+        }
+    }
 
     public long TotalAnnounces => Interlocked.Read(ref _totalAnnounces);
     public long TotalScrapes => Interlocked.Read(ref _totalScrapes);
@@ -56,6 +85,49 @@ public class PeerDatabase : IPeerDatabase
     public void IncrementScrapes()
     {
         Interlocked.Increment(ref _totalScrapes);
+    }
+
+    public int PruneStalePeers()
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                return 0;
+            }
+
+            var now = DateTime.UtcNow;
+            var totalEvicted = 0;
+            var emptyHashes = new List<string>();
+
+            foreach (var kvp in _peers)
+            {
+                var list = kvp.Value;
+                var initialCount = list.Count;
+                list.RemoveAll(p => (now - p.LastAnnounce).TotalMinutes > PeerTtlMinutes);
+                totalEvicted += initialCount - list.Count;
+
+                if (list.Count == 0)
+                {
+                    emptyHashes.Add(kvp.Key);
+                }
+            }
+
+            foreach (var emptyHash in emptyHashes)
+            {
+                _peers.Remove(emptyHash);
+            }
+
+            return totalEvicted;
+        }
+    }
+
+    public bool ContainsSwarm(string infoHash)
+    {
+        lock (_lock)
+        {
+            return _peers.ContainsKey(infoHash);
+        }
     }
 
     public void AddPeer(string infoHash, string ip, int port, string peerId)
@@ -194,5 +266,26 @@ public class PeerDatabase : IPeerDatabase
         {
             return _peers.Count(kvp => kvp.Value.Any(p => (DateTime.UtcNow - p.LastAnnounce).TotalMinutes <= PeerTtlMinutes));
         }
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (disposing)
+        {
+            _evictionTimer?.Dispose();
+        }
+
+        _disposed = true;
     }
 }
