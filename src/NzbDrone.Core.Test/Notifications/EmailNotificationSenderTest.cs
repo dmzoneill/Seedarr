@@ -1,9 +1,14 @@
 using System;
+using System.Linq;
 using System.Net.Mail;
+using System.Net.Security;
 using System.Threading.Tasks;
+using MailKit.Security;
+using MimeKit;
 using NUnit.Framework;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Torrents;
+using SmtpStatusCode = System.Net.Mail.SmtpStatusCode;
 
 namespace NzbDrone.Core.Test.Notifications;
 
@@ -491,5 +496,160 @@ public class EmailNotificationSenderTest
 
         Assert.That(capturedMessage, Is.Not.Null);
         Assert.That(capturedMessage.Body, Does.Contain("Category: None"));
+    }
+
+    [TestCase(465, true, null, SecureSocketOptions.SslOnConnect)]
+    [TestCase(465, false, null, SecureSocketOptions.SslOnConnect)]
+    [TestCase(587, true, null, SecureSocketOptions.StartTls)]
+    [TestCase(587, false, null, SecureSocketOptions.None)]
+    [TestCase(25, false, null, SecureSocketOptions.None)]
+    [TestCase(25, true, null, SecureSocketOptions.StartTls)]
+    [TestCase(2525, true, null, SecureSocketOptions.StartTls)]
+    [TestCase(587, true, "Auto", SecureSocketOptions.Auto)]
+    [TestCase(587, true, "StartTls", SecureSocketOptions.StartTls)]
+    [TestCase(587, true, "SslOnConnect", SecureSocketOptions.SslOnConnect)]
+    [TestCase(587, true, "None", SecureSocketOptions.None)]
+    [TestCase(587, true, "implicit", SecureSocketOptions.SslOnConnect)]
+    [TestCase(587, true, "explicit", SecureSocketOptions.StartTls)]
+    [TestCase(587, true, "plaintext", SecureSocketOptions.None)]
+    public void ResolveSecureSocketOptions_should_resolve_correct_options(
+        int port,
+        bool ssl,
+        string explicitMode,
+        SecureSocketOptions expectedOptions)
+    {
+        var resolved = EmailNotificationSender.ResolveSecureSocketOptions(port, ssl, explicitMode);
+        Assert.That(resolved, Is.EqualTo(expectedOptions));
+    }
+
+    [TestCase("{\"ignoreSslErrors\":true}", true)]
+    [TestCase("{\"ignoreSslErrors\":false}", false)]
+    [TestCase("{\"ignoreSsl\":\"true\"}", true)]
+    [TestCase("{\"ignoreSsl\":\"false\"}", false)]
+    [TestCase("{\"allowInvalidCertificates\":true}", true)]
+    [TestCase("{\"allowInvalidCertificates\":false}", false)]
+    [TestCase("{\"allowInvalidCert\":true}", true)]
+    [TestCase("{\"ignoreTlsErrors\":true}", true)]
+    [TestCase("{\"ignoreSslErrors\":1}", true)]
+    [TestCase("{\"ignoreSslErrors\":0}", false)]
+    public void ParseSettings_should_parse_ignoreSslErrors_from_json(string jsonFragment, bool expected)
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":465,\"to\":\"to@example.com\",{jsonFragment.TrimStart('{')}";
+        var parsed = EmailNotificationSender.ParseSettings(settings);
+
+        Assert.That(parsed.IgnoreSslErrors, Is.EqualTo(expected));
+    }
+
+    [TestCase("ignoresslerrors=true", true)]
+    [TestCase("ignoresslerrors=false", false)]
+    [TestCase("ignoressl=true", true)]
+    [TestCase("allowinvalidcertificates=true", true)]
+    [TestCase("allowinvalidcert=true", true)]
+    [TestCase("ignoretlserrors=true", true)]
+    [TestCase("ignoresslerrors=1", true)]
+    [TestCase("ignoresslerrors=0", false)]
+    public void ParseSettings_should_parse_ignoreSslErrors_from_query_string(string qsFragment, bool expected)
+    {
+        var settings = $"host={ValidPublicHost}&port=465&to=to@example.com&{qsFragment}";
+        var parsed = EmailNotificationSender.ParseSettings(settings);
+
+        Assert.That(parsed.IgnoreSslErrors, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void ParseSettings_should_parse_tlsMode_and_resolve_socket_options()
+    {
+        var jsonSettings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":465,\"to\":\"to@example.com\",\"tlsMode\":\"Auto\"}}";
+        var parsed = EmailNotificationSender.ParseSettings(jsonSettings);
+
+        Assert.That(parsed.TlsMode, Is.EqualTo("Auto"));
+        Assert.That(parsed.ResolveSecureSocketOptions(), Is.EqualTo(SecureSocketOptions.Auto));
+
+        var qsSettings = $"host={ValidPublicHost}&port=587&to=to@example.com&tlsmode=SslOnConnect";
+        var parsedQs = EmailNotificationSender.ParseSettings(qsSettings);
+
+        Assert.That(parsedQs.TlsMode, Is.EqualTo("SslOnConnect"));
+        Assert.That(parsedQs.ResolveSecureSocketOptions(), Is.EqualTo(SecureSocketOptions.SslOnConnect));
+    }
+
+    [Test]
+    public void SendEmailNotification_should_dispatch_via_mailkit_with_ignoreSslErrors_callback()
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":465,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\",\"ignoreSslErrors\":true}}";
+        var mailKitCalled = false;
+        MailKit.Net.Smtp.ISmtpClient capturedClient = null;
+        MimeMessage capturedMessage = null;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Test",
+            null,
+            null,
+            "Test message",
+            smtpSender: null,
+            retryDelays: null,
+            mailKitSender: (client, message) =>
+            {
+                mailKitCalled = true;
+                capturedClient = client;
+                capturedMessage = message;
+            });
+
+        Assert.That(mailKitCalled, Is.True);
+        Assert.That(capturedClient, Is.Not.Null);
+        Assert.That(capturedClient.ServerCertificateValidationCallback, Is.Not.Null);
+
+        // Verify custom certificate validation callback accepts certificates
+        var callbackResult = capturedClient.ServerCertificateValidationCallback(
+            null,
+            null,
+            null,
+            SslPolicyErrors.RemoteCertificateChainErrors);
+        Assert.That(callbackResult, Is.True);
+
+        Assert.That(capturedMessage, Is.Not.Null);
+        Assert.That(capturedMessage.To.Mailboxes.First().Address, Is.EqualTo("recipient@example.com"));
+        Assert.That(capturedMessage.From.Mailboxes.First().Address, Is.EqualTo("test@example.com"));
+        Assert.That(capturedMessage.Headers["Auto-Submitted"], Is.EqualTo("auto-generated"));
+        Assert.That(capturedMessage.Headers["Precedence"], Is.EqualTo("bulk"));
+        Assert.That(capturedMessage.TextBody, Does.Contain("Test message"));
+        Assert.That(capturedMessage.HtmlBody, Does.Contain("Test message"));
+    }
+
+    [Test]
+    public void SendEmailNotification_should_not_set_certificate_callback_when_ignoreSslErrors_is_false()
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":465,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\",\"ignoreSslErrors\":false}}";
+        MailKit.Net.Smtp.ISmtpClient capturedClient = null;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Test",
+            null,
+            null,
+            "Test message",
+            smtpSender: null,
+            retryDelays: null,
+            mailKitSender: (client, message) =>
+            {
+                capturedClient = client;
+            });
+
+        Assert.That(capturedClient, Is.Not.Null);
+        Assert.That(capturedClient.ServerCertificateValidationCallback, Is.Null);
+    }
+
+    [TestCase(MailKit.Net.Smtp.SmtpStatusCode.ServiceNotAvailable, true)]
+    [TestCase(MailKit.Net.Smtp.SmtpStatusCode.MailboxBusy, true)]
+    [TestCase(MailKit.Net.Smtp.SmtpStatusCode.TransactionFailed, true)]
+    [TestCase(MailKit.Net.Smtp.SmtpStatusCode.InsufficientStorage, true)]
+    [TestCase(MailKit.Net.Smtp.SmtpStatusCode.MailboxUnavailable, false)]
+    public void IsTransientMailKitSmtpError_should_identify_transient_status_codes(
+        MailKit.Net.Smtp.SmtpStatusCode code,
+        bool expectedTransient)
+    {
+        var ex = new MailKit.Net.Smtp.SmtpCommandException(MailKit.Net.Smtp.SmtpErrorCode.UnexpectedStatusCode, code, "Test error");
+        var isTransient = EmailNotificationSender.IsTransientMailKitSmtpError(ex);
+        Assert.That(isTransient, Is.EqualTo(expectedTransient));
     }
 }

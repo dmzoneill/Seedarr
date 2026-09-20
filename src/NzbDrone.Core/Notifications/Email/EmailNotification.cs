@@ -1,26 +1,10 @@
 using System;
 using System.Linq;
-using System.Net;
 using System.Net.Mail;
 using NLog;
 using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Notifications.Email;
-
-public class EmailSettings
-{
-    public string SmtpHost { get; set; } = "";
-    public int SmtpPort { get; set; } = 587;
-    public bool UseTls { get; set; } = true;
-    public string Username { get; set; } = "";
-    public string Password { get; set; } = "";
-    public string FromAddress { get; set; } = "";
-
-    /// <summary>
-    /// Comma-separated list of recipient email addresses.
-    /// </summary>
-    public string ToAddresses { get; set; } = "";
-}
 
 public class EmailNotification : INotificationService
 {
@@ -156,15 +140,25 @@ public class EmailNotification : INotificationService
         var retryPipeline = EmailNotificationSender.CreateSmtpRetryPipeline();
         retryPipeline.Execute(() =>
         {
-            using var client = new SmtpClient(Settings.SmtpHost, Settings.SmtpPort);
-            client.EnableSsl = Settings.UseTls;
+            using var client = new MailKit.Net.Smtp.SmtpClient();
+            client.Timeout = 10000;
+
+            if (Settings.IgnoreSslErrors || Settings.AllowInvalidCertificates)
+            {
+                client.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
+            }
+
+            var secureSocketOptions = EmailNotificationSender.ResolveSecureSocketOptions(Settings.SmtpPort, Settings.UseTls);
+            client.Connect(Settings.SmtpHost, Settings.SmtpPort, secureSocketOptions);
 
             if (!string.IsNullOrWhiteSpace(Settings.Username))
             {
-                client.Credentials = new NetworkCredential(Settings.Username, Settings.Password);
+                client.Authenticate(Settings.Username, Settings.Password);
             }
 
-            client.Send(message);
+            var mimeMessage = MimeKit.MimeMessage.CreateFromMailMessage(message);
+            client.Send(mimeMessage);
+            client.Disconnect(true);
         });
     }
 }

@@ -56,6 +56,23 @@ public class EmailNotificationTest
     }
 
     [Test]
+    public void Settings_should_default_ignore_ssl_errors_to_false()
+    {
+        Assert.That(_subject.Settings.IgnoreSslErrors, Is.False);
+        Assert.That(_subject.Settings.AllowInvalidCertificates, Is.False);
+    }
+
+    [Test]
+    public void Settings_should_sync_ignore_ssl_errors_and_allow_invalid_certificates()
+    {
+        _subject.Settings.IgnoreSslErrors = true;
+        Assert.That(_subject.Settings.AllowInvalidCertificates, Is.True);
+
+        _subject.Settings.AllowInvalidCertificates = false;
+        Assert.That(_subject.Settings.IgnoreSslErrors, Is.False);
+    }
+
+    [Test]
     public void OnTorrentAdded_should_not_throw_when_smtp_host_is_empty()
     {
         Assert.DoesNotThrow(() => _subject.OnTorrentAdded("test.torrent"));

@@ -127,6 +127,7 @@ interface NotificationFormState {
   server: string;
   port: number;
   useSsl: boolean;
+  ignoreSslErrors: boolean;
   password: string;
   from: string;
   recipient: string;
@@ -164,6 +165,7 @@ function getDefaultFormForImplementation(impl: string): NotificationFormState {
     server: "",
     port: 587,
     useSsl: true,
+    ignoreSslErrors: false,
     password: "",
     from: "",
     recipient: "",
@@ -225,6 +227,7 @@ function parseNotificationToForm(
     server: parsed.server || parsed.host || "",
     port: parsed.port ? Number(parsed.port) : 587,
     useSsl: parsed.useSsl ?? parsed.ssl ?? true,
+    ignoreSslErrors: parsed.ignoreSslErrors ?? parsed.ignoreSsl ?? parsed.allowInvalidCertificates ?? parsed.allowInvalidCert ?? false,
     password: parsed.password || parsed.pass || "",
     from: parsed.from || "",
     recipient: parsed.recipient || parsed.to || "",
@@ -297,6 +300,7 @@ function buildNotificationPayload(
         server: form.server.trim(),
         port: form.port || 587,
         useSsl: form.useSsl,
+        ignoreSslErrors: form.ignoreSslErrors,
         username: form.username.trim() || undefined,
         password: form.password || undefined,
         from: form.from.trim() || undefined,
@@ -1095,6 +1099,12 @@ export function NotificationsTab() {
                   label="Use SSL/TLS"
                   checked={editing.useSsl}
                   onChange={(v) => setEditing({ ...editing, useSsl: v })}
+                />
+                <Toggle
+                  label="Ignore SSL/TLS Certificate Errors"
+                  checked={editing.ignoreSslErrors}
+                  onChange={(v) => setEditing({ ...editing, ignoreSslErrors: v })}
+                  hint="Ignore SSL/TLS Certificate Errors (useful for self-signed certificates in private homelabs)"
                 />
                 <TextInput
                   label="From Address"
