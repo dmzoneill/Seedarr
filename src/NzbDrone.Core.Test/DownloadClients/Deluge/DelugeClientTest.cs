@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Reflection;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.DownloadClients.Deluge;
 using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Test.TestHelpers;
@@ -168,15 +169,12 @@ public class DelugeClientTest
     }
 
     [Test]
-    public void GetItems_should_return_empty_list_when_connection_fails()
+    public void GetItems_should_throw_when_connection_fails()
     {
         _client.Host = "nonexistent.invalid";
         _client.Port = 1;
 
-        var result = _client.GetItems();
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+        Assert.Throws<DownloadClientUnavailableException>(() => _client.GetItems());
     }
 
     [Test]
@@ -243,16 +241,13 @@ public class DelugeClientTest
     }
 
     [Test]
-    public void GetItems_should_return_empty_when_auth_fails()
+    public void GetItems_should_throw_when_auth_fails()
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":false,""id"":0}");
         InjectMockClient(handler);
 
-        var result = _client.GetItems();
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+        Assert.Throws<DownloadClientAuthenticationException>(() => _client.GetItems());
     }
 
     [Test]
@@ -433,7 +428,7 @@ public class DelugeClientTest
     }
 
     [Test]
-    public void GetItems_should_catch_exception_when_update_ui_request_fails()
+    public void GetItems_should_throw_when_update_ui_request_fails()
     {
         var handler = new MockHttpMessageHandler();
 
@@ -442,10 +437,7 @@ public class DelugeClientTest
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
         InjectMockClient(handler);
 
-        var result = _client.GetItems();
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+        Assert.Throws<DownloadClientUnavailableException>(() => _client.GetItems());
     }
 
     [Test]
@@ -464,16 +456,13 @@ public class DelugeClientTest
     }
 
     [Test]
-    public void GetItems_should_return_empty_when_auth_http_error()
+    public void GetItems_should_throw_when_auth_http_error()
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.Unauthorized, @"{}");
         InjectMockClient(handler);
 
-        var result = _client.GetItems();
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+        Assert.Throws<DownloadClientAuthenticationException>(() => _client.GetItems());
     }
 
     [Test]

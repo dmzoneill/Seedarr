@@ -688,6 +688,12 @@ export interface DownloadClientDefinition {
   configContract: string;
   enable: boolean;
   tags?: number[];
+  isOnline?: boolean | null;
+  version?: string | null;
+  lastSyncTime?: string | null;
+  lastErrorMessage?: string | null;
+  consecutiveFailures?: number;
+  backoffUntil?: string | null;
 }
 
 export interface DownloadClientRemoteItem {

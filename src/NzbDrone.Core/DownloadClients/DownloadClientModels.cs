@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.DownloadClients;
@@ -14,6 +16,24 @@ public class DownloadClientDefinition : ProviderDefinition
     public string Password { get; set; }
     public string Category { get; set; }
     public List<int> Tags { get; set; } = new();
+
+    [Ignore]
+    public bool? IsOnline { get; set; }
+
+    [Ignore]
+    public string Version { get; set; }
+
+    [Ignore]
+    public DateTime? LastSyncTime { get; set; }
+
+    [Ignore]
+    public string LastErrorMessage { get; set; }
+
+    [Ignore]
+    public int ConsecutiveFailures { get; set; }
+
+    [Ignore]
+    public DateTime? BackoffUntil { get; set; }
 
     public DownloadClientDefinition Clone() => (DownloadClientDefinition)MemberwiseClone();
 }

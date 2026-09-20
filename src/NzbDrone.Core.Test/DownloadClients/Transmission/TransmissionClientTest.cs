@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.DownloadClients.Transmission;
 using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Test.TestHelpers;
@@ -257,15 +258,22 @@ public class TransmissionClientTest
     }
 
     [Test]
-    public void GetItems_should_return_empty_list_when_connection_fails()
+    public void GetItems_should_throw_when_connection_fails()
     {
         _client.Host = "nonexistent.invalid";
         _client.Port = 1;
 
-        var result = _client.GetItems();
+        Assert.Throws<DownloadClientUnavailableException>(() => _client.GetItems());
+    }
 
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+    [Test]
+    public void GetItems_should_throw_when_auth_fails()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.Unauthorized, "Unauthorized");
+        InjectMockClient(handler);
+
+        Assert.Throws<DownloadClientAuthenticationException>(() => _client.GetItems());
     }
 
     [Test]

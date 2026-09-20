@@ -10,12 +10,28 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.DownloadClients.Sync;
 
+public class DownloadClientStatus
+{
+    public int ClientId { get; set; }
+    public bool? IsOnline { get; set; }
+    public string Version { get; set; }
+    public DateTime? LastSyncTime { get; set; }
+    public string LastErrorMessage { get; set; }
+    public int ConsecutiveFailures { get; set; }
+    public DateTime? BackoffUntil { get; set; }
+
+    public bool IsInBackoff => BackoffUntil.HasValue && BackoffUntil.Value > DateTime.UtcNow;
+}
+
 public interface IDownloadClientSyncService
 {
     SyncResult Sync();
     List<DownloadClientRemoteItem> GetClientItems(int clientId);
     Torrent ImportTorrent(int clientId, string infoHash);
     BatchImportResponse ImportTorrents(int clientId, List<string> infoHashes);
+    DownloadClientStatus GetClientStatus(int clientId);
+    IReadOnlyDictionary<int, DownloadClientStatus> GetAllClientStatuses();
+    void ResetClientStatus(int clientId);
 }
 
 public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
@@ -29,6 +45,49 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
     private readonly IRemotePathMappingService _remotePathMappingService;
     private readonly SemaphoreSlim _syncLock = new(1, 1);
     private readonly Logger _logger;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, DownloadClientStatus> _clientStatuses = new();
+
+    public DownloadClientStatus GetClientStatus(int clientId)
+    {
+        return _clientStatuses.TryGetValue(clientId, out var status) ? status : null;
+    }
+
+    public IReadOnlyDictionary<int, DownloadClientStatus> GetAllClientStatuses()
+    {
+        return _clientStatuses;
+    }
+
+    public void ResetClientStatus(int clientId)
+    {
+        _clientStatuses.TryRemove(clientId, out _);
+    }
+
+    public static TimeSpan CalculateBackoff(int consecutiveFailures)
+    {
+        var exponent = Math.Max(0, Math.Min(consecutiveFailures - 1, 5));
+        var seconds = Math.Min(30 * (int)Math.Pow(2, exponent), 600);
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    private void RecordSuccess(int clientId)
+    {
+        var status = _clientStatuses.GetOrAdd(clientId, id => new DownloadClientStatus { ClientId = id });
+        status.IsOnline = true;
+        status.ConsecutiveFailures = 0;
+        status.BackoffUntil = null;
+        status.LastErrorMessage = null;
+        status.LastSyncTime = DateTime.UtcNow;
+    }
+
+    private void RecordFailure(int clientId, Exception ex)
+    {
+        var status = _clientStatuses.GetOrAdd(clientId, id => new DownloadClientStatus { ClientId = id });
+        status.IsOnline = false;
+        status.ConsecutiveFailures++;
+        status.LastErrorMessage = ex?.Message;
+        status.LastSyncTime = DateTime.UtcNow;
+        status.BackoffUntil = DateTime.UtcNow.Add(CalculateBackoff(status.ConsecutiveFailures));
+    }
 
     public DownloadClientSyncService(
         IDownloadClientFactory downloadClientFactory,
@@ -68,6 +127,18 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
             foreach (var definition in clients)
             {
+                var status = _clientStatuses.GetOrAdd(definition.Id, id => new DownloadClientStatus { ClientId = id });
+                if (status.IsInBackoff)
+                {
+                    _logger.Warn(
+                        "Download client {0} is degraded and backing off until {1} UTC (failures: {2}). Skipping sync.",
+                        definition.Name,
+                        status.BackoffUntil.Value,
+                        status.ConsecutiveFailures);
+                    result.Skipped++;
+                    continue;
+                }
+
                 var provider = CreateClient(definition);
                 if (provider == null)
                 {
@@ -77,6 +148,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 try
                 {
                     var items = provider.GetItems();
+                    RecordSuccess(definition.Id);
                     foreach (var item in items)
                     {
                         if (string.IsNullOrEmpty(item.InfoHash))
@@ -237,6 +309,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 }
                 catch (Exception ex)
                 {
+                    RecordFailure(definition.Id, ex);
                     _logger.Error(ex, "Failed to sync download client {0}", definition.Name);
                     result.Failed++;
                 }
@@ -269,7 +342,18 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             .GroupBy(t => t.InfoHash.ToLowerInvariant())
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
-        var items = provider.GetItems();
+        List<DownloadClientItem> items;
+        try
+        {
+            items = provider.GetItems();
+            RecordSuccess(clientId);
+        }
+        catch (Exception ex)
+        {
+            RecordFailure(clientId, ex);
+            throw;
+        }
+
         var result = new List<DownloadClientRemoteItem>();
 
         foreach (var item in items)
@@ -348,10 +432,12 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             try
             {
                 var items = provider.GetItems();
+                RecordSuccess(clientId);
                 matchingItem = items?.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception ex)
             {
+                RecordFailure(clientId, ex);
                 _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
             }
 
@@ -636,6 +722,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             try
             {
                 var items = provider.GetItems();
+                RecordSuccess(clientId);
                 if (items != null)
                 {
                     foreach (var item in items)
@@ -649,6 +736,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             }
             catch (Exception ex)
             {
+                RecordFailure(clientId, ex);
                 _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
             }
 

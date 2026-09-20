@@ -3742,6 +3742,12 @@ body {
   background-color: var(--warning-bg-alert);
 }
 
+.provider-card-badge-red {
+  color: var(--danger, #ef4444);
+  border-color: var(--danger, #ef4444);
+  background-color: var(--danger-bg, rgba(239, 68, 68, 0.1));
+}
+
 .provider-card-badge-gray {
   color: var(--text-secondary);
   border-color: var(--border-light);

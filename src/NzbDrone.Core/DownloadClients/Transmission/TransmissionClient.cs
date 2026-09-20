@@ -46,7 +46,10 @@ public class TransmissionClient : IDownloadClient, IDisposable
                 CheckCertificateRevocationList = true,
             };
 
-            _client = new HttpClient(handler);
+            _client = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(10),
+            };
         }
     }
 
@@ -78,7 +81,19 @@ public class TransmissionClient : IDownloadClient, IDisposable
     private JsonDocument SendRequest(string method, object arguments)
     {
         var request = CreateRequest(method, arguments);
-        var response = _client.Send(request);
+        HttpResponseMessage response;
+        try
+        {
+            response = _client.Send(request);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new DownloadClientUnavailableException($"Unable to connect to Transmission at {RpcUrl}: {ex.Message}", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new DownloadClientUnavailableException($"Connection to Transmission at {RpcUrl} timed out: {ex.Message}", ex);
+        }
 
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
@@ -99,12 +114,32 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
             response.Dispose();
             request = CreateRequest(method, arguments);
-            response = _client.Send(request);
+            try
+            {
+                response = _client.Send(request);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new DownloadClientUnavailableException($"Unable to connect to Transmission at {RpcUrl}: {ex.Message}", ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                throw new DownloadClientUnavailableException($"Connection to Transmission at {RpcUrl} timed out: {ex.Message}", ex);
+            }
         }
 
         using (response)
         {
-            response.EnsureSuccessStatusCode();
+            if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                throw new DownloadClientAuthenticationException($"Transmission authentication failed (HTTP {(int)response.StatusCode}). Check username and password.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new DownloadClientUnavailableException($"Transmission request failed: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+            }
+
             using var stream = response.Content.ReadAsStream();
             return JsonDocument.Parse(stream);
         }
@@ -113,7 +148,19 @@ public class TransmissionClient : IDownloadClient, IDisposable
     private async Task<JsonDocument> SendRequestAsync(string method, object arguments, CancellationToken cancellationToken = default)
     {
         var request = CreateRequest(method, arguments);
-        var response = await _client.SendAsync(request, cancellationToken);
+        HttpResponseMessage response;
+        try
+        {
+            response = await _client.SendAsync(request, cancellationToken);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new DownloadClientUnavailableException($"Unable to connect to Transmission at {RpcUrl}: {ex.Message}", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new DownloadClientUnavailableException($"Connection to Transmission at {RpcUrl} timed out: {ex.Message}", ex);
+        }
 
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
@@ -134,12 +181,32 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
             response.Dispose();
             request = CreateRequest(method, arguments);
-            response = await _client.SendAsync(request, cancellationToken);
+            try
+            {
+                response = await _client.SendAsync(request, cancellationToken);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new DownloadClientUnavailableException($"Unable to connect to Transmission at {RpcUrl}: {ex.Message}", ex);
+            }
+            catch (TaskCanceledException ex)
+            {
+                throw new DownloadClientUnavailableException($"Connection to Transmission at {RpcUrl} timed out: {ex.Message}", ex);
+            }
         }
 
         using (response)
         {
-            response.EnsureSuccessStatusCode();
+            if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                throw new DownloadClientAuthenticationException($"Transmission authentication failed (HTTP {(int)response.StatusCode}). Check username and password.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new DownloadClientUnavailableException($"Transmission request failed: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+            }
+
             using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         }
@@ -149,62 +216,54 @@ public class TransmissionClient : IDownloadClient, IDisposable
     {
         var items = new List<DownloadClientItem>();
 
-        try
+        var arguments = new
         {
-            var arguments = new
+            fields = new[] { "hashString", "name", "totalSize", "leftUntilDone", "status", "downloadDir", "labels", "isPrivate", "rateDownload", "rateUpload" },
+        };
+
+        using var doc = SendRequest("torrent-get", arguments);
+        var torrents = doc.RootElement
+            .GetProperty("arguments")
+            .GetProperty("torrents");
+
+        foreach (var t in torrents.EnumerateArray())
+        {
+            var labels = new List<string>();
+            if (t.TryGetProperty("labels", out var labelsEl))
             {
-                fields = new[] { "hashString", "name", "totalSize", "leftUntilDone", "status", "downloadDir", "labels", "isPrivate", "rateDownload", "rateUpload" },
-            };
-
-            using var doc = SendRequest("torrent-get", arguments);
-            var torrents = doc.RootElement
-                .GetProperty("arguments")
-                .GetProperty("torrents");
-
-            foreach (var t in torrents.EnumerateArray())
-            {
-                var labels = new List<string>();
-                if (t.TryGetProperty("labels", out var labelsEl))
+                foreach (var label in labelsEl.EnumerateArray())
                 {
-                    foreach (var label in labelsEl.EnumerateArray())
-                    {
-                        labels.Add(label.GetString());
-                    }
+                    labels.Add(label.GetString());
                 }
-
-                if (!string.IsNullOrEmpty(Category) && !labels.Contains(Category))
-                {
-                    continue;
-                }
-
-                var status = t.TryGetProperty("status", out var st) ? st.GetInt32() : 0;
-                var isPrivate = t.TryGetProperty("isPrivate", out var ip) &&
-                    (ip.ValueKind == JsonValueKind.True ||
-                        (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
-                        (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
-
-                items.Add(new DownloadClientItem
-                {
-                    InfoHash = t.TryGetProperty("hashString", out var h) ? h.GetString() : "",
-                    Title = t.TryGetProperty("name", out var n) ? n.GetString() : "",
-                    TotalSize = t.TryGetProperty("totalSize", out var ts) ? ts.GetInt64() : 0,
-                    RemainingSize = t.TryGetProperty("leftUntilDone", out var lu) ? lu.GetInt64() : 0,
-                    Status = MapStatus(status),
-                    OutputPath = t.TryGetProperty("downloadDir", out var dd) ? dd.GetString() : "",
-                    Category = labels.Count > 0 ? labels[0] : "",
-                    IsPrivate = isPrivate,
-                    DownloadSpeed = t.TryGetProperty("rateDownload", out var rd) ? rd.GetInt64() : null,
-                    UploadSpeed = t.TryGetProperty("rateUpload", out var ru) ? ru.GetInt64() : null,
-                });
             }
 
-            _logger.Debug("Fetched {0} items from Transmission", items.Count);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Failed to fetch Transmission items");
+            if (!string.IsNullOrEmpty(Category) && !labels.Contains(Category))
+            {
+                continue;
+            }
+
+            var status = t.TryGetProperty("status", out var st) ? st.GetInt32() : 0;
+            var isPrivate = t.TryGetProperty("isPrivate", out var ip) &&
+                (ip.ValueKind == JsonValueKind.True ||
+                    (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
+                    (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
+
+            items.Add(new DownloadClientItem
+            {
+                InfoHash = t.TryGetProperty("hashString", out var h) ? h.GetString() : "",
+                Title = t.TryGetProperty("name", out var n) ? n.GetString() : "",
+                TotalSize = t.TryGetProperty("totalSize", out var ts) ? ts.GetInt64() : 0,
+                RemainingSize = t.TryGetProperty("leftUntilDone", out var lu) ? lu.GetInt64() : 0,
+                Status = MapStatus(status),
+                OutputPath = t.TryGetProperty("downloadDir", out var dd) ? dd.GetString() : "",
+                Category = labels.Count > 0 ? labels[0] : "",
+                IsPrivate = isPrivate,
+                DownloadSpeed = t.TryGetProperty("rateDownload", out var rd) ? rd.GetInt64() : null,
+                UploadSpeed = t.TryGetProperty("rateUpload", out var ru) ? ru.GetInt64() : null,
+            });
         }
 
+        _logger.Debug("Fetched {0} items from Transmission", items.Count);
         return items;
     }
 

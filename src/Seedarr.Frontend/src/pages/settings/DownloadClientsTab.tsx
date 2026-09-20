@@ -324,6 +324,28 @@ export function DownloadClientsTab() {
                     SSL
                   </span>
                 )}
+                {client.backoffUntil && new Date(client.backoffUntil).getTime() > Date.now() ? (
+                  <span
+                    className="provider-card-badge provider-card-badge-amber"
+                    title={`In circuit breaker backoff until ${new Date(client.backoffUntil).toLocaleTimeString()} (${client.consecutiveFailures ?? 0} failures)`}
+                  >
+                    Backoff ({client.consecutiveFailures ?? 0})
+                  </span>
+                ) : client.isOnline === true ? (
+                  <span
+                    className="provider-card-badge provider-card-badge-green"
+                    title={client.version ? `Online • Version: ${client.version}` : "Client is online"}
+                  >
+                    Online
+                  </span>
+                ) : client.isOnline === false ? (
+                  <span
+                    className="provider-card-badge provider-card-badge-red"
+                    title={client.lastErrorMessage || "Client is offline"}
+                  >
+                    Offline
+                  </span>
+                ) : null}
               </div>
               {client.tags && client.tags.length > 0 && allTags && (
                 <div
@@ -349,7 +371,36 @@ export function DownloadClientsTab() {
                 </div>
               )}
               <div className="provider-card-info">
-                {client.host}:{client.port}
+                <div>
+                  {client.host}:{client.port}
+                  {client.version ? ` • v${client.version}` : ""}
+                </div>
+                {client.lastSyncTime && (
+                  <div
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--text-muted)",
+                      marginTop: "0.2rem",
+                    }}
+                  >
+                    Last sync: {new Date(client.lastSyncTime).toLocaleTimeString()}
+                  </div>
+                )}
+                {client.lastErrorMessage && client.isOnline === false && (
+                  <div
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "var(--danger, #ef4444)",
+                      marginTop: "0.2rem",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={client.lastErrorMessage}
+                  >
+                    {client.lastErrorMessage}
+                  </div>
+                )}
               </div>
               {testResults[client.id]?.success === true && (
                 <div className="provider-card-test provider-card-test-ok">
