@@ -13,6 +13,7 @@ import {
   NumberInput,
   SectionCard,
 } from "./shared";
+import { isTelemetryEnabled, setTelemetryEnabled } from "../../utils/analytics";
 
 export function GeneralTab() {
   const { data: config, isLoading } = useGeneralConfig();
@@ -51,6 +52,9 @@ export function GeneralTab() {
   const [testingSsl, setTestingSsl] = useState(false);
   const [sslTestResult, setSslTestResult] =
     useState<SslCertificateValidationResult | null>(null);
+  const [telemetryEnabled, setTelemetryEnabledState] = useState(() =>
+    isTelemetryEnabled(),
+  );
 
   useEffect(() => {
     if (config) {
@@ -705,6 +709,25 @@ export function GeneralTab() {
           onChange={(v) => set("tmdbApiKey", v)}
           placeholder="Leave empty for built-in default"
           hint="API key used to query The Movie Database (TMDb) for posters, backdrops, genres, and cast when Arr applications are not connected"
+        />
+      </SectionCard>
+
+      <SectionCard
+        title="Privacy & Telemetry"
+        description="Configure anonymous usage statistics and diagnostics"
+      >
+        <Toggle
+          label="Anonymous Usage Telemetry"
+          checked={telemetryEnabled}
+          onChange={(v) => {
+            setTelemetryEnabled(v);
+            setTelemetryEnabledState(v);
+            showToast(
+              v ? "Anonymous telemetry enabled" : "Anonymous telemetry disabled",
+              "info",
+            );
+          }}
+          hint="Send anonymous aggregate usage data and crash reports to help improve Seedarr. No torrent names, file paths, IP addresses, or personal credentials are ever collected."
         />
       </SectionCard>
     </div>
