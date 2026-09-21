@@ -32,27 +32,40 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
 {
     private static readonly IClientProfile FallbackProfile = new QBittorrentProfile();
 
+    public const int DefaultSwitchCooldownMinutes = 5;
+    public static readonly TimeSpan DefaultSwitchCooldown = TimeSpan.FromMinutes(DefaultSwitchCooldownMinutes);
+
     private readonly IConfigService _configService;
     private readonly IClientProfileFactory _profileFactory;
     private readonly Logger _logger;
     private readonly IRandomNumberGenerator _random;
+    private readonly ISystemClock _clock;
+    private readonly TimeSpan _switchCooldown;
     private readonly object _lock = new object();
     private readonly Dictionary<string, TorrentClientSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
 
     private IClientProfile _currentProfile;
+    private DateTime _lastProfileSwitchTime;
 
     public ClientBehaviorSimulator(
         IConfigService configService,
         IClientProfileFactory profileFactory,
-        IRandomNumberGenerator random = null)
+        IRandomNumberGenerator random = null,
+        ISystemClock clock = null,
+        TimeSpan? switchCooldown = null)
     {
         _configService = configService;
         _profileFactory = profileFactory;
         _logger = LogManager.GetCurrentClassLogger();
         _random = random ?? new RandomNumberGenerator();
+        _clock = clock ?? new SystemClock();
+        _switchCooldown = switchCooldown ?? DefaultSwitchCooldown;
+        _lastProfileSwitchTime = _clock.UtcNow;
     }
 
     public bool IsEnabled => _configService.ClientBehaviorEngineEnabled;
+    public TimeSpan SwitchCooldown => _switchCooldown;
+    public DateTime LastProfileSwitchTime => _lastProfileSwitchTime;
 
     public IClientProfile GetActiveProfile(bool isPrivateTorrent = false)
     {
@@ -62,6 +75,7 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
             lock (_lock)
             {
                 _currentProfile = GetDefaultProfile();
+                _lastProfileSwitchTime = _clock.UtcNow;
                 return _currentProfile;
             }
         }
@@ -77,20 +91,11 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
             if (_currentProfile == null)
             {
                 _currentProfile = ResolveProfileByName(_configService.PrimaryClient) ?? FallbackProfile;
+                _lastProfileSwitchTime = _clock.UtcNow;
                 _logger.Debug("Initialized client profile: {0}", _currentProfile.Name);
             }
 
-            if (_configService.ClientProfileSwitching)
-            {
-                var switchProbability = _configService.SwitchClientProbability;
-
-                if (_random.NextDouble() < switchProbability)
-                {
-                    var previous = _currentProfile;
-                    _currentProfile = SelectRandomAlternateProfile(_currentProfile) ?? _currentProfile;
-                    _logger.Debug("Switched client profile from {0} to {1}", previous?.Name, _currentProfile?.Name);
-                }
-            }
+            TrySwitchProfileLocked();
 
             return _currentProfile ?? FallbackProfile;
         }
@@ -100,13 +105,13 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
     {
         if (string.IsNullOrWhiteSpace(infoHash))
         {
-            var fallbackProfile = GetActiveProfile(isPrivateTorrent);
+            var fallbackProfile = isPrivateTorrent ? GetDefaultProfile() : GetActiveProfile(isPrivateTorrent);
             return new TorrentClientSession
             {
                 ProfileName = fallbackProfile?.Name ?? string.Empty,
                 PeerId = fallbackProfile?.GeneratePeerId() ?? FallbackProfile.GeneratePeerId(),
                 AnnounceKey = GenerateAnnounceKey(),
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = _clock.UtcNow,
                 Profile = fallbackProfile,
             };
         }
@@ -115,6 +120,19 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
         {
             if (_sessions.TryGetValue(infoHash, out var existingSession))
             {
+                if (isPrivateTorrent)
+                {
+                    var defaultProfile = GetDefaultProfile();
+                    if (!string.Equals(existingSession.ProfileName, defaultProfile.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.Warn("Private torrent session {0} was using non-primary profile {1}; pinning to primary client {2}",
+                            infoHash, existingSession.ProfileName, defaultProfile.Name);
+                        existingSession.Profile = defaultProfile;
+                        existingSession.ProfileName = defaultProfile.Name;
+                        existingSession.PeerId = defaultProfile.GeneratePeerId();
+                    }
+                }
+
                 return existingSession;
             }
 
@@ -135,20 +153,11 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
                 if (_currentProfile == null)
                 {
                     _currentProfile = ResolveProfileByName(_configService.PrimaryClient) ?? FallbackProfile;
+                    _lastProfileSwitchTime = _clock.UtcNow;
                     _logger.Debug("Initialized client profile: {0}", _currentProfile.Name);
                 }
 
-                if (_configService.ClientProfileSwitching)
-                {
-                    var switchProbability = _configService.SwitchClientProbability;
-
-                    if (_random.NextDouble() < switchProbability)
-                    {
-                        var previous = _currentProfile;
-                        _currentProfile = SelectRandomAlternateProfile(_currentProfile) ?? _currentProfile;
-                        _logger.Debug("Switched client profile from {0} to {1} for new session {2}", previous?.Name, _currentProfile?.Name, infoHash);
-                    }
-                }
+                TrySwitchProfileLocked(infoHash);
 
                 profile = _currentProfile ?? FallbackProfile;
             }
@@ -161,7 +170,7 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
                 ProfileName = profile?.Name ?? string.Empty,
                 PeerId = peerId,
                 AnnounceKey = announceKey,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = _clock.UtcNow,
                 Profile = profile,
             };
 
@@ -179,6 +188,11 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
 
     public IClientProfile GetProfileForTorrent(string infoHash, bool isPrivateTorrent = false)
     {
+        if (isPrivateTorrent)
+        {
+            return GetDefaultProfile();
+        }
+
         if (string.IsNullOrWhiteSpace(infoHash))
         {
             return GetActiveProfile(isPrivateTorrent);
@@ -186,6 +200,42 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
 
         var session = GetOrCreateSession(infoHash, isPrivateTorrent);
         return session.Profile ?? ResolveProfileByName(session.ProfileName) ?? FallbackProfile;
+    }
+
+    private void TrySwitchProfileLocked(string infoHash = null)
+    {
+        if (!_configService.ClientProfileSwitching)
+        {
+            return;
+        }
+
+        if (_switchCooldown > TimeSpan.Zero && (_clock.UtcNow - _lastProfileSwitchTime) < _switchCooldown)
+        {
+            return;
+        }
+
+        _lastProfileSwitchTime = _clock.UtcNow;
+
+        var switchProbability = _configService.SwitchClientProbability;
+
+        if (_random.NextDouble() < switchProbability)
+        {
+            var previous = _currentProfile;
+            var alternate = SelectRandomAlternateProfile(_currentProfile);
+            if (alternate != null && !string.Equals(alternate.Name, _currentProfile?.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                _currentProfile = alternate;
+
+                if (string.IsNullOrEmpty(infoHash))
+                {
+                    _logger.Debug("Switched client profile from {0} to {1}", previous?.Name, _currentProfile?.Name);
+                }
+                else
+                {
+                    _logger.Debug("Switched client profile from {0} to {1} for new session {2}", previous?.Name, _currentProfile?.Name, infoHash);
+                }
+            }
+        }
     }
 
     public TorrentClientSession GetSession(string infoHash)

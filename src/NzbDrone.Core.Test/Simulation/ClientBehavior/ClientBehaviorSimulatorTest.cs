@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
@@ -13,6 +14,8 @@ public class ClientBehaviorSimulatorTest
 {
     private IConfigService _configService;
     private IClientProfileFactory _profileFactory;
+    private ISystemClock _clock;
+    private DateTime _currentTime;
     private ClientBehaviorSimulator _simulator;
 
     private IClientProfile _qbitProfile;
@@ -24,6 +27,10 @@ public class ClientBehaviorSimulatorTest
     {
         _configService = Substitute.For<IConfigService>();
         _profileFactory = Substitute.For<IClientProfileFactory>();
+        _clock = Substitute.For<ISystemClock>();
+
+        _currentTime = new DateTime(2026, 9, 21, 12, 0, 0, DateTimeKind.Utc);
+        _clock.UtcNow.Returns(_currentTime);
 
         _qbitProfile = Substitute.For<IClientProfile>();
         _qbitProfile.Name.Returns("qBittorrent 4.4.2");
@@ -42,7 +49,13 @@ public class ClientBehaviorSimulatorTest
         _configService.ClientProfileSwitching.Returns(false);
         _configService.SwitchClientProbability.Returns(0.0);
 
-        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory);
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
+    }
+
+    private void AdvanceClock(TimeSpan duration)
+    {
+        _currentTime = _currentTime.Add(duration);
+        _clock.UtcNow.Returns(_currentTime);
     }
 
     [Test]
@@ -159,12 +172,57 @@ public class ClientBehaviorSimulatorTest
         _configService.SwitchClientProbability.Returns(1.0);
 
         var profile1 = _simulator.GetActiveProfile();
+        AdvanceClock(ClientBehaviorSimulator.DefaultSwitchCooldown.Add(TimeSpan.FromSeconds(1)));
         var profile2 = _simulator.GetActiveProfile();
 
         Assert.That(
             profile1.Name == profile2.Name,
             Is.False,
-            "With probability 1.0 the profile should switch on each call");
+            "With probability 1.0 and cooldown elapsed the profile should switch");
+    }
+
+    [Test]
+    public void GetActiveProfile_should_obey_cooldown_dwell_time_before_switching()
+    {
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        var profile1 = _simulator.GetActiveProfile();
+
+        // Advance less than dwell cooldown -> must not switch
+        AdvanceClock(TimeSpan.FromMinutes(2));
+        var profileDuringCooldown = _simulator.GetActiveProfile();
+
+        Assert.That(profileDuringCooldown.Name, Is.EqualTo(profile1.Name),
+            "Profile should not switch before dwell cooldown expires");
+
+        // Advance past remaining cooldown -> should switch
+        AdvanceClock(TimeSpan.FromMinutes(4));
+        var profileAfterCooldown = _simulator.GetActiveProfile();
+
+        Assert.That(profileAfterCooldown.Name, Is.Not.EqualTo(profile1.Name),
+            "Profile should switch after dwell cooldown has elapsed");
+    }
+
+    [Test]
+    public void ProfileSwitching_should_reset_dwell_cooldown_after_switching()
+    {
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        var profile1 = _simulator.GetActiveProfile();
+        AdvanceClock(ClientBehaviorSimulator.DefaultSwitchCooldown.Add(TimeSpan.FromSeconds(1)));
+        var profile2 = _simulator.GetActiveProfile();
+        Assert.That(profile2.Name, Is.Not.EqualTo(profile1.Name));
+
+        // Immediately after switch, rapid calls within new dwell window must not switch
+        for (var i = 0; i < 5; i++)
+        {
+            AdvanceClock(TimeSpan.FromSeconds(30));
+            var nextProfile = _simulator.GetActiveProfile();
+            Assert.That(nextProfile.Name, Is.EqualTo(profile2.Name),
+                "Profile must dwell on the new profile for full cooldown window");
+        }
     }
 
     [Test]
@@ -174,8 +232,9 @@ public class ClientBehaviorSimulatorTest
         _configService.ClientProfileSwitching.Returns(true);
         _configService.SwitchClientProbability.Returns(1.0);
 
-        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory);
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
         var profile1 = _simulator.GetActiveProfile();
+        AdvanceClock(ClientBehaviorSimulator.DefaultSwitchCooldown.Add(TimeSpan.FromSeconds(1)));
         var profile2 = _simulator.GetActiveProfile();
 
         Assert.That(profile2.Name, Is.EqualTo(profile1.Name));
@@ -188,6 +247,7 @@ public class ClientBehaviorSimulatorTest
         _configService.SwitchClientProbability.Returns(1.0);
 
         var profile1 = _simulator.GetActiveProfile();
+        AdvanceClock(ClientBehaviorSimulator.DefaultSwitchCooldown.Add(TimeSpan.FromSeconds(1)));
         var profile2 = _simulator.GetActiveProfile();
 
         Assert.That(profile2.Name, Is.Not.EqualTo(profile1.Name));
@@ -251,10 +311,11 @@ public class ClientBehaviorSimulatorTest
         _configService.ClientProfileSwitching.Returns(true);
         _configService.SwitchClientProbability.Returns(1.0);
 
-        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory);
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
 
         for (var i = 0; i < 10; i++)
         {
+            AdvanceClock(ClientBehaviorSimulator.DefaultSwitchCooldown.Add(TimeSpan.FromMinutes(5)));
             var profile = _simulator.GetActiveProfile(isPrivateTorrent: true);
             Assert.That(profile.Name, Is.EqualTo("qBittorrent 4.4.2"), "Private torrent must lock to primary client without rotating");
         }
@@ -268,12 +329,13 @@ public class ClientBehaviorSimulatorTest
         _configService.ClientProfileSwitching.Returns(true);
         _configService.SwitchClientProbability.Returns(1.0);
 
-        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory);
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
 
         var profile1 = _simulator.GetActiveProfile(isPrivateTorrent: false);
+        AdvanceClock(ClientBehaviorSimulator.DefaultSwitchCooldown.Add(TimeSpan.FromSeconds(1)));
         var profile2 = _simulator.GetActiveProfile(isPrivateTorrent: false);
 
-        Assert.That(profile2.Name, Is.Not.EqualTo(profile1.Name), "Public torrent should switch when probability is 1.0");
+        Assert.That(profile2.Name, Is.Not.EqualTo(profile1.Name), "Public torrent should switch when probability is 1.0 and cooldown elapsed");
     }
 
     [Test]
@@ -440,5 +502,92 @@ public class ClientBehaviorSimulatorTest
             TorrentStatus.Stopped));
 
         Assert.That(_simulator.GetSession(infoHash), Is.Null);
+    }
+
+    [Test]
+    public void Session_peer_id_remains_stable_and_does_not_regenerate_rapidly()
+    {
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        var session = _simulator.GetOrCreateSession("stable_hash", isPrivateTorrent: false);
+        var expectedPeerId = session.PeerId;
+
+        for (var i = 0; i < 50; i++)
+        {
+            AdvanceClock(TimeSpan.FromSeconds(1));
+            var currentSession = _simulator.GetOrCreateSession("stable_hash", isPrivateTorrent: false);
+            Assert.That(currentSession.PeerId, Is.EqualTo(expectedPeerId), "Session Peer ID must remain stable across ticks");
+        }
+    }
+
+    [Test]
+    public void PrivateTorrents_should_strictly_suppress_identity_rotation_and_pin_to_primary_client()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.PrimaryClient.Returns("qBittorrent");
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
+
+        var privateSession = _simulator.GetOrCreateSession("private_torrent_hash", isPrivateTorrent: true);
+        var initialPeerId = privateSession.PeerId;
+
+        for (var i = 0; i < 20; i++)
+        {
+            AdvanceClock(TimeSpan.FromMinutes(10));
+            var activeProfile = _simulator.GetActiveProfile(isPrivateTorrent: true);
+            var session = _simulator.GetOrCreateSession("private_torrent_hash", isPrivateTorrent: true);
+            var profileForTorrent = _simulator.GetProfileForTorrent("private_torrent_hash", isPrivateTorrent: true);
+
+            Assert.That(activeProfile.Name, Is.EqualTo("qBittorrent 4.4.2"));
+            Assert.That(session.ProfileName, Is.EqualTo("qBittorrent 4.4.2"));
+            Assert.That(session.PeerId, Is.EqualTo(initialPeerId), "Private torrent session peer ID must remain stable");
+            Assert.That(profileForTorrent.Name, Is.EqualTo("qBittorrent 4.4.2"));
+        }
+    }
+
+    [Test]
+    public void PrivateTorrents_session_profile_corrected_if_previously_created_with_different_profile()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.PrimaryClient.Returns("qBittorrent");
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock, switchCooldown: TimeSpan.Zero);
+
+        // Created initially without private flag (public)
+        var session = _simulator.GetOrCreateSession("hash_now_private", isPrivateTorrent: false);
+
+        // Later accessed as private torrent -> must pin to PrimaryClient
+        var privateSession = _simulator.GetOrCreateSession("hash_now_private", isPrivateTorrent: true);
+
+        Assert.That(privateSession.ProfileName, Is.EqualTo("qBittorrent 4.4.2"));
+        Assert.That(_simulator.GetProfileForTorrent("hash_now_private", isPrivateTorrent: true).Name, Is.EqualTo("qBittorrent 4.4.2"));
+    }
+
+    [Test]
+    public void GetOrCreateSession_respects_dwell_cooldown_for_subsequent_sessions()
+    {
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        var session1 = _simulator.GetOrCreateSession("session_hash_1", isPrivateTorrent: false);
+
+        // Advance by less than cooldown -> next session must reuse current profile without flip-flop
+        AdvanceClock(TimeSpan.FromMinutes(2));
+        var session2 = _simulator.GetOrCreateSession("session_hash_2", isPrivateTorrent: false);
+
+        Assert.That(session2.ProfileName, Is.EqualTo(session1.ProfileName),
+            "New session created within dwell window must use the active dwelling profile");
+
+        // Advance past cooldown -> next session may switch
+        AdvanceClock(TimeSpan.FromMinutes(4));
+        var session3 = _simulator.GetOrCreateSession("session_hash_3", isPrivateTorrent: false);
+
+        Assert.That(session3.ProfileName, Is.Not.EqualTo(session2.ProfileName),
+            "New session created after dwell cooldown may switch to alternate profile");
     }
 }
