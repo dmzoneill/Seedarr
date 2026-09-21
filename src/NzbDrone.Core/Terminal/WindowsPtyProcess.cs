@@ -205,11 +205,20 @@ public class WindowsPtyProcess : IPtyProcess
             psi.WorkingDirectory = workingDirectory;
         }
 
+        foreach (var key in new List<string>(psi.Environment.Keys))
+        {
+            if (TerminalEnvironmentSanitizer.IsSensitive(key) || !TerminalEnvironmentSanitizer.IsWhitelisted(key))
+            {
+                psi.Environment.Remove(key);
+            }
+        }
+
         if (environment != null)
         {
-            foreach (var (k, v) in environment)
+            var sanitizedOverrides = TerminalEnvironmentSanitizer.Sanitize(environment);
+            foreach (var kvp in sanitizedOverrides)
             {
-                psi.Environment[k] = v;
+                psi.Environment[kvp.Key] = kvp.Value;
             }
         }
 

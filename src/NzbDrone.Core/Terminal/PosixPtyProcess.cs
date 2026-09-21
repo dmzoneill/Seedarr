@@ -63,28 +63,9 @@ public class PosixPtyProcess : IPtyProcess
             finalArgs = new[] { shellPath };
         }
 
-        var envDict = new Dictionary<string, string>();
-        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
-        {
-            var key = entry.Key?.ToString();
-            var val = entry.Value?.ToString();
-            if (!string.IsNullOrEmpty(key) && val != null)
-            {
-                envDict[key] = val;
-            }
-        }
-
-        envDict["TERM"] = "xterm-256color";
+        var envDict = TerminalEnvironmentSanitizer.GetSanitizedEnvironment(environment);
         envDict["COLORTERM"] = "truecolor";
         envDict["SHELL"] = shellPath;
-
-        if (environment != null)
-        {
-            foreach (var kvp in environment)
-            {
-                envDict[kvp.Key] = kvp.Value;
-            }
-        }
 
         var unmanagedToFree = new List<IntPtr>();
         var shellPathPtr = IntPtr.Zero;
