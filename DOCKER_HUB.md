@@ -55,6 +55,7 @@
 
 ### Single Container Run (`podman run` / `docker run`)
 
+**Option 1: Docker Hub**
 ```bash
 podman run -d \
   --name seedarr \
@@ -63,6 +64,17 @@ podman run -d \
   -v seedarr-data:/data \
   --restart unless-stopped \
   feeditout/seedarr:latest
+```
+
+**Option 2: GitHub Container Registry (GHCR)**
+```bash
+podman run -d \
+  --name seedarr \
+  -p 9898:9898 \
+  -v seedarr-config:/config \
+  -v seedarr-data:/data \
+  --restart unless-stopped \
+  ghcr.io/dmzoneill/seedarr:latest
 ```
 
 Open **http://localhost:9898** in your browser.
@@ -74,7 +86,10 @@ Open **http://localhost:9898** in your browser.
 ```yaml
 services:
   seedarr:
+    # Option 1 (Docker Hub):
     image: feeditout/seedarr:latest
+    # Option 2 (GHCR):
+    # image: ghcr.io/dmzoneill/seedarr:latest
     container_name: seedarr
     restart: unless-stopped
     ports:
@@ -94,9 +109,10 @@ services:
       start_period: 15s
 ```
 
-Run with Podman Compose:
+Run with Container Compose:
 ```bash
 podman-compose up -d
+# or: docker compose up -d
 ```
 
 ---
@@ -152,10 +168,10 @@ labels:
 
 Multi-architecture builds are automatically published to both Docker Hub and GitHub Packages Container Registry (GHCR):
 
-| Architecture | Tag Example | Status |
-| :--- | :--- | :--- |
-| **`linux/amd64`** | `feeditout/seedarr:latest`, `feeditout/seedarr:1.3.38` | ✅ Verified Stable |
-| **`linux/arm64`** | `feeditout/seedarr:latest`, `feeditout/seedarr:1.3.38` | ✅ Verified Stable |
+| Architecture | Docker Hub Tag Example | GHCR Tag Example | Status |
+| :--- | :--- | :--- | :--- |
+| **`linux/amd64`** | `feeditout/seedarr:latest` | `ghcr.io/dmzoneill/seedarr:latest` | ✅ Verified Stable |
+| **`linux/arm64`** | `feeditout/seedarr:latest` | `ghcr.io/dmzoneill/seedarr:latest` | ✅ Verified Stable |
 
 ---
 
