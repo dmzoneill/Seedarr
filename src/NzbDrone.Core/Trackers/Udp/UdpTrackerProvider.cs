@@ -56,6 +56,12 @@ public class UdpTrackerProvider : ITrackerProvider
             return true;
         }
 
+        if (_proxySettingsProvider?.IsEnabled == true)
+        {
+            failureReason = "Proxy is enabled and UDP tracker cannot be routed through the configured proxy.";
+            return true;
+        }
+
         failureReason = null;
         return false;
     }
@@ -145,7 +151,7 @@ public class UdpTrackerProvider : ITrackerProvider
 
     internal virtual UdpClient CreateClient(int timeoutMs)
     {
-        if (_configService?.ForceProxy == true)
+        if (_configService?.ForceProxy == true || _proxySettingsProvider?.IsEnabled == true)
         {
             throw new InvalidOperationException("Strict proxy enforcement active: direct UDP sockets are prohibited.");
         }
@@ -153,7 +159,7 @@ public class UdpTrackerProvider : ITrackerProvider
         var client = new UdpClient();
         client.Client.ReceiveTimeout = timeoutMs;
         client.Client.SendTimeout = timeoutMs;
-        client.Client.BindToNetworkInterface(_configService.BindInterface);
+        client.Client.BindToNetworkInterface(_configService?.BindInterface);
         return client;
     }
 
@@ -243,7 +249,7 @@ public class UdpTrackerProvider : ITrackerProvider
     {
         if (IsProxyEnforcedAndIncompatible(out var proxyFailureReason))
         {
-            _logger.Warn("ForceProxy is active; suppressing UDP announce to {0}: {1}", request?.TrackerUrl, proxyFailureReason);
+            _logger.Warn("Proxy enforcement active; suppressing UDP announce to {0}: {1}", request?.TrackerUrl, proxyFailureReason);
             return new TrackerAnnounceResponse
             {
                 Success = false,
@@ -304,7 +310,7 @@ public class UdpTrackerProvider : ITrackerProvider
     {
         if (IsProxyEnforcedAndIncompatible(out var proxyFailureReason))
         {
-            _logger.Warn("ForceProxy is active; suppressing UDP scrape for {0}: {1}", trackerUrl, proxyFailureReason);
+            _logger.Warn("Proxy enforcement active; suppressing UDP scrape for {0}: {1}", trackerUrl, proxyFailureReason);
             return new TrackerScrapeResponse
             {
                 Success = false,
@@ -365,7 +371,7 @@ public class UdpTrackerProvider : ITrackerProvider
 
         if (IsProxyEnforcedAndIncompatible(out var proxyFailureReason))
         {
-            _logger.Warn("ForceProxy is active; suppressing UDP batch scrape for {0}: {1}", trackerUrl, proxyFailureReason);
+            _logger.Warn("Proxy enforcement active; suppressing UDP batch scrape for {0}: {1}", trackerUrl, proxyFailureReason);
             foreach (var hash in infoHashes)
             {
                 if (!string.IsNullOrWhiteSpace(hash))
