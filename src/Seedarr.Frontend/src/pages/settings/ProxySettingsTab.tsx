@@ -12,6 +12,7 @@ import {
   SelectInput,
   Toggle,
 } from "./shared";
+import { trackNetworkConfigSave } from "../../utils/analytics";
 
 export function ProxySettingsTab() {
   const { data: config, isLoading } = useNetworkConfig();
@@ -63,6 +64,10 @@ export function ProxySettingsTab() {
 
   const handleSave = () => {
     if (!config) return;
+    trackNetworkConfigSave({
+      has_proxy: form.proxyType !== "none",
+      proxy_type: form.proxyType,
+    });
     saveMutation.mutate(
       {
         ...config,

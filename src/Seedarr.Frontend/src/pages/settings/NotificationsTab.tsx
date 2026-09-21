@@ -24,6 +24,7 @@ import {
   SectionTitle,
 } from "./shared";
 import { useToast } from "../../context/ToastContext";
+import { trackNotificationAction } from "../../utils/analytics";
 
 const NOTIFICATION_SETTINGS_KEY = "seedarr-notification-settings";
 
@@ -518,8 +519,10 @@ export function NotificationsTab() {
 
   const handleTest = (id: number, name: string) => {
     setTestResults((prev) => ({ ...prev, [id]: null }));
+    const notif = notifications?.find((n) => n.id === id);
     testMutation.mutate(id, {
       onSuccess: (data) => {
+        trackNotificationAction(notif?.implementation || "unknown", "test", data.success);
         setTestResults((prev) => ({ ...prev, [id]: data }));
         if (data.success) {
           showToast(`Test notification for "${name}" sent successfully`, "success");
@@ -528,6 +531,7 @@ export function NotificationsTab() {
         }
       },
       onError: (err: any) => {
+        trackNotificationAction(notif?.implementation || "unknown", "test", false);
         const msg = err?.message || "Test failed";
         setTestResults((prev) => ({
           ...prev,
@@ -550,6 +554,7 @@ export function NotificationsTab() {
     const payload = buildNotificationPayload(editing);
     testDirectMutation.mutate(payload, {
       onSuccess: (data) => {
+        trackNotificationAction(editing.implementation || "unknown", "test", data.success);
         setModalTestResult(data);
         if (data.success) {
           showToast("Test notification sent successfully", "success");
@@ -558,6 +563,7 @@ export function NotificationsTab() {
         }
       },
       onError: (err: any) => {
+        trackNotificationAction(editing.implementation || "unknown", "test", false);
         const msg = err?.message || "Test failed";
         setModalTestResult({ success: false, message: msg });
         showToast(`Test notification failed: ${msg}`, "error");
@@ -574,6 +580,7 @@ export function NotificationsTab() {
     const target = deletingNotif;
     deleteMutation.mutate(target.id, {
       onSuccess: () => {
+        trackNotificationAction(target.implementation || "unknown", "delete", true);
         showToast(`Notification "${target.name}" deleted`, "info");
         setDeletingNotif(null);
       },
@@ -592,6 +599,7 @@ export function NotificationsTab() {
     }
 
     const payload = buildNotificationPayload(editing);
+    trackNotificationAction(editing.implementation || "unknown", "save", true);
     if (editing.id) {
       updateMutation.mutate(payload, {
         onSuccess: () => {

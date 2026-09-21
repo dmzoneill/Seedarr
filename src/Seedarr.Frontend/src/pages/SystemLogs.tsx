@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { apiClient } from "../api/client";
+import { trackSystemLogAction } from "../utils/analytics";
 
 type LogLevel = "Trace" | "Debug" | "Info" | "Warn" | "Error";
 
@@ -139,6 +140,7 @@ function SystemLogs() {
   }, []);
 
   const handleClear = useCallback(() => {
+    trackSystemLogAction("clear");
     if (entries && entries.length > 0) {
       const maxId = entries.reduce(
         (max, entry) => (entry.id > max ? entry.id : max),
@@ -208,6 +210,7 @@ function SystemLogs() {
                 className={`btn btn-small ${levelFilter === level ? "log-filter-active" : ""} ${level !== "All" ? `log-filter-${level.toLowerCase()}` : ""}`}
                 onClick={() => {
                   setLevelFilter(level);
+                  trackSystemLogAction("filter_level", level);
                   setClearedBeforeId(null);
                 }}
               >

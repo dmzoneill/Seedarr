@@ -14,6 +14,7 @@ import TrackerFavicon from "../TrackerFavicon";
 import TrackerMultiSelectModal, {
   TrackerPickerItem,
 } from "../TrackerMultiSelectModal";
+import { trackTrackerAction } from "../../utils/analytics";
 
 function formatTrackerStatus(status: string | number | unknown): string {
   const s = String(status ?? "");
@@ -207,6 +208,9 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
         // continue
       }
     }
+    if (addedCount > 0) {
+      trackTrackerAction("add");
+    }
     setIsAddingBatch(false);
     setSelectedUrls(new Set());
     setShowPickerModal(false);
@@ -218,6 +222,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
   };
 
   const handleDeleteTracker = (trackerId: number) => {
+    trackTrackerAction("remove");
     deleteTracker.mutate(
       { torrentId, trackerId },
       {
@@ -345,6 +350,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
                             fontSize: "0.72rem",
                           }}
                           onClick={() => {
+                            trackTrackerAction("reannounce");
                             announceTracker.mutate(
                               { torrentId, trackerId: t.id },
                               {

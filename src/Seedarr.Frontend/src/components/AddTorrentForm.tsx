@@ -421,7 +421,10 @@ export function AddTorrentForm({
         },
         {
           onSuccess: (result: AddTorrentResult) => {
-            trackTorrentAdd("file", result.added.length, finalCategory);
+            trackTorrentAdd("file", result.added.length, finalCategory, {
+              start_paused: startPaused,
+              sequential: sequentialDownload,
+            });
             if (result.failed.length === 0) {
               showToast(`Added ${result.added.length} torrent(s)`, "success");
               if (onSuccess) onSuccess();
@@ -450,7 +453,10 @@ export function AddTorrentForm({
         },
         {
           onSuccess: () => {
-            trackTorrentAdd("magnet", 1, finalCategory);
+            trackTorrentAdd("magnet", 1, finalCategory, {
+              start_paused: startPaused,
+              sequential: sequentialDownload,
+            });
             showToast("Magnet link added successfully", "success");
             setMagnetLink("");
             if (onSuccess) onSuccess();
