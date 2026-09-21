@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.10.5](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.5) - 2026-09-21
+
+### ✨ Features
+- feat(ui): implement virtualized torrent table, system resources, and AI swarm diagnostics
+
+### 🐛 Bug Fixes
+- fix(ci): add stub ai endpoints and remove monitor_ci script
+
+### 🔧 Maintenance & Improvements
+- docs: remove redundant repository name header from README
+- refactor(container): migrate from docker to podman and generic container naming
+
 ## [v1.10.4](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.4) - 2026-09-21
 
 ### 🐛 Bug Fixes
