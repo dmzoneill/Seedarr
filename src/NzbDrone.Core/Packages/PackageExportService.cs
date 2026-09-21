@@ -29,6 +29,7 @@ public class PackageExportService : IPackageExportService
     private readonly ITagService _tagService;
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly ISyntheticMetadataGenerator _syntheticMetadataGenerator;
+    private readonly ITrackerEntryService _trackerEntryService;
     private readonly Logger _logger;
 
     public PackageExportService(
@@ -38,7 +39,8 @@ public class PackageExportService : IPackageExportService
         IFastResumeBencodeSerializer bencodeSerializer = null,
         ITagService tagService = null,
         IAppFolderInfo appFolderInfo = null,
-        ISyntheticMetadataGenerator syntheticMetadataGenerator = null)
+        ISyntheticMetadataGenerator syntheticMetadataGenerator = null,
+        ITrackerEntryService trackerEntryService = null)
     {
         _torrentService = torrentService ?? throw new ArgumentNullException(nameof(torrentService));
         _torrentFileService = torrentFileService;
@@ -47,6 +49,7 @@ public class PackageExportService : IPackageExportService
         _tagService = tagService;
         _appFolderInfo = appFolderInfo;
         _syntheticMetadataGenerator = syntheticMetadataGenerator ?? new SyntheticMetadataGenerator();
+        _trackerEntryService = trackerEntryService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -131,6 +134,7 @@ public class PackageExportService : IPackageExportService
                 InfoHash = t.InfoHash,
                 Category = t.Category,
                 Tags = ResolveTags(t),
+                Trackers = ResolveTrackers(t),
                 TotalSize = t.TotalSize,
                 PieceCount = t.PieceCount,
                 PieceLength = t.PieceLength,
@@ -173,6 +177,68 @@ public class PackageExportService : IPackageExportService
         }
 
         return torrent.TagIds.Select(t => t.ToString()).ToList();
+    }
+
+    private List<PackageTrackerItem> ResolveTrackers(Torrent torrent)
+    {
+        if (_trackerEntryService == null || torrent.Id <= 0)
+        {
+            if (!string.IsNullOrWhiteSpace(torrent.TrackerUrl))
+            {
+                return new List<PackageTrackerItem>
+                {
+                    new()
+                    {
+                        Url = torrent.TrackerUrl,
+                        Tier = 0,
+                        Enabled = true,
+                        Status = "Working"
+                    }
+                };
+            }
+
+            return new List<PackageTrackerItem>();
+        }
+
+        try
+        {
+            var entries = _trackerEntryService.GetByTorrentId(torrent.Id);
+            if (entries != null && entries.Count > 0)
+            {
+                return entries.Select(e => new PackageTrackerItem
+                {
+                    Url = e.Url,
+                    Tier = e.Tier,
+                    Status = e.Status.ToString(),
+                    Enabled = e.Enabled,
+                    Seeders = e.Seeders,
+                    Leechers = e.Leechers,
+                    TotalAnnounces = e.TotalAnnounces,
+                    SuccessfulAnnounces = e.SuccessfulAnnounces,
+                    LastAnnounce = e.LastAnnounce
+                }).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to resolve tracker entries for torrent {0}", torrent.Id);
+        }
+
+        if (!string.IsNullOrWhiteSpace(torrent.TrackerUrl))
+        {
+            return new List<PackageTrackerItem>
+            {
+                new()
+                {
+                    Url = torrent.TrackerUrl,
+                    Tier = 0,
+                    Enabled = true,
+                    Status = "Working"
+                }
+            };
+        }
+
+        return new List<PackageTrackerItem>();
     }
 
     private async Task WriteMetainfoEntryAsync(TarWriter tarWriter, Torrent torrent, CancellationToken cancellationToken)
@@ -327,7 +393,7 @@ public class PackageExportService : IPackageExportService
                 Files = new List<FastResumeFileEntry>()
             };
 
-            if (torrent.PieceCount > 0 && torrent.Progress >= 1.0)
+            if (torrent.PieceCount > 0 && (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding))
             {
                 var bitfield = new bool[torrent.PieceCount];
                 Array.Fill(bitfield, true);

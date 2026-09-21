@@ -25,6 +25,7 @@ public class PackageImportService : IPackageImportService
     private readonly IFastResumeService _fastResumeService;
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IDiskProvider _diskProvider;
+    private readonly ITrackerEntryService _trackerEntryService;
     private readonly Logger _logger;
 
     public PackageImportService(
@@ -32,13 +33,15 @@ public class PackageImportService : IPackageImportService
         ITorrentImportService torrentImportService = null,
         IFastResumeService fastResumeService = null,
         IAppFolderInfo appFolderInfo = null,
-        IDiskProvider diskProvider = null)
+        IDiskProvider diskProvider = null,
+        ITrackerEntryService trackerEntryService = null)
     {
         _torrentService = torrentService;
         _torrentImportService = torrentImportService;
         _fastResumeService = fastResumeService;
         _appFolderInfo = appFolderInfo;
         _diskProvider = diskProvider;
+        _trackerEntryService = trackerEntryService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -101,6 +104,9 @@ public class PackageImportService : IPackageImportService
 
         var extractedFiles = new List<string>();
         long totalUncompressedBytes = 0;
+        var duplicateInfoHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var duplicateTorrentNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        PackageManifest parsedManifest = null;
 
         using var countingStream = new CountingStream(effectiveStream);
         await using var decompressedStream = isGzip
@@ -127,8 +133,10 @@ public class PackageImportService : IPackageImportService
                     throw new SecurityException($"Disallowed tar entry type '{entry.EntryType}' in entry: {entry.Name}");
                 }
 
-                // 2. Canonical Path Sandboxing
-                var destinationPath = Path.GetFullPath(Path.Combine(targetRootDir, entry.Name));
+                // 2. Canonical Path Sandboxing & Zip-Slip Defense
+                ValidateTarEntryName(entry.Name);
+
+                var destinationPath = Path.GetFullPath(Path.Combine(canonicalTargetRoot, entry.Name));
                 if (entry.EntryType == TarEntryType.Directory && destinationPath == canonicalTargetRoot)
                 {
                     continue;
@@ -139,13 +147,56 @@ public class PackageImportService : IPackageImportService
                     throw new SecurityException($"Potential Zip-Slip attack detected in entry: {entry.Name}");
                 }
 
-                // 3. Check declared entry length limit if specified
+                // 3. Deduplication check before extracting: candidate infohash checked against active library
+                var isDuplicateEntry = false;
+                if (options.SkipDuplicates && _torrentService != null)
+                {
+                    if (entry.Name.StartsWith("metainfo/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var hash = Path.GetFileNameWithoutExtension(entry.Name).ToLowerInvariant();
+                        if (duplicateInfoHashes.Contains(hash) || _torrentService.ExistsByInfoHash(hash))
+                        {
+                            duplicateInfoHashes.Add(hash);
+                            isDuplicateEntry = true;
+                        }
+                    }
+                    else if (entry.Name.StartsWith("fastresume/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var hash = Path.GetFileNameWithoutExtension(entry.Name).ToLowerInvariant();
+                        if (duplicateInfoHashes.Contains(hash) || _torrentService.ExistsByInfoHash(hash))
+                        {
+                            duplicateInfoHashes.Add(hash);
+                            isDuplicateEntry = true;
+                        }
+                    }
+                    else if (entry.Name.StartsWith("content/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var rel = entry.Name.Substring("content/".Length).TrimStart('/', '\\');
+                        var rootTorrentName = rel.Split(new[] { '/', '\\' }, 2)[0];
+                        if (duplicateTorrentNames.Contains(rootTorrentName))
+                        {
+                            isDuplicateEntry = true;
+                        }
+                    }
+                }
+
+                if (isDuplicateEntry)
+                {
+                    _logger.Info("Skipping extraction of duplicate entry '{0}' as torrent already exists in active library.", entry.Name);
+                    if (entry.DataStream != null)
+                    {
+                        await entry.DataStream.CopyToAsync(Stream.Null, cancellationToken);
+                    }
+                    continue;
+                }
+
+                // 4. Check declared entry length limit if specified
                 if (entry.Length > effectiveMaxBytes)
                 {
                     throw new SecurityException($"Tar entry '{entry.Name}' declared length of {entry.Length} bytes exceeds limit of {effectiveMaxBytes} bytes.");
                 }
 
-                // 4. Extract entry
+                // 5. Extract entry
                 if (entry.EntryType == TarEntryType.Directory)
                 {
                     Directory.CreateDirectory(destinationPath);
@@ -189,6 +240,34 @@ public class PackageImportService : IPackageImportService
                     }
 
                     extractedFiles.Add(destinationPath);
+
+                    // If manifest was extracted, immediately inspect candidate torrents for deduplication
+                    if (entry.Name == "manifest.json" && parsedManifest == null)
+                    {
+                        try
+                        {
+                            var json = await File.ReadAllTextAsync(destinationPath, cancellationToken);
+                            parsedManifest = json.FromJson<PackageManifest>();
+                            if (parsedManifest?.Torrents != null && options.SkipDuplicates && _torrentService != null)
+                            {
+                                foreach (var item in parsedManifest.Torrents)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(item.InfoHash) && _torrentService.ExistsByInfoHash(item.InfoHash))
+                                    {
+                                        duplicateInfoHashes.Add(item.InfoHash.ToLowerInvariant());
+                                        if (!string.IsNullOrWhiteSpace(item.Name))
+                                        {
+                                            duplicateTorrentNames.Add(item.Name);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Debug(ex, "Could not pre-parse manifest during extraction");
+                        }
+                    }
                 }
             }
         }
@@ -208,7 +287,7 @@ public class PackageImportService : IPackageImportService
             throw;
         }
 
-        // 5. Manifest & Torrent Import
+        // 6. Manifest & Torrent Import
         var manifestPath = Path.Combine(canonicalTargetRoot, "manifest.json");
         if (!File.Exists(manifestPath))
         {
@@ -226,26 +305,29 @@ public class PackageImportService : IPackageImportService
             throw new SecurityException("Package archive is missing required manifest.json.");
         }
 
-        var manifestJson = await File.ReadAllTextAsync(manifestPath, cancellationToken);
-        PackageManifest manifest;
-        try
+        var manifest = parsedManifest;
+        if (manifest == null)
         {
-            manifest = manifestJson.FromJson<PackageManifest>();
-        }
-        catch (Exception ex)
-        {
-            if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot))
+            var manifestJson = await File.ReadAllTextAsync(manifestPath, cancellationToken);
+            try
             {
-                try
-                {
-                    Directory.Delete(canonicalTargetRoot, true);
-                }
-                catch
-                {
-                }
+                manifest = manifestJson.FromJson<PackageManifest>();
             }
+            catch (Exception ex)
+            {
+                if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot))
+                {
+                    try
+                    {
+                        Directory.Delete(canonicalTargetRoot, true);
+                    }
+                    catch
+                    {
+                    }
+                }
 
-            throw new SecurityException("Failed to parse package manifest JSON.", ex);
+                throw new SecurityException("Failed to parse package manifest JSON.", ex);
+            }
         }
 
         if (manifest == null || manifest.SchemaVersion != 1)
@@ -295,6 +377,11 @@ public class PackageImportService : IPackageImportService
                 var manifestItem = manifest.Torrents?.FirstOrDefault(t =>
                     string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
 
+                if (duplicateInfoHashes.Contains(infoHash))
+                {
+                    continue;
+                }
+
                 Torrent importedTorrent = null;
 
                 if (options.RestoreTorrents && _torrentImportService != null)
@@ -329,6 +416,47 @@ public class PackageImportService : IPackageImportService
                         _torrentService?.Update(importedTorrent);
                     }
 
+                    // Restore trackers
+                    if (_trackerEntryService != null && manifestItem?.Trackers != null && manifestItem.Trackers.Count > 0)
+                    {
+                        try
+                        {
+                            var existingTrackers = _trackerEntryService.GetByTorrentId(importedTorrent.Id);
+                            var existingUrls = new HashSet<string>(existingTrackers?.Select(t => t.Url) ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+                            var trackersToAdd = new List<TrackerEntry>();
+
+                            foreach (var trk in manifestItem.Trackers)
+                            {
+                                if (!string.IsNullOrWhiteSpace(trk.Url) && existingUrls.Add(trk.Url))
+                                {
+                                    var status = Enum.TryParse<TrackerStatus>(trk.Status, true, out var parsedStatus) ? parsedStatus : TrackerStatus.Unknown;
+                                    trackersToAdd.Add(new TrackerEntry
+                                    {
+                                        TorrentId = importedTorrent.Id,
+                                        Url = trk.Url,
+                                        Tier = trk.Tier,
+                                        Enabled = trk.Enabled,
+                                        Status = status,
+                                        Seeders = trk.Seeders,
+                                        Leechers = trk.Leechers,
+                                        TotalAnnounces = trk.TotalAnnounces,
+                                        SuccessfulAnnounces = trk.SuccessfulAnnounces,
+                                        LastAnnounce = trk.LastAnnounce
+                                    });
+                                }
+                            }
+
+                            if (trackersToAdd.Count > 0)
+                            {
+                                _trackerEntryService.AddMany(trackersToAdd);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Debug(ex, "Failed to restore tracker entries for torrent {0}", importedTorrent.Id);
+                        }
+                    }
+
                     result.Torrents.Add(new PackageImportTorrentSummary
                     {
                         Id = importedTorrent.Id,
@@ -336,7 +464,8 @@ public class PackageImportService : IPackageImportService
                         InfoHash = importedTorrent.InfoHash,
                         Category = importedTorrent.Category,
                         TotalSize = importedTorrent.TotalSize,
-                        Tags = manifestItem?.Tags ?? new List<string>()
+                        Tags = manifestItem?.Tags ?? new List<string>(),
+                        IsDuplicate = false
                     });
                 }
                 else
@@ -348,7 +477,8 @@ public class PackageImportService : IPackageImportService
                         InfoHash = infoHash,
                         Category = manifestItem?.Category,
                         TotalSize = manifestItem?.TotalSize ?? 0,
-                        Tags = manifestItem?.Tags ?? new List<string>()
+                        Tags = manifestItem?.Tags ?? new List<string>(),
+                        IsDuplicate = false
                     });
                 }
 
@@ -375,6 +505,37 @@ public class PackageImportService : IPackageImportService
                                 _logger.Debug(ex, "Failed to load fastresume for {0}", importedTorrent.InfoHash);
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Record duplicate candidate torrents from manifest
+        if (manifest.Torrents != null)
+        {
+            foreach (var manifestItem in manifest.Torrents)
+            {
+                var infoHash = manifestItem.InfoHash?.ToLowerInvariant();
+                if (!string.IsNullOrWhiteSpace(infoHash) && duplicateInfoHashes.Contains(infoHash))
+                {
+                    if (!result.SkippedDuplicates.Contains(infoHash))
+                    {
+                        result.SkippedDuplicates.Add(infoHash);
+                    }
+
+                    if (!result.Torrents.Any(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var existing = _torrentService?.GetByInfoHash(infoHash);
+                        result.Torrents.Add(new PackageImportTorrentSummary
+                        {
+                            Id = existing?.Id ?? manifestItem.Id,
+                            Name = existing?.Name ?? manifestItem.Name ?? infoHash,
+                            InfoHash = infoHash,
+                            Category = existing?.Category ?? manifestItem.Category,
+                            TotalSize = existing?.TotalSize ?? manifestItem.TotalSize,
+                            Tags = manifestItem.Tags ?? new List<string>(),
+                            IsDuplicate = true
+                        });
                     }
                 }
             }
@@ -418,8 +579,53 @@ public class PackageImportService : IPackageImportService
             }
         }
 
-        result.Message = $"Successfully imported {result.Torrents.Count} torrent(s).";
+        var importedCount = result.Torrents.Count(t => !t.IsDuplicate);
+        var duplicateCount = result.SkippedDuplicates.Count;
+
+        if (importedCount == 0 && duplicateCount > 0)
+        {
+            result.Message = $"All {duplicateCount} candidate torrent(s) already exist in active library (skipped duplicates).";
+        }
+        else if (duplicateCount > 0)
+        {
+            result.Message = $"Successfully imported {importedCount} torrent(s), skipped {duplicateCount} duplicate(s).";
+        }
+        else
+        {
+            result.Message = $"Successfully imported {importedCount} torrent(s).";
+        }
+
+        result.Success = true;
         return result;
+    }
+
+    public static void ValidateTarEntryName(string entryName)
+    {
+        if (string.IsNullOrWhiteSpace(entryName))
+        {
+            throw new SecurityException("Tar entry name is empty or whitespace.");
+        }
+
+        var normalized = entryName.Replace('\\', '/');
+
+        // Check for drive letter: e.g. "C:..."
+        if (normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':')
+        {
+            throw new SecurityException($"Potential Zip-Slip attack detected in entry: {entryName}");
+        }
+
+        // Check for absolute or UNC paths: starts with '/' or '\\'
+        if (normalized.StartsWith('/') || normalized.StartsWith('\\'))
+        {
+            throw new SecurityException($"Potential Zip-Slip attack detected in entry: {entryName}");
+        }
+
+        // Check for directory traversal sequences like ".."
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Any(s => s == ".."))
+        {
+            throw new SecurityException($"Potential Zip-Slip attack detected in entry: {entryName}");
+        }
     }
 }
 

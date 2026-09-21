@@ -18,8 +18,22 @@ public class PackageTorrentItem
     public string InfoHash { get; set; }
     public string Category { get; set; }
     public List<string> Tags { get; set; } = new();
+    public List<PackageTrackerItem> Trackers { get; set; } = new();
     public long TotalSize { get; set; }
     public int PieceCount { get; set; }
     public int PieceLength { get; set; }
     public bool IsPrivate { get; set; }
+}
+
+public class PackageTrackerItem
+{
+    public string Url { get; set; }
+    public int Tier { get; set; }
+    public string Status { get; set; }
+    public bool Enabled { get; set; } = true;
+    public int Seeders { get; set; }
+    public int Leechers { get; set; }
+    public int TotalAnnounces { get; set; }
+    public int SuccessfulAnnounces { get; set; }
+    public DateTime? LastAnnounce { get; set; }
 }
