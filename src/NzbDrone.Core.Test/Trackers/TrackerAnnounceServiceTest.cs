@@ -1632,8 +1632,8 @@ public class TrackerAnnounceServiceTest
             Status = TorrentStatus.Downloading
         };
 
-        var tracker1 = new TrackerEntry { Id = 1, TorrentId = 57, Url = "http://tier0-t1.org/announce", Tier = 0, Enabled = true, TotalAnnounces = 1 };
-        var tracker2 = new TrackerEntry { Id = 2, TorrentId = 57, Url = "http://tier0-t2.org/announce", Tier = 0, Enabled = true, TotalAnnounces = 1 };
+        var tracker1 = new TrackerEntry { Id = 1, TorrentId = 57, Url = "mock://tier0-t1.org/announce", Tier = 0, Enabled = true, TotalAnnounces = 1 };
+        var tracker2 = new TrackerEntry { Id = 2, TorrentId = 57, Url = "mock://tier0-t2.org/announce", Tier = 0, Enabled = true, TotalAnnounces = 1 };
 
         _trackerEntryService.GetByTorrentId(57).Returns(new List<TrackerEntry> { tracker1, tracker2 });
 
@@ -1658,7 +1658,7 @@ public class TrackerAnnounceServiceTest
             Arg.Any<TrackerAnnounceRequest>(),
             Arg.Is<List<List<string>>>(tiers =>
                 tiers.Count == 1 &&
-                tiers[0][0] == "http://tier0-t2.org/announce" &&
-                tiers[0][1] == "http://tier0-t1.org/announce"));
+                tiers[0][0] == "mock://tier0-t2.org/announce" &&
+                tiers[0][1] == "mock://tier0-t1.org/announce"));
     }
 }
