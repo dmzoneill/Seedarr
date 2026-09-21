@@ -1591,3 +1591,296 @@ export interface PackageImportResult {
   message?: string;
 }
 
+export interface DiskMountPointMetrics {
+  mountPoint: string;
+  driveType: string;
+  totalSpaceBytes: number;
+  freeSpaceBytes: number;
+  usedSpaceBytes: number;
+  usedPercent: number;
+}
+
+export interface HostProcessResourceMetrics {
+  cpuProcessPercent: number;
+  cpuCores: number;
+  workingSetBytes: number;
+  privateMemoryBytes: number;
+  virtualMemoryBytes: number;
+  managedHeapBytes: number;
+  gcGen0Collections: number;
+  gcGen1Collections: number;
+  gcGen2Collections: number;
+  threadCount: number;
+  threadPoolWorkerThreads: number;
+  threadPoolCompletionPortThreads: number;
+  handleCount: number;
+  uptimeSeconds: number;
+  diskDrives: DiskMountPointMetrics[];
+  timestamp: string;
+}
+
+export interface TorrentEngineMetrics {
+  engineId: string;
+  displayName: string;
+  version: string;
+  isRunning: boolean;
+  activeTorrents: number;
+  downloadingTorrents: number;
+  seedingTorrents: number;
+  pausedTorrents: number;
+  totalDownloadSpeed: number;
+  totalUploadSpeed: number;
+  totalProtocolDownloadSpeed: number;
+  totalProtocolUploadSpeed: number;
+  totalDataDownloaded: number;
+  totalDataUploaded: number;
+  totalProtocolDownloaded: number;
+  totalProtocolUploaded: number;
+  protocolOverheadPercentage: number;
+  openConnections: number;
+  halfOpenConnections: number;
+  maxConnections: number;
+  connectedSeeds: number;
+  connectedLeechers: number;
+  totalSwarmPeers: number;
+  dhtNodeCount: number;
+  dhtState: string;
+  diskCacheBytesAllocated: number;
+  diskCacheCapacityBytes: number;
+  diskCacheHitRatio: number;
+  diskCacheHits: number;
+  diskCacheMisses: number;
+  diskPendingWrites: number;
+  diskPendingReads: number;
+  diskTotalBytesWritten: number;
+  diskTotalBytesRead: number;
+  diskWriteRate: number;
+  diskReadRate: number;
+  piecesHashedPerSec: number;
+  hashFailsTotal: number;
+  encryptedConnectionsCount: number;
+  plaintextConnectionsCount: number;
+  utpConnectionsCount: number;
+  tcpConnectionsCount: number;
+  timestamp: string;
+}
+
+export interface TorrentResourceMetrics {
+  torrentId: number;
+  infoHash: string;
+  name: string;
+  category?: string | null;
+  status?: string | null;
+  progress?: number | null;
+  totalBytes: number;
+  payloadDownloadSpeed: number;
+  payloadUploadSpeed: number;
+  protocolDownloadSpeed: number;
+  protocolUploadSpeed: number;
+  downloadedPayload: number;
+  uploadedPayload: number;
+  protocolDownloaded: number;
+  protocolUploaded: number;
+  efficiencyRatio: number;
+  connectedPeers: number;
+  connectedSeeds: number;
+  connectedLeechers: number;
+  totalAvailablePeers: number;
+  tcpPeers: number;
+  utpPeers: number;
+  encryptedPeers: number;
+  plaintextPeers: number;
+  totalPieces: number;
+  completedPieces: number;
+  piecesInFlight: number;
+  pieceLength: number;
+  hashFails: number;
+  wastedBytes: number;
+  diskPendingWrites: number;
+  estimatedMemoryBufferBytes: number;
+  swarmAvailability: number;
+  ratio: number;
+  etaSeconds?: number | null;
+}
+
+export interface SubsystemTelemetryReport {
+  subsystemId: string;
+  subsystemName: string;
+  activeProvider: string;
+  status: string;
+  resourceLoad: string;
+  metrics: Record<string, any>;
+}
+
+export interface SystemResourceTelemetrySnapshot {
+  host: HostProcessResourceMetrics;
+  torrentEngine: TorrentEngineMetrics;
+  perTorrent: TorrentResourceMetrics[];
+  subsystems: SubsystemTelemetryReport[];
+  timestamp: string;
+}
+
+export interface SubsystemProvider {
+  providerId: string;
+  displayName: string;
+  version: string;
+  description: string;
+  isActive: boolean;
+  isAvailable: boolean;
+  status: string;
+  capabilities: Record<string, boolean | string | number>;
+}
+
+export interface SubsystemOverview {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  activeProviderId: string;
+  providers: SubsystemProvider[];
+}
+
+export interface SwitchSubsystemRequest {
+  subsystemId: string;
+  providerId: string;
+}
+
+export interface SwitchSubsystemResult {
+  success: boolean;
+  subsystemId: string;
+  previousProvider: string;
+  activeProvider: string;
+  message?: string;
+  error?: string;
+}
+
+export interface SubsystemProbeResult {
+  subsystemId: string;
+  providerId: string;
+  isHealthy: boolean;
+  statusMessage: string;
+  dependencyChecks?: string[];
+  warnings?: string[];
+}
+
+export interface AiCapabilities {
+  supportsNaturalLanguageSearch: boolean;
+  supportsReleaseNameParsing: boolean;
+  supportsDiagnosticCopilot: boolean;
+  supportsMalwareAnomalyDetection: boolean;
+  supportsSwarmOptimization: boolean;
+  supportsLocalOfflineInference: boolean;
+  supportsCloudLlm: boolean;
+}
+
+export interface AiStatus {
+  activeProviderId: string;
+  displayName: string;
+  version: string;
+  description: string;
+  capabilities: AiCapabilities;
+  health: {
+    isHealthy: boolean;
+    statusMessage: string;
+    warnings: string[];
+    latencyMs: number;
+    modelName: string;
+    version: string;
+  };
+}
+
+export interface AiParsedRelease {
+  rawTitle: string;
+  cleanTitle: string;
+  year?: number | null;
+  season?: number | null;
+  episode?: number | null;
+  episodes: number[];
+  resolution?: string;
+  quality?: string;
+  videoCodec?: string;
+  audioCodec?: string;
+  audioChannels?: string;
+  dynamicRange?: string;
+  releaseGroup?: string;
+  language?: string;
+  languages?: string[];
+  edition?: string;
+  isProper: boolean;
+  isRepack: boolean;
+  isRemux: boolean;
+  confidenceScore: number;
+  additionalTags: Record<string, string>;
+}
+
+export interface AiDiagnosticReport {
+  torrentId: number;
+  torrentName: string;
+  overallHealth: string;
+  severity: "Low" | "Medium" | "High" | string;
+  summary: string;
+  issues: string[];
+  recommendations: string[];
+  suggestedActions: string[];
+  swarmAnalysis: string;
+  trackerAnalysis: string;
+  healthScore: number;
+  analyzedAt: string;
+}
+
+export interface AiSearchParameters {
+  rawQuery: string;
+  cleanQuery: string;
+  cleanTitle?: string;
+  category?: string;
+  year?: number | null;
+  season?: number | null;
+  episode?: number | null;
+  resolution?: string;
+  quality?: string;
+  codec?: string;
+  releaseGroup?: string;
+  minSeeders: number;
+  maxAgeDays?: number | null;
+  freeleechOnly: boolean;
+  tags: string[];
+  confidenceScore: number;
+}
+
+export interface AiMalwareRiskAssessment {
+  torrentName: string;
+  riskScore: number;
+  riskLevel: "Low" | "Medium" | "High" | "Critical" | string;
+  isSuspicious: boolean;
+  analyzedFilesCount: number;
+  suspiciousFileNames: string[];
+  threatReasons: string[];
+  recommendations: string[];
+  assessedAt: string;
+}
+
+export interface AiChatRequest {
+  message: string;
+  context?: string;
+}
+
+export interface AiChatResponse {
+  reply: string;
+  provider: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface AiConfig {
+  activeAiProvider: string;
+  ollamaHost: string;
+  ollamaModel: string;
+  geminiApiKey: string;
+  geminiModel: string;
+  onnxModelPath: string;
+  enableCopilotButton: boolean;
+  enableNaturalSearch: boolean;
+  enableSwarmDiagnostics: boolean;
+}
+
+

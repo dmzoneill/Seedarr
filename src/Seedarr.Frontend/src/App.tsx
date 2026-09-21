@@ -15,6 +15,7 @@ import Activity from "./pages/Activity";
 import TrackerServer from "./pages/TrackerServer";
 import Settings from "./pages/Settings";
 import SystemStatus from "./pages/SystemStatus";
+import SystemResources from "./pages/SystemResources";
 import SystemTasks from "./pages/SystemTasks";
 import SystemLogs from "./pages/SystemLogs";
 import SystemBackup from "./pages/SystemBackup";
@@ -48,6 +49,7 @@ import { useModalStack } from "./components/ModalProvider";
 import AddTorrentModal from "./components/AddTorrentModal";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
+import { AiCopilotDrawer } from "./components/AiCopilotDrawer";
 import { useIdleTimer } from "./hooks/useIdleTimer";
 import { IdleLockModal, IdleCountdownModal } from "./components/IdleLockModal";
 import {
@@ -105,6 +107,7 @@ import {
 
 const systemSubItems = [
   { path: "/system/status", label: "Status" },
+  { path: "/system/resources", label: "Resources", labelKey: "nav.resources" },
   { path: "/system/tasks", label: "Tasks" },
   { path: "/system/backup", label: "Backup" },
   { path: "/system/updates", label: "Updates" },
@@ -1482,6 +1485,8 @@ function App() {
               <Route path="/settings/tags" element={<Tags />} />
               <Route path="/settings/:section?" element={<Settings />} />
               <Route path="/system/status" element={<SystemStatus />} />
+              <Route path="/system/resources" element={<SystemResources />} />
+              <Route path="/system/telemetry" element={<Navigate to="/system/resources" replace />} />
               <Route path="/system/tasks" element={<SystemTasks />} />
               <Route path="/system/logs" element={<SystemLogs />} />
               <Route path="/system/backup" element={<SystemBackup />} />
@@ -1504,6 +1509,7 @@ function App() {
       </div>
       <AriaLiveAnnouncer />
       <SignalRProvider />
+      <AiCopilotDrawer />
       {showAddTorrentModal && (
         <AddTorrentModal onClose={() => setShowAddTorrentModal(false)} />
       )}

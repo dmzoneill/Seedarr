@@ -35,7 +35,8 @@ export interface TranslationOptions {
 
 export type TranslationParams =
   | TranslationOptions
-  | (string | number)[];
+  | (string | number)[]
+  | string;
 
 export type TranslationDictionary = {
   [key: string]: string | TranslationDictionary;

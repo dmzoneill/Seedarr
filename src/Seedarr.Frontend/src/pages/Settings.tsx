@@ -19,6 +19,7 @@ import { CategorySettingsTab } from "./settings/CategorySettingsTab";
 import { CustomScriptsTab } from "./settings/CustomScriptsTab";
 import { WebUiSettingsTab } from "./settings/WebUiSettingsTab";
 import { SecurityTab } from "./settings/SecurityTab";
+import { AiTab } from "./settings/AiTab";
 
 const sectionTitles: Record<string, string> = {
   general: "General",
@@ -40,6 +41,7 @@ const sectionTitles: Record<string, string> = {
   indexers: "Indexers",
   connections: "Connections",
   "download-clients": "Download Clients",
+  ai: "AI & Copilot",
   advanced: "Advanced",
 };
 
@@ -80,6 +82,7 @@ const sectionDescriptions: Record<string, string> = {
     "Arr suite integration (Radarr, Sonarr, Readarr, Lidarr, Whisparr)",
   "download-clients":
     "Manage download agents (qBittorrent, Transmission, Deluge, rTorrent)",
+  ai: "Configure AI providers (Ollama, Gemini, ONNX), Copilot drawer, and swarm diagnostics",
   advanced: "System logging verbosity, diagnostics, and developer flags",
 };
 
@@ -102,6 +105,7 @@ const TAB_COMPONENTS: Record<string, React.ComponentType> = {
   indexers: IndexersTab,
   connections: ConnectionsTab,
   "download-clients": DownloadClientsTab,
+  ai: AiTab,
   advanced: AdvancedTab,
 };
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTorrentSpeedHistory } from "../../api/hooks";
 import { formatSpeed } from "../../utils/formatters";
 import type { Torrent } from "../../api/types";
+import { AiSwarmDiagnosticCard } from "./AiSwarmDiagnosticCard";
 
 const CHART_W = 400;
 const CHART_H = 120;
@@ -162,6 +163,7 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
         data={h.down}
         color="#b5443a"
       />
+      <AiSwarmDiagnosticCard torrent={torrent} />
     </div>
   );
 }
