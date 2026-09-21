@@ -2055,10 +2055,11 @@ export function useProbeSubsystemProvider() {
   });
 }
 
-export function useAiStatus() {
+export function useAiStatus(options?: { enabled?: boolean }) {
   return useQuery<AiStatus>({
     queryKey: ["ai", "status"],
     queryFn: () => apiClient.get("/ai/status"),
+    enabled: options?.enabled,
     refetchInterval: 30_000,
   });
 }
@@ -2098,10 +2099,11 @@ export function useAiChat() {
   });
 }
 
-export function useAiConfig() {
+export function useAiConfig(options?: { enabled?: boolean }) {
   return useQuery<AiConfig>({
     queryKey: ["config", "ai"],
     queryFn: () => apiClient.get("/config/ai"),
+    enabled: options?.enabled,
   });
 }
 
