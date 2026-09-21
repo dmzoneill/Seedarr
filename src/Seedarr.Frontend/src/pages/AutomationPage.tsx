@@ -1150,7 +1150,11 @@ if (torrent) {
   }
 
   function openEditScript(script: AutomationScript) {
-    setEditingScript({ ...script });
+    setEditingScript({
+      ...script,
+      targetCategories: script.targetCategories || [],
+      targetTagIds: script.targetTagIds || [],
+    });
     const isYaml = script.language === "Yaml" || script.language === 1;
     if (isYaml) {
       setVisualSteps(yamlToVisualSteps(script.code || ""));
@@ -1463,6 +1467,11 @@ if (torrent) {
                       {script.targetCategories && script.targetCategories.length > 0 && (
                         <span className="badge" style={{ backgroundColor: "rgba(168, 85, 247, 0.15)", color: "#c084fc" }}>
                           {t("automation.ui.text2")}{script.targetCategories.join(", ")}
+                        </span>
+                      )}
+                      {script.targetTagIds && script.targetTagIds.length > 0 && (
+                        <span className="badge" style={{ backgroundColor: "rgba(234, 179, 8, 0.15)", color: "#facc15" }}>
+                          🏷️ {script.targetTagIds.map((id) => tags?.find((tg) => tg.id === id)?.label || `#${id}`).join(", ")}
                         </span>
                       )}
                     </div>
@@ -1840,6 +1849,136 @@ if (torrent) {
                   onChange={(e) => setEditingScript({ ...editingScript, description: e.target.value })}
                   placeholder={t("automation.ui.summaryOfWhatThisAutomation")}
                 />
+              </div>
+
+              {/* Form Row 3: Target Categories & Target Tags */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                    {t("automation.ui.targetCategories") || "Target Categories"}
+                  </label>
+                  <select
+                    multiple
+                    className="form-control"
+                    value={editingScript.targetCategories || []}
+                    onChange={(e) => {
+                      const selectedOptions = Array.from(
+                        e.target.selectedOptions,
+                        (option) => option.value
+                      );
+                      setEditingScript({ ...editingScript, targetCategories: selectedOptions });
+                    }}
+                    style={{ minHeight: "75px", borderRadius: "6px" }}
+                  >
+                    {categories?.map((cat) => (
+                      <option key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
+                    {editingScript.targetCategories
+                      ?.filter((catName) => !categories?.some((c) => c.name === catName))
+                      .map((catName) => (
+                        <option key={catName} value={catName}>
+                          {catName}
+                        </option>
+                      ))}
+                  </select>
+                  {editingScript.targetCategories && editingScript.targetCategories.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.25rem" }}>
+                      {editingScript.targetCategories.map((catName) => (
+                        <span
+                          key={catName}
+                          className="badge"
+                          style={{
+                            backgroundColor: "rgba(168, 85, 247, 0.15)",
+                            color: "#c084fc",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            cursor: "pointer",
+                          }}
+                          title="Click to remove"
+                          onClick={() => {
+                            setEditingScript({
+                              ...editingScript,
+                              targetCategories: (editingScript.targetCategories || []).filter((c) => c !== catName),
+                            });
+                          }}
+                        >
+                          {catName} ✕
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    {t("automation.ui.targetCategoriesHint") || "Filter by categories (leave empty to apply to all)"}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                    {t("automation.ui.targetTags") || "Target Tags"}
+                  </label>
+                  <select
+                    multiple
+                    className="form-control"
+                    value={(editingScript.targetTagIds || []).map(String)}
+                    onChange={(e) => {
+                      const selectedOptions = Array.from(
+                        e.target.selectedOptions,
+                        (option) => Number(option.value)
+                      );
+                      setEditingScript({ ...editingScript, targetTagIds: selectedOptions });
+                    }}
+                    style={{ minHeight: "75px", borderRadius: "6px" }}
+                  >
+                    {tags?.map((tag) => (
+                      <option key={tag.id} value={tag.id}>
+                        {tag.label}
+                      </option>
+                    ))}
+                    {editingScript.targetTagIds
+                      ?.filter((tagId) => !tags?.some((t) => t.id === tagId))
+                      .map((tagId) => (
+                        <option key={tagId} value={tagId}>
+                          Tag #{tagId}
+                        </option>
+                      ))}
+                  </select>
+                  {editingScript.targetTagIds && editingScript.targetTagIds.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.25rem" }}>
+                      {editingScript.targetTagIds.map((tagId) => {
+                        const tag = tags?.find((tg) => tg.id === tagId);
+                        return (
+                          <span
+                            key={tagId}
+                            className="badge"
+                            style={{
+                              backgroundColor: "rgba(234, 179, 8, 0.15)",
+                              color: "#facc15",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                              cursor: "pointer",
+                            }}
+                            title="Click to remove"
+                            onClick={() => {
+                              setEditingScript({
+                                ...editingScript,
+                                targetTagIds: (editingScript.targetTagIds || []).filter((id) => id !== tagId),
+                              });
+                            }}
+                          >
+                            🏷️ {tag ? tag.label : `Tag #${tagId}`} ✕
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    {t("automation.ui.targetTagsHint") || "Filter by tags (leave empty to apply to all)"}
+                  </span>
+                </div>
               </div>
 
               {/* EDITOR MODE 1: VISUAL PIPELINE BUILDER */}

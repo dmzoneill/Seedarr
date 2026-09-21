@@ -292,6 +292,33 @@ public class TagServiceTest
     }
 
     [Test]
+    public void Delete_should_scrub_tag_from_automation_scripts_target_tags()
+    {
+        var scriptRepo = Substitute.For<IAutomationScriptRepository>();
+        _repo.Get(15).Returns(new Tag { Id = 15, Label = "Anime" });
+
+        var script1 = new AutomationScript { Id = 1, TargetTagIds = new List<int> { 15, 20 } };
+        var script2 = new AutomationScript { Id = 2, TargetTagIds = new List<int> { 15 } };
+        var script3 = new AutomationScript { Id = 3, TargetTagIds = new List<int> { 30 } };
+
+        scriptRepo.All().Returns(new List<AutomationScript> { script1, script2, script3 });
+
+        var subject = new TagService(
+            _repo,
+            _eventAggregator,
+            automationScriptRepository: scriptRepo,
+            database: null);
+
+        subject.Delete(15);
+
+        scriptRepo.Received(1).UpdateMany(Arg.Is<IEnumerable<AutomationScript>>(items =>
+            items.Count() == 2 &&
+            items.Any(s => s.Id == 1 && !s.TargetTagIds.Contains(15) && s.TargetTagIds.Contains(20)) &&
+            items.Any(s => s.Id == 2 && s.TargetTagIds.Count == 0)));
+        _repo.Received(1).Delete(15);
+    }
+
+    [Test]
     public void Delete_should_remove_tag_id_and_scrub_label_using_torrent_service()
     {
         var torrentService = Substitute.For<ITorrentService>();

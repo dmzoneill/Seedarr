@@ -55,14 +55,24 @@ public class AutomationEventService :
 {
     private readonly IAutomationService _automationService;
     private readonly ITorrentRepository? _torrentRepository;
+    private readonly IAutomationScriptRepository? _scriptRepository;
     private readonly Logger _logger;
 
     public AutomationEventService(
         IAutomationService automationService,
-        ITorrentRepository? torrentRepository = null)
+        IAutomationScriptRepository scriptRepository)
+        : this(automationService, null, scriptRepository)
+    {
+    }
+
+    public AutomationEventService(
+        IAutomationService automationService,
+        ITorrentRepository? torrentRepository = null,
+        IAutomationScriptRepository? scriptRepository = null)
     {
         _automationService = automationService;
         _torrentRepository = torrentRepository;
+        _scriptRepository = scriptRepository;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -356,12 +366,13 @@ public class AutomationEventService :
 
         try
         {
-            var allScripts = _automationService.GetAll();
-            var matchingScripts = allScripts
-                .Where(s => s.IsEnabled && s.Trigger == trigger)
-                .ToList();
+            var matchingScripts = _scriptRepository != null
+                ? _scriptRepository.GetByTrigger(trigger)
+                : _automationService.GetAll()
+                    .Where(s => s.IsEnabled && s.Trigger == trigger)
+                    .ToList();
 
-            if (matchingScripts.Count == 0)
+            if (matchingScripts == null || matchingScripts.Count == 0)
             {
                 return;
             }

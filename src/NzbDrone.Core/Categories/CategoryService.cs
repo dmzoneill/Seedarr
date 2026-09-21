@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.Automation;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Messaging.Events;
@@ -61,6 +62,7 @@ public class CategoryService : ICategoryService, IQueueService
     private readonly IEventAggregator _eventAggregator;
     private readonly ITorrentRepository _torrentRepository;
     private readonly Lazy<ITorrentService> _torrentService;
+    private readonly IAutomationScriptRepository _automationScriptRepository;
     private readonly Logger _logger;
 
     private readonly ConcurrentDictionary<string, Category> _nameCache = new(StringComparer.OrdinalIgnoreCase);
@@ -73,12 +75,17 @@ public class CategoryService : ICategoryService, IQueueService
         ICategoryRepository repository,
         IEventAggregator eventAggregator,
         ITorrentRepository torrentRepository = null,
-        Lazy<ITorrentService> torrentService = null)
+        Lazy<ITorrentService> torrentService = null,
+        IAutomationScriptRepository automationScriptRepository = null)
     {
         _repository = repository;
         _eventAggregator = eventAggregator;
         _torrentRepository = torrentRepository;
         _torrentService = torrentService;
+        _automationScriptRepository = automationScriptRepository ??
+            ((repository as BasicRepository<Category>)?.Database != null
+                ? new AutomationScriptRepository(((BasicRepository<Category>)repository).Database)
+                : null);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -282,6 +289,7 @@ public class CategoryService : ICategoryService, IQueueService
             !string.Equals(existing.Name, updated.Name, StringComparison.OrdinalIgnoreCase))
         {
             SyncTorrentsOnCategoryRename(existing.Name, updated.Name);
+            SyncAutomationScriptsOnCategoryRename(existing.Name, updated.Name);
             _nameCache.TryRemove(existing.Name.Trim().ToLowerInvariant(), out _);
         }
 
@@ -351,6 +359,8 @@ public class CategoryService : ICategoryService, IQueueService
                     UpdateTorrent(torrent);
                 }
             }
+
+            SyncAutomationScriptsOnCategoryDelete(cat.Name);
         }
 
         _repository.Delete(id);
@@ -397,6 +407,96 @@ public class CategoryService : ICategoryService, IQueueService
             {
                 UpdateTorrent(torrent);
             }
+        }
+    }
+
+    private void SyncAutomationScriptsOnCategoryRename(string oldName, string newName)
+    {
+        if (_automationScriptRepository == null || string.IsNullOrWhiteSpace(oldName) || string.IsNullOrWhiteSpace(newName))
+        {
+            return;
+        }
+
+        try
+        {
+            var scripts = _automationScriptRepository.All()?.ToList() ?? new List<AutomationScript>();
+            var updatedScripts = new List<AutomationScript>();
+
+            foreach (var script in scripts)
+            {
+                if (script.TargetCategories == null || script.TargetCategories.Count == 0)
+                {
+                    continue;
+                }
+
+                var changed = false;
+                for (var i = 0; i < script.TargetCategories.Count; i++)
+                {
+                    if (string.Equals(script.TargetCategories[i]?.Trim(), oldName.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        script.TargetCategories[i] = newName.Trim();
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    script.TargetCategories = script.TargetCategories
+                        .Where(c => !string.IsNullOrWhiteSpace(c))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    updatedScripts.Add(script);
+                }
+            }
+
+            if (updatedScripts.Count > 0)
+            {
+                _automationScriptRepository.UpdateMany(updatedScripts);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to cascade category rename from '{0}' to '{1}' for automation scripts.", oldName, newName);
+        }
+    }
+
+    private void SyncAutomationScriptsOnCategoryDelete(string categoryName)
+    {
+        if (_automationScriptRepository == null || string.IsNullOrWhiteSpace(categoryName))
+        {
+            return;
+        }
+
+        try
+        {
+            var scripts = _automationScriptRepository.All()?.ToList() ?? new List<AutomationScript>();
+            var updatedScripts = new List<AutomationScript>();
+
+            foreach (var script in scripts)
+            {
+                if (script.TargetCategories == null || script.TargetCategories.Count == 0)
+                {
+                    continue;
+                }
+
+                var removedCount = script.TargetCategories.RemoveAll(c =>
+                    string.Equals(c?.Trim(), categoryName.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                if (removedCount > 0)
+                {
+                    updatedScripts.Add(script);
+                }
+            }
+
+            if (updatedScripts.Count > 0)
+            {
+                _automationScriptRepository.UpdateMany(updatedScripts);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to cascade category delete for '{0}' to automation scripts.", categoryName);
         }
     }
 
