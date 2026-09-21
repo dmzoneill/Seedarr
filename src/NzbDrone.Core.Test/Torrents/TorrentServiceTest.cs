@@ -10,6 +10,7 @@ using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Exceptions;
+using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Torrents;
@@ -313,6 +314,63 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.Delete(1);
 
             _trackerEntryService.Received(1).DeleteByTorrentId(1);
+        }
+
+        [Test]
+        public void Delete_should_call_DeleteByTorrentId_on_event_log_repository()
+        {
+            var eventLogRepo = Substitute.For<ITorrentEventLogRepository>();
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
+                torrentEventLogRepository: eventLogRepo);
+
+            subject.Delete(1);
+
+            eventLogRepo.Received(1).DeleteByTorrentId(1);
+        }
+
+        [Test]
+        public void Delete_should_call_DeleteByTorrentId_on_media_metadata_repository()
+        {
+            var metadataRepo = Substitute.For<ITorrentMediaMetadataRepository>();
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
+                torrentMediaMetadataRepository: metadataRepo);
+
+            subject.Delete(1);
+
+            metadataRepo.Received(1).DeleteByTorrentId(1);
+        }
+
+        [Test]
+        public void Delete_should_call_DeleteByTorrentId_on_event_log_service()
+        {
+            var eventLogService = Substitute.For<ITorrentEventLogService>();
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
+                torrentEventLogService: eventLogService);
+
+            subject.Delete(1);
+
+            eventLogService.Received(1).DeleteByTorrentId(1);
+        }
+
+        [Test]
+        public void Delete_should_clean_up_all_child_tables_before_repository_delete()
+        {
+            var eventLogRepo = Substitute.For<ITorrentEventLogRepository>();
+            var metadataRepo = Substitute.For<ITorrentMediaMetadataRepository>();
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
+                torrentEventLogRepository: eventLogRepo,
+                torrentMediaMetadataRepository: metadataRepo);
+
+            subject.Delete(1);
+
+            Received.InOrder(() =>
+            {
+                _torrentFileService.DeleteByTorrentId(1);
+                _trackerEntryService.DeleteByTorrentId(1);
+                eventLogRepo.DeleteByTorrentId(1);
+                metadataRepo.DeleteByTorrentId(1);
+                _repository.Delete(1);
+            });
         }
 
         [Test]

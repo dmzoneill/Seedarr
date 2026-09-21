@@ -217,4 +217,31 @@ public class TorrentEventLogRepositoryTest
         var remaining = _subject.GetByTorrentId(1, 100);
         Assert.That(remaining, Has.Count.EqualTo(3));
     }
+
+    [Test]
+    public void DeleteByTorrentId_should_delete_all_logs_for_torrent()
+    {
+        var logs = new List<TorrentEventLog>
+        {
+            new() { TorrentId = 1, TimeStamp = DateTime.UtcNow, Level = "Info", Source = "Tracker", Message = "Msg 1" },
+            new() { TorrentId = 1, TimeStamp = DateTime.UtcNow, Level = "Warn", Source = "Tracker", Message = "Msg 2" },
+            new() { TorrentId = 2, TimeStamp = DateTime.UtcNow, Level = "Error", Source = "Disk", Message = "Msg 3" },
+        };
+
+        _subject.InsertMany(logs);
+
+        _subject.DeleteByTorrentId(1);
+
+        var torrent1Logs = _subject.GetByTorrentId(1, 10);
+        var torrent2Logs = _subject.GetByTorrentId(2, 10);
+
+        Assert.That(torrent1Logs, Is.Empty);
+        Assert.That(torrent2Logs, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void DeleteByTorrentId_on_nonexistent_torrent_does_not_throw()
+    {
+        Assert.DoesNotThrow(() => _subject.DeleteByTorrentId(9999));
+    }
 }

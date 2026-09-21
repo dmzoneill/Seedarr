@@ -152,4 +152,20 @@ public class TorrentEventLogServiceTest
 
         _repository.DidNotReceive().InsertMany(Arg.Any<IEnumerable<TorrentEventLog>>());
     }
+
+    [Test]
+    public void DeleteByTorrentId_delegates_to_repository()
+    {
+        _subject.DeleteByTorrentId(42);
+
+        _repository.Received(1).DeleteByTorrentId(42);
+    }
+
+    [Test]
+    public void Handle_TorrentDeletedEvent_calls_DeleteByTorrentId()
+    {
+        _subject.Handle(new TorrentDeletedEvent(42));
+
+        _repository.Received(1).DeleteByTorrentId(42);
+    }
 }

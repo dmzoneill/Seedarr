@@ -7,6 +7,7 @@ using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Exceptions;
+using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network.Vpn;
 
@@ -48,6 +49,9 @@ public class TorrentService : ITorrentService,
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IEventAggregator _eventAggregator;
     private readonly Lazy<ITorrentRecheckService> _torrentRecheckService;
+    private readonly ITorrentEventLogRepository _torrentEventLogRepository;
+    private readonly ITorrentMediaMetadataRepository _torrentMediaMetadataRepository;
+    private readonly ITorrentEventLogService _torrentEventLogService;
     private readonly object _sortOrderLock = new();
     private readonly Logger _logger;
 
@@ -88,6 +92,9 @@ public class TorrentService : ITorrentService,
 
     public IDiskSpaceService DiskSpaceService { get; set; }
     public IDiskAllocationService DiskAllocationService { get; set; }
+    public ITorrentEventLogRepository TorrentEventLogRepository { get; set; }
+    public ITorrentMediaMetadataRepository TorrentMediaMetadataRepository { get; set; }
+    public ITorrentEventLogService TorrentEventLogService { get; set; }
 
     public TorrentService(
         ITorrentRepository repository,
@@ -96,7 +103,10 @@ public class TorrentService : ITorrentService,
         IEventAggregator eventAggregator,
         IDiskSpaceService diskSpaceService = null,
         Lazy<ITorrentRecheckService> torrentRecheckService = null,
-        IDiskAllocationService diskAllocationService = null)
+        IDiskAllocationService diskAllocationService = null,
+        ITorrentEventLogRepository torrentEventLogRepository = null,
+        ITorrentMediaMetadataRepository torrentMediaMetadataRepository = null,
+        ITorrentEventLogService torrentEventLogService = null)
     {
         _repository = repository;
         _torrentFileService = torrentFileService;
@@ -105,6 +115,9 @@ public class TorrentService : ITorrentService,
         DiskSpaceService = diskSpaceService;
         _torrentRecheckService = torrentRecheckService;
         DiskAllocationService = diskAllocationService;
+        _torrentEventLogRepository = torrentEventLogRepository;
+        _torrentMediaMetadataRepository = torrentMediaMetadataRepository;
+        _torrentEventLogService = torrentEventLogService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -303,8 +316,11 @@ public class TorrentService : ITorrentService,
         }
 
         _eventAggregator.PublishEvent(new TorrentDeletedEvent(id, torrent));
-        _torrentFileService.DeleteByTorrentId(id);
-        _trackerEntryService.DeleteByTorrentId(id);
+        _torrentFileService?.DeleteByTorrentId(id);
+        _trackerEntryService?.DeleteByTorrentId(id);
+        (_torrentEventLogService ?? TorrentEventLogService)?.DeleteByTorrentId(id);
+        (_torrentEventLogRepository ?? TorrentEventLogRepository)?.DeleteByTorrentId(id);
+        (_torrentMediaMetadataRepository ?? TorrentMediaMetadataRepository)?.DeleteByTorrentId(id);
         _repository.Delete(id);
         _pieceHashesById.TryRemove(id, out _);
 
