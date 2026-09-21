@@ -32,25 +32,25 @@ public interface ITrackerBoostService
     Task<TrackerBoostStatusSummary> GetStatusSummaryAsync();
     TrackerBoostSettings GetSettings();
     void UpdateSettings(TrackerBoostSettings settings);
-    Task<int> HarvestFromActiveDownloadsAsync();
-    Task<int> HarvestFromProwlarrAsync();
-    Task<int> HarvestFromCuratedListsAsync();
-    Task<int> ProbeTrackerHealthAsync();
-    Task<TorrentTrackerInspectionResult> InspectTorrentTrackersAsync(int torrentId);
-    Task<TorrentTrackerInspectionResult> InspectHashTrackersAsync(string infoHash, string name = "");
-    Task<SwarmBoostResult> BoostTorrentAsync(int torrentId, bool onlyVerified = true);
-    Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "", bool onlyVerified = true, bool force = false);
+    Task<int> HarvestFromActiveDownloadsAsync(CancellationToken cancellationToken = default);
+    Task<int> HarvestFromProwlarrAsync(CancellationToken cancellationToken = default);
+    Task<int> HarvestFromCuratedListsAsync(CancellationToken cancellationToken = default);
+    Task<int> ProbeTrackerHealthAsync(CancellationToken cancellationToken = default);
+    Task<TorrentTrackerInspectionResult> InspectTorrentTrackersAsync(int torrentId, CancellationToken cancellationToken = default);
+    Task<TorrentTrackerInspectionResult> InspectHashTrackersAsync(string infoHash, string name = "", CancellationToken cancellationToken = default);
+    Task<SwarmBoostResult> BoostTorrentAsync(int torrentId, bool onlyVerified = true, CancellationToken cancellationToken = default);
+    Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "", bool onlyVerified = true, bool force = false, CancellationToken cancellationToken = default);
     Task<SwarmBoostResult> InjectTrackerToTorrentAsync(int torrentId, string trackerUrl, bool force = false);
     Task<SwarmBoostResult> InjectTrackerToHashAsync(string infoHash, string trackerUrl, bool force = false);
-    Task<List<SwarmBoostResult>> BoostAllTorrentsAsync(bool onlyVerified = true);
+    Task<List<SwarmBoostResult>> BoostAllTorrentsAsync(bool onlyVerified = true, CancellationToken cancellationToken = default);
     Task<TrackerCrossMatrixResult> GetCrossMatrixAsync();
-    Task<int> RecoverMissingTrackersAsync();
+    Task<int> RecoverMissingTrackersAsync(CancellationToken cancellationToken = default);
     int InjectIntoDownloadClients(string infoHash, IEnumerable<string> trackers);
     void ReannounceDownloadClients(string infoHash);
     IReadOnlyList<TrackerBoostLogEntry> GetLogs(int limit = 100, string category = null, string level = null);
     void ClearLogs();
     void LogActivity(string level, string category, string message, string trackerUrl = null, string infoHash = null);
-    Task RunOptimizationCycleAsync();
+    Task RunOptimizationCycleAsync(CancellationToken cancellationToken = default);
 }
 
 public class TrackerBoostService : ITrackerBoostService
@@ -88,6 +88,7 @@ public class TrackerBoostService : ITrackerBoostService
         "https://tracker.tamersunion.org:443/announce"
     };
 
+    private static readonly object TimeStampLock = new();
     private static DateTime? _lastScanTime;
     private static DateTime? _lastHarvestTime;
     private static DateTime? _lastProwlarrHarvestTime;
@@ -96,6 +97,30 @@ public class TrackerBoostService : ITrackerBoostService
     private static int _totalTrackersInjected;
     private static int _totalVerifiedMatchesCount;
     private static int _nextLogId;
+
+    public static DateTime? LastScanTime
+    {
+        get { lock (TimeStampLock) return _lastScanTime; }
+        set { lock (TimeStampLock) _lastScanTime = value; }
+    }
+
+    public static DateTime? LastHarvestTime
+    {
+        get { lock (TimeStampLock) return _lastHarvestTime; }
+        set { lock (TimeStampLock) _lastHarvestTime = value; }
+    }
+
+    public static DateTime? LastProwlarrHarvestTime
+    {
+        get { lock (TimeStampLock) return _lastProwlarrHarvestTime; }
+        set { lock (TimeStampLock) _lastProwlarrHarvestTime = value; }
+    }
+
+    public static DateTime? LastAutoBoostTime
+    {
+        get { lock (TimeStampLock) return _lastAutoBoostTime; }
+        set { lock (TimeStampLock) _lastAutoBoostTime = value; }
+    }
 
     public static int TotalTorrentsBoosted => Volatile.Read(ref _totalTorrentsBoosted);
 
@@ -139,6 +164,13 @@ public class TrackerBoostService : ITrackerBoostService
         Interlocked.Exchange(ref _totalTorrentsBoosted, 0);
         Interlocked.Exchange(ref _totalTrackersInjected, 0);
         Interlocked.Exchange(ref _totalVerifiedMatchesCount, 0);
+        lock (TimeStampLock)
+        {
+            _lastScanTime = null;
+            _lastHarvestTime = null;
+            _lastProwlarrHarvestTime = null;
+            _lastAutoBoostTime = null;
+        }
         HttpClient = DefaultHttpClient;
     }
 
@@ -153,6 +185,7 @@ public class TrackerBoostService : ITrackerBoostService
     private readonly IRandomNumberGenerator _random;
     private readonly ISystemClock _clock;
     private readonly Logger _logger;
+    private readonly object _trackerAddLock = new();
 
     public TrackerBoostService(
         ITrackerBoostTrackerRepository trackerRepository,
@@ -320,53 +353,56 @@ public class TrackerBoostService : ITrackerBoostService
         }
 
         var cleanUrl = url.Trim();
-        var existing = _trackerRepository.FindByUrl(cleanUrl);
-        if (existing != null)
+        lock (_trackerAddLock)
         {
-            return (existing, false);
-        }
-
-        var protocol = TrackerProtocol.Udp;
-        if (cleanUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            protocol = TrackerProtocol.Https;
-        }
-        else if (cleanUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
-        {
-            protocol = TrackerProtocol.Http;
-        }
-
-        var host = cleanUrl;
-        var port = protocol == TrackerProtocol.Https ? 443 : 80;
-
-        try
-        {
-            if (Uri.TryCreate(cleanUrl, UriKind.Absolute, out var uri))
+            var existing = _trackerRepository.FindByUrl(cleanUrl);
+            if (existing != null)
             {
-                host = uri.Host;
-                port = uri.Port > 0 ? uri.Port : (protocol == TrackerProtocol.Https ? 443 : 80);
+                return (existing, false);
             }
-        }
-        catch
-        {
-            // fallback
-        }
 
-        var tracker = new TrackerBoostTracker
-        {
-            Url = cleanUrl,
-            Host = host,
-            Port = port,
-            Protocol = protocol,
-            Status = TrackerHealthStatus.Untested,
-            Source = source,
-            SourceName = sourceName,
-            LatencyMs = 0,
-            Enabled = true
-        };
+            var protocol = TrackerProtocol.Udp;
+            if (cleanUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                protocol = TrackerProtocol.Https;
+            }
+            else if (cleanUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                protocol = TrackerProtocol.Http;
+            }
 
-        var inserted = _trackerRepository.Insert(tracker);
-        return (inserted, true);
+            var host = cleanUrl;
+            var port = protocol == TrackerProtocol.Https ? 443 : 80;
+
+            try
+            {
+                if (Uri.TryCreate(cleanUrl, UriKind.Absolute, out var uri))
+                {
+                    host = uri.Host;
+                    port = uri.Port > 0 ? uri.Port : (protocol == TrackerProtocol.Https ? 443 : 80);
+                }
+            }
+            catch
+            {
+                // fallback
+            }
+
+            var tracker = new TrackerBoostTracker
+            {
+                Url = cleanUrl,
+                Host = host,
+                Port = port,
+                Protocol = protocol,
+                Status = TrackerHealthStatus.Untested,
+                Source = source,
+                SourceName = sourceName,
+                LatencyMs = 0,
+                Enabled = true
+            };
+
+            var inserted = _trackerRepository.Insert(tracker);
+            return (inserted, true);
+        }
     }
 
     public void DeleteTracker(int id)
@@ -393,15 +429,16 @@ public class TrackerBoostService : ITrackerBoostService
             TotalVerifiedMatchesCount = TotalVerifiedMatchesCount,
             AutoBoostEnabled = settings.AutoBoostEnabled,
             AutoHarvestEnabled = settings.AutoHarvestEnabled,
-            LastScanTime = _lastScanTime,
-            LastHarvestTime = _lastHarvestTime,
-            LastProwlarrHarvestTime = _lastProwlarrHarvestTime,
-            LastAutoBoostTime = _lastAutoBoostTime
+            LastScanTime = LastScanTime,
+            LastHarvestTime = LastHarvestTime,
+            LastProwlarrHarvestTime = LastProwlarrHarvestTime,
+            LastAutoBoostTime = LastAutoBoostTime
         });
     }
 
-    public async Task<int> HarvestFromActiveDownloadsAsync()
+    public async Task<int> HarvestFromActiveDownloadsAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var discovered = 0;
         try
         {
@@ -415,6 +452,7 @@ public class TrackerBoostService : ITrackerBoostService
             var seedarrEntries = _trackerEntryService.All().Where(e => !privateTorrentIds.Contains(e.TorrentId));
             foreach (var entry in seedarrEntries)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (IsValidPublicTrackerUrl(entry.Url))
                 {
                     var (_, wasInserted) = AddTrackerInternal(entry.Url, TrackerSourceType.ActiveTorrent, "Seedarr Active Download");
@@ -428,12 +466,14 @@ public class TrackerBoostService : ITrackerBoostService
             var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
             foreach (var clientDef in clients)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     var client = _downloadClientFactory.CreateClient(clientDef);
                     var items = client.GetItems();
                     foreach (var item in items)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (string.IsNullOrWhiteSpace(item.InfoHash) || item.IsPrivate || privateHashes.Contains(item.InfoHash))
                         {
                             continue;
@@ -442,6 +482,7 @@ public class TrackerBoostService : ITrackerBoostService
                         var trackers = client.GetTrackers(item.InfoHash);
                         foreach (var trUrl in trackers)
                         {
+                            cancellationToken.ThrowIfCancellationRequested();
                             if (IsValidPublicTrackerUrl(trUrl))
                             {
                                 var (_, wasInserted) = AddTrackerInternal(trUrl, TrackerSourceType.ActiveTorrent, $"{clientDef.Name} Swarm Harvest");
@@ -453,13 +494,17 @@ public class TrackerBoostService : ITrackerBoostService
                         }
                     }
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.Debug(ex, "Failed to harvest trackers from client {0}", clientDef.Name);
                 }
             }
 
-            _lastHarvestTime = DateTime.UtcNow;
+            LastHarvestTime = DateTime.UtcNow;
             if (discovered > 0)
             {
                 _logger.Info("Harvested {0} new public trackers from active download swarms", discovered);
@@ -469,6 +514,10 @@ public class TrackerBoostService : ITrackerBoostService
             {
                 LogActivity("Info", "Discovery", "Harvested active download clients: all client swarms up to date");
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -648,8 +697,9 @@ public class TrackerBoostService : ITrackerBoostService
         return true;
     }
 
-    public async Task<int> HarvestFromProwlarrAsync()
+    public async Task<int> HarvestFromProwlarrAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var harvestedCount = 0;
         try
         {
@@ -660,6 +710,7 @@ public class TrackerBoostService : ITrackerBoostService
 
             foreach (var prowlarr in prowlarrIndexers)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (string.IsNullOrWhiteSpace(prowlarr.Url))
                 {
                     continue;
@@ -674,13 +725,13 @@ public class TrackerBoostService : ITrackerBoostService
                     request.Headers.Add("X-Api-Key", prowlarr.ApiKey);
                 }
 
-                var response = await HttpClient.SendAsync(request);
+                var response = await HttpClient.SendAsync(request, cancellationToken);
                 if (!response.IsSuccessStatusCode)
                 {
                     continue;
                 }
 
-                var content = await response.Content.ReadAsStringAsync();
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 using var doc = JsonDocument.Parse(content);
                 if (doc.RootElement.ValueKind != JsonValueKind.Array)
                 {
@@ -689,6 +740,7 @@ public class TrackerBoostService : ITrackerBoostService
 
                 foreach (var indexerElem in doc.RootElement.EnumerateArray())
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var privacy = indexerElem.TryGetProperty("privacy", out var pProp) ? pProp.GetString() : "public";
                     if (string.Equals(privacy, "private", StringComparison.OrdinalIgnoreCase))
                     {
@@ -701,6 +753,7 @@ public class TrackerBoostService : ITrackerBoostService
                     {
                         foreach (var urlItem in urlsProp.EnumerateArray())
                         {
+                            cancellationToken.ThrowIfCancellationRequested();
                             var u = urlItem.GetString();
                             if (IsValidPublicTrackerUrl(u))
                             {
@@ -717,6 +770,7 @@ public class TrackerBoostService : ITrackerBoostService
                     {
                         foreach (var field in fieldsProp.EnumerateArray())
                         {
+                            cancellationToken.ThrowIfCancellationRequested();
                             if (field.TryGetProperty("name", out var fnProp))
                             {
                                 var fn = fnProp.GetString() ?? string.Empty;
@@ -741,9 +795,13 @@ public class TrackerBoostService : ITrackerBoostService
                 }
             }
 
-            _lastProwlarrHarvestTime = DateTime.UtcNow;
+            LastProwlarrHarvestTime = DateTime.UtcNow;
             _logger.Info("Harvested {0} trackers from connected Prowlarr indexers", harvestedCount);
             LogActivity(harvestedCount > 0 ? "Success" : "Info", "Discovery", $"Prowlarr sync complete: {harvestedCount} tracker(s) harvested from indexers");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -754,8 +812,9 @@ public class TrackerBoostService : ITrackerBoostService
         return harvestedCount;
     }
 
-    public async Task<int> HarvestFromCuratedListsAsync()
+    public async Task<int> HarvestFromCuratedListsAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var count = 0;
         var feedUrls = new[]
         {
@@ -765,13 +824,22 @@ public class TrackerBoostService : ITrackerBoostService
 
         foreach (var feed in feedUrls)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var content = await HttpClient.GetStringAsync(feed);
+                using var req = new HttpRequestMessage(HttpMethod.Get, feed);
+                var resp = await HttpClient.SendAsync(req, cancellationToken);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    continue;
+                }
+
+                var content = await resp.Content.ReadAsStringAsync(cancellationToken);
                 using var reader = new StringReader(content);
                 string line;
-                while ((line = await reader.ReadLineAsync()) != null)
+                while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var clean = line.Trim();
                     if (string.IsNullOrWhiteSpace(clean) || clean.StartsWith("#"))
                     {
@@ -788,6 +856,10 @@ public class TrackerBoostService : ITrackerBoostService
                     }
                 }
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Failed to download tracker feed from {0}", feed);
@@ -799,8 +871,9 @@ public class TrackerBoostService : ITrackerBoostService
         return count;
     }
 
-    public async Task<int> ProbeTrackerHealthAsync()
+    public async Task<int> ProbeTrackerHealthAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var trackers = _trackerRepository.All().Where(t => t.Enabled).ToList();
         var testedCount = 0;
         var updatedTrackers = new ConcurrentBag<TrackerBoostTracker>();
@@ -808,19 +881,20 @@ public class TrackerBoostService : ITrackerBoostService
         using var semaphore = new SemaphoreSlim(16);
         var tasks = trackers.Select(async tracker =>
         {
-            await semaphore.WaitAsync();
+            await semaphore.WaitAsync(cancellationToken);
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var sw = Stopwatch.StartNew();
                 var isAlive = false;
 
                 if (tracker.Protocol == TrackerProtocol.Udp)
                 {
-                    isAlive = await ProbeUdpTrackerAsync(tracker.Host, tracker.Port);
+                    isAlive = await ProbeUdpTrackerAsync(tracker.Host, tracker.Port, cancellationToken);
                 }
                 else
                 {
-                    isAlive = await ProbeHttpTrackerAsync(tracker.Url);
+                    isAlive = await ProbeHttpTrackerAsync(tracker.Url, null, cancellationToken);
                 }
 
                 sw.Stop();
@@ -844,6 +918,10 @@ public class TrackerBoostService : ITrackerBoostService
                 updatedTrackers.Add(tracker);
                 Interlocked.Increment(ref testedCount);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 tracker.Status = TrackerHealthStatus.Offline;
@@ -857,23 +935,29 @@ public class TrackerBoostService : ITrackerBoostService
             }
         });
 
-        await Task.WhenAll(tasks);
-
-        if (!updatedTrackers.IsEmpty)
+        try
         {
-            _trackerRepository.UpdateMany(updatedTrackers);
+            await Task.WhenAll(tasks);
+        }
+        finally
+        {
+            if (!updatedTrackers.IsEmpty)
+            {
+                _trackerRepository.UpdateMany(updatedTrackers);
+            }
         }
 
-        _lastScanTime = DateTime.UtcNow;
+        LastScanTime = DateTime.UtcNow;
         LogActivity("Info", "Health", $"Completed health scan of {testedCount} candidate tracker(s)");
         return testedCount;
     }
 
-    private async Task<bool> ProbeUdpTrackerAsync(string host, int port)
+    private async Task<bool> ProbeUdpTrackerAsync(string host, int port, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var addresses = await Dns.GetHostAddressesAsync(host);
+            var addresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
             if (addresses.Length == 0)
             {
                 return false;
@@ -892,7 +976,8 @@ public class TrackerBoostService : ITrackerBoostService
             var endpoint = new IPEndPoint(addresses[0], port);
             await client.SendAsync(packet, packet.Length, endpoint);
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromMilliseconds(2500));
             UdpReceiveResult result;
             try
             {
@@ -900,6 +985,10 @@ public class TrackerBoostService : ITrackerBoostService
             }
             catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 return false;
             }
 
@@ -915,6 +1004,10 @@ public class TrackerBoostService : ITrackerBoostService
 
             return false;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
         {
             return false;
@@ -925,13 +1018,15 @@ public class TrackerBoostService : ITrackerBoostService
         }
     }
 
-    internal async Task<bool> ProbeHttpTrackerAsync(string url, HttpClient httpClient = null)
+    internal async Task<bool> ProbeHttpTrackerAsync(string url, HttpClient httpClient = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var client = httpClient ?? HttpClient;
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Head, url);
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(3));
             var resp = await client.SendAsync(req, cts.Token);
             if (resp.IsSuccessStatusCode ||
                 resp.StatusCode == HttpStatusCode.BadRequest ||
@@ -940,6 +1035,10 @@ public class TrackerBoostService : ITrackerBoostService
                 return true;
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch
         {
             // HEAD might be rejected or unsupported at transport/daemon level, fall through to GET fallback
@@ -947,14 +1046,20 @@ public class TrackerBoostService : ITrackerBoostService
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var separator = url.Contains('?') ? "&" : "?";
             var getUrl = $"{url}{separator}info_hash=%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00%00&peer_id=-SD0001-000000000000&port=6881&uploaded=0&downloaded=0&left=0&compact=1";
             using var getReq = new HttpRequestMessage(HttpMethod.Get, getUrl);
-            using var getCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var getCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            getCts.CancelAfter(TimeSpan.FromSeconds(3));
             var getResp = await client.SendAsync(getReq, getCts.Token);
             return getResp.IsSuccessStatusCode ||
                    getResp.StatusCode == HttpStatusCode.BadRequest ||
                    getResp.StatusCode == HttpStatusCode.MethodNotAllowed;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {
@@ -962,8 +1067,9 @@ public class TrackerBoostService : ITrackerBoostService
         }
     }
 
-    private async Task<(bool Success, int Seeders, int Leechers, int Downloaded)> ScrapeTrackerForHashAsync(TrackerBoostTracker tracker, string infoHash)
+    private async Task<(bool Success, int Seeders, int Leechers, int Downloaded)> ScrapeTrackerForHashAsync(TrackerBoostTracker tracker, string infoHash, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (tracker == null || string.IsNullOrWhiteSpace(infoHash))
         {
             return (false, 0, 0, 0);
@@ -979,12 +1085,16 @@ public class TrackerBoostService : ITrackerBoostService
         {
             if (tracker.Protocol == TrackerProtocol.Udp)
             {
-                return await ScrapeUdpTrackerAsync(tracker.Host, tracker.Port, cleanHash);
+                return await ScrapeUdpTrackerAsync(tracker.Host, tracker.Port, cleanHash, cancellationToken);
             }
             else
             {
-                return await ScrapeHttpTrackerAsync(tracker.Url, cleanHash);
+                return await ScrapeHttpTrackerAsync(tracker.Url, cleanHash, cancellationToken);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {
@@ -992,11 +1102,12 @@ public class TrackerBoostService : ITrackerBoostService
         }
     }
 
-    private async Task<(bool Success, int Seeders, int Leechers, int Downloaded)> ScrapeUdpTrackerAsync(string host, int port, string hexHash)
+    private async Task<(bool Success, int Seeders, int Leechers, int Downloaded)> ScrapeUdpTrackerAsync(string host, int port, string hexHash, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var addresses = await Dns.GetHostAddressesAsync(host);
+            var addresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
             if (addresses.Length == 0)
             {
                 return (false, 0, 0, 0);
@@ -1016,7 +1127,8 @@ public class TrackerBoostService : ITrackerBoostService
 
             await client.SendAsync(connectPacket, connectPacket.Length, endpoint);
 
-            using var connectCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
+            using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            connectCts.CancelAfter(TimeSpan.FromMilliseconds(2500));
             UdpReceiveResult connectResult;
             try
             {
@@ -1024,6 +1136,10 @@ public class TrackerBoostService : ITrackerBoostService
             }
             catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 return (false, 0, 0, 0);
             }
 
@@ -1051,7 +1167,8 @@ public class TrackerBoostService : ITrackerBoostService
 
             await client.SendAsync(scrapePacket, scrapePacket.Length, endpoint);
 
-            using var scrapeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
+            using var scrapeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            scrapeCts.CancelAfter(TimeSpan.FromMilliseconds(2500));
             UdpReceiveResult scrapeResult;
             try
             {
@@ -1059,6 +1176,10 @@ public class TrackerBoostService : ITrackerBoostService
             }
             catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 return (false, 0, 0, 0);
             }
 
@@ -1080,6 +1201,10 @@ public class TrackerBoostService : ITrackerBoostService
 
             return (true, Math.Max(0, seeders), Math.Max(0, leechers), Math.Max(0, completed));
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
         {
             return (false, 0, 0, 0);
@@ -1090,8 +1215,9 @@ public class TrackerBoostService : ITrackerBoostService
         }
     }
 
-    private async Task<(bool Success, int Seeders, int Leechers, int Downloaded)> ScrapeHttpTrackerAsync(string announceUrl, string hexHash)
+    private async Task<(bool Success, int Seeders, int Leechers, int Downloaded)> ScrapeHttpTrackerAsync(string announceUrl, string hexHash, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             if (!announceUrl.Contains("/announce"))
@@ -1106,14 +1232,15 @@ public class TrackerBoostService : ITrackerBoostService
             var separator = scrapeUrl.Contains('?') ? "&" : "?";
             var requestUrl = $"{scrapeUrl}{separator}info_hash={encodedHash}";
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(4));
             var resp = await HttpClient.GetAsync(requestUrl, cts.Token);
             if (!resp.IsSuccessStatusCode)
             {
                 return (false, 0, 0, 0);
             }
 
-            var bytes = await resp.Content.ReadAsByteArrayAsync();
+            var bytes = await resp.Content.ReadAsByteArrayAsync(cancellationToken);
             if (bytes.Length == 0)
             {
                 return (false, 0, 0, 0);
@@ -1137,37 +1264,44 @@ public class TrackerBoostService : ITrackerBoostService
 
             return (true, 0, 0, 0);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch
         {
             return (false, 0, 0, 0);
         }
     }
 
-    public async Task<TorrentTrackerInspectionResult> InspectTorrentTrackersAsync(int torrentId)
+    public async Task<TorrentTrackerInspectionResult> InspectTorrentTrackersAsync(int torrentId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var torrent = _torrentService.Get(torrentId);
         if (torrent == null)
         {
             return new TorrentTrackerInspectionResult { TorrentId = torrentId };
         }
 
-        return await InspectHashInternalAsync(torrent.Id, torrent.Name, torrent.InfoHash, torrent.IsPrivate);
+        return await InspectHashInternalAsync(torrent.Id, torrent.Name, torrent.InfoHash, torrent.IsPrivate, cancellationToken);
     }
 
-    public async Task<TorrentTrackerInspectionResult> InspectHashTrackersAsync(string infoHash, string name = "")
+    public async Task<TorrentTrackerInspectionResult> InspectHashTrackersAsync(string infoHash, string name = "", CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
         if (torrent != null)
         {
-            return await InspectTorrentTrackersAsync(torrent.Id);
+            return await InspectTorrentTrackersAsync(torrent.Id, cancellationToken);
         }
 
         var isPrivate = IsHashPrivate(infoHash);
-        return await InspectHashInternalAsync(0, !string.IsNullOrWhiteSpace(name) ? name : infoHash, infoHash, isPrivate);
+        return await InspectHashInternalAsync(0, !string.IsNullOrWhiteSpace(name) ? name : infoHash, infoHash, isPrivate, cancellationToken);
     }
 
-    private async Task<TorrentTrackerInspectionResult> InspectHashInternalAsync(int torrentId, string torrentName, string infoHash, bool isPrivate)
+    private async Task<TorrentTrackerInspectionResult> InspectHashInternalAsync(int torrentId, string torrentName, string infoHash, bool isPrivate, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var attachedMap = new Dictionary<string, TrackerEntry>();
         if (torrentId > 0)
         {
@@ -1182,9 +1316,10 @@ public class TrackerBoostService : ITrackerBoostService
         using var semaphore = new SemaphoreSlim(12);
         var tasks = allKnownTrackers.Select(async tracker =>
         {
-            await semaphore.WaitAsync();
+            await semaphore.WaitAsync(cancellationToken);
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var cleanUrl = (tracker.Url ?? string.Empty).Trim().ToLowerInvariant();
                 var isAttached = attachedMap.TryGetValue(cleanUrl, out var entry);
 
@@ -1205,7 +1340,7 @@ public class TrackerBoostService : ITrackerBoostService
 
                 if (!string.IsNullOrWhiteSpace(infoHash) && !isPrivate)
                 {
-                    var scrape = await ScrapeTrackerForHashAsync(tracker, infoHash);
+                    var scrape = await ScrapeTrackerForHashAsync(tracker, infoHash, cancellationToken);
                     if (scrape.Success)
                     {
                         detection.Seeders = Math.Max(detection.Seeders, scrape.Seeders);
@@ -1249,17 +1384,26 @@ public class TrackerBoostService : ITrackerBoostService
                     detections.Add(detection);
                 }
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             finally
             {
                 semaphore.Release();
             }
         });
 
-        await Task.WhenAll(tasks);
-
-        if (!trackersToUpdate.IsEmpty)
+        try
         {
-            _trackerRepository.UpdateMany(trackersToUpdate);
+            await Task.WhenAll(tasks);
+        }
+        finally
+        {
+            if (!trackersToUpdate.IsEmpty)
+            {
+                _trackerRepository.UpdateMany(trackersToUpdate);
+            }
         }
 
         foreach (var entry in attachedMap.Values)
@@ -1308,8 +1452,9 @@ public class TrackerBoostService : ITrackerBoostService
         };
     }
 
-    public async Task<SwarmBoostResult> BoostTorrentAsync(int torrentId, bool onlyVerified = true)
+    public async Task<SwarmBoostResult> BoostTorrentAsync(int torrentId, bool onlyVerified = true, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var torrent = _torrentService.Get(torrentId);
         if (torrent == null)
         {
@@ -1329,7 +1474,8 @@ public class TrackerBoostService : ITrackerBoostService
             };
         }
 
-        var inspection = await InspectTorrentTrackersAsync(torrentId);
+        var inspection = await InspectTorrentTrackersAsync(torrentId, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         var existingTrackers = _trackerEntryService.GetByTorrentId(torrentId)
             .Select(t => (t.Url ?? string.Empty).Trim().ToLowerInvariant())
             .ToHashSet();
@@ -1349,6 +1495,7 @@ public class TrackerBoostService : ITrackerBoostService
 
         foreach (var candidate in candidateDetections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var entry = new TrackerEntry
             {
                 TorrentId = torrentId,
@@ -1436,8 +1583,9 @@ public class TrackerBoostService : ITrackerBoostService
         };
     }
 
-    public async Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "", bool onlyVerified = true, bool force = false)
+    public async Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "", bool onlyVerified = true, bool force = false, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
         if (torrent != null)
         {
@@ -1455,7 +1603,7 @@ public class TrackerBoostService : ITrackerBoostService
                 };
             }
 
-            return await BoostTorrentAsync(torrent.Id, onlyVerified);
+            return await BoostTorrentAsync(torrent.Id, onlyVerified, cancellationToken);
         }
 
         if (!force && IsHashPrivate(infoHash))
@@ -1472,7 +1620,8 @@ public class TrackerBoostService : ITrackerBoostService
             };
         }
 
-        var inspection = await InspectHashTrackersAsync(infoHash, name);
+        var inspection = await InspectHashTrackersAsync(infoHash, name, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         var settings = GetSettings();
         var candidateDetections = inspection.Detections
             .Where(d => !onlyVerified || d.IsVerified)
@@ -1613,8 +1762,9 @@ public class TrackerBoostService : ITrackerBoostService
         });
     }
 
-    public async Task<List<SwarmBoostResult>> BoostAllTorrentsAsync(bool onlyVerified = true)
+    public async Task<List<SwarmBoostResult>> BoostAllTorrentsAsync(bool onlyVerified = true, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var results = new List<SwarmBoostResult>();
 
         var allTorrents = _torrentService.GetAll();
@@ -1626,17 +1776,20 @@ public class TrackerBoostService : ITrackerBoostService
         var publicTorrents = allTorrents.Where(t => !t.IsPrivate).ToList();
         foreach (var t in publicTorrents)
         {
-            var res = await BoostTorrentAsync(t.Id, onlyVerified);
+            cancellationToken.ThrowIfCancellationRequested();
+            var res = await BoostTorrentAsync(t.Id, onlyVerified, cancellationToken);
             results.Add(res);
         }
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
             var processedClientHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var clientDef in clients)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     var provider = CreateDownloadClient(clientDef);
@@ -1648,6 +1801,7 @@ public class TrackerBoostService : ITrackerBoostService
                     var items = provider.GetItems();
                     foreach (var item in items)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (string.IsNullOrWhiteSpace(item.InfoHash) || item.IsPrivate || privateHashes.Contains(item.InfoHash))
                         {
                             continue;
@@ -1656,10 +1810,14 @@ public class TrackerBoostService : ITrackerBoostService
                         if (!publicTorrents.Any(t => string.Equals(t.InfoHash, item.InfoHash, StringComparison.OrdinalIgnoreCase)) &&
                             processedClientHashes.Add(item.InfoHash))
                         {
-                            var res = await BoostHashAsync(item.InfoHash, item.Title, onlyVerified, force: false);
+                            var res = await BoostHashAsync(item.InfoHash, item.Title, onlyVerified, force: false, cancellationToken: cancellationToken);
                             results.Add(res);
                         }
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -1667,12 +1825,16 @@ public class TrackerBoostService : ITrackerBoostService
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to boost download client swarms");
         }
 
-        _lastAutoBoostTime = DateTime.UtcNow;
+        LastAutoBoostTime = DateTime.UtcNow;
         return results;
     }
 
@@ -1735,8 +1897,9 @@ public class TrackerBoostService : ITrackerBoostService
         };
     }
 
-    public async Task<int> RecoverMissingTrackersAsync()
+    public async Task<int> RecoverMissingTrackersAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var recoveredCount = 0;
         try
         {
@@ -1745,6 +1908,7 @@ public class TrackerBoostService : ITrackerBoostService
 
             foreach (var torrent in torrents)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var existingEntries = _trackerEntryService.GetByTorrentId(torrent.Id);
                 if (existingEntries.Count > 0 && !string.IsNullOrWhiteSpace(torrent.TrackerUrl))
                 {
@@ -1757,6 +1921,7 @@ public class TrackerBoostService : ITrackerBoostService
                 // 1. Query active download clients for attached trackers
                 foreach (var clientDef in activeClients)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     try
                     {
                         var provider = CreateDownloadClient(clientDef);
@@ -1863,6 +2028,10 @@ public class TrackerBoostService : ITrackerBoostService
                             }
                         }
                     }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
                     catch (Exception clientEx)
                     {
                         _logger.Debug(clientEx, "Failed to inspect download client {0} for torrent {1}", clientDef.Name, torrent.InfoHash);
@@ -1872,13 +2041,18 @@ public class TrackerBoostService : ITrackerBoostService
                 // 2. If still no trackers and torrent is not private, scrape candidate trackers via TrackerBoost
                 if (!foundTrackers && !torrent.IsPrivate)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     try
                     {
-                        var boostRes = await BoostTorrentAsync(torrent.Id, onlyVerified: true);
+                        var boostRes = await BoostTorrentAsync(torrent.Id, onlyVerified: true, cancellationToken: cancellationToken);
                         if (boostRes.Boosted && boostRes.AddedTrackersCount > 0)
                         {
                             recoveredCount++;
                         }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
                     }
                     catch (Exception boostEx)
                     {
@@ -1886,6 +2060,10 @@ public class TrackerBoostService : ITrackerBoostService
                     }
                 }
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -1896,27 +2074,32 @@ public class TrackerBoostService : ITrackerBoostService
         return recoveredCount;
     }
 
-    public async Task RunOptimizationCycleAsync()
+    public async Task RunOptimizationCycleAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         LogActivity("Info", "Cycle", "Background tracker optimization cycle started");
 
-        await RecoverMissingTrackersAsync();
+        await RecoverMissingTrackersAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var settings = GetSettings();
         if (settings.AutoHarvestEnabled)
         {
-            await HarvestFromActiveDownloadsAsync();
+            await HarvestFromActiveDownloadsAsync(cancellationToken);
         }
+        cancellationToken.ThrowIfCancellationRequested();
 
         var hasUntested = _trackerRepository.All().Any(t => t.Enabled && t.Status == TrackerHealthStatus.Untested);
-        if (hasUntested || _lastScanTime == null || DateTime.UtcNow.Subtract(_lastScanTime.Value).TotalMinutes > 5)
+        var scanTime = LastScanTime;
+        if (hasUntested || scanTime == null || DateTime.UtcNow.Subtract(scanTime.Value).TotalMinutes > 5)
         {
-            await ProbeTrackerHealthAsync();
+            await ProbeTrackerHealthAsync(cancellationToken);
         }
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (settings.AutoBoostEnabled)
         {
-            await BoostAllTorrentsAsync(onlyVerified: settings.OnlyVerified);
+            await BoostAllTorrentsAsync(onlyVerified: settings.OnlyVerified, cancellationToken: cancellationToken);
         }
 
         LogActivity("Info", "Cycle", "Background tracker optimization cycle completed successfully");

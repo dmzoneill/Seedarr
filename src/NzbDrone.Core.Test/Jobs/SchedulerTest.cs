@@ -118,12 +118,13 @@ public class SchedulerTest
         await _subject.StartAsync(cts.Token);
         await Task.Delay(500);
 
-        _taskManager.Received().UpdateLastExecution(typeof(ThrowingScheduledTask).FullName);
+        _taskManager.Received().RecordTaskFinished(typeof(ThrowingScheduledTask).FullName, Arg.Any<DateTime>(), ScheduledTaskTriggerSource.Scheduler);
+        _taskManager.DidNotReceive().UpdateLastExecution(Arg.Any<string>());
         _taskManager.Received().RecordTaskFailed(typeof(ThrowingScheduledTask).FullName, Arg.Any<DateTime>(), "Task failed");
     }
 
     [Test]
-    public async Task ExecuteAsync_should_update_last_execution_when_no_task_instance_found()
+    public async Task ExecuteAsync_should_record_task_finished_when_no_task_instance_found()
     {
         var scheduled = new ScheduledTask
         {
@@ -140,7 +141,8 @@ public class SchedulerTest
         await _subject.StartAsync(cts.Token);
         await Task.Delay(500);
 
-        _taskManager.Received().UpdateLastExecution("NonExistent.TaskType");
+        _taskManager.Received().RecordTaskFinished("NonExistent.TaskType", Arg.Any<DateTime>(), ScheduledTaskTriggerSource.Scheduler);
+        _taskManager.DidNotReceive().UpdateLastExecution(Arg.Any<string>());
     }
 
     [Test]
@@ -168,7 +170,8 @@ public class SchedulerTest
         await _subject.StartAsync(cts.Token);
         await Task.Delay(500);
 
-        _taskManager.Received().UpdateLastExecution("NonExistent.TaskType");
+        _taskManager.Received().RecordTaskFinished("NonExistent.TaskType", Arg.Any<DateTime>(), ScheduledTaskTriggerSource.Scheduler);
+        _taskManager.DidNotReceive().UpdateLastExecution(Arg.Any<string>());
     }
 
     [Test]
