@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -468,5 +469,68 @@ public class MultiFilePieceStorageTests
         Assert.That(h2.IsClosed, Is.True);
         Assert.That(pool.Count, Is.EqualTo(0));
         Assert.Throws<ObjectDisposedException>(() => pool.GetOrCreateHandle(f1, writeAccess: false));
+    }
+
+    [Test]
+    public void ReadBlock_and_WriteBlock_spanning_two_files_succeeds()
+    {
+        var files = new List<TorrentFile>
+        {
+            new TorrentFile { Path = "blk_a.bin", Size = 600 },
+            new TorrentFile { Path = "blk_b.bin", Size = 600 }
+        };
+
+        using var storage = new MultiFilePieceStorage(_tempDir, files, pieceLength: 1200);
+
+        var blockData = new byte[400];
+        for (var i = 0; i < blockData.Length; i++)
+        {
+            blockData[i] = (byte)(i ^ 0x5A);
+        }
+
+        storage.WriteBlock(0, 400, blockData);
+
+        var readBack = storage.ReadBlock(0, 400, 400);
+        Assert.That(readBack, Is.EqualTo(blockData));
+    }
+
+    [Test]
+    public void BEP47_padding_file_skipped_on_WritePiece_and_zero_filled_on_ReadPiece()
+    {
+        var torrent = new Torrent
+        {
+            InfoHash = "padtest",
+            PieceLength = 800,
+            TotalSize = 800,
+            SavePath = _tempDir
+        };
+
+        var files = new List<TorrentFile>
+        {
+            new TorrentFile { Path = "f1.bin", Size = 300 },
+            new TorrentFile { Path = ".pad/200", Size = 200, IsPaddingFile = true },
+            new TorrentFile { Path = "f2.bin", Size = 300 }
+        };
+
+        var pieceData = new byte[800];
+        Array.Fill(pieceData, (byte)0xEE);
+
+        _storage.WritePiece(torrent, files, 0, pieceData);
+
+        var padFile = Path.Combine(_tempDir, ".pad", "200");
+        Assert.That(File.Exists(padFile), Is.False);
+
+        var destBuf = new byte[800];
+        Array.Fill(destBuf, (byte)0xFF);
+
+        var bytesRead = _storage.ReadPiece(torrent, files, 0, destBuf);
+
+        var expectedEE = new byte[300];
+        Array.Fill(expectedEE, (byte)0xEE);
+
+        Assert.That(bytesRead, Is.EqualTo(800));
+        Assert.That(destBuf.AsSpan(0, 300).ToArray(), Is.EqualTo(expectedEE));
+        Assert.That(destBuf.AsSpan(300, 200).ToArray(), Is.EqualTo(new byte[200])); // zero-filled
+        Assert.That(destBuf.AsSpan(500, 300).ToArray(), Is.EqualTo(expectedEE));
     }
 }
