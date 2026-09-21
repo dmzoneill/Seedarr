@@ -6,6 +6,8 @@ using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;

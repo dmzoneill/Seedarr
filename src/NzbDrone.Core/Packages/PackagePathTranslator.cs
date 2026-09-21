@@ -115,6 +115,13 @@ public static class PackagePathTranslator
         {
             var root = !string.IsNullOrWhiteSpace(destinationRoot) ? destinationRoot : destinationPrefix;
             var destRoot = NormalizePathSeparators(root, sep).TrimEnd(sep);
+            var normCurrent = NormalizePathSeparators(stripped, sep).TrimEnd(sep);
+            if (string.Equals(normCurrent, destRoot, StringComparison.OrdinalIgnoreCase) ||
+                normCurrent.StartsWith(destRoot + sep, StringComparison.OrdinalIgnoreCase))
+            {
+                return normCurrent;
+            }
+
             var relativePart = stripped.TrimStart('/', '\\');
             return string.IsNullOrEmpty(relativePart) ? destRoot : destRoot + sep + NormalizePathSeparators(relativePart, sep);
         }

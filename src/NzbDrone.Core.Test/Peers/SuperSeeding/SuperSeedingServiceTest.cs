@@ -313,11 +313,11 @@ public class SuperSeedingServiceTest
 
         Assert.That(allowed, Is.False);
 
-        // Client receives nothing; send KeepAlive to verify socket queue is clear
-        serverConn.SendKeepAlive();
+        // Client receives nothing; send Unchoke to verify socket queue had no rejected message before it
+        serverConn.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
         var received = clientConn.ReceiveMessage();
         Assert.That(received, Is.Not.Null);
-        Assert.That(received.Type, Is.EqualTo(PeerMessageType.KeepAlive));
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Unchoke));
     }
 
     [Test]

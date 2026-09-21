@@ -2627,6 +2627,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _logger.Debug("Incoming peer: {0}:{1}", connection.RemoteIp, connection.RemotePort);
 
         var addedToConnectionManager = false;
+        Torrent torrent = null;
         try
         {
             var negotiated = _mseSkeyRegistry != null
@@ -2652,7 +2653,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 return;
             }
 
-            var torrent = connection.MatchedTorrent ?? GetCachedTorrent(connection.InfoHash);
+            torrent = connection.MatchedTorrent ?? GetCachedTorrent(connection.InfoHash);
 
             if (torrent == null)
             {

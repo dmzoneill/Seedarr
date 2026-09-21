@@ -9,6 +9,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
+using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers.MultiTracker;
 

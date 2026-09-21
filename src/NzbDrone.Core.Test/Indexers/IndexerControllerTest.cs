@@ -1054,7 +1054,7 @@ public class IndexerControllerTest
 
         try
         {
-            await _controller.Search(new TorrentSearchCriteria { Query = "Ubuntu" });
+            await _controller.Search(query: "Ubuntu");
         }
         catch
         {
