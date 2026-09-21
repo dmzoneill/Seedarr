@@ -334,7 +334,9 @@ public class SystemController : ControllerBase
             return NotFound(new { message = $"Task implementation for {task.TypeName} not found" });
         }
 
-        if (_taskManager.IsRunning(task.TypeName))
+        if (_taskManager.IsRunning(task.TypeName) ||
+            _taskManager.IsRunning(taskInstance.GetType().FullName) ||
+            _taskManager.IsRunning(taskInstance.GetType().Name))
         {
             return Conflict(new { message = $"Task {task.TypeName} is already running" });
         }
@@ -373,7 +375,28 @@ public class SystemController : ControllerBase
         global::System.Threading.Tasks.Task.Run(() =>
         {
             var startTime = DateTime.UtcNow;
-            _taskManager.RecordTaskStarted(task.TypeName);
+            try
+            {
+                _taskManager.RecordTaskStarted(task.TypeName, ScheduledTaskTriggerSource.Manual);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Scheduled task execution failed");
+                _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                {
+                    Name = "TaskFailed",
+                    Action = ModelAction.Updated,
+                    Body = new
+                    {
+                        Id = task.Id,
+                        TypeName = task.TypeName,
+                        Name = simpleName,
+                        Error = ex.Message
+                    }
+                });
+                return;
+            }
+
             _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
             {
                 Name = "TaskStarted",
@@ -381,23 +404,41 @@ public class SystemController : ControllerBase
                 Body = taskInfo
             });
 
+            var failed = false;
             try
             {
                 taskInstance.Execute();
             }
             catch (Exception ex)
             {
+                failed = true;
+                _logger.Error(ex, "Scheduled task execution failed");
                 _taskManager.RecordTaskFailed(task.TypeName, startTime, ex.Message);
+                _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                {
+                    Name = "TaskFailed",
+                    Action = ModelAction.Updated,
+                    Body = new
+                    {
+                        Id = task.Id,
+                        TypeName = task.TypeName,
+                        Name = simpleName,
+                        Error = ex.Message
+                    }
+                });
             }
             finally
             {
-                _taskManager.RecordTaskFinished(task.TypeName, startTime);
-                _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                _taskManager.RecordTaskFinished(task.TypeName, startTime, ScheduledTaskTriggerSource.Manual);
+                if (!failed)
                 {
-                    Name = "TaskCompleted",
-                    Action = ModelAction.Updated,
-                    Body = taskInfo
-                });
+                    _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                    {
+                        Name = "TaskCompleted",
+                        Action = ModelAction.Updated,
+                        Body = taskInfo
+                    });
+                }
             }
         });
 

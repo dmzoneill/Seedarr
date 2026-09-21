@@ -133,6 +133,7 @@ public class Scheduler : BackgroundService
                             Body = taskInfo
                         });
 
+                        var failed = false;
                         try
                         {
                             if (taskInstance != null)
@@ -147,24 +148,40 @@ public class Scheduler : BackgroundService
                         }
                         catch (OperationCanceledException)
                         {
+                            failed = true;
                             _logger.Warn("Scheduled task was canceled or timed out: {0}", next.TypeName);
                         }
                         catch (Exception ex)
                         {
+                            failed = true;
                             _logger.Error(ex, "Scheduled task failed: {0}", next.TypeName);
                             _taskManager.RecordTaskFailed(next.TypeName, startTime, ex.Message);
+                            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                            {
+                                Name = "TaskFailed",
+                                Action = ModelAction.Updated,
+                                Body = new
+                                {
+                                    TypeName = next.TypeName,
+                                    Name = taskInstance?.GetType().Name ?? next.TypeName,
+                                    TriggerSource = ScheduledTaskTriggerSource.Scheduler.ToString(),
+                                    Error = ex.Message
+                                }
+                            });
                         }
                         finally
                         {
-                            _taskManager.UpdateLastExecution(next.TypeName);
                             _taskManager.RecordTaskFinished(next.TypeName, startTime, ScheduledTaskTriggerSource.Scheduler);
 
-                            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                            if (!failed)
                             {
-                                Name = "TaskCompleted",
-                                Action = ModelAction.Updated,
-                                Body = taskInfo
-                            });
+                                _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                                {
+                                    Name = "TaskCompleted",
+                                    Action = ModelAction.Updated,
+                                    Body = taskInfo
+                                });
+                            }
                         }
 
                         // Stagger consecutive/overdue task runs with jitter to prevent CPU/IO spikes

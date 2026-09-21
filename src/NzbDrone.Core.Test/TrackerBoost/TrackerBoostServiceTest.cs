@@ -459,6 +459,78 @@ public class TrackerBoostServiceTest
             list.Any(t => t.Id == 10 && (t.Status == TrackerHealthStatus.Alive || t.Status == TrackerHealthStatus.Slow))));
     }
 
+    [Test]
+    public void ProbeTrackerHealthAsync_throws_OperationCanceledException_when_token_is_cancelled()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await _service.ProbeTrackerHealthAsync(cts.Token);
+        });
+    }
+
+    [Test]
+    public void RunOptimizationCycleAsync_throws_OperationCanceledException_when_token_is_cancelled()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await _service.RunOptimizationCycleAsync(cts.Token);
+        });
+    }
+
+    [Test]
+    public void AddTracker_is_thread_safe_and_handles_concurrent_duplicate_urls()
+    {
+        const string url = "udp://tracker.concurrent-test.org:1337/announce";
+        TrackerBoostTracker inserted = null;
+
+        _trackerRepository.FindByUrl(url).Returns(_ => inserted);
+        _trackerRepository.Insert(Arg.Any<TrackerBoostTracker>())
+            .Returns(callInfo =>
+            {
+                var tr = callInfo.Arg<TrackerBoostTracker>();
+                tr.Id = 99;
+                inserted = tr;
+                return tr;
+            });
+
+        // Run 20 concurrent tasks trying to add the same tracker URL
+        var tasks = Enumerable.Range(0, 20)
+            .Select(_ => Task.Run(() => _service.AddTracker(url)))
+            .ToArray();
+
+        Task.WaitAll(tasks);
+
+        // Tracker should only be inserted once
+        _trackerRepository.Received(1).Insert(Arg.Any<TrackerBoostTracker>());
+    }
+
+    [Test]
+    public async Task StatusSummary_returns_thread_safe_timestamps()
+    {
+        TrackerBoostService.ResetMetricsAndHistory();
+
+        var summary = await _service.GetStatusSummaryAsync();
+        Assert.That(summary.LastScanTime, Is.Null);
+        Assert.That(summary.LastHarvestTime, Is.Null);
+
+        TrackerBoostService.LastScanTime = DateTime.UtcNow;
+        TrackerBoostService.LastHarvestTime = DateTime.UtcNow;
+
+        var updatedSummary = await _service.GetStatusSummaryAsync();
+        Assert.That(updatedSummary.LastScanTime, Is.Not.Null);
+        Assert.That(updatedSummary.LastHarvestTime, Is.Not.Null);
+
+        TrackerBoostService.ResetMetricsAndHistory();
+        var resetSummary = await _service.GetStatusSummaryAsync();
+        Assert.That(resetSummary.LastScanTime, Is.Null);
+    }
+
     private sealed class FakeHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
@@ -474,3 +546,4 @@ public class TrackerBoostServiceTest
         }
     }
 }
+

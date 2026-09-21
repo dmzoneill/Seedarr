@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
@@ -30,6 +31,15 @@ public class SystemControllerTasksTest
     {
         public int DefaultInterval => 15;
         public void Execute() { }
+    }
+
+    private class ThrowingScheduledTask : IScheduledTask
+    {
+        public int DefaultInterval => 15;
+        public void Execute()
+        {
+            throw new InvalidOperationException("Task failed deliberately");
+        }
     }
 
     [SetUp]
@@ -121,6 +131,66 @@ public class SystemControllerTasksTest
 
         Assert.That(result, Is.InstanceOf<ConflictObjectResult>());
         _commandQueueManager.DidNotReceive().Push(Arg.Any<ScheduledTaskCommand>(), Arg.Any<CommandTrigger>());
+    }
+
+    [Test]
+    public void ExecuteTask_returns_conflict_when_task_already_running_by_short_name()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 15,
+            LastExecution = DateTime.UtcNow
+        };
+        _taskManager.GetAll().Returns(new List<ScheduledTask> { task });
+        _taskManager.IsRunning(task.TypeName).Returns(false);
+        _taskManager.IsRunning(nameof(SampleScheduledTask)).Returns(true);
+
+        var result = _controller.ExecuteTask(1);
+
+        Assert.That(result, Is.InstanceOf<ConflictObjectResult>());
+        _commandQueueManager.DidNotReceive().Push(Arg.Any<ScheduledTaskCommand>(), Arg.Any<CommandTrigger>());
+    }
+
+    [Test]
+    public void ExecuteTask_direct_execution_logs_and_broadcasts_failure_when_task_throws()
+    {
+        var throwingTask = new ThrowingScheduledTask();
+        var controller = new SystemController(
+            _taskManager,
+            new[] { throwingTask },
+            null,
+            _appFolderInfo,
+            _lifetime,
+            _configService,
+            signalRBroadcaster: _signalRBroadcaster);
+
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = typeof(ThrowingScheduledTask).FullName,
+            Interval = 15,
+            LastExecution = DateTime.UtcNow
+        };
+        _taskManager.GetAll().Returns(new List<ScheduledTask> { task });
+        _taskManager.IsRunning(Arg.Any<string>()).Returns(false);
+
+        using var finishedSignal = new ManualResetEventSlim();
+        _taskManager.When(x => x.RecordTaskFinished(Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<ScheduledTaskTriggerSource>()))
+            .Do(_ => finishedSignal.Set());
+
+        var result = controller.ExecuteTask(1);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(finishedSignal.Wait(TimeSpan.FromSeconds(5)), Is.True, "Background task did not finish in time");
+
+        _taskManager.Received(1).RecordTaskStarted(task.TypeName, ScheduledTaskTriggerSource.Manual);
+        _taskManager.Received(1).RecordTaskFailed(task.TypeName, Arg.Any<DateTime>(), Arg.Is<string>(s => s.Contains("Task failed deliberately")));
+        _taskManager.Received(1).RecordTaskFinished(task.TypeName, Arg.Any<DateTime>(), ScheduledTaskTriggerSource.Manual);
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskFailed"));
+        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskCompleted"));
     }
 
     [Test]
