@@ -71,6 +71,58 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 
 ---
 
+## ⚡ Quick Start
+
+Seedarr container images are available on both **Docker Hub** and **GitHub Container Registry (GHCR)**.
+
+### Run with Podman / Docker
+
+**Option 1: Docker Hub**
+```bash
+podman run -d \
+  --name seedarr \
+  -p 9898:9898 \
+  -v seedarr-config:/config \
+  -v seedarr-data:/data \
+  --restart unless-stopped \
+  feeditout/seedarr:latest
+```
+
+**Option 2: GitHub Container Registry (GHCR)**
+```bash
+podman run -d \
+  --name seedarr \
+  -p 9898:9898 \
+  -v seedarr-config:/config \
+  -v seedarr-data:/data \
+  --restart unless-stopped \
+  ghcr.io/dmzoneill/seedarr:latest
+```
+
+### Container Compose (`compose.yaml` / `podman-compose.yml`)
+
+```yaml
+services:
+  seedarr:
+    # Option 1: Docker Hub
+    image: feeditout/seedarr:latest
+    # Option 2: GitHub Container Registry (GHCR)
+    # image: ghcr.io/dmzoneill/seedarr:latest
+    container_name: seedarr
+    restart: unless-stopped
+    ports:
+      - "9898:9898"
+    volumes:
+      - /opt/seedarr/config:/config
+      - /opt/seedarr/data:/data
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+```
+
+---
+
 ## Documentation & Changelog
 
 - [Changelog & Version History](CHANGELOG.md)
