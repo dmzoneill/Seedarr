@@ -215,7 +215,7 @@ public class RssRuleController : Controller
         return Ok(new { success = true, grabbedCount });
     }
 
-    internal static void ResetSyncCooldown()
+    public static void ResetSyncCooldown()
     {
         lock (_syncLock)
         {

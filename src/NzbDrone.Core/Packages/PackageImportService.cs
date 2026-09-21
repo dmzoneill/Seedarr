@@ -242,11 +242,11 @@ public class PackageImportService : IPackageImportService
                         }
                     }
 
-                    if (entry.ModificationTime.HasValue)
+                    if (entry.ModificationTime != default)
                     {
                         try
                         {
-                            File.SetLastWriteTimeUtc(destinationPath, entry.ModificationTime.Value.UtcDateTime);
+                            File.SetLastWriteTimeUtc(destinationPath, entry.ModificationTime.UtcDateTime);
                         }
                         catch
                         {

@@ -308,21 +308,21 @@ public class SwarmAvailabilityService : ISwarmAvailabilityService
         return false;
     }
 
-    public double CalculateAvailability(Torrent torrent, IEnumerable<PeerConnection> peers, bool[] verifiedPieces = null)
+    double ISwarmAvailabilityService.CalculateAvailability(Torrent torrent, IEnumerable<PeerConnection> peers, bool[] verifiedPieces)
         => CalculateAvailability(torrent, peers, verifiedPieces);
 
-    public double CalculateAvailability(int pieceCount, bool[] localPieces, IEnumerable<PeerConnection> peers)
+    double ISwarmAvailabilityService.CalculateAvailability(int pieceCount, bool[] localPieces, IEnumerable<PeerConnection> peers)
         => CalculateAvailability(pieceCount, localPieces, peers);
 
-    public double CalculateAvailability(int pieceCount, bool[] localPieces, IReadOnlyList<int> peerPieceFrequencies)
+    double ISwarmAvailabilityService.CalculateAvailability(int pieceCount, bool[] localPieces, IReadOnlyList<int> peerPieceFrequencies)
         => CalculateAvailability(pieceCount, localPieces, peerPieceFrequencies);
 
-    public (double Availability, bool IsExtinct, int ExtinctPieceCount) CalculateSwarmAvailability(
+    (double Availability, bool IsExtinct, int ExtinctPieceCount) ISwarmAvailabilityService.CalculateSwarmAvailability(
         Torrent torrent,
         IEnumerable<PeerConnection> peers,
-        bool[] verifiedPieces = null)
+        bool[] verifiedPieces)
         => CalculateSwarmAvailability(torrent, peers, verifiedPieces);
 
-    public double CalculateCumulativeAvailability(IEnumerable<PeerConnection> peers, int pieceCount)
+    double ISwarmAvailabilityService.CalculateCumulativeAvailability(IEnumerable<PeerConnection> peers, int pieceCount)
         => CalculateCumulativeAvailability(peers, pieceCount);
 }

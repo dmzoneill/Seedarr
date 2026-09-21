@@ -4,13 +4,13 @@ namespace NzbDrone.Core.Simulation.ClientBehavior;
 
 public class TorrentClientSession
 {
-    public string ProfileName { get; init; }
+    public string ProfileName { get; set; }
 
-    public string PeerId { get; init; }
+    public string PeerId { get; set; }
 
-    public string AnnounceKey { get; init; }
+    public string AnnounceKey { get; set; }
 
-    public DateTime CreatedAt { get; init; }
+    public DateTime CreatedAt { get; set; }
 
-    public IClientProfile Profile { get; init; }
+    public IClientProfile Profile { get; set; }
 }

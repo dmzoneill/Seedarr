@@ -7,6 +7,7 @@ using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Packages;
+using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 

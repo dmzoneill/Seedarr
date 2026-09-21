@@ -4427,7 +4427,7 @@ public class PeerServerTest
     {
         _configService.ForceProxy.Returns(true);
 
-        var conn = Substitute.For<Transport.IUtpConnection>();
+        var conn = Substitute.For<IUtpConnection>();
         conn.IsConnected.Returns(true);
         conn.RemoteEndPoint.Returns(new IPEndPoint(IPAddress.Loopback, 12345));
 
@@ -4559,7 +4559,7 @@ public class PeerServerTest
             _multiTracker,
             proxySettingsProvider: proxySettingsProvider);
 
-        var conn = Substitute.For<Transport.IUtpConnection>();
+        var conn = Substitute.For<IUtpConnection>();
         conn.IsConnected.Returns(true);
         conn.RemoteEndPoint.Returns(new IPEndPoint(IPAddress.Loopback, 12345));
 

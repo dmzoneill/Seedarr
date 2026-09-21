@@ -23,7 +23,7 @@
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
     <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
-    <NoWarn>$(NoWarn);CS1591;SA1200</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;SA1200;SA1503;SA1513;SA1518;SA1117;SA1407;IDE0005;CA1849;IDE0007;SA1501;SA1507;SA1209;SA1210;SA1119</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>

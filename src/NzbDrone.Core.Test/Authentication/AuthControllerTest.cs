@@ -13,6 +13,7 @@ using NUnit.Framework;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Api.V1.Auth;
+using Roles = NzbDrone.Core.Authentication.Roles;
 
 namespace NzbDrone.Core.Test.Authentication;
 
@@ -651,8 +652,7 @@ public class AuthControllerTest
     public async Task Login_WhenNonAdminCredentialsValid_AssignsReadOnlyRole()
     {
         _configFileProvider.AuthenticationEnabled.Returns(true);
-        _configFileProvider.Password.Returns("shared-password");
-        _configFileProvider.ApiKey.Returns("some-api-key");
+        _configFileProvider.ApiKey.Returns("shared-password");
 
         var httpContext = new DefaultHttpContext();
         var authService = Substitute.For<IAuthenticationService>();

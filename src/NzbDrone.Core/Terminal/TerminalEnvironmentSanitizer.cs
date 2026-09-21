@@ -131,6 +131,11 @@ public static class TerminalEnvironmentSanitizer
         return result;
     }
 
+    public static Dictionary<string, string> Sanitize(Dictionary<string, string> environment)
+    {
+        return Sanitize((IDictionary<string, string>)environment);
+    }
+
     public static Dictionary<string, string> Sanitize(IDictionary environment)
     {
         var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -149,7 +154,7 @@ public static class TerminalEnvironmentSanitizer
             }
         }
 
-        return Sanitize(dict);
+        return Sanitize((IDictionary<string, string>)dict);
     }
 
     public static Dictionary<string, string> GetSanitizedEnvironment(IDictionary<string, string> customOverrides = null)

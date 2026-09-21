@@ -101,11 +101,6 @@ public class NewznabIndexer : IIndexer
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public NewznabIndexer(IProxySettingsProvider proxySettingsProvider, IIndexerStatusService indexerStatusService = null)
-        : this(null, indexerStatusService, proxySettingsProvider)
-    {
-    }
-
     private HttpClient GetHttpClient()
     {
         if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)

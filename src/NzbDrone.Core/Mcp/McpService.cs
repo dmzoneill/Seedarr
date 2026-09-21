@@ -632,79 +632,79 @@ public class McpService : IMcpService
         switch (uri)
         {
             case "seedarr://torrents":
-            {
-                var torrents = _torrentService.GetAll() ?? new List<Torrent>();
-                var json = JsonSerializer.Serialize(torrents.Select(t => new
                 {
-                    id = t.Id,
-                    name = t.Name,
-                    infoHash = t.InfoHash,
-                    status = t.Status.ToString(),
-                    size = t.TotalSize,
-                    ratio = t.Ratio,
-                    progress = t.Progress,
-                    uploadSpeed = t.UploadSpeed,
-                    downloadSpeed = t.DownloadSpeed,
-                    seeders = t.Seeders,
-                    leechers = t.Leechers
-                }), McpJsonOptions.Default);
+                    var torrents = _torrentService.GetAll() ?? new List<Torrent>();
+                    var json = JsonSerializer.Serialize(torrents.Select(t => new
+                    {
+                        id = t.Id,
+                        name = t.Name,
+                        infoHash = t.InfoHash,
+                        status = t.Status.ToString(),
+                        size = t.TotalSize,
+                        ratio = t.Ratio,
+                        progress = t.Progress,
+                        uploadSpeed = t.UploadSpeed,
+                        downloadSpeed = t.DownloadSpeed,
+                        seeders = t.Seeders,
+                        leechers = t.Leechers
+                    }), McpJsonOptions.Default);
 
-                return JsonRpcResponse.Success(id, new McpResourceReadResult
-                {
-                    Contents = new List<McpResourceContent>
+                    return JsonRpcResponse.Success(id, new McpResourceReadResult
+                    {
+                        Contents = new List<McpResourceContent>
                     {
                         new() { Uri = uri, MimeType = "application/json", Text = json }
                     }
-                });
-            }
+                    });
+                }
 
             case "seedarr://system/status":
-            {
-                var health = _healthCheckService?.PerformChecks()?.Select(h => new
                 {
-                    source = h.Source,
-                    type = h.Type.ToString(),
-                    message = h.Message
-                }).ToList() ?? (object)Array.Empty<object>();
+                    var health = _healthCheckService?.PerformChecks()?.Select(h => new
+                    {
+                        source = h.Source,
+                        type = h.Type.ToString(),
+                        message = h.Message
+                    }).ToList() ?? (object)Array.Empty<object>();
 
-                var diskSpace = _diskSpaceService?.GetDiskSpace()?.Select(d => new
-                {
-                    path = d.Path,
-                    freeSpace = d.FreeSpace,
-                    totalSpace = d.TotalSpace
-                }).ToList() ?? (object)Array.Empty<object>();
+                    var diskSpace = _diskSpaceService?.GetDiskSpace()?.Select(d => new
+                    {
+                        path = d.Path,
+                        freeSpace = d.FreeSpace,
+                        totalSpace = d.TotalSpace
+                    }).ToList() ?? (object)Array.Empty<object>();
 
-                var json = JsonSerializer.Serialize(new { health, diskSpace }, McpJsonOptions.Default);
+                    var json = JsonSerializer.Serialize(new { health, diskSpace }, McpJsonOptions.Default);
 
-                return JsonRpcResponse.Success(id, new McpResourceReadResult
-                {
-                    Contents = new List<McpResourceContent>
+                    return JsonRpcResponse.Success(id, new McpResourceReadResult
+                    {
+                        Contents = new List<McpResourceContent>
                     {
                         new() { Uri = uri, MimeType = "application/json", Text = json }
                     }
-                });
-            }
+                    });
+                }
 
             case "seedarr://logs/recent":
-            {
-                var logs = RingBufferTarget.Instance?.GetEntries(100, LogLevel.Trace)?.Select(l => new
                 {
-                    time = l.Time.ToString("O"),
-                    level = l.Level,
-                    logger = l.Logger,
-                    message = l.Message
-                }).ToList() ?? (object)Array.Empty<object>();
+                    var logs = RingBufferTarget.Instance?.GetEntries(100, LogLevel.Trace)?.Select(l => new
+                    {
+                        time = l.Time.ToString("O"),
+                        level = l.Level,
+                        logger = l.Logger,
+                        message = l.Message
+                    }).ToList() ?? (object)Array.Empty<object>();
 
-                var json = JsonSerializer.Serialize(logs, McpJsonOptions.Default);
+                    var json = JsonSerializer.Serialize(logs, McpJsonOptions.Default);
 
-                return JsonRpcResponse.Success(id, new McpResourceReadResult
-                {
-                    Contents = new List<McpResourceContent>
+                    return JsonRpcResponse.Success(id, new McpResourceReadResult
+                    {
+                        Contents = new List<McpResourceContent>
                     {
                         new() { Uri = uri, MimeType = "application/json", Text = json }
                     }
-                });
-            }
+                    });
+                }
 
             default:
                 return JsonRpcResponse.CreateError(id, -32602, $"Resource '{uri}' not found.");
@@ -769,53 +769,53 @@ public class McpService : IMcpService
         switch (promptName)
         {
             case "swarm_diagnosis":
-            {
-                arguments.TryGetValue("torrent_id", out var tid);
-                var text = string.IsNullOrWhiteSpace(tid)
-                    ? "You are diagnosing BitTorrent swarm health across all torrents in Seedarr. Analyze seed/peer ratios, unchoke limits, tracker scrape health, and DHT connectivity to identify stalled downloads and swarm bottlenecks. Recommend remediation steps."
-                    : $"You are diagnosing the BitTorrent swarm for torrent '{tid}' in Seedarr. Analyze peer connectivity, tracker responses, piece availability, and choke/unchoke dynamics to resolve download/seeding stalls.";
-
-                return JsonRpcResponse.Success(id, new McpPromptGetResult
                 {
-                    Description = "Swarm diagnosis template",
-                    Messages = new List<McpPromptMessage>
+                    arguments.TryGetValue("torrent_id", out var tid);
+                    var text = string.IsNullOrWhiteSpace(tid)
+                        ? "You are diagnosing BitTorrent swarm health across all torrents in Seedarr. Analyze seed/peer ratios, unchoke limits, tracker scrape health, and DHT connectivity to identify stalled downloads and swarm bottlenecks. Recommend remediation steps."
+                        : $"You are diagnosing the BitTorrent swarm for torrent '{tid}' in Seedarr. Analyze peer connectivity, tracker responses, piece availability, and choke/unchoke dynamics to resolve download/seeding stalls.";
+
+                    return JsonRpcResponse.Success(id, new McpPromptGetResult
+                    {
+                        Description = "Swarm diagnosis template",
+                        Messages = new List<McpPromptMessage>
                     {
                         new() { Role = "user", Content = new McpContent { Type = "text", Text = text } }
                     }
-                });
-            }
+                    });
+                }
 
             case "ratio_balancing":
-            {
-                arguments.TryGetValue("target_ratio", out var target);
-                var tr = string.IsNullOrWhiteSpace(target) ? "1.0" : target;
-                var text = $"You are optimizing seeding bandwidth and ratio balancing in Seedarr for a target ratio of {tr}. Review torrent seeding times, upload limits, and tracker requirements. Recommend which torrents to pause or re-prioritize to maximize upload efficiency.";
-
-                return JsonRpcResponse.Success(id, new McpPromptGetResult
                 {
-                    Description = "Ratio balancing template",
-                    Messages = new List<McpPromptMessage>
+                    arguments.TryGetValue("target_ratio", out var target);
+                    var tr = string.IsNullOrWhiteSpace(target) ? "1.0" : target;
+                    var text = $"You are optimizing seeding bandwidth and ratio balancing in Seedarr for a target ratio of {tr}. Review torrent seeding times, upload limits, and tracker requirements. Recommend which torrents to pause or re-prioritize to maximize upload efficiency.";
+
+                    return JsonRpcResponse.Success(id, new McpPromptGetResult
+                    {
+                        Description = "Ratio balancing template",
+                        Messages = new List<McpPromptMessage>
                     {
                         new() { Role = "user", Content = new McpContent { Type = "text", Text = text } }
                     }
-                });
-            }
+                    });
+                }
 
             case "arr_config":
-            {
-                arguments.TryGetValue("arr_type", out var arr);
-                var at = string.IsNullOrWhiteSpace(arr) ? "Radarr/Sonarr" : arr;
-                var text = $"You are an expert configuring integration between Seedarr and {at}. Detail the required download client connection settings (host, port, API credentials, category paths, and remote path mappings), and verify webhook notifications for automated grabbed and completed release handling.";
-
-                return JsonRpcResponse.Success(id, new McpPromptGetResult
                 {
-                    Description = "Arr integration config template",
-                    Messages = new List<McpPromptMessage>
+                    arguments.TryGetValue("arr_type", out var arr);
+                    var at = string.IsNullOrWhiteSpace(arr) ? "Radarr/Sonarr" : arr;
+                    var text = $"You are an expert configuring integration between Seedarr and {at}. Detail the required download client connection settings (host, port, API credentials, category paths, and remote path mappings), and verify webhook notifications for automated grabbed and completed release handling.";
+
+                    return JsonRpcResponse.Success(id, new McpPromptGetResult
+                    {
+                        Description = "Arr integration config template",
+                        Messages = new List<McpPromptMessage>
                     {
                         new() { Role = "user", Content = new McpContent { Type = "text", Text = text } }
                     }
-                });
-            }
+                    });
+                }
 
             default:
                 return JsonRpcResponse.CreateError(id, -32602, $"Prompt '{promptName}' not found.");

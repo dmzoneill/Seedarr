@@ -468,9 +468,14 @@ public class MultiTrackerManager : IMultiTrackerManager
             ? _configService.FailoverMaxConsecutiveFailures
             : 5;
 
-        if (state.IsDisabled || Volatile.Read(ref state.ConsecutiveFailures) >= maxFailures)
+        if (state.IsDisabled)
         {
             return true;
+        }
+
+        if (Volatile.Read(ref state.ConsecutiveFailures) < maxFailures)
+        {
+            return false;
         }
 
         return DateTime.UtcNow < state.BackoffUntil;

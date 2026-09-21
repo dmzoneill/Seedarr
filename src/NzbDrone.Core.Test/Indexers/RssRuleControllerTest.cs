@@ -324,9 +324,10 @@ public class RssRuleControllerTest
 
         Assert.That(response.Result, Is.InstanceOf<OkObjectResult>());
         var okResult = (OkObjectResult)response.Result;
-        dynamic value = okResult.Value;
-        Assert.That((bool)value.success, Is.True);
-        Assert.That((int)value.grabbedCount, Is.EqualTo(5));
+        var successProp = okResult.Value?.GetType().GetProperty("success")?.GetValue(okResult.Value);
+        var grabbedCountProp = okResult.Value?.GetType().GetProperty("grabbedCount")?.GetValue(okResult.Value);
+        Assert.That(successProp, Is.EqualTo(true));
+        Assert.That(grabbedCountProp, Is.EqualTo(5));
 
         rssSyncService.Received(1).Sync(true);
     }

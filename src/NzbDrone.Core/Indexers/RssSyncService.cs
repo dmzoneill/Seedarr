@@ -315,7 +315,7 @@ public class RssSyncService : IRssSyncService
         {
             _logger.Info("Starting RSS sync cycle (manual: {0})", isManual);
 
-            var indexers = _indexerFactory?.All() ?? _indexerRepository?.All();
+            var indexers = (_indexerFactory?.All() ?? _indexerRepository?.All())?.ToList();
             if (indexers == null || indexers.Count == 0)
             {
                 _logger.Debug("No indexers configured for RSS sync");

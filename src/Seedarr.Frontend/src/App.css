@@ -4612,8 +4612,8 @@ html[dir="rtl"] .topbar-getting-started {
 }
 
 /* ============================================
-   Column Customizer Modal
-   ============================================ */
+  Column Customizer Modal
+============================================ */
 
 .column-customizer-modal {
   display: flex;
@@ -4980,8 +4980,8 @@ html[dir="rtl"] .topbar-getting-started {
 }
 
 /* ============================================
-   Terminal Console Styles
-   ============================================ */
+  Terminal Console Styles
+============================================ */
 .terminal-container {
   display: flex;
   flex-direction: column;
