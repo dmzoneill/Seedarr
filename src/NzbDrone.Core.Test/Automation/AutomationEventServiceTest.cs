@@ -128,4 +128,100 @@ public class AutomationEventServiceTest
 
         _automationService.Received(1).ExecuteScript(script, null);
     }
+
+    [Test]
+    public void DispatchTrigger_should_query_scriptRepository_GetByTrigger_and_not_call_GetAll()
+    {
+        var scriptRepo = Substitute.For<IAutomationScriptRepository>();
+        var subject = new AutomationEventService(_automationService, scriptRepository: scriptRepo);
+
+        var script = new AutomationScript
+        {
+            Id = 1,
+            Name = "On Download Completed",
+            Trigger = AutomationTrigger.TorrentCompleted,
+            IsEnabled = true
+        };
+
+        scriptRepo.GetByTrigger(AutomationTrigger.TorrentCompleted)
+            .Returns(new List<AutomationScript> { script });
+
+        var torrent = new Torrent { Id = 10, Name = "Test Torrent" };
+
+        subject.Handle(new TorrentDownloadCompletedEvent(torrent));
+
+        scriptRepo.Received(1).GetByTrigger(AutomationTrigger.TorrentCompleted);
+        _automationService.DidNotReceive().GetAll();
+        _automationService.Received(1).ExecuteScript(script, torrent);
+    }
+
+    [Test]
+    public void DispatchTrigger_should_filter_scripts_by_target_categories()
+    {
+        var scriptRepo = Substitute.For<IAutomationScriptRepository>();
+        var subject = new AutomationEventService(_automationService, scriptRepository: scriptRepo);
+
+        var matchingScript = new AutomationScript
+        {
+            Id = 1,
+            Name = "Matches Category",
+            Trigger = AutomationTrigger.TorrentAdded,
+            IsEnabled = true,
+            TargetCategories = new List<string> { "Movies", "Anime" }
+        };
+
+        var nonMatchingScript = new AutomationScript
+        {
+            Id = 2,
+            Name = "Different Category",
+            Trigger = AutomationTrigger.TorrentAdded,
+            IsEnabled = true,
+            TargetCategories = new List<string> { "TV" }
+        };
+
+        scriptRepo.GetByTrigger(AutomationTrigger.TorrentAdded)
+            .Returns(new List<AutomationScript> { matchingScript, nonMatchingScript });
+
+        var torrent = new Torrent { Id = 10, Name = "Test Torrent", Category = "movies" };
+
+        subject.Handle(new TorrentAddedEvent(torrent));
+
+        _automationService.Received(1).ExecuteScript(matchingScript, torrent);
+        _automationService.DidNotReceive().ExecuteScript(nonMatchingScript, torrent);
+    }
+
+    [Test]
+    public void DispatchTrigger_should_filter_scripts_by_target_tags()
+    {
+        var scriptRepo = Substitute.For<IAutomationScriptRepository>();
+        var subject = new AutomationEventService(_automationService, scriptRepository: scriptRepo);
+
+        var matchingScript = new AutomationScript
+        {
+            Id = 1,
+            Name = "Matches Tag",
+            Trigger = AutomationTrigger.TorrentAdded,
+            IsEnabled = true,
+            TargetTagIds = new List<int> { 5, 10 }
+        };
+
+        var nonMatchingScript = new AutomationScript
+        {
+            Id = 2,
+            Name = "Different Tag",
+            Trigger = AutomationTrigger.TorrentAdded,
+            IsEnabled = true,
+            TargetTagIds = new List<int> { 20 }
+        };
+
+        scriptRepo.GetByTrigger(AutomationTrigger.TorrentAdded)
+            .Returns(new List<AutomationScript> { matchingScript, nonMatchingScript });
+
+        var torrent = new Torrent { Id = 10, Name = "Test Torrent", TagIds = new List<int> { 5, 99 } };
+
+        subject.Handle(new TorrentAddedEvent(torrent));
+
+        _automationService.Received(1).ExecuteScript(matchingScript, torrent);
+        _automationService.DidNotReceive().ExecuteScript(nonMatchingScript, torrent);
+    }
 }

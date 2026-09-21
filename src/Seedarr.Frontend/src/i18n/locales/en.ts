@@ -927,7 +927,11 @@ const en = {
           insertTorrentJsonPayload: "✨ Insert Torrent JSON Payload",
           registerVariable: "Register Variable",
           timeoutS: "Timeout (s)",
-          deleteAction: "Delete Action"
+          deleteAction: "Delete Action",
+          targetCategories: "Target Categories",
+          targetCategoriesHint: "Filter by categories (leave empty to apply to all)",
+          targetTags: "Target Tags",
+          targetTagsHint: "Filter by tags (leave empty to apply to all)"
     }
 }
 };

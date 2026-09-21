@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Automation;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
@@ -18,6 +19,7 @@ public class CategoryServiceTest
     private ICategoryRepository _repository;
     private IEventAggregator _eventAggregator;
     private ITorrentRepository _torrentRepository;
+    private IAutomationScriptRepository _automationScriptRepository;
     private CategoryService _subject;
 
     [SetUp]
@@ -26,7 +28,8 @@ public class CategoryServiceTest
         _repository = Substitute.For<ICategoryRepository>();
         _eventAggregator = Substitute.For<IEventAggregator>();
         _torrentRepository = Substitute.For<ITorrentRepository>();
-        _subject = new CategoryService(_repository, _eventAggregator, _torrentRepository);
+        _automationScriptRepository = Substitute.For<IAutomationScriptRepository>();
+        _subject = new CategoryService(_repository, _eventAggregator, _torrentRepository, automationScriptRepository: _automationScriptRepository);
     }
 
     [Test]
@@ -739,5 +742,77 @@ public class CategoryServiceTest
         Assert.That(result.TargetSeedTimeMinutes, Is.EqualTo(240));
         Assert.That(result.AutoStop, Is.False);
         _repository.Received(1).Update(category);
+    }
+
+    [Test]
+    public void Update_renamed_category_updates_matching_names_in_automation_scripts()
+    {
+        var oldCat = new Category { Id = 1, Name = "Movies", IsDefault = false };
+        var newCat = new Category { Id = 1, Name = "Films", IsDefault = false };
+
+        var script1 = new AutomationScript
+        {
+            Id = 1,
+            Name = "Movie Pipeline",
+            TargetCategories = new List<string> { "Movies", "Anime" }
+        };
+        var script2 = new AutomationScript
+        {
+            Id = 2,
+            Name = "Case Insensitive Pipeline",
+            TargetCategories = new List<string> { "movies" }
+        };
+        var script3 = new AutomationScript
+        {
+            Id = 3,
+            Name = "TV Pipeline",
+            TargetCategories = new List<string> { "TV" }
+        };
+
+        _repository.Get(1).Returns(oldCat);
+        _repository.Update(newCat).Returns(newCat);
+        _automationScriptRepository.All().Returns(new List<AutomationScript> { script1, script2, script3 });
+
+        _subject.Update(newCat);
+
+        _automationScriptRepository.Received(1).UpdateMany(Arg.Is<IEnumerable<AutomationScript>>(scripts =>
+            scripts.Count() == 2 &&
+            scripts.Any(s => s.Id == 1 && s.TargetCategories.Contains("Films") && !s.TargetCategories.Contains("Movies") && s.TargetCategories.Contains("Anime")) &&
+            scripts.Any(s => s.Id == 2 && s.TargetCategories.Contains("Films") && !s.TargetCategories.Contains("movies"))));
+    }
+
+    [Test]
+    public void Delete_removes_matching_categories_from_automation_scripts()
+    {
+        var cat = new Category { Id = 5, Name = "Anime", IsDefault = false };
+
+        var script1 = new AutomationScript
+        {
+            Id = 1,
+            Name = "Anime Pipeline",
+            TargetCategories = new List<string> { "Anime", "Movies" }
+        };
+        var script2 = new AutomationScript
+        {
+            Id = 2,
+            Name = "Only Anime Pipeline",
+            TargetCategories = new List<string> { "anime" }
+        };
+        var script3 = new AutomationScript
+        {
+            Id = 3,
+            Name = "Unrelated Pipeline",
+            TargetCategories = new List<string> { "TV" }
+        };
+
+        _repository.Get(5).Returns(cat);
+        _automationScriptRepository.All().Returns(new List<AutomationScript> { script1, script2, script3 });
+
+        _subject.Delete(5);
+
+        _automationScriptRepository.Received(1).UpdateMany(Arg.Is<IEnumerable<AutomationScript>>(scripts =>
+            scripts.Count() == 2 &&
+            scripts.Any(s => s.Id == 1 && !s.TargetCategories.Contains("Anime") && s.TargetCategories.Contains("Movies")) &&
+            scripts.Any(s => s.Id == 2 && s.TargetCategories.Count == 0)));
     }
 }
