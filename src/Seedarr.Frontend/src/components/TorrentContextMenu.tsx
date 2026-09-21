@@ -793,23 +793,44 @@ function TorrentContextMenu({
 
             {/* Export .torrent */}
             {ct && (
-              <button
-                className="context-menu-item"
-                onClick={() => {
-                  effectiveTorrents.forEach((t) => {
+              <>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    effectiveTorrents.forEach((t) => {
+                      const link = document.createElement("a");
+                      link.href = `/api/v1/torrent/${t.id}/torrent`;
+                      link.download = `${t.name}.torrent`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    });
+                    onClose();
+                  }}
+                >
+                  {t("torrents.exportTorrent", undefined, "Export .torrent")}
+                  {countSuffix}
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    const ids = effectiveTorrents.map((t) => t.id).join(",");
                     const link = document.createElement("a");
-                    link.href = `/api/v1/torrent/${t.id}/torrent`;
-                    link.download = `${t.name}.torrent`;
+                    link.href = `/api/v1/packages/export?torrentIds=${ids}`;
+                    link.download =
+                      effectiveTorrents.length === 1
+                        ? `${effectiveTorrents[0].name}.seedarr`
+                        : "package.seedarr";
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                  });
-                  onClose();
-                }}
-              >
-                {t("torrents.exportTorrent", undefined, "Export .torrent")}
-                {countSuffix}
-              </button>
+                    onClose();
+                  }}
+                >
+                  📦 {t("torrents.exportPackage", undefined, "Export Package")}
+                  {countSuffix}
+                </button>
+              </>
             )}
 
             {canMutateTorrents && (

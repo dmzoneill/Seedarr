@@ -162,6 +162,8 @@ const en = {
     setLocation: "Set Location...",
     setLabel: "Set Label...",
     exportTorrent: "Export .torrent",
+    exportPackage: "Export Package",
+    importPackage: "Import Package",
     superSeeding: "Super Seeding",
     sequentialDownload: "Sequential Download",
     removeTorrent: "Remove Torrent",

@@ -1565,3 +1565,27 @@ export interface UpdateScheduledTaskRequest {
   interval: number;
   isEnabled: boolean;
 }
+
+export interface PackageImportTorrentSummary {
+  id: number;
+  name: string;
+  infoHash: string;
+  category?: string;
+  tags?: string[];
+  totalSize: number;
+  isDuplicate: boolean;
+  status?: string;
+  savePath?: string;
+}
+
+export interface PackageImportResult {
+  success: boolean;
+  importedTorrentsCount: number;
+  skippedDuplicatesCount: number;
+  torrents: PackageImportTorrentSummary[];
+  skippedDuplicates: string[];
+  extractedFiles: string[];
+  totalBytesExtracted: number;
+  message?: string;
+}
+

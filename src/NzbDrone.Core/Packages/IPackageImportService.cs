@@ -10,11 +10,16 @@ public class PackageImportOptions
 {
     public string TargetRootDir { get; set; }
     public string DestinationPath { get; set; }
+    public string DestinationRoot { get; set; }
+    public string SourcePrefix { get; set; }
+    public string DestinationPrefix { get; set; }
+    public Dictionary<string, string> PathRemappings { get; set; } = new();
     public long? MaxUncompressedBytes { get; set; }
     public double MaxCompressionRatio { get; set; } = 50.0;
     public long MinBytesForRatioCheck { get; set; } = 1024 * 1024; // 1 MiB
     public bool RestoreTorrents { get; set; } = true;
     public bool SkipDuplicates { get; set; } = true;
+    public bool VerifyFastResume { get; set; } = true;
 }
 
 public class PackageImportResult
@@ -38,6 +43,8 @@ public class PackageImportTorrentSummary
     public List<string> Tags { get; set; } = new();
     public long TotalSize { get; set; }
     public bool IsDuplicate { get; set; }
+    public string Status { get; set; }
+    public string SavePath { get; set; }
 }
 
 public interface IPackageImportService

@@ -13,6 +13,7 @@ import {
   FilterIcon,
   SlidersIcon,
   ColumnsIcon,
+  UploadIcon,
 } from "../../components/icons/UIIcons";
 import { ViewMode } from "./types";
 import { ColumnCustomizerModal } from "./ColumnCustomizerModal";
@@ -36,6 +37,7 @@ interface TorrentToolbarProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   onAddTorrent: () => void;
+  onImportPackage?: () => void;
   onSearchIndexers?: () => void;
   onStartAll: () => void;
   onStopAll: () => void;
@@ -75,6 +77,7 @@ export function TorrentToolbar({
   viewMode,
   onViewModeChange,
   onAddTorrent,
+  onImportPackage,
   onSearchIndexers,
   onStartAll,
   onStopAll,
@@ -306,6 +309,22 @@ export function TorrentToolbar({
               <button className="btn btn-success" onClick={onAddTorrent}>
                 <PlusIcon size={13} />{" "}
                 {t("torrents.addTorrent", undefined, "Add Torrent")}
+              </button>
+            )}
+            {(canAddTorrent || canMutateTorrents) && onImportPackage && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={onImportPackage}
+                title={t("torrents.importPackage", undefined, "Import Package")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <UploadIcon size={13} />{" "}
+                <span>{t("torrents.importPackage", undefined, "Import Package")}</span>
               </button>
             )}
             {onSearchIndexers && (

@@ -149,7 +149,10 @@ public class PackageController : ControllerBase
     [HttpPost("/api/v1/package/import")]
     public async Task<IActionResult> Import(
         IFormFile file = null,
-        [FromQuery] string destinationPath = null)
+        [FromQuery] string destinationPath = null,
+        [FromQuery] string destinationRoot = null,
+        [FromQuery] string sourcePrefix = null,
+        [FromQuery] string destinationPrefix = null)
     {
         if (_torrentPackageService == null && _packageImportService == null)
         {
@@ -178,9 +181,17 @@ public class PackageController : ControllerBase
 
         try
         {
+            var formDestPath = Request?.HasFormContentType == true ? Request.Form["destinationPath"].FirstOrDefault() : null;
+            var formDestRoot = Request?.HasFormContentType == true ? Request.Form["destinationRoot"].FirstOrDefault() : null;
+            var formSrcPrefix = Request?.HasFormContentType == true ? Request.Form["sourcePrefix"].FirstOrDefault() : null;
+            var formDstPrefix = Request?.HasFormContentType == true ? Request.Form["destinationPrefix"].FirstOrDefault() : null;
+
             var options = new PackageImportOptions
             {
-                DestinationPath = destinationPath
+                DestinationPath = !string.IsNullOrWhiteSpace(destinationPath) ? destinationPath : formDestPath,
+                DestinationRoot = !string.IsNullOrWhiteSpace(destinationRoot) ? destinationRoot : formDestRoot,
+                SourcePrefix = !string.IsNullOrWhiteSpace(sourcePrefix) ? sourcePrefix : formSrcPrefix,
+                DestinationPrefix = !string.IsNullOrWhiteSpace(destinationPrefix) ? destinationPrefix : formDstPrefix,
             };
 
             var cancellationToken = HttpContext?.RequestAborted ?? default;
