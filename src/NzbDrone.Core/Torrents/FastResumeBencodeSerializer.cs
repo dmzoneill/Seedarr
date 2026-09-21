@@ -195,9 +195,21 @@ public class FastResumeBencodeSerializer : IFastResumeBencodeSerializer
 
         // 10. save_path
         dict["save_path"] = new BString(data.SavePath ?? string.Empty);
+        dict["qBt-savePath"] = new BString(data.SavePath ?? string.Empty);
 
         // 11. allocation
         dict["allocation"] = new BString(string.IsNullOrWhiteSpace(data.Allocation) ? "sparse" : data.Allocation);
+
+        // Standard libtorrent / qBittorrent compatibility keys
+        if (data.Bitfield != null)
+        {
+            dict["num_pieces"] = new BNumber(data.Bitfield.Length);
+            dict["num_downloaded"] = new BNumber(data.Bitfield.Count(b => b));
+        }
+
+        var isSeeding = data.Progress >= 1.0 || string.Equals(data.Status, "Seeding", StringComparison.OrdinalIgnoreCase);
+        dict["qBt-seedStatus"] = new BNumber(isSeeding ? 1 : 0);
+        dict["state"] = new BNumber(isSeeding ? 5 : 3);
 
         // 12. file sizes, mtime, mapped_files
         var fileSizesList = new BList();

@@ -7,12 +7,20 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Primitives;
 using NzbDrone.Core.Packages;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Torrents.Package;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Packages;
+
+public class PackageExportRequest
+{
+    public List<int> TorrentIds { get; set; } = new();
+    public bool IncludePayload { get; set; }
+}
 
 [V1ApiController("packages")]
 public class PackageController : ControllerBase
@@ -24,15 +32,25 @@ public class PackageController : ControllerBase
     private readonly IPackageExportService _packageExportService;
     private readonly ITorrentService _torrentService;
     private readonly IPackageImportService _packageImportService;
+    private readonly ITorrentPackageService _torrentPackageService;
 
     public PackageController(
         IPackageExportService packageExportService,
         ITorrentService torrentService,
-        IPackageImportService packageImportService = null)
+        IPackageImportService packageImportService = null,
+        ITorrentPackageService torrentPackageService = null)
     {
-        _packageExportService = packageExportService ?? throw new ArgumentNullException(nameof(packageExportService));
+        _packageExportService = packageExportService;
         _torrentService = torrentService ?? throw new ArgumentNullException(nameof(torrentService));
         _packageImportService = packageImportService;
+        _torrentPackageService = torrentPackageService;
+    }
+
+    public PackageController(
+        ITorrentPackageService torrentPackageService,
+        ITorrentService torrentService)
+        : this(null, torrentService, null, torrentPackageService)
+    {
     }
 
     [HttpGet("export")]
@@ -42,9 +60,41 @@ public class PackageController : ControllerBase
         [FromQuery] bool includePayload = false)
     {
         var idList = ParseTorrentIds(torrentIds, Request?.Query?["torrentIds"] ?? StringValues.Empty);
+        return await ExecuteExportAsync(idList, includePayload);
+    }
+
+    [HttpPost("export")]
+    [HttpPost("/api/v1/package/export")]
+    public async Task<IActionResult> ExportPost(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] PackageExportRequest request = null,
+        [FromQuery] string torrentIds = null,
+        [FromQuery] bool? includePayload = null)
+    {
+        var idList = new List<int>();
+        if (request?.TorrentIds != null && request.TorrentIds.Count > 0)
+        {
+            idList.AddRange(request.TorrentIds.Where(id => id > 0));
+        }
+
+        if (idList.Count == 0)
+        {
+            idList = ParseTorrentIds(torrentIds, Request?.Query?["torrentIds"] ?? StringValues.Empty);
+        }
+
+        var payload = request?.IncludePayload ?? includePayload ?? false;
+        return await ExecuteExportAsync(idList, payload);
+    }
+
+    private async Task<IActionResult> ExecuteExportAsync(List<int> idList, bool includePayload)
+    {
         if (idList.Count == 0)
         {
             return BadRequest(new { message = "At least one valid torrent ID must be provided." });
+        }
+
+        if (_torrentPackageService == null && _packageExportService == null)
+        {
+            return StatusCode(StatusCodes.Status501NotImplemented, new { message = "Package export service is not available." });
         }
 
         var existingTorrents = new List<Torrent>();
@@ -72,11 +122,25 @@ public class PackageController : ControllerBase
         }
 
         var cancellationToken = HttpContext?.RequestAborted ?? default;
-        await _packageExportService.ExportPackageAsync(
-            outputStream ?? Stream.Null,
-            existingTorrents.Select(t => t.Id),
-            includePayload,
-            cancellationToken);
+        var exportTarget = outputStream ?? Stream.Null;
+        var torrentIdList = existingTorrents.Select(t => t.Id).ToList();
+
+        if (_torrentPackageService != null)
+        {
+            await _torrentPackageService.ExportPackageAsync(
+                exportTarget,
+                torrentIdList,
+                includePayload,
+                cancellationToken);
+        }
+        else
+        {
+            await _packageExportService.ExportPackageAsync(
+                exportTarget,
+                torrentIdList,
+                includePayload,
+                cancellationToken);
+        }
 
         return new EmptyResult();
     }
@@ -87,7 +151,7 @@ public class PackageController : ControllerBase
         IFormFile file = null,
         [FromQuery] string destinationPath = null)
     {
-        if (_packageImportService == null)
+        if (_torrentPackageService == null && _packageImportService == null)
         {
             return StatusCode(StatusCodes.Status501NotImplemented, new { message = "Package import service is not available." });
         }
@@ -120,7 +184,17 @@ public class PackageController : ControllerBase
             };
 
             var cancellationToken = HttpContext?.RequestAborted ?? default;
-            var result = await _packageImportService.ImportPackageAsync(archiveStream, options, cancellationToken);
+            PackageImportResult result;
+
+            if (_torrentPackageService != null)
+            {
+                result = await _torrentPackageService.ImportPackageAsync(archiveStream, options, cancellationToken);
+            }
+            else
+            {
+                result = await _packageImportService.ImportPackageAsync(archiveStream, options, cancellationToken);
+            }
+
             return Ok(result);
         }
         catch (SecurityException ex)
