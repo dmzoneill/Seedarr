@@ -659,7 +659,7 @@ function visualStepsToYaml(pipelineName: string, trigger: string, steps: VisualS
           yaml += `      - reannounce: true\n`;
         } else if (act.type === "remove") {
           yaml += `      - remove: true\n`;
-          if (act.extra?.deleteData) {
+          if (act.extra?.deleteData || act.extra?.delete_data || act.deleteData) {
             yaml += `        deleteData: true\n`;
           }
         }
@@ -877,7 +877,20 @@ function yamlToVisualSteps(code: string): VisualStep[] {
     } else if (currentStep && inActions && trimmed.startsWith("- reannounce:")) {
       currentStep.actions.push({ id: `act-${Date.now()}-${Math.random()}`, type: "reannounce", value: "" });
     } else if (currentStep && inActions && trimmed.startsWith("- remove:")) {
-      currentStep.actions.push({ id: `act-${Date.now()}-${Math.random()}`, type: "remove", value: "", deleteData: undefined });
+      const isInlineTrue = /delete[_-]?data:\s*true/i.test(trimmed);
+      currentStep.actions.push({
+        id: `act-${Date.now()}-${Math.random()}`,
+        type: "remove",
+        value: "",
+        extra: { deleteData: isInlineTrue },
+        deleteData: isInlineTrue,
+      });
+    } else if (currentStep && inActions && (trimmed.startsWith("deleteData:") || trimmed.startsWith("delete_data:") || trimmed.startsWith("- deleteData:") || trimmed.startsWith("- delete_data:")) && currentStep.actions.length > 0 && currentStep.actions[currentStep.actions.length - 1].type === "remove") {
+      const isTrue = /:\s*true\b/i.test(trimmed);
+      const lastAct = currentStep.actions[currentStep.actions.length - 1];
+      if (!lastAct.extra) lastAct.extra = {};
+      lastAct.extra.deleteData = isTrue;
+      lastAct.deleteData = isTrue;
     }
   }
 
@@ -2623,6 +2636,12 @@ if (torrent) {
                                       copy[stepIdx].actions[actIdx].value = "true";
                                     } else if (newType === "notifyArr") {
                                       copy[stepIdx].actions[actIdx].value = "";
+                                    } else if (newType === "remove") {
+                                      copy[stepIdx].actions[actIdx].value = "";
+                                      if (!copy[stepIdx].actions[actIdx].extra) {
+                                        copy[stepIdx].actions[actIdx].extra = { deleteData: false };
+                                      }
+                                      copy[stepIdx].actions[actIdx].deleteData = false;
                                     }
                                     updateVisualSteps(copy);
                                   }}
@@ -2723,10 +2742,12 @@ if (torrent) {
                                   <label style={{ flex: 1, display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer", color: "var(--color-danger, #ff6b6b)" }}>
                                     <input
                                       type="checkbox"
-                                      checked={act.extra?.deleteData || false}
+                                      checked={act.extra?.deleteData || act.deleteData || false}
                                       onChange={(e) => {
                                         const copy = [...visualSteps];
-                                        copy[stepIdx].actions[actIdx].extra!.deleteData = e.target.checked;
+                                        if (!copy[stepIdx].actions[actIdx].extra) copy[stepIdx].actions[actIdx].extra = {};
+                                        copy[stepIdx].actions[actIdx].extra.deleteData = e.target.checked;
+                                        copy[stepIdx].actions[actIdx].deleteData = e.target.checked;
                                         updateVisualSteps(copy);
                                       }}
                                     />

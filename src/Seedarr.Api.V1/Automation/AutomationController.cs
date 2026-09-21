@@ -66,12 +66,26 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
         return ToResource(added);
     }
 
+    [HttpPut("{id:int}")]
     [HttpPut]
-    public ActionResult<AutomationScriptResource> Update([FromBody] AutomationScriptResource resource)
+    public ActionResult<AutomationScriptResource> Update([FromBody] AutomationScriptResource resource, int? id = null)
     {
         if (resource == null)
         {
             return BadRequest("Request body cannot be null");
+        }
+
+        if (id.HasValue)
+        {
+            if (resource.Id > 0 && resource.Id != id.Value)
+            {
+                return BadRequest($"ID mismatch: URL ID {id.Value} does not match resource ID {resource.Id}.");
+            }
+
+            if (resource.Id == 0)
+            {
+                resource.Id = id.Value;
+            }
         }
 
         if (string.IsNullOrWhiteSpace(resource.Name))
@@ -79,10 +93,18 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
             return BadRequest("Script name is required.");
         }
 
+        if (resource.Id <= 0 || _automationService.Get(resource.Id) == null)
+        {
+            return NotFound("Automation script not found");
+        }
+
         var model = ToModel(resource);
         var updated = _automationService.Update(model);
-        return ToResource(updated);
+        return Ok(ToResource(updated));
     }
+
+    [NonAction]
+    public ActionResult<AutomationScriptResource> Update(int id, AutomationScriptResource resource) => Update(resource, id);
 
     [HttpDelete("{id:int}")]
     public ActionResult Delete(int id)
