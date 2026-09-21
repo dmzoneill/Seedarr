@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Core.Trackers.Udp;
 
@@ -2088,5 +2089,77 @@ public class UdpTrackerProviderTest
         Assert.That(scrapeCount, Is.EqualTo(1));
         Assert.That(connIds[0], Is.EqualTo(33333L));
         Assert.That(connIds[1], Is.EqualTo(33333L));
+    }
+
+    [Test]
+    public void Announce_should_fail_closed_and_suppress_traffic_when_ForceProxy_is_true_and_proxy_is_unconfigured()
+    {
+        _configService.ForceProxy.Returns(true);
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(false);
+
+        var provider = new UdpTrackerProvider(_configService, proxySettings);
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = "udp://127.0.0.1:12345/announce",
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF"
+        };
+
+        var result = provider.Announce(request);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("ForceProxy is active but proxy is not configured or enabled"));
+    }
+
+    [Test]
+    public void Announce_should_fail_closed_and_suppress_traffic_when_ForceProxy_is_true_and_proxy_is_incompatible()
+    {
+        _configService.ForceProxy.Returns(true);
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(true);
+        proxySettings.Type.Returns(ProxyType.Socks5);
+
+        var provider = new UdpTrackerProvider(_configService, proxySettings);
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = "udp://127.0.0.1:12345/announce",
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF"
+        };
+
+        var result = provider.Announce(request);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("UDP tracker cannot be routed through the configured proxy"));
+    }
+
+    [Test]
+    public void Scrape_and_BatchScrape_should_fail_closed_when_ForceProxy_is_true()
+    {
+        _configService.ForceProxy.Returns(true);
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(true);
+        proxySettings.Type.Returns(ProxyType.Http);
+
+        var provider = new UdpTrackerProvider(_configService, proxySettings);
+        var infoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF";
+        var trackerUrl = "udp://127.0.0.1:12345/announce";
+
+        var scrapeRes = provider.Scrape(infoHash, trackerUrl);
+        Assert.That(scrapeRes.Success, Is.False);
+        Assert.That(scrapeRes.FailureReason, Does.Contain("UDP tracker cannot be routed through the configured proxy"));
+
+        var batchRes = provider.BatchScrape(new[] { infoHash }, trackerUrl);
+        Assert.That(batchRes, Does.ContainKey(infoHash));
+        Assert.That(batchRes[infoHash].Success, Is.False);
+        Assert.That(batchRes[infoHash].FailureReason, Does.Contain("UDP tracker cannot be routed through the configured proxy"));
+    }
+
+    [Test]
+    public void CreateClient_should_throw_InvalidOperationException_when_ForceProxy_is_true()
+    {
+        _configService.ForceProxy.Returns(true);
+        var provider = new UdpTrackerProvider(_configService);
+
+        Assert.Throws<InvalidOperationException>(() => provider.CreateClient(5000));
     }
 }

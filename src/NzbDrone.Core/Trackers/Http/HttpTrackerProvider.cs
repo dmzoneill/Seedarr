@@ -74,7 +74,7 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 
     private void EnsureClientUpdated()
     {
-        if (_proxySettingsProvider == null)
+        if (_proxySettingsProvider == null && _configService == null)
         {
             return;
         }
@@ -128,7 +128,19 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
         }
         catch (Exception ex)
         {
+            if (_configService?.ForceProxy == true)
+            {
+                _logger.Error(ex, "Failed to create proxy handler; ForceProxy is active, suppressing unproxied fallback");
+                return new BlockedHttpMessageHandler("Failed to create proxy handler under ForceProxy enforcement.");
+            }
+
             _logger.Error(ex, "Failed to create proxy handler; falling back to direct connection");
+        }
+
+        if (_configService?.ForceProxy == true)
+        {
+            _logger.Warn("ForceProxy is active but proxy is not enabled; direct connection is prohibited");
+            return new BlockedHttpMessageHandler("Direct connection is prohibited when ForceProxy is active.");
         }
 
         return new SocketsHttpHandler
@@ -145,6 +157,16 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request)
     {
+        if (_configService?.ForceProxy == true && (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled))
+        {
+            _logger.Warn("ForceProxy is active but proxy is not configured or enabled; suppressing HTTP announce to {0}", request?.TrackerUrl);
+            return new TrackerAnnounceResponse
+            {
+                Success = false,
+                FailureReason = "ForceProxy is active but proxy is not configured or enabled."
+            };
+        }
+
         try
         {
             var url = BuildAnnounceUrl(request);
@@ -224,7 +246,7 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "HTTP announce failed for {0}", request.TrackerUrl);
+            _logger.Error(ex, "HTTP announce failed for {0}", request?.TrackerUrl);
             return new TrackerAnnounceResponse
             {
                 Success = false,
@@ -235,6 +257,16 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 
     public TrackerScrapeResponse Scrape(string infoHash, string trackerUrl)
     {
+        if (_configService?.ForceProxy == true && (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled))
+        {
+            _logger.Warn("ForceProxy is active but proxy is not configured or enabled; suppressing HTTP scrape for {0}", trackerUrl);
+            return new TrackerScrapeResponse
+            {
+                Success = false,
+                FailureReason = "ForceProxy is active but proxy is not configured or enabled."
+            };
+        }
+
         try
         {
             var scrapeUrl = trackerUrl.Replace("/announce", "/scrape");
@@ -303,6 +335,20 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
         var result = new Dictionary<string, TrackerScrapeResponse>(StringComparer.OrdinalIgnoreCase);
         if (infoHashes == null)
         {
+            return result;
+        }
+
+        if (_configService?.ForceProxy == true && (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled))
+        {
+            _logger.Warn("ForceProxy is active but proxy is not configured or enabled; suppressing HTTP batch scrape for {0}", trackerUrl);
+            foreach (var hash in infoHashes)
+            {
+                result[hash] = new TrackerScrapeResponse
+                {
+                    Success = false,
+                    FailureReason = "ForceProxy is active but proxy is not configured or enabled."
+                };
+            }
             return result;
         }
 
@@ -547,11 +593,13 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
         public string Password { get; }
         public bool ProxyAuthEnabled { get; }
         public int TimeoutSeconds { get; }
+        public bool ForceProxy { get; }
 
         public ProxyConfigState(IProxySettingsProvider proxyProvider, IConfigService configService)
         {
             TimeoutSeconds = configService?.HttpTrackerTimeoutSeconds ?? 10;
             ProxyAuthEnabled = configService?.ProxyAuthEnabled ?? false;
+            ForceProxy = configService?.ForceProxy ?? false;
 
             if (proxyProvider != null && proxyProvider.IsEnabled)
             {
@@ -582,7 +630,8 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
                 string.Equals(Username, other.Username, StringComparison.Ordinal) &&
                 string.Equals(Password, other.Password, StringComparison.Ordinal) &&
                 ProxyAuthEnabled == other.ProxyAuthEnabled &&
-                TimeoutSeconds == other.TimeoutSeconds;
+                TimeoutSeconds == other.TimeoutSeconds &&
+                ForceProxy == other.ForceProxy;
         }
 
         public override bool Equals(object obj) => obj is ProxyConfigState other && Equals(other);
@@ -597,7 +646,27 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
                 Username,
                 Password,
                 ProxyAuthEnabled,
-                TimeoutSeconds);
+                HashCode.Combine(TimeoutSeconds, ForceProxy));
+        }
+    }
+
+    private sealed class BlockedHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly string _reason;
+
+        public BlockedHttpMessageHandler(string reason)
+        {
+            _reason = reason;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException($"Strict proxy enforcement active: {_reason}");
+        }
+
+        protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException($"Strict proxy enforcement active: {_reason}");
         }
     }
 }
