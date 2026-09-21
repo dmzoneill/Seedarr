@@ -198,14 +198,18 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             if (!string.IsNullOrWhiteSpace(item.OutputPath))
                             {
                                 var remappedPath = RemapRemotePath(definition.Host, item.OutputPath);
+                                var resolvedExistingPath = !string.IsNullOrWhiteSpace(remappedPath)
+                                    ? remappedPath
+                                    : item.OutputPath;
+
                                 if (string.IsNullOrEmpty(torrent.SavePath))
                                 {
-                                    torrent.SavePath = remappedPath;
+                                    torrent.SavePath = resolvedExistingPath;
                                 }
 
                                 if (string.IsNullOrEmpty(torrent.SourcePath))
                                 {
-                                    torrent.SourcePath = remappedPath;
+                                    torrent.SourcePath = resolvedExistingPath;
                                 }
                             }
 
@@ -218,6 +222,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             {
                                 torrent.Category = definition.Category;
                             }
+
+                            torrent.Category ??= string.Empty;
 
                             torrent.UpdateRatio();
                             _torrentService.Update(torrent);
@@ -252,6 +258,12 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             var remaining = item.RemainingSize;
                             var downloaded = Math.Max(0, total - remaining);
                             var remappedPath = RemapRemotePath(definition.Host, item.OutputPath);
+                            var resolvedPath = !string.IsNullOrWhiteSpace(remappedPath)
+                                ? remappedPath
+                                : (item.OutputPath ?? string.Empty);
+                            var resolvedCategory = !string.IsNullOrWhiteSpace(item.Category)
+                                ? item.Category
+                                : (!string.IsNullOrWhiteSpace(definition.Category) ? definition.Category : string.Empty);
                             var initialProgress = total > 0 ? (double)(total - remaining) / total : (remaining == 0 ? 1.0 : 0.0);
 
                             torrent = new Torrent
@@ -267,9 +279,9 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                                 TrackerUrl = parsed.AnnounceUrl,
                                 DateAdded = DateTime.UtcNow,
                                 Status = MapClientStatus(item.Status, remaining, total),
-                                Category = !string.IsNullOrWhiteSpace(item.Category) ? item.Category : definition.Category,
-                                SavePath = remappedPath,
-                                SourcePath = remappedPath,
+                                Category = resolvedCategory,
+                                SavePath = resolvedPath,
+                                SourcePath = resolvedPath,
                                 Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
                                 DownloadClientId = definition.Id,
                             };
@@ -502,6 +514,12 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         }
 
         var remappedPath = RemapRemotePath(definition?.Host, matchingItem?.OutputPath);
+        var resolvedPath = !string.IsNullOrWhiteSpace(remappedPath)
+            ? remappedPath
+            : (matchingItem?.OutputPath ?? string.Empty);
+        var resolvedCategory = !string.IsNullOrWhiteSpace(matchingItem?.Category)
+            ? matchingItem.Category
+            : (!string.IsNullOrWhiteSpace(definition?.Category) ? definition.Category : string.Empty);
 
         Torrent torrent;
         if (torrentBytes != null && torrentBytes.Length > 0)
@@ -528,9 +546,9 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 TrackerUrl = parsed.AnnounceUrl,
                 DateAdded = DateTime.UtcNow,
                 Status = MapClientStatus(matchingItem?.Status, remaining, total),
-                Category = !string.IsNullOrWhiteSpace(matchingItem?.Category) ? matchingItem.Category : definition?.Category,
-                SavePath = remappedPath,
-                SourcePath = remappedPath,
+                Category = resolvedCategory,
+                SavePath = resolvedPath,
+                SourcePath = resolvedPath,
                 Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
                 DownloadClientId = definition?.Id,
             };
@@ -576,9 +594,9 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
                 DateAdded = DateTime.UtcNow,
                 Status = MapClientStatus(matchingItem.Status, remaining, total),
-                Category = !string.IsNullOrWhiteSpace(matchingItem.Category) ? matchingItem.Category : definition?.Category,
-                SavePath = remappedPath,
-                SourcePath = remappedPath,
+                Category = resolvedCategory,
+                SavePath = resolvedPath,
+                SourcePath = resolvedPath,
                 Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
                 DownloadClientId = definition?.Id,
             };

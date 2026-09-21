@@ -4,6 +4,7 @@ using NzbDrone.Core.RemotePathMappings;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -828,6 +829,205 @@ public class QBittorrentApiControllerTest
         var fileResult = (FileContentResult)result;
         Assert.That(fileResult.ContentType, Is.EqualTo("application/x-bittorrent"));
         Assert.That(fileResult.FileDownloadName, Is.EqualTo("ExportMovie2.torrent"));
+    }
+
+    [Test]
+    public void GetTorrentsInfo_CategoryFilter_Matches_Both_Category_And_Label()
+    {
+        var torrentWithCategory = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1111111111111111111111111111111111111111",
+            Name = "Torrent 1",
+            Category = "movies",
+            Label = null,
+        };
+        var torrentWithLabel = new Torrent
+        {
+            Id = 2,
+            InfoHash = "2222222222222222222222222222222222222222",
+            Name = "Torrent 2",
+            Category = null,
+            Label = "movies",
+        };
+        var otherTorrent = new Torrent
+        {
+            Id = 3,
+            InfoHash = "3333333333333333333333333333333333333333",
+            Name = "Torrent 3",
+            Category = "tv",
+            Label = "series",
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrentWithCategory, torrentWithLabel, otherTorrent });
+
+        var result = _controller.GetTorrentsInfo(category: "movies");
+        var okResult = result.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var list = okResult.Value as List<Dictionary<string, object>>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list.Count, Is.EqualTo(2));
+        var hashes = list.Select(d => d["hash"] as string).ToList();
+        Assert.That(hashes, Contains.Item("1111111111111111111111111111111111111111"));
+        Assert.That(hashes, Contains.Item("2222222222222222222222222222222222222222"));
+    }
+
+    [Test]
+    public void GetCategories_Aggregates_Distinct_Categories_From_Both_Category_And_Label()
+    {
+        var torrent1 = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1111111111111111111111111111111111111111",
+            Name = "Torrent 1",
+            Category = "movies",
+            Label = "radarr-label",
+        };
+        var torrent2 = new Torrent
+        {
+            Id = 2,
+            InfoHash = "2222222222222222222222222222222222222222",
+            Name = "Torrent 2",
+            Category = "anime",
+            Label = null,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent1, torrent2 });
+        _categoryService.GetAll().Returns(new List<Category>());
+
+        var result = _controller.GetCategories();
+        var okResult = result.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var dict = okResult.Value as Dictionary<string, object>;
+        Assert.That(dict, Is.Not.Null);
+        Assert.That(dict.ContainsKey("movies"), Is.True);
+        Assert.That(dict.ContainsKey("radarr-label"), Is.True);
+        Assert.That(dict.ContainsKey("anime"), Is.True);
+    }
+
+    [Test]
+    public void GetMainData_Returns_Torrent_Category_And_Falls_Back_To_Label()
+    {
+        var torrentWithCategory = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1111111111111111111111111111111111111111",
+            Name = "Torrent 1",
+            Category = "movies",
+            Label = "tag1",
+        };
+        var torrentWithLabelOnly = new Torrent
+        {
+            Id = 2,
+            InfoHash = "2222222222222222222222222222222222222222",
+            Name = "Torrent 2",
+            Category = null,
+            Label = "tv",
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrentWithCategory, torrentWithLabelOnly });
+        _categoryService.GetAll().Returns(new List<Category>());
+
+        var httpContext = new DefaultHttpContext();
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = _controller.GetMainData(rid: 0);
+        var okResult = result.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var dict = okResult.Value as Dictionary<string, object>;
+        Assert.That(dict, Is.Not.Null);
+        Assert.That(dict.ContainsKey("torrents"), Is.True);
+        var torrentsDict = dict["torrents"] as Dictionary<string, object>;
+        Assert.That(torrentsDict, Is.Not.Null);
+
+        var t1Obj = torrentsDict["1111111111111111111111111111111111111111"];
+        var t1Category = t1Obj.GetType().GetProperty("category")?.GetValue(t1Obj) as string;
+        Assert.That(t1Category, Is.EqualTo("movies"));
+
+        var t2Obj = torrentsDict["2222222222222222222222222222222222222222"];
+        var t2Category = t2Obj.GetType().GetProperty("category")?.GetValue(t2Obj) as string;
+        Assert.That(t2Category, Is.EqualTo("tv"));
+    }
+
+    [Test]
+    public void QBitTorrentSnapshot_FromTorrent_Sets_Category_With_Fallback_To_Label()
+    {
+        var torrentWithCat = new Torrent
+        {
+            InfoHash = "aaaa",
+            Category = "documentaries",
+            Label = "tagA",
+            DateAdded = DateTime.UtcNow
+        };
+        var snapshot1 = QBitTorrentSnapshot.FromTorrent(torrentWithCat);
+        Assert.That(snapshot1.Category, Is.EqualTo("documentaries"));
+        Assert.That(snapshot1.Tags, Is.EqualTo("tagA"));
+
+        var torrentWithLabel = new Torrent
+        {
+            InfoHash = "bbbb",
+            Category = "   ",
+            Label = "audiobooks",
+            DateAdded = DateTime.UtcNow
+        };
+        var snapshot2 = QBitTorrentSnapshot.FromTorrent(torrentWithLabel);
+        Assert.That(snapshot2.Category, Is.EqualTo("audiobooks"));
+    }
+
+    [Test]
+    public void GetTorrentsInfo_Sets_Category_With_Fallback_To_Label()
+    {
+        var torrentWithCat = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1111111111111111111111111111111111111111",
+            Name = "Torrent 1",
+            Category = "movies",
+            Label = "tag1",
+        };
+        var torrentWithLabel = new Torrent
+        {
+            Id = 2,
+            InfoHash = "2222222222222222222222222222222222222222",
+            Name = "Torrent 2",
+            Category = "",
+            Label = "series",
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrentWithCat, torrentWithLabel });
+
+        var result = _controller.GetTorrentsInfo();
+        var okResult = result.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var list = okResult.Value as List<Dictionary<string, object>>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list[0]["category"], Is.EqualTo("movies"));
+        Assert.That(list[1]["category"], Is.EqualTo("series"));
+    }
+
+    [Test]
+    public async Task AddTorrents_Preserves_Category_When_Tags_Are_Provided()
+    {
+        var torrent = new Torrent
+        {
+            Id = 10,
+            Name = "MultiOption Torrent",
+            InfoHash = "1234567890abcdef1234567890abcdef12345678"
+        };
+        _torrentImportService.ImportFromMagnet(Arg.Any<string>()).Returns(torrent);
+
+        await _controller.AddTorrents(new QBitAddTorrentsRequest
+        {
+            Urls = "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=MultiOption",
+            Category = "radarr",
+            Tags = "tagA, tagB"
+        });
+
+        Assert.That(torrent.Category, Is.EqualTo("radarr"));
+        Assert.That(torrent.Label, Is.EqualTo("tagA, tagB"));
+        _torrentService.Received().Update(Arg.Is<Torrent>(t =>
+            t.Category == "radarr" &&
+            t.Label == "tagA, tagB"));
     }
 }
 

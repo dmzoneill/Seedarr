@@ -427,7 +427,9 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         if (!string.IsNullOrEmpty(category))
         {
-            torrents = torrents.Where(t => string.Equals(t.Label, category, StringComparison.OrdinalIgnoreCase)).ToList();
+            torrents = torrents.Where(t =>
+                string.Equals(t.Category, category, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.Label, category, StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
         if (!string.IsNullOrWhiteSpace(tag))
@@ -524,7 +526,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 ["state"] = state,
                 ["seq_dl"] = t.SequentialDownload,
                 ["f_l_piece_prio"] = t.FirstLastPiecePrio,
-                ["category"] = t.Category ?? string.Empty,
+                ["category"] = !string.IsNullOrWhiteSpace(t.Category) ? t.Category : (t.Label ?? string.Empty),
                 ["tags"] = t.Label ?? string.Empty,
                 ["save_path"] = savePath,
                 ["content_path"] = contentPath,
@@ -768,6 +770,11 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                         added.Label = string.Join(", ", labels);
                     }
                 }
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Category))
+            {
+                added.Category = request.Category;
             }
 
             needsUpdate = true;
@@ -1798,13 +1805,21 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         var torrents = _torrentService.GetAll();
         foreach (var t in torrents)
         {
-            var catName = !string.IsNullOrWhiteSpace(t.Category) ? t.Category : t.Label;
-            if (!string.IsNullOrWhiteSpace(catName))
+            if (!string.IsNullOrWhiteSpace(t.Category))
             {
-                var trimmed = catName.Trim();
-                if (!result.ContainsKey(trimmed))
+                var trimmedCat = t.Category.Trim();
+                if (!result.ContainsKey(trimmedCat))
                 {
-                    result[trimmed] = new { name = trimmed, savePath = RemapLocalToRemote(Path.Combine(localBase, trimmed)) };
+                    result[trimmedCat] = new { name = trimmedCat, savePath = RemapLocalToRemote(Path.Combine(localBase, trimmedCat)) };
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(t.Label))
+            {
+                var trimmedLabel = t.Label.Trim();
+                if (!result.ContainsKey(trimmedLabel))
+                {
+                    result[trimmedLabel] = new { name = trimmedLabel, savePath = RemapLocalToRemote(Path.Combine(localBase, trimmedLabel)) };
                 }
             }
         }
@@ -2973,7 +2988,7 @@ public record QBitTorrentSnapshot
             DlSpeed = torrent.DownloadSpeed,
             UpSpeed = torrent.UploadSpeed,
             State = QBittorrentApiController.MapToQBitState(torrent.Status, torrent.Progress),
-            Category = torrent.Category ?? string.Empty,
+            Category = !string.IsNullOrWhiteSpace(torrent.Category) ? torrent.Category : (torrent.Label ?? string.Empty),
             Tags = torrent.Label ?? string.Empty,
             SavePath = savePath ?? string.Empty,
             ContentPath = contentPath ?? string.Empty,
