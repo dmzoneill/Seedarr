@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Indexers
 {
@@ -420,6 +422,244 @@ namespace NzbDrone.Core.Test.Indexers
             repo.PurgeOlderThan(TimeSpan.FromDays(14)).Returns(5);
             var purged = service.PurgeSeenReleases(TimeSpan.FromDays(14));
             Assert.That(purged, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void RuleMatching_evaluates_regexes_size_seeders_freeleech_age_and_category_accurately()
+        {
+            var now = new DateTime(2026, 9, 21, 12, 0, 0, DateTimeKind.Utc);
+            var rule = new RssRule
+            {
+                Name = "Complex Rule",
+                IsEnabled = true,
+                MustContain = @"\b(2160p|4K)\b",
+                MustNotContain = @"\b(CAM|TS)\b",
+                MinSizeBytes = 1000,
+                MaxSizeBytes = 5000,
+                MinSeeders = 5,
+                AllowUnknownSeeders = false,
+                FreeleechOnly = true,
+                MaxAgeDays = 7,
+                CategoryId = 2000
+            };
+
+            var validRelease = new ReleaseInfo
+            {
+                Title = "The.Matrix.1999.2160p.UHD",
+                Size = 3000,
+                Seeders = 10,
+                DownloadVolumeFactor = 0.0,
+                PublishDate = now.AddDays(-2),
+                Categories = new List<string> { "2000" }
+            };
+
+            Assert.That(_subject.MatchesRule(rule, validRelease, now), Is.True);
+
+            // MustContain failed
+            var missingContain = new ReleaseInfo
+            {
+                Title = "The.Matrix.1999.1080p.HD",
+                Size = 3000,
+                Seeders = 10,
+                DownloadVolumeFactor = 0.0,
+                PublishDate = now.AddDays(-2),
+                Categories = new List<string> { "2000" }
+            };
+            Assert.That(_subject.MatchesRule(rule, missingContain, now), Is.False);
+
+            // MustNotContain failed
+            var hasForbidden = new ReleaseInfo
+            {
+                Title = "The.Matrix.1999.2160p.CAM",
+                Size = 3000,
+                Seeders = 10,
+                DownloadVolumeFactor = 0.0,
+                PublishDate = now.AddDays(-2),
+                Categories = new List<string> { "2000" }
+            };
+            Assert.That(_subject.MatchesRule(rule, hasForbidden, now), Is.False);
+
+            // Size below min
+            var tooSmall = new ReleaseInfo
+            {
+                Title = "The.Matrix.1999.2160p.UHD",
+                Size = 500,
+                Seeders = 10,
+                DownloadVolumeFactor = 0.0,
+                PublishDate = now.AddDays(-2),
+                Categories = new List<string> { "2000" }
+            };
+            Assert.That(_subject.MatchesRule(rule, tooSmall, now), Is.False);
+
+            // Size above max
+            var tooLarge = new ReleaseInfo
+            {
+                Title = "The.Matrix.1999.2160p.UHD",
+                Size = 6000,
+                Seeders = 10,
+                DownloadVolumeFactor = 0.0,
+                PublishDate = now.AddDays(-2),
+                Categories = new List<string> { "2000" }
+            };
+            Assert.That(_subject.MatchesRule(rule, tooLarge, now), Is.False);
+
+            // Seeders below min
+            var lowSeeds = new ReleaseInfo
+            {
+                Title = "The.Matrix.1999.2160p.UHD",
+                Size = 3000,
+                Seeders = 2,
+                DownloadVolumeFactor = 0.0,
+                PublishDate = now.AddDays(-2),
+                Categories = new List<string> { "2000" }
+            };
+            Assert.That(_subject.MatchesRule(rule, lowSeeds, now), Is.False);
+
+            // Freeleech only but factor > 0
+            var notFreeleech = new ReleaseInfo
+            {
+                Title = "The.Matrix.1999.2160p.UHD",
+                Size = 3000,
+                Seeders = 10,
+                DownloadVolumeFactor = 1.0,
+                PublishDate = now.AddDays(-2),
+                Categories = new List<string> { "2000" }
+            };
+            Assert.That(_subject.MatchesRule(rule, notFreeleech, now), Is.False);
+
+            // Age older than max
+            var tooOld = new ReleaseInfo
+            {
+                Title = "The.Matrix.1999.2160p.UHD",
+                Size = 3000,
+                Seeders = 10,
+                DownloadVolumeFactor = 0.0,
+                PublishDate = now.AddDays(-10),
+                Categories = new List<string> { "2000" }
+            };
+            Assert.That(_subject.MatchesRule(rule, tooOld, now), Is.False);
+
+            // Category mismatch
+            var wrongCategory = new ReleaseInfo
+            {
+                Title = "The.Matrix.1999.2160p.UHD",
+                Size = 3000,
+                Seeders = 10,
+                DownloadVolumeFactor = 0.0,
+                PublishDate = now.AddDays(-2),
+                Categories = new List<string> { "5000" }
+            };
+            Assert.That(_subject.MatchesRule(rule, wrongCategory, now), Is.False);
+        }
+
+        [Test]
+        public void Sync_coordinates_fetching_across_enabled_indexers_and_grabs_matching_releases()
+        {
+            var indexerRepo = Substitute.For<IIndexerRepository>();
+            var ruleRepo = Substitute.For<IRssRuleRepository>();
+            var torrentService = Substitute.For<ITorrentService>();
+            var grabRepo = Substitute.For<IRssGrabHistoryRepository>();
+            var downloadHistoryRepo = Substitute.For<IDownloadHistoryRepository>();
+            var mockIndexer = Substitute.For<IIndexer>();
+
+            var enabledIndexer = new IndexerDefinition { Id = 1, Name = "Indexer 1", Enable = true, EnableRss = true };
+            var disabledRssIndexer = new IndexerDefinition { Id = 2, Name = "Indexer 2", Enable = true, EnableRss = false };
+
+            indexerRepo.All().Returns(new List<IndexerDefinition> { enabledIndexer, disabledRssIndexer });
+
+            var rule = new RssRule
+            {
+                Id = 1,
+                Name = "Rule 1",
+                IsEnabled = true,
+                MustContain = "MatchMe",
+                MinSeeders = 1,
+                AllowUnknownSeeders = true
+            };
+            ruleRepo.All().Returns(new List<RssRule> { rule });
+
+            var releaseMatching = new ReleaseInfo
+            {
+                Title = "Release.MatchMe.1080p",
+                InfoHash = "hash111111111111111111111111111111111111",
+                Size = 1000,
+                Seeders = 5,
+                IndexerId = 1
+            };
+            var releaseNonMatching = new ReleaseInfo
+            {
+                Title = "Release.Other.1080p",
+                InfoHash = "hash222222222222222222222222222222222222",
+                Size = 1000,
+                Seeders = 5,
+                IndexerId = 1
+            };
+
+            mockIndexer.Search(enabledIndexer, Arg.Any<SearchQuery>()).Returns(new List<ReleaseInfo> { releaseMatching, releaseNonMatching });
+            torrentService.ExistsByInfoHash(Arg.Any<string>()).Returns(false);
+            torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
+
+            var service = new RssSyncService(
+                torrentService: torrentService,
+                grabHistoryRepository: grabRepo,
+                indexerRepository: indexerRepo,
+                rssRuleRepository: ruleRepo,
+                downloadHistoryRepository: downloadHistoryRepo,
+                indexerInstanceFactory: _ => mockIndexer);
+
+            var grabbedCount = service.Sync();
+
+            Assert.That(grabbedCount, Is.EqualTo(1));
+            torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == "hash111111111111111111111111111111111111"));
+            downloadHistoryRepo.Received(1).Insert(Arg.Is<DownloadHistory>(dh => dh.InfoHash == "hash111111111111111111111111111111111111"));
+            mockIndexer.DidNotReceive().Search(disabledRssIndexer, Arg.Any<SearchQuery>());
+        }
+
+        [Test]
+        public void Sync_deduplicates_against_active_torrents_and_download_history()
+        {
+            var indexerRepo = Substitute.For<IIndexerRepository>();
+            var ruleRepo = Substitute.For<IRssRuleRepository>();
+            var torrentService = Substitute.For<ITorrentService>();
+            var downloadHistoryRepo = Substitute.For<IDownloadHistoryRepository>();
+            var mockIndexer = Substitute.For<IIndexer>();
+
+            var indexerDef = new IndexerDefinition { Id = 1, Name = "Indexer 1", Enable = true, EnableRss = true };
+            indexerRepo.All().Returns(new List<IndexerDefinition> { indexerDef });
+
+            var rule = new RssRule { Id = 1, Name = "Grab All", IsEnabled = true, AllowUnknownSeeders = true };
+            ruleRepo.All().Returns(new List<RssRule> { rule });
+
+            var relActive = new ReleaseInfo { Title = "Rel.Active", InfoHash = "hash-active", Size = 100, Seeders = 5 };
+            var relHistory = new ReleaseInfo { Title = "Rel.History", InfoHash = "hash-history", Size = 100, Seeders = 5 };
+            var relNew = new ReleaseInfo { Title = "Rel.New", InfoHash = "hash-new", Size = 100, Seeders = 5 };
+
+            mockIndexer.Search(indexerDef, Arg.Any<SearchQuery>()).Returns(new List<ReleaseInfo> { relActive, relHistory, relNew });
+
+            // Active in torrent service
+            torrentService.ExistsByInfoHash("hash-active").Returns(true);
+            torrentService.ExistsByInfoHash("hash-history").Returns(false);
+            torrentService.ExistsByInfoHash("hash-new").Returns(false);
+
+            // In download history
+            downloadHistoryRepo.FindByInfoHash("hash-history").Returns(new DownloadHistory { InfoHash = "hash-history" });
+            downloadHistoryRepo.FindByInfoHash("hash-new").Returns((DownloadHistory)null);
+
+            torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
+
+            var service = new RssSyncService(
+                torrentService: torrentService,
+                indexerRepository: indexerRepo,
+                rssRuleRepository: ruleRepo,
+                downloadHistoryRepository: downloadHistoryRepo,
+                indexerInstanceFactory: _ => mockIndexer);
+
+            var grabbedCount = service.Sync();
+
+            Assert.That(grabbedCount, Is.EqualTo(1));
+            torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == "hash-new"));
+            torrentService.DidNotReceive().Add(Arg.Is<Torrent>(t => t.InfoHash == "hash-active"));
+            torrentService.DidNotReceive().Add(Arg.Is<Torrent>(t => t.InfoHash == "hash-history"));
         }
     }
 }

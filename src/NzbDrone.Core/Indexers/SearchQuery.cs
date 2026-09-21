@@ -8,6 +8,7 @@ public enum SearchMode
     Movie = 2,
     Music = 3,
     Book = 4,
+    Rss = 5,
 }
 
 public class SearchQuery

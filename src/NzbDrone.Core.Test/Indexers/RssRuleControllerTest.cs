@@ -305,4 +305,29 @@ public class RssRuleControllerTest
         Assert.That(returned[0].ReleaseTitle, Is.EqualTo("Movie.2024.1080p"));
         Assert.That(returned[0].Status, Is.EqualTo("Grabbed"));
     }
+
+    [Test]
+    public void SyncRss_invokes_service_and_returns_true_grabbed_count()
+    {
+        RssRuleController.ResetSyncCooldown();
+        var rssSyncService = Substitute.For<IRssSyncService>();
+        rssSyncService.Sync(true).Returns(5);
+
+        var controller = new RssRuleController(
+            _rssRuleRepository,
+            _indexerRepository,
+            _categoryService,
+            _grabHistoryRepository,
+            rssSyncService: rssSyncService);
+
+        var response = controller.SyncRss();
+
+        Assert.That(response.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)response.Result;
+        dynamic value = okResult.Value;
+        Assert.That((bool)value.success, Is.True);
+        Assert.That((int)value.grabbedCount, Is.EqualTo(5));
+
+        rssSyncService.Received(1).Sync(true);
+    }
 }

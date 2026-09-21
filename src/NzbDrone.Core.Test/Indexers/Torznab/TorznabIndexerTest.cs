@@ -1657,6 +1657,88 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             Assert.That(indexer.Client, Is.Not.SameAs(initialClient));
         }
 
+        [Test]
+        public void Search_with_null_or_empty_query_should_fetch_recent_releases_without_q_parameter()
+        {
+            var handler = new TorznabTestHttpMessageHandler();
+            var indexer = new TorznabIndexer(new HttpClient(handler));
+
+            var definition = new IndexerDefinition
+            {
+                Id = 1,
+                Name = "Torznab Test",
+                Url = "http://indexer.local:9696",
+                ApiKey = "secret-key"
+            };
+
+            var searchXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"">
+    <channel>
+        <item>
+            <title>Recent.Release.1080p</title>
+            <guid>recent-1</guid>
+        </item>
+    </channel>
+</rss>";
+
+            handler.Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(searchXml)
+            };
+
+            var resultsNull = indexer.Search(definition, (string)null);
+            Assert.That(resultsNull, Has.Count.EqualTo(1));
+            Assert.That(resultsNull[0].Title, Is.EqualTo("Recent.Release.1080p"));
+
+            var resultsEmpty = indexer.Search(definition, "");
+            Assert.That(resultsEmpty, Has.Count.EqualTo(1));
+
+            Assert.That(handler.SentRequests, Has.Count.EqualTo(2));
+            Assert.That(handler.SentRequests[0].RequestUri.Query, Does.Contain("t=search"));
+            Assert.That(handler.SentRequests[0].RequestUri.Query, Does.Not.Contain("q="));
+            Assert.That(handler.SentRequests[1].RequestUri.Query, Does.Contain("t=search"));
+            Assert.That(handler.SentRequests[1].RequestUri.Query, Does.Not.Contain("q="));
+        }
+
+        [Test]
+        public void Search_with_SearchMode_Rss_should_use_t_rss_without_q_parameter()
+        {
+            var handler = new TorznabTestHttpMessageHandler();
+            var indexer = new TorznabIndexer(new HttpClient(handler));
+
+            var definition = new IndexerDefinition
+            {
+                Id = 1,
+                Name = "Torznab Test",
+                Url = "http://indexer.local:9696",
+                ApiKey = "secret-key"
+            };
+
+            var searchXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"">
+    <channel>
+        <item>
+            <title>Rss.Feed.Release</title>
+            <guid>rss-1</guid>
+        </item>
+    </channel>
+</rss>";
+
+            handler.Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(searchXml)
+            };
+
+            var query = new SearchQuery { Mode = SearchMode.Rss };
+            var results = indexer.Search(definition, query);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Title, Is.EqualTo("Rss.Feed.Release"));
+            Assert.That(handler.SentRequests, Has.Count.EqualTo(1));
+            Assert.That(handler.SentRequests[0].RequestUri.Query, Does.Contain("t=rss"));
+            Assert.That(handler.SentRequests[0].RequestUri.Query, Does.Not.Contain("q="));
+        }
+
         private class TorznabTestHttpMessageHandler : HttpMessageHandler
         {
             public List<HttpRequestMessage> SentRequests { get; } = new();

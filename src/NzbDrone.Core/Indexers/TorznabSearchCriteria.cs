@@ -61,6 +61,11 @@ public class TorznabSearchCriteria
                 return SearchMode.Book;
             }
 
+            if (st == "rss")
+            {
+                return SearchMode.Rss;
+            }
+
             if (st == "search")
             {
                 return SearchMode.Search;

@@ -110,4 +110,42 @@ public class RssSyncServiceGrabTest
             h.Status == "Failed" &&
             h.ErrorMessage.Contains("already exists")));
     }
+
+    [Test]
+    public void GrabRelease_when_infohash_in_download_history_should_record_failed_audit_history()
+    {
+        var downloadHistoryRepo = Substitute.For<IDownloadHistoryRepository>();
+        var service = new RssSyncService(
+            _ruleEvaluator,
+            _indexerStatusService,
+            _seenReleaseRepository,
+            _torrentService,
+            _grabHistoryRepository,
+            downloadHistoryRepository: downloadHistoryRepo);
+
+        var rule = new RssRule
+        {
+            Id = 1,
+            Name = "Default"
+        };
+
+        var release = new ReleaseInfo
+        {
+            Title = "History.Duplicate.Torrent.1080p",
+            InfoHash = "historydup123",
+            IndexerId = 1
+        };
+
+        _torrentService.ExistsByInfoHash("historydup123").Returns(false);
+        downloadHistoryRepo.FindByInfoHash("historydup123").Returns(new DownloadHistory { InfoHash = "historydup123" });
+
+        var result = service.GrabRelease(release, rule);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("download history"));
+
+        _grabHistoryRepository.Received(1).Insert(Arg.Is<RssGrabHistory>(h =>
+            h.Status == "Failed" &&
+            h.ErrorMessage.Contains("download history")));
+    }
 }
