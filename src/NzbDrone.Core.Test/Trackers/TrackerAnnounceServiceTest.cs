@@ -1530,4 +1530,135 @@ public class TrackerAnnounceServiceTest
         Assert.That(TrackerAnnounceService.IsLoopbackOrMockTracker("http://tracker.example.com/announce"), Is.False);
         Assert.That(TrackerAnnounceService.IsLoopbackOrMockTracker("udp://tracker.openbittorrent.com:6969/announce"), Is.False);
     }
+
+    [Test]
+    public void AnnounceTorrent_should_group_enabled_trackers_by_tier_and_pass_tiered_structure_to_multi_tracker_manager()
+    {
+        var torrent = new Torrent
+        {
+            Id = 55,
+            Name = "TierTest",
+            InfoHash = "1234567890123456789012345678901234567890",
+            Uploaded = 0,
+            Downloaded = 0,
+            TotalSize = 1000,
+            Status = TorrentStatus.Downloading
+        };
+
+        var tracker1 = new TrackerEntry { Id = 1, TorrentId = 55, Url = "http://tier0-t1.org/announce", Tier = 0, Enabled = true };
+        var tracker2 = new TrackerEntry { Id = 2, TorrentId = 55, Url = "http://tier0-t2.org/announce", Tier = 0, Enabled = true };
+        var tracker3 = new TrackerEntry { Id = 3, TorrentId = 55, Url = "http://tier1-t1.org/announce", Tier = 1, Enabled = true };
+
+        _trackerEntryService.GetByTorrentId(55).Returns(new List<TrackerEntry> { tracker1, tracker2, tracker3 });
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = true,
+                TrackerUrl = tracker1.Url,
+                TrackerResponses = new List<TrackerAnnounceResponse>
+                {
+                    new() { TrackerUrl = tracker1.Url, Success = true, Complete = 5, Incomplete = 1, Interval = 1800 }
+                }
+            });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        _multiTracker.Received(1).Announce(
+            Arg.Any<TrackerAnnounceRequest>(),
+            Arg.Is<List<List<string>>>(tiers =>
+                tiers.Count == 2 &&
+                tiers[0].Contains("http://tier0-t1.org/announce") &&
+                tiers[0].Contains("http://tier0-t2.org/announce") &&
+                tiers[1].Contains("http://tier1-t1.org/announce")));
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_auto_disable_tracker_after_five_consecutive_failures()
+    {
+        var torrent = new Torrent
+        {
+            Id = 56,
+            Name = "AutoDisableTest",
+            InfoHash = "1234567890123456789012345678901234567891",
+            Uploaded = 0,
+            Downloaded = 0,
+            TotalSize = 1000,
+            Status = TorrentStatus.Downloading
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 56,
+            Url = "http://failtracker.org/announce",
+            Tier = 0,
+            Enabled = true,
+            ConsecutiveFailures = 4
+        };
+
+        _trackerEntryService.GetByTorrentId(56).Returns(new List<TrackerEntry> { tracker });
+        _configService.FailoverMaxConsecutiveFailures.Returns(5);
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = false,
+                FailureReason = "Connection refused",
+                TrackerResponses = new List<TrackerAnnounceResponse>
+                {
+                    new() { TrackerUrl = tracker.Url, Success = false, FailureReason = "Connection refused" }
+                }
+            });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(tracker.ConsecutiveFailures, Is.EqualTo(5));
+        Assert.That(tracker.Enabled, Is.False);
+        Assert.That(tracker.Status, Is.EqualTo(TrackerStatus.Disabled));
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_promote_successful_tracker_in_tier_order()
+    {
+        var torrent = new Torrent
+        {
+            Id = 57,
+            Name = "PromotionTest",
+            InfoHash = "1234567890123456789012345678901234567892",
+            Uploaded = 0,
+            Downloaded = 0,
+            TotalSize = 1000,
+            Status = TorrentStatus.Downloading
+        };
+
+        var tracker1 = new TrackerEntry { Id = 1, TorrentId = 57, Url = "http://tier0-t1.org/announce", Tier = 0, Enabled = true, TotalAnnounces = 1 };
+        var tracker2 = new TrackerEntry { Id = 2, TorrentId = 57, Url = "http://tier0-t2.org/announce", Tier = 0, Enabled = true, TotalAnnounces = 1 };
+
+        _trackerEntryService.GetByTorrentId(57).Returns(new List<TrackerEntry> { tracker1, tracker2 });
+
+        // First announce: t2 succeeds
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = true,
+                TrackerUrl = tracker2.Url,
+                TrackerResponses = new List<TrackerAnnounceResponse>
+                {
+                    new() { TrackerUrl = tracker2.Url, Success = true, Complete = 5, Incomplete = 1, Interval = 1800 }
+                }
+            });
+
+        _service.AnnounceTorrent(torrent, force: true);
+
+        // Second announce: verify that t2 was promoted to head of tier
+        _service.AnnounceTorrent(torrent, force: true);
+
+        _multiTracker.Received().Announce(
+            Arg.Any<TrackerAnnounceRequest>(),
+            Arg.Is<List<List<string>>>(tiers =>
+                tiers.Count == 1 &&
+                tiers[0][0] == "http://tier0-t2.org/announce" &&
+                tiers[0][1] == "http://tier0-t1.org/announce"));
+    }
 }

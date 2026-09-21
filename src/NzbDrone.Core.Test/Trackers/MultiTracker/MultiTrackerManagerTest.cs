@@ -658,6 +658,215 @@ public class MultiTrackerManagerTest
         Assert.That(result.Success, Is.False);
     }
 
+    [Test]
+    public void Announce_should_failover_to_next_tier_when_all_trackers_in_first_tier_fail()
+    {
+        _configService.AnnounceToAllTiers.Returns(false);
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier1-t1.com/announce"))
+            .Returns(new TrackerAnnounceResponse { Success = false, FailureReason = "offline" });
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier1-t2.com/announce"))
+            .Returns(new TrackerAnnounceResponse { Success = false, FailureReason = "timeout" });
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier2-t1.com/announce"))
+            .Returns(new TrackerAnnounceResponse { Success = true, Complete = 12, Incomplete = 3, Interval = 1800 });
+
+        var request = CreateRequest();
+        var announceList = new List<List<string>>
+        {
+            new() { "http://tier1-t1.com/announce", "http://tier1-t2.com/announce" },
+            new() { "http://tier2-t1.com/announce" }
+        };
+
+        var result = _manager.Announce(request, announceList);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Complete, Is.EqualTo(12));
+        _httpTracker.Received(1).Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier1-t1.com/announce"));
+        _httpTracker.Received(1).Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier1-t2.com/announce"));
+        _httpTracker.Received(1).Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier2-t1.com/announce"));
+    }
+
+    [Test]
+    public void Announce_should_stop_tier_traversal_when_first_tier_succeeds_and_announce_to_all_tiers_is_false()
+    {
+        _configService.AnnounceToAllTiers.Returns(false);
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier1-t1.com/announce"))
+            .Returns(new TrackerAnnounceResponse { Success = true, Complete = 5, Interval = 1800 });
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier2-t1.com/announce"))
+            .Returns(new TrackerAnnounceResponse { Success = true, Complete = 20, Interval = 1800 });
+
+        var request = CreateRequest();
+        var announceList = new List<List<string>>
+        {
+            new() { "http://tier1-t1.com/announce" },
+            new() { "http://tier2-t1.com/announce" }
+        };
+
+        var result = _manager.Announce(request, announceList);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Complete, Is.EqualTo(5));
+        _httpTracker.Received(1).Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier1-t1.com/announce"));
+        _httpTracker.DidNotReceive().Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier2-t1.com/announce"));
+    }
+
+    [Test]
+    public void Announce_should_promote_successful_tracker_to_head_of_its_tier()
+    {
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tracker1.com/announce"))
+            .Returns(new TrackerAnnounceResponse { Success = false, FailureReason = "timeout" });
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tracker2.com/announce"))
+            .Returns(new TrackerAnnounceResponse { Success = true, Interval = 1800 });
+
+        var request = CreateRequest();
+        var announceList = new List<List<string>>
+        {
+            new() { "http://tracker1.com/announce", "http://tracker2.com/announce", "http://tracker3.com/announce" }
+        };
+
+        var result = _manager.Announce(request, announceList);
+
+        Assert.That(result.Success, Is.True);
+        // BEP 12: Successful tracker is moved to index 0 of its tier
+        Assert.That(announceList[0][0], Is.EqualTo("http://tracker2.com/announce"));
+        Assert.That(announceList[0][1], Is.EqualTo("http://tracker1.com/announce"));
+        Assert.That(announceList[0][2], Is.EqualTo("http://tracker3.com/announce"));
+    }
+
+    [Test]
+    public void ShuffleTier_should_randomize_order_of_trackers_within_tier_using_fisher_yates()
+    {
+        var tier = new List<string>();
+        for (var i = 0; i < 20; i++)
+        {
+            tier.Add($"http://tracker{i}.com/announce");
+        }
+
+        var original = new List<string>(tier);
+        MultiTrackerManager.ShuffleTier(tier);
+
+        // Same elements preserved
+        Assert.That(tier, Is.EquivalentTo(original));
+        // Elements should not be in identical order with high probability
+        Assert.That(tier, Is.Not.EqualTo(original));
+    }
+
+    [Test]
+    public void Announce_should_shuffle_trackers_within_tiers_when_event_is_started()
+    {
+        _httpTracker.Announce(Arg.Any<TrackerAnnounceRequest>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var request = CreateRequest();
+        request.Event = AnnounceEvent.Started;
+
+        var tier = new List<string>();
+        for (var i = 0; i < 20; i++)
+        {
+            tier.Add($"http://tracker{i}.com/announce");
+        }
+
+        var original = new List<string>(tier);
+        var announceList = new List<List<string>> { tier };
+
+        _manager.Announce(request, announceList);
+
+        Assert.That(announceList[0], Is.EquivalentTo(original));
+    }
+
+    [Test]
+    public void Announce_should_apply_exponential_backoff_and_auto_disable_after_five_consecutive_failures()
+    {
+        _configService.MultiTrackerFailoverEnabled.Returns(true);
+        _configService.FailoverBackoffBaseSeconds.Returns(60);
+        _configService.FailoverMaxBackoffSeconds.Returns(3600);
+        _configService.FailoverMaxConsecutiveFailures.Returns(5);
+
+        _httpTracker.Announce(Arg.Any<TrackerAnnounceRequest>())
+            .Returns(new TrackerAnnounceResponse { Success = false, FailureReason = "Connection refused" });
+
+        var request = CreateRequest();
+        var trackerUrl = "http://failing-tracker.com/announce";
+        var announceList = new List<List<string>> { new() { trackerUrl } };
+
+        // Failures 1 through 4: tracker backed off but not disabled
+        for (var i = 1; i <= 4; i++)
+        {
+            var res = _manager.Announce(request, announceList);
+            Assert.That(res.Success, Is.False);
+            Assert.That(_manager.IsTrackerDisabled(trackerUrl), Is.False);
+        }
+
+        // Failure 5: auto-disabled
+        var res5 = _manager.Announce(request, announceList);
+        Assert.That(res5.Success, Is.False);
+        Assert.That(_manager.IsTrackerDisabled(trackerUrl), Is.True);
+    }
+
+    [Test]
+    public void Announce_should_deduplicate_peers_across_multiple_tracker_responses()
+    {
+        _configService.AnnounceToAllTiers.Returns(true);
+        _configService.AnnounceToAllInTier.Returns(true);
+
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier1.com/announce"))
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = true,
+                Complete = 5,
+                Incomplete = 2,
+                Peers = new List<TrackerPeer>
+                {
+                    new() { Ip = "1.2.3.4", Port = 6881, PeerId = "peerA" },
+                    new() { Ip = "5.6.7.8", Port = 6881, PeerId = "peerB" }
+                }
+            });
+
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://tier2.com/announce"))
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = true,
+                Complete = 8,
+                Incomplete = 1,
+                Peers = new List<TrackerPeer>
+                {
+                    new() { Ip = "5.6.7.8", Port = 6881, PeerId = "peerB" }, // Duplicate!
+                    new() { Ip = "9.10.11.12", Port = 6882, PeerId = "peerC" }
+                }
+            });
+
+        var request = CreateRequest();
+        var announceList = new List<List<string>>
+        {
+            new() { "http://tier1.com/announce" },
+            new() { "http://tier2.com/announce" }
+        };
+
+        var result = _manager.Announce(request, announceList);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Peers.Count, Is.EqualTo(3));
+        var endpoints = result.Peers.Select(p => $"{p.Ip}:{p.Port}").ToList();
+        Assert.That(endpoints, Does.Contain("1.2.3.4:6881"));
+        Assert.That(endpoints, Does.Contain("5.6.7.8:6881"));
+        Assert.That(endpoints, Does.Contain("9.10.11.12:6882"));
+    }
+
+    [Test]
+    public void CalculateResponseTimeEma_should_calculate_correct_exponential_moving_average()
+    {
+        // First sample initializes EMA
+        var ema = MultiTrackerManager.CalculateResponseTimeEma(100.0, 0.0);
+        Assert.That(ema, Is.EqualTo(100.0));
+
+        // Second sample with alpha = 0.2: 0.2 * 200 + 0.8 * 100 = 40 + 80 = 120
+        ema = MultiTrackerManager.CalculateResponseTimeEma(200.0, ema, 0.2);
+        Assert.That(ema, Is.EqualTo(120.0).Within(0.001));
+
+        // Third sample: 0.2 * 50 + 0.8 * 120 = 10 + 96 = 106
+        ema = MultiTrackerManager.CalculateResponseTimeEma(50.0, ema, 0.2);
+        Assert.That(ema, Is.EqualTo(106.0).Within(0.001));
+    }
+
     private static TrackerAnnounceRequest CreateRequest()
     {
         return new TrackerAnnounceRequest

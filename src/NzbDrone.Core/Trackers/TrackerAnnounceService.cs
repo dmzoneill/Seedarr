@@ -72,6 +72,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly IClientProfileFactory _clientProfileFactory;
     private readonly ConcurrentDictionary<int, bool> _completedTorrents = new();
+    private readonly ConcurrentDictionary<int, List<List<string>>> _torrentTierOrder = new();
     private readonly ConcurrentQueue<Torrent> _staggeredQueue = new();
     private readonly object _staggeredLock = new();
     private readonly Logger _logger;
@@ -214,21 +215,36 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
         var primaryUrl = torrent.IsPrivate ? enabledTrackers.FirstOrDefault()?.Url : null;
 
+        if (torrent.IsPrivate)
+        {
+            enabledTrackers = enabledTrackers
+                .Where(entry =>
+                {
+                    if (!MultiTrackerManager.IsAuthorizedPrivateTrackerDomain(primaryUrl, entry.Url))
+                    {
+                        _logger.Warn("Private torrent {0} skipping unauthorized tracker: {1}", torrent.Name ?? torrent.InfoHash, entry.Url);
+                        return false;
+                    }
+                    return true;
+                })
+                .ToList();
+
+            if (enabledTrackers.Count == 0)
+            {
+                return results;
+            }
+        }
+
+        var candidateTrackers = new List<TrackerEntry>();
         foreach (var entry in enabledTrackers)
         {
-            if (torrent.IsPrivate && !MultiTrackerManager.IsAuthorizedPrivateTrackerDomain(primaryUrl, entry.Url))
-            {
-                _logger.Warn("Private torrent {0} skipping unauthorized tracker: {1}", torrent.Name ?? torrent.InfoHash, entry.Url);
-                continue;
-            }
-
-            var isFirstAnnounce = entry.TotalAnnounces == 0 || !entry.LastAnnounce.HasValue;
-            if (!force && !isFirstAnnounce && entry.NextAnnounce.HasValue && entry.NextAnnounce.Value > DateTime.UtcNow)
+            var isFirst = entry.TotalAnnounces == 0 || !entry.LastAnnounce.HasValue;
+            if (!force && !isFirst && entry.NextAnnounce.HasValue && entry.NextAnnounce.Value > DateTime.UtcNow)
             {
                 continue;
             }
 
-            if (IsRateLimited(entry, isFirstAnnounce, out var minIntervalSeconds, out var retryAfter))
+            if (IsRateLimited(entry, isFirst, out var minIntervalSeconds, out var retryAfter))
             {
                 results.Add(new TrackerAnnounceResult
                 {
@@ -241,21 +257,415 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 continue;
             }
 
-            var result = ExecuteAnnounce(torrent, entry, isFirstAnnounce, eventType);
-            results.Add(result);
+            candidateTrackers.Add(entry);
+        }
 
-            if (torrent.Status == TorrentStatus.Paused && !string.IsNullOrWhiteSpace(entry.WarningMessage))
+        if (candidateTrackers.Count == 0)
+        {
+            return results;
+        }
+
+        // BEP 12: Group candidate trackers by Tier into tiered structure
+        var tieredEntries = candidateTrackers
+            .GroupBy(t => t.Tier)
+            .OrderBy(g => g.Key)
+            .Select(g => g.ToList())
+            .ToList();
+
+        var isStopped = torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused || eventType == AnnounceEvent.Stopped;
+        var isFirstAnnounceOverall = candidateTrackers.All(t => t.TotalAnnounces == 0 || !t.LastAnnounce.HasValue);
+
+        AnnounceEvent announceEvent;
+        if (eventType != AnnounceEvent.None)
+        {
+            announceEvent = eventType;
+        }
+        else if (isStopped)
+        {
+            announceEvent = AnnounceEvent.Stopped;
+        }
+        else if (isFirstAnnounceOverall)
+        {
+            announceEvent = AnnounceEvent.Started;
+        }
+        else
+        {
+            announceEvent = AnnounceEvent.None;
+        }
+
+        // BEP 12: In-Tier Randomization (Fisher-Yates Shuffle) on startup / torrent initiation
+        if (announceEvent == AnnounceEvent.Started || !_torrentTierOrder.ContainsKey(torrent.Id))
+        {
+            foreach (var tier in tieredEntries)
             {
-                break;
+                MultiTrackerManager.ShuffleTier(tier);
             }
 
-            if (torrent.IsPrivate && result.Success)
+            _torrentTierOrder[torrent.Id] = tieredEntries
+                .Select(tier => tier.Select(e => e.Url).ToList())
+                .ToList();
+        }
+        else if (_torrentTierOrder.TryGetValue(torrent.Id, out var cachedTiers))
+        {
+            for (var i = 0; i < tieredEntries.Count; i++)
             {
+                if (i < cachedTiers.Count)
+                {
+                    var cachedUrls = cachedTiers[i];
+                    tieredEntries[i] = tieredEntries[i]
+                        .OrderBy(e =>
+                        {
+                            var idx = cachedUrls.IndexOf(e.Url);
+                            return idx >= 0 ? idx : int.MaxValue;
+                        })
+                        .ToList();
+                }
+            }
+        }
+
+        var announceList = tieredEntries
+            .Select(tier => tier.Select(e => e.Url).ToList())
+            .ToList();
+
+        var left = announceEvent == AnnounceEvent.Completed ? 0 : Math.Max(0, torrent.TotalSize - torrent.Downloaded);
+        var eventName = announceEvent != AnnounceEvent.None ? announceEvent.ToString().ToLowerInvariant() : "regular";
+        var primaryTrackerUrl = primaryUrl ?? announceList.FirstOrDefault()?.FirstOrDefault();
+
+        var isSimulated = torrent.IsSimulated || (_configService != null && _configService.SimulationModeEnabled);
+        var isLoopback = IsLoopbackOrMockTracker(primaryTrackerUrl);
+
+        long effectiveUploaded;
+        if (isSimulated && !isLoopback)
+        {
+            effectiveUploaded = torrent.RealUploaded;
+            if (torrent.Uploaded > torrent.RealUploaded)
+            {
+                _logger.Debug(
+                    "Simulated torrent {0}: suppressing synthetic upload bytes ({1:N0} bytes) from external tracker {2}; reporting genuine wire bytes ({3:N0} bytes)",
+                    torrent.Name ?? torrent.InfoHash,
+                    torrent.Uploaded,
+                    primaryTrackerUrl,
+                    effectiveUploaded);
+            }
+        }
+        else
+        {
+            effectiveUploaded = torrent.Uploaded;
+        }
+
+        var maxAnnouncedUploaded = candidateTrackers.Select(e => e.LastAnnouncedUploaded).DefaultIfEmpty(0).Max();
+        var uploadedBytes = Math.Max(effectiveUploaded, maxAnnouncedUploaded);
+
+        IClientProfile profile = null;
+        TorrentClientSession session = null;
+
+        if (!string.IsNullOrWhiteSpace(torrent.ClientProfile))
+        {
+            profile = ResolveProfileByName(torrent.ClientProfile);
+        }
+
+        if (profile == null && _clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+        {
+            session = _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate);
+            profile = session?.Profile ?? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate);
+        }
+
+        if (profile == null && !string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent))
+        {
+            profile = DetectProfileFromUserAgent(_configService.BitTorrentUserAgent);
+        }
+
+        if (profile == null && _clientBehaviorSimulator != null && !_configService.AnonymousMode)
+        {
+            session = _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate);
+            profile = session?.Profile ?? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate);
+        }
+
+        if (profile == null)
+        {
+            profile = ResolveProfileByName(_configService.PrimaryClient) ?? new QBittorrentProfile();
+        }
+
+        var peerId = session?.PeerId ?? profile.GeneratePeerId();
+        var userAgent = session?.Profile?.UserAgent ?? profile.UserAgent ?? (!string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent) ? _configService.BitTorrentUserAgent : "qBittorrent/4.4.2");
+        var announceKey = session?.AnnounceKey ?? RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue).ToString("X8", CultureInfo.InvariantCulture);
+
+        var request = new TrackerAnnounceRequest
+        {
+            InfoHash = torrent.InfoHash,
+            PeerId = peerId,
+            UserAgent = userAgent,
+            Key = announceKey,
+            Port = _configService.ListeningPort,
+            Uploaded = uploadedBytes,
+            Downloaded = torrent.Downloaded,
+            Left = left,
+            Event = announceEvent,
+            TrackerUrl = primaryTrackerUrl,
+            Compact = true,
+            NumWant = isStopped ? 0 : 50,
+            IsPrivate = torrent.IsPrivate,
+            ClientProfile = profile,
+            LastAnnouncedUploaded = maxAnnouncedUploaded
+        };
+
+        foreach (var entry in candidateTrackers)
+        {
+            var previousStatus = entry.Status;
+            entry.Status = TrackerStatus.Announcing;
+            _trackerEntryService.Update(entry);
+            _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, previousStatus, TrackerStatus.Announcing));
+            _eventLogService.Info(
+                torrent.Id,
+                "Tracker",
+                $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {uploadedBytes:N0} bytes, left: {left:N0} bytes)");
+        }
+
+        TrackerAnnounceResponse response;
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            response = _multiTracker.Announce(request, announceList, torrent.IsPrivate);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Exception announcing for torrent {0}", torrent.Name ?? torrent.InfoHash);
+            response = new TrackerAnnounceResponse
+            {
+                Success = false,
+                FailureReason = ex.Message
+            };
+        }
+        finally
+        {
+            sw.Stop();
+        }
+
+        var responsesToProcess = (response?.TrackerResponses != null && response.TrackerResponses.Count > 0)
+            ? response.TrackerResponses
+            : candidateTrackers.Select(e => new TrackerAnnounceResponse
+            {
+                Success = response?.Success ?? false,
+                Complete = response?.Complete ?? 0,
+                Incomplete = response?.Incomplete ?? 0,
+                Interval = response?.Interval ?? 0,
+                MinInterval = response?.MinInterval ?? 0,
+                Peers = response?.Peers ?? new List<TrackerPeer>(),
+                FailureReason = response?.FailureReason,
+                WarningMessage = response?.WarningMessage,
+                TrackerUrl = e.Url,
+                ResponseTimeMs = sw.ElapsedMilliseconds
+            }).ToList();
+
+        foreach (var tr in responsesToProcess)
+        {
+            var entry = candidateTrackers.FirstOrDefault(e => string.Equals(e.Url, tr.TrackerUrl, StringComparison.OrdinalIgnoreCase))
+                ?? candidateTrackers.FirstOrDefault();
+
+            if (entry == null)
+            {
+                continue;
+            }
+
+            var respTime = tr.ResponseTimeMs > 0 ? tr.ResponseTimeMs : sw.ElapsedMilliseconds;
+
+            _trackerMetricService?.RecordAnnounce(
+                entry.Url,
+                torrent.Id,
+                uploadedBytes,
+                torrent.Downloaded,
+                left,
+                respTime,
+                tr.Success,
+                tr.Complete,
+                tr.Incomplete,
+                tr.Peers?.Count ?? 0,
+                tr.FailureReason);
+
+            entry.TotalAnnounces++;
+            entry.LastResponseTime = respTime;
+            entry.AverageResponseTime = MultiTrackerManager.CalculateResponseTimeEma(respTime, entry.AverageResponseTime);
+
+            var result = new TrackerAnnounceResult
+            {
+                TrackerId = entry.Id,
+                Url = entry.Url,
+                Success = tr.Success,
+                ResponseTimeMs = respTime,
+                Seeders = tr.Complete,
+                Leechers = tr.Incomplete,
+                PeersDiscovered = tr.Peers?.Count ?? 0,
+                FailureReason = tr.FailureReason,
+                WarningMessage = tr.WarningMessage,
+                LastAnnouncedUploaded = entry.LastAnnouncedUploaded
+            };
+
+            if (HasWarningOrAntiCheat(tr, out var warningText))
+            {
+                var oldStatus = torrent.Status;
+                torrent.Status = TorrentStatus.Paused;
+                torrent.ErrorMessage = $"Circuit breaker tripped: {warningText}";
+                _torrentService?.Update(torrent);
+
+                entry.Status = TrackerStatus.Disabled;
+                entry.Enabled = false;
+                entry.NextAnnounce = null;
+                entry.WarningMessage = warningText;
+                entry.ErrorMessage = $"Circuit breaker tripped: {warningText}";
+                entry.LastErrorTime = DateTime.UtcNow;
+                entry.LastAnnounce = DateTime.UtcNow;
+                entry.LastAnnouncedUploaded = request.Uploaded;
+                _trackerEntryService.Update(entry);
+
+                _logger.Error("Circuit breaker tripped for torrent {0} ({1}) on tracker {2}: {3}", torrent.Name, torrent.InfoHash, entry.Url, warningText);
+                _eventLogService.Error(
+                    torrent.Id,
+                    "Tracker",
+                    $"CRITICAL: Tracker safety circuit breaker tripped for {entry.Url}: {warningText}. Pausing torrent and suspending automated announces.");
+
+                _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused, $"Circuit breaker tripped: {warningText}"));
+                _eventAggregator?.PublishEvent(new HealthIssueEvent(torrent, "TrackerSafety", $"Circuit breaker tripped on {entry.Url}: {warningText}", isResolved: false));
+                _eventAggregator?.PublishEvent(new TrackerWarningEvent(torrent, entry.Url, warningText));
+                _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Disabled));
+
+                result.Success = false;
+                result.FailureReason = $"Circuit breaker tripped: {warningText}";
+                result.WarningMessage = warningText;
+                result.LastAnnouncedUploaded = request.Uploaded;
+                results.Add(result);
                 break;
+            }
+            else if (tr.Success)
+            {
+                entry.Status = TrackerStatus.Working;
+                entry.Seeders = tr.Complete;
+                entry.Leechers = tr.Incomplete;
+                entry.LastAnnounce = DateTime.UtcNow;
+                entry.LastAnnouncedUploaded = request.Uploaded;
+                var interval = tr.Interval > 0 ? tr.Interval : (_configService.AnnounceIntervalSeconds > 0 ? _configService.AnnounceIntervalSeconds : 1800);
+                entry.AnnounceInterval = interval;
+                entry.MinAnnounceInterval = tr.MinInterval > 0 ? tr.MinInterval : 900;
+                var jitteredInterval = JitterCalculator != null
+                    ? JitterCalculator(interval, tr.MinInterval)
+                    : CalculateJitteredInterval(interval, tr.MinInterval);
+                entry.NextAnnounce = DateTime.UtcNow.AddSeconds(jitteredInterval);
+                entry.SuccessfulAnnounces++;
+                entry.ConsecutiveFailures = 0;
+                entry.ErrorMessage = null;
+                entry.WarningMessage = null;
+                _trackerEntryService.Update(entry);
+
+                var allEntries = _trackerEntryService?.GetByTorrentId(torrent.Id);
+                if (allEntries != null && allEntries.Count > 0)
+                {
+                    torrent.Seeders = Math.Max(tr.Complete, allEntries.Where(e => e.Enabled).Select(e => e.Seeders).DefaultIfEmpty(0).Max());
+                    torrent.Leechers = Math.Max(tr.Incomplete, allEntries.Where(e => e.Enabled).Select(e => e.Leechers).DefaultIfEmpty(0).Max());
+                }
+                else
+                {
+                    torrent.Seeders = tr.Complete;
+                    torrent.Leechers = tr.Incomplete;
+                }
+
+                _torrentService?.Update(torrent);
+                _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Working));
+
+                result.AnnounceInterval = interval;
+                result.LastAnnouncedUploaded = request.Uploaded;
+
+                _eventLogService.Info(
+                    torrent.Id,
+                    "Tracker",
+                    $"Tracker announce succeeded: {entry.Url} -> Seeders: {tr.Complete}, Leechers: {tr.Incomplete}, Peers: {tr.Peers?.Count ?? 0}, Interval: {interval}s ({respTime}ms)");
+
+                if (tr.Peers != null && tr.Peers.Count > 0)
+                {
+                    _peerDiscovery.AddPeers(torrent.InfoHash, tr.Peers, "tracker");
+                    var peerSample = string.Join(", ", tr.Peers.Take(5).Select(p => $"{p.Ip}:{p.Port}"));
+                    _eventLogService.Info(
+                        torrent.Id,
+                        "Peers",
+                        $"Discovered {tr.Peers.Count} peer candidate(s) from {entry.Url} ({peerSample}{(tr.Peers.Count > 5 ? ", ..." : "")})");
+                }
+
+                results.Add(result);
+
+                PromoteTrackerInTorrentTierOrder(torrent.Id, entry.Tier, entry.Url);
+            }
+            else
+            {
+                entry.ConsecutiveFailures++;
+                entry.ErrorMessage = tr.FailureReason;
+                entry.LastErrorTime = DateTime.UtcNow;
+
+                var maxFailures = _configService?.FailoverMaxConsecutiveFailures > 0
+                    ? _configService.FailoverMaxConsecutiveFailures
+                    : 5;
+
+                if (entry.ConsecutiveFailures >= maxFailures)
+                {
+                    entry.Status = TrackerStatus.Disabled;
+                    entry.Enabled = false;
+                    _logger.Warn("Tracker {0} auto-disabled after {1} consecutive failures", entry.Url, entry.ConsecutiveFailures);
+                }
+                else
+                {
+                    entry.Status = TrackerStatus.Failed;
+                }
+
+                var baseSeconds = _configService?.FailoverBackoffBaseSeconds > 0
+                    ? _configService.FailoverBackoffBaseSeconds
+                    : 60;
+                var maxBackoff = _configService?.FailoverMaxBackoffSeconds > 0
+                    ? _configService.FailoverMaxBackoffSeconds
+                    : 3600;
+                var exponent = Math.Min(Math.Max(0, entry.ConsecutiveFailures - 1), 10);
+                var backoffSeconds = Math.Min(baseSeconds * Math.Pow(2, exponent), maxBackoff);
+                entry.NextAnnounce = DateTime.UtcNow.AddSeconds(backoffSeconds);
+                _trackerEntryService.Update(entry);
+
+                _eventLogService.Warn(
+                    torrent.Id,
+                    "Tracker",
+                    $"Tracker announce failed: {entry.Url} -> {tr.FailureReason ?? "Unreachable"} (failure #{entry.ConsecutiveFailures}, next retry in {(int)backoffSeconds}s)");
+
+                _eventAggregator?.PublishEvent(new TrackerUnreachableEvent(torrent, entry.Url, tr.FailureReason ?? "Unreachable"));
+                _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, entry.Status));
+
+                results.Add(result);
+            }
+
+            _eventAggregator?.PublishEvent(new TrackerAnnounceEvent(torrent, entry.Url, tr.Complete, tr.Incomplete, tr.Peers?.Count ?? 0, respTime, tr.Success, tr.FailureReason, entry.Id, entry.Status));
+        }
+
+        var announcedUrls = new HashSet<string>(results.Select(r => r.Url), StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in candidateTrackers)
+        {
+            if (!announcedUrls.Contains(entry.Url) && entry.Status == TrackerStatus.Announcing)
+            {
+                entry.Status = TrackerStatus.Unknown;
+                _trackerEntryService.Update(entry);
             }
         }
 
         return results;
+    }
+
+    private void PromoteTrackerInTorrentTierOrder(int torrentId, int tier, string trackerUrl)
+    {
+        if (_torrentTierOrder.TryGetValue(torrentId, out var tiers))
+        {
+            foreach (var t in tiers)
+            {
+                var idx = t.IndexOf(trackerUrl);
+                if (idx > 0)
+                {
+                    t.RemoveAt(idx);
+                    t.Insert(0, trackerUrl);
+                    break;
+                }
+            }
+        }
     }
 
     public TrackerAnnounceResult AnnounceTracker(Torrent torrent, TrackerEntry entry, bool force = false, AnnounceEvent eventType = AnnounceEvent.None)
@@ -330,7 +740,9 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         var trackerEntries = _trackerEntryService.GetByTorrentId(torrent.Id);
         var announceList = trackerEntries
             .Where(t => t.Enabled && !string.IsNullOrWhiteSpace(t.Url))
-            .Select(t => new List<string> { t.Url })
+            .GroupBy(t => t.Tier)
+            .OrderBy(g => g.Key)
+            .Select(g => g.Select(t => t.Url).ToList())
             .ToList();
 
         if (announceList.Count == 0 && !string.IsNullOrEmpty(torrent.TrackerUrl))
@@ -499,6 +911,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
         entry.TotalAnnounces++;
         entry.LastResponseTime = sw.ElapsedMilliseconds;
+        entry.AverageResponseTime = MultiTrackerManager.CalculateResponseTimeEma(sw.ElapsedMilliseconds, entry.AverageResponseTime);
 
         var result = new TrackerAnnounceResult
         {
@@ -601,11 +1014,33 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         }
         else
         {
-            entry.Status = TrackerStatus.Failed;
             entry.ConsecutiveFailures++;
             entry.ErrorMessage = response.FailureReason;
             entry.LastErrorTime = DateTime.UtcNow;
-            var backoffSeconds = Math.Min(1800, 60 * Math.Pow(2, Math.Min(5, entry.ConsecutiveFailures)));
+
+            var maxFailures = _configService?.FailoverMaxConsecutiveFailures > 0
+                ? _configService.FailoverMaxConsecutiveFailures
+                : 5;
+
+            if (entry.ConsecutiveFailures >= maxFailures)
+            {
+                entry.Status = TrackerStatus.Disabled;
+                entry.Enabled = false;
+                _logger.Warn("Tracker {0} auto-disabled after {1} consecutive failures", entry.Url, entry.ConsecutiveFailures);
+            }
+            else
+            {
+                entry.Status = TrackerStatus.Failed;
+            }
+
+            var baseSeconds = _configService?.FailoverBackoffBaseSeconds > 0
+                ? _configService.FailoverBackoffBaseSeconds
+                : 60;
+            var maxBackoff = _configService?.FailoverMaxBackoffSeconds > 0
+                ? _configService.FailoverMaxBackoffSeconds
+                : 3600;
+            var exponent = Math.Min(Math.Max(0, entry.ConsecutiveFailures - 1), 10);
+            var backoffSeconds = Math.Min(baseSeconds * Math.Pow(2, exponent), maxBackoff);
             entry.NextAnnounce = DateTime.UtcNow.AddSeconds(backoffSeconds);
             _trackerEntryService.Update(entry);
 
@@ -615,7 +1050,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 $"Tracker announce failed: {entry.Url} -> {response.FailureReason ?? "Unreachable"} (failure #{entry.ConsecutiveFailures}, next retry in {(int)backoffSeconds}s)");
 
             _eventAggregator?.PublishEvent(new TrackerUnreachableEvent(torrent, entry.Url, response.FailureReason ?? "Unreachable"));
-            _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Failed));
+            _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, entry.Status));
         }
 
         _eventAggregator?.PublishEvent(new TrackerAnnounceEvent(torrent, entry.Url, response.Complete, response.Incomplete, response.Peers?.Count ?? 0, sw.ElapsedMilliseconds, response.Success, response.FailureReason, entry.Id, entry.Status));
@@ -927,6 +1362,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         }
 
         _completedTorrents.TryRemove(torrent.Id, out _);
+        _torrentTierOrder.TryRemove(torrent.Id, out _);
 
         try
         {
