@@ -10,6 +10,7 @@ using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.ArrIntegration.Webhook;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Extraction;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Messaging.Events;
@@ -866,7 +867,10 @@ public class ArrWebhookServiceTest
 
     // --- Constructor-injection tests (inject mock HttpClient + fresh policy) ---
 
-    private ArrWebhookService CreateWithMockClient(MockHttpMessageHandler handler)
+    private ArrWebhookService CreateWithMockClient(
+        MockHttpMessageHandler handler,
+        ITrackerEntryService trackerEntryService = null,
+        IDownloadClientFactory downloadClientFactory = null)
     {
         var httpClient = new HttpClient(handler);
         var policy = new ResiliencePipelineBuilder().Build();
@@ -874,6 +878,9 @@ public class ArrWebhookServiceTest
             _connectionFactory,
             _torrentService,
             _torrentFileParser,
+            trackerEntryService,
+            null,
+            downloadClientFactory,
             httpClient,
             policy)
         {
@@ -1280,6 +1287,228 @@ public class ArrWebhookServiceTest
         Assert.DoesNotThrowAsync(async () => await task);
 
         _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public async Task EnrichTorrentFromHistoryAsync_should_parse_magnet_link_and_attach_trackers()
+    {
+        var magnetUri = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=MagnetTorrent&tr=http%3A%2F%2Ftracker1.example.com%2Fannounce&tr=http%3A%2F%2Ftracker2.example.com%2Fannounce";
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            $"{{\"records\":[{{\"data\":{{\"downloadUrl\":\"{magnetUri}\"}}}}]}}");
+
+        var trackerEntryService = Substitute.For<ITrackerEntryService>();
+        trackerEntryService.GetByTorrentId(1).Returns(new List<TrackerEntry>());
+
+        var existingTorrent = new Torrent { Id = 1, Name = "InitialName", InfoHash = "0123456789abcdef0123456789abcdef01234567", TrackerUrl = null };
+        _torrentService.Get(1).Returns(existingTorrent);
+
+        var service = CreateWithMockClient(handler, trackerEntryService);
+        var method = typeof(ArrWebhookService).GetMethod("EnrichTorrentFromHistoryAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "test-key"
+        };
+
+        var task = (Task)method.Invoke(service, new object[] { 1, "0123456789abcdef0123456789abcdef01234567", "0123456789ABCDEF0123456789ABCDEF01234567", connection, "Sonarr", CancellationToken.None });
+        await task;
+
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.TrackerUrl == "http://tracker1.example.com/announce"));
+        trackerEntryService.Received(1).AddMany(Arg.Is<List<TrackerEntry>>(list =>
+            list.Count == 2 &&
+            list[0].Url == "http://tracker1.example.com/announce" &&
+            list[0].Tier == 1 &&
+            list[1].Url == "http://tracker2.example.com/announce" &&
+            list[1].Tier == 2));
+    }
+
+    [Test]
+    public async Task EnrichTorrentFromHistoryAsync_should_preserve_existing_tracker_url_when_parsing_magnet()
+    {
+        var magnetUri = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=MagnetTorrent&tr=http%3A%2F%2Ftracker2.example.com%2Fannounce";
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            $"{{\"records\":[{{\"data\":{{\"downloadUrl\":\"{magnetUri}\"}}}}]}}");
+
+        var trackerEntryService = Substitute.For<ITrackerEntryService>();
+        trackerEntryService.GetByTorrentId(1).Returns(new List<TrackerEntry>());
+
+        var existingTorrent = new Torrent { Id = 1, Name = "InitialName", InfoHash = "0123456789abcdef0123456789abcdef01234567", TrackerUrl = "http://existing-tracker.com/announce" };
+        _torrentService.Get(1).Returns(existingTorrent);
+
+        var service = CreateWithMockClient(handler, trackerEntryService);
+        var method = typeof(ArrWebhookService).GetMethod("EnrichTorrentFromHistoryAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "test-key"
+        };
+
+        var task = (Task)method.Invoke(service, new object[] { 1, "0123456789abcdef0123456789abcdef01234567", "0123456789ABCDEF0123456789ABCDEF01234567", connection, "Sonarr", CancellationToken.None });
+        await task;
+
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+        trackerEntryService.Received(1).AddMany(Arg.Is<List<TrackerEntry>>(list =>
+            list.Count == 1 &&
+            list[0].Url == "http://tracker2.example.com/announce"));
+    }
+
+    [Test]
+    public async Task EnrichTorrentFromHistoryAsync_when_downloadUrl_is_missing_should_execute_fallback_to_download_client()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""records"":[{""data"":{}}]}");
+
+        var trackerEntryService = Substitute.For<ITrackerEntryService>();
+        trackerEntryService.GetByTorrentId(1).Returns(new List<TrackerEntry>());
+
+        var downloadClientFactory = Substitute.For<IDownloadClientFactory>();
+        var downloadClient = Substitute.For<IDownloadClient>();
+        var clientDef = new DownloadClientDefinition { Id = 10, Name = "qBittorrent", Enable = true };
+        downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+        downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+        downloadClient.GetTrackers("0123456789abcdef0123456789abcdef01234567")
+            .Returns(new List<string> { "http://client-tracker.example.com/announce" });
+
+        var existingTorrent = new Torrent { Id = 1, Name = "TorrentWithoutUrl", InfoHash = "0123456789abcdef0123456789abcdef01234567", TrackerUrl = null };
+        _torrentService.Get(1).Returns(existingTorrent);
+
+        var service = CreateWithMockClient(handler, trackerEntryService, downloadClientFactory);
+        var method = typeof(ArrWebhookService).GetMethod("EnrichTorrentFromHistoryAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "test-key"
+        };
+
+        var task = (Task)method.Invoke(service, new object[] { 1, "0123456789abcdef0123456789abcdef01234567", "0123456789ABCDEF0123456789ABCDEF01234567", connection, "Sonarr", CancellationToken.None });
+        await task;
+
+        downloadClient.Received(1).GetTrackers("0123456789abcdef0123456789abcdef01234567");
+        trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t =>
+            t.TorrentId == 1 &&
+            t.Url == "http://client-tracker.example.com/announce" &&
+            t.Tier == 1));
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.TrackerUrl == "http://client-tracker.example.com/announce"));
+    }
+
+    [Test]
+    public async Task EnrichTorrentFromHistoryAsync_when_fetch_torrent_fails_should_execute_fallback_to_download_client()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            @"{""records"":[{""data"":{""downloadUrl"":""http://93.184.216.34/file.torrent""}}]}");
+        handler.Enqueue(HttpStatusCode.NotFound, "{}");
+
+        var trackerEntryService = Substitute.For<ITrackerEntryService>();
+        trackerEntryService.GetByTorrentId(1).Returns(new List<TrackerEntry>());
+
+        var downloadClientFactory = Substitute.For<IDownloadClientFactory>();
+        var downloadClient = Substitute.For<IDownloadClient>();
+        var clientDef = new DownloadClientDefinition { Id = 11, Name = "Transmission", Enable = true };
+        downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+        downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+        downloadClient.GetTrackers("0123456789abcdef0123456789abcdef01234567")
+            .Returns(new List<string> { "http://recovered-tracker.com/announce" });
+
+        var existingTorrent = new Torrent { Id = 1, Name = "TorrentFetchFailed", InfoHash = "0123456789abcdef0123456789abcdef01234567", TrackerUrl = null };
+        _torrentService.Get(1).Returns(existingTorrent);
+
+        var service = CreateWithMockClient(handler, trackerEntryService, downloadClientFactory);
+        var method = typeof(ArrWebhookService).GetMethod("EnrichTorrentFromHistoryAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "test-key"
+        };
+
+        var task = (Task)method.Invoke(service, new object[] { 1, "0123456789abcdef0123456789abcdef01234567", "0123456789ABCDEF0123456789ABCDEF01234567", connection, "Sonarr", CancellationToken.None });
+        await task;
+
+        downloadClient.Received(1).GetTrackers("0123456789abcdef0123456789abcdef01234567");
+        trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t =>
+            t.TorrentId == 1 &&
+            t.Url == "http://recovered-tracker.com/announce" &&
+            t.Tier == 1));
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.TrackerUrl == "http://recovered-tracker.com/announce"));
+    }
+
+    [Test]
+    [TestCase("http://radarr:7878/", "http://radarr:7878/api/v3/history?downloadId=0123456789abcdef0123456789abcdef01234567&pageSize=1")]
+    [TestCase("http://radarr:7878///", "http://radarr:7878/api/v3/history?downloadId=0123456789abcdef0123456789abcdef01234567&pageSize=1")]
+    [TestCase("http://lidarr:8686/", "http://lidarr:8686/api/v1/history?downloadId=0123456789abcdef0123456789abcdef01234567&pageSize=1")]
+    public void QueryHistoryForDownloadUrl_should_trim_trailing_slashes_from_connection_url(string url, string expectedRequestUri)
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""records"":[]}");
+
+        var service = CreateWithMockClient(handler);
+        var isLidarr = url.Contains("lidarr");
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = isLidarr ? "Lidarr" : "Radarr",
+            Url = url,
+            ApiKey = "test-key"
+        };
+
+        var method = typeof(ArrWebhookService).GetMethod("QueryHistoryForDownloadUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(service, new object[] { connection, isLidarr ? "v1" : "v3", "0123456789abcdef0123456789abcdef01234567" });
+
+        Assert.That(handler.LastRequest, Is.Not.Null);
+        Assert.That(handler.LastRequest.RequestUri?.AbsoluteUri, Is.EqualTo(expectedRequestUri));
+        Assert.That(handler.LastRequest.RequestUri?.AbsoluteUri, Does.Not.Contain("//api/"));
+    }
+
+    [Test]
+    [TestCase("lidarr", "v1")]
+    [TestCase("LIDARR", "v1")]
+    [TestCase("Lidarr", "v1")]
+    [TestCase("readarr", "v1")]
+    [TestCase("READARR", "v1")]
+    [TestCase("Readarr", "v1")]
+    [TestCase("sonarr", "v3")]
+    [TestCase("SONARR", "v3")]
+    [TestCase("Sonarr", "v3")]
+    [TestCase("radarr", "v3")]
+    [TestCase("RADARR", "v3")]
+    [TestCase("Radarr", "v3")]
+    public async Task GetDownloadUrlFromHistoryAsync_should_evaluate_ArrType_case_insensitively(string arrType, string expectedApiVersion)
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            @"{""records"":[{""data"":{""downloadUrl"":""https://tracker.example.com/item.torrent""}}]}");
+
+        var service = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = arrType,
+            Url = "http://arrhost:8989",
+            ApiKey = "test-key"
+        };
+
+        var method = typeof(ArrWebhookService).GetMethod("GetDownloadUrlFromHistoryAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var task = (Task<string>)method.Invoke(service, new object[] { connection, "0123456789abcdef0123456789abcdef01234567", CancellationToken.None });
+        var result = await task;
+
+        Assert.That(result, Is.EqualTo("https://tracker.example.com/item.torrent"));
+        Assert.That(handler.LastRequest, Is.Not.Null);
+        Assert.That(handler.LastRequest.RequestUri?.AbsoluteUri,
+            Does.StartWith($"http://arrhost:8989/api/{expectedApiVersion}/history?"));
     }
 
     [Test]

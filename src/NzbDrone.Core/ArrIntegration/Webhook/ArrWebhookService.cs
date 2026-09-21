@@ -730,132 +730,199 @@ public class ArrWebhookService : IArrWebhookService
             if (string.IsNullOrEmpty(downloadUrl))
             {
                 _logger.Warn("Enrich: could not find downloadUrl in {0} history for {1}", connection.ArrType, downloadId);
-                return;
             }
-
-            var torrentBytes = FetchTorrentFile(downloadUrl);
-            if (torrentBytes == null || torrentBytes.Length == 0)
+            else if (downloadUrl.StartsWith("magnet:?", StringComparison.OrdinalIgnoreCase))
             {
-                _logger.Warn("Enrich: failed to fetch .torrent from {0}", downloadUrl);
-                return;
-            }
-
-            using var stream = new MemoryStream(torrentBytes);
-            var parsed = _torrentFileParser.Parse(stream);
-
-            var torrent = _torrentService.Get(torrentId);
-            if (torrent == null)
-            {
-                return;
-            }
-
-            torrent.Name = parsed.Name;
-            torrent.InfoHash = parsed.InfoHash.ToLowerInvariant();
-            torrent.TotalSize = parsed.TotalSize;
-            torrent.PieceCount = parsed.PieceCount;
-            torrent.PieceLength = parsed.PieceLength;
-            torrent.Comment = parsed.Comment;
-            torrent.IsPrivate = parsed.IsPrivate;
-            if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
-            {
-                torrent.TrackerUrl = parsed.AnnounceUrl;
-            }
-
-            _torrentService.Update(torrent);
-
-            if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)
-            {
-                var existingFiles = _torrentFileService.GetByTorrentId(torrentId);
-                if (existingFiles.Count == 0)
+                try
                 {
-                    var pieceLength = parsed.PieceLength > 0 ? (long)parsed.PieceLength : 0L;
-                    var runningByteOffset = 0L;
-                    var filesToAdd = new List<TorrentFile>();
-
-                    foreach (var f in parsed.Files)
+                    var parsedMagnet = MagnetLinkParser.Parse(downloadUrl);
+                    var torrent = _torrentService.Get(torrentId);
+                    if (torrent != null)
                     {
-                        var (pieceOffset, pieceCount) = TorrentPieceCalculator.CalculateForFile(runningByteOffset, f.Size, pieceLength);
-                        if (pieceLength > 0)
+                        var torrentUpdated = false;
+                        if (string.IsNullOrEmpty(torrent.TrackerUrl) && parsedMagnet.Trackers != null && parsedMagnet.Trackers.Length > 0)
                         {
-                            runningByteOffset += f.Size;
-                        }
-
-                        filesToAdd.Add(new TorrentFile
-                        {
-                            TorrentId = torrentId,
-                            Path = f.Path,
-                            Size = f.Size,
-                            PieceOffset = pieceOffset,
-                            PieceCount = pieceCount,
-                            IsPaddingFile = f.IsPaddingFile
-                        });
-                    }
-                    _torrentFileService.AddMany(filesToAdd);
-                }
-            }
-
-            if (_trackerEntryService != null)
-            {
-                var existingTrackers = _trackerEntryService.GetByTorrentId(torrentId)
-                    .Select(t => t.Url.Trim().ToLowerInvariant())
-                    .ToHashSet();
-
-                var newTrackers = new List<TrackerEntry>();
-
-                if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
-                {
-                    var tier = 1;
-                    foreach (var tierUrls in parsed.AnnounceList)
-                    {
-                        foreach (var url in tierUrls)
-                        {
-                            var clean = url.Trim();
-                            if (!string.IsNullOrEmpty(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
+                            var firstTracker = parsedMagnet.Trackers.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
+                            if (!string.IsNullOrEmpty(firstTracker))
                             {
-                                newTrackers.Add(new TrackerEntry
-                                {
-                                    TorrentId = torrentId,
-                                    Url = clean,
-                                    Tier = tier,
-                                    Enabled = true
-                                });
-                                existingTrackers.Add(clean.ToLowerInvariant());
+                                torrent.TrackerUrl = firstTracker.Trim();
+                                torrentUpdated = true;
                             }
                         }
 
-                        tier++;
-                    }
-                }
-                else if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
-                {
-                    var clean = parsed.AnnounceUrl.Trim();
-                    if (!existingTrackers.Contains(clean.ToLowerInvariant()))
-                    {
-                        newTrackers.Add(new TrackerEntry
+                        if (torrentUpdated)
                         {
-                            TorrentId = torrentId,
-                            Url = clean,
-                            Tier = 1,
-                            Enabled = true
-                        });
+                            _torrentService.Update(torrent);
+                        }
+
+                        if (_trackerEntryService != null && parsedMagnet.Trackers != null && parsedMagnet.Trackers.Length > 0)
+                        {
+                            var existingTrackers = (_trackerEntryService.GetByTorrentId(torrentId) ?? new List<TrackerEntry>())
+                                .Select(t => t.Url.Trim().ToLowerInvariant())
+                                .ToHashSet();
+
+                            var newTrackers = new List<TrackerEntry>();
+                            var tier = 1;
+                            foreach (var trackerUrl in parsedMagnet.Trackers)
+                            {
+                                var clean = trackerUrl?.Trim();
+                                if (!string.IsNullOrEmpty(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
+                                {
+                                    newTrackers.Add(new TrackerEntry
+                                    {
+                                        TorrentId = torrentId,
+                                        Url = clean,
+                                        Tier = tier++,
+                                        Enabled = true
+                                    });
+                                    existingTrackers.Add(clean.ToLowerInvariant());
+                                }
+                            }
+
+                            if (newTrackers.Count > 0)
+                            {
+                                _trackerEntryService.AddMany(newTrackers);
+                            }
+                        }
+
+                        _logger.Info(
+                            "Enrich: updated '{0}' ({1}) with trackers from magnet link from {2}",
+                            torrent.Name,
+                            torrent.InfoHash,
+                            instanceName);
                     }
                 }
-
-                if (newTrackers.Count > 0)
+                catch (Exception magnetEx)
                 {
-                    _trackerEntryService.AddMany(newTrackers);
+                    _logger.Warn(magnetEx, "Enrich: failed to parse magnet link for {0}", infoHash);
                 }
             }
+            else
+            {
+                var torrentBytes = FetchTorrentFile(downloadUrl);
+                if (torrentBytes == null || torrentBytes.Length == 0)
+                {
+                    _logger.Warn("Enrich: failed to fetch .torrent from {0}", downloadUrl);
+                }
+                else
+                {
+                    using var stream = new MemoryStream(torrentBytes);
+                    var parsed = _torrentFileParser.Parse(stream);
 
-            _logger.Info(
-                "Enrich: upgraded '{0}' ({1}) with full metadata and trackers from {2}",
-                torrent.Name,
-                torrent.InfoHash,
-                instanceName);
+                    var torrent = _torrentService.Get(torrentId);
+                    if (torrent != null)
+                    {
+                        torrent.Name = parsed.Name;
+                        torrent.InfoHash = parsed.InfoHash.ToLowerInvariant();
+                        torrent.TotalSize = parsed.TotalSize;
+                        torrent.PieceCount = parsed.PieceCount;
+                        torrent.PieceLength = parsed.PieceLength;
+                        torrent.Comment = parsed.Comment;
+                        torrent.IsPrivate = parsed.IsPrivate;
+                        if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
+                        {
+                            torrent.TrackerUrl = parsed.AnnounceUrl;
+                        }
+
+                        _torrentService.Update(torrent);
+
+                        if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)
+                        {
+                            var existingFiles = _torrentFileService.GetByTorrentId(torrentId);
+                            if (existingFiles.Count == 0)
+                            {
+                                var pieceLength = parsed.PieceLength > 0 ? (long)parsed.PieceLength : 0L;
+                                var runningByteOffset = 0L;
+                                var filesToAdd = new List<TorrentFile>();
+
+                                foreach (var f in parsed.Files)
+                                {
+                                    var (pieceOffset, pieceCount) = TorrentPieceCalculator.CalculateForFile(runningByteOffset, f.Size, pieceLength);
+                                    if (pieceLength > 0)
+                                    {
+                                        runningByteOffset += f.Size;
+                                    }
+
+                                    filesToAdd.Add(new TorrentFile
+                                    {
+                                        TorrentId = torrentId,
+                                        Path = f.Path,
+                                        Size = f.Size,
+                                        PieceOffset = pieceOffset,
+                                        PieceCount = pieceCount,
+                                        IsPaddingFile = f.IsPaddingFile
+                                    });
+                                }
+                                _torrentFileService.AddMany(filesToAdd);
+                            }
+                        }
+
+                        if (_trackerEntryService != null)
+                        {
+                            var existingTrackers = (_trackerEntryService.GetByTorrentId(torrentId) ?? new List<TrackerEntry>())
+                                .Select(t => t.Url.Trim().ToLowerInvariant())
+                                .ToHashSet();
+
+                            var newTrackers = new List<TrackerEntry>();
+
+                            if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
+                            {
+                                var tier = 1;
+                                foreach (var tierUrls in parsed.AnnounceList)
+                                {
+                                    foreach (var url in tierUrls)
+                                    {
+                                        var clean = url.Trim();
+                                        if (!string.IsNullOrEmpty(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
+                                        {
+                                            newTrackers.Add(new TrackerEntry
+                                            {
+                                                TorrentId = torrentId,
+                                                Url = clean,
+                                                Tier = tier,
+                                                Enabled = true
+                                            });
+                                            existingTrackers.Add(clean.ToLowerInvariant());
+                                        }
+                                    }
+
+                                    tier++;
+                                }
+                            }
+                            else if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
+                            {
+                                var clean = parsed.AnnounceUrl.Trim();
+                                if (!existingTrackers.Contains(clean.ToLowerInvariant()))
+                                {
+                                    newTrackers.Add(new TrackerEntry
+                                    {
+                                        TorrentId = torrentId,
+                                        Url = clean,
+                                        Tier = 1,
+                                        Enabled = true
+                                    });
+                                }
+                            }
+
+                            if (newTrackers.Count > 0)
+                            {
+                                _trackerEntryService.AddMany(newTrackers);
+                            }
+                        }
+
+                        _logger.Info(
+                            "Enrich: upgraded '{0}' ({1}) with full metadata and trackers from {2}",
+                            torrent.Name,
+                            torrent.InfoHash,
+                            instanceName);
+                    }
+                }
+            }
         }
         catch (OperationCanceledException)
         {
             _logger.Debug("Enrich: cancelled for torrent {0}", infoHash);
+            return;
         }
         catch (Exception ex)
         {
@@ -867,8 +934,14 @@ public class ArrWebhookService : IArrWebhookService
         {
             if (_trackerEntryService != null && _downloadClientFactory != null)
             {
+                var torrent = _torrentService.Get(torrentId);
+                if (torrent == null)
+                {
+                    return;
+                }
+
                 var currentTrackers = _trackerEntryService.GetByTorrentId(torrentId);
-                if (currentTrackers.Count == 0)
+                if (currentTrackers == null || currentTrackers.Count == 0)
                 {
                     var activeClients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
                     foreach (var clientDef in activeClients)
@@ -882,7 +955,6 @@ public class ArrWebhookService : IArrWebhookService
                                 if (clientTrackers != null && clientTrackers.Count > 0)
                                 {
                                     var tier = 1;
-                                    var torrent = _torrentService.Get(torrentId);
                                     foreach (var trUrl in clientTrackers)
                                     {
                                         var clean = trUrl.Trim();
@@ -898,7 +970,7 @@ public class ArrWebhookService : IArrWebhookService
                                         }
                                     }
 
-                                    if (torrent != null && string.IsNullOrEmpty(torrent.TrackerUrl) && clientTrackers.Count > 0)
+                                    if (string.IsNullOrEmpty(torrent.TrackerUrl) && clientTrackers.Count > 0)
                                     {
                                         torrent.TrackerUrl = clientTrackers[0].Trim();
                                         _torrentService.Update(torrent);
@@ -1050,10 +1122,9 @@ public class ArrWebhookService : IArrWebhookService
             {
                 var hasRecord = _policy.Execute(ct =>
                 {
-                    var cleanUrl = connection.Url.TrimEnd('/');
                     using var request = new HttpRequestMessage(
                         HttpMethod.Get,
-                        $"{cleanUrl}/api/{apiVersion}/history?downloadId={id}&pageSize=1");
+                        $"{connection.Url?.TrimEnd('/')}/api/{apiVersion}/history?downloadId={id}&pageSize=1");
                     request.Headers.Add("X-Api-Key", connection.ApiKey);
 
                     using var response = _client.Send(request, ct);
@@ -1121,9 +1192,8 @@ public class ArrWebhookService : IArrWebhookService
         {
             return _policy.Execute(ct =>
             {
-                var cleanUrl = connection.Url?.TrimEnd('/');
                 using var request = new HttpRequestMessage(HttpMethod.Get,
-                    $"{cleanUrl}/api/{apiVersion}/history?downloadId={downloadId}&pageSize=1");
+                    $"{connection.Url?.TrimEnd('/')}/api/{apiVersion}/history?downloadId={downloadId}&pageSize=1");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
                 using var response = _client.Send(request, ct);
