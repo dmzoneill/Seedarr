@@ -12,6 +12,11 @@ namespace NzbDrone.Core.Jobs;
 
 public class Scheduler : BackgroundService
 {
+    public static readonly TimeSpan DefaultStartupDelay = TimeSpan.FromSeconds(15);
+    public static readonly TimeSpan DefaultMinJitter = TimeSpan.FromSeconds(5);
+    public static readonly TimeSpan DefaultMaxJitter = TimeSpan.FromSeconds(15);
+    public static readonly TimeSpan DefaultTickDelay = TimeSpan.FromSeconds(30);
+
     private readonly ITaskManager _taskManager;
     private readonly IEnumerable<IScheduledTask> _scheduledTasks;
     private readonly TimeSpan _startupDelay;
@@ -24,9 +29,18 @@ public class Scheduler : BackgroundService
     public TimeSpan StartupDelay => _startupDelay;
     public TimeSpan MinJitter => _minJitter;
     public TimeSpan MaxJitter => _maxJitter;
+    public TimeSpan TickDelay { get; internal set; }
 
     public Scheduler(ITaskManager taskManager, IEnumerable<IScheduledTask> scheduledTasks, IBroadcastSignalRMessage signalRBroadcaster = null)
-        : this(taskManager, scheduledTasks, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), signalRBroadcaster)
+        : this(taskManager, scheduledTasks, DefaultStartupDelay, DefaultMinJitter, DefaultMaxJitter, DefaultTickDelay, signalRBroadcaster)
+    {
+    }
+
+    public Scheduler(
+        ITaskManager taskManager,
+        IEnumerable<IScheduledTask> scheduledTasks,
+        TimeSpan? tickDelay)
+        : this(taskManager, scheduledTasks, DefaultStartupDelay, DefaultMinJitter, DefaultMaxJitter, tickDelay, null)
     {
     }
 
@@ -37,12 +51,25 @@ public class Scheduler : BackgroundService
         TimeSpan minJitter,
         TimeSpan maxJitter,
         IBroadcastSignalRMessage signalRBroadcaster = null)
+        : this(taskManager, scheduledTasks, startupDelay, minJitter, maxJitter, DefaultTickDelay, signalRBroadcaster)
+    {
+    }
+
+    public Scheduler(
+        ITaskManager taskManager,
+        IEnumerable<IScheduledTask> scheduledTasks,
+        TimeSpan startupDelay,
+        TimeSpan minJitter,
+        TimeSpan maxJitter,
+        TimeSpan? tickDelay,
+        IBroadcastSignalRMessage signalRBroadcaster = null)
     {
         _taskManager = taskManager;
         _scheduledTasks = scheduledTasks;
         _startupDelay = startupDelay;
         _minJitter = minJitter;
         _maxJitter = maxJitter;
+        TickDelay = tickDelay ?? DefaultTickDelay;
         _signalRBroadcaster = signalRBroadcaster;
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -91,7 +118,7 @@ public class Scheduler : BackgroundService
                 {
                     if (!next.IsEnabled)
                     {
-                        await Task.Delay(50, stoppingToken);
+                        await Task.Delay(TickDelay, stoppingToken);
                         continue;
                     }
 
@@ -105,7 +132,7 @@ public class Scheduler : BackgroundService
                         if (_taskManager.IsRunning(next.TypeName))
                         {
                             _logger.Debug("Scheduled task already running: {0}", next.TypeName);
-                            await Task.Delay(50, stoppingToken);
+                            await Task.Delay(TickDelay, stoppingToken);
                             continue;
                         }
 
@@ -198,6 +225,7 @@ public class Scheduler : BackgroundService
                                 _logger.Debug("Applying scheduler jitter delay of {0:N1}s before next overdue task", jitter.TotalSeconds);
                                 await Task.Delay(jitter, stoppingToken);
                             }
+                            continue;
                         }
                     }
                 }
@@ -211,7 +239,7 @@ public class Scheduler : BackgroundService
                 _logger.Error(ex, "Scheduler tick error");
             }
 
-            await Task.Delay(50, stoppingToken);
+            await Task.Delay(TickDelay, stoppingToken);
         }
     }
 }

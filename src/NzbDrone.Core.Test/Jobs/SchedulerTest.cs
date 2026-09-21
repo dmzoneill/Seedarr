@@ -45,7 +45,7 @@ public class SchedulerTest
     public async Task ExecuteAsync_should_stop_when_cancellation_requested()
     {
         _taskManager.GetNextScheduled().Returns((ScheduledTask)null);
-        _subject = new Scheduler(_taskManager, new List<IScheduledTask>(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask>(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
 
@@ -67,7 +67,7 @@ public class SchedulerTest
         };
 
         _taskManager.GetNextScheduled().Returns(scheduled, scheduled, (ScheduledTask)null);
-        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { testTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { testTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
 
@@ -89,7 +89,7 @@ public class SchedulerTest
         };
 
         _taskManager.GetNextScheduled().Returns(scheduled);
-        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { testTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { testTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
 
@@ -111,7 +111,7 @@ public class SchedulerTest
         };
 
         _taskManager.GetNextScheduled().Returns(scheduled, (ScheduledTask)null);
-        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { throwingTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { throwingTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
 
@@ -134,7 +134,7 @@ public class SchedulerTest
         };
 
         _taskManager.GetNextScheduled().Returns(scheduled, (ScheduledTask)null);
-        _subject = new Scheduler(_taskManager, new List<IScheduledTask>(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask>(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
 
@@ -163,7 +163,7 @@ public class SchedulerTest
         };
 
         _taskManager.GetNextScheduled().Returns(orphanedTask, validScheduled, (ScheduledTask)null);
-        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { validTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { validTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
 
@@ -191,7 +191,8 @@ public class SchedulerTest
             new List<IScheduledTask> { testTask },
             startupDelay: TimeSpan.FromSeconds(5),
             minJitter: TimeSpan.Zero,
-            maxJitter: TimeSpan.Zero);
+            maxJitter: TimeSpan.Zero,
+            tickDelay: TimeSpan.FromMilliseconds(10));
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
 
@@ -266,7 +267,7 @@ public class SchedulerTest
         };
 
         _taskManager.GetNextScheduled().Returns(scheduled);
-        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { testTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { testTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
 
@@ -274,5 +275,61 @@ public class SchedulerTest
         await Task.Delay(200);
 
         Assert.That(testTask.ExecuteCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Constructor_should_default_tick_delay_to_30_seconds()
+    {
+        var scheduler = new Scheduler(_taskManager, new List<IScheduledTask>());
+        Assert.That(scheduler.TickDelay, Is.EqualTo(TimeSpan.FromSeconds(30)));
+    }
+
+    [Test]
+    public void Constructor_with_jitter_parameters_should_default_tick_delay_to_30_seconds()
+    {
+        var scheduler = new Scheduler(
+            _taskManager,
+            new List<IScheduledTask>(),
+            TimeSpan.FromSeconds(15),
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(15));
+
+        Assert.That(scheduler.TickDelay, Is.EqualTo(TimeSpan.FromSeconds(30)));
+    }
+
+    [Test]
+    public void Constructor_with_custom_tick_delay_should_set_tick_delay()
+    {
+        var scheduler = new Scheduler(
+            _taskManager,
+            new List<IScheduledTask>(),
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(5));
+
+        Assert.That(scheduler.TickDelay, Is.EqualTo(TimeSpan.FromSeconds(5)));
+    }
+
+    [Test]
+    public void Constructor_with_tick_delay_overload_should_set_tick_delay()
+    {
+        var scheduler = new Scheduler(
+            _taskManager,
+            new List<IScheduledTask>(),
+            TimeSpan.FromSeconds(10));
+
+        Assert.That(scheduler.TickDelay, Is.EqualTo(TimeSpan.FromSeconds(10)));
+    }
+
+    [Test]
+    public void TickDelay_can_be_set_directly()
+    {
+        var scheduler = new Scheduler(_taskManager, new List<IScheduledTask>())
+        {
+            TickDelay = TimeSpan.FromMilliseconds(50)
+        };
+
+        Assert.That(scheduler.TickDelay, Is.EqualTo(TimeSpan.FromMilliseconds(50)));
     }
 }
