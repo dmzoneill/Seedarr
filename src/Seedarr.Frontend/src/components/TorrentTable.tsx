@@ -5,6 +5,7 @@ import {
   useStartSeeding,
   useStopSeeding,
   useDeleteTorrent,
+  useBulkTorrentAction,
   useUpdateTorrent,
   useAnnounceTorrent,
   useRecheckTorrent,
@@ -191,6 +192,7 @@ function TorrentTable({
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
   const deleteTorrent = useDeleteTorrent();
+  const bulkAction = useBulkTorrentAction();
   const updateTorrent = useUpdateTorrent();
   const announceTorrent = useAnnounceTorrent();
   const recheckTorrent = useRecheckTorrent();
@@ -507,15 +509,24 @@ function TorrentTable({
     async (deleteFiles: boolean) => {
       if (!deleteModalState || deleteModalState.ids.length === 0) return;
       try {
-        for (const id of deleteModalState.ids) {
-          await deleteTorrent.mutateAsync({ id, deleteFiles });
+        if (deleteModalState.ids.length === 1) {
+          await deleteTorrent.mutateAsync({
+            id: deleteModalState.ids[0],
+            deleteFiles,
+          });
+        } else {
+          await bulkAction.mutateAsync({
+            torrentIds: deleteModalState.ids,
+            action: "delete",
+            deleteFiles,
+          });
         }
         setDeleteModalState(null);
       } catch {
         // Handled by query client
       }
     },
-    [deleteModalState, deleteTorrent],
+    [deleteModalState, deleteTorrent, bulkAction],
   );
 
   const handleKeyDown = useCallback(
@@ -1418,9 +1429,9 @@ function TorrentTable({
           isOpen={deleteModalState.isOpen}
           count={deleteModalState.ids.length}
           torrentName={deleteModalState.torrentName}
-          isPending={deleteTorrent.isPending}
+          isPending={deleteTorrent.isPending || bulkAction.isPending}
           onClose={() => {
-            if (!deleteTorrent.isPending) setDeleteModalState(null);
+            if (!deleteTorrent.isPending && !bulkAction.isPending) setDeleteModalState(null);
           }}
           onConfirm={handleConfirmDefaultDelete}
         />

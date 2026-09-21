@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Dapper;
 using Microsoft.Data.Sqlite;
@@ -211,5 +212,60 @@ public class TorrentRepositoryTest
             Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentEventLogs"" WHERE ""TorrentId"" = 1"), Is.EqualTo(0));
             Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentEventLogs"" WHERE ""TorrentId"" = 2"), Is.EqualTo(1));
         }
+    }
+
+    [Test]
+    public void DeleteMany_deletes_all_torrents_and_child_records_in_single_transaction()
+    {
+        using (var connection = _database.OpenConnection())
+        {
+            connection.Execute(
+                @"INSERT INTO ""Torrents"" (""Id"", ""Name"", ""InfoHash"") VALUES (1, 'Torrent 1', 'hash1')");
+            connection.Execute(
+                @"INSERT INTO ""Torrents"" (""Id"", ""Name"", ""InfoHash"") VALUES (2, 'Torrent 2', 'hash2')");
+            connection.Execute(
+                @"INSERT INTO ""Torrents"" (""Id"", ""Name"", ""InfoHash"") VALUES (3, 'Torrent 3', 'hash3')");
+
+            connection.Execute(
+                @"INSERT INTO ""TorrentMediaMetadata"" (""TorrentId"") VALUES (1), (2), (3)");
+            connection.Execute(
+                @"INSERT INTO ""PeerConnectionLogs"" (""InfoHash"") VALUES ('hash1'), ('hash2'), ('hash3')");
+            connection.Execute(
+                @"INSERT INTO ""TorrentFiles"" (""TorrentId"") VALUES (1), (2), (3)");
+            connection.Execute(
+                @"INSERT INTO ""TrackerEntries"" (""TorrentId"") VALUES (1), (2), (3)");
+            connection.Execute(
+                @"INSERT INTO ""TorrentEventLogs"" (""TorrentId"") VALUES (1), (2), (3)");
+        }
+
+        _subject.DeleteMany(new List<int> { 1, 2 });
+
+        using (var connection = _database.OpenConnection())
+        {
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""Torrents"" WHERE ""Id"" IN (1, 2)"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""Torrents"" WHERE ""Id"" = 3"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentMediaMetadata"" WHERE ""TorrentId"" IN (1, 2)"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentMediaMetadata"" WHERE ""TorrentId"" = 3"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""PeerConnectionLogs"" WHERE ""InfoHash"" IN ('hash1', 'hash2')"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""PeerConnectionLogs"" WHERE ""InfoHash"" = 'hash3'"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentFiles"" WHERE ""TorrentId"" IN (1, 2)"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentFiles"" WHERE ""TorrentId"" = 3"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TrackerEntries"" WHERE ""TorrentId"" IN (1, 2)"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TrackerEntries"" WHERE ""TorrentId"" = 3"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentEventLogs"" WHERE ""TorrentId"" IN (1, 2)"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentEventLogs"" WHERE ""TorrentId"" = 3"), Is.EqualTo(1));
+        }
+    }
+
+    [Test]
+    public void DeleteMany_handles_null_or_empty_list_without_error()
+    {
+        Assert.DoesNotThrow(() => _subject.DeleteMany(null));
+        Assert.DoesNotThrow(() => _subject.DeleteMany(new List<int>()));
     }
 }

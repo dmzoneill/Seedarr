@@ -644,6 +644,94 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
+        public void DeleteMany_should_call_repository_DeleteMany_with_distinct_ids()
+        {
+            var ids = new List<int> { 1, 2, 1, 3 };
+
+            _subject.DeleteMany(ids, false);
+
+            _repository.Received(1).DeleteMany(Arg.Is<List<int>>(l => l.Count == 3 && l.Contains(1) && l.Contains(2) && l.Contains(3)), false);
+        }
+
+        [Test]
+        public void DeleteMany_should_publish_TorrentDeletedEvent_for_each_id()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 1, Name = "Torrent 1" },
+                new Torrent { Id = 2, Name = "Torrent 2" }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+
+            _subject.DeleteMany(new List<int> { 1, 2 }, false);
+
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentDeletedEvent>(e => e.TorrentId == 1 && e.Torrent == torrents[0]));
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentDeletedEvent>(e => e.TorrentId == 2 && e.Torrent == torrents[1]));
+        }
+
+        [Test]
+        public void DeleteMany_should_publish_ModelEvent_Deleted_for_existing_torrents()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 1, Name = "Torrent 1" }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+
+            _subject.DeleteMany(new List<int> { 1, 2 }, false);
+
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<ModelEvent<Torrent>>(e => e.Model.Id == 1 && e.Action == ModelAction.Deleted));
+        }
+
+        [Test]
+        public void DeleteMany_should_delete_files_when_deleteFiles_is_true()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "seedarr_test_bulk_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var payloadFile = Path.Combine(tempDir, "sample.mkv");
+            File.WriteAllText(payloadFile, "test data");
+
+            var torrent = new Torrent
+            {
+                Id = 1,
+                Name = "TestTorrent",
+                SavePath = tempDir
+            };
+            var file = new TorrentFile
+            {
+                TorrentId = 1,
+                Path = "sample.mkv"
+            };
+
+            _repository.All().Returns(new List<Torrent> { torrent }.AsQueryable());
+            _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+            try
+            {
+                _subject.DeleteMany(new List<int> { 1 }, deleteFiles: true);
+
+                Assert.That(File.Exists(payloadFile), Is.False);
+                _repository.Received(1).DeleteMany(Arg.Is<List<int>>(l => l.Contains(1)), true);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+        }
+
+        [Test]
+        public void DeleteMany_should_do_nothing_when_ids_null_or_empty()
+        {
+            _subject.DeleteMany(null);
+            _subject.DeleteMany(new List<int>());
+
+            _repository.DidNotReceive().DeleteMany(Arg.Any<List<int>>(), Arg.Any<bool>());
+        }
+
+        [Test]
         public void Recheck_should_return_null_when_torrent_not_found()
         {
             _repository.Get(1).Returns((Torrent)null);

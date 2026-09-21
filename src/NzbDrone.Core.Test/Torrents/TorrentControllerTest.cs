@@ -309,6 +309,73 @@ public class TorrentControllerTest
     }
 
     [Test]
+    public void BulkAction_delete_calls_DeleteMany_on_TorrentService_and_returns_success()
+    {
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "delete",
+            TorrentIds = new List<int> { 1, 2 },
+            DeleteFiles = true,
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var bulkResult = (BulkActionResult)okResult.Value;
+
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(2));
+        Assert.That(bulkResult.FailedCount, Is.EqualTo(0));
+        Assert.That(bulkResult.SucceededIds, Does.Contain(1));
+        Assert.That(bulkResult.SucceededIds, Does.Contain(2));
+        _torrentService.Received(1).DeleteMany(Arg.Is<List<int>>(l => l.Contains(1) && l.Contains(2)), true);
+    }
+
+    [Test]
+    public void BulkAction_delete_handles_exception_and_populates_failed_ids()
+    {
+        _torrentService.When(x => x.DeleteMany(Arg.Any<List<int>>(), Arg.Any<bool>()))
+            .Do(x => throw new InvalidOperationException("DB error"));
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "delete",
+            TorrentIds = new List<int> { 1, 2 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var bulkResult = (BulkActionResult)okResult.Value;
+
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(0));
+        Assert.That(bulkResult.FailedCount, Is.EqualTo(2));
+        Assert.That(bulkResult.FailedIds, Does.ContainKey(1));
+        Assert.That(bulkResult.FailedIds, Does.ContainKey(2));
+        Assert.That(bulkResult.Errors, Does.Contain("DB error"));
+    }
+
+    [Test]
+    public void DeleteBulk_endpoint_executes_bulk_deletion()
+    {
+        var resource = new BulkTorrentActionResource
+        {
+            TorrentIds = new List<int> { 5, 6 },
+            DeleteFiles = false,
+        };
+
+        var result = _controller.DeleteBulk(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var bulkResult = (BulkActionResult)okResult.Value;
+
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(2));
+        _torrentService.Received(1).DeleteMany(Arg.Is<List<int>>(l => l.Contains(5) && l.Contains(6)), false);
+    }
+
+    [Test]
     public void BulkAction_setCategory_returns_BadRequest_when_categoryId_is_invalid()
     {
         _categoryService.Get(999).Returns((Category)null);

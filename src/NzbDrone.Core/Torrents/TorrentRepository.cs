@@ -156,50 +156,70 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
         UpdateTagsAndLabels(new[] { new Torrent { Id = id, TagIds = tagIds, Label = label } });
     }
 
-    public override void Delete(int id)
+    public void DeleteMany(List<int> torrentIds, bool deleteFiles = false)
     {
+        if (torrentIds == null || torrentIds.Count == 0)
+        {
+            return;
+        }
+
+        var ids = torrentIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
         ExecuteWithRetry(connection =>
         {
             using var transaction = connection.BeginTransaction();
             try
             {
-                var torrent = connection.QueryFirstOrDefault<Torrent>(
-                    $"SELECT * FROM \"{_table}\" WHERE \"Id\" = @Id",
-                    new { Id = id },
-                    transaction);
-
-                if (torrent != null && !string.IsNullOrWhiteSpace(torrent.InfoHash))
+                foreach (var batch in ids.Chunk(500))
                 {
+                    var infoHashes = connection.Query<string>(
+                        $"SELECT \"InfoHash\" FROM \"{_table}\" WHERE \"Id\" IN @Ids AND \"InfoHash\" IS NOT NULL",
+                        new { Ids = batch },
+                        transaction)
+                        .Where(h => !string.IsNullOrWhiteSpace(h))
+                        .Distinct()
+                        .ToList();
+
+                    if (infoHashes.Count > 0)
+                    {
+                        foreach (var hashBatch in infoHashes.Chunk(500))
+                        {
+                            connection.Execute(
+                                "DELETE FROM \"PeerConnectionLogs\" WHERE \"InfoHash\" IN @Hashes",
+                                new { Hashes = hashBatch },
+                                transaction);
+                        }
+                    }
+
                     connection.Execute(
-                        "DELETE FROM \"PeerConnectionLogs\" WHERE \"InfoHash\" = @InfoHash",
-                        new { torrent.InfoHash },
+                        "DELETE FROM \"TorrentMediaMetadata\" WHERE \"TorrentId\" IN @Ids",
+                        new { Ids = batch },
+                        transaction);
+
+                    connection.Execute(
+                        "DELETE FROM \"TorrentFiles\" WHERE \"TorrentId\" IN @Ids",
+                        new { Ids = batch },
+                        transaction);
+
+                    connection.Execute(
+                        "DELETE FROM \"TrackerEntries\" WHERE \"TorrentId\" IN @Ids",
+                        new { Ids = batch },
+                        transaction);
+
+                    connection.Execute(
+                        "DELETE FROM \"TorrentEventLogs\" WHERE \"TorrentId\" IN @Ids",
+                        new { Ids = batch },
+                        transaction);
+
+                    connection.Execute(
+                        $"DELETE FROM \"{_table}\" WHERE \"Id\" IN @Ids",
+                        new { Ids = batch },
                         transaction);
                 }
-
-                connection.Execute(
-                    "DELETE FROM \"TorrentMediaMetadata\" WHERE \"TorrentId\" = @Id",
-                    new { Id = id },
-                    transaction);
-
-                connection.Execute(
-                    "DELETE FROM \"TorrentFiles\" WHERE \"TorrentId\" = @Id",
-                    new { Id = id },
-                    transaction);
-
-                connection.Execute(
-                    "DELETE FROM \"TrackerEntries\" WHERE \"TorrentId\" = @Id",
-                    new { Id = id },
-                    transaction);
-
-                connection.Execute(
-                    "DELETE FROM \"TorrentEventLogs\" WHERE \"TorrentId\" = @Id",
-                    new { Id = id },
-                    transaction);
-
-                connection.Execute(
-                    $"DELETE FROM \"{_table}\" WHERE \"Id\" = @Id",
-                    new { Id = id },
-                    transaction);
 
                 transaction.Commit();
             }
@@ -217,5 +237,10 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
                 throw;
             }
         });
+    }
+
+    public override void Delete(int id)
+    {
+        DeleteMany(new List<int> { id });
     }
 }

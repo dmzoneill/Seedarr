@@ -14,4 +14,5 @@ public interface ITorrentRepository : IBasicRepository<Torrent>
     void ClearCategory(string categoryName);
     void UpdateTagsAndLabels(IEnumerable<Torrent> torrents);
     void UpdateTagsAndLabel(int id, List<int> tagIds, string label);
+    void DeleteMany(List<int> torrentIds, bool deleteFiles = false);
 }

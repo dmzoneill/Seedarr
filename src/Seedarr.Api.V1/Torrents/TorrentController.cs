@@ -1636,6 +1636,18 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return Ok();
     }
 
+    [HttpDelete("bulk")]
+    public ActionResult<BulkActionResult> DeleteBulk([FromBody] BulkTorrentActionResource resource)
+    {
+        if (resource == null)
+        {
+            return BadRequest(new { message = "Request body is required." });
+        }
+
+        resource.Action = "delete";
+        return BulkAction(resource);
+    }
+
     [HttpPost("bulk")]
     public ActionResult<BulkActionResult> BulkAction([FromBody] BulkTorrentActionResource resource)
     {
@@ -1651,6 +1663,34 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         var action = resource.Action.Trim().ToLowerInvariant();
+        if (action is "delete" or "remove")
+        {
+            var distinctIds = resource.TorrentIds.Distinct().ToList();
+            try
+            {
+                _torrentService.DeleteMany(distinctIds, resource.DeleteFiles);
+                foreach (var id in distinctIds)
+                {
+                    result.SucceededIds.Add(id);
+                    result.SuccessCount++;
+                    _eventLogService?.Info(id, "Bulk", $"Deleted torrent (deleteFiles={resource.DeleteFiles})");
+                    InvalidateBroadcastCache(id);
+                }
+            }
+            catch (Exception ex)
+            {
+                result.FailedCount = distinctIds.Count;
+                result.Errors.Add(ex.Message);
+                foreach (var id in distinctIds)
+                {
+                    result.FailedIds[id] = ex.Message;
+                }
+                _logger.Error(ex, "Failed to execute bulk delete for {0} torrents", distinctIds.Count);
+            }
+
+            return Ok(result);
+        }
+
         string resolvedCategoryName = null;
         Category resolvedCategory = null;
         if (action == "setcategory")
