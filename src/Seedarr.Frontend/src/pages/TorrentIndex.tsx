@@ -4,6 +4,7 @@ import TorrentTable from "../components/TorrentTable";
 import TorrentGrid from "../components/TorrentGrid";
 import TorrentDetailPanel from "../components/TorrentDetailPanel";
 import AddTorrentModal from "../components/AddTorrentModal";
+import ImportPackageModal from "../components/ImportPackageModal";
 import DeleteTorrentModal from "../components/DeleteTorrentModal";
 import BulkTagModal from "../components/BulkTagModal";
 import { QuickSettingsDrawer } from "../components/quicksettings";
@@ -90,6 +91,7 @@ function TorrentIndex() {
   } = useTorrentIndexState();
 
   const [bulkPending, setBulkPending] = useState(false);
+  const [showImportPackageModal, setShowImportPackageModal] = useState(false);
   const [bulkTagModalState, setBulkTagModalState] = useState<{
     isOpen: boolean;
     mode: "add" | "remove";
@@ -509,6 +511,7 @@ function TorrentIndex() {
         viewMode={viewMode}
         onViewModeChange={handleViewMode}
         onAddTorrent={() => setShowAddModal(true)}
+        onImportPackage={() => setShowImportPackageModal(true)}
         onSearchIndexers={() => navigate("/settings/indexers")}
         onStartAll={() => startAll.mutate()}
         onStopAll={() => stopAll.mutate()}
@@ -622,6 +625,12 @@ function TorrentIndex() {
       </div>
       {showAddModal && (
         <AddTorrentModal onClose={() => setShowAddModal(false)} />
+      )}
+      {showImportPackageModal && (
+        <ImportPackageModal
+          isOpen={showImportPackageModal}
+          onClose={() => setShowImportPackageModal(false)}
+        />
       )}
       {deleteModalState?.isOpen && (
         <DeleteTorrentModal

@@ -51,7 +51,8 @@ public class TorrentPackageService : ITorrentPackageService
             fastResumeService,
             appFolderInfo,
             diskProvider,
-            trackerEntryService);
+            trackerEntryService,
+            bencodeSerializer);
 
         _logger = LogManager.GetCurrentClassLogger();
     }

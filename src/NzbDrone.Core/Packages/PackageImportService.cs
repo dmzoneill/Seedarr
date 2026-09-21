@@ -26,6 +26,7 @@ public class PackageImportService : IPackageImportService
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IDiskProvider _diskProvider;
     private readonly ITrackerEntryService _trackerEntryService;
+    private readonly IFastResumeBencodeSerializer _bencodeSerializer;
     private readonly Logger _logger;
 
     public PackageImportService(
@@ -34,7 +35,8 @@ public class PackageImportService : IPackageImportService
         IFastResumeService fastResumeService = null,
         IAppFolderInfo appFolderInfo = null,
         IDiskProvider diskProvider = null,
-        ITrackerEntryService trackerEntryService = null)
+        ITrackerEntryService trackerEntryService = null,
+        IFastResumeBencodeSerializer bencodeSerializer = null)
     {
         _torrentService = torrentService;
         _torrentImportService = torrentImportService;
@@ -42,6 +44,7 @@ public class PackageImportService : IPackageImportService
         _appFolderInfo = appFolderInfo;
         _diskProvider = diskProvider;
         _trackerEntryService = trackerEntryService;
+        _bencodeSerializer = bencodeSerializer ?? new FastResumeBencodeSerializer();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -239,6 +242,17 @@ public class PackageImportService : IPackageImportService
                         }
                     }
 
+                    if (entry.ModificationTime.HasValue)
+                    {
+                        try
+                        {
+                            File.SetLastWriteTimeUtc(destinationPath, entry.ModificationTime.Value.UtcDateTime);
+                        }
+                        catch
+                        {
+                        }
+                    }
+
                     extractedFiles.Add(destinationPath);
 
                     // If manifest was extracted, immediately inspect candidate torrents for deduplication
@@ -358,6 +372,47 @@ public class PackageImportService : IPackageImportService
         };
         result.ExtractedFiles.AddRange(extractedFiles);
 
+        var effectiveDestRoot = !string.IsNullOrWhiteSpace(options.DestinationPath)
+            ? options.DestinationPath
+            : (!string.IsNullOrWhiteSpace(options.DestinationRoot)
+                ? options.DestinationRoot
+                : options.DestinationPrefix);
+
+        // 7. Restore content payload first if specified
+        var contentDir = Path.Combine(canonicalTargetRoot, "content");
+        if (!string.IsNullOrWhiteSpace(effectiveDestRoot) && Directory.Exists(contentDir))
+        {
+            var canonicalDest = Path.GetFullPath(effectiveDestRoot);
+            Directory.CreateDirectory(canonicalDest);
+
+            var files = Directory.GetFiles(contentDir, "*", SearchOption.AllDirectories);
+            foreach (var file in files)
+            {
+                var rel = Path.GetRelativePath(contentDir, file);
+                var destFile = Path.GetFullPath(Path.Combine(canonicalDest, rel));
+
+                if (!destFile.StartsWith(canonicalDest + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                {
+                    throw new SecurityException($"Potential Zip-Slip attack detected during payload relocation: {rel}");
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(destFile)!);
+                if (!string.Equals(Path.GetFullPath(file), Path.GetFullPath(destFile), StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(file, destFile, overwrite: true);
+                }
+
+                try
+                {
+                    var fileInfo = new FileInfo(file);
+                    File.SetLastWriteTimeUtc(destFile, fileInfo.LastWriteTimeUtc);
+                }
+                catch
+                {
+                }
+            }
+        }
+
         var metainfoDir = Path.Combine(canonicalTargetRoot, "metainfo");
         var fastresumeDirInArchive = Path.Combine(canonicalTargetRoot, "fastresume");
 
@@ -416,6 +471,12 @@ public class PackageImportService : IPackageImportService
                         _torrentService?.Update(importedTorrent);
                     }
 
+                    if (!string.IsNullOrWhiteSpace(effectiveDestRoot))
+                    {
+                        importedTorrent.SavePath = effectiveDestRoot;
+                        _torrentService?.Update(importedTorrent);
+                    }
+
                     // Restore trackers
                     if (_trackerEntryService != null && manifestItem?.Trackers != null && manifestItem.Trackers.Count > 0)
                     {
@@ -456,7 +517,133 @@ public class PackageImportService : IPackageImportService
                             _logger.Debug(ex, "Failed to restore tracker entries for torrent {0}", importedTorrent.Id);
                         }
                     }
+                }
 
+                // Restore and verify fastresume file if present
+                if (Directory.Exists(fastresumeDirInArchive))
+                {
+                    var srcFastResume = Path.Combine(fastresumeDirInArchive, $"{infoHash}.fastresume");
+                    if (File.Exists(srcFastResume))
+                    {
+                        var destFastResume = Path.Combine(seedarrFastResumeDir, $"{infoHash}.fastresume");
+                        FastResumeData fastResumeData = null;
+
+                        try
+                        {
+                            var resumeBytes = await File.ReadAllBytesAsync(srcFastResume, cancellationToken);
+                            if (_bencodeSerializer.IsBencode(resumeBytes))
+                            {
+                                fastResumeData = _bencodeSerializer.Deserialize(resumeBytes);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Debug(ex, "Failed to deserialize fastresume file {0}", srcFastResume);
+                        }
+
+                        if (fastResumeData != null)
+                        {
+                            // Remap / normalize save path cross-platform
+                            if (!string.IsNullOrWhiteSpace(fastResumeData.SavePath))
+                            {
+                                fastResumeData.SavePath = PackagePathTranslator.TranslatePath(
+                                    fastResumeData.SavePath,
+                                    options.SourcePrefix,
+                                    options.DestinationPrefix,
+                                    effectiveDestRoot,
+                                    options.PathRemappings);
+                            }
+                            else if (!string.IsNullOrWhiteSpace(effectiveDestRoot))
+                            {
+                                fastResumeData.SavePath = effectiveDestRoot;
+                            }
+
+                            if (importedTorrent != null && !string.IsNullOrWhiteSpace(fastResumeData.SavePath))
+                            {
+                                importedTorrent.SavePath = fastResumeData.SavePath;
+                            }
+
+                            // Normalize file entries
+                            if (fastResumeData.Files != null)
+                            {
+                                foreach (var f in fastResumeData.Files)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(f.Path))
+                                    {
+                                        f.Path = PackagePathTranslator.NormalizePathSeparators(
+                                            PackagePathTranslator.StripDriveLetter(f.Path));
+                                    }
+                                }
+                            }
+
+                            // Zero-I/O FastResume Verification
+                            if (options.VerifyFastResume && importedTorrent != null)
+                            {
+                                var isVerifiedComplete = VerifyFastResumePayload(importedTorrent, fastResumeData, out var mismatchReason);
+                                if (isVerifiedComplete)
+                                {
+                                    _logger.Info("Zero-I/O FastResume verification succeeded for {0}: payload matches manifest and bitfield, setting TorrentStatus.Seeding.", infoHash);
+                                    importedTorrent.Status = TorrentStatus.Seeding;
+                                    importedTorrent.Progress = 1.0;
+                                    _torrentService?.Update(importedTorrent);
+                                }
+                                else
+                                {
+                                    _logger.Warn("FastResume verification did not confirm full payload completion for {0}: {1}", infoHash, mismatchReason);
+                                }
+                            }
+
+                            try
+                            {
+                                var serialized = _bencodeSerializer.Serialize(fastResumeData);
+                                await File.WriteAllBytesAsync(destFastResume, serialized, cancellationToken);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Warn(ex, "Failed to serialize and write remapped fastresume file {0}", destFastResume);
+                                File.Copy(srcFastResume, destFastResume, overwrite: true);
+                            }
+
+                            if (_fastResumeService != null && importedTorrent != null)
+                            {
+                                try
+                                {
+                                    _fastResumeService.LoadFastResume(importedTorrent);
+                                    if (importedTorrent.Status == TorrentStatus.Seeding)
+                                    {
+                                        _torrentService?.Update(importedTorrent);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.Debug(ex, "Failed to load fastresume via IFastResumeService for {0}", importedTorrent.InfoHash);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (!string.Equals(Path.GetFullPath(srcFastResume), Path.GetFullPath(destFastResume), StringComparison.OrdinalIgnoreCase))
+                            {
+                                File.Copy(srcFastResume, destFastResume, overwrite: true);
+                            }
+
+                            if (_fastResumeService != null && importedTorrent != null)
+                            {
+                                try
+                                {
+                                    _fastResumeService.LoadFastResume(importedTorrent);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.Debug(ex, "Failed to load fastresume for {0}", importedTorrent.InfoHash);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (importedTorrent != null)
+                {
                     result.Torrents.Add(new PackageImportTorrentSummary
                     {
                         Id = importedTorrent.Id,
@@ -465,7 +652,9 @@ public class PackageImportService : IPackageImportService
                         Category = importedTorrent.Category,
                         TotalSize = importedTorrent.TotalSize,
                         Tags = manifestItem?.Tags ?? new List<string>(),
-                        IsDuplicate = false
+                        IsDuplicate = false,
+                        Status = importedTorrent.Status.ToString(),
+                        SavePath = importedTorrent.SavePath
                     });
                 }
                 else
@@ -478,34 +667,10 @@ public class PackageImportService : IPackageImportService
                         Category = manifestItem?.Category,
                         TotalSize = manifestItem?.TotalSize ?? 0,
                         Tags = manifestItem?.Tags ?? new List<string>(),
-                        IsDuplicate = false
+                        IsDuplicate = false,
+                        Status = "Queued",
+                        SavePath = effectiveDestRoot
                     });
-                }
-
-                // Restore fastresume file if present
-                if (Directory.Exists(fastresumeDirInArchive))
-                {
-                    var srcFastResume = Path.Combine(fastresumeDirInArchive, $"{infoHash}.fastresume");
-                    if (File.Exists(srcFastResume))
-                    {
-                        var destFastResume = Path.Combine(seedarrFastResumeDir, $"{infoHash}.fastresume");
-                        if (!string.Equals(Path.GetFullPath(srcFastResume), Path.GetFullPath(destFastResume), StringComparison.OrdinalIgnoreCase))
-                        {
-                            File.Copy(srcFastResume, destFastResume, overwrite: true);
-                        }
-
-                        if (_fastResumeService != null && importedTorrent != null)
-                        {
-                            try
-                            {
-                                _fastResumeService.LoadFastResume(importedTorrent);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.Debug(ex, "Failed to load fastresume for {0}", importedTorrent.InfoHash);
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -534,35 +699,11 @@ public class PackageImportService : IPackageImportService
                             Category = existing?.Category ?? manifestItem.Category,
                             TotalSize = existing?.TotalSize ?? manifestItem.TotalSize,
                             Tags = manifestItem.Tags ?? new List<string>(),
-                            IsDuplicate = true
+                            IsDuplicate = true,
+                            Status = existing?.Status.ToString() ?? "Duplicate",
+                            SavePath = existing?.SavePath
                         });
                     }
-                }
-            }
-        }
-
-        // Restore content payload if specified
-        var contentDir = Path.Combine(canonicalTargetRoot, "content");
-        if (!string.IsNullOrWhiteSpace(options.DestinationPath) && Directory.Exists(contentDir))
-        {
-            var canonicalDest = Path.GetFullPath(options.DestinationPath);
-            Directory.CreateDirectory(canonicalDest);
-
-            var files = Directory.GetFiles(contentDir, "*", SearchOption.AllDirectories);
-            foreach (var file in files)
-            {
-                var rel = Path.GetRelativePath(contentDir, file);
-                var destFile = Path.GetFullPath(Path.Combine(canonicalDest, rel));
-
-                if (!destFile.StartsWith(canonicalDest + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-                {
-                    throw new SecurityException($"Potential Zip-Slip attack detected during payload relocation: {rel}");
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(destFile)!);
-                if (!string.Equals(Path.GetFullPath(file), Path.GetFullPath(destFile), StringComparison.OrdinalIgnoreCase))
-                {
-                    File.Copy(file, destFile, overwrite: true);
                 }
             }
         }
@@ -626,6 +767,103 @@ public class PackageImportService : IPackageImportService
         {
             throw new SecurityException($"Potential Zip-Slip attack detected in entry: {entryName}");
         }
+    }
+
+    public static string NormalizePathSeparators(string path, char? separator = null)
+    {
+        return PackagePathTranslator.NormalizePathSeparators(path, separator);
+    }
+
+    public static string StripDriveLetter(string path)
+    {
+        return PackagePathTranslator.StripDriveLetter(path);
+    }
+
+    public static string TranslatePath(
+        string path,
+        string sourcePrefix = null,
+        string destinationPrefix = null,
+        string destinationRoot = null,
+        Dictionary<string, string> remappings = null,
+        char? targetSeparator = null)
+    {
+        return PackagePathTranslator.TranslatePath(path, sourcePrefix, destinationPrefix, destinationRoot, remappings, targetSeparator);
+    }
+
+    public static bool VerifyFastResumePayload(Torrent torrent, FastResumeData data, out string mismatchReason)
+    {
+        mismatchReason = null;
+        if (data == null)
+        {
+            mismatchReason = "FastResume data is null";
+            return false;
+        }
+
+        var isCompleteBitfield = data.Bitfield != null && data.Bitfield.Length > 0 && data.Bitfield.All(b => b);
+        var isSeedingStatus = string.Equals(data.Status, "Seeding", StringComparison.OrdinalIgnoreCase) || data.Progress >= 1.0;
+
+        if (!isCompleteBitfield && !isSeedingStatus)
+        {
+            mismatchReason = "FastResume does not indicate complete seeding payload (incomplete bitfield and non-seeding status)";
+            return false;
+        }
+
+        var basePath = !string.IsNullOrWhiteSpace(torrent?.SavePath)
+            ? torrent.SavePath
+            : (!string.IsNullOrWhiteSpace(data.SavePath) ? data.SavePath : torrent?.SourcePath);
+
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            mismatchReason = "Payload save path could not be resolved";
+            return false;
+        }
+
+        var filesToCheck = data.Files;
+        if (filesToCheck != null && filesToCheck.Count > 0)
+        {
+            foreach (var entry in filesToCheck)
+            {
+                if (string.IsNullOrWhiteSpace(entry.Path))
+                {
+                    continue;
+                }
+
+                var diskPath = PackageExportService.ResolveFileDiskPath(basePath, torrent?.Name, entry.Path);
+                if (!File.Exists(diskPath))
+                {
+                    mismatchReason = $"Payload file not found on disk: {diskPath}";
+                    return false;
+                }
+
+                var fi = new FileInfo(diskPath);
+                if (entry.Length > 0 && fi.Length != entry.Length)
+                {
+                    mismatchReason = $"Payload file '{diskPath}' size mismatch: expected {entry.Length} bytes, found {fi.Length} bytes";
+                    return false;
+                }
+
+                if (entry.Mtime.HasValue)
+                {
+                    var timeDiff = Math.Abs((fi.LastWriteTimeUtc - entry.Mtime.Value).TotalSeconds);
+                    if (timeDiff > 5.0)
+                    {
+                        mismatchReason = $"Payload file '{diskPath}' timestamp mismatch: expected {entry.Mtime.Value:O}, found {fi.LastWriteTimeUtc:O}";
+                        return false;
+                    }
+                }
+            }
+        }
+        else
+        {
+            var diskPath = PackageExportService.ResolveFileDiskPath(basePath, null, torrent?.Name);
+            if (!File.Exists(diskPath) && !Directory.Exists(diskPath))
+            {
+                mismatchReason = $"Payload path does not exist on disk: {diskPath}";
+                return false;
+            }
+        }
+
+        return true;
     }
 }
 

@@ -489,6 +489,275 @@ public class TorrentPackageServiceTest
         Assert.That(responseBody.Length, Is.GreaterThan(0));
     }
 
+    [Test]
+    public void NormalizePathSeparators_ConvertsAcrossWindowsAndLinuxSeparators()
+    {
+        var windowsPath = @"foo\bar\baz\file.txt";
+        var linuxNormalized = PackageImportService.NormalizePathSeparators(windowsPath, '/');
+        Assert.That(linuxNormalized, Is.EqualTo("foo/bar/baz/file.txt"));
+
+        var linuxPath = "foo/bar/baz/file.txt";
+        var windowsNormalized = PackageImportService.NormalizePathSeparators(linuxPath, '\\');
+        Assert.That(windowsNormalized, Is.EqualTo(@"foo\bar\baz\file.txt"));
+
+        var mixedPath = @"foo/bar\baz/file.txt";
+        Assert.That(PackageImportService.NormalizePathSeparators(mixedPath, '/'), Is.EqualTo("foo/bar/baz/file.txt"));
+        Assert.That(PackageImportService.NormalizePathSeparators(mixedPath, '\\'), Is.EqualTo(@"foo\bar\baz\file.txt"));
+    }
+
+    [Test]
+    public void StripDriveLetter_RemovesWindowsDriveLetter()
+    {
+        Assert.That(PackageImportService.StripDriveLetter(@"C:\Torrents\Ubuntu\ubuntu.iso"), Is.EqualTo(@"\Torrents\Ubuntu\ubuntu.iso"));
+        Assert.That(PackageImportService.StripDriveLetter(@"D:/Torrents/Ubuntu/ubuntu.iso"), Is.EqualTo(@"/Torrents/Ubuntu/ubuntu.iso"));
+        Assert.That(PackageImportService.StripDriveLetter("/var/torrents/ubuntu.iso"), Is.EqualTo("/var/torrents/ubuntu.iso"));
+    }
+
+    [Test]
+    public void TranslatePath_ZipSlipProtection_ThrowsSecurityException()
+    {
+        Assert.Throws<SecurityException>(() =>
+        {
+            PackageImportService.TranslatePath(@"C:\Data\..\..\Windows\calc.exe");
+        });
+
+        Assert.Throws<SecurityException>(() =>
+        {
+            PackageImportService.TranslatePath("/torrents/../../etc/passwd");
+        });
+    }
+
+    [Test]
+    public void TranslatePath_PrefixRemapping_RemapsSourceToDestinationPrefix()
+    {
+        var sourcePath = @"C:\Data\Torrents\Linux\ubuntu.iso";
+        var translated = PackageImportService.TranslatePath(
+            sourcePath,
+            sourcePrefix: @"C:\Data\Torrents",
+            destinationPrefix: "/storage/torrents",
+            targetSeparator: '/');
+
+        Assert.That(translated, Is.EqualTo("/storage/torrents/Linux/ubuntu.iso"));
+
+        var unixPath = "/downloads/music/track.flac";
+        var winTranslated = PackageImportService.TranslatePath(
+            unixPath,
+            sourcePrefix: "/downloads",
+            destinationPrefix: @"D:\Seedarr\Downloads",
+            targetSeparator: '\\');
+
+        Assert.That(winTranslated, Is.EqualTo(@"D:\Seedarr\Downloads\music\track.flac"));
+    }
+
+    [Test]
+    public void TranslatePath_DestinationRoot_CombinesStrippedPathWithRoot()
+    {
+        var translated = PackageImportService.TranslatePath(
+            @"C:\Movies\film.mkv",
+            destinationRoot: "/mnt/storage",
+            targetSeparator: '/');
+
+        Assert.That(translated, Is.EqualTo("/mnt/storage/Movies/film.mkv"));
+    }
+
+    [Test]
+    public async Task ImportPackageAsync_PathPrefixRemapping_ExtractsPayloadToRemappedDestinationAndUpdatesSavePath()
+    {
+        const string infoHash = "9999888877776666555544443333222211110000";
+        _torrentService.ExistsByInfoHash(infoHash).Returns(false);
+
+        var manifestBytes = CreateValidManifestBytes(infoHash, "Remapped Torrent", "Linux");
+        var torrentBytes = Encoding.UTF8.GetBytes("d8:announce11:http://test4:infod4:name4:teste");
+        var fastresumeBytes = Encoding.UTF8.GetBytes("d8:info_hash20:99998888777766665555e");
+        var payloadContent = Encoding.UTF8.GetBytes("REMAPPED PAYLOAD CONTENT");
+
+        var archiveBytes = CreateGzipTarArchive(tar =>
+        {
+            AddFileEntry(tar, "manifest.json", manifestBytes);
+            AddFileEntry(tar, $"metainfo/{infoHash}.torrent", torrentBytes);
+            AddFileEntry(tar, $"fastresume/{infoHash}.fastresume", fastresumeBytes);
+            AddFileEntry(tar, "content/Remapped Torrent/payload.bin", payloadContent);
+        });
+
+        var destinationFolder = Path.Combine(_sandboxDir, "remapped_dest");
+        var createdTorrent = new Torrent
+        {
+            Id = 55,
+            Name = "Remapped Torrent",
+            InfoHash = infoHash,
+            Category = "Linux",
+            TotalSize = payloadContent.Length
+        };
+
+        _torrentImportService.ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>())
+            .Returns(createdTorrent);
+
+        using var archiveStream = new MemoryStream(archiveBytes);
+        var options = new PackageImportOptions
+        {
+            TargetRootDir = _sandboxDir,
+            SourcePrefix = @"C:\Torrents",
+            DestinationPrefix = destinationFolder,
+            RestoreTorrents = true
+        };
+
+        var result = await _service.ImportPackageAsync(archiveStream, options);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ImportedTorrentsCount, Is.EqualTo(1));
+
+        var extractedPayloadFile = Path.Combine(destinationFolder, "Remapped Torrent", "payload.bin");
+        Assert.That(File.Exists(extractedPayloadFile), Is.True, "Payload file should be relocated to DestinationPrefix");
+        Assert.That(File.ReadAllBytes(extractedPayloadFile), Is.EqualTo(payloadContent));
+        Assert.That(createdTorrent.SavePath, Is.EqualTo(destinationFolder), "Imported torrent SavePath should be updated to DestinationPrefix");
+    }
+
+    [Test]
+    public async Task ImportPackageAsync_ZeroIoFastResumeVerification_MarksCompletedPayloadsAsSeeding()
+    {
+        const string infoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd";
+        _torrentService.ExistsByInfoHash(infoHash).Returns(false);
+
+        var destinationFolder = Path.Combine(_sandboxDir, "verified_dest");
+        Directory.CreateDirectory(Path.Combine(destinationFolder, "Verified Seeding Torrent"));
+        var payloadFilePath = Path.Combine(destinationFolder, "Verified Seeding Torrent", "data.iso");
+
+        var payloadBytes = new byte[2048];
+        Array.Fill(payloadBytes, (byte)0x42);
+        await File.WriteAllBytesAsync(payloadFilePath, payloadBytes);
+
+        var fixedTimestamp = new DateTime(2026, 9, 21, 1, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(payloadFilePath, fixedTimestamp);
+
+        var manifestBytes = CreateValidManifestBytes(infoHash, "Verified Seeding Torrent", "Linux");
+        var torrentBytes = Encoding.UTF8.GetBytes("d8:announce11:http://test4:infod4:name4:teste");
+
+        var fastResumeData = new FastResumeData
+        {
+            InfoHash = infoHash,
+            SavePath = destinationFolder,
+            Status = "Seeding",
+            Progress = 1.0,
+            Bitfield = new[] { true, true },
+            Files = new List<FastResumeFileEntry>
+            {
+                new()
+                {
+                    Path = "Verified Seeding Torrent/data.iso",
+                    Length = payloadBytes.Length,
+                    Mtime = fixedTimestamp
+                }
+            }
+        };
+        var fastresumeBytes = _bencodeSerializer.Serialize(fastResumeData);
+
+        var archiveBytes = CreateGzipTarArchive(tar =>
+        {
+            AddFileEntry(tar, "manifest.json", manifestBytes);
+            AddFileEntry(tar, $"metainfo/{infoHash}.torrent", torrentBytes);
+            AddFileEntry(tar, $"fastresume/{infoHash}.fastresume", fastresumeBytes);
+        });
+
+        var createdTorrent = new Torrent
+        {
+            Id = 77,
+            Name = "Verified Seeding Torrent",
+            InfoHash = infoHash,
+            Category = "Linux",
+            TotalSize = payloadBytes.Length,
+            PieceCount = 2,
+            Status = TorrentStatus.Queued,
+            Progress = 0.0,
+            SavePath = destinationFolder
+        };
+
+        _torrentImportService.ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>())
+            .Returns(createdTorrent);
+
+        using var archiveStream = new MemoryStream(archiveBytes);
+        var options = new PackageImportOptions
+        {
+            TargetRootDir = _sandboxDir,
+            DestinationPath = destinationFolder,
+            RestoreTorrents = true,
+            VerifyFastResume = true
+        };
+
+        var result = await _service.ImportPackageAsync(archiveStream, options);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ImportedTorrentsCount, Is.EqualTo(1));
+        Assert.That(createdTorrent.Status, Is.EqualTo(TorrentStatus.Seeding), "Payload matching manifest and bitfield must be set directly to TorrentStatus.Seeding");
+        Assert.That(createdTorrent.Progress, Is.EqualTo(1.0));
+        _torrentService.Received().Update(Arg.Is<Torrent>(t => t.Id == 77 && t.Status == TorrentStatus.Seeding));
+    }
+
+    [Test]
+    public async Task ImportPackageAsync_ZeroIoFastResumeVerification_MismatchedPayloadDoesNotMarkSeeding()
+    {
+        const string infoHash = "7777888899990000111122223333444455556666";
+        _torrentService.ExistsByInfoHash(infoHash).Returns(false);
+
+        var destinationFolder = Path.Combine(_sandboxDir, "mismatched_dest");
+        Directory.CreateDirectory(destinationFolder);
+
+        var manifestBytes = CreateValidManifestBytes(infoHash, "Missing File Torrent", "Linux");
+        var torrentBytes = Encoding.UTF8.GetBytes("d8:announce11:http://test4:infod4:name4:teste");
+
+        var fastResumeData = new FastResumeData
+        {
+            InfoHash = infoHash,
+            SavePath = destinationFolder,
+            Status = "Seeding",
+            Progress = 1.0,
+            Bitfield = new[] { true },
+            Files = new List<FastResumeFileEntry>
+            {
+                new()
+                {
+                    Path = "nonexistent_file.iso",
+                    Length = 1000,
+                    Mtime = DateTime.UtcNow
+                }
+            }
+        };
+        var fastresumeBytes = _bencodeSerializer.Serialize(fastResumeData);
+
+        var archiveBytes = CreateGzipTarArchive(tar =>
+        {
+            AddFileEntry(tar, "manifest.json", manifestBytes);
+            AddFileEntry(tar, $"metainfo/{infoHash}.torrent", torrentBytes);
+            AddFileEntry(tar, $"fastresume/{infoHash}.fastresume", fastresumeBytes);
+        });
+
+        var createdTorrent = new Torrent
+        {
+            Id = 88,
+            Name = "Missing File Torrent",
+            InfoHash = infoHash,
+            Status = TorrentStatus.Queued,
+            Progress = 0.0,
+            SavePath = destinationFolder
+        };
+
+        _torrentImportService.ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>())
+            .Returns(createdTorrent);
+
+        using var archiveStream = new MemoryStream(archiveBytes);
+        var options = new PackageImportOptions
+        {
+            TargetRootDir = _sandboxDir,
+            DestinationPath = destinationFolder,
+            RestoreTorrents = true,
+            VerifyFastResume = true
+        };
+
+        var result = await _service.ImportPackageAsync(archiveStream, options);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(createdTorrent.Status, Is.Not.EqualTo(TorrentStatus.Seeding), "Mismatched or missing payload must not be marked Seeding");
+    }
+
     private static byte[] CreateValidManifestBytes(string infoHash, string name = "Sample", string category = "Default")
     {
         var manifest = new PackageManifest
