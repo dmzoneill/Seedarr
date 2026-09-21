@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.11.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.11.0) - 2026-09-21
+
+### ✨ Features
+- feat(telemetry): wire qualitative interaction analytics suite across UI
+- feat(analytics): track user settings adoption, engine configurations, and client interactions
+
 ## [v1.10.7](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.7) - 2026-09-21
 
 ### ✨ Features
