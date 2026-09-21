@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useBlocker, type BlockerFunction } from "react-router";
 import { usePermissions } from "../../hooks/usePermissions";
 
@@ -365,6 +365,16 @@ export function SectionCard({
   );
 }
 
+export function clampNumber(
+  val: number,
+  min?: number,
+  max?: number,
+): number {
+  if (min !== undefined && val < min) return min;
+  if (max !== undefined && val > max) return max;
+  return val;
+}
+
 export function NumberInput({
   label,
   value,
@@ -375,6 +385,9 @@ export function NumberInput({
   hint,
   suffix,
   disabled,
+  defaultValue,
+  placeholder,
+  onBlur,
 }: {
   label: string;
   value: number;
@@ -385,23 +398,93 @@ export function NumberInput({
   hint?: string;
   suffix?: string;
   disabled?: boolean;
+  defaultValue?: number;
+  placeholder?: string;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
 }) {
+  const isDecimal = Boolean(step && step < 1);
+  const initialText =
+    value !== undefined && value !== null && !isNaN(value) ? String(value) : "";
+  const [text, setText] = useState<string>(initialText);
+  const textRef = useRef<string>(initialText);
+  const lastValueRef = useRef<number>(value);
+
+  useEffect(() => {
+    if (value !== lastValueRef.current) {
+      lastValueRef.current = value;
+      const strVal =
+        value !== undefined && value !== null && !isNaN(value)
+          ? String(value)
+          : "";
+      textRef.current = strVal;
+      setText(strVal);
+    }
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nextText = e.target.value;
+    textRef.current = nextText;
+    setText(nextText);
+
+    const trimmed = nextText.trim();
+    if (trimmed === "" || trimmed === "-" || trimmed.endsWith(".")) {
+      return;
+    }
+
+    const parsed = isDecimal ? parseFloat(trimmed) : parseInt(trimmed, 10);
+    if (isNaN(parsed) || isNaN(Number(trimmed))) {
+      return;
+    }
+
+    const isWithinBounds =
+      (min === undefined || parsed >= min) &&
+      (max === undefined || parsed <= max);
+
+    if (isWithinBounds) {
+      const normalized = Object.is(parsed, -0) ? 0 : parsed;
+      lastValueRef.current = normalized;
+      onChange(normalized);
+    }
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const trimmed = textRef.current.trim();
+    let finalVal: number;
+
+    if (trimmed === "" || trimmed === "-") {
+      const fallback = defaultValue !== undefined ? defaultValue : (min ?? 0);
+      finalVal = clampNumber(fallback, min, max);
+    } else {
+      const parsed = isDecimal ? parseFloat(trimmed) : parseInt(trimmed, 10);
+      if (isNaN(parsed) || isNaN(Number(trimmed))) {
+        const fallback = defaultValue !== undefined ? defaultValue : (min ?? 0);
+        finalVal = clampNumber(fallback, min, max);
+      } else {
+        finalVal = clampNumber(parsed, min, max);
+      }
+    }
+
+    const normalized = Object.is(finalVal, -0) ? 0 : finalVal;
+    lastValueRef.current = normalized;
+    const strVal = String(normalized);
+    textRef.current = strVal;
+    setText(strVal);
+    onChange(normalized);
+    onBlur?.(e);
+  };
+
   const inputEl = (
     <input
       type="number"
       className="form-input"
-      value={value}
-      onChange={(e) =>
-        onChange(
-          step && step < 1
-            ? parseFloat(e.target.value) || 0
-            : parseInt(e.target.value, 10) || 0,
-        )
-      }
+      value={text}
+      onChange={handleChange}
+      onBlur={handleBlur}
       min={min}
       max={max}
       step={step}
       disabled={disabled}
+      placeholder={placeholder}
       style={{ borderRadius: suffix ? "6px 0 0 6px" : "6px" }}
     />
   );

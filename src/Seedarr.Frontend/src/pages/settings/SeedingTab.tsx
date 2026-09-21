@@ -176,17 +176,17 @@ export function SeedingTab() {
           label="Max Upload Speed"
           value={form.maxUploadSpeedKbps}
           onChange={(v) => set("maxUploadSpeedKbps", v)}
-          min={1}
+          min={0}
           suffix="KB/s"
-          hint="Default 625 KB/s (5 Mbit/s)"
+          hint="Default 625 KB/s (5 Mbit/s) (0 for unlimited)"
         />
         <NumberInput
           label="Max Download Speed"
           value={form.maxDownloadSpeedKbps}
           onChange={(v) => set("maxDownloadSpeedKbps", v)}
-          min={1}
+          min={0}
           suffix="KB/s"
-          hint="Default 1250 KB/s (10 Mbit/s)"
+          hint="Default 1250 KB/s (10 Mbit/s) (0 for unlimited)"
         />
         <NumberInput
           label="Global Seed Ratio Limit"
@@ -219,16 +219,18 @@ export function SeedingTab() {
           label="Alt Upload Speed"
           value={form.altUploadSpeedKbps}
           onChange={(v) => set("altUploadSpeedKbps", v)}
-          min={1}
+          min={0}
           suffix="KB/s"
+          hint="0 for unlimited"
           disabled={!form.alternativeSpeedEnabled}
         />
         <NumberInput
           label="Alt Download Speed"
           value={form.altDownloadSpeedKbps}
           onChange={(v) => set("altDownloadSpeedKbps", v)}
-          min={1}
+          min={0}
           suffix="KB/s"
+          hint="0 for unlimited"
           disabled={!form.alternativeSpeedEnabled}
         />
       </SectionCard>
