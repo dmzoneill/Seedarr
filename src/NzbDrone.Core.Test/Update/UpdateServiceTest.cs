@@ -16,12 +16,14 @@ namespace NzbDrone.Core.Test.Update;
 public class UpdateServiceTest
 {
     private UpdateService _subject;
+    private MockHttpMessageHandler _defaultHandler;
 
     [SetUp]
     public void SetUp()
     {
         UpdateService.ChangelogProvider = () => new List<ReleaseInfo>();
-        _subject = new UpdateService();
+        _defaultHandler = new MockHttpMessageHandler();
+        _subject = new UpdateService(new HttpClient(_defaultHandler));
     }
 
     [TearDown]
