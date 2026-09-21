@@ -1937,12 +1937,17 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             if (connection == null && _utpManager.TcpFallbackEnabled)
             {
                 _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
-                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
+                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService?.PeerDscp ?? 0, _configService?.PeerTos ?? 0, _proxySettingsProvider, _dhKeyPool, _configService?.BindInterface);
             }
         }
         else
         {
-            connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
+            if (_proxySettingsProvider?.IsEnabled == true && _utpManager != null && _utpManager.IsEnabled)
+            {
+                _logger.Debug("Proxy is enabled; bypassing direct uTP connection to {0}:{1} and routing via proxied TCP", candidate?.Ip, candidate?.Port);
+            }
+
+            connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService?.PeerDscp ?? 0, _configService?.PeerTos ?? 0, _proxySettingsProvider, _dhKeyPool, _configService?.BindInterface);
         }
 
         if (connection != null)
@@ -2356,6 +2361,13 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             return;
         }
 
+        if (_configService?.ForceProxy == true || _proxySettingsProvider?.IsEnabled == true)
+        {
+            _logger.Debug("Proxy is active; rejecting incoming uTP connection from {0}", conn.RemoteEndPoint);
+            conn.Dispose();
+            return;
+        }
+
         try
         {
             var token = _serverLifecycleCts.Token;
@@ -2401,9 +2413,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 return;
             }
 
-            if (_configService?.ForceProxy == true)
+            if (_configService?.ForceProxy == true || _proxySettingsProvider?.IsEnabled == true)
             {
-                _logger.Debug("ForceProxy is active; rejecting unproxied incoming uTP peer connection from {0}", conn.RemoteEndPoint);
+                _logger.Debug("Proxy is active; rejecting unproxied incoming uTP peer connection from {0}", conn.RemoteEndPoint);
                 conn.Dispose();
                 return;
             }

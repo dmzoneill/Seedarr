@@ -4436,4 +4436,136 @@ public class PeerServerTest
         conn.Received().Dispose();
         _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
     }
+
+    [Test]
+    public void ConnectToPeer_should_not_attempt_utp_when_proxy_is_enabled_without_ForceProxy()
+    {
+        _configService.ForceProxy.Returns(false);
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(true);
+        proxySettingsProvider.Type.Returns(ProxyType.Socks5);
+        proxySettingsProvider.Host.Returns("127.0.0.1");
+        proxySettingsProvider.Port.Returns(1080);
+
+        var utpManager = Substitute.For<IUtpManager>();
+        utpManager.IsEnabled.Returns(true);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            utpManager: utpManager,
+            proxySettingsProvider: proxySettingsProvider);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "ProxyUtpTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = 12345,
+            Source = "tracker"
+        };
+
+        InvokeConnectToPeer(server, torrent, candidate);
+
+        utpManager.DidNotReceive().CreateConnection();
+    }
+
+    [Test]
+    public void ConnectToPeer_should_route_via_proxied_tcp_when_proxy_is_enabled_without_ForceProxy()
+    {
+        _configService.ForceProxy.Returns(false);
+
+        var proxyListener = new TcpListener(IPAddress.Loopback, 0);
+        proxyListener.Start();
+        _listeners.Add(proxyListener);
+        var proxyPort = ((IPEndPoint)proxyListener.LocalEndpoint).Port;
+
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(true);
+        proxySettingsProvider.Type.Returns(ProxyType.Socks5);
+        proxySettingsProvider.Host.Returns("127.0.0.1");
+        proxySettingsProvider.Port.Returns(proxyPort);
+
+        var utpManager = Substitute.For<IUtpManager>();
+        utpManager.IsEnabled.Returns(true);
+
+        var proxyAccepted = new ManualResetEventSlim(false);
+        var proxyServerTask = Task.Run(() =>
+        {
+            try
+            {
+                var client = proxyListener.AcceptTcpClient();
+                _clients.Add(client);
+                proxyAccepted.Set();
+                client.Close();
+            }
+            catch
+            {
+            }
+        });
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            utpManager: utpManager,
+            proxySettingsProvider: proxySettingsProvider);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "ProxyTcpTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = 54321,
+            Source = "tracker"
+        };
+
+        InvokeConnectToPeer(server, torrent, candidate);
+        proxyServerTask.Wait(TimeSpan.FromSeconds(3));
+
+        utpManager.DidNotReceive().CreateConnection();
+        Assert.That(proxyAccepted.IsSet, Is.True);
+    }
+
+    [Test]
+    public async Task ProcessIncomingUtpConnectionAsync_should_reject_connection_when_proxy_is_enabled_without_ForceProxy()
+    {
+        _configService.ForceProxy.Returns(false);
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(true);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            proxySettingsProvider: proxySettingsProvider);
+
+        var conn = Substitute.For<Transport.IUtpConnection>();
+        conn.IsConnected.Returns(true);
+        conn.RemoteEndPoint.Returns(new IPEndPoint(IPAddress.Loopback, 12345));
+
+        await server.ProcessIncomingUtpConnectionAsync(conn);
+
+        conn.Received().Dispose();
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+    }
 }
