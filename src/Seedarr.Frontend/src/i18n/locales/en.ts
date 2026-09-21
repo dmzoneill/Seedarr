@@ -90,6 +90,7 @@ const en = {
     statistics: "Statistics",
     settings: "Settings",
     system: "System",
+    terminal: "Terminal",
   },
   topbar: {
     searchPlaceholder: "Quick Jump / Search... (Ctrl+K or /)",
@@ -933,7 +934,23 @@ const en = {
           targetTags: "Target Tags",
           targetTagsHint: "Filter by tags (leave empty to apply to all)"
     }
-}
+  },
+  terminal: {
+    title: "Terminal",
+    subtitle: "Interactive web console with PTY session management",
+    connected: "Connected",
+    reconnecting: "Reconnecting...",
+    disconnected: "Disconnected",
+    reconnect: "Reconnect",
+    clear: "Clear Screen",
+    copy: "Copy Selection",
+    paste: "Paste",
+    adminRequired: "Administrator privileges required for terminal access",
+    accessDisabled: "Terminal access is disabled in Security settings",
+    inputPlaceholder: "Enter command...",
+    shortcutsHint: "Ctrl+L to clear, Ctrl+C to interrupt, Up/Down for command history",
+    dimensions: "Dimensions",
+  },
 };
 
 export default en;
