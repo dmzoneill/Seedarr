@@ -4,10 +4,12 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Security;
 using Seedarr.Http;
@@ -331,11 +333,16 @@ public class SeedingConfigController : ConfigController<SeedingConfigResource>
 public class NetworkConfigController : ConfigController<NetworkConfigResource>
 {
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly IProxyTestService _proxyTestService;
 
-    public NetworkConfigController(IConfigService configService, IConfigFileProvider configFileProvider = null)
+    public NetworkConfigController(
+        IConfigService configService,
+        IConfigFileProvider configFileProvider = null,
+        IProxyTestService proxyTestService = null)
         : base(configService)
     {
         _configFileProvider = configFileProvider;
+        _proxyTestService = proxyTestService ?? new ProxyTestService(configService);
 
         SharedValidator.RuleFor(c => c.ListeningPort)
             .InclusiveBetween(1024, 65535)
@@ -434,6 +441,25 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
         }
 
         return base.SaveConfig(resource);
+    }
+
+    [HttpPost("test-proxy")]
+    [HttpPost("/api/v1/config/proxy/test")]
+    [Produces("application/json")]
+    [ProducesResponseType(typeof(ProxyTestResult), 200)]
+    public async Task<ActionResult<ProxyTestResult>> TestProxy([FromBody] ProxyTestRequest request, CancellationToken cancellationToken)
+    {
+        if (request == null)
+        {
+            return BadRequest(new ProxyTestResult
+            {
+                Success = false,
+                Message = "Request body cannot be empty."
+            });
+        }
+
+        var result = await _proxyTestService.TestProxyAsync(request, cancellationToken);
+        return Ok(result);
     }
 }
 

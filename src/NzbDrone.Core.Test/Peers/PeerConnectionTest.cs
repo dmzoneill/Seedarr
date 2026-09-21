@@ -2099,4 +2099,66 @@ public class PeerConnectionTest
         Assert.That(received, Is.Null);
         Assert.That(conn.IsConnected, Is.False);
     }
+
+    [Test]
+    public void PeerConnection_times_out_cleanly_on_unreachable_proxy_without_blocking_indefinitely()
+    {
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(true);
+        proxySettings.Type.Returns(ProxyType.Socks5);
+        proxySettings.Host.Returns("192.0.2.1");
+        proxySettings.Port.Returns(1080);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        Assert.Catch<Exception>(() =>
+        {
+            new PeerConnection("example.com", 6881, proxySettings: proxySettings, connectTimeoutMs: 150);
+        });
+
+        stopwatch.Stop();
+        Assert.That(stopwatch.ElapsedMilliseconds, Is.LessThan(3000));
+    }
+
+    [Test]
+    public void PeerConnection_connects_successfully_with_socks5h_proxy()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var proxyPort = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        var serverTask = Task.Run(() =>
+        {
+            using var client = listener.AcceptTcpClient();
+            using var stream = client.GetStream();
+
+            var greeting = new byte[3];
+            PeerConnection.ReadExactBytes(stream, greeting, 0, 3);
+            stream.Write(new byte[] { 0x05, 0x00 });
+            stream.Flush();
+
+            var connectHdr = new byte[4];
+            PeerConnection.ReadExactBytes(stream, connectHdr, 0, 4);
+            Assert.That(connectHdr[3], Is.EqualTo(0x03));
+            var domainLen = stream.ReadByte();
+            var domainBytes = new byte[domainLen + 2];
+            PeerConnection.ReadExactBytes(stream, domainBytes, 0, domainBytes.Length);
+
+            stream.Write(new byte[] { 0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0x1A, 0xE1 });
+            stream.Flush();
+        });
+
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(true);
+        proxySettings.Type.Returns(ProxyType.Socks5h);
+        proxySettings.Host.Returns("127.0.0.1");
+        proxySettings.Port.Returns(proxyPort);
+
+        var conn = new PeerConnection("example.com", 6881, proxySettings: proxySettings, connectTimeoutMs: 2000);
+        _connections.Add(conn);
+
+        Assert.That(serverTask.Wait(TimeSpan.FromSeconds(3)), Is.True);
+        Assert.That(conn.IsConnected, Is.True);
+    }
 }

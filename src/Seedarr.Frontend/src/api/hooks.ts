@@ -627,6 +627,26 @@ export function useSaveNetworkConfig() {
   return useConfigMutation<NetworkConfig>("network");
 }
 
+export function useTestProxy() {
+  return useMutation<
+    { success: boolean; message: string; remoteDnsVerified?: boolean },
+    Error,
+    {
+      proxyType: string;
+      proxyHost: string;
+      proxyPort: number;
+      proxyAuthEnabled: boolean;
+      proxyUsername?: string;
+      proxyPassword?: string;
+      testTargetHost?: string;
+      testTargetPort?: number;
+      timeoutMs?: number;
+    }
+  >({
+    mutationFn: (req) => apiClient.testProxy(req),
+  });
+}
+
 export function useBitTorrentConfig() {
   return useConfigQuery<BitTorrentConfig>("bittorrent");
 }

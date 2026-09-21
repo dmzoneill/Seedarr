@@ -63,6 +63,10 @@ namespace NzbDrone.Core.Test.Network
         [TestCase("Socks5", ProxyType.Socks5)]
         [TestCase("SOCKS5", ProxyType.Socks5)]
         [TestCase("sOcKs5", ProxyType.Socks5)]
+        [TestCase("socks5h", ProxyType.Socks5h)]
+        [TestCase("Socks5h", ProxyType.Socks5h)]
+        [TestCase("SOCKS5H", ProxyType.Socks5h)]
+        [TestCase("sOcKs5h", ProxyType.Socks5h)]
         [TestCase("http", ProxyType.Http)]
         [TestCase("Http", ProxyType.Http)]
         [TestCase("HTTP", ProxyType.Http)]
@@ -84,6 +88,9 @@ namespace NzbDrone.Core.Test.Network
         [TestCase("socks5")]
         [TestCase("SOCKS5")]
         [TestCase("sOcKs5")]
+        [TestCase("socks5h")]
+        [TestCase("SOCKS5H")]
+        [TestCase("sOcKs5h")]
         [TestCase("http")]
         [TestCase("HTTP")]
         [TestCase("hTtP")]
@@ -302,6 +309,63 @@ namespace NzbDrone.Core.Test.Network
             Assert.That(proxy, Is.Not.Null);
             Assert.That(proxy.Address, Is.EqualTo(new Uri("socks5h://proxy.example.com:1080")));
             Assert.That(proxy.Address.Scheme, Is.EqualTo("socks5h"));
+        }
+
+        [Test]
+        public void CreateHandler_should_return_socks5h_proxy_handler_when_socks5h_enabled()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("socks5h");
+            _configService.GetValue("ProxyHost", "").Returns("proxy.example.com");
+            _configService.GetValueInt("ProxyPort", 8080).Returns(1080);
+
+            var handler = _subject.CreateHandler();
+
+            Assert.That(handler, Is.Not.Null);
+            Assert.That(handler.Proxy, Is.Not.Null);
+            Assert.That(handler.UseProxy, Is.True);
+            var proxy = handler.Proxy as WebProxy;
+            Assert.That(proxy, Is.Not.Null);
+            Assert.That(proxy.Address, Is.EqualTo(new Uri("socks5h://proxy.example.com:1080")));
+            Assert.That(proxy.Address.Scheme, Is.EqualTo("socks5h"));
+        }
+
+        [Test]
+        public void ProxyUri_should_return_socks5h_scheme_for_socks5()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("Socks5");
+            _configService.GetValue("ProxyHost", "").Returns("proxy.internal.net");
+            _configService.GetValueInt("ProxyPort", 8080).Returns(1080);
+
+            Assert.That(_subject.ProxyUri, Is.EqualTo("socks5h://proxy.internal.net:1080"));
+        }
+
+        [Test]
+        public void ProxyUri_should_return_socks5h_scheme_for_socks5h()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("Socks5h");
+            _configService.GetValue("ProxyHost", "").Returns("remote.proxy.org");
+            _configService.GetValueInt("ProxyPort", 8080).Returns(9050);
+
+            Assert.That(_subject.ProxyUri, Is.EqualTo("socks5h://remote.proxy.org:9050"));
+        }
+
+        [Test]
+        public void ProxyUri_should_return_http_scheme_for_http()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("Http");
+            _configService.GetValue("ProxyHost", "").Returns("squid.example.com");
+            _configService.GetValueInt("ProxyPort", 8080).Returns(3128);
+
+            Assert.That(_subject.ProxyUri, Is.EqualTo("http://squid.example.com:3128"));
+        }
+
+        [Test]
+        public void ProxyUri_should_return_null_when_disabled()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("None");
+            _configService.GetValue("ProxyHost", "").Returns("proxy.example.com");
+
+            Assert.That(_subject.ProxyUri, Is.Null);
         }
     }
 }
