@@ -258,6 +258,23 @@ class ApiClient {
     );
   }
 
+  testProxy(request: {
+    proxyType: string;
+    proxyHost: string;
+    proxyPort: number;
+    proxyAuthEnabled: boolean;
+    proxyUsername?: string;
+    proxyPassword?: string;
+    testTargetHost?: string;
+    testTargetPort?: number;
+    timeoutMs?: number;
+  }): Promise<{ success: boolean; message: string; remoteDnsVerified?: boolean }> {
+    return this.post<{ success: boolean; message: string; remoteDnsVerified?: boolean }>(
+      "/config/network/test-proxy",
+      request,
+    );
+  }
+
   getFileSystem(path?: string, includeFiles?: boolean): Promise<FileSystemResource> {
     const params = new URLSearchParams();
     if (path) params.append("path", path);

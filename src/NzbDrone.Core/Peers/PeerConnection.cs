@@ -42,6 +42,7 @@ public class PeerConnection : IDisposable
     public Torrent MatchedTorrent { get; set; }
     public IClientProfile ClientProfile { get; set; }
     public int? ExpectedInfoHashLength { get; set; }
+    public const int OutgoingConnectTimeoutMs = 5000;
     private static IBandwidthLimiter _defaultBandwidthLimiter = NzbDrone.Core.Bandwidth.BandwidthLimiter.Instance;
 
     public static IBandwidthLimiter DefaultBandwidthLimiter
@@ -674,7 +675,7 @@ public class PeerConnection : IDisposable
         LastActivity = DateTime.UtcNow;
     }
 
-    public PeerConnection(string host, int port, IPAddress localBindAddress = null, int dscp = 0, int tos = 0, Network.IProxySettingsProvider proxySettings = null, IDhKeyPool dhKeyPool = null, string bindInterface = null)
+    public PeerConnection(string host, int port, IPAddress localBindAddress = null, int dscp = 0, int tos = 0, Network.IProxySettingsProvider proxySettings = null, IDhKeyPool dhKeyPool = null, string bindInterface = null, int connectTimeoutMs = OutgoingConnectTimeoutMs)
     {
         DhKeyPool = dhKeyPool;
         if (!string.IsNullOrWhiteSpace(bindInterface))
@@ -699,10 +700,24 @@ public class PeerConnection : IDisposable
 
             if (proxySettings != null && proxySettings.IsEnabled)
             {
-                _client.Connect(proxySettings.Host, proxySettings.Port);
-                _networkStream = _client.GetStream();
+                var timeout = connectTimeoutMs > 0 ? connectTimeoutMs : OutgoingConnectTimeoutMs;
+                using (var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeout)))
+                {
+                    try
+                    {
+                        _client.ConnectAsync(proxySettings.Host, proxySettings.Port, cts.Token).AsTask().GetAwaiter().GetResult();
+                    }
+                    catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                    {
+                        throw new TimeoutException($"Connection to proxy {proxySettings.Host}:{proxySettings.Port} timed out after {timeout}ms");
+                    }
+                }
 
-                if (proxySettings.Type == Network.ProxyType.Socks5)
+                _networkStream = _client.GetStream();
+                _networkStream.ReadTimeout = timeout;
+                _networkStream.WriteTimeout = timeout;
+
+                if (proxySettings.Type == Network.ProxyType.Socks5 || proxySettings.Type == Network.ProxyType.Socks5h)
                 {
                     PerformSocks5Handshake(_networkStream, host, port, proxySettings.Username, proxySettings.Password);
                 }
@@ -1957,7 +1972,7 @@ public class PeerConnection : IDisposable
         }
     }
 
-    private static void PerformSocks5Handshake(Stream stream, string targetHost, int targetPort, string username, string password)
+    public static void PerformSocks5Handshake(Stream stream, string targetHost, int targetPort, string username, string password)
     {
         var hasAuth = !string.IsNullOrEmpty(username);
         var greeting = hasAuth
@@ -2070,7 +2085,7 @@ public class PeerConnection : IDisposable
         ReadExactBytes(stream, boundAddress, 0, boundAddress.Length);
     }
 
-    private static void PerformHttpConnectHandshake(Stream stream, string targetHost, int targetPort, string username, string password)
+    public static void PerformHttpConnectHandshake(Stream stream, string targetHost, int targetPort, string username, string password)
     {
         var formattedHost = targetHost.Contains(':') && !targetHost.StartsWith('[') ? $"[{targetHost}]" : targetHost;
         var sb = new StringBuilder();
@@ -2130,7 +2145,7 @@ public class PeerConnection : IDisposable
         }
     }
 
-    private static void ReadExactBytes(Stream stream, byte[] buffer, int offset, int count)
+    public static void ReadExactBytes(Stream stream, byte[] buffer, int offset, int count)
     {
         var totalRead = 0;
         while (totalRead < count)

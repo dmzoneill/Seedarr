@@ -10,7 +10,8 @@ public enum ProxyType
 {
     None,
     Http,
-    Socks5
+    Socks5,
+    Socks5h
 }
 
 public interface IProxySettingsProvider
@@ -21,6 +22,7 @@ public interface IProxySettingsProvider
     string Username { get; }
     string Password { get; }
     bool IsEnabled { get; }
+    string ProxyUri { get; }
     SocketsHttpHandler CreateHandler();
 }
 
@@ -42,6 +44,24 @@ public class ProxySettingsProvider : IProxySettingsProvider
     public string Password => _configService.GetValue("ProxyPassword", "");
     public bool IsEnabled => Type != ProxyType.None && !string.IsNullOrEmpty(Host);
 
+    public string ProxyUri
+    {
+        get
+        {
+            if (!IsEnabled)
+            {
+                return null;
+            }
+
+            return Type switch
+            {
+                ProxyType.Http => $"http://{Host}:{Port}",
+                ProxyType.Socks5 or ProxyType.Socks5h => $"socks5h://{Host}:{Port}",
+                _ => null
+            };
+        }
+    }
+
     public SocketsHttpHandler CreateHandler()
     {
         if (!IsEnabled)
@@ -49,12 +69,7 @@ public class ProxySettingsProvider : IProxySettingsProvider
             return new SocketsHttpHandler();
         }
 
-        var proxyUri = Type switch
-        {
-            ProxyType.Http => $"http://{Host}:{Port}",
-            ProxyType.Socks5 => $"socks5h://{Host}:{Port}",
-            _ => null
-        };
+        var proxyUri = ProxyUri;
 
         if (proxyUri == null)
         {
@@ -63,7 +78,7 @@ public class ProxySettingsProvider : IProxySettingsProvider
 
         _logger.Debug("Using proxy: {0}", proxyUri);
 
-        var proxy = Type == ProxyType.Socks5
+        var proxy = (Type == ProxyType.Socks5 || Type == ProxyType.Socks5h)
             ? (WebProxy)new Socks5hWebProxy(proxyUri)
             : new WebProxy(proxyUri);
 

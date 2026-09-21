@@ -1,7 +1,10 @@
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network;
 using Seedarr.Api.V1.Config;
 
 namespace Seedarr.Api.V1.Test.Config;
@@ -109,5 +112,50 @@ public class ConfigControllerTest
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+    }
+
+    [Test]
+    public async Task TestProxy_should_return_bad_request_when_request_is_null()
+    {
+        var result = await _controller.TestProxy(null, CancellationToken.None);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        var testResult = (ProxyTestResult)badRequest.Value;
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("Request body cannot be empty"));
+    }
+
+    [Test]
+    public async Task TestProxy_should_delegate_to_proxy_test_service()
+    {
+        var proxyTestService = Substitute.For<IProxyTestService>();
+        var expectedResult = new ProxyTestResult
+        {
+            Success = true,
+            Message = "Proxy test passed.",
+            RemoteDnsVerified = true
+        };
+
+        var request = new ProxyTestRequest
+        {
+            ProxyType = "socks5h",
+            ProxyHost = "127.0.0.1",
+            ProxyPort = 1080
+        };
+
+        proxyTestService.TestProxyAsync(request, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(expectedResult));
+
+        var controller = new NetworkConfigController(_configService, _configFileProvider, proxyTestService);
+
+        var result = await controller.TestProxy(request, CancellationToken.None);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var actual = (ProxyTestResult)okResult.Value;
+        Assert.That(actual.Success, Is.True);
+        Assert.That(actual.RemoteDnsVerified, Is.True);
+        Assert.That(actual.Message, Is.EqualTo("Proxy test passed."));
     }
 }

@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNetworkConfig, useSaveNetworkConfig } from "../../api/hooks";
+import {
+  useNetworkConfig,
+  useSaveNetworkConfig,
+  useTestProxy,
+} from "../../api/hooks";
 import {
   SaveBar,
   SectionCard,
@@ -12,6 +16,7 @@ import {
 export function ProxySettingsTab() {
   const { data: config, isLoading } = useNetworkConfig();
   const saveMutation = useSaveNetworkConfig();
+  const testMutation = useTestProxy();
 
   const [form, setForm] = useState({
     proxyType: "none",
@@ -25,6 +30,11 @@ export function ProxySettingsTab() {
   });
 
   const [dirty, setDirty] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+    remoteDnsVerified?: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (config) {
@@ -48,6 +58,7 @@ export function ProxySettingsTab() {
   ) => {
     setForm((prev) => ({ ...prev, [key]: val }));
     setDirty(true);
+    setTestResult(null);
   };
 
   const handleSave = () => {
@@ -68,6 +79,29 @@ export function ProxySettingsTab() {
         onSuccess: () => setDirty(false),
       },
     );
+  };
+
+  const handleTestProxy = async () => {
+    if (!isProxyActive || !form.proxyHost) return;
+    setTestResult(null);
+    try {
+      const res = await testMutation.mutateAsync({
+        proxyType: form.proxyType,
+        proxyHost: form.proxyHost,
+        proxyPort: form.proxyPort,
+        proxyAuthEnabled: form.proxyAuthEnabled,
+        proxyUsername: form.proxyUsername,
+        proxyPassword: form.proxyPassword,
+      });
+      setTestResult(res);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Proxy test connection failed.";
+      setTestResult({
+        success: false,
+        message,
+      });
+    }
   };
 
   if (isLoading) {
@@ -109,6 +143,7 @@ export function ProxySettingsTab() {
             options={[
               { value: "none", label: "None (Direct Connection)" },
               { value: "socks5", label: "SOCKS5 Proxy" },
+              { value: "socks5h", label: "SOCKS5h (Remote DNS)" },
               { value: "http", label: "HTTP Proxy" },
             ]}
           />
@@ -170,6 +205,69 @@ export function ProxySettingsTab() {
                 />
               </div>
             )}
+
+            <div
+              style={{
+                marginTop: "1.25rem",
+                borderTop: "1px solid var(--border-light)",
+                paddingTop: "1rem",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={handleTestProxy}
+                  disabled={testMutation.isPending || !form.proxyHost}
+                  style={{ fontSize: "0.85rem" }}
+                >
+                  {testMutation.isPending
+                    ? "Testing Proxy Connection..."
+                    : "Test Proxy Connection"}
+                </button>
+                {testMutation.isPending && (
+                  <span
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    Connecting and verifying handshake...
+                  </span>
+                )}
+              </div>
+
+              {testResult && (
+                <div
+                  style={{
+                    marginTop: "0.75rem",
+                    padding: "10px 14px",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    backgroundColor: testResult.success
+                      ? "var(--success-bg, rgba(46, 204, 113, 0.15))"
+                      : "var(--danger-bg-alert, rgba(231, 76, 60, 0.15))",
+                    border: `1px solid ${
+                      testResult.success
+                        ? "var(--success, #2ecc71)"
+                        : "var(--danger-border-alert, #e74c3c)"
+                    }`,
+                    color: testResult.success
+                      ? "var(--success, #2ecc71)"
+                      : "var(--danger, #e74c3c)",
+                  }}
+                >
+                  {testResult.success ? "✓ " : "✕ "} {testResult.message}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </SectionCard>
