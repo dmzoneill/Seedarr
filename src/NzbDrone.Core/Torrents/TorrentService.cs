@@ -27,6 +27,7 @@ public interface ITorrentService
     Torrent UpdateUserFields(int id, Torrent updates);
     Torrent UpdateUserFields(Torrent torrent);
     void Delete(int id, bool deleteFiles = false);
+    void DeleteMany(List<int> torrentIds, bool deleteFiles = false);
     Torrent Recheck(int id);
     void MoveQueue(int id, string position);
     void BatchMoveQueue(IEnumerable<int> ids, string position);
@@ -325,6 +326,59 @@ public class TorrentService : ITorrentService,
         _pieceHashesById.TryRemove(id, out _);
 
         if (torrent != null)
+        {
+            _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
+        }
+    }
+
+    public void DeleteMany(List<int> torrentIds, bool deleteFiles = false)
+    {
+        if (torrentIds == null || torrentIds.Count == 0)
+        {
+            return;
+        }
+
+        var ids = torrentIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Info("Deleting {0} torrents (deleteFiles={1})", ids.Count, deleteFiles);
+
+        var torrents = _repository.All()?.Where(t => ids.Contains(t.Id)).ToList() ?? new List<Torrent>();
+        var torrentMap = torrents.ToDictionary(t => t.Id);
+
+        if (deleteFiles)
+        {
+            foreach (var torrent in torrents)
+            {
+                try
+                {
+                    var files = _torrentFileService?.GetByTorrentId(torrent.Id);
+                    DeleteTorrentFiles(torrent, files);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to delete files for torrent {0} ({1})", torrent.Id, torrent.Name);
+                }
+            }
+        }
+
+        foreach (var id in ids)
+        {
+            torrentMap.TryGetValue(id, out var torrent);
+            _eventAggregator.PublishEvent(new TorrentDeletedEvent(id, torrent));
+        }
+
+        _repository.DeleteMany(ids, deleteFiles);
+
+        foreach (var id in ids)
+        {
+            _pieceHashesById.TryRemove(id, out _);
+        }
+
+        foreach (var torrent in torrents)
         {
             _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
         }
