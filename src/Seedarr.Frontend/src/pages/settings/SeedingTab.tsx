@@ -8,6 +8,7 @@ import {
   NumberInput,
   SectionCard,
 } from "./shared";
+import { trackSettingSave } from "../../utils/analytics";
 
 export function SeedingTab() {
   const { data: config, isLoading } = useSeedingConfig();
@@ -83,7 +84,20 @@ export function SeedingTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+        onSave={() =>
+          save.mutate(form, {
+            onSuccess: () => {
+              setDirty(false);
+              trackSettingSave("seeding", {
+                uploadDistributionAlgorithm: form.uploadDistributionAlgorithm,
+                downloadDistributionAlgorithm: form.downloadDistributionAlgorithm,
+                alternativeSpeedEnabled: form.alternativeSpeedEnabled,
+                globalSeedRatioLimit: form.globalSeedRatioLimit > 0,
+                seedGoalReachedAction: form.seedGoalReachedAction,
+              });
+            },
+          })
+        }
       />
 
       <SectionCard

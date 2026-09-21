@@ -8,6 +8,7 @@ import {
   NumberInput,
   SectionCard,
 } from "./shared";
+import { trackSettingSave } from "../../utils/analytics";
 
 export function SimulationTab() {
   const { data: config, isLoading } = useSimulationConfig();
@@ -53,7 +54,19 @@ export function SimulationTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+        onSave={() =>
+          save.mutate(form, {
+            onSuccess: () => {
+              setDirty(false);
+              trackSettingSave("simulation", {
+                clientBehaviorEngineEnabled: form.clientBehaviorEngineEnabled,
+                primaryClient: form.primaryClient,
+                trafficPatternProfile: form.trafficPatternProfile,
+                swarmIntelligenceEnabled: form.swarmIntelligenceEnabled,
+              });
+            },
+          })
+        }
       />
 
       <SectionCard
