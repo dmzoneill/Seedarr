@@ -4978,3 +4978,116 @@ html[dir="rtl"] .topbar-getting-started {
     transform: scale(1);
   }
 }
+
+/* ============================================
+   Terminal Console Styles
+   ============================================ */
+.terminal-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 180px);
+  min-height: 480px;
+  background-color: #0d1117;
+  border-radius: 8px;
+  border: 1px solid var(--border-light, #30363d);
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  background-color: #161b22;
+  border-bottom: 1px solid #30363d;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.terminal-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #c9d1d9;
+}
+
+.terminal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.terminal-dim-badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background-color: #21262d;
+  color: #8b949e;
+  border: 1px solid #30363d;
+}
+
+.terminal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+  color: #c9d1d9;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  user-select: text;
+  cursor: text;
+}
+
+.terminal-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-height: 1.25rem;
+}
+
+.terminal-prompt-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #161b22;
+  border-top: 1px solid #30363d;
+}
+
+.terminal-prompt-prefix {
+  color: #22c55e;
+  font-weight: bold;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.terminal-prompt-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f0f6fc;
+  font-family: inherit;
+  font-size: 0.875rem;
+  caret-color: #58a6ff;
+  width: 100%;
+}
+
+.terminal-prompt-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.terminal-footer-hints {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 1rem;
+  background-color: #0d1117;
+  border-top: 1px solid #21262d;
+  font-size: 0.75rem;
+  color: #6e7681;
+}

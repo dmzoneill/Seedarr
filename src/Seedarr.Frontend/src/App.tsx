@@ -29,6 +29,7 @@ import TrackerBoost from "./pages/TrackerBoost";
 import TrackerMetrics from "./pages/TrackerMetrics";
 import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
+import SystemTerminal from "./pages/SystemTerminal";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
 import { AutomationPage } from "./pages/AutomationPage";
@@ -110,6 +111,7 @@ const systemSubItems = [
   { path: "/system/events", label: "Events" },
   { path: "/system/logfiles", label: "Log Files" },
   { path: "/system/network", label: "Network" },
+  { path: "/system/terminal", label: "Terminal", labelKey: "nav.terminal" },
   { path: "/system/api", label: "API Reference" },
 ];
 
@@ -999,16 +1001,21 @@ function App() {
             <SystemIcon /> <span>{t("nav.system", undefined, "System")}</span>
           </NavLink>
           {isSystemRoute &&
-            systemSubItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className="sidebar-nav-item sidebar-nav-sub"
-                title={item.label}
-              >
-                <span>{item.label}</span>
-              </NavLink>
-            ))}
+            systemSubItems.map((item) => {
+              const labelText = (item as any).labelKey
+                ? t((item as any).labelKey, undefined, item.label)
+                : item.label;
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className="sidebar-nav-item sidebar-nav-sub"
+                  title={labelText}
+                >
+                  <span>{labelText}</span>
+                </NavLink>
+              );
+            })}
         </nav>
       </aside>
 
@@ -1482,6 +1489,7 @@ function App() {
               <Route path="/system/events" element={<SystemEvents />} />
               <Route path="/system/logfiles" element={<SystemLogFiles />} />
               <Route path="/system/network" element={<SystemNetwork />} />
+              <Route path="/system/terminal" element={<SystemTerminal />} />
               <Route path="/system/api" element={<ApiDocsPage />} />
               <Route path="/system/swagger" element={<ApiDocsPage />} />
               <Route path="/api-docs" element={<ApiDocsPage />} />
