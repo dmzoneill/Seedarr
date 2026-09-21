@@ -78,6 +78,9 @@ public class TrackerAnnounceResponse : ITrackerResponse
     public List<TrackerPeer> Peers { get; set; } = new();
     public string FailureReason { get; set; }
     public string WarningMessage { get; set; }
+    public string TrackerUrl { get; set; }
+    public long ResponseTimeMs { get; set; }
+    public List<TrackerAnnounceResponse> TrackerResponses { get; set; } = new();
 }
 
 public class TrackerPeer

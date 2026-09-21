@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using NLog;
@@ -26,6 +27,7 @@ public class MultiTrackerManager : IMultiTrackerManager
     private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, TrackerFailureState> _failureStates = new();
+    private readonly ConcurrentDictionary<string, TrackerPerformanceState> _performanceStates = new();
 
     public MultiTrackerManager(
         IEnumerable<ITrackerProvider> trackerProviders,
@@ -49,6 +51,34 @@ public class MultiTrackerManager : IMultiTrackerManager
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    public static void ShuffleTier<T>(IList<T> list, Random random = null)
+    {
+        if (list == null || list.Count <= 1)
+        {
+            return;
+        }
+
+        var rng = random ?? Random.Shared;
+        for (var i = list.Count - 1; i > 0; i--)
+        {
+            var j = rng.Next(i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
+    public static void ShuffleTiers(List<List<string>> announceList, Random random = null)
+    {
+        if (announceList == null)
+        {
+            return;
+        }
+
+        foreach (var tier in announceList)
+        {
+            ShuffleTier(tier, random);
+        }
+    }
+
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList)
     {
         return Announce(request, announceList, request?.IsPrivate ?? false);
@@ -67,9 +97,20 @@ public class MultiTrackerManager : IMultiTrackerManager
             request.IsPrivate = isPrivate;
         }
 
+        if (announceList == null || announceList.Count == 0 || announceList.All(t => t == null || t.Count == 0))
+        {
+            return new TrackerAnnounceResponse { Success = false, FailureReason = "No trackers available" };
+        }
+
+        // BEP 12: The order of trackers within each tier should be randomized when the torrent is started.
+        if (request?.Event == AnnounceEvent.Started)
+        {
+            ShuffleTiers(announceList);
+        }
+
         if (!_configService.MultiTrackerEnabled)
         {
-            var firstTracker = announceList.FirstOrDefault()?.FirstOrDefault();
+            var firstTracker = announceList.FirstOrDefault(t => t != null && t.Count > 0)?.FirstOrDefault();
             if (firstTracker == null)
             {
                 return new TrackerAnnounceResponse { Success = false, FailureReason = "No trackers available" };
@@ -111,9 +152,14 @@ public class MultiTrackerManager : IMultiTrackerManager
             return new TrackerScrapeResponse { Success = false, FailureReason = "VPN outage: scrape deferred" };
         }
 
+        if (announceList == null || announceList.Count == 0 || announceList.All(t => t == null || t.Count == 0))
+        {
+            return new TrackerScrapeResponse { Success = false, FailureReason = "No trackers available" };
+        }
+
         if (!_configService.MultiTrackerEnabled)
         {
-            var firstTracker = announceList.FirstOrDefault()?.FirstOrDefault();
+            var firstTracker = announceList.FirstOrDefault(t => t != null && t.Count > 0)?.FirstOrDefault();
             if (firstTracker == null)
             {
                 return new TrackerScrapeResponse { Success = false, FailureReason = "No trackers available" };
@@ -142,6 +188,7 @@ public class MultiTrackerManager : IMultiTrackerManager
         var announceToAllTiers = !isPrivate && _configService.AnnounceToAllTiers;
         var announceToAllInTier = !isPrivate && _configService.AnnounceToAllInTier;
         TResponse bestResponse = null;
+        var failedResponses = new List<TResponse>();
 
         string primaryUrl = null;
         if (isPrivate)
@@ -151,7 +198,10 @@ public class MultiTrackerManager : IMultiTrackerManager
 
         foreach (var tier in announceList)
         {
-            foreach (var trackerUrl in tier)
+            var tierCopy = tier.ToList();
+            var tierHasSuccess = false;
+
+            foreach (var trackerUrl in tierCopy)
             {
                 if (isPrivate && !IsAuthorizedPrivateTrackerDomain(primaryUrl, trackerUrl))
                 {
@@ -173,11 +223,50 @@ public class MultiTrackerManager : IMultiTrackerManager
 
                 if (response != null && response.Success)
                 {
+                    tierHasSuccess = true;
                     ResetFailureState(infoHash, trackerUrl);
+
+                    // BEP 12: In-Tier Promotion on Success
+                    // "If a tracker in a tier succeeds, it is moved to the head of that tier for subsequent announces."
+                    var currentIdx = tier.IndexOf(trackerUrl);
+                    if (currentIdx > 0)
+                    {
+                        tier.RemoveAt(currentIdx);
+                        tier.Insert(0, trackerUrl);
+                    }
 
                     if (bestResponse == null)
                     {
                         bestResponse = response;
+                        if (bestResponse is TrackerAnnounceResponse bestAnnounce)
+                        {
+                            foreach (var fr in failedResponses)
+                            {
+                                if (fr is TrackerAnnounceResponse fa && !bestAnnounce.TrackerResponses.Contains(fa))
+                                {
+                                    bestAnnounce.TrackerResponses.Add(fa);
+                                }
+                            }
+
+                            if (!bestAnnounce.TrackerResponses.Contains(bestAnnounce))
+                            {
+                                bestAnnounce.TrackerResponses.Add(bestAnnounce);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Deduplicate peers received across multiple tracker responses
+                        if (bestResponse is TrackerAnnounceResponse targetAnnounce && response is TrackerAnnounceResponse srcAnnounce)
+                        {
+                            MergeAnnounceResponses(targetAnnounce, srcAnnounce);
+                        }
+                        else if (bestResponse is TrackerScrapeResponse targetScrape && response is TrackerScrapeResponse srcScrape)
+                        {
+                            targetScrape.Complete = Math.Max(targetScrape.Complete, srcScrape.Complete);
+                            targetScrape.Incomplete = Math.Max(targetScrape.Incomplete, srcScrape.Incomplete);
+                            targetScrape.Downloaded = Math.Max(targetScrape.Downloaded, srcScrape.Downloaded);
+                        }
                     }
 
                     if (!announceToAllInTier)
@@ -188,31 +277,115 @@ public class MultiTrackerManager : IMultiTrackerManager
                 else
                 {
                     RecordFailure(infoHash, trackerUrl, isNetworkError);
+                    if (response != null)
+                    {
+                        if (bestResponse is TrackerAnnounceResponse bestAnnounce && response is TrackerAnnounceResponse srcAnnounce)
+                        {
+                            if (!bestAnnounce.TrackerResponses.Contains(srcAnnounce))
+                            {
+                                bestAnnounce.TrackerResponses.Add(srcAnnounce);
+                            }
+                        }
+                        else
+                        {
+                            failedResponses.Add(response);
+                        }
+                    }
                 }
             }
 
-            if (bestResponse != null && !announceToAllTiers)
+            if (tierHasSuccess && !announceToAllTiers)
             {
                 return bestResponse;
             }
         }
 
-        return bestResponse ?? fallbackResponse();
+        if (bestResponse != null)
+        {
+            return bestResponse;
+        }
+
+        var fallback = fallbackResponse();
+        if (fallback is TrackerAnnounceResponse fbAnnounce)
+        {
+            foreach (var fr in failedResponses)
+            {
+                if (fr is TrackerAnnounceResponse fa && !fbAnnounce.TrackerResponses.Contains(fa))
+                {
+                    fbAnnounce.TrackerResponses.Add(fa);
+                }
+            }
+        }
+
+        return fallback;
+    }
+
+    private static void MergeAnnounceResponses(TrackerAnnounceResponse target, TrackerAnnounceResponse source)
+    {
+        if (target == null || source == null)
+        {
+            return;
+        }
+
+        if (!target.TrackerResponses.Contains(source))
+        {
+            target.TrackerResponses.Add(source);
+        }
+
+        target.Complete = Math.Max(target.Complete, source.Complete);
+        target.Incomplete = Math.Max(target.Incomplete, source.Incomplete);
+
+        if (source.Interval > 0 && (target.Interval <= 0 || source.Interval < target.Interval))
+        {
+            target.Interval = source.Interval;
+        }
+
+        if (source.MinInterval > 0 && (target.MinInterval <= 0 || source.MinInterval < target.MinInterval))
+        {
+            target.MinInterval = source.MinInterval;
+        }
+
+        if (source.Peers != null && source.Peers.Count > 0)
+        {
+            target.Peers ??= new List<TrackerPeer>();
+            var existingKeys = new HashSet<string>(
+                target.Peers.Select(p => $"{p.Ip}:{p.Port}"),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var peer in source.Peers)
+            {
+                if (peer != null && existingKeys.Add($"{peer.Ip}:{peer.Port}"))
+                {
+                    target.Peers.Add(peer);
+                }
+            }
+        }
     }
 
     private (TrackerAnnounceResponse Response, bool IsNetworkError) AnnounceToTracker(TrackerAnnounceRequest request, string trackerUrl)
     {
+        var sw = Stopwatch.StartNew();
         try
         {
             var trackerRequest = request.Clone(trackerUrl);
             var provider = GetProvider(trackerUrl);
             if (provider == null)
             {
-                return (new TrackerAnnounceResponse { Success = false, FailureReason = "Unknown tracker protocol" }, true);
+                return (new TrackerAnnounceResponse { Success = false, FailureReason = "Unknown tracker protocol", TrackerUrl = trackerUrl }, true);
             }
 
             var response = provider.Announce(trackerRequest);
-            if (!response.Success)
+            sw.Stop();
+            var responseTimeMs = sw.ElapsedMilliseconds;
+
+            if (response != null)
+            {
+                response.TrackerUrl ??= trackerUrl;
+                response.ResponseTimeMs = responseTimeMs;
+                RecordResponseTime(request.InfoHash, trackerUrl, responseTimeMs);
+            }
+
+            if (response != null && !response.Success)
             {
                 _logger.Warn("Tracker {0} failed: {1}", trackerUrl, response.FailureReason);
             }
@@ -222,13 +395,15 @@ public class MultiTrackerManager : IMultiTrackerManager
         }
         catch (Exception ex)
         {
+            sw.Stop();
             _logger.Warn(ex, "Tracker {0} error", trackerUrl);
-            return (new TrackerAnnounceResponse { Success = false, FailureReason = ex.Message }, true);
+            return (new TrackerAnnounceResponse { Success = false, FailureReason = ex.Message, TrackerUrl = trackerUrl, ResponseTimeMs = sw.ElapsedMilliseconds }, true);
         }
     }
 
     private (TrackerScrapeResponse Response, bool IsNetworkError) ScrapeTracker(string infoHash, string trackerUrl)
     {
+        var sw = Stopwatch.StartNew();
         try
         {
             var provider = GetProvider(trackerUrl);
@@ -238,11 +413,19 @@ public class MultiTrackerManager : IMultiTrackerManager
             }
 
             var response = provider.Scrape(infoHash, trackerUrl);
+            sw.Stop();
+
+            if (response != null)
+            {
+                RecordResponseTime(infoHash, trackerUrl, sw.ElapsedMilliseconds);
+            }
+
             var isNetwork = IsNetworkError(response?.FailureReason);
             return (response, isNetwork);
         }
         catch (Exception ex)
         {
+            sw.Stop();
             _logger.Warn(ex, "Scrape {0} error", trackerUrl);
             return (new TrackerScrapeResponse { Success = false, FailureReason = ex.Message }, true);
         }
@@ -281,12 +464,83 @@ public class MultiTrackerManager : IMultiTrackerManager
             return false;
         }
 
-        if (Volatile.Read(ref state.ConsecutiveFailures) < _configService.FailoverMaxConsecutiveFailures)
+        var maxFailures = _configService.FailoverMaxConsecutiveFailures > 0
+            ? _configService.FailoverMaxConsecutiveFailures
+            : 5;
+
+        if (state.IsDisabled || Volatile.Read(ref state.ConsecutiveFailures) >= maxFailures)
+        {
+            return true;
+        }
+
+        return DateTime.UtcNow < state.BackoffUntil;
+    }
+
+    public bool IsTrackerDisabled(string trackerUrl)
+    {
+        return IsTrackerDisabled(null, trackerUrl);
+    }
+
+    public bool IsTrackerDisabled(string infoHash, string trackerUrl)
+    {
+        if (IsKeyDisabled(trackerUrl))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(infoHash))
+        {
+            return IsKeyDisabled(GetTorrentKey(infoHash, trackerUrl));
+        }
+
+        return false;
+    }
+
+    private bool IsKeyDisabled(string key)
+    {
+        if (!_failureStates.TryGetValue(key, out var state))
         {
             return false;
         }
 
-        return DateTime.UtcNow < state.BackoffUntil;
+        var maxFailures = _configService.FailoverMaxConsecutiveFailures > 0
+            ? _configService.FailoverMaxConsecutiveFailures
+            : 5;
+
+        return state.IsDisabled || Volatile.Read(ref state.ConsecutiveFailures) >= maxFailures;
+    }
+
+    public double GetAverageResponseTime(string trackerUrl)
+    {
+        return _performanceStates.TryGetValue(trackerUrl, out var state) ? state.AverageResponseTimeMs : 0.0;
+    }
+
+    public double GetLastResponseTime(string trackerUrl)
+    {
+        return _performanceStates.TryGetValue(trackerUrl, out var state) ? state.LastResponseTimeMs : 0.0;
+    }
+
+    public static double CalculateResponseTimeEma(double responseTimeMs, double currentEma, double alpha = 0.2)
+    {
+        if (currentEma <= 0)
+        {
+            return responseTimeMs;
+        }
+
+        return (alpha * responseTimeMs) + ((1.0 - alpha) * currentEma);
+    }
+
+    private void RecordResponseTime(string infoHash, string trackerUrl, double responseTimeMs)
+    {
+        var state = _performanceStates.GetOrAdd(trackerUrl, _ => new TrackerPerformanceState());
+        state.RecordResponseTime(responseTimeMs);
+
+        if (!string.IsNullOrWhiteSpace(infoHash))
+        {
+            var torrentKey = GetTorrentKey(infoHash, trackerUrl);
+            var torrentState = _performanceStates.GetOrAdd(torrentKey, _ => new TrackerPerformanceState());
+            torrentState.RecordResponseTime(responseTimeMs);
+        }
     }
 
     private void RecordFailure(string trackerUrl)
@@ -308,16 +562,35 @@ public class MultiTrackerManager : IMultiTrackerManager
         var state = _failureStates.GetOrAdd(key, _ => new TrackerFailureState());
         var failures = Interlocked.Increment(ref state.ConsecutiveFailures);
 
-        var maxFailures = _configService.FailoverMaxConsecutiveFailures;
+        var baseSeconds = _configService.FailoverBackoffBaseSeconds > 0
+            ? _configService.FailoverBackoffBaseSeconds
+            : 60;
+        var maxBackoffSeconds = _configService.FailoverMaxBackoffSeconds > 0
+            ? _configService.FailoverMaxBackoffSeconds
+            : 3600;
+        var maxFailures = _configService.FailoverMaxConsecutiveFailures > 0
+            ? _configService.FailoverMaxConsecutiveFailures
+            : 5;
+
+        // Exponential backoff per tracker on failure (base 60s, max 3600s)
+        var exponent = Math.Min(Math.Max(0, failures - 1), 10);
+        var backoffSeconds = Math.Min(baseSeconds * Math.Pow(2, exponent), maxBackoffSeconds);
+        state.BackoffUntil = DateTime.UtcNow.AddSeconds(backoffSeconds);
+
+        // Auto-disable after 5 consecutive failures
         if (failures >= maxFailures)
         {
-            var baseSeconds = _configService.FailoverBackoffBaseSeconds;
-            var maxBackoffSeconds = _configService.FailoverMaxBackoffSeconds;
-            var exponent = Math.Min(failures - maxFailures, 10);
-            var backoffSeconds = Math.Min(baseSeconds * Math.Pow(2, exponent), maxBackoffSeconds);
-            state.BackoffUntil = DateTime.UtcNow.AddSeconds(backoffSeconds);
+            state.IsDisabled = true;
             _logger.Warn(
-                "Tracker {0} disabled for {1:F0}s after {2} consecutive failures (key: {3})",
+                "Tracker {0} auto-disabled after {1} consecutive failures (key: {2})",
+                trackerUrl,
+                failures,
+                key);
+        }
+        else
+        {
+            _logger.Warn(
+                "Tracker {0} backed off for {1:F0}s after failure #{2} (key: {3})",
                 trackerUrl,
                 backoffSeconds,
                 failures,
@@ -334,7 +607,7 @@ public class MultiTrackerManager : IMultiTrackerManager
     {
         var now = DateTime.UtcNow;
         var staleKeys = _failureStates
-            .Where(kvp => kvp.Value.BackoffUntil != DateTime.MinValue && kvp.Value.BackoffUntil < now)
+            .Where(kvp => !kvp.Value.IsDisabled && kvp.Value.BackoffUntil != DateTime.MinValue && kvp.Value.BackoffUntil < now)
             .Select(kvp => kvp.Key)
             .ToList();
 
@@ -472,12 +745,32 @@ public class MultiTrackerManager : IMultiTrackerManager
     private class TrackerFailureState
     {
         public int ConsecutiveFailures;
+        public bool IsDisabled;
         private long _backoffUntilTicks;
 
         public DateTime BackoffUntil
         {
             get => new DateTime(Interlocked.Read(ref _backoffUntilTicks));
             set => Interlocked.Exchange(ref _backoffUntilTicks, value.Ticks);
+        }
+    }
+
+    private class TrackerPerformanceState
+    {
+        public double AverageResponseTimeMs;
+        public double LastResponseTimeMs;
+
+        public void RecordResponseTime(double responseTimeMs, double alpha = 0.2)
+        {
+            LastResponseTimeMs = responseTimeMs;
+            if (AverageResponseTimeMs <= 0)
+            {
+                AverageResponseTimeMs = responseTimeMs;
+            }
+            else
+            {
+                AverageResponseTimeMs = (alpha * responseTimeMs) + ((1.0 - alpha) * AverageResponseTimeMs);
+            }
         }
     }
 }
