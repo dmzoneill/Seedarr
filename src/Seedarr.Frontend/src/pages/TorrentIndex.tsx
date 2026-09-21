@@ -19,7 +19,7 @@ import {
 } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 import { useModalStack } from "../components/ModalProvider";
-import { trackBulkAction } from "../utils/analytics";
+import { trackBulkAction, trackQueueMove } from "../utils/analytics";
 
 function TorrentIndex() {
   const navigate = useNavigate();
@@ -359,6 +359,7 @@ function TorrentIndex() {
         orderedIds.reverse();
       }
 
+      trackQueueMove(position, validSelectedIds.length);
       setBulkPending(true);
       try {
         for (const id of orderedIds) {

@@ -23,6 +23,7 @@ import type { IndexerDefinition, IndexerTestResult, RssRule, RssGrabHistory, Tor
 import { formatBytes, formatDate } from "../../utils/formatters";
 import { TextInput, SelectInput, Toggle, NumberInput, SectionCard } from "./shared";
 import { useToast } from "../../context/ToastContext";
+import { trackIndexerAction } from "../../utils/analytics";
 
 export function formatIndexerTestError(error: any): string {
   if (!error) return "Connection failed";
@@ -137,22 +138,26 @@ export function IndexersTab() {
     if (editing.id) {
       updateMutation.mutate(payload as IndexerDefinition, {
         onSuccess: () => {
+          trackIndexerAction("edit", payload.indexerType || "Prowlarr", true);
           setEditing(null);
           setModalTestResult(null);
           showToast(`Indexer "${payload.name}" updated`, "success");
         },
         onError: (err: any) => {
+          trackIndexerAction("edit", payload.indexerType || "Prowlarr", false);
           showToast(err?.message || "Failed to update indexer", "error");
         },
       });
     } else {
       createMutation.mutate(payload, {
         onSuccess: () => {
+          trackIndexerAction("add", payload.indexerType || "Prowlarr", true);
           setEditing(null);
           setModalTestResult(null);
           showToast(`Indexer "${payload.name}" created`, "success");
         },
         onError: (err: any) => {
+          trackIndexerAction("add", payload.indexerType || "Prowlarr", false);
           showToast(err?.message || "Failed to create indexer", "error");
         },
       });
@@ -168,6 +173,7 @@ export function IndexersTab() {
     });
     testMutation.mutate(id, {
       onSuccess: (data) => {
+        trackIndexerAction("test", "indexer", data.success);
         setTestResults((prev) => ({ ...prev, [id]: data.success }));
         if (data.success) {
           showToast("Indexer connection successful", "success");
@@ -178,6 +184,7 @@ export function IndexersTab() {
         }
       },
       onError: (err: any) => {
+        trackIndexerAction("test", "indexer", false);
         const message = formatIndexerTestError(err);
         setTestResults((prev) => ({ ...prev, [id]: false }));
         setTestErrorMessages((prev) => ({ ...prev, [id]: message }));
@@ -191,6 +198,7 @@ export function IndexersTab() {
     setModalTestResult(null);
     testDirectMutation.mutate(editing, {
       onSuccess: (res) => {
+        trackIndexerAction("test", editing.indexerType || "indexer", res.success);
         setModalTestResult(res);
         if (res.capabilities) {
           setEditing((prev) => (prev ? { ...prev, capabilities: res.capabilities } : prev));
@@ -202,6 +210,7 @@ export function IndexersTab() {
         }
       },
       onError: (err: any) => {
+        trackIndexerAction("test", editing.indexerType || "indexer", false);
         const message = formatIndexerTestError(err);
         setModalTestResult({
           success: false,
@@ -282,6 +291,7 @@ export function IndexersTab() {
     if (syncProwlarrMutation.isPending) return;
     syncProwlarrMutation.mutate(undefined, {
       onSuccess: (res) => {
+        trackIndexerAction("sync", "Prowlarr", res.success);
         showToast(
           res.message ||
             `Prowlarr sync complete (${res.added} added, ${res.updated} updated, ${res.removed} removed)`,
@@ -289,6 +299,7 @@ export function IndexersTab() {
         );
       },
       onError: (err: any) => {
+        trackIndexerAction("sync", "Prowlarr", false);
         showToast(err?.message || "Prowlarr sync failed", "error");
       },
     });
@@ -374,8 +385,14 @@ export function IndexersTab() {
                     e.stopPropagation();
                     if (window.confirm(`Are you sure you want to delete indexer "${idx.name}"?`)) {
                       deleteMutation.mutate(idx.id, {
-                        onSuccess: () => showToast(`Indexer "${idx.name}" deleted`, "info"),
-                        onError: (err) => showToast(err?.message || "Failed to delete indexer", "error"),
+                        onSuccess: () => {
+                          trackIndexerAction("delete", idx.indexerType || "indexer", true);
+                          showToast(`Indexer "${idx.name}" deleted`, "info");
+                        },
+                        onError: (err) => {
+                          trackIndexerAction("delete", idx.indexerType || "indexer", false);
+                          showToast(err?.message || "Failed to delete indexer", "error");
+                        },
                       });
                     }
                   }}

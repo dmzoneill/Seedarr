@@ -5,8 +5,8 @@ import {
   useCallback,
   useEffect,
 } from "react";
-import type { ReactNode } from "react";
 import { useGeneralConfig } from "../api/hooks";
+import { trackThemeChange } from "../utils/analytics";
 
 export type Theme = "dark" | "light" | "indigo" | "oled" | "slate" | "system";
 export type Accent =
@@ -115,6 +115,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [config]);
 
   const setTheme = useCallback((newTheme: Theme) => {
+    trackThemeChange(newTheme);
     setThemeState(newTheme);
     try {
       localStorage.setItem(STORAGE_THEME_KEY, newTheme);

@@ -8,6 +8,7 @@ import {
   useCategories,
 } from "../api/hooks";
 import type { Tag, Torrent } from "../api/types";
+import { trackTagAction } from "../utils/analytics";
 
 const COLOR_PRESETS = [
   "#3b82f6", // Blue
@@ -111,11 +112,17 @@ function Tags() {
 
     if (payload.id) {
       updateTag.mutate(payload as Tag, {
-        onSuccess: () => setModalTag(null),
+        onSuccess: () => {
+          trackTagAction("update");
+          setModalTag(null);
+        },
       });
     } else {
       createTag.mutate(payload, {
-        onSuccess: () => setModalTag(null),
+        onSuccess: () => {
+          trackTagAction("create");
+          setModalTag(null);
+        },
       });
     }
   }
@@ -126,6 +133,7 @@ function Tags() {
     const deletedLabel = deletingTag.label;
     deleteTag.mutate(deletedId, {
       onSuccess: () => {
+        trackTagAction("delete");
         if (typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("seedarr:tag-deleted", {
