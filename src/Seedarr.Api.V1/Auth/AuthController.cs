@@ -152,6 +152,8 @@ public class AuthController : ControllerBase
         var requestedUrl = returnUrl ?? request.ReturnUrl;
         var safeReturnUrl = SanitizeRedirectUrl(requestedUrl, GetEffectivePathBase());
 
+        var authEnabled = _configFileProvider?.AuthenticationEnabled ?? true;
+
         return Ok(new CurrentUserResource
         {
             Id = 1,
@@ -160,6 +162,8 @@ public class AuthController : ControllerBase
             DisplayName = username == "admin" ? "Administrator" : username,
             Roles = new List<string> { role },
             IsAuthenticated = true,
+            RequiresPassword = authEnabled,
+            AuthenticationEnabled = authEnabled,
             ReturnUrl = safeReturnUrl,
         });
     }
@@ -198,9 +202,11 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public ActionResult<CurrentUserResource> GetCurrentUser()
     {
+        var authEnabled = _configFileProvider?.AuthenticationEnabled ?? true;
+
         if (!User.Identity?.IsAuthenticated ?? true)
         {
-            if (!_configFileProvider.AuthenticationEnabled)
+            if (!authEnabled)
             {
                 return Ok(new CurrentUserResource
                 {
@@ -208,12 +214,16 @@ public class AuthController : ControllerBase
                     DisplayName = "Administrator",
                     Roles = new List<string> { "Admin" },
                     IsAuthenticated = true,
+                    RequiresPassword = false,
+                    AuthenticationEnabled = false,
                 });
             }
 
             return Ok(new CurrentUserResource
             {
                 IsAuthenticated = false,
+                RequiresPassword = true,
+                AuthenticationEnabled = true,
             });
         }
 
@@ -234,6 +244,8 @@ public class AuthController : ControllerBase
             DisplayName = displayName,
             Roles = roles,
             IsAuthenticated = true,
+            RequiresPassword = authEnabled,
+            AuthenticationEnabled = authEnabled,
         });
     }
 
@@ -341,6 +353,7 @@ public class AuthController : ControllerBase
         return string.Empty;
     }
 
+    [NonAction]
     public string GetClientIpAddress()
     {
         if (HttpContext == null)

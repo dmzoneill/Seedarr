@@ -85,8 +85,8 @@ public class Migration69Test
         using var conn = db.OpenConnection();
 
         // Simulate existing rows with legacy '0', null, or empty TagIds
-        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\", \"TagIds\") VALUES ('Torrent_0', 'hash_0', '0');");
-        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\", \"TagIds\") VALUES ('Torrent_Empty', 'hash_empty', '');");
+        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\", \"TagIds\", \"DateAdded\") VALUES ('Torrent_0', 'hash_0', '0', '2026-01-01 00:00:00');");
+        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\", \"TagIds\", \"DateAdded\") VALUES ('Torrent_Empty', 'hash_empty', '', '2026-01-01 00:00:00');");
 
         // Run cleanup logic as defined in Migration 69 Up()
         conn.Execute("UPDATE \"Torrents\" SET \"TagIds\" = '[]' WHERE \"TagIds\" = '0' OR \"TagIds\" IS NULL OR \"TagIds\" = '';");
@@ -107,7 +107,7 @@ public class Migration69Test
         using var conn = db.OpenConnection();
 
         // Simulate row inserted with numeric 0 (SQLite integer column default)
-        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\", \"TagIds\") VALUES ('LegacyTorrent', 'hash_numeric_0', 0);");
+        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\", \"TagIds\", \"DateAdded\") VALUES ('LegacyTorrent', 'hash_numeric_0', 0, '2026-01-01 00:00:00');");
 
         var torrent = conn.QuerySingle<Torrent>("SELECT * FROM \"Torrents\" WHERE \"InfoHash\" = 'hash_numeric_0'");
 
@@ -129,7 +129,7 @@ public class Migration69Test
 
         using var conn = db.OpenConnection();
 
-        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\") VALUES ('TestTorrent', 'tracker_hash_1');");
+        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\", \"DateAdded\") VALUES ('TestTorrent', 'tracker_hash_1', '2026-01-01 00:00:00');");
         var torrentId = conn.QuerySingle<int>("SELECT \"Id\" FROM \"Torrents\" WHERE \"InfoHash\" = 'tracker_hash_1'");
 
         // 5 GB downloaded > 2,147,483,647 bytes

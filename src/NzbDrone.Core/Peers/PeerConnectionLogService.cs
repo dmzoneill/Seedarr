@@ -35,6 +35,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
     private readonly SemaphoreSlim _flushLock = new(1, 1);
     private readonly object _flushGate = new();
     private CancellationTokenSource _flushSignalCts = new();
+    private TaskCompletionSource _pendingFlushTcs;
     private volatile bool _isProcessingBatch;
     private bool _disposed;
 
@@ -135,28 +136,28 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
 
     public void Flush()
     {
-        TriggerFlush();
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while ((_logChannel.Reader.Count > 0 || _isProcessingBatch) && DateTime.UtcNow < deadline)
-        {
-            Thread.Sleep(5);
-        }
-
-        _flushLock.Wait(TimeSpan.FromSeconds(5));
-        _flushLock.Release();
+        FlushAsync().GetAwaiter().GetResult();
     }
 
     public async Task FlushAsync()
     {
-        TriggerFlush();
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while ((_logChannel.Reader.Count > 0 || _isProcessingBatch) && DateTime.UtcNow < deadline)
+        TaskCompletionSource tcs;
+        lock (_flushGate)
         {
-            await Task.Delay(5).ConfigureAwait(false);
+            if (_logChannel.Reader.Count == 0 && !_isProcessingBatch)
+            {
+                return;
+            }
+
+            if (_pendingFlushTcs == null || _pendingFlushTcs.Task.IsCompleted)
+            {
+                _pendingFlushTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+            tcs = _pendingFlushTcs;
+            TriggerFlush();
         }
 
-        await _flushLock.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-        _flushLock.Release();
+        await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
     }
 
     private void TriggerFlush()
@@ -204,8 +205,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
                         {
                             if (_flushSignalCts.IsCancellationRequested)
                             {
-                                _flushSignalCts.Dispose();
-                                _flushSignalCts = new CancellationTokenSource();
+                                break;
                             }
 
                             flushToken = _flushSignalCts.Token;
@@ -248,6 +248,11 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
                     {
                         _flushSignalCts.Dispose();
                         _flushSignalCts = new CancellationTokenSource();
+                    }
+
+                    if (_logChannel.Reader.Count == 0)
+                    {
+                        _pendingFlushTcs?.TrySetResult();
                     }
                 }
             }

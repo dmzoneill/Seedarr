@@ -293,14 +293,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             announceEvent = AnnounceEvent.None;
         }
 
-        // BEP 12: In-Tier Randomization (Fisher-Yates Shuffle) on startup / torrent initiation
-        if (announceEvent == AnnounceEvent.Started || !_torrentTierOrder.ContainsKey(torrent.Id))
+        if (!_torrentTierOrder.ContainsKey(torrent.Id))
         {
-            foreach (var tier in tieredEntries)
-            {
-                MultiTrackerManager.ShuffleTier(tier);
-            }
-
             _torrentTierOrder[torrent.Id] = tieredEntries
                 .Select(tier => tier.Select(e => e.Url).ToList())
                 .ToList();
@@ -425,7 +419,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         var sw = Stopwatch.StartNew();
         try
         {
-            response = _multiTracker.Announce(request, announceList, torrent.IsPrivate);
+            response = _multiTracker.Announce(request, announceList);
         }
         catch (Exception ex)
         {

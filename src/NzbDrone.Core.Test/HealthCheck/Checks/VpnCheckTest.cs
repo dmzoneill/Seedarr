@@ -95,6 +95,7 @@ public class VpnCheckTest
         _vpnKillSwitchService.IsVpnInterfaceUp.Returns(true);
         _vpnKillSwitchService.IsFailClosedActive.Returns(true);
         _vpnKillSwitchService.IsStabilizing.Returns(false);
+        _vpnKillSwitchService.State.Returns(VpnState.Down);
 
         var result = _subject.Check();
 

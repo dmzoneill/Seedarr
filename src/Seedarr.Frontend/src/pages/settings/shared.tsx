@@ -160,6 +160,17 @@ export function SaveBar({
   const blocker = useUnsavedGuard(dirty);
   const [savingToProceed, setSavingToProceed] = useState(false);
 
+  useEffect(() => {
+    if (savingToProceed) {
+      if (isError) {
+        setSavingToProceed(false);
+      } else if (isSuccess && !isPending && blocker.state === "blocked") {
+        setSavingToProceed(false);
+        blocker.proceed();
+      }
+    }
+  }, [savingToProceed, isSuccess, isPending, isError, blocker]);
+
   if (!canSaveSettings) {
     return (
       <div
@@ -211,17 +222,6 @@ export function SaveBar({
       setSavingToProceed(false);
     }
   };
-
-  useEffect(() => {
-    if (savingToProceed) {
-      if (isError) {
-        setSavingToProceed(false);
-      } else if (isSuccess && !isPending && blocker.state === "blocked") {
-        setSavingToProceed(false);
-        blocker.proceed();
-      }
-    }
-  }, [savingToProceed, isSuccess, isPending, isError, blocker]);
 
   const handleDiscard = () => {
     setSavingToProceed(false);

@@ -107,15 +107,7 @@ public class SwarmAvailabilityService : ISwarmAvailabilityService
 
         if (pieceCount <= 0)
         {
-            if (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding || hasSeed)
-            {
-                return (1.0, false, 0);
-            }
-
-            var sumProgress = peerList.Sum(p => Math.Clamp(p.Progress, 0.0, 1.0));
-            var totalAvail = Math.Min(1.0, torrent.Progress + sumProgress);
-            var isExt = totalAvail < 1.0 && (peerList.Count == 0 || sumProgress == 0);
-            return (totalAvail, isExt, isExt ? 1 : 0);
+            return (0.0, false, 0);
         }
 
         var localPieces = new bool[pieceCount];

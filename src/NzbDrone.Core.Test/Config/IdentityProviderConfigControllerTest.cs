@@ -439,9 +439,11 @@ public class IdentityProviderConfigControllerTest
 
         Assert.That(result, Is.TypeOf<OkObjectResult>());
         var ok = (OkObjectResult)result;
-        dynamic value = ok.Value;
-        Assert.That((bool)value.success, Is.False);
-        Assert.That((string)value.message, Is.EqualTo("Failed to reach provider endpoint"));
+        var valType = ok.Value.GetType();
+        var successVal = (bool)(valType.GetProperty("success")?.GetValue(ok.Value) ?? valType.GetProperty("Success")?.GetValue(ok.Value));
+        var messageVal = (string)(valType.GetProperty("message")?.GetValue(ok.Value) ?? valType.GetProperty("Message")?.GetValue(ok.Value));
+        Assert.That(successVal, Is.False);
+        Assert.That(messageVal, Is.EqualTo("Failed to reach provider endpoint"));
     }
 
     [Test]
@@ -460,9 +462,11 @@ public class IdentityProviderConfigControllerTest
 
         Assert.That(result, Is.TypeOf<OkObjectResult>());
         var ok = (OkObjectResult)result;
-        dynamic value = ok.Value;
-        Assert.That((bool)value.success, Is.True);
-        Assert.That((string)value.message, Is.EqualTo("Connection successful"));
+        var valType = ok.Value.GetType();
+        var successVal = (bool)(valType.GetProperty("success")?.GetValue(ok.Value) ?? valType.GetProperty("Success")?.GetValue(ok.Value));
+        var messageVal = (string)(valType.GetProperty("message")?.GetValue(ok.Value) ?? valType.GetProperty("Message")?.GetValue(ok.Value));
+        Assert.That(successVal, Is.True);
+        Assert.That(messageVal, Is.EqualTo("Connection successful"));
     }
 
     [Test]
