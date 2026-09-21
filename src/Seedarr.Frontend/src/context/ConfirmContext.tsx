@@ -6,7 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { ConfirmModal } from "../components/ConfirmModal";
-import { ErrorBoundary } from "../components/ErrorBoundary";
+import ErrorBoundary from "../components/ErrorBoundary";
 
 export interface ConfirmOptions {
   title?: string;
