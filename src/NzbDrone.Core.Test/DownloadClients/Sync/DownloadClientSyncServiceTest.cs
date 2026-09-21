@@ -1513,4 +1513,159 @@ public class DownloadClientSyncServiceTest
         Assert.That(allItems[1].ClientId, Is.EqualTo(2));
         Assert.That(allItems[1].ClientName, Is.EqualTo("Transmission"));
     }
+
+    [Test]
+    public void ImportTorrent_should_assign_category_and_savepath_from_item()
+    {
+        var hash = "8888111122223333444455556666777788888888";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Categorized Item",
+                InfoHash = hash,
+                TotalSize = 4000,
+                RemainingSize = 0,
+                Category = "radarr-movies",
+                OutputPath = "/downloads/radarr-movies"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Categorized Item",
+            TotalSize = 4000,
+            PieceCount = 8,
+            PieceLength = 500
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(5).Returns(new DownloadClientDefinition
+        {
+            Id = 5,
+            Name = "qBit Client",
+            ClientType = "QBitTorrent",
+            Enable = true,
+            Category = "default-cat",
+            Host = "localhost"
+        });
+
+        var torrent = _service.ImportTorrent(5, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.Category, Is.EqualTo("radarr-movies"));
+        Assert.That(torrent.SavePath, Is.EqualTo("/downloads/radarr-movies"));
+        Assert.That(torrent.SourcePath, Is.EqualTo("/downloads/radarr-movies"));
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Category == "radarr-movies" &&
+            t.SavePath == "/downloads/radarr-movies" &&
+            t.SourcePath == "/downloads/radarr-movies"));
+    }
+
+    [Test]
+    public void Sync_should_assign_category_and_savepath_when_creating_new_torrent()
+    {
+        var hash = "7777111122223333444455556666777788887777";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Sync Item",
+                InfoHash = hash,
+                TotalSize = 6000,
+                RemainingSize = 1000,
+                Category = "sonarr-tv",
+                OutputPath = "/downloads/sonarr-tv"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Sync Item",
+            TotalSize = 6000,
+            PieceCount = 12,
+            PieceLength = 500
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new()
+            {
+                Id = 8,
+                Name = "qBit Sync Client",
+                ClientType = "QBitTorrent",
+                Enable = true,
+                Host = "localhost"
+            }
+        });
+
+        var result = _service.Sync();
+
+        Assert.That(result.Added, Is.EqualTo(1));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.Category == "sonarr-tv" &&
+            t.SavePath == "/downloads/sonarr-tv" &&
+            t.SourcePath == "/downloads/sonarr-tv"));
+    }
+
+    [Test]
+    public void ImportTorrent_should_default_category_to_empty_string_when_item_and_definition_category_are_null()
+    {
+        var hash = "6666111122223333444455556666777788886666";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Uncategorized Item",
+                InfoHash = hash,
+                TotalSize = 4000,
+                Category = null,
+                OutputPath = "/downloads"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Uncategorized Item",
+            TotalSize = 4000,
+            PieceCount = 8,
+            PieceLength = 500
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(6).Returns(new DownloadClientDefinition
+        {
+            Id = 6,
+            Name = "Client 6",
+            ClientType = "QBitTorrent",
+            Enable = true,
+            Category = null,
+            Host = "localhost"
+        });
+
+        var torrent = _service.ImportTorrent(6, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.Category, Is.EqualTo(string.Empty));
+        Assert.That(torrent.SavePath, Is.EqualTo("/downloads"));
+        Assert.That(torrent.SourcePath, Is.EqualTo("/downloads"));
+    }
 }
