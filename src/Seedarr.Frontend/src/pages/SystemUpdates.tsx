@@ -173,10 +173,10 @@ function SystemUpdates() {
               }}
             >
               <span style={{ display: "flex", alignItems: "center", fontSize: "1.2rem" }}>
-                🐳
+                📦
               </span>
               <div style={{ fontSize: "0.9rem" }}>
-                Seedarr is running inside a Docker container. Update your deployment by pulling the latest image:{" "}
+                Seedarr is running inside a container. Update your deployment by pulling the latest image:{" "}
                 <code
                   style={{
                     backgroundColor: "rgba(0, 0, 0, 0.25)",
@@ -186,7 +186,7 @@ function SystemUpdates() {
                     fontSize: "0.85rem",
                   }}
                 >
-                  docker compose pull &amp;&amp; docker compose up -d
+                  podman-compose pull &amp;&amp; podman-compose up -d
                 </code>
               </div>
             </div>

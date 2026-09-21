@@ -53,10 +53,10 @@
 
 ## ⚡ Quick Start
 
-### Single Container Run (`docker run`)
+### Single Container Run (`podman run` / `docker run`)
 
 ```bash
-docker run -d \
+podman run -d \
   --name seedarr \
   -p 9898:9898 \
   -v seedarr-config:/config \
@@ -69,7 +69,7 @@ Open **http://localhost:9898** in your browser.
 
 ---
 
-### Docker Compose (`compose.yaml` / `docker-compose.yml`)
+### Container Compose (`podman-compose.yml` / `compose.yaml`)
 
 ```yaml
 services:
@@ -92,6 +92,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+```
+
+Run with Podman Compose:
+```bash
+podman-compose up -d
 ```
 
 ---
