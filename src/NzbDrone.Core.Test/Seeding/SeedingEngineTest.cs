@@ -15,6 +15,7 @@ using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Core.TrackerServer;
 
@@ -2823,5 +2824,60 @@ public class SeedingEngineTest
         var field = typeof(SeedingEngine).GetField("_shutdownRequested", BindingFlags.NonPublic | BindingFlags.Instance);
         var isShutdown = (bool)field.GetValue(_engine);
         Assert.That(isShutdown, Is.True);
+    }
+
+    [Test]
+    public void LocalPeerId_remains_stable_and_does_not_regenerate_across_ticks()
+    {
+        _configService.PeerIdPrefix.Returns("-SD1000-");
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        CallTick();
+
+        var initialPeerId = _engine.LocalPeerId;
+        Assert.That(initialPeerId, Is.Not.Null.And.Not.Empty);
+
+        for (var i = 0; i < 20; i++)
+        {
+            CallTick();
+            Assert.That(_engine.LocalPeerId, Is.EqualTo(initialPeerId), "LocalPeerId must remain stable across idle ticks and not regenerate");
+        }
+    }
+
+    [Test]
+    public void LocalPeerId_remains_stable_when_client_behavior_engine_enabled()
+    {
+        var mockSimulator = Substitute.For<IClientBehaviorSimulator>();
+        var profile = Substitute.For<IClientProfile>();
+        profile.GeneratePeerId().Returns("-qB4420-111111111111", "-qB4420-222222222222", "-qB4420-333333333333");
+        mockSimulator.GetActiveProfile(Arg.Any<bool>()).Returns(profile);
+
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var engine = new SeedingEngine(
+            _torrentService,
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventAggregator,
+            _peerDatabase,
+            _connectionManager,
+            _eventLogService,
+            clientBehaviorSimulator: mockSimulator);
+
+        var tickMethod = typeof(SeedingEngine).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        // First tick generates initial peer ID
+        tickMethod.Invoke(engine, null);
+        var initialPeerId = engine.LocalPeerId;
+        Assert.That(initialPeerId, Is.EqualTo("-qB4420-111111111111"));
+
+        // Subsequent ticks must NOT regenerate peer ID
+        for (var i = 0; i < 10; i++)
+        {
+            tickMethod.Invoke(engine, null);
+            Assert.That(engine.LocalPeerId, Is.EqualTo(initialPeerId), "Peer ID must not be regenerated on subsequent ticks");
+        }
     }
 }

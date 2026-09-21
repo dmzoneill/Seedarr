@@ -72,6 +72,8 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
 
     private string _localPeerId;
 
+    public string LocalPeerId => _localPeerId;
+
     public SeedingEngine(
         ITorrentService torrentService,
         ISpeedDistributionManager distributionManager,
@@ -548,14 +550,6 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                 }
 
                 _localPeerId = prefix + new string(suffix);
-            }
-        }
-        else if (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && downloadingTorrents.Count == 0 && seedingTorrents.Count == 0 && stalledTorrents.Count == 0)
-        {
-            var activeProfile = _clientBehaviorSimulator.GetActiveProfile(isAnyPrivate);
-            if (activeProfile != null)
-            {
-                _localPeerId = activeProfile.GeneratePeerId();
             }
         }
 
