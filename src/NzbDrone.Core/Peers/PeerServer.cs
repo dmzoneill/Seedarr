@@ -134,6 +134,22 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         return _swarmHistograms.GetOrAdd(infoHash, _ => new SwarmPieceHistogram(pieceCount));
     }
 
+    public void UnregisterPeerPieces(PeerConnection connection, string infoHash = null)
+    {
+        if (connection?.PeerPieces == null)
+        {
+            return;
+        }
+
+        var hash = infoHash ?? connection.MatchedTorrent?.InfoHash ?? connection.InfoHash;
+        if (!string.IsNullOrEmpty(hash) && _swarmHistograms.TryGetValue(hash, out var histogram))
+        {
+            histogram.UnregisterPeer(connection.PeerPieces);
+        }
+
+        connection.PeerPieces = null;
+    }
+
     private static string GetPeerKey(PeerConnection connection)
     {
         if (connection == null)
@@ -2331,23 +2347,14 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             _chokeManager?.PeerDisconnected(connection);
             _endgameManager?.UnregisterPeer(connection);
             _connectionManager.Remove(connection);
-            var sessionInfoHash = connection.MatchedTorrent?.InfoHash ?? connection.InfoHash;
+            var sessionInfoHash = connection.MatchedTorrent?.InfoHash ?? connection.InfoHash ?? torrent?.InfoHash;
             if (!string.IsNullOrEmpty(sessionInfoHash))
             {
                 var tracker = GetSuperSeedingTracker(sessionInfoHash);
                 tracker?.OnPeerDisconnected(GetPeerKey(connection));
             }
 
-            if (connection.PeerPieces != null)
-            {
-                var infoHash = connection.MatchedTorrent?.InfoHash ?? connection.InfoHash;
-                if (!string.IsNullOrEmpty(infoHash) && _swarmHistograms.TryGetValue(infoHash, out var histogram))
-                {
-                    histogram.UnregisterPeer(connection.PeerPieces);
-                }
-
-                connection.PeerPieces = null;
-            }
+            UnregisterPeerPieces(connection, sessionInfoHash);
 
             connection.PendingRequestCount = 0;
             connection.Dispose();
@@ -2787,16 +2794,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 _connectionManager.Remove(connection);
             }
 
-            if (connection.PeerPieces != null)
-            {
-                var infoHash = connection.MatchedTorrent?.InfoHash ?? connection.InfoHash;
-                if (!string.IsNullOrEmpty(infoHash) && _swarmHistograms.TryGetValue(infoHash, out var histogram))
-                {
-                    histogram.UnregisterPeer(connection.PeerPieces);
-                }
-
-                connection.PeerPieces = null;
-            }
+            var sessionInfoHash = connection.MatchedTorrent?.InfoHash ?? connection.InfoHash ?? torrent?.InfoHash;
+            UnregisterPeerPieces(connection, sessionInfoHash);
 
             connection.PendingRequestCount = 0;
         }
@@ -2945,26 +2944,16 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     var havePieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
                     if (torrent != null && torrent.PieceCount > 0)
                     {
-                        if (connection.PeerPieces == null)
+                        var newlyAdded = connection.RecordHave(havePieceIndex, torrent.PieceCount);
+                        if (newlyAdded)
                         {
-                            connection.PeerPieces = new bool[torrent.PieceCount];
+                            var histogram = GetOrCreateHistogram(torrent.InfoHash, torrent.PieceCount);
+                            histogram?.IncrementPiece(havePieceIndex);
                         }
 
-                        if (havePieceIndex >= 0 && havePieceIndex < connection.PeerPieces.Length)
+                        if (connection.IsSeed)
                         {
-                            if (!connection.PeerPieces[havePieceIndex])
-                            {
-                                connection.PeerPieces[havePieceIndex] = true;
-                                connection.HaveCount++;
-                                var histogram = GetOrCreateHistogram(torrent.InfoHash, torrent.PieceCount);
-                                histogram?.IncrementPiece(havePieceIndex);
-                            }
-
-                            connection.Progress = (double)connection.HaveCount / torrent.PieceCount;
-                            if (connection.IsSeed)
-                            {
-                                _chokeManager?.PeerBecameSeed(connection);
-                            }
+                            _chokeManager?.PeerBecameSeed(connection);
                         }
 
                         UpdateLocalInterest(connection, torrent);

@@ -290,3 +290,12 @@ public class SequentialPiecePicker : IPiecePicker
         return boundary.Distinct().ToList();
     }
 }
+
+public class SequentialPicker : SequentialPiecePicker
+{
+    public SequentialPicker(IPiecePicker rarestFirstPicker = null, IRandomNumberGenerator random = null)
+        : base(rarestFirstPicker, random)
+    {
+    }
+}
+

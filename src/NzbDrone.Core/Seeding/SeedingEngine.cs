@@ -65,6 +65,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
     private readonly IDhtService _dhtService;
     private readonly ITrackerAnnounceService _trackerAnnounceService;
     private readonly Peers.IPeerServer _peerServer;
+    private readonly ISwarmAvailabilityService _swarmAvailabilityService;
     private readonly CancellationTokenSource _shutdownCts = new();
     private bool _speedThresholdExceededState;
     private long _lastTickTimestamp;
@@ -99,7 +100,8 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         ITrackerAnnounceService trackerAnnounceService = null,
         Peers.IPeerServer peerServer = null,
         IPieceBoundaryMasker pieceBoundaryMasker = null,
-        ITorrentFileService torrentFileService = null)
+        ITorrentFileService torrentFileService = null,
+        ISwarmAvailabilityService swarmAvailabilityService = null)
     {
         _torrentService = torrentService;
         _torrentRepository = torrentRepository;
@@ -123,6 +125,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         _dhtService = dhtService;
         _trackerAnnounceService = trackerAnnounceService;
         _peerServer = peerServer;
+        _swarmAvailabilityService = swarmAvailabilityService ?? new SwarmAvailabilityService();
         _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService, tagService, pieceBoundaryMasker, torrentFileService);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -989,55 +992,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
 
     public static double CalculateCumulativeAvailability(IEnumerable<PeerConnection> peers, int pieceCount)
     {
-        if (peers == null)
-        {
-            return 0.0;
-        }
-
-        var peerList = peers.Where(p => p != null).ToList();
-        if (peerList.Count == 0)
-        {
-            return 0.0;
-        }
-
-        if (peerList.Any(p => p.IsSeed || p.Progress >= 1.0))
-        {
-            return 1.0;
-        }
-
-        if (pieceCount <= 0)
-        {
-            var sumProgress = peerList.Sum(p => Math.Clamp(p.Progress, 0.0, 1.0));
-            return Math.Min(1.0, sumProgress);
-        }
-
-        var coveredPieces = new bool[pieceCount];
-        var hasAnyBitfield = false;
-
-        foreach (var peer in peerList)
-        {
-            if (peer.PeerPieces != null && peer.PeerPieces.Length > 0)
-            {
-                hasAnyBitfield = true;
-                var max = Math.Min(pieceCount, peer.PeerPieces.Length);
-                for (var i = 0; i < max; i++)
-                {
-                    if (peer.PeerPieces[i])
-                    {
-                        coveredPieces[i] = true;
-                    }
-                }
-            }
-        }
-
-        if (hasAnyBitfield)
-        {
-            var coveredCount = coveredPieces.Count(c => c);
-            return (double)coveredCount / pieceCount;
-        }
-
-        var totalProgress = peerList.Sum(p => Math.Clamp(p.Progress, 0.0, 1.0));
-        return Math.Min(1.0, totalProgress);
+        return SwarmAvailabilityService.CalculateCumulativeAvailability(peers, pieceCount);
     }
 
     public void EvaluateSuperSeeding(Torrent torrent)
@@ -1150,94 +1105,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         IEnumerable<PeerConnection> peers,
         bool[] verifiedPieces)
     {
-        if (torrent == null)
-        {
-            return (0.0, false, 0);
-        }
-
-        if (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding)
-        {
-            return (1.0, false, 0);
-        }
-
-        var peerList = peers?.Where(p => p != null).ToList() ?? new List<PeerConnection>();
-        var hasSeed = peerList.Any(p => p.IsSeed || p.Progress >= 1.0);
-
-        if (torrent.PieceCount <= 0)
-        {
-            if (hasSeed)
-            {
-                return (1.0, false, 0);
-            }
-
-            var sumProgress = peerList.Sum(p => Math.Clamp(p.Progress, 0.0, 1.0));
-            var totalAvail = Math.Min(1.0, torrent.Progress + sumProgress);
-            var isExt = totalAvail < 1.0 && (peerList.Count == 0 || sumProgress == 0);
-            return (totalAvail, isExt, isExt ? 1 : 0);
-        }
-
-        var pieceCount = torrent.PieceCount;
-        var localPieces = new bool[pieceCount];
-        var localCount = 0;
-        for (var i = 0; i < pieceCount; i++)
-        {
-            if (LocalHasPiece(torrent, verifiedPieces, i))
-            {
-                localPieces[i] = true;
-                localCount++;
-            }
-        }
-
-        if (localCount == pieceCount)
-        {
-            return (1.0, false, 0);
-        }
-
-        var missingCount = pieceCount - localCount;
-
-        if (hasSeed)
-        {
-            return (1.0, false, 0);
-        }
-
-        var copyCount = new int[pieceCount];
-        for (var i = 0; i < pieceCount; i++)
-        {
-            if (localPieces[i])
-            {
-                copyCount[i] = 1;
-            }
-        }
-
-        foreach (var peer in peerList)
-        {
-            if (peer.PeerPieces != null && peer.PeerPieces.Length > 0)
-            {
-                var len = Math.Min(pieceCount, peer.PeerPieces.Length);
-                for (var i = 0; i < len; i++)
-                {
-                    if (peer.PeerPieces[i])
-                    {
-                        copyCount[i]++;
-                    }
-                }
-            }
-        }
-
-        var extinctPieceCount = 0;
-        for (var i = 0; i < pieceCount; i++)
-        {
-            if (!localPieces[i] && copyCount[i] == 0)
-            {
-                extinctPieceCount++;
-            }
-        }
-
-        var coveredPieces = copyCount.Count(c => c > 0);
-        var availability = (double)coveredPieces / pieceCount;
-        var allMissingExtinct = missingCount > 0 && extinctPieceCount == missingCount;
-
-        return (availability, allMissingExtinct, extinctPieceCount);
+        return SwarmAvailabilityService.CalculateSwarmAvailability(torrent, peers, verifiedPieces);
     }
 
     private bool UpdateAvailabilityAndExtinction(Torrent torrent)
@@ -1247,20 +1115,20 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             return false;
         }
 
-        if (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding)
-        {
-            torrent.IsExtinct = false;
-            torrent.StallDurationSeconds = 0;
-            torrent.Availability = Math.Max(1.0, torrent.Availability);
-            return false;
-        }
-
         var peers = _connectionManager?.GetConnections(torrent.InfoHash);
         var peerList = peers?.Where(p => p != null).ToList() ?? new List<PeerConnection>();
         var verified = _pieceStorage?.GetVerifiedPieces(torrent.InfoHash);
 
         var (availability, isExtinct, _) = CalculateSwarmAvailability(torrent, peerList, verified);
         torrent.Availability = availability;
+
+        if (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding)
+        {
+            torrent.IsExtinct = false;
+            torrent.StallDurationSeconds = 0;
+            torrent.Availability = Math.Max(1.0, availability);
+            return false;
+        }
 
         var wasExtinct = torrent.IsExtinct;
         torrent.IsExtinct = isExtinct;
