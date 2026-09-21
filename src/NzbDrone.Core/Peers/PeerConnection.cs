@@ -497,6 +497,28 @@ public class PeerConnection : IDisposable
         return false;
     }
 
+    public virtual bool RecordHave(int pieceIndex, int pieceCount = 0)
+    {
+        if (pieceCount > 0 && _peerPieces == null)
+        {
+            _peerPieces = new bool[pieceCount];
+        }
+
+        if (_peerPieces != null && pieceIndex >= 0 && pieceIndex < _peerPieces.Length)
+        {
+            if (!_peerPieces[pieceIndex])
+            {
+                _peerPieces[pieceIndex] = true;
+                HaveCount++;
+                Progress = _peerPieces.Length > 0 ? (double)HaveCount / _peerPieces.Length : 0.0;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
     public IDhKeyPool DhKeyPool { get; set; }
     public byte[] InitialApplicationData { get; private set; }
     public bool HandshakeSent { get; private set; }

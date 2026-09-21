@@ -218,3 +218,12 @@ public class RarestFirstPiecePicker : IPiecePicker
         return false;
     }
 }
+
+public class RarestFirstPicker : RarestFirstPiecePicker
+{
+    public RarestFirstPicker(IRandomNumberGenerator random = null)
+        : base(random)
+    {
+    }
+}
+
