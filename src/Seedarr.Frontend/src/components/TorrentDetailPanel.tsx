@@ -10,6 +10,7 @@ import {
   ActivityIcon,
   HashIcon,
 } from "./icons/UIIcons";
+import { PeerMapIcon } from "./icons/AppIcons";
 import { usePanelHeight } from "./torrentdetailpanel/shared";
 import { StatusTab } from "./torrentdetailpanel/StatusTab";
 import { DetailsTab } from "./torrentdetailpanel/DetailsTab";
@@ -19,6 +20,7 @@ import { TrackersTab } from "./torrentdetailpanel/TrackersTab";
 import { OptionsTab } from "./torrentdetailpanel/OptionsTab";
 import { MonitoringTab } from "./torrentdetailpanel/MonitoringTab";
 import { LogTab } from "./torrentdetailpanel/LogTab";
+import PieceMap from "./PieceMap";
 
 type DetailTab =
   | "status"
@@ -27,6 +29,7 @@ type DetailTab =
   | "peers"
   | "trackers"
   | "options"
+  | "piecemap"
   | "monitoring"
   | "log";
 
@@ -42,6 +45,7 @@ const TAB_ICONS: Record<DetailTab, React.ReactNode> = {
   peers: <UsersIcon size={13} />,
   trackers: <GlobeIcon size={13} />,
   options: <SlidersIcon size={13} />,
+  piecemap: <PeerMapIcon size={13} />,
   monitoring: <ActivityIcon size={13} />,
   log: <HashIcon size={13} />,
 };
@@ -53,6 +57,7 @@ const DETAIL_TABS: { key: DetailTab; label: string }[] = [
   { key: "peers", label: "Peers" },
   { key: "trackers", label: "Trackers" },
   { key: "options", label: "Options" },
+  { key: "piecemap", label: "Piece Map" },
   { key: "monitoring", label: "Monitoring" },
   { key: "log", label: "Seeder Log" },
 ];
@@ -133,6 +138,15 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
         {tab === "peers" && <PeersTab torrentId={torrent.id} />}
         {tab === "trackers" && <TrackersTab torrentId={torrent.id} />}
         {tab === "options" && <OptionsTab torrent={torrent} />}
+        {tab === "piecemap" && (
+          <PieceMap
+            torrentId={torrent.id}
+            pieceCount={torrent.pieceCount}
+            pieceLength={torrent.pieceLength}
+            progress={torrent.progress}
+            isSeeding={isSeeding}
+          />
+        )}
         {tab === "monitoring" && <MonitoringTab torrent={torrent} />}
         {tab === "log" && <LogTab torrent={torrent} />}
       </div>
