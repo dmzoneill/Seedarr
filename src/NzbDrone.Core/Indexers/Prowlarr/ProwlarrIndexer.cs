@@ -481,8 +481,8 @@ public class ProwlarrIndexer : IIndexer
                         release.UploadVolumeFactor = Math.Clamp(uvfVal, 0.0, 10.0);
                     }
                     else if (uvfProp.ValueKind == System.Text.Json.JsonValueKind.String &&
-                             double.TryParse(uvfProp.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var uvfStr) &&
-                             double.IsFinite(uvfStr) && uvfStr >= 0.0)
+                        double.TryParse(uvfProp.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var uvfStr) &&
+                        double.IsFinite(uvfStr) && uvfStr >= 0.0)
                     {
                         release.UploadVolumeFactor = Math.Clamp(uvfStr, 0.0, 10.0);
                     }
