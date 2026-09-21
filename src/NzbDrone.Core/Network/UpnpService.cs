@@ -81,22 +81,38 @@ public class UpnpService : BackgroundService, IUpnpService
     public DateTime? NextRenewalUtc { get; private set; }
     public string RouterModel { get; set; } = "";
 
+    public const PortMapper SupportedPortMappers = PortMapper.Upnp | PortMapper.Pmp;
+
     public UpnpService(
         IConfigService configService,
         IEventAggregator eventAggregator,
-        Func<CancellationToken, Task<IUpnpDevice>> deviceDiscoverer = null)
+        Func<CancellationToken, Task<IUpnpDevice>> deviceDiscoverer = null,
+        Func<PortMapper, CancellationTokenSource, Task<IUpnpDevice>> portMapperDiscoverer = null)
     {
         _configService = configService;
         _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
-        _deviceDiscoverer = deviceDiscoverer ?? (async ct =>
+
+        if (portMapperDiscoverer != null)
         {
-            var discoverer = new NatDiscoverer();
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(10));
-            var device = await discoverer.DiscoverDeviceAsync(PortMapper.Upnp, cts);
-            return new UpnpDeviceWrapper(device);
-        });
+            _deviceDiscoverer = async ct =>
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(10));
+                return await portMapperDiscoverer(SupportedPortMappers, cts);
+            };
+        }
+        else
+        {
+            _deviceDiscoverer = deviceDiscoverer ?? (async ct =>
+            {
+                var discoverer = new NatDiscoverer();
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(10));
+                var device = await discoverer.DiscoverDeviceAsync(SupportedPortMappers, cts);
+                return new UpnpDeviceWrapper(device);
+            });
+        }
     }
 
     public List<PortMapping> GetMappings()
@@ -164,10 +180,28 @@ public class UpnpService : BackgroundService, IUpnpService
 
             var peerPort = _configService.ListeningPort;
             var trackerPort = _configService.TrackerHttpPort;
+            var trackerUdpPort = _configService.TrackerUdpPort;
 
             var peerTcpSuccess = await MapPort(device, peerPort, Protocol.Tcp, "Seedarr Peer", stoppingToken);
-            await MapPort(device, trackerPort, Protocol.Tcp, "Seedarr Tracker HTTP", stoppingToken);
             await MapPort(device, peerPort, Protocol.Udp, "Seedarr DHT", stoppingToken);
+
+            if (_configService.TrackerServerEnabled && _configService.TrackerHttpEnabled && trackerPort > 0)
+            {
+                await MapPort(device, trackerPort, Protocol.Tcp, "Seedarr Tracker HTTP", stoppingToken);
+            }
+            else
+            {
+                await UnmapPortByDescription(device, "Seedarr Tracker HTTP", stoppingToken);
+            }
+
+            if (_configService.TrackerServerEnabled && _configService.TrackerUdpEnabled && trackerUdpPort > 0)
+            {
+                await MapPort(device, trackerUdpPort, Protocol.Udp, "Seedarr Tracker UDP", stoppingToken);
+            }
+            else
+            {
+                await UnmapPortByDescription(device, "Seedarr Tracker UDP", stoppingToken);
+            }
 
             if (peerTcpSuccess)
             {
@@ -223,6 +257,38 @@ public class UpnpService : BackgroundService, IUpnpService
         }
     }
 
+    private async Task UnmapPortByDescription(IUpnpDevice device, string description, CancellationToken cancellationToken)
+    {
+        PortMapping existing;
+        lock (_mappings)
+        {
+            existing = _mappings.Find(m => string.Equals(m.Description, description, StringComparison.OrdinalIgnoreCase) && m.IsActive);
+        }
+
+        if (existing == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var protocol = string.Equals(existing.Protocol, "UDP", StringComparison.OrdinalIgnoreCase)
+                ? Protocol.Udp
+                : Protocol.Tcp;
+            var natMapping = new Mapping(protocol, existing.InternalPort, existing.ExternalPort, 0, existing.Description);
+            await device.DeletePortMapAsync(natMapping).WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            existing.IsActive = false;
+            existing.LeaseSeconds = 0;
+            existing.ExpiryUtc = null;
+            existing.ErrorMessage = "Mapping removed";
+            _logger.Info("UPnP: unmapped disabled {0} port {1} ({2})", existing.Protocol, existing.InternalPort, description);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "UPnP: failed to unmap disabled mapping {0}:{1}", existing.Protocol, existing.InternalPort);
+        }
+    }
+
     public async Task RemoveMappings()
     {
         if (_discoveredDevice == null)
@@ -245,6 +311,10 @@ public class UpnpService : BackgroundService, IUpnpService
 
             foreach (var portMapping in snapshot)
             {
+                if (!portMapping.IsActive)
+                {
+                    continue;
+                }
                 cts.Token.ThrowIfCancellationRequested();
 
                 try
