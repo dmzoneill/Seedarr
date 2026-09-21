@@ -21,6 +21,7 @@ import type {
   RemotePathMappingTestResult,
 } from "../../api/types";
 import { useToast } from "../../context/ToastContext";
+import { trackDownloadClientAction } from "../../utils/analytics";
 import {
   TextInput,
   SelectInput,
@@ -91,12 +92,21 @@ export function DownloadClientsTab() {
 
   const handleSave = () => {
     if (!editing) return;
+    const clientType = editing.clientType || "unknown";
     if (editing.id) {
       updateMutation.mutate(editing as DownloadClientDefinition, {
-        onSuccess: () => setEditing(null),
+        onSuccess: () => {
+          trackDownloadClientAction(clientType, "add");
+          setEditing(null);
+        },
       });
     } else {
-      createMutation.mutate(editing, { onSuccess: () => setEditing(null) });
+      createMutation.mutate(editing, {
+        onSuccess: () => {
+          trackDownloadClientAction(clientType, "add");
+          setEditing(null);
+        },
+      });
     }
   };
 
@@ -115,13 +125,19 @@ export function DownloadClientsTab() {
   const handleModalTest = () => {
     if (!editing) return;
     setModalTestResult(null);
+    const clientType = editing.clientType || "unknown";
     testDirectMutation.mutate(editing, {
-      onSuccess: (data) => setModalTestResult(data),
-      onError: (err) =>
+      onSuccess: (data) => {
+        trackDownloadClientAction(clientType, "test", data.success);
+        setModalTestResult(data);
+      },
+      onError: (err) => {
+        trackDownloadClientAction(clientType, "test", false);
         setModalTestResult({
           success: false,
           message: err.message || "Connection test failed",
-        }),
+        });
+      },
     });
   };
 

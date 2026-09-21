@@ -13,7 +13,11 @@ import {
   NumberInput,
   SectionCard,
 } from "./shared";
-import { isTelemetryEnabled, setTelemetryEnabled } from "../../utils/analytics";
+import {
+  isTelemetryEnabled,
+  setTelemetryEnabled,
+  trackSettingSave,
+} from "../../utils/analytics";
 
 export function GeneralTab() {
   const { data: config, isLoading } = useGeneralConfig();
@@ -192,7 +196,19 @@ export function GeneralTab() {
               uiTheme: form.themeStyle,
               uiAccent: form.colorScheme === "green" ? "emerald" : form.colorScheme,
             },
-            { onSuccess: () => setDirty(false) },
+            {
+              onSuccess: () => {
+                setDirty(false);
+                trackSettingSave("general", {
+                  autoStart: form.autoStart,
+                  themeStyle: form.themeStyle,
+                  colorScheme: form.colorScheme,
+                  watchFolderEnabled: form.watchFolderEnabled,
+                  authenticationEnabled: form.authenticationEnabled,
+                  enableSsl: form.enableSsl,
+                });
+              },
+            },
           )
         }
       />

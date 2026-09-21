@@ -9,6 +9,7 @@ import {
   NumberInput,
   SectionCard,
 } from "./shared";
+import { trackSettingSave } from "../../utils/analytics";
 
 export function BitTorrentTab() {
   const { data: config, isLoading } = useBitTorrentConfig();
@@ -56,7 +57,18 @@ export function BitTorrentTab() {
         isSuccess={save.isSuccess}
         error={save.error as Error | null}
         onSave={() => {
-          save.mutate(form, { onSuccess: () => setDirty(false) });
+          save.mutate(form, {
+            onSuccess: () => {
+              setDirty(false);
+              trackSettingSave("bittorrent_engine", {
+                enableDht: form.enableDht,
+                enablePex: form.enablePex,
+                enableLpd: form.enableLpd,
+                encryptionMode: form.encryptionMode,
+                emulatedClient: form.bitTorrentUserAgent,
+              });
+            },
+          });
         }}
       />
 

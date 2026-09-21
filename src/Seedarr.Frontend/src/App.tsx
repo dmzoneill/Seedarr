@@ -103,6 +103,7 @@ import {
   trackPageView,
   trackThemeChange,
   setAnalyticsInstanceUuid,
+  trackConfigAdoption,
 } from "./utils/analytics";
 
 const systemSubItems = [
@@ -486,8 +487,16 @@ function App() {
   useEffect(() => {
     if (generalConfig?.instanceUuid) {
       setAnalyticsInstanceUuid(generalConfig.instanceUuid);
+      trackConfigAdoption({
+        has_auth: generalConfig.authenticationEnabled,
+        has_ssl: generalConfig.enableSsl ?? false,
+        has_watch_folder: generalConfig.watchFolderEnabled,
+        theme: generalConfig.themeStyle,
+        color_scheme: generalConfig.colorScheme,
+        language: generalConfig.uiLanguage,
+      });
     }
-  }, [generalConfig?.instanceUuid]);
+  }, [generalConfig]);
   const { data: downloadClients } = useDownloadClients();
   const [showApiKey, setShowApiKey] = useState(false);
   const [unmaskedApiKey, setUnmaskedApiKey] = useState<string | null>(null);
