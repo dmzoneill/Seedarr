@@ -261,9 +261,10 @@ public class TorrentStateMachineTest
     [Test]
     public void ApplyRatioLimit_stops_torrents_reaching_category_target_ratio()
     {
+        var eventAggregator = Substitute.For<IEventAggregator>();
         var categoryService = Substitute.For<ICategoryService>();
-        categoryService.GetByName("Movies").Returns(new Category { Name = "Movies", TargetRatio = 1.75 });
-        var subject = new TorrentStateMachine(_eventLogService, null, new Lazy<ITorrentService>(() => _torrentService), categoryService);
+        categoryService.GetByName("Movies").Returns(new Category { Name = "Movies", TargetRatio = 1.75, AutoStop = true });
+        var subject = new TorrentStateMachine(_eventLogService, eventAggregator, new Lazy<ITorrentService>(() => _torrentService), categoryService);
 
         var torrent = new Torrent
         {
@@ -272,6 +273,7 @@ public class TorrentStateMachineTest
             Status = TorrentStatus.Seeding,
             Ratio = 1.8,
             UploadSpeed = 100,
+            DownloadSpeed = 50,
             Active = true
         };
         var list = new List<Torrent> { torrent };
@@ -279,15 +281,21 @@ public class TorrentStateMachineTest
         var stopped = subject.ApplyRatioLimit(list, 0.0);
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
+        Assert.That(torrent.DownloadSpeed, Is.EqualTo(0));
+        Assert.That(torrent.Active, Is.False);
         Assert.That(stopped, Has.Count.EqualTo(1));
+        eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedGoalReachedEvent>());
+        eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentRatioReachedEvent>(e => e.Ratio == 1.8));
     }
 
     [Test]
     public void ApplyRatioLimit_stops_torrents_reaching_category_target_seed_time()
     {
+        var eventAggregator = Substitute.For<IEventAggregator>();
         var categoryService = Substitute.For<ICategoryService>();
-        categoryService.GetByName("TV").Returns(new Category { Name = "TV", TargetSeedTimeMinutes = 60 });
-        var subject = new TorrentStateMachine(_eventLogService, null, new Lazy<ITorrentService>(() => _torrentService), categoryService);
+        categoryService.GetByName("TV").Returns(new Category { Name = "TV", TargetSeedTimeMinutes = 60, AutoStop = true });
+        var subject = new TorrentStateMachine(_eventLogService, eventAggregator, new Lazy<ITorrentService>(() => _torrentService), categoryService);
 
         var torrent = new Torrent
         {
@@ -297,6 +305,7 @@ public class TorrentStateMachineTest
             Ratio = 0.5,
             SeedingTime = 3660, // 61 minutes
             UploadSpeed = 100,
+            DownloadSpeed = 50,
             Active = true
         };
         var list = new List<Torrent> { torrent };
@@ -304,7 +313,121 @@ public class TorrentStateMachineTest
         var stopped = subject.ApplyRatioLimit(list, 0.0);
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
+        Assert.That(torrent.DownloadSpeed, Is.EqualTo(0));
+        Assert.That(torrent.Active, Is.False);
         Assert.That(stopped, Has.Count.EqualTo(1));
+        eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedGoalReachedEvent>());
+        eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedingTimeReachedEvent>());
+    }
+
+    [Test]
+    public void ApplyRatioLimit_does_not_stop_torrents_when_category_autostop_disabled()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var categoryService = Substitute.For<ICategoryService>();
+        categoryService.GetByName("Movies").Returns(new Category
+        {
+            Name = "Movies",
+            TargetRatio = 1.75,
+            TargetSeedTimeMinutes = 60,
+            AutoStop = false
+        });
+        var subject = new TorrentStateMachine(_eventLogService, eventAggregator, new Lazy<ITorrentService>(() => _torrentService), categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Category = "Movies",
+            Status = TorrentStatus.Seeding,
+            Ratio = 2.0,
+            SeedingTime = 7200,
+            UploadSpeed = 100,
+            Active = true
+        };
+        var list = new List<Torrent> { torrent };
+
+        // Global ratio limit is 1.5, category has TargetRatio 1.75 & TargetSeedTimeMinutes 60, but AutoStop is false
+        var stopped = subject.ApplyRatioLimit(list, 1.5);
+
+        Assert.That(stopped, Is.Empty);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(list, Has.Count.EqualTo(1));
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentSeedGoalReachedEvent>());
+    }
+
+    [Test]
+    public void ApplyRatioLimit_category_target_ratio_overrides_global_ratio_limit()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var categoryService = Substitute.For<ICategoryService>();
+        categoryService.GetByName("Movies").Returns(new Category
+        {
+            Name = "Movies",
+            TargetRatio = 3.0,
+            AutoStop = true
+        });
+        var subject = new TorrentStateMachine(_eventLogService, eventAggregator, new Lazy<ITorrentService>(() => _torrentService), categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Category = "Movies",
+            Status = TorrentStatus.Seeding,
+            Ratio = 2.5,
+            UploadSpeed = 100,
+            Active = true
+        };
+        var list = new List<Torrent> { torrent };
+
+        // Global limit is 2.0, but category target ratio is 3.0, current ratio 2.5 -> should NOT stop
+        var stopped = subject.ApplyRatioLimit(list, 2.0);
+
+        Assert.That(stopped, Is.Empty);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(list, Has.Count.EqualTo(1));
+
+        // When ratio reaches category target ratio 3.0 -> should stop
+        torrent.Ratio = 3.0;
+        stopped = subject.ApplyRatioLimit(list, 2.0);
+
+        Assert.That(stopped, Has.Count.EqualTo(1));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedGoalReachedEvent>());
+        eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentRatioReachedEvent>(e => e.Ratio == 3.0));
+    }
+
+    [Test]
+    public void ApplyRatioLimit_falls_back_to_global_ratio_limit_when_category_has_no_target_ratio()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var categoryService = Substitute.For<ICategoryService>();
+        categoryService.GetByName("Movies").Returns(new Category
+        {
+            Name = "Movies",
+            TargetRatio = 0.0,
+            AutoStop = true
+        });
+        var subject = new TorrentStateMachine(_eventLogService, eventAggregator, new Lazy<ITorrentService>(() => _torrentService), categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Category = "Movies",
+            Status = TorrentStatus.Seeding,
+            Ratio = 2.5,
+            UploadSpeed = 100,
+            Active = true
+        };
+        var list = new List<Torrent> { torrent };
+
+        // Global limit is 2.0, category has AutoStop = true but TargetRatio = 0 -> falls back to global 2.0 -> stops
+        var stopped = subject.ApplyRatioLimit(list, 2.0);
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(stopped, Has.Count.EqualTo(1));
+        Assert.That(list, Is.Empty);
+        eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedGoalReachedEvent>());
     }
 
     [Test]

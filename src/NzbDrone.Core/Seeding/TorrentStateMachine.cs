@@ -103,9 +103,19 @@ public class TorrentStateMachine : ITorrentStateMachine
             {
                 effectiveRatioLimit = torrent.RatioLimit.Value;
             }
-            else if (category != null && category.TargetRatio > 0)
+            else if (category != null)
             {
-                effectiveRatioLimit = category.TargetRatio;
+                if (category.AutoStop)
+                {
+                    if (category.TargetRatio > 0)
+                    {
+                        effectiveRatioLimit = category.TargetRatio;
+                    }
+                    else if (globalRatioLimit > 0)
+                    {
+                        effectiveRatioLimit = globalRatioLimit;
+                    }
+                }
             }
             else if (globalRatioLimit > 0)
             {
@@ -117,7 +127,7 @@ public class TorrentStateMachine : ITorrentStateMachine
             {
                 effectiveTimeLimitSeconds = torrent.SeedingTimeLimit.Value;
             }
-            else if (category != null && category.TargetSeedTimeMinutes > 0)
+            else if (category != null && category.AutoStop && category.TargetSeedTimeMinutes > 0)
             {
                 effectiveTimeLimitSeconds = category.TargetSeedTimeMinutes * 60L;
             }

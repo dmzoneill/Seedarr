@@ -696,4 +696,48 @@ public class CategoryServiceTest
 
         Assert.That(notPromoted, Is.Empty);
     }
+
+    [Test]
+    public void Add_persists_target_ratio_target_seed_time_and_autostop()
+    {
+        var category = new Category
+        {
+            Name = "Anime",
+            TargetRatio = 2.5,
+            TargetSeedTimeMinutes = 120,
+            AutoStop = true
+        };
+
+        _repository.Insert(category).Returns(category);
+
+        var result = _subject.Add(category);
+
+        Assert.That(result.TargetRatio, Is.EqualTo(2.5));
+        Assert.That(result.TargetSeedTimeMinutes, Is.EqualTo(120));
+        Assert.That(result.AutoStop, Is.True);
+        _repository.Received(1).Insert(category);
+    }
+
+    [Test]
+    public void Update_persists_target_ratio_target_seed_time_and_autostop()
+    {
+        var category = new Category
+        {
+            Id = 1,
+            Name = "Anime",
+            TargetRatio = 3.0,
+            TargetSeedTimeMinutes = 240,
+            AutoStop = false
+        };
+
+        _repository.Get(1).Returns(new Category { Id = 1, Name = "Anime" });
+        _repository.Update(category).Returns(category);
+
+        var result = _subject.Update(category);
+
+        Assert.That(result.TargetRatio, Is.EqualTo(3.0));
+        Assert.That(result.TargetSeedTimeMinutes, Is.EqualTo(240));
+        Assert.That(result.AutoStop, Is.False);
+        _repository.Received(1).Update(category);
+    }
 }

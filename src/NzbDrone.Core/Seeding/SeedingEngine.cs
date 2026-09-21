@@ -979,6 +979,15 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             return torrent.SeedingTimeLimit.Value;
         }
 
+        if (_categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
+        {
+            var category = _categoryService.GetByName(torrent.Category);
+            if (category != null && category.AutoStop && category.TargetSeedTimeMinutes > 0)
+            {
+                return category.TargetSeedTimeMinutes * 60;
+            }
+        }
+
         return null;
     }
 
