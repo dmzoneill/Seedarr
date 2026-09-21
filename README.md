@@ -1,5 +1,3 @@
-# Seedarr
-
 <p align="center">
   <img src="logo/seedarr-skull.svg" alt="Seedarr" width="200"/>
   <br/>
