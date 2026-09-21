@@ -190,8 +190,9 @@ test-integration-only:
 test-all: test integration
 
 container-build:
-	podman build -t seedarr:latest -f Containerfile . || docker build -t seedarr:latest -f Containerfile .
+	podman build -t seedarr:latest -f Containerfile .
 
 container-build-test:
-	podman build --target test --build-arg COVERAGE_TOOLS=true -t seedarr:test -f Containerfile . || docker build --target test --build-arg COVERAGE_TOOLS=true -t seedarr:test -f Containerfile .
+	podman build --target test --build-arg COVERAGE_TOOLS=true -t seedarr:test -f Containerfile .
+
 

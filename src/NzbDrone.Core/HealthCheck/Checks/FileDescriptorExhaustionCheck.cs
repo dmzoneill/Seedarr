@@ -30,7 +30,7 @@ public class FileDescriptorExhaustionCheck : IHealthCheck
             return new HealthCheckResult(
                 GetType(),
                 HealthCheckResultType.Error,
-                $"File descriptor usage is at {usage.Value:0.#}% ({count}/{max}). Risk of socket and file I/O failure (EMFILE). Increase nofile ulimit (e.g. 'ulimits: nofile: 65536' in docker-compose or /etc/security/limits.conf).");
+                $"File descriptor usage is at {usage.Value:0.#}% ({count}/{max}). Risk of socket and file I/O failure (EMFILE). Increase nofile ulimit (e.g. 'ulimits: nofile: 65536' in podman-compose / compose.yaml or /etc/security/limits.conf).");
         }
 
         if (usage.Value >= 80.0)

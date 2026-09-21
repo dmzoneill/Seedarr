@@ -893,7 +893,7 @@ function SystemStatus() {
                 <span className="status-label">Execution Mode</span>
                 <span className="status-value">
                   <span className="badge badge-primary">
-                    {status.isDocker ? "🐳 Docker" : "💻 Console"}
+                    {status.isDocker ? "🦭 Podman / Container" : "💻 Console"}
                     {status.isDebug ? " (Debug)" : ""}
                   </span>
                 </span>
@@ -1088,7 +1088,7 @@ function SystemStatus() {
                 <span className="status-label">Cgroup / Limit Scope</span>
                 <span className="status-value">
                   <span className="badge badge-primary">
-                    {status.isDocker ? "🐳 Container Limit" : "💻 Host Physical Memory"}
+                    {status.isDocker ? "📦 Container Limit" : "💻 Host Physical Memory"}
                   </span>
                 </span>
               </div>
