@@ -22,7 +22,6 @@ wwwroot/
 .vscode/
 *.swp
 *.swo
-.claude/
 .gemini/
 
 # OS
