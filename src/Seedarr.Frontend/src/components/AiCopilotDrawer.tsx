@@ -110,8 +110,8 @@ export const AiCopilotDrawer: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: aiStatus } = useAiStatus();
-  const { data: aiConfig } = useAiConfig();
+  const { data: aiStatus } = useAiStatus({ enabled: isOpen });
+  const { data: aiConfig } = useAiConfig({ enabled: isOpen });
   const chatMutation = useAiChat();
   const parseMutation = useAiParseRelease();
   const malwareMutation = useAiMalwareCheck();
