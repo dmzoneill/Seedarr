@@ -13,6 +13,7 @@ import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
 import { formatBytes, formatUptime } from "../utils/formatters";
 import { getDownloadClientUrl } from "../utils/arrLinks";
+import { trackSystemLifecycle } from "../utils/analytics";
 
 function SystemStatus() {
   const { data: status, isLoading: statusLoading } = useSystemStatus();
@@ -40,6 +41,7 @@ function SystemStatus() {
     health?.filter((c) => isWarningOrError(c.type)) ?? [];
 
   const handleRestart = async () => {
+    trackSystemLifecycle("restart");
     setIsRestarting(true);
     setShowRestartModal(false);
     window.dispatchEvent(new CustomEvent("seedarr:restarting"));
@@ -85,6 +87,7 @@ function SystemStatus() {
   };
 
   const handleShutdown = async () => {
+    trackSystemLifecycle("shutdown");
     setIsShuttingDown(true);
     setShowShutdownModal(false);
     try {

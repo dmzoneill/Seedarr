@@ -11,6 +11,7 @@ import type { Category, DiskSpaceInfo } from "../../api/types";
 import { formatBytes } from "../../utils/formatters";
 import { useToast } from "../../context/ToastContext";
 import { SectionCard, TextInput, NumberInput, Toggle } from "./shared";
+import { trackCategoryAction } from "../../utils/analytics";
 
 interface CategorySettingsProps {
   embedded?: boolean;
@@ -238,6 +239,7 @@ export function CategorySettingsTab({
         { id: editingCategory.id, data: payload },
         {
           onSuccess: (updated) => {
+            trackCategoryAction("update", Boolean(payload.savePath));
             showToast(
               `Category "${updated.name}" updated successfully`,
               "success",
@@ -252,6 +254,7 @@ export function CategorySettingsTab({
     } else {
       createMutation.mutate(payload, {
         onSuccess: (created) => {
+          trackCategoryAction("create", Boolean(payload.savePath));
           showToast(
             `Category "${created.name}" created successfully`,
             "success",
@@ -284,6 +287,7 @@ export function CategorySettingsTab({
 
     deleteMutation.mutate(cat.id, {
       onSuccess: () => {
+        trackCategoryAction("delete");
         showToast(`Category "${cat.name}" deleted`, "info");
       },
       onError: (err: any) => {
