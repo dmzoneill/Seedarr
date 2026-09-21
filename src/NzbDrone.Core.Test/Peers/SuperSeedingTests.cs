@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Torrents;
@@ -22,6 +23,7 @@ public class SuperSeedingTests
     private IPeerDiscoveryService _peerDiscovery;
     private IMultiTrackerManager _multiTracker;
     private IFastExtensionHandler _fastExtensionHandler;
+    private IEventAggregator _eventAggregator;
     private PeerServer _server;
     private List<PeerConnection> _connections;
     private List<TcpListener> _listeners;
@@ -36,6 +38,7 @@ public class SuperSeedingTests
         _peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         _multiTracker = Substitute.For<IMultiTrackerManager>();
         _fastExtensionHandler = new FastExtensionHandler();
+        _eventAggregator = Substitute.For<IEventAggregator>();
 
         _configService.MaxGlobalConnections.Returns(200);
         _configService.ListeningPort.Returns(0);
@@ -54,7 +57,8 @@ public class SuperSeedingTests
             _connectionManager,
             _peerDiscovery,
             _multiTracker,
-            fastExtensionHandler: _fastExtensionHandler);
+            fastExtensionHandler: _fastExtensionHandler,
+            eventAggregator: _eventAggregator);
 
         _connections = new List<PeerConnection>();
         _listeners = new List<TcpListener>();
@@ -534,5 +538,127 @@ public class SuperSeedingTests
         Assert.That(haveMsg, Is.Not.Null);
         Assert.That(haveMsg.Type, Is.EqualTo(PeerMessageType.Have));
         Assert.That(BinaryPrimitives.ReadInt32BigEndian(haveMsg.Payload), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleMessage_HaveAll_from_secondary_seed_triggers_automatic_exit_of_super_seeding()
+    {
+        var (client1, server1) = CreateTestPair();
+        server1.SupportsFastExtension = true;
+
+        var torrent = new Torrent
+        {
+            Id = 10,
+            Name = "HaveAllExitTorrent",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 8,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+        server1.MatchedTorrent = torrent;
+
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { server1 });
+
+        var haveAllMsg = new PeerMessage { Type = PeerMessageType.HaveAll };
+        _server.HandleMessage(server1, haveAllMsg, torrent);
+
+        Assert.That(torrent.SuperSeeding, Is.False);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 10 && !t.SuperSeeding));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 10 && e.Reason == "secondary seed joined"));
+
+        var msg = client1.ReceiveMessage();
+        Assert.That(msg, Is.Not.Null);
+        Assert.That(msg.Type, Is.EqualTo(PeerMessageType.HaveAll));
+    }
+
+    [Test]
+    public void HandleMessage_Bitfield_from_secondary_seed_triggers_automatic_exit_of_super_seeding()
+    {
+        var (client1, server1) = CreateTestPair();
+        server1.SupportsFastExtension = false;
+
+        var torrent = new Torrent
+        {
+            Id = 11,
+            Name = "BitfieldExitTorrent",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 8,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+        server1.MatchedTorrent = torrent;
+
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { server1 });
+
+        var bitfieldPayload = new byte[] { 0xFF }; // all 8 pieces
+        var bitfieldMsg = new PeerMessage
+        {
+            Type = PeerMessageType.Bitfield,
+            Payload = bitfieldPayload,
+            PayloadLength = 1
+        };
+
+        _server.HandleMessage(server1, bitfieldMsg, torrent);
+
+        Assert.That(torrent.SuperSeeding, Is.False);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 11 && !t.SuperSeeding));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 11 && e.Reason == "secondary seed joined"));
+
+        var msg = client1.ReceiveMessage();
+        Assert.That(msg, Is.Not.Null);
+        Assert.That(msg.Type, Is.EqualTo(PeerMessageType.Bitfield));
+        Assert.That(msg.Payload[0], Is.EqualTo(0xFF));
+    }
+
+    [Test]
+    public void HandleMessage_Bitfield_completing_swarm_availability_triggers_automatic_exit_of_super_seeding()
+    {
+        var (client1, server1) = CreateTestPair();
+        var (client2, server2) = CreateTestPair();
+        server1.SupportsFastExtension = true;
+        server2.SupportsFastExtension = true;
+
+        var torrent = new Torrent
+        {
+            Id = 12,
+            Name = "SwarmAvailExitTorrent",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            PieceCount = 8,
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            SuperSeeding = true
+        };
+        server1.MatchedTorrent = torrent;
+        server2.MatchedTorrent = torrent;
+
+        // Peer 1 has pieces 0-3 (0xF0)
+        server1.PeerPieces = new bool[] { true, true, true, true, false, false, false, false };
+        server1.HaveCount = 4;
+        server1.Progress = 0.5;
+        server1.IsSeed = false;
+
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { server1, server2 });
+
+        // Peer 2 announces bitfield with pieces 4-7 (0x0F)
+        var bitfield2Payload = new byte[] { 0x0F };
+        var bitfield2Msg = new PeerMessage
+        {
+            Type = PeerMessageType.Bitfield,
+            Payload = bitfield2Payload,
+            PayloadLength = 1
+        };
+
+        _server.HandleMessage(server2, bitfield2Msg, torrent);
+
+        Assert.That(torrent.SuperSeeding, Is.False);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 12 && !t.SuperSeeding));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 12 && e.Reason == "swarm availability >= 1.0"));
+
+        var msg1 = client1.ReceiveMessage();
+        var msg2 = client2.ReceiveMessage();
+        Assert.That(msg1?.Type, Is.EqualTo(PeerMessageType.HaveAll));
+        Assert.That(msg2?.Type, Is.EqualTo(PeerMessageType.HaveAll));
     }
 }

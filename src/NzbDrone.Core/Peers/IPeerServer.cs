@@ -33,4 +33,8 @@ public interface IPeerServer
     System.Collections.Generic.List<Seeding.SelfishLeecherResult> CheckSuperSeedingTimeouts(Torrent torrent = null, System.DateTime? now = null);
 
     Seeding.ISuperSeedingTracker GetSuperSeedingTracker(string infoHash, int pieceCount = 0);
+
+    bool CheckSuperSeedingExitCriteria(Torrent torrent, PeerConnection triggerPeer = null);
+
+    void ExitSuperSeeding(Torrent torrent, string reason, System.Collections.Generic.List<PeerConnection> connectedPeers = null);
 }
