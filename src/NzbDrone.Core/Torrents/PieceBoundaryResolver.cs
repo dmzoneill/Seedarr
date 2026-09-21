@@ -52,18 +52,55 @@ public class PieceBoundaryResolver : IPieceBoundaryResolver
 
         var rangeStart = globalOffset;
         var rangeEnd = globalOffset + length;
-        long runningOffset = 0;
 
-        foreach (var file in files)
+        var offsets = new long[files.Count];
+        long running = 0;
+        for (var i = 0; i < files.Count; i++)
         {
+            var f = files[i];
+            offsets[i] = (f != null && f.ByteOffset > 0) ? f.ByteOffset : running;
+            if (f != null && f.Size > 0)
+            {
+                running = offsets[i] + f.Size;
+            }
+        }
+
+        var low = 0;
+        var high = files.Count - 1;
+        var startIndex = files.Count;
+
+        while (low <= high)
+        {
+            var mid = low + ((high - low) / 2);
+            var f = files[mid];
+            var fEnd = offsets[mid] + (f != null && f.Size > 0 ? f.Size : 0L);
+
+            if (fEnd > rangeStart)
+            {
+                startIndex = mid;
+                high = mid - 1;
+            }
+            else
+            {
+                low = mid + 1;
+            }
+        }
+
+        for (var i = startIndex; i < files.Count; i++)
+        {
+            var file = files[i];
             if (file == null || file.Size <= 0)
             {
                 continue;
             }
 
-            var fileStart = file.ByteOffset > 0 ? file.ByteOffset : runningOffset;
+            var fileStart = offsets[i];
             var fileEnd = fileStart + file.Size;
-            runningOffset = fileEnd;
+
+            if (fileStart >= rangeEnd)
+            {
+                break;
+            }
 
             var intersectStart = Math.Max(rangeStart, fileStart);
             var intersectEnd = Math.Min(rangeEnd, fileEnd);
