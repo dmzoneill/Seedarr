@@ -3026,6 +3026,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 break;
 
             case PeerMessageType.Request:
+                connection.LastRequestReceived = DateTime.UtcNow;
+                connection.IsSnubbed = false;
                 _chokeManager?.UpdatePeerActivity(connection);
 
                 if (torrent != null && (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking))
@@ -3254,6 +3256,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 break;
 
             case PeerMessageType.Piece:
+                connection.LastBlockReceived = DateTime.UtcNow;
+                connection.IsSnubbed = false;
+
                 if (torrent != null && (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking))
                 {
                     _logger.Debug(

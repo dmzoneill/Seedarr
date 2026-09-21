@@ -235,7 +235,7 @@ public class ChokeManagerTest
     [Test]
     public void PeerInterestedChanged_should_choke_peer_and_immediately_promote_next_eligible_peer_when_not_interested()
     {
-        _configService.MaxUploadSlots.Returns(2);
+        _configService.MaxUploadSlots.Returns(3);
 
         var peer1 = CreatePeer("hashA", 1001, rate: 100);
         var peer2 = CreatePeer("hashA", 1002, rate: 200);
@@ -293,7 +293,7 @@ public class ChokeManagerTest
     [Test]
     public void PeerInterestedChanged_should_not_promote_snubbed_peer_when_not_interested()
     {
-        _configService.MaxUploadSlots.Returns(2);
+        _configService.MaxUploadSlots.Returns(3);
 
         var peer1 = CreatePeer("hashA", 1001, rate: 100);
         var peer2 = CreatePeer("hashA", 1002, rate: 200);
@@ -853,5 +853,174 @@ public class ChokeManagerTest
 
         Assert.That(peer.PendingIncomingRequests.Any(r => r.PieceIndex == 3), Is.False);
         Assert.That(peer.PendingIncomingRequests.Any(r => r.PieceIndex == 5), Is.True);
+    }
+
+    [Test]
+    public void ProcessOptimisticUnchoke_can_select_snubbed_peer_and_reset_snubbed_state_on_activity()
+    {
+        _configService.MaxUploadSlots.Returns(2);
+
+        var snubbedPeer = CreatePeer("hashA", 1001);
+        snubbedPeer.IsSnubbed = true;
+        snubbedPeer.AmChoking = true;
+
+        // Snubbed peer should be eligible for optimistic unchoke
+        _subject.ProcessOptimisticUnchoke();
+
+        Assert.That(snubbedPeer.IsOptimisticUnchoked, Is.True);
+        Assert.That(snubbedPeer.AmChoking, Is.False);
+
+        // When incoming request arrives, snubbed state should be cleared
+        _subject.UpdatePeerActivity(snubbedPeer);
+
+        Assert.That(snubbedPeer.IsSnubbed, Is.False);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_does_not_penalize_choked_peer_with_snubbing_timeout()
+    {
+        _configService.MaxUploadSlots.Returns(4);
+
+        var chokedPeer = CreatePeer("hashA", 1001);
+        chokedPeer.AmChoking = true;
+        chokedPeer.LastRequestReceived = DateTime.UtcNow.AddSeconds(-120);
+        chokedPeer.IsSnubbed = false;
+
+        _subject.ProcessRegularUnchoke();
+
+        // Choked peer must not be marked snubbed
+        Assert.That(chokedPeer.IsSnubbed, Is.False);
+    }
+
+    [Test]
+    public void CanUnchoke_strictly_respects_max_upload_slots_including_optimistic_reservation()
+    {
+        // MaxUploadSlots = 4 => regularSlotCount = 3, leaving 1 slot for optimistic unchoke
+        _configService.MaxUploadSlots.Returns(4);
+
+        var peer1 = CreatePeer("hashA", 1001);
+        var peer2 = CreatePeer("hashA", 1002);
+        var peer3 = CreatePeer("hashA", 1003);
+        var peer4 = CreatePeer("hashA", 1004);
+
+        peer1.AmChoking = false;
+        peer2.AmChoking = false;
+        peer3.AmChoking = false;
+        peer4.AmChoking = true;
+
+        // 3 regular slots are full; peer4 cannot be unchoked as regular slot because 1 is reserved for optimistic
+        Assert.That(_subject.CanUnchoke(peer4), Is.False);
+        Assert.That(_subject.CanUnchoke("hashA"), Is.False);
+
+        // PeerInterestedChanged should not unchoke peer4
+        peer4.PeerInterested = true;
+        _subject.PeerInterestedChanged(peer4);
+
+        Assert.That(peer4.AmChoking, Is.True);
+    }
+
+    [Test]
+    public void Slot_limit_enforcement_strictly_respects_max_upload_slots_with_regular_and_optimistic()
+    {
+        // MaxUploadSlots = 3 => regularSlotCount = 2, 1 optimistic slot
+        _configService.MaxUploadSlots.Returns(3);
+
+        for (var i = 1; i <= 5; i++)
+        {
+            CreatePeer("hashA", 1000 + i, rate: i * 100);
+        }
+
+        _subject.ProcessRegularUnchoke();
+        _subject.ProcessOptimisticUnchoke();
+
+        var unchoked = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+        var regularUnchoked = unchoked.Where(c => !c.IsOptimisticUnchoked).ToList();
+        var optimisticUnchoked = unchoked.Where(c => c.IsOptimisticUnchoked).ToList();
+
+        Assert.That(regularUnchoked.Count, Is.EqualTo(2));
+        Assert.That(optimisticUnchoked.Count, Is.EqualTo(1));
+        Assert.That(unchoked.Count, Is.EqualTo(3));
+
+        // A new interested peer must not exceed MaxUploadSlots
+        var newPeer = CreatePeer("hashA", 1006, rate: 500);
+        newPeer.PeerInterested = true;
+        _subject.PeerInterestedChanged(newPeer);
+
+        Assert.That(newPeer.AmChoking, Is.True);
+        var totalUnchoked = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).Count();
+        Assert.That(totalUnchoked, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Stale_optimistic_keys_are_cleared_when_peer_signals_not_interested()
+    {
+        _configService.MaxUploadSlots.Returns(3);
+
+        var peer1 = CreatePeer("hashA", 1001);
+
+        _subject.ProcessOptimisticUnchoke();
+
+        Assert.That(peer1.IsOptimisticUnchoked, Is.True);
+        Assert.That(_subject.CurrentOptimisticPeerKey, Is.EqualTo($"{peer1.RemoteIp}:{peer1.RemotePort}"));
+
+        peer1.PeerInterested = false;
+        _subject.PeerInterestedChanged(peer1);
+
+        Assert.That(peer1.IsOptimisticUnchoked, Is.False);
+        Assert.That(peer1.AmChoking, Is.True);
+        Assert.That(_subject.CurrentOptimisticPeerKey, Is.Null);
+    }
+
+    [Test]
+    public void PeerInterestedChanged_is_thread_safe_under_concurrent_interested_changes()
+    {
+        _configService.MaxUploadSlots.Returns(4);
+
+        var peers = new List<PeerConnection>();
+        for (var i = 1; i <= 20; i++)
+        {
+            peers.Add(CreatePeer("hashA", 1000 + i, rate: i * 50));
+        }
+
+        var tasks = new List<System.Threading.Tasks.Task>();
+        for (var i = 0; i < 20; i++)
+        {
+            var peer = peers[i];
+            tasks.Add(System.Threading.Tasks.Task.Run(() =>
+            {
+                for (var j = 0; j < 50; j++)
+                {
+                    peer.PeerInterested = (j % 2 == 0);
+                    _subject.PeerInterestedChanged(peer);
+                    _subject.CanUnchoke(peer);
+                }
+            }));
+        }
+
+        Assert.DoesNotThrow(() => System.Threading.Tasks.Task.WaitAll(tasks.ToArray()));
+
+        // Under no condition should unchoked peers on the swarm exceed MaxUploadSlots
+        var unchokedCount = peers.Count(c => !c.AmChoking);
+        Assert.That(unchokedCount, Is.LessThanOrEqualTo(4));
+    }
+
+    [Test]
+    public void Leecher_block_tracking_updates_timestamp_and_clears_snubbed_state()
+    {
+        var peer = CreatePeer("hashA", 1001);
+        peer.IsSnubbed = true;
+
+        Assert.That(peer.LastBlockReceived, Is.Null);
+        Assert.That(peer.LastPieceReceived, Is.Null);
+        Assert.That(peer.IsSnubbed, Is.True);
+
+        // Simulate block arrival
+        var now = DateTime.UtcNow;
+        peer.LastBlockReceived = now;
+        peer.IsSnubbed = false;
+
+        Assert.That(peer.LastBlockReceived, Is.EqualTo(now));
+        Assert.That(peer.LastPieceReceived, Is.EqualTo(now));
+        Assert.That(peer.IsSnubbed, Is.False);
     }
 }
