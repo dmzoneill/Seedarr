@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.10.3](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.3) - 2026-09-21
+
+### ✨ Features
+- feat(ui): implement interactive web console terminal page with auto-fit resizing, clipboard integration, and reconnect backoff
+- feat(packages): implement cross-platform path translation, fastresume verification, and package import UI modal
+- feat(trackers): implement BEP 12 multi-tracker manager with tier failover and in-tier promotion
+- feat(security): implement multi-user Role-Based Access Control (RBAC) with ReadOnly and Admin permission policies
+- feat(plugins): implement isolated sidecar plugin architecture and Model Context Protocol (MCP) server integration
+- feat(superseeding): implement BEP 16 Super-Seeding state machine and progressive piece revelation in PeerServer
+- feat(packagemigration): implement Torrent Package Migration, fastresume serialization, and cross-client archive export/import
+- feat(storage): implement MultiFilePieceStorage to handle piece and block I/O spanning across file boundaries
+- feat(pieces): implement Swarm PieceAvailability aggregation, Rarest-First and Sequential PiecePicker
+- feat(rss): implement RSS sync cycle, background auto-grab engine, and release deduplication
+- feat(health): implement VpnCheck, PortForwardCheck, AppFolderPermissionsCheck, and DatabaseIntegrityCheck
+- feat(categories): implement Category TargetRatio, TargetSeedTimeMinutes and AutoStop goal evaluation
+- feat(proxy): implement proxy test endpoint and add connect timeout to PeerConnection
+
+### 🐛 Bug Fixes
+- fix(test): synchronize on IConnectionManager.Add in peer fallback test
+- fix(test): resolve peer fallback race condition and tracker rate-limit promotion in unit tests
+- fix(ci): resolve Swagger schema 500, test race conditions, and frontend lock/lint errors
+- fix(ci): resolve compilation errors, ambiguous overloads, and unit test failures
+- fix(automation): prevent deleteData toggle crash, preserve deleteData on yaml parse, and validate script PUT ID
+- fix(automation): cascade tag and category mutations to automation scripts and expose filters in pipeline editor
+- fix(arrintegration): handle magnet links, trim history query URL, support case-insensitive ArrType, and prevent skipped download client fallback in ArrWebhookService
+- fix(jobs): replace 50ms scheduler busy-wait loop with 30s interval to prevent SQLite I/O and CPU exhaustion
+- fix(emulation): resolve Category and path mapping discrepancies in qBittorrent API and DownloadClientSyncService
+- fix(jobs): add concurrency guard, exception logging, and cancellation propagation in TrackerBoostOptimizationTask and SystemController
+- fix(ui): resolve NumberInput snap-to-zero glitch, add client-side bounds clamping, and update speed limits min to 0
+- fix(simulation): prevent peer ID regeneration storm and rapid profile flip-flop in ClientBehaviorSimulator and SeedingEngine
+- fix(upnp): support NAT-PMP/PCP in UpnpService and gate tracker port mapping on tracker enable status
+- fix(datastore): resolve PostgreSQL type syntax error on Torrents.TagIds and integer overflow on TrackerEntries.Downloaded
+- fix(torrents): execute bulk deletion via single-batch database transaction and replace frontend Promise.all with bulk API
+- fix(choking): correct anti-snubbing detection, swarm upload balancing, and unchoke slot concurrency in ChokeManager
+- fix(datastore): resolve PostgreSQL VARCHAR(255) truncation on json/urls and missing cascade deletes on child tables
+- fix(ingestion): prevent watch folder duplicate loop, quarantine corrupt torrents, and calculate file PieceOffset and PieceCount
+- fix(fast): implement IPv6 /64 subnet masking and unsigned uint modulo in FastExtension (BEP 6)
+
+### 🔧 Maintenance & Improvements
+- style: fix indentation on uvfProp in ProwlarrIndexer to satisfy editorconfig
+- style: fix editorconfig indentation in ProwlarrIndexer and format App.css with prettier
+- security(terminal): sanitize process environment variables, validate PTY dimensions, and enforce audit logging in TerminalController
+- security(network): prevent UdpTrackerProvider and uTP peer connections from bypassing proxy
+- security(proxy): enforce ForceProxy kill switch across peer connections, trackers, and fallback paths
+- security(vpn): prevent IP and infohash leaks by halting TrackerAnnounceService and DhtService on VPN drop
+- security(indexers): route Torznab, Prowlarr, and Newznab indexer queries through IProxySettingsProvider
+- security(auth): implement rate limiting and brute-force protection on /api/v1/auth/login
+- security(network): bind ExternalIpService to configured network interface to prevent IP and UUID leaks
+- security(proxy): case-sensitive Enum.TryParse in ProxySettingsProvider silently disables proxy for UI-configured settings
+- security(mediacover): prevent arbitrary local file disclosure via unauthenticated MediaCoverController
+- security(auth): prevent SSRF in IdentityProviderService.TestConnectionAsync
+- security(torrents): sanitize file paths in TorrentFileParser to prevent directory traversal
+- security(logging): redact webhook tokens, API keys, and sensitive URLs in log outputs and ring buffer
+- perf(geoip): cache database path and IP lookups in GeoIpService and add CGNAT subnet filtering
+
 ## [v1.10.2](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.2) - 2026-09-20
 
 ### ✨ Features
