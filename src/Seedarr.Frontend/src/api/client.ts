@@ -1,4 +1,5 @@
 import { broadcastSessionExpired } from "../utils/authChannel";
+import { trackException } from "../utils/analytics";
 import type {
   Category,
   IdentityProviderDefinition,
@@ -95,6 +96,10 @@ class ApiClient {
         }
       }
       const errorMsg = await this.parseError(response);
+      if (response.status >= 500) {
+        const cleanEndpoint = endpoint.split("?")[0];
+        trackException(`Backend ${response.status}: ${cleanEndpoint} - ${errorMsg.slice(0, 80)}`, false, "backend_api_5xx");
+      }
       throw new Error(errorMsg);
     }
 

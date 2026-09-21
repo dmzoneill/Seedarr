@@ -32,7 +32,7 @@ class ErrorBoundary extends Component<Props, State> {
     console.error("ErrorBoundary caught an unhandled error:", error, errorInfo);
     this.setState({ errorInfo });
     try {
-      trackException(error.message, false);
+      trackException(`${error.name || "Error"}: ${error.message}`, false, "frontend_react");
     } catch {
       // ignore telemetry errors
     }
