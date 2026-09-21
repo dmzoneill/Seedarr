@@ -6,6 +6,7 @@ import {
   useRestoreBackup,
 } from "../api/hooks";
 import { apiClient } from "../api/client";
+import { usePermissions } from "../hooks/usePermissions";
 import { useToast } from "../context/ToastContext";
 import { formatBytes, formatDate } from "../utils/formatters";
 
@@ -84,6 +85,7 @@ function TrashIcon() {
 }
 
 function SystemBackup() {
+  const { canManageBackups } = usePermissions();
   const { data: backups, isLoading, isError } = useBackups();
   const createBackup = useCreateBackup();
   const deleteBackup = useDeleteBackup();
@@ -138,6 +140,26 @@ function SystemBackup() {
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
+      {!canManageBackups && (
+        <div
+          role="alert"
+          style={{
+            padding: "0.75rem 1rem",
+            marginBottom: "1rem",
+            backgroundColor: "rgba(239, 68, 68, 0.1)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            borderRadius: "6px",
+            color: "#fca5a5",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            fontSize: "0.875rem",
+          }}
+        >
+          <span>🔒</span>
+          <span>You have ReadOnly permissions. Backup creation and restoration require Admin privileges.</span>
+        </div>
+      )}
       {/* Header Banner */}
       <div
         style={{
@@ -177,7 +199,8 @@ function SystemBackup() {
           <button
             className="btn btn-primary"
             onClick={handleCreateBackup}
-            disabled={createBackup.isPending}
+            disabled={createBackup.isPending || !canManageBackups}
+            title={!canManageBackups ? "Creating backups requires Admin privileges" : undefined}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -286,27 +309,33 @@ function SystemBackup() {
                     <td>{formatBytes(backup.size)}</td>
                     <td>{formatDate(backup.time)}</td>
                     <td style={{ textAlign: "right" }}>
-                      <div
-                        className="torrent-actions"
-                        style={{ display: "inline-flex", gap: "0.4rem" }}
-                      >
-                        <button
-                          className="btn btn-small btn-outline"
-                          onClick={() => setConfirmRestore(backup.name)}
-                          title="Restore Snapshot"
-                          disabled={restoreBackup.isPending}
+                      {canManageBackups ? (
+                        <div
+                          className="torrent-actions"
+                          style={{ display: "inline-flex", gap: "0.4rem" }}
                         >
-                          <RestoreIcon />
-                        </button>
-                        <button
-                          className="btn btn-small btn-danger"
-                          onClick={() => setConfirmDelete(backup.id)}
-                          title="Delete Snapshot"
-                          disabled={deleteBackup.isPending}
-                        >
-                          <TrashIcon />
-                        </button>
-                      </div>
+                          <button
+                            className="btn btn-small btn-outline"
+                            onClick={() => setConfirmRestore(backup.name)}
+                            title="Restore Snapshot"
+                            disabled={restoreBackup.isPending}
+                          >
+                            <RestoreIcon />
+                          </button>
+                          <button
+                            className="btn btn-small btn-danger"
+                            onClick={() => setConfirmDelete(backup.id)}
+                            title="Delete Snapshot"
+                            disabled={deleteBackup.isPending}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                          🔒 Read Only
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

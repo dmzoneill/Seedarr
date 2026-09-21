@@ -5,6 +5,7 @@ import { getMediaDeepLink } from "../utils/arrLinks";
 import { useTranslation } from "../i18n";
 import { useToast } from "../context/ToastContext";
 import { copyToClipboard } from "../utils/clipboard";
+import { usePermissions } from "../hooks/usePermissions";
 import { COLUMN_I18N_KEYS } from "./TorrentTable";
 import PromptModal from "./PromptModal";
 import type { Torrent } from "../api/types";
@@ -114,6 +115,7 @@ function TorrentContextMenu({
 
   const { data: history } = useDownloadHistory();
   const { data: arrConnections } = useArrConnections();
+  const { canMutateTorrents, canDeleteTorrent } = usePermissions();
 
   const isMulti = Boolean(selectedTorrents && selectedTorrents.length > 1);
   const effectiveTorrents: Torrent[] = isMulti
@@ -304,80 +306,82 @@ function TorrentContextMenu({
             )}
 
             {/* Quick Queue Reorder Action Bar */}
-            <div
-              className="context-menu-quick-queue"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "0.25rem 0.5rem",
-                gap: "4px",
-                borderBottom:
-                  "1px solid var(--border, rgba(255, 255, 255, 0.1))",
-                marginBottom: "0.25rem",
-              }}
-            >
-              <button
-                type="button"
-                className="btn btn-outline btn-small"
+            {canMutateTorrents && (
+              <div
+                className="context-menu-quick-queue"
                 style={{
-                  flex: 1,
-                  padding: "0.2rem 0.35rem",
-                  fontSize: "0.75rem",
-                  textAlign: "center",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.25rem 0.5rem",
+                  gap: "4px",
+                  borderBottom:
+                    "1px solid var(--border, rgba(255, 255, 255, 0.1))",
+                  marginBottom: "0.25rem",
                 }}
-                onClick={() => handleMoveQueueAll("top")}
-                title={t("torrents.contextMenu.top", undefined, "Move to Top")}
               >
-                ⤒ {t("torrents.contextMenu.top", undefined, "Top")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline btn-small"
-                style={{
-                  flex: 1,
-                  padding: "0.2rem 0.35rem",
-                  fontSize: "0.75rem",
-                  textAlign: "center",
-                }}
-                onClick={() => handleMoveQueueAll("up")}
-                title={t("torrents.contextMenu.up", undefined, "Move Up")}
-              >
-                ▲ {t("torrents.contextMenu.up", undefined, "Up")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline btn-small"
-                style={{
-                  flex: 1,
-                  padding: "0.2rem 0.35rem",
-                  fontSize: "0.75rem",
-                  textAlign: "center",
-                }}
-                onClick={() => handleMoveQueueAll("down")}
-                title={t("torrents.contextMenu.down", undefined, "Move Down")}
-              >
-                ▼ {t("torrents.contextMenu.down", undefined, "Down")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline btn-small"
-                style={{
-                  flex: 1,
-                  padding: "0.2rem 0.35rem",
-                  fontSize: "0.75rem",
-                  textAlign: "center",
-                }}
-                onClick={() => handleMoveQueueAll("bottom")}
-                title={t(
-                  "torrents.contextMenu.bottom",
-                  undefined,
-                  "Move to Bottom",
-                )}
-              >
-                ⤓ {t("torrents.contextMenu.bottom", undefined, "Bottom")}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-small"
+                  style={{
+                    flex: 1,
+                    padding: "0.2rem 0.35rem",
+                    fontSize: "0.75rem",
+                    textAlign: "center",
+                  }}
+                  onClick={() => handleMoveQueueAll("top")}
+                  title={t("torrents.contextMenu.top", undefined, "Move to Top")}
+                >
+                  ⤒ {t("torrents.contextMenu.top", undefined, "Top")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-small"
+                  style={{
+                    flex: 1,
+                    padding: "0.2rem 0.35rem",
+                    fontSize: "0.75rem",
+                    textAlign: "center",
+                  }}
+                  onClick={() => handleMoveQueueAll("up")}
+                  title={t("torrents.contextMenu.up", undefined, "Move Up")}
+                >
+                  ▲ {t("torrents.contextMenu.up", undefined, "Up")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-small"
+                  style={{
+                    flex: 1,
+                    padding: "0.2rem 0.35rem",
+                    fontSize: "0.75rem",
+                    textAlign: "center",
+                  }}
+                  onClick={() => handleMoveQueueAll("down")}
+                  title={t("torrents.contextMenu.down", undefined, "Move Down")}
+                >
+                  ▼ {t("torrents.contextMenu.down", undefined, "Down")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-small"
+                  style={{
+                    flex: 1,
+                    padding: "0.2rem 0.35rem",
+                    fontSize: "0.75rem",
+                    textAlign: "center",
+                  }}
+                  onClick={() => handleMoveQueueAll("bottom")}
+                  title={t(
+                    "torrents.contextMenu.bottom",
+                    undefined,
+                    "Move to Bottom",
+                  )}
+                >
+                  ⤓ {t("torrents.contextMenu.bottom", undefined, "Bottom")}
+                </button>
+              </div>
+            )}
 
             {/* Arr Direct Jump Link (single item only) */}
             {!isMulti && arrLink && (
@@ -393,57 +397,61 @@ function TorrentContextMenu({
               </button>
             )}
 
-            {/* Pause / Resume */}
-            {isMulti ? (
+            {/* Pause / Resume & Mutating actions */}
+            {canMutateTorrents && (
               <>
-                <button className="context-menu-item" onClick={handleStartAll}>
-                  {t("torrents.resume", undefined, "Resume")}
+                {isMulti ? (
+                  <>
+                    <button className="context-menu-item" onClick={handleStartAll}>
+                      {t("torrents.resume", undefined, "Resume")}
+                      {countSuffix}
+                    </button>
+                    <button className="context-menu-item" onClick={handleStopAll}>
+                      {t("torrents.pause", undefined, "Pause")}
+                      {countSuffix}
+                    </button>
+                  </>
+                ) : ct?.active ? (
+                  <button className="context-menu-item" onClick={handleStopAll}>
+                    {t("torrents.pause", undefined, "Pause")}
+                  </button>
+                ) : (
+                  <button className="context-menu-item" onClick={handleStartAll}>
+                    {t("torrents.resume", undefined, "Resume")}
+                  </button>
+                )}
+
+                <button
+                  className="context-menu-item"
+                  onClick={() =>
+                    handleUpdateAll((t) => ({ ...t, forceStart: !t.forceStart }))
+                  }
+                >
+                  {!isMulti && ct?.forceStart ? "✓ " : ""}
+                  {t("torrents.forceStart", undefined, "Force Start")}
                   {countSuffix}
                 </button>
-                <button className="context-menu-item" onClick={handleStopAll}>
-                  {t("torrents.pause", undefined, "Pause")}
+                <button className="context-menu-item" onClick={handleAnnounceAll}>
+                  {t("torrents.updateTracker", undefined, "Update Tracker")}
                   {countSuffix}
                 </button>
+
+                {(!isMulti && ct && ct.progress < 1.0) ||
+                (isMulti && effectiveTorrents.some((t) => t.progress < 1.0)) ? (
+                  <button
+                    className="context-menu-item"
+                    onClick={() =>
+                      handleUpdateAll((t) => ({ ...t, progress: 1.0 }))
+                    }
+                  >
+                    {t("torrents.forceComplete", undefined, "Force Complete")}
+                    {countSuffix}
+                  </button>
+                ) : null}
+
+                <div className="context-menu-separator" />
               </>
-            ) : ct?.active ? (
-              <button className="context-menu-item" onClick={handleStopAll}>
-                {t("torrents.pause", undefined, "Pause")}
-              </button>
-            ) : (
-              <button className="context-menu-item" onClick={handleStartAll}>
-                {t("torrents.resume", undefined, "Resume")}
-              </button>
             )}
-
-            <button
-              className="context-menu-item"
-              onClick={() =>
-                handleUpdateAll((t) => ({ ...t, forceStart: !t.forceStart }))
-              }
-            >
-              {!isMulti && ct?.forceStart ? "✓ " : ""}
-              {t("torrents.forceStart", undefined, "Force Start")}
-              {countSuffix}
-            </button>
-            <button className="context-menu-item" onClick={handleAnnounceAll}>
-              {t("torrents.updateTracker", undefined, "Update Tracker")}
-              {countSuffix}
-            </button>
-
-            {(!isMulti && ct && ct.progress < 1.0) ||
-            (isMulti && effectiveTorrents.some((t) => t.progress < 1.0)) ? (
-              <button
-                className="context-menu-item"
-                onClick={() =>
-                  handleUpdateAll((t) => ({ ...t, progress: 1.0 }))
-                }
-              >
-                {t("torrents.forceComplete", undefined, "Force Complete")}
-                {countSuffix}
-              </button>
-            ) : null}
-
-            <div className="context-menu-separator" />
 
             {/* Usability & Navigation Actions (single selection only) */}
             {!isMulti && ct && (
@@ -549,234 +557,239 @@ function TorrentContextMenu({
               )}
             </div>
 
-            {/* Priority submenu */}
-            <div
-              className="context-menu-item context-menu-submenu-trigger"
-              onMouseEnter={() => setOpenSubmenu("priority")}
-              onMouseLeave={() => setOpenSubmenu(null)}
-            >
-              {t("torrents.priority", undefined, "Priority")}
-              {countSuffix} ▶
-              {openSubmenu === "priority" && (
-                <div className="context-menu context-menu-submenu">
-                  <button
-                    className="context-menu-item"
-                    onClick={() =>
-                      handleUpdateAll((t) => ({ ...t, priority: 2 }))
-                    }
-                  >
-                    {!isMulti && ct?.priority === 2 ? "✓ " : ""}High
-                  </button>
-                  <button
-                    className="context-menu-item"
-                    onClick={() =>
-                      handleUpdateAll((t) => ({ ...t, priority: 1 }))
-                    }
-                  >
-                    {!isMulti && ct?.priority === 1 ? "✓ " : ""}Normal
-                  </button>
-                  <button
-                    className="context-menu-item"
-                    onClick={() =>
-                      handleUpdateAll((t) => ({ ...t, priority: 0 }))
-                    }
-                  >
-                    {!isMulti && ct?.priority === 0 ? "✓ " : ""}Low
-                  </button>
+            {/* Priority, Speed, Queue submenus */}
+            {canMutateTorrents && (
+              <>
+                {/* Priority submenu */}
+                <div
+                  className="context-menu-item context-menu-submenu-trigger"
+                  onMouseEnter={() => setOpenSubmenu("priority")}
+                  onMouseLeave={() => setOpenSubmenu(null)}
+                >
+                  {t("torrents.priority", undefined, "Priority")}
+                  {countSuffix} ▶
+                  {openSubmenu === "priority" && (
+                    <div className="context-menu context-menu-submenu">
+                      <button
+                        className="context-menu-item"
+                        onClick={() =>
+                          handleUpdateAll((t) => ({ ...t, priority: 2 }))
+                        }
+                      >
+                        {!isMulti && ct?.priority === 2 ? "✓ " : ""}High
+                      </button>
+                      <button
+                        className="context-menu-item"
+                        onClick={() =>
+                          handleUpdateAll((t) => ({ ...t, priority: 1 }))
+                        }
+                      >
+                        {!isMulti && ct?.priority === 1 ? "✓ " : ""}Normal
+                      </button>
+                      <button
+                        className="context-menu-item"
+                        onClick={() =>
+                          handleUpdateAll((t) => ({ ...t, priority: 0 }))
+                        }
+                      >
+                        {!isMulti && ct?.priority === 0 ? "✓ " : ""}Low
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Speed Limit submenu */}
-            <div
-              className="context-menu-item context-menu-submenu-trigger"
-              onMouseEnter={() => setOpenSubmenu("speed")}
-              onMouseLeave={() => setOpenSubmenu(null)}
-            >
-              Speed Limit{countSuffix} ▶
-              {openSubmenu === "speed" && (
-                <div className="context-menu context-menu-submenu">
+                {/* Speed Limit submenu */}
+                <div
+                  className="context-menu-item context-menu-submenu-trigger"
+                  onMouseEnter={() => setOpenSubmenu("speed")}
+                  onMouseLeave={() => setOpenSubmenu(null)}
+                >
+                  Speed Limit{countSuffix} ▶
+                  {openSubmenu === "speed" && (
+                    <div className="context-menu context-menu-submenu">
+                      <button
+                        className="context-menu-item"
+                        onClick={() => {
+                          setPromptConfig({
+                            title: `${t("torrents.setUploadLimit", undefined, "Set Upload Speed Limit")}${countSuffix}`,
+                            description:
+                              "Enter upload limit in KB/s (0 for unlimited):",
+                            initialValue: !isMulti ? ct?.uploadLimit || 0 : 0,
+                            inputType: "number",
+                            min: 0,
+                            suffix: "KB/s",
+                            onConfirm: (limit) => {
+                              const val = parseInt(limit, 10);
+                              if (!isNaN(val) && val >= 0) {
+                                handleUpdateAll((t) => ({
+                                  ...t,
+                                  uploadLimit: val,
+                                }));
+                              }
+                            },
+                          });
+                        }}
+                      >
+                        Set Upload Limit...{countSuffix}
+                      </button>
+                      <button
+                        className="context-menu-item"
+                        onClick={() => {
+                          setPromptConfig({
+                            title: `${t("torrents.setDownloadLimit", undefined, "Set Download Speed Limit")}${countSuffix}`,
+                            description:
+                              "Enter download limit in KB/s (0 for unlimited):",
+                            initialValue: !isMulti ? ct?.downloadLimit || 0 : 0,
+                            inputType: "number",
+                            min: 0,
+                            suffix: "KB/s",
+                            onConfirm: (limit) => {
+                              const val = parseInt(limit, 10);
+                              if (!isNaN(val) && val >= 0) {
+                                handleUpdateAll((t) => ({
+                                  ...t,
+                                  downloadLimit: val,
+                                }));
+                              }
+                            },
+                          });
+                        }}
+                      >
+                        Set Download Limit...{countSuffix}
+                      </button>
+                      <button
+                        className="context-menu-item"
+                        onClick={() =>
+                          handleUpdateAll((t) => ({
+                            ...t,
+                            uploadLimit: 0,
+                            downloadLimit: 0,
+                          }))
+                        }
+                      >
+                        Reset to Global Limits{countSuffix}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Queue submenu */}
+                <div
+                  className="context-menu-item context-menu-submenu-trigger"
+                  onMouseEnter={() => setOpenSubmenu("queue")}
+                  onMouseLeave={() => setOpenSubmenu(null)}
+                >
+                  {t("torrents.queue", undefined, "Queue")}
+                  {countSuffix} ▶
+                  {openSubmenu === "queue" && (
+                    <div className="context-menu context-menu-submenu">
+                      <button
+                        className="context-menu-item"
+                        onClick={() => handleMoveQueueAll("top")}
+                      >
+                        {t("common.top", undefined, "Top")}
+                        {countSuffix}
+                      </button>
+                      <button
+                        className="context-menu-item"
+                        onClick={() => handleMoveQueueAll("up")}
+                      >
+                        {t("common.up", undefined, "Up")}
+                        {countSuffix}
+                      </button>
+                      <button
+                        className="context-menu-item"
+                        onClick={() => handleMoveQueueAll("down")}
+                      >
+                        {t("common.down", undefined, "Down")}
+                        {countSuffix}
+                      </button>
+                      <button
+                        className="context-menu-item"
+                        onClick={() => handleMoveQueueAll("bottom")}
+                      >
+                        {t("common.bottom", undefined, "Bottom")}
+                        {countSuffix}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="context-menu-separator" />
+
+                {/* Rename (single selection only) */}
+                {!isMulti && ct && (
                   <button
                     className="context-menu-item"
                     onClick={() => {
                       setPromptConfig({
-                        title: `${t("torrents.setUploadLimit", undefined, "Set Upload Speed Limit")}${countSuffix}`,
-                        description:
-                          "Enter upload limit in KB/s (0 for unlimited):",
-                        initialValue: !isMulti ? ct?.uploadLimit || 0 : 0,
-                        inputType: "number",
-                        min: 0,
-                        suffix: "KB/s",
-                        onConfirm: (limit) => {
-                          const val = parseInt(limit, 10);
-                          if (!isNaN(val) && val >= 0) {
-                            handleUpdateAll((t) => ({
-                              ...t,
-                              uploadLimit: val,
-                            }));
-                          }
+                        title: t("torrents.rename", undefined, "Rename Torrent"),
+                        description: "Enter a new name for this torrent:",
+                        initialValue: ct.name,
+                        inputType: "text",
+                        validate: (val) =>
+                          !val.trim() ? "Name cannot be empty" : null,
+                        onConfirm: (n) => {
+                          if (n.trim()) onUpdate({ ...ct, name: n.trim() });
+                          onClose();
                         },
                       });
                     }}
                   >
-                    Set Upload Limit...{countSuffix}
+                    {t("torrents.rename", undefined, "Rename...")}
                   </button>
-                  <button
-                    className="context-menu-item"
-                    onClick={() => {
-                      setPromptConfig({
-                        title: `${t("torrents.setDownloadLimit", undefined, "Set Download Speed Limit")}${countSuffix}`,
-                        description:
-                          "Enter download limit in KB/s (0 for unlimited):",
-                        initialValue: !isMulti ? ct?.downloadLimit || 0 : 0,
-                        inputType: "number",
-                        min: 0,
-                        suffix: "KB/s",
-                        onConfirm: (limit) => {
-                          const val = parseInt(limit, 10);
-                          if (!isNaN(val) && val >= 0) {
-                            handleUpdateAll((t) => ({
-                              ...t,
-                              downloadLimit: val,
-                            }));
-                          }
-                        },
-                      });
-                    }}
-                  >
-                    Set Download Limit...{countSuffix}
-                  </button>
-                  <button
-                    className="context-menu-item"
-                    onClick={() =>
-                      handleUpdateAll((t) => ({
-                        ...t,
-                        uploadLimit: 0,
-                        downloadLimit: 0,
-                      }))
-                    }
-                  >
-                    Reset to Global Limits{countSuffix}
-                  </button>
-                </div>
-              )}
-            </div>
+                )}
 
-            {/* Queue submenu */}
-            <div
-              className="context-menu-item context-menu-submenu-trigger"
-              onMouseEnter={() => setOpenSubmenu("queue")}
-              onMouseLeave={() => setOpenSubmenu(null)}
-            >
-              {t("torrents.queue", undefined, "Queue")}
-              {countSuffix} ▶
-              {openSubmenu === "queue" && (
-                <div className="context-menu context-menu-submenu">
-                  <button
-                    className="context-menu-item"
-                    onClick={() => handleMoveQueueAll("top")}
-                  >
-                    {t("common.top", undefined, "Top")}
-                    {countSuffix}
-                  </button>
-                  <button
-                    className="context-menu-item"
-                    onClick={() => handleMoveQueueAll("up")}
-                  >
-                    {t("common.up", undefined, "Up")}
-                    {countSuffix}
-                  </button>
-                  <button
-                    className="context-menu-item"
-                    onClick={() => handleMoveQueueAll("down")}
-                  >
-                    {t("common.down", undefined, "Down")}
-                    {countSuffix}
-                  </button>
-                  <button
-                    className="context-menu-item"
-                    onClick={() => handleMoveQueueAll("bottom")}
-                  >
-                    {t("common.bottom", undefined, "Bottom")}
-                    {countSuffix}
-                  </button>
-                </div>
-              )}
-            </div>
+                {/* Set Location */}
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    setPromptConfig({
+                      title: `${t("torrents.setLocation", undefined, "Set Location")}${countSuffix}`,
+                      description: "Enter new save path directory:",
+                      initialValue: !isMulti ? (ct?.savePath || ct?.sourcePath || "") : "",
+                      inputType: "text",
+                      validate: (val) =>
+                        !val.trim() ? "Location cannot be empty" : null,
+                      onConfirm: (loc) => {
+                        const trimmed = loc.trim();
+                        if (trimmed) {
+                          handleUpdateAll((t) => ({
+                            ...t,
+                            savePath: trimmed,
+                            sourcePath: trimmed,
+                          }));
+                        }
+                      },
+                    });
+                  }}
+                >
+                  {t("torrents.setLocation", undefined, "Set Location...")}
+                  {countSuffix}
+                </button>
 
-            <div className="context-menu-separator" />
-
-            {/* Rename (single selection only) */}
-            {!isMulti && ct && (
-              <button
-                className="context-menu-item"
-                onClick={() => {
-                  setPromptConfig({
-                    title: t("torrents.rename", undefined, "Rename Torrent"),
-                    description: "Enter a new name for this torrent:",
-                    initialValue: ct.name,
-                    inputType: "text",
-                    validate: (val) =>
-                      !val.trim() ? "Name cannot be empty" : null,
-                    onConfirm: (n) => {
-                      if (n.trim()) onUpdate({ ...ct, name: n.trim() });
-                      onClose();
-                    },
-                  });
-                }}
-              >
-                {t("torrents.rename", undefined, "Rename...")}
-              </button>
+                {/* Label / Tag */}
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    setPromptConfig({
+                      title: `${t("torrents.setLabel", undefined, "Set Torrent Label / Tag")}${countSuffix}`,
+                      description:
+                        "Enter label for organization (leave empty to remove):",
+                      initialValue: !isMulti ? (ct?.label ?? "") : "",
+                      inputType: "text",
+                      onConfirm: (l) => {
+                        const trimmed = l.trim() || null;
+                        handleUpdateAll((t) => ({ ...t, label: trimmed }));
+                      },
+                    });
+                  }}
+                >
+                  {t("torrents.setLabel", undefined, "Set Label...")}
+                  {!isMulti && ct?.label ? ` (${ct.label})` : countSuffix}
+                </button>
+              </>
             )}
-
-            {/* Set Location */}
-            <button
-              className="context-menu-item"
-              onClick={() => {
-                setPromptConfig({
-                  title: `${t("torrents.setLocation", undefined, "Set Location")}${countSuffix}`,
-                  description: "Enter new save path directory:",
-                  initialValue: !isMulti ? (ct?.savePath || ct?.sourcePath || "") : "",
-                  inputType: "text",
-                  validate: (val) =>
-                    !val.trim() ? "Location cannot be empty" : null,
-                  onConfirm: (loc) => {
-                    const trimmed = loc.trim();
-                    if (trimmed) {
-                      handleUpdateAll((t) => ({
-                        ...t,
-                        savePath: trimmed,
-                        sourcePath: trimmed,
-                      }));
-                    }
-                  },
-                });
-              }}
-            >
-              {t("torrents.setLocation", undefined, "Set Location...")}
-              {countSuffix}
-            </button>
-
-            {/* Label / Tag */}
-            <button
-              className="context-menu-item"
-              onClick={() => {
-                setPromptConfig({
-                  title: `${t("torrents.setLabel", undefined, "Set Torrent Label / Tag")}${countSuffix}`,
-                  description:
-                    "Enter label for organization (leave empty to remove):",
-                  initialValue: !isMulti ? (ct?.label ?? "") : "",
-                  inputType: "text",
-                  onConfirm: (l) => {
-                    const trimmed = l.trim() || null;
-                    handleUpdateAll((t) => ({ ...t, label: trimmed }));
-                  },
-                });
-              }}
-            >
-              {t("torrents.setLabel", undefined, "Set Label...")}
-              {!isMulti && ct?.label ? ` (${ct.label})` : countSuffix}
-            </button>
 
             {/* Export .torrent */}
             {ct && (
@@ -799,109 +812,116 @@ function TorrentContextMenu({
               </button>
             )}
 
-            <div className="context-menu-separator" />
+            {canMutateTorrents && (
+              <>
+                <div className="context-menu-separator" />
 
-            {/* Toggles */}
-            <button
-              className="context-menu-item"
-              onClick={() => {
-                if (isMulti) {
-                  const anyDisabled = effectiveTorrents.some(
-                    (t) => !t.superSeeding,
-                  );
-                  handleUpdateAll((t) => ({ ...t, superSeeding: anyDisabled }));
-                } else if (ct) {
-                  handleUpdateAll((t) => ({
-                    ...t,
-                    superSeeding: !t.superSeeding,
-                  }));
-                }
-              }}
-            >
-              {isMulti
-                ? `Super Seeding${countSuffix}`
-                : `${ct?.superSeeding ? "Disable" : "Enable"} ${t("torrents.superSeeding", undefined, "Super Seeding")}`}
-            </button>
-            <button
-              className="context-menu-item"
-              onClick={() => {
-                if (isMulti) {
-                  const anyDisabled = effectiveTorrents.some(
-                    (t) => !t.sequentialDownload,
-                  );
-                  handleUpdateAll((t) => ({
-                    ...t,
-                    sequentialDownload: anyDisabled,
-                  }));
-                } else if (ct) {
-                  handleUpdateAll((t) => ({
-                    ...t,
-                    sequentialDownload: !t.sequentialDownload,
-                  }));
-                }
-              }}
-            >
-              {isMulti
-                ? `Sequential Download${countSuffix}`
-                : `${ct?.sequentialDownload ? "Disable" : "Enable"} ${t("torrents.sequentialDownload", undefined, "Sequential Download")}`}
-            </button>
-            <button
-              className="context-menu-item"
-              onClick={() => {
-                if (isMulti) {
-                  const anyDisabled = effectiveTorrents.some(
-                    (t) => !t.firstLastPiecePrio,
-                  );
-                  handleUpdateAll((t) => ({
-                    ...t,
-                    firstLastPiecePrio: anyDisabled,
-                  }));
-                } else if (ct) {
-                  handleUpdateAll((t) => ({
-                    ...t,
-                    firstLastPiecePrio: !t.firstLastPiecePrio,
-                  }));
-                }
-              }}
-            >
-              {isMulti
-                ? `Prioritize First & Last Pieces${countSuffix}`
-                : `${ct?.firstLastPiecePrio ? "Disable" : "Enable"} ${t("torrents.firstLastPiecePrio", undefined, "Prioritize First & Last Pieces")}`}
-            </button>
-
-            <div className="context-menu-separator" />
+                {/* Toggles */}
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    if (isMulti) {
+                      const anyDisabled = effectiveTorrents.some(
+                        (t) => !t.superSeeding,
+                      );
+                      handleUpdateAll((t) => ({ ...t, superSeeding: anyDisabled }));
+                    } else if (ct) {
+                      handleUpdateAll((t) => ({
+                        ...t,
+                        superSeeding: !t.superSeeding,
+                      }));
+                    }
+                  }}
+                >
+                  {isMulti
+                    ? `Super Seeding${countSuffix}`
+                    : `${ct?.superSeeding ? "Disable" : "Enable"} ${t("torrents.superSeeding", undefined, "Super Seeding")}`}
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    if (isMulti) {
+                      const anyDisabled = effectiveTorrents.some(
+                        (t) => !t.sequentialDownload,
+                      );
+                      handleUpdateAll((t) => ({
+                        ...t,
+                        sequentialDownload: anyDisabled,
+                      }));
+                    } else if (ct) {
+                      handleUpdateAll((t) => ({
+                        ...t,
+                        sequentialDownload: !t.sequentialDownload,
+                      }));
+                    }
+                  }}
+                >
+                  {isMulti
+                    ? `Sequential Download${countSuffix}`
+                    : `${ct?.sequentialDownload ? "Disable" : "Enable"} ${t("torrents.sequentialDownload", undefined, "Sequential Download")}`}
+                </button>
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    if (isMulti) {
+                      const anyDisabled = effectiveTorrents.some(
+                        (t) => !t.firstLastPiecePrio,
+                      );
+                      handleUpdateAll((t) => ({
+                        ...t,
+                        firstLastPiecePrio: anyDisabled,
+                      }));
+                    } else if (ct) {
+                      handleUpdateAll((t) => ({
+                        ...t,
+                        firstLastPiecePrio: !t.firstLastPiecePrio,
+                      }));
+                    }
+                  }}
+                >
+                  {isMulti
+                    ? `Prioritize First & Last Pieces${countSuffix}`
+                    : `${ct?.firstLastPiecePrio ? "Disable" : "Enable"} ${t("torrents.firstLastPiecePrio", undefined, "Prioritize First & Last Pieces")}`}
+                </button>
+              </>
+            )}
 
             {/* Remove submenu */}
-            <div
-              className="context-menu-item context-menu-submenu-trigger"
-              onMouseEnter={() => setOpenSubmenu("remove")}
-              onMouseLeave={() => setOpenSubmenu(null)}
-            >
-              {t("common.remove", undefined, "Remove")}
-              {countSuffix} ▶
-              {openSubmenu === "remove" && (
-                <div className="context-menu context-menu-submenu">
-                  <button
-                    className="context-menu-item context-menu-item-danger"
-                    onClick={() => handleDeleteAll(false)}
-                  >
-                    {t("torrents.removeTorrent", undefined, "Remove Torrent")}
-                    {countSuffix}
-                  </button>
-                  <button
-                    className="context-menu-item context-menu-item-danger"
-                    onClick={() => handleDeleteAll(true)}
-                  >
-                    {t(
-                      "torrents.removeTorrentAndData",
-                      undefined,
-                      "Remove Torrent and Data",
-                    )}
-                    {countSuffix}
-                  </button>
+            {canDeleteTorrent && (
+              <>
+                <div className="context-menu-separator" />
+                <div
+                  className="context-menu-item context-menu-submenu-trigger"
+                  onMouseEnter={() => setOpenSubmenu("remove")}
+                  onMouseLeave={() => setOpenSubmenu(null)}
+                >
+                  {t("common.remove", undefined, "Remove")}
+                  {countSuffix} ▶
+                  {openSubmenu === "remove" && (
+                    <div className="context-menu context-menu-submenu">
+                      <button
+                        className="context-menu-item context-menu-item-danger"
+                        onClick={() => handleDeleteAll(false)}
+                      >
+                        {t("torrents.removeTorrent", undefined, "Remove Torrent")}
+                        {countSuffix}
+                      </button>
+                      <button
+                        className="context-menu-item context-menu-item-danger"
+                        onClick={() => handleDeleteAll(true)}
+                      >
+                        {t(
+                          "torrents.removeTorrentAndData",
+                          undefined,
+                          "Remove Torrent and Data",
+                        )}
+                        {countSuffix}
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
 
             <div className="context-menu-separator" />
           </>

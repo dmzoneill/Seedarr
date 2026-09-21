@@ -7,7 +7,9 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Notifications;
@@ -106,6 +108,7 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         return string.IsNullOrEmpty(trimmed) ? string.Empty : "/" + trimmed;
     }
 
+    [Authorize(Policy = Policies.AdminOnly)]
     public override ActionResult<GeneralConfigResource> SaveConfig([FromBody] GeneralConfigResource resource)
     {
         if (resource == null)
@@ -208,6 +211,7 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
     }
 
     [HttpGet("api-key")]
+    [Authorize(Policy = Policies.AdminOnly)]
     [Produces("application/json")]
     public ActionResult<ApiKeyResource> GetApiKey()
     {
@@ -215,6 +219,7 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
     }
 
     [HttpPost("test-ssl")]
+    [Authorize(Policy = Policies.AdminOnly)]
     [Produces("application/json")]
     [ProducesResponseType(typeof(SslCertificateValidationResult), 200)]
     public async Task<ActionResult<SslCertificateValidationResult>> TestSsl([FromBody] SslTestRequest request)
@@ -407,6 +412,7 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
         return NetworkConfigResourceMapper.ToResource(model);
     }
 
+    [Authorize(Policy = Policies.AdminOnly)]
     public override ActionResult<NetworkConfigResource> SaveConfig([FromBody] NetworkConfigResource resource)
     {
         if (resource == null)
@@ -445,6 +451,7 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
 
     [HttpPost("test-proxy")]
     [HttpPost("/api/v1/config/proxy/test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     [Produces("application/json")]
     [ProducesResponseType(typeof(ProxyTestResult), 200)]
     public async Task<ActionResult<ProxyTestResult>> TestProxy([FromBody] ProxyTestRequest request, CancellationToken cancellationToken)

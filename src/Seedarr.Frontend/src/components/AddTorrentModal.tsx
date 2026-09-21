@@ -1,6 +1,7 @@
 import { useRef, useEffect } from "react";
 import AddTorrentForm, { InputMode } from "./AddTorrentForm";
 import { useModalRegistration } from "./ModalProvider";
+import { usePermissions } from "../hooks/usePermissions";
 import { trackModalOpen } from "../utils/analytics";
 
 interface AddTorrentModalProps {
@@ -14,6 +15,7 @@ function AddTorrentModal({
   initialQuery = "",
   onClose,
 }: AddTorrentModalProps) {
+  const { canAddTorrent } = usePermissions();
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,12 +87,35 @@ function AddTorrentModal({
           </button>
         </div>
 
-        <AddTorrentForm
-          initialMode={initialMode}
-          initialQuery={initialQuery}
-          isModal={true}
-          onClose={onClose}
-        />
+        {!canAddTorrent ? (
+          <div style={{ padding: "1rem 0" }}>
+            <div
+              role="alert"
+              style={{
+                padding: "0.75rem 1rem",
+                backgroundColor: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: "6px",
+                color: "#fca5a5",
+                fontSize: "0.875rem",
+              }}
+            >
+              🔒 You have ReadOnly permissions. Adding torrents is not permitted.
+            </div>
+            <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
+              <button className="btn btn-outline" onClick={onClose}>
+                Close
+              </button>
+            </div>
+          </div>
+        ) : (
+          <AddTorrentForm
+            initialMode={initialMode}
+            initialQuery={initialQuery}
+            isModal={true}
+            onClose={onClose}
+          />
+        )}
       </div>
     </div>
   );

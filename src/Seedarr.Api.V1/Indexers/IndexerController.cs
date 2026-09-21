@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Newznab;
 using NzbDrone.Core.Indexers.Prowlarr;
@@ -65,6 +67,7 @@ public class IndexerController : Controller
     }
 
     [HttpGet]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<List<IndexerDefinition>> GetAll()
     {
         var definitions = _indexerFactory.All();
@@ -72,6 +75,7 @@ public class IndexerController : Controller
     }
 
     [HttpGet("{id}")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<IndexerDefinition> Get(int id)
     {
         var definition = _indexerFactory.Get(id);
@@ -84,6 +88,7 @@ public class IndexerController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<IndexerDefinition> Create([FromBody] IndexerDefinition definition)
     {
         if (definition == null)
@@ -106,6 +111,7 @@ public class IndexerController : Controller
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Update(int id, [FromBody] IndexerDefinition definition)
     {
         if (definition == null)
@@ -142,6 +148,7 @@ public class IndexerController : Controller
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Delete(int id)
     {
         _indexerFactory.Delete(id);
@@ -163,6 +170,7 @@ public class IndexerController : Controller
     }
 
     [HttpPost("test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<IndexerTestResult> TestDirect([FromBody] IndexerDefinition definition)
     {
         if (definition == null)
@@ -243,6 +251,7 @@ public class IndexerController : Controller
     }
 
     [HttpPost("{id}/test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<IndexerTestResult> TestConnection(int id)
     {
         var definition = _indexerFactory.Get(id);
@@ -300,6 +309,7 @@ public class IndexerController : Controller
     }
 
     [HttpPost("prowlarr/sync")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<ProwlarrSyncResult> SyncProwlarr(
         [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] ProwlarrSyncRequest request = null,
         [FromQuery] int? prowlarrIndexerId = null)
@@ -323,6 +333,7 @@ public class IndexerController : Controller
     }
 
     [HttpGet("search")]
+    [Authorize(Policy = Policies.Reader)]
     public async Task<ActionResult<List<ReleaseInfo>>> Search(
         [FromQuery] string query = null,
         [FromQuery] string category = null,
@@ -510,6 +521,7 @@ public class IndexerController : Controller
     }
 
     [HttpPost("download")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<TorrentResource> DownloadRelease([FromBody] DownloadReleaseRequest request)
     {
         if (request == null)
@@ -696,6 +708,7 @@ public class IndexerController : Controller
     }
 
     [HttpGet("{id}/caps")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<TorznabCapabilities> GetCapabilities(int id)
     {
         var definition = _indexerFactory.Get(id);

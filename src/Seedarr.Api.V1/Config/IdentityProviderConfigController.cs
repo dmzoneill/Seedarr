@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using FluentValidation;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.Authentication;
@@ -93,6 +94,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     }
 
     [HttpGet]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<List<IdentityProviderResource>> GetAll()
     {
         var providers = _providerService.GetAll();
@@ -107,6 +109,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<IdentityProviderResource> GetById(int id)
     {
         var provider = _providerService.GetById(id);
@@ -119,6 +122,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<IdentityProviderResource>> Create([FromBody] IdentityProviderResource resource)
     {
         if (resource == null)
@@ -152,6 +156,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<IdentityProviderResource>> Update(int id, [FromBody] IdentityProviderResource resource)
     {
         if (resource == null)
@@ -213,6 +218,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult> Delete(int id)
     {
         var existing = _providerService.GetById(id);
@@ -236,6 +242,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     }
 
     [HttpPost("test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult> TestConnection([FromBody] IdentityProviderResource resource)
     {
         if (resource == null)

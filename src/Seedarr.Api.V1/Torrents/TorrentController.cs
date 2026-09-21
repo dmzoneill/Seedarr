@@ -8,10 +8,12 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
@@ -31,6 +33,7 @@ using Seedarr.Http.REST;
 namespace Seedarr.Api.V1.Torrents;
 
 [V1ApiController("torrent")]
+[Authorize(Policy = Policies.Reader)]
 public class TorrentController : RestControllerWithSignalR<TorrentResource, Torrent>
 {
     private readonly Logger _logger;
@@ -890,6 +893,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPost("{torrentId:int}/trackers")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<TrackerEntryResource> AddTracker(int torrentId, [FromBody] AddTorrentTrackerResource resource)
     {
         if (resource == null || string.IsNullOrWhiteSpace(resource.Url))
@@ -965,6 +969,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPut("{torrentId:int}/trackers/{trackerId:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<TrackerEntryResource> UpdateTracker(int torrentId, int trackerId, [FromBody] UpdateTorrentTrackerResource resource)
     {
         if (resource == null)
@@ -1013,6 +1018,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpDelete("{torrentId:int}/trackers/{trackerId:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult DeleteTracker(int torrentId, int trackerId)
     {
         var torrent = _torrentService.Get(torrentId);
@@ -1213,6 +1219,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<TorrentResource> Create([FromBody] TorrentResource resource)
     {
         var defaultPath = _configService?.TorrentSaveDirectory ?? string.Empty;
@@ -1377,6 +1384,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPost("upload")]
+    [Authorize(Policy = Policies.Operator)]
     [Consumes("multipart/form-data")]
     public IActionResult Upload(
         [FromForm(Name = "file")] List<IFormFile> files,
@@ -1470,6 +1478,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<TorrentResource> Update(int id, [FromBody] TorrentResource resource)
     {
         var validationResult = SharedValidator.Validate(resource);
@@ -1536,6 +1545,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPost("{id}/scrape")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<ActionResult> Scrape(int id, CancellationToken cancellationToken = default)
     {
         var torrent = _torrentService.Get(id);
@@ -1554,6 +1564,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPost("{id:int}/announce")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Announce(int id)
     {
         var torrent = _torrentService.Get(id);
@@ -1598,6 +1609,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPost("{id:int}/recheck")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<TorrentResource> Recheck(int id)
     {
         var torrent = _torrentRecheckService != null
@@ -1614,6 +1626,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPut("{id:int}/queue")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult MoveQueue(int id, [FromBody] QueuePositionResource resource)
     {
         var torrent = _torrentService.Get(id);
@@ -1628,6 +1641,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Delete(int id, [FromQuery] bool deleteFiles = false)
     {
         var torrent = _torrentService.Get(id);
@@ -1637,6 +1651,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpDelete("bulk")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<BulkActionResult> DeleteBulk([FromBody] BulkTorrentActionResource resource)
     {
         if (resource == null)
@@ -1649,6 +1664,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPost("bulk")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<BulkActionResult> BulkAction([FromBody] BulkTorrentActionResource resource)
     {
         if (resource == null || string.IsNullOrWhiteSpace(resource.Action))
@@ -1955,6 +1971,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPost("{torrentId:int}/trackers/{trackerId:int}/announce")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult AnnounceTracker(int torrentId, int trackerId)
     {
         var torrent = _torrentService.Get(torrentId);

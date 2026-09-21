@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useBlocker, type BlockerFunction } from "react-router";
+import { usePermissions } from "../../hooks/usePermissions";
 
 export function SaveFeedback({
   isPending: _isPending,
@@ -155,8 +156,45 @@ export function SaveBar({
   error: Error | null;
   onSave: () => void | Promise<void>;
 }) {
+  const { canSaveSettings } = usePermissions();
   const blocker = useUnsavedGuard(dirty);
   const [savingToProceed, setSavingToProceed] = useState(false);
+
+  if (!canSaveSettings) {
+    return (
+      <div
+        className="card"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem",
+          padding: "0.75rem 1.25rem",
+          marginBottom: "1.25rem",
+          borderRadius: "8px",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          border: "1px solid rgba(239, 68, 68, 0.3)",
+          backgroundColor: "var(--bg-secondary)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <button
+            className="btn btn-outline"
+            disabled
+            style={{ minWidth: "120px", opacity: 0.5, cursor: "not-allowed" }}
+            title="Read-only access: settings cannot be modified"
+          >
+            🔒 Read Only
+          </button>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+            Settings cannot be saved with ReadOnly permissions.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const handleSaveAndProceed = async () => {
     setSavingToProceed(true);

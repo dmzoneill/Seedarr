@@ -1,4 +1,5 @@
 import { useParams } from "react-router";
+import { usePermissions } from "../hooks/usePermissions";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SeedingTab } from "./settings/SeedingTab";
 import { BitTorrentTab } from "./settings/BitTorrentTab";
@@ -105,6 +106,7 @@ const TAB_COMPONENTS: Record<string, React.ComponentType> = {
 };
 
 function Settings() {
+  const { canSaveSettings } = usePermissions();
   const { section } = useParams<{ section?: string }>();
   const activeSection = section || "general";
   const title = sectionTitles[activeSection] || "Settings";
@@ -117,6 +119,26 @@ function Settings() {
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
+      {!canSaveSettings && (
+        <div
+          role="alert"
+          style={{
+            padding: "0.75rem 1rem",
+            marginBottom: "1rem",
+            backgroundColor: "rgba(239, 68, 68, 0.1)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            borderRadius: "6px",
+            color: "#fca5a5",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            fontSize: "0.875rem",
+          }}
+        >
+          <span>🔒</span>
+          <span>You have ReadOnly permissions. Settings cannot be modified.</span>
+        </div>
+      )}
       {/* Header Banner */}
       <div
         style={{

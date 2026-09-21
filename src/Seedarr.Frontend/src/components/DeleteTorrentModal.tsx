@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "../i18n";
 import { useModalRegistration } from "./ModalProvider";
+import { usePermissions } from "../hooks/usePermissions";
 
 export interface DeleteTorrentModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export function DeleteTorrentModal({
   isPending = false,
 }: DeleteTorrentModalProps) {
   const { t } = useTranslation();
+  const { canDeleteTorrent } = usePermissions();
   const [deleteFiles, setDeleteFiles] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
@@ -98,6 +100,27 @@ export function DeleteTorrentModal({
               : t("torrents.deleteTorrentTitle", undefined, "Delete Torrent")}
           </span>
         </h3>
+
+        {!canDeleteTorrent && (
+          <div
+            role="alert"
+            style={{
+              padding: "0.75rem 1rem",
+              backgroundColor: "rgba(239, 68, 68, 0.1)",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
+              borderRadius: "6px",
+              marginBottom: "1rem",
+              color: "#fca5a5",
+              fontSize: "0.875rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <span>🔒</span>
+            <span>You have ReadOnly permissions. Torrents cannot be deleted.</span>
+          </div>
+        )}
 
         <div
           id="delete-torrent-modal-desc"
@@ -206,7 +229,12 @@ export function DeleteTorrentModal({
             type="button"
             className="btn btn-danger"
             onClick={handleConfirm}
-            disabled={isPending}
+            disabled={isPending || !canDeleteTorrent}
+            title={
+              !canDeleteTorrent
+                ? "Deleting torrents requires operator or admin role"
+                : undefined
+            }
             style={{
               display: "inline-flex",
               alignItems: "center",

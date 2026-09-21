@@ -126,12 +126,13 @@ public class AuthController : ControllerBase
             ? "admin"
             : enteredUser;
         var sessionId = Guid.NewGuid().ToString("N");
+        var role = (username == "admin" || usernameMatchesApiKey) ? Roles.Admin : Roles.ReadOnly;
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, "1"),
             new(ClaimTypes.Name, username),
             new("DisplayName", username == "admin" ? "Administrator" : username),
-            new(ClaimTypes.Role, "Admin"),
+            new(ClaimTypes.Role, role),
             new("SessionId", sessionId),
         };
 
@@ -157,7 +158,7 @@ public class AuthController : ControllerBase
             Identifier = username,
             Username = username,
             DisplayName = username == "admin" ? "Administrator" : username,
-            Roles = new List<string> { "Admin" },
+            Roles = new List<string> { role },
             IsAuthenticated = true,
             ReturnUrl = safeReturnUrl,
         });
@@ -223,7 +224,7 @@ public class AuthController : ControllerBase
 
         if (roles.Count == 0)
         {
-            roles.Add("Admin");
+            roles.Add(Roles.ReadOnly);
         }
 
         return Ok(new CurrentUserResource
