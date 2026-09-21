@@ -1327,10 +1327,15 @@ public class PeerServerTest
 
         Assert.That(acceptTask.Wait(TimeSpan.FromSeconds(5)), Is.True);
 
-        for (var i = 0; i < 100; i++)
+        for (var i = 0; i < 150; i++)
         {
-            if (_connectionManager.ReceivedCalls().Any()) break;
+            if (_connectionManager.ReceivedCalls().Any(c => c.GetMethodInfo().Name == nameof(IConnectionManager.Add))) break;
             Thread.Sleep(20);
+        }
+
+        if (connectTask.IsFaulted)
+        {
+            throw connectTask.Exception!;
         }
 
         _connectionManager.Received().Add(Arg.Any<PeerConnection>());
