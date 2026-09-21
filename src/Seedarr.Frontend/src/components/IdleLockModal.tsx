@@ -27,21 +27,51 @@ export function IdleLockModal({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const passwordInputRef = useRef<HTMLInputElement | null>(null);
+  const resumeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const isAnonymous =
+    !currentUser ||
+    !currentUser.isAuthenticated ||
+    currentUser.username === "Anonymous";
+
+  const requiresPassword =
+    currentUser?.requiresPassword !== undefined
+      ? currentUser.requiresPassword
+      : (currentUser?.authenticationEnabled ?? (!isAnonymous));
 
   useEffect(() => {
     if (isOpen) {
       setPassword("");
       setError(null);
       setIsSubmitting(false);
-      // Focus password input after modal renders
+      // Focus password input or resume button after modal renders
       const timer = setTimeout(() => {
-        passwordInputRef.current?.focus();
+        if (requiresPassword) {
+          passwordInputRef.current?.focus();
+        } else {
+          resumeButtonRef.current?.focus();
+        }
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [isOpen]);
+  }, [isOpen, requiresPassword]);
 
-  // Trap Escape key and prevent propagation
+  // When no password is required (screen saver mode), pressing Enter or Space unlocks
+  useEffect(() => {
+    if (!isOpen || requiresPassword) return;
+
+    const handleKeyResume = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onUnlock();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyResume);
+    return () => window.removeEventListener("keydown", handleKeyResume);
+  }, [isOpen, requiresPassword, onUnlock]);
+
+  // Trap Escape key and prevent propagation (or unlock if screen saver)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -50,12 +80,15 @@ export function IdleLockModal({
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
+        if (!requiresPassword) {
+          onUnlock();
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [isOpen]);
+  }, [isOpen, requiresPassword, onUnlock]);
 
   const handleUnlock = useCallback(
     async (e?: React.FormEvent) => {
@@ -63,8 +96,8 @@ export function IdleLockModal({
         e.preventDefault();
       }
 
-      // If user is unauthenticated or authentication is disabled, unlock directly
-      if (!currentUser || !currentUser.isAuthenticated) {
+      // If user is unauthenticated, auth is disabled, or no password is required, unlock directly
+      if (!requiresPassword) {
         onUnlock();
         return;
       }
@@ -85,7 +118,7 @@ export function IdleLockModal({
         setIsSubmitting(true);
         setError(null);
 
-        const username = currentUser.username || "admin";
+        const username = currentUser?.username || "admin";
         await apiClient.loginWithRetry({
           username,
           password: password.trim(),
@@ -103,7 +136,7 @@ export function IdleLockModal({
         setIsSubmitting(false);
       }
     },
-    [currentUser, password, onUnlock, t],
+    [currentUser, password, requiresPassword, onUnlock, t],
   );
 
   if (!isOpen) {
@@ -112,7 +145,7 @@ export function IdleLockModal({
 
   const isExpired = lockReason === "expired";
   const displayName =
-    currentUser?.displayName || currentUser?.username || "Administrator";
+    currentUser?.displayName || currentUser?.username || (requiresPassword ? "Administrator" : "Guest");
   const userInitials = displayName.slice(0, 2).toUpperCase();
   const roleName =
     currentUser?.roles && currentUser.roles.length > 0
@@ -125,9 +158,13 @@ export function IdleLockModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="idle-lock-title"
-      onClick={(e) => e.stopPropagation()}
+      onClick={() => {
+        if (!requiresPassword) {
+          onUnlock();
+        }
+      }}
     >
-      <div className="idle-lock-card">
+      <div className="idle-lock-card" onClick={(e) => e.stopPropagation()}>
         {/* Seedarr Branding */}
         <div
           style={{
@@ -157,7 +194,9 @@ export function IdleLockModal({
               color: "var(--text-primary)",
             }}
           >
-            {isExpired
+            {!requiresPassword
+              ? t("auth.sessionPaused", undefined, "Session Paused")
+              : isExpired
               ? t("auth.sessionExpired", undefined, "Session Expired")
               : t("auth.screenLocked", undefined, "Screen Locked")}
           </h2>
@@ -169,7 +208,13 @@ export function IdleLockModal({
               lineHeight: 1.45,
             }}
           >
-            {isExpired
+            {!requiresPassword
+              ? t(
+                  "auth.screenSaverDescription",
+                  undefined,
+                  "Seedarr is paused due to inactivity. Click Resume or press Enter to continue.",
+                )
+              : isExpired
               ? t(
                   "auth.expiredDescription",
                   undefined,
@@ -232,7 +277,7 @@ export function IdleLockModal({
           onSubmit={handleUnlock}
           style={{ width: "100%", display: "flex", flexDirection: "column", gap: "1rem" }}
         >
-          {currentUser?.isAuthenticated !== false && (
+          {requiresPassword && (
             <div style={{ position: "relative", width: "100%" }}>
               <input
                 ref={passwordInputRef}
@@ -281,6 +326,7 @@ export function IdleLockModal({
           )}
 
           <button
+            ref={resumeButtonRef}
             type="submit"
             className="btn btn-primary"
             disabled={isSubmitting}
@@ -304,28 +350,32 @@ export function IdleLockModal({
               </>
             ) : (
               <span>
-                {t("auth.unlockButton", undefined, "Unlock Session")}
+                {!requiresPassword
+                  ? t("auth.resumeSession", undefined, "Resume Session")
+                  : t("auth.unlockButton", undefined, "Unlock Session")}
               </span>
             )}
           </button>
         </form>
 
         {/* Sign Out Button */}
-        <div style={{ marginTop: "1.5rem", width: "100%" }}>
-          <button
-            type="button"
-            className="btn btn-outline btn-small"
-            onClick={onLogout}
-            style={{
-              width: "100%",
-              fontSize: "0.85rem",
-              color: "var(--danger, #ef4444)",
-              borderColor: "rgba(239, 68, 68, 0.4)",
-            }}
-          >
-            {t("auth.signOut", undefined, "Sign Out")}
-          </button>
-        </div>
+        {requiresPassword && (
+          <div style={{ marginTop: "1.5rem", width: "100%" }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-small"
+              onClick={onLogout}
+              style={{
+                width: "100%",
+                fontSize: "0.85rem",
+                color: "var(--danger, #ef4444)",
+                borderColor: "rgba(239, 68, 68, 0.4)",
+              }}
+            >
+              {t("auth.signOut", undefined, "Sign Out")}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

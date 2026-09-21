@@ -216,7 +216,7 @@ function App() {
     unlockSession,
   } = useIdleTimer({
     enabled: Boolean(
-      currentUser && currentUser.isAuthenticated && location.pathname !== "/login",
+      currentUser && location.pathname !== "/login",
     ),
     onIdle: () => {
       setLockReason("idle");

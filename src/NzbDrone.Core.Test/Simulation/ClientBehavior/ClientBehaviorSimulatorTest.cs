@@ -350,7 +350,7 @@ public class ClientBehaviorSimulatorTest
         Assert.That(session.PeerId, Is.EqualTo("-qB4420-123456789012"));
         Assert.That(session.AnnounceKey, Is.Not.Null.And.Not.Empty);
         Assert.That(session.AnnounceKey.Length, Is.EqualTo(8));
-        Assert.That(session.CreatedAt, Is.GreaterThan(DateTime.UtcNow.AddMinutes(-1)));
+        Assert.That(session.CreatedAt, Is.EqualTo(_currentTime));
         Assert.That(session.Profile, Is.EqualTo(_qbitProfile));
     }
 
