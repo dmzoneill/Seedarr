@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Torrents;
 
@@ -15,13 +16,14 @@ public interface ITorrentEventLogService
     void Warn(int torrentId, string source, string message);
     void Error(int torrentId, string source, string message);
     List<TorrentEventLog> GetByTorrentId(int torrentId, int count);
+    void DeleteByTorrentId(int torrentId);
     void Purge(DateTime before);
     void Purge(DateTime before, int maxLogsPerTorrent);
     void Purge(DateTime before, int maxLogsPerTorrent, int batchSize);
     Task FlushAsync();
 }
 
-public class TorrentEventLogService : ITorrentEventLogService, IDisposable, IAsyncDisposable
+public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDeletedEvent>, IDisposable, IAsyncDisposable
 {
     private readonly ITorrentEventLogRepository _repository;
     private readonly Logger _logger;
@@ -87,6 +89,19 @@ public class TorrentEventLogService : ITorrentEventLogService, IDisposable, IAsy
     {
         DrainRemainingLogs();
         return _repository.GetByTorrentId(torrentId, count);
+    }
+
+    public void DeleteByTorrentId(int torrentId)
+    {
+        _repository.DeleteByTorrentId(torrentId);
+    }
+
+    public void Handle(TorrentDeletedEvent message)
+    {
+        if (message != null && message.TorrentId > 0)
+        {
+            DeleteByTorrentId(message.TorrentId);
+        }
     }
 
     public void Purge(DateTime before)
