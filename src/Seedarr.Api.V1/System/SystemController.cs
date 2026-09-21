@@ -38,7 +38,7 @@ public class SystemController : ControllerBase
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly IConfigService _configService;
-    private readonly IMainDatabase _mainDatabase;
+    private readonly IDatabase _mainDatabase;
     private readonly IScheduledTaskHistoryRepository _taskHistoryRepository;
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
     private readonly IDatabaseMaintenanceService _databaseMaintenanceService;
@@ -52,7 +52,7 @@ public class SystemController : ControllerBase
         IAppFolderInfo appFolderInfo,
         IHostApplicationLifetime lifetime,
         IConfigService configService = null,
-        IMainDatabase mainDatabase = null,
+        IDatabase mainDatabase = null,
         IScheduledTaskHistoryRepository taskHistoryRepository = null,
         IBroadcastSignalRMessage signalRBroadcaster = null,
         IDatabaseMaintenanceService databaseMaintenanceService = null,
@@ -124,6 +124,7 @@ public class SystemController : ControllerBase
             IsDocker = isDocker,
             IsDebug = isDebug,
             DatabaseVersion = dbType,
+            DatabaseType = dbType,
             DatabaseMigration = GetDatabaseMigrationVersion(),
             UptimeSeconds = (DateTime.UtcNow - StartTime).TotalSeconds,
             GcGen0Collections = GC.CollectionCount(0),

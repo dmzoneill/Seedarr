@@ -99,6 +99,11 @@ public class SystemResource : RestResource
     public string DatabaseVersion { get; set; }
 
     /// <summary>
+    /// Gets or sets the database engine type string.
+    /// </summary>
+    public string DatabaseType { get; set; }
+
+    /// <summary>
     /// Gets or sets the last database migration identifier.
     /// </summary>
     public string DatabaseMigration { get; set; }
