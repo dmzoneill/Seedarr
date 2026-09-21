@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { SeedingConfig } from "../../api/types";
+import { usePermissions } from "../../hooks/usePermissions";
 import { formatSpeed } from "../../utils/formatters";
 import { useTranslation } from "../../i18n";
 import { TagIcon } from "../../components/icons/NavIcons";
@@ -101,6 +102,7 @@ export function TorrentToolbar({
   isColumnCustomizerOpen,
   onToggleColumnCustomizer,
 }: TorrentToolbarProps) {
+  const { canMutateTorrents, canAddTorrent, canDeleteTorrent } = usePermissions();
   const [isInternalCustomizerOpen, setIsInternalCustomizerOpen] = useState(false);
   const defaultPrefs = useColumnPreferences();
 
@@ -185,14 +187,14 @@ export function TorrentToolbar({
             <button
               className="btn btn-success"
               onClick={onBulkStart}
-              disabled={bulkPending}
+              disabled={bulkPending || !canMutateTorrents}
             >
               <PlayIcon size={13} /> {t("torrents.start", undefined, "Start")}
             </button>
             <button
               className="btn btn-outline"
               onClick={onBulkStop}
-              disabled={bulkPending}
+              disabled={bulkPending || !canMutateTorrents}
             >
               <StopIcon size={13} /> {t("torrents.stop", undefined, "Stop")}
             </button>
@@ -201,7 +203,7 @@ export function TorrentToolbar({
                 type="button"
                 className="btn btn-outline bulk-add-tags-btn"
                 onClick={onBulkAddTags}
-                disabled={bulkPending}
+                disabled={bulkPending || !canMutateTorrents}
                 title={t("torrents.bulkAddTags", undefined, "Assign Tags")}
                 style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
               >
@@ -213,7 +215,7 @@ export function TorrentToolbar({
                 type="button"
                 className="btn btn-outline bulk-remove-tags-btn"
                 onClick={onBulkRemoveTags}
-                disabled={bulkPending}
+                disabled={bulkPending || !canMutateTorrents}
                 title={t("torrents.bulkRemoveTags", undefined, "Remove Tags")}
                 style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
               >
@@ -223,7 +225,7 @@ export function TorrentToolbar({
             <button
               className="btn btn-danger"
               onClick={onBulkDelete}
-              disabled={bulkPending}
+              disabled={bulkPending || !canDeleteTorrent}
             >
               {t("common.delete", undefined, "Delete")}
             </button>
@@ -244,7 +246,7 @@ export function TorrentToolbar({
                   type="button"
                   className="btn btn-outline"
                   onClick={() => onBulkMoveQueue("top")}
-                  disabled={bulkPending}
+                  disabled={bulkPending || !canMutateTorrents}
                   title={t(
                     "torrents.contextMenu.top",
                     undefined,
@@ -258,7 +260,7 @@ export function TorrentToolbar({
                   type="button"
                   className="btn btn-outline"
                   onClick={() => onBulkMoveQueue("up")}
-                  disabled={bulkPending}
+                  disabled={bulkPending || !canMutateTorrents}
                   title={t("torrents.contextMenu.up", undefined, "Move Up")}
                   style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
                 >
@@ -268,7 +270,7 @@ export function TorrentToolbar({
                   type="button"
                   className="btn btn-outline"
                   onClick={() => onBulkMoveQueue("down")}
-                  disabled={bulkPending}
+                  disabled={bulkPending || !canMutateTorrents}
                   title={t("torrents.contextMenu.down", undefined, "Move Down")}
                   style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
                 >
@@ -278,7 +280,7 @@ export function TorrentToolbar({
                   type="button"
                   className="btn btn-outline"
                   onClick={() => onBulkMoveQueue("bottom")}
-                  disabled={bulkPending}
+                  disabled={bulkPending || !canMutateTorrents}
                   title={t(
                     "torrents.contextMenu.bottom",
                     undefined,
@@ -300,10 +302,12 @@ export function TorrentToolbar({
           </div>
         ) : (
           <>
-            <button className="btn btn-success" onClick={onAddTorrent}>
-              <PlusIcon size={13} />{" "}
-              {t("torrents.addTorrent", undefined, "Add Torrent")}
-            </button>
+            {canAddTorrent && (
+              <button className="btn btn-success" onClick={onAddTorrent}>
+                <PlusIcon size={13} />{" "}
+                {t("torrents.addTorrent", undefined, "Add Torrent")}
+              </button>
+            )}
             {onSearchIndexers && (
               <button
                 type="button"
@@ -342,11 +346,19 @@ export function TorrentToolbar({
         )}
       </div>
       <div className="page-header-actions">
-        <button className="btn btn-success" onClick={onStartAll}>
+        <button
+          className="btn btn-success"
+          onClick={onStartAll}
+          disabled={!canMutateTorrents}
+        >
           <PlayIcon size={13} />{" "}
           {t("torrents.startAll", undefined, "Start All")}
         </button>
-        <button className="btn btn-danger" onClick={onStopAll}>
+        <button
+          className="btn btn-danger"
+          onClick={onStopAll}
+          disabled={!canMutateTorrents}
+        >
           <StopIcon size={13} /> {t("torrents.stopAll", undefined, "Stop All")}
         </button>
         <div
@@ -361,7 +373,7 @@ export function TorrentToolbar({
             onClick={() => adjustSpeed("maxUploadSpeedKbps", 2)}
             title="Double upload speed limit"
             aria-label="Double upload speed limit"
-            disabled={!seedingConfig}
+            disabled={!seedingConfig || !canMutateTorrents}
           >
             &#9650;&#9650;
           </button>
@@ -370,7 +382,7 @@ export function TorrentToolbar({
             onClick={() => adjustSpeed("maxUploadSpeedKbps", 0.5)}
             title="Halve upload speed limit"
             aria-label="Halve upload speed limit"
-            disabled={!seedingConfig}
+            disabled={!seedingConfig || !canMutateTorrents}
           >
             &#9660;&#9660;
           </button>
@@ -382,7 +394,7 @@ export function TorrentToolbar({
             onClick={() => adjustSpeed("maxDownloadSpeedKbps", 2)}
             title="Double download speed limit"
             aria-label="Double download speed limit"
-            disabled={!seedingConfig}
+            disabled={!seedingConfig || !canMutateTorrents}
           >
             &#9650;&#9650;
           </button>
@@ -391,7 +403,7 @@ export function TorrentToolbar({
             onClick={() => adjustSpeed("maxDownloadSpeedKbps", 0.5)}
             title="Halve download speed limit"
             aria-label="Halve download speed limit"
-            disabled={!seedingConfig}
+            disabled={!seedingConfig || !canMutateTorrents}
           >
             &#9660;&#9660;
           </button>

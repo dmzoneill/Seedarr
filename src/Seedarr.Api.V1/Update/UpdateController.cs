@@ -4,8 +4,10 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Update;
 using Seedarr.Http;
@@ -41,6 +43,7 @@ public class UpdateController : Controller
     }
 
     [HttpGet("status")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<UpdateStatusResource> GetStatus()
     {
         var state = _postUpdateVerificationService?.GetUpdateState() ?? new UpdateState
@@ -71,6 +74,7 @@ public class UpdateController : Controller
     }
 
     [HttpGet("progress")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<UpdateInstallProgress> GetProgress()
     {
         var progress = _installUpdateService?.GetProgress() ?? new UpdateInstallProgress
@@ -83,6 +87,7 @@ public class UpdateController : Controller
     }
 
     [HttpPost("install")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<UpdateInstallProgress>> Install(
         [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] InstallUpdateRequest request = null,
         CancellationToken cancellationToken = default)
@@ -114,6 +119,7 @@ public class UpdateController : Controller
     }
 
     [HttpGet]
+    [Authorize(Policy = Policies.Reader)]
     public async Task<ActionResult<List<UpdateResource>>> GetUpdates(CancellationToken cancellationToken = default)
     {
         var info = await _updateService.CheckForUpdateAsync(false, cancellationToken).ConfigureAwait(false);

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Migration;
@@ -78,6 +79,7 @@ public class SystemController : ControllerBase
     /// </summary>
     /// <returns>The system status resource.</returns>
     [HttpGet("status")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<SystemResource> GetStatus()
     {
         var isDocker = global::System.IO.File.Exists("/.dockerenv") ||
@@ -187,6 +189,7 @@ public class SystemController : ControllerBase
     /// </summary>
     /// <returns>A list of scheduled task resources.</returns>
     [HttpGet("task")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<List<ScheduledTaskResource>> GetTasks()
     {
         var tasks = _taskManager.GetAll();
@@ -197,6 +200,7 @@ public class SystemController : ControllerBase
     /// Updates interval and enabled status for a scheduled task by ID.
     /// </summary>
     [HttpPut("task/{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<ScheduledTaskResource> UpdateTask(int id, [FromBody] UpdateScheduledTaskRequest request)
     {
         if (request == null || request.Interval < 1)
@@ -272,6 +276,7 @@ public class SystemController : ControllerBase
     /// Executes a scheduled task immediately by ID.
     /// </summary>
     [HttpPost("task/{id:int}/execute")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult ExecuteTask(int id)
     {
         var task = _taskManager.GetAll().FirstOrDefault(t => t.Id == id);
@@ -287,6 +292,7 @@ public class SystemController : ControllerBase
     /// Executes a scheduled task immediately by type or name.
     /// </summary>
     [HttpPost("task/{name}/execute")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult ExecuteTaskByName(string name)
     {
         var task = _taskManager.GetAll().FirstOrDefault(t =>
@@ -404,6 +410,7 @@ public class SystemController : ControllerBase
     /// <param name="id">The task ID.</param>
     /// <returns>Ok if task cancellation was signaled; NotFound if task is not found or not running.</returns>
     [HttpPost("task/{id:int}/abort")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult AbortTask(int id)
     {
         var cancelled = _taskManager.CancelTask(id);
@@ -421,6 +428,7 @@ public class SystemController : ControllerBase
     /// <param name="name">The task type name or short name.</param>
     /// <returns>Ok if task cancellation was signaled; NotFound if task is not found or not running.</returns>
     [HttpPost("task/{name}/abort")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult AbortTaskByName(string name)
     {
         var task = _taskManager.GetAll().FirstOrDefault(t =>
@@ -444,6 +452,7 @@ public class SystemController : ControllerBase
     /// <param name="limit">The maximum number of history records to return (default 50).</param>
     /// <returns>A list of scheduled task history resources.</returns>
     [HttpGet("task/{id:int}/history")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<List<ScheduledTaskHistoryResource>> GetTaskHistoryById(int id, [FromQuery] int limit = 50)
     {
         if (limit <= 0)
@@ -465,6 +474,7 @@ public class SystemController : ControllerBase
     /// <param name="limit">The maximum number of history records to return (default 50).</param>
     /// <returns>A list of scheduled task history resources.</returns>
     [HttpGet("task/{name}/history")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<List<ScheduledTaskHistoryResource>> GetTaskHistoryByName(string name, [FromQuery] int limit = 50)
     {
         if (limit <= 0)
@@ -501,6 +511,7 @@ public class SystemController : ControllerBase
     /// </summary>
     /// <returns>A list of command resources.</returns>
     [HttpGet("command")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<List<CommandResource>> GetCommands()
     {
         var commands = _commandQueueManager.GetAll();
@@ -513,6 +524,7 @@ public class SystemController : ControllerBase
     /// <param name="id">The command ID.</param>
     /// <returns>The command resource if found; otherwise, NotFound.</returns>
     [HttpGet("command/{id:int}")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<CommandResource> GetCommand(int id)
     {
         var command = _commandQueueManager.Get(id);
@@ -530,6 +542,7 @@ public class SystemController : ControllerBase
     /// <param name="id">The command ID.</param>
     /// <returns>Result of the cancellation.</returns>
     [HttpDelete("command/{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult CancelCommand(int id)
     {
         var command = _commandQueueManager.Get(id);
@@ -553,6 +566,7 @@ public class SystemController : ControllerBase
     }
 
     [HttpPost("command")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<CommandResource> PushCommand([FromBody] JsonElement body)
     {
         if (body.ValueKind != JsonValueKind.Object)
@@ -631,7 +645,7 @@ public class SystemController : ControllerBase
     }
 
     [HttpPost("restart")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Policies.AdminOnly, Roles = "Admin")]
     public ActionResult Restart()
     {
         if (User?.Identity?.IsAuthenticated == true && !User.IsInRole("Admin"))
@@ -684,7 +698,7 @@ public class SystemController : ControllerBase
     }
 
     [HttpPost("shutdown")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = Policies.AdminOnly, Roles = "Admin")]
     public ActionResult Shutdown()
     {
         if (User?.Identity?.IsAuthenticated == true && !User.IsInRole("Admin"))
@@ -708,6 +722,7 @@ public class SystemController : ControllerBase
     /// <param name="maxPages">Optional query parameter specifying maxPages to reclaim.</param>
     /// <returns>Result containing reclaimed page counts and reclaimed bytes.</returns>
     [HttpPost("database/vacuum")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<DatabaseVacuumResource> VacuumDatabase(
         [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] DatabaseVacuumRequest request = null,
         [FromQuery] int? maxPages = null)

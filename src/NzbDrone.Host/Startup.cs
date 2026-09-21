@@ -229,6 +229,15 @@ public class Startup
             options.FallbackPolicy = new AuthorizationPolicyBuilder()
                 .RequireAuthenticatedUser()
                 .Build();
+
+            options.AddPolicy(Policies.AdminOnly, policy =>
+                policy.RequireRole(Roles.Admin));
+
+            options.AddPolicy(Policies.Operator, policy =>
+                policy.RequireRole(Roles.Admin, Roles.User));
+
+            options.AddPolicy(Policies.Reader, policy =>
+                policy.RequireRole(Roles.Admin, Roles.User, Roles.ReadOnly));
         });
 
         services.AddEndpointsApiExplorer();

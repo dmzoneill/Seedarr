@@ -54,6 +54,8 @@ import {
   STORAGE_KEY_HIDE_GUIDE,
 } from "./components/GettingStartedModal";
 import AddTorrentPage from "./pages/AddTorrentPage";
+import { usePermissions } from "./hooks/usePermissions";
+import { useAppStore } from "./store/app";
 import { useToast } from "./context/ToastContext";
 import { apiClient } from "./api/client";
 import SeedarrLogo from "./components/icons/SeedarrLogo";
@@ -146,6 +148,15 @@ function App() {
   const { connected, isReconnecting, reconnect } = useSignalR();
   const { showToast } = useToast();
   const [currentUser, setCurrentUser] = useState<import("./api/types").CurrentUser | null>(null);
+  const setStoreCurrentUser = useAppStore((s) => s.setCurrentUser);
+  const updateCurrentUser = useCallback(
+    (user: import("./api/types").CurrentUser | null) => {
+      setCurrentUser(user);
+      setStoreCurrentUser(user);
+    },
+    [setStoreCurrentUser],
+  );
+  const { isAdmin, canAddTorrent } = usePermissions(currentUser);
   const [isManuallyLocked, setIsManuallyLocked] = useState(false);
   const [lockReason, setLockReason] = useState<"idle" | "expired">("idle");
   const [isRestarting, setIsRestarting] = useState(false);
@@ -238,7 +249,7 @@ function App() {
   const loadUser = async () => {
     try {
       const user = await apiClient.getCurrentUser();
-      setCurrentUser(user);
+      updateCurrentUser(user);
     } catch {
       // ignore
     }
@@ -268,7 +279,7 @@ function App() {
   useEffect(() => {
     const unsubscribe = subscribeAuthChannel((event) => {
       if (event.type === "AUTH_LOGOUT") {
-        setCurrentUser(null);
+        updateCurrentUser(null);
         stopSignalR();
         navigate("/login");
         showToast(
@@ -292,13 +303,13 @@ function App() {
             "warning",
           );
         } else {
-          setCurrentUser(null);
+          updateCurrentUser(null);
           stopSignalR();
           navigate("/login");
         }
       } else if (event.type === "AUTH_LOGIN") {
         if (event.user) {
-          setCurrentUser(event.user);
+          updateCurrentUser(event.user);
         } else {
           loadUser();
         }
@@ -325,7 +336,7 @@ function App() {
       // ignore
     } finally {
       broadcastLogout();
-      setCurrentUser(null);
+      updateCurrentUser(null);
       stopSignalR();
       navigate("/login");
     }
@@ -718,14 +729,16 @@ function App() {
                 <TorrentIcon />{" "}
                 <span>{t("nav.torrents", undefined, "Torrents")}</span>
               </NavLink>
-              <NavLink
-                to="/torrents/add"
-                className="sidebar-nav-item sidebar-nav-sub"
-                title={t("nav.addTorrent", undefined, "Add Torrent")}
-              >
-                <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>+</span>{" "}
-                <span>{t("nav.addTorrent", undefined, "Add Torrent")}</span>
-              </NavLink>
+              {canAddTorrent && (
+                <NavLink
+                  to="/torrents/add"
+                  className="sidebar-nav-item sidebar-nav-sub"
+                  title={t("nav.addTorrent", undefined, "Add Torrent")}
+                >
+                  <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>+</span>{" "}
+                  <span>{t("nav.addTorrent", undefined, "Add Torrent")}</span>
+                </NavLink>
+              )}
             </>
           )}
 
@@ -1341,45 +1354,49 @@ function App() {
                   >
                     {t("topbar.logout", undefined, "Log Out")}
                   </button>
-                  <div className="topbar-dropdown-separator" />
-                  <button
-                    className="topbar-dropdown-item"
-                    role="menuitem"
-                    onClick={handleRestart}
-                  >
-                    {t("topbar.restart", undefined, "Restart")}
-                  </button>
-                  <button
-                    className="topbar-dropdown-item topbar-dropdown-danger"
-                    role="menuitem"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          t(
-                            "topbar.shutdownConfirm",
-                            undefined,
-                            "Shut down Seedarr?",
-                          ),
-                        )
-                      ) {
-                        apiClient
-                          .post("/system/shutdown")
-                          .catch((err) => {
-                            console.error("System action failed:", err);
-                            showToast(
+                  {isAdmin && (
+                    <>
+                      <div className="topbar-dropdown-separator" />
+                      <button
+                        className="topbar-dropdown-item"
+                        role="menuitem"
+                        onClick={handleRestart}
+                      >
+                        {t("topbar.restart", undefined, "Restart")}
+                      </button>
+                      <button
+                        className="topbar-dropdown-item topbar-dropdown-danger"
+                        role="menuitem"
+                        onClick={() => {
+                          if (
+                            confirm(
                               t(
-                                "topbar.actionFailed",
+                                "topbar.shutdownConfirm",
                                 undefined,
-                                "System action failed",
+                                "Shut down Seedarr?",
                               ),
-                              "error",
-                            );
-                          });
-                      }
-                    }}
-                  >
-                    {t("topbar.shutdown", undefined, "Shutdown")}
-                  </button>
+                            )
+                          ) {
+                            apiClient
+                              .post("/system/shutdown")
+                              .catch((err) => {
+                                console.error("System action failed:", err);
+                                showToast(
+                                  t(
+                                    "topbar.actionFailed",
+                                    undefined,
+                                    "System action failed",
+                                  ),
+                                  "error",
+                                );
+                              });
+                          }
+                        }}
+                      >
+                        {t("topbar.shutdown", undefined, "Shutdown")}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

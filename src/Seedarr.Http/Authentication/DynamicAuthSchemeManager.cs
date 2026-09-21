@@ -522,7 +522,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
 
         if (assignedRoles.Count == 0)
         {
-            assignedRoles.Add("User");
+            assignedRoles.Add(Roles.ReadOnly);
         }
 
         return assignedRoles;

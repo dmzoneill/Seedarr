@@ -581,4 +581,107 @@ public class AuthControllerTest
     {
         Assert.That(AuthController.CleanAndValidateIp(input), Is.EqualTo(expected));
     }
+
+    [Test]
+    public void GetCurrentUser_WhenAuthenticationDisabled_ReturnsAdminUserWithAdminRole()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(false);
+        var httpContext = new DefaultHttpContext();
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = _controller.GetCurrentUser();
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var user = okResult.Value as CurrentUserResource;
+        Assert.That(user, Is.Not.Null);
+        Assert.That(user.IsAuthenticated, Is.True);
+        Assert.That(user.Roles, Contains.Item(Roles.Admin));
+    }
+
+    [Test]
+    public void GetCurrentUser_WhenAuthenticatedWithoutRoles_DefaultsToReadOnlyRole()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, "testuser"),
+            new Claim("Identifier", "testuser"),
+        };
+        var identity = new ClaimsIdentity(claims, "Cookies");
+        var principal = new ClaimsPrincipal(identity);
+        var httpContext = new DefaultHttpContext { User = principal };
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = _controller.GetCurrentUser();
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var user = okResult.Value as CurrentUserResource;
+        Assert.That(user, Is.Not.Null);
+        Assert.That(user.IsAuthenticated, Is.True);
+        Assert.That(user.Roles, Contains.Item(Roles.ReadOnly));
+        Assert.That(user.Roles, Does.Not.Contain(Roles.Admin));
+    }
+
+    [Test]
+    public void GetCurrentUser_WhenAuthenticatedWithRoles_PreservesAssignedRoles()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, "adminuser"),
+            new Claim(ClaimTypes.Role, Roles.Admin),
+        };
+        var identity = new ClaimsIdentity(claims, "Cookies");
+        var principal = new ClaimsPrincipal(identity);
+        var httpContext = new DefaultHttpContext { User = principal };
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = _controller.GetCurrentUser();
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var user = okResult.Value as CurrentUserResource;
+        Assert.That(user, Is.Not.Null);
+        Assert.That(user.Roles, Contains.Item(Roles.Admin));
+    }
+
+    [Test]
+    public async Task Login_WhenNonAdminCredentialsValid_AssignsReadOnlyRole()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.Password.Returns("shared-password");
+        _configFileProvider.ApiKey.Returns("some-api-key");
+
+        var httpContext = new DefaultHttpContext();
+        var authService = Substitute.For<IAuthenticationService>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IAuthenticationService)).Returns(authService);
+        httpContext.RequestServices = serviceProvider;
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        ClaimsPrincipal capturedPrincipal = null;
+        await authService.SignInAsync(
+            httpContext,
+            "Cookies",
+            Arg.Do<ClaimsPrincipal>(p => capturedPrincipal = p),
+            Arg.Any<AuthenticationProperties>());
+
+        var request = new LoginRequestResource
+        {
+            Username = "standarduser",
+            Password = "shared-password",
+        };
+
+        var result = await _controller.Login(request);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var user = okResult.Value as CurrentUserResource;
+        Assert.That(user, Is.Not.Null);
+        Assert.That(user.Roles, Contains.Item(Roles.ReadOnly));
+        Assert.That(user.Roles, Does.Not.Contain(Roles.Admin));
+        Assert.That(capturedPrincipal.Claims.Any(c => c.Type == ClaimTypes.Role && c.Value == Roles.ReadOnly), Is.True);
+    }
 }

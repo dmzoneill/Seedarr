@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Backup;
 using Seedarr.Http;
 
@@ -19,6 +21,7 @@ public class BackupController : Controller
     }
 
     [HttpGet]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<List<BackupResource>> GetBackups()
     {
         var backups = _backupService.GetBackups();
@@ -34,6 +37,7 @@ public class BackupController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<BackupResource> CreateBackup()
     {
         try
@@ -61,6 +65,7 @@ public class BackupController : Controller
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult DeleteBackup(int id, [FromQuery] string fileName)
     {
         var backups = _backupService.GetBackups();
@@ -106,6 +111,7 @@ public class BackupController : Controller
     }
 
     [HttpGet("{id:int}/download")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult DownloadBackup(int id)
     {
         var backups = _backupService.GetBackups();
@@ -127,6 +133,7 @@ public class BackupController : Controller
     }
 
     [HttpPost("restore")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult RestoreBackup([FromBody] RestoreRequest request)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.FileName))

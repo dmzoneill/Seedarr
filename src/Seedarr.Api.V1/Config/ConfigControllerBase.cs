@@ -1,6 +1,8 @@
 using System.Linq;
 using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http.REST;
 using Seedarr.Http.REST.Attributes;
@@ -20,6 +22,7 @@ public abstract class ConfigController<TResource> : Controller
     }
 
     [HttpGet]
+    [Authorize(Policy = Policies.Reader)]
     [Produces("application/json")]
     public TResource GetConfig()
     {
@@ -30,6 +33,7 @@ public abstract class ConfigController<TResource> : Controller
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Policy = Policies.Reader)]
     [Produces("application/json")]
     public TResource GetConfigById(int id)
     {
@@ -37,6 +41,7 @@ public abstract class ConfigController<TResource> : Controller
     }
 
     [RestPutById]
+    [Authorize(Policy = Policies.AdminOnly)]
     [Consumes("application/json")]
     [Produces("application/json")]
     public virtual ActionResult<TResource> SaveConfig([FromBody] TResource resource)

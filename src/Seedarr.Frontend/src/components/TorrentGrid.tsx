@@ -22,6 +22,7 @@ import {
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
 import { filterTorrents } from "../utils/filterUtils";
+import { usePermissions } from "../hooks/usePermissions";
 import TorrentContextMenu from "./TorrentContextMenu";
 import AddTorrentModal from "./AddTorrentModal";
 import DeleteTorrentModal from "./DeleteTorrentModal";
@@ -60,6 +61,7 @@ function TorrentGrid({
   onSelectTorrent,
 }: TorrentGridProps) {
   const { t } = useTranslation();
+  const { canMutateTorrents, canDeleteTorrent } = usePermissions();
   const { data: fetchedTorrents, isLoading } = useTorrents();
   const torrents = propTorrents ?? fetchedTorrents;
   const { data: arrConnections } = useArrConnections();
@@ -578,7 +580,8 @@ function TorrentGrid({
                       e.stopPropagation();
                       stopSeeding.mutate(torrent.id);
                     }}
-                    title="Stop seeding"
+                    disabled={!canMutateTorrents}
+                    title={!canMutateTorrents ? "Pausing/stopping requires operator or admin role" : "Stop seeding"}
                   >
                     <span>⏹</span> <span>{t("torrents.stop", undefined, "Stop")}</span>
                   </button>
@@ -598,7 +601,8 @@ function TorrentGrid({
                       e.stopPropagation();
                       startSeeding.mutate(torrent.id);
                     }}
-                    title="Start seeding"
+                    disabled={!canMutateTorrents}
+                    title={!canMutateTorrents ? "Starting torrents requires operator or admin role" : "Start seeding"}
                   >
                     <span>▶</span> <span>{t("torrents.start", undefined, "Start")}</span>
                   </button>
@@ -616,8 +620,8 @@ function TorrentGrid({
                     e.stopPropagation();
                     setTorrentToDelete(torrent);
                   }}
-                  disabled={deleteTorrent.isPending}
-                  title="Delete torrent"
+                  disabled={deleteTorrent.isPending || !canDeleteTorrent}
+                  title={!canDeleteTorrent ? "Deleting torrents requires operator or admin role" : "Delete torrent"}
                 >
                   <span>{t("common.delete", undefined, "Delete")}</span>
                 </button>

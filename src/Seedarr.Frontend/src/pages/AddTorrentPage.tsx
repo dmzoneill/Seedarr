@@ -1,8 +1,34 @@
 import { useNavigate } from "react-router";
 import AddTorrentForm from "../components/AddTorrentForm";
+import { usePermissions } from "../hooks/usePermissions";
 
 export function AddTorrentPage() {
   const navigate = useNavigate();
+  const { canAddTorrent } = usePermissions();
+
+  if (!canAddTorrent) {
+    return (
+      <div className="content-area" style={{ padding: "1.5rem" }}>
+        <div
+          role="alert"
+          style={{
+            padding: "0.75rem 1rem",
+            backgroundColor: "rgba(239, 68, 68, 0.1)",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            borderRadius: "6px",
+            color: "#fca5a5",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            fontSize: "0.875rem",
+          }}
+        >
+          <span>🔒</span>
+          <span>You have ReadOnly permissions. Adding torrents is not permitted.</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

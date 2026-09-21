@@ -69,7 +69,7 @@ public class DynamicAuthSchemeManagerTest
     }
 
     [Test]
-    public void ResolveRoles_should_fallback_to_User_when_no_rules_configured()
+    public void ResolveRoles_should_fallback_to_ReadOnly_when_no_rules_configured()
     {
         var claims = new List<Claim>
         {
@@ -81,13 +81,13 @@ public class DynamicAuthSchemeManagerTest
         var rolesEmpty = DynamicAuthSchemeManager.ResolveRoles(claims, "");
         var rolesWhitespace = DynamicAuthSchemeManager.ResolveRoles(claims, "   ");
 
-        Assert.That(rolesNull, Is.EquivalentTo(new[] { "User" }));
-        Assert.That(rolesEmpty, Is.EquivalentTo(new[] { "User" }));
-        Assert.That(rolesWhitespace, Is.EquivalentTo(new[] { "User" }));
+        Assert.That(rolesNull, Is.EquivalentTo(new[] { Roles.ReadOnly }));
+        Assert.That(rolesEmpty, Is.EquivalentTo(new[] { Roles.ReadOnly }));
+        Assert.That(rolesWhitespace, Is.EquivalentTo(new[] { Roles.ReadOnly }));
     }
 
     [Test]
-    public void ResolveRoles_should_fallback_to_User_when_rules_do_not_match_claims()
+    public void ResolveRoles_should_fallback_to_ReadOnly_when_rules_do_not_match_claims()
     {
         var claims = new List<Claim>
         {
@@ -98,7 +98,7 @@ public class DynamicAuthSchemeManagerTest
         var rules = "{\"Admin\":\"^(admin|devops)$\",\"Operator\":\"^operators$\"}";
         var roles = DynamicAuthSchemeManager.ResolveRoles(claims, rules);
 
-        Assert.That(roles, Is.EquivalentTo(new[] { "User" }));
+        Assert.That(roles, Is.EquivalentTo(new[] { Roles.ReadOnly }));
     }
 
     [Test]
@@ -187,7 +187,7 @@ public class DynamicAuthSchemeManagerTest
     }
 
     [Test]
-    public void ResolveRoles_should_handle_invalid_json_rules_gracefully_and_return_User()
+    public void ResolveRoles_should_handle_invalid_json_rules_gracefully_and_return_ReadOnly()
     {
         var claims = new List<Claim>
         {
@@ -197,7 +197,7 @@ public class DynamicAuthSchemeManagerTest
         var invalidRules = "this is not valid json";
         var roles = DynamicAuthSchemeManager.ResolveRoles(claims, invalidRules);
 
-        Assert.That(roles, Is.EquivalentTo(new[] { "User" }));
+        Assert.That(roles, Is.EquivalentTo(new[] { Roles.ReadOnly }));
     }
 
     [Test]
@@ -228,7 +228,7 @@ public class DynamicAuthSchemeManagerTest
 
         Assert.That(options.Events.OnTokenValidated, Is.Not.Null);
 
-        // Case 1: Non-admin user gets "User" role instead of escalating to "Admin"
+        // Case 1: Non-admin user gets "ReadOnly" role instead of escalating to "Admin"
         var httpContext1 = new DefaultHttpContext();
         var scheme1 = new AuthenticationScheme("Oidc_test_roles", "Test Role Provider", typeof(OpenIdConnectHandler));
         var userClaims1 = new ClaimsIdentity(
@@ -250,7 +250,7 @@ public class DynamicAuthSchemeManagerTest
         await options.Events.TokenValidated(tokenContext1);
 
         var resultingRoles1 = tokenContext1.Principal.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
-        Assert.That(resultingRoles1, Is.EquivalentTo(new[] { "User" }));
+        Assert.That(resultingRoles1, Is.EquivalentTo(new[] { Roles.ReadOnly }));
         Assert.That(resultingRoles1, Does.Not.Contain("Admin"));
 
         // Case 2: Matching admin group gets "Admin" role
