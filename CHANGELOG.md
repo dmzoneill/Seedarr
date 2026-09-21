@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.10.6](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.6) - 2026-09-21
+
+### 🐛 Bug Fixes
+- fix(test): inject MockHttpMessageHandler in UpdateServiceTest to prevent real HTTP calls during unit testing
+
+### 🔧 Maintenance & Improvements
+- docs: add both Docker Hub and GHCR container pull options
+
 ## [v1.10.5](https://github.com/dmzoneill/Seedarr/releases/tag/v1.10.5) - 2026-09-21
 
 ### ✨ Features
