@@ -211,7 +211,16 @@ public class RssRuleController : Controller
             _lastSyncTime = DateTime.UtcNow;
         }
 
-        return Ok(new { success = true, grabbedCount = 0 });
+        var grabbedCount = _rssSyncService?.Sync(isManual: true) ?? 0;
+        return Ok(new { success = true, grabbedCount });
+    }
+
+    internal static void ResetSyncCooldown()
+    {
+        lock (_syncLock)
+        {
+            _lastSyncTime = DateTime.MinValue;
+        }
     }
 
     private ActionResult ValidateResource(RssRuleResource resource, int? currentId)

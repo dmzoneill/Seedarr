@@ -460,6 +460,15 @@ public class NewznabIndexer : IIndexer
 
                 break;
 
+            case SearchMode.Rss:
+                tParam = "rss";
+                if (!string.IsNullOrWhiteSpace(searchQuery.Query))
+                {
+                    queryParams.Add($"q={Uri.EscapeDataString(searchQuery.Query)}");
+                }
+
+                break;
+
             default:
                 tParam = "search";
                 if (!string.IsNullOrWhiteSpace(searchQuery.Query))
@@ -528,10 +537,12 @@ public class NewznabIndexer : IIndexer
     public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery)
     {
         var results = new System.Collections.Generic.List<ReleaseInfo>();
-        if (definition == null || string.IsNullOrWhiteSpace(definition.Url) || searchQuery == null)
+        if (definition == null || string.IsNullOrWhiteSpace(definition.Url))
         {
             return results;
         }
+
+        searchQuery ??= new SearchQuery();
 
         var mode = searchQuery.Mode;
         if (mode == SearchMode.Default)
@@ -552,21 +563,6 @@ public class NewznabIndexer : IIndexer
             {
                 mode = SearchMode.Book;
             }
-        }
-
-        if (mode == SearchMode.Default &&
-            string.IsNullOrWhiteSpace(searchQuery.Query) &&
-            string.IsNullOrWhiteSpace(searchQuery.ImdbId) &&
-            string.IsNullOrWhiteSpace(searchQuery.TvdbId) &&
-            string.IsNullOrWhiteSpace(searchQuery.TmdbId) &&
-            !searchQuery.Season.HasValue &&
-            !searchQuery.Episode.HasValue &&
-            string.IsNullOrWhiteSpace(searchQuery.Artist) &&
-            string.IsNullOrWhiteSpace(searchQuery.Album) &&
-            string.IsNullOrWhiteSpace(searchQuery.Author) &&
-            string.IsNullOrWhiteSpace(searchQuery.Title))
-        {
-            return results;
         }
 
         try
@@ -776,6 +772,9 @@ public class NewznabIndexer : IIndexer
                 var attrNodes = item.SelectNodes("*[local-name()='attr']");
                 if (attrNodes != null)
                 {
+                    int? rawPeers = null;
+                    var explicitLeechers = false;
+
                     foreach (System.Xml.XmlNode attr in attrNodes)
                     {
                         var name = attr.Attributes?["name"]?.Value?.ToLowerInvariant();
@@ -800,6 +799,36 @@ public class NewznabIndexer : IIndexer
                         {
                             release.InfoHash = val;
                         }
+                        else if (name == "seeders" && int.TryParse(val, out var seeds))
+                        {
+                            release.Seeders = Math.Max(0, seeds);
+                        }
+                        else if (name == "leechers" && int.TryParse(val, out var leechers))
+                        {
+                            release.Leechers = Math.Max(0, leechers);
+                            explicitLeechers = true;
+                        }
+                        else if (name == "peers" && int.TryParse(val, out var peers))
+                        {
+                            rawPeers = Math.Max(0, peers);
+                        }
+                        else if (name == "downloadvolumefactor")
+                        {
+                            if (double.TryParse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dvf)
+                                && double.IsFinite(dvf) && dvf >= 0.0)
+                            {
+                                release.DownloadVolumeFactor = Math.Clamp(dvf, 0.0, 10.0);
+                            }
+                            else
+                            {
+                                release.DownloadVolumeFactor = null;
+                            }
+                        }
+                    }
+
+                    if (!explicitLeechers && rawPeers.HasValue)
+                    {
+                        release.Leechers = Math.Max(0, rawPeers.Value - (release.Seeders ?? 0));
                     }
                 }
 

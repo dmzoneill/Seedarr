@@ -1,12 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using NLog;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Indexers;
 
 public interface IRssSyncService
 {
+    int Sync(bool isManual = false);
+
+    Task<int> SyncAsync(bool isManual = false);
+
     bool MatchesRule(RssRule rule, ReleaseInfo release, DateTime? now = null);
 
     RssRule GetFirstMatchingRule(IEnumerable<RssRule> rules, ReleaseInfo release, DateTime? now = null);
@@ -45,19 +51,40 @@ public class RssSyncService : IRssSyncService
     private readonly IRssSeenReleaseRepository _seenReleaseRepository;
     private readonly ITorrentService _torrentService;
     private readonly IRssGrabHistoryRepository _grabHistoryRepository;
+    private readonly IIndexerRepository _indexerRepository;
+    private readonly IIndexerFactory _indexerFactory;
+    private readonly IRssRuleRepository _rssRuleRepository;
+    private readonly IDownloadHistoryRepository _downloadHistoryRepository;
+    private readonly IDownloadHistoryService _downloadHistoryService;
+    private readonly Func<IndexerDefinition, IIndexer> _indexerInstanceFactory;
+    private readonly Logger _logger;
+    private readonly object _syncLock = new();
 
     public RssSyncService(
         IRssRuleEvaluator ruleEvaluator = null,
         IIndexerStatusService indexerStatusService = null,
         IRssSeenReleaseRepository seenReleaseRepository = null,
         ITorrentService torrentService = null,
-        IRssGrabHistoryRepository grabHistoryRepository = null)
+        IRssGrabHistoryRepository grabHistoryRepository = null,
+        IIndexerRepository indexerRepository = null,
+        IIndexerFactory indexerFactory = null,
+        IRssRuleRepository rssRuleRepository = null,
+        IDownloadHistoryRepository downloadHistoryRepository = null,
+        IDownloadHistoryService downloadHistoryService = null,
+        Func<IndexerDefinition, IIndexer> indexerInstanceFactory = null)
     {
         _ruleEvaluator = ruleEvaluator ?? new RssRuleEvaluator();
         _indexerStatusService = indexerStatusService;
         _seenReleaseRepository = seenReleaseRepository;
         _torrentService = torrentService;
         _grabHistoryRepository = grabHistoryRepository;
+        _indexerRepository = indexerRepository;
+        _indexerFactory = indexerFactory;
+        _rssRuleRepository = rssRuleRepository;
+        _downloadHistoryRepository = downloadHistoryRepository;
+        _downloadHistoryService = downloadHistoryService;
+        _indexerInstanceFactory = indexerInstanceFactory;
+        _logger = LogManager.GetCurrentClassLogger();
     }
 
     public bool MatchesRule(RssRule rule, ReleaseInfo release, DateTime? now = null)
@@ -282,6 +309,198 @@ public class RssSyncService : IRssSyncService
         return indexers.Where(i => ShouldSyncIndexer(i, isManual, now)).ToList();
     }
 
+    public int Sync(bool isManual = false)
+    {
+        lock (_syncLock)
+        {
+            _logger.Info("Starting RSS sync cycle (manual: {0})", isManual);
+
+            var indexers = _indexerFactory?.All() ?? _indexerRepository?.All();
+            if (indexers == null || indexers.Count == 0)
+            {
+                _logger.Debug("No indexers configured for RSS sync");
+                return 0;
+            }
+
+            var eligibleIndexers = FilterEligibleIndexers(indexers, isManual);
+            if (eligibleIndexers.Count == 0)
+            {
+                _logger.Debug("No eligible indexers available for RSS sync");
+                return 0;
+            }
+
+            var rules = _rssRuleRepository?.All() ?? new List<RssRule>();
+            var enabledRules = rules
+                .Where(r => r != null && r.IsEnabled)
+                .OrderBy(r => r.Priority)
+                .ThenBy(r => r.Id)
+                .ToList();
+
+            var grabbedCount = 0;
+            var grabbedHashesInCycle = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var indexerDef in eligibleIndexers)
+            {
+                try
+                {
+                    var indexer = GetIndexerInstance(indexerDef);
+                    if (indexer == null)
+                    {
+                        _logger.Warn("Unable to create indexer instance for '{0}' ({1})", indexerDef.Name, indexerDef.IndexerType);
+                        continue;
+                    }
+
+                    _logger.Debug("Fetching RSS releases from indexer '{0}'", indexerDef.Name);
+
+                    var query = new SearchQuery
+                    {
+                        Mode = SearchMode.Rss,
+                        Limit = 100
+                    };
+
+                    List<ReleaseInfo> releases;
+                    try
+                    {
+                        releases = indexer.Search(indexerDef, query) ?? new List<ReleaseInfo>();
+                        _indexerStatusService?.RecordSuccess(indexerDef.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to fetch RSS releases from indexer '{0}'", indexerDef.Name);
+                        _indexerStatusService?.RecordFailure(indexerDef.Id, null, ex.Message, ex);
+                        continue;
+                    }
+
+                    foreach (var rel in releases)
+                    {
+                        if (rel.IndexerId <= 0)
+                        {
+                            rel.IndexerId = indexerDef.Id;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(rel.Indexer))
+                        {
+                            rel.Indexer = indexerDef.Name;
+                        }
+                    }
+
+                    var newReleases = FilterNewReleases(indexerDef.Id, releases);
+
+                    foreach (var release in newReleases)
+                    {
+                        if (release == null)
+                        {
+                            continue;
+                        }
+
+                        var infoHash = release.InfoHash;
+                        if (string.IsNullOrWhiteSpace(infoHash) && !string.IsNullOrWhiteSpace(release.MagnetUrl))
+                        {
+                            try
+                            {
+                                infoHash = MagnetLinkParser.Parse(release.MagnetUrl)?.InfoHash;
+                            }
+                            catch
+                            {
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(infoHash))
+                        {
+                            release.InfoHash = infoHash.Trim().ToLowerInvariant();
+                        }
+
+                        var isDuplicate = false;
+                        if (!string.IsNullOrWhiteSpace(release.InfoHash))
+                        {
+                            if (grabbedHashesInCycle.Contains(release.InfoHash))
+                            {
+                                isDuplicate = true;
+                            }
+                            else if (_torrentService != null && _torrentService.ExistsByInfoHash(release.InfoHash))
+                            {
+                                isDuplicate = true;
+                            }
+                            else if (_downloadHistoryRepository != null && _downloadHistoryRepository.FindByInfoHash(release.InfoHash) != null)
+                            {
+                                isDuplicate = true;
+                            }
+                            else if (_downloadHistoryService != null && _downloadHistoryService.GetByInfoHash(release.InfoHash) != null)
+                            {
+                                isDuplicate = true;
+                            }
+                        }
+
+                        if (isDuplicate)
+                        {
+                            _logger.Debug("Release '{0}' ({1}) is already grabbed or active; skipping duplicate.", release.Title, release.InfoHash);
+                            RecordSeen(indexerDef.Id, release, RssSeenStatus.Grabbed);
+                            continue;
+                        }
+
+                        var matchedRule = GetFirstMatchingRule(enabledRules, release);
+                        if (matchedRule != null)
+                        {
+                            _logger.Info("Release '{0}' matched rule '{1}'. Initiating grab.", release.Title, matchedRule.Name);
+                            var grabResult = GrabRelease(release, matchedRule, indexerDef.Name);
+                            if (grabResult.Success)
+                            {
+                                grabbedCount++;
+                                if (!string.IsNullOrWhiteSpace(release.InfoHash))
+                                {
+                                    grabbedHashesInCycle.Add(release.InfoHash);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            RecordSeen(indexerDef.Id, release, RssSeenStatus.Rejected);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error processing RSS sync for indexer '{0}'", indexerDef.Name);
+                }
+            }
+
+            _logger.Info("RSS sync cycle completed. Total releases grabbed: {0}", grabbedCount);
+            return grabbedCount;
+        }
+    }
+
+    public Task<int> SyncAsync(bool isManual = false)
+    {
+        return Task.Run(() => Sync(isManual));
+    }
+
+    private IIndexer GetIndexerInstance(IndexerDefinition definition)
+    {
+        if (_indexerInstanceFactory != null)
+        {
+            return _indexerInstanceFactory(definition);
+        }
+
+        if (_indexerFactory != null)
+        {
+            var available = _indexerFactory.GetAvailableProviders();
+            var matched = available?.FirstOrDefault(p =>
+                string.Equals(p.GetType().Name, definition.Implementation, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.IndexerType, definition.IndexerType, StringComparison.OrdinalIgnoreCase));
+            if (matched != null)
+            {
+                return matched;
+            }
+        }
+
+        return definition.IndexerType?.ToLowerInvariant() switch
+        {
+            "newznab" => new Newznab.NewznabIndexer(indexerStatusService: _indexerStatusService),
+            "prowlarr" => new Prowlarr.ProwlarrIndexer(indexerStatusService: _indexerStatusService),
+            _ => new Torznab.TorznabIndexer(indexerStatusService: _indexerStatusService)
+        };
+    }
+
     public RssGrabResult GrabRelease(ReleaseInfo release, RssRule rule, string indexerName = null)
     {
         if (release == null || rule == null)
@@ -334,12 +553,22 @@ public class RssSyncService : IRssSyncService
                 }
             }
 
+            if (!string.IsNullOrWhiteSpace(infoHash))
+            {
+                infoHash = infoHash.Trim().ToLowerInvariant();
+            }
+
             history.InfoHash = infoHash;
 
-            if (!string.IsNullOrWhiteSpace(infoHash) && _torrentService.ExistsByInfoHash(infoHash))
+            var existsInHistory = (_downloadHistoryRepository != null && !string.IsNullOrWhiteSpace(infoHash) && _downloadHistoryRepository.FindByInfoHash(infoHash) != null)
+                || (_downloadHistoryService != null && !string.IsNullOrWhiteSpace(infoHash) && _downloadHistoryService.GetByInfoHash(infoHash) != null);
+
+            if (!string.IsNullOrWhiteSpace(infoHash) && ((_torrentService != null && _torrentService.ExistsByInfoHash(infoHash)) || existsInHistory))
             {
                 history.Status = RssGrabHistory.StatusFailed;
-                history.ErrorMessage = "Torrent with this info hash already exists in active library";
+                history.ErrorMessage = existsInHistory
+                    ? "Torrent with this info hash already exists in download history"
+                    : "Torrent with this info hash already exists in active library";
                 _grabHistoryRepository?.Insert(history);
                 RecordSeen(release.IndexerId, release, RssSeenStatus.Grabbed, rule.Id);
                 return new RssGrabResult { Success = false, GrabHistory = history, ErrorMessage = history.ErrorMessage };
@@ -366,6 +595,27 @@ public class RssSyncService : IRssSyncService
             history.Status = RssGrabHistory.StatusGrabbed;
             _grabHistoryRepository?.Insert(history);
             RecordSeen(release.IndexerId, release, RssSeenStatus.Grabbed, rule.Id);
+
+            if (_downloadHistoryService != null)
+            {
+                _downloadHistoryService.RecordTorrentAdded(added, source: "RSS", magnetUrl: release.MagnetUrl, downloadUrl: release.DownloadUrl, indexerName: history.IndexerName);
+            }
+            else if (_downloadHistoryRepository != null && !string.IsNullOrWhiteSpace(infoHash) && _downloadHistoryRepository.FindByInfoHash(infoHash) == null)
+            {
+                _downloadHistoryRepository.Insert(new DownloadHistory
+                {
+                    TorrentId = added?.Id,
+                    Title = release.Title,
+                    InfoHash = infoHash,
+                    TotalSize = release.Size,
+                    DateAdded = DateTime.UtcNow,
+                    Source = "RSS",
+                    IndexerName = history.IndexerName,
+                    MagnetUrl = release.MagnetUrl,
+                    DownloadUrl = release.DownloadUrl,
+                    Status = "Active"
+                });
+            }
 
             return new RssGrabResult
             {

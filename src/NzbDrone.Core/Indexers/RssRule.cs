@@ -69,9 +69,9 @@ public class RssRule : ModelBase
             return false;
         }
 
-        if (CategoryId > 0 && release.Categories != null && release.Categories.Count > 0)
+        if (CategoryId > 0)
         {
-            if (!release.Categories.Contains(CategoryId.ToString()))
+            if (release.Categories == null || release.Categories.Count == 0 || !release.Categories.Contains(CategoryId.ToString()))
             {
                 return false;
             }

@@ -777,6 +777,15 @@ public class TorznabIndexer : IIndexer
 
                 break;
 
+            case SearchMode.Rss:
+                tParam = "rss";
+                if (!string.IsNullOrWhiteSpace(searchQuery.Query))
+                {
+                    queryParams.Add($"q={Uri.EscapeDataString(searchQuery.Query)}");
+                }
+
+                break;
+
             default:
                 tParam = "search";
                 if (!string.IsNullOrWhiteSpace(searchQuery.Query))
@@ -846,10 +855,12 @@ public class TorznabIndexer : IIndexer
     public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery)
     {
         var results = new System.Collections.Generic.List<ReleaseInfo>();
-        if (definition == null || string.IsNullOrWhiteSpace(definition.Url) || searchQuery == null)
+        if (definition == null || string.IsNullOrWhiteSpace(definition.Url))
         {
             return results;
         }
+
+        searchQuery ??= new SearchQuery();
 
         var mode = searchQuery.Mode;
         if (mode == SearchMode.Default)
@@ -870,21 +881,6 @@ public class TorznabIndexer : IIndexer
             {
                 mode = SearchMode.Book;
             }
-        }
-
-        if (mode == SearchMode.Default &&
-            string.IsNullOrWhiteSpace(searchQuery.Query) &&
-            string.IsNullOrWhiteSpace(searchQuery.ImdbId) &&
-            string.IsNullOrWhiteSpace(searchQuery.TvdbId) &&
-            string.IsNullOrWhiteSpace(searchQuery.TmdbId) &&
-            !searchQuery.Season.HasValue &&
-            !searchQuery.Episode.HasValue &&
-            string.IsNullOrWhiteSpace(searchQuery.Artist) &&
-            string.IsNullOrWhiteSpace(searchQuery.Album) &&
-            string.IsNullOrWhiteSpace(searchQuery.Author) &&
-            string.IsNullOrWhiteSpace(searchQuery.Title))
-        {
-            return results;
         }
 
         try
