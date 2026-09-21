@@ -16,6 +16,7 @@ namespace NzbDrone.Core.Peers;
 public interface IChokeManager
 {
     event Action<PeerConnection> PeerUnchoked;
+    string CurrentOptimisticPeerKey { get; }
     void ProcessChoking();
     void ProcessRegularUnchoke();
     void ProcessOptimisticUnchoke();
@@ -36,6 +37,16 @@ public interface IChokeManager
 public class ChokeManager : BackgroundService, IChokeManager
 {
     public event Action<PeerConnection> PeerUnchoked;
+    public string CurrentOptimisticPeerKey
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _currentOptimisticPeerKey;
+            }
+        }
+    }
     public const int MinUnchokeDurationSeconds = 20;
     public const int MaxUnchokeLeaseSeconds = 60;
     public const double ChokeHysteresisMargin = 0.15;
@@ -57,6 +68,7 @@ public class ChokeManager : BackgroundService, IChokeManager
     private readonly object _lock = new();
     private readonly HashSet<string> _explicitSeedingTorrents = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, OptimisticSlot> _optimisticSlots = new(StringComparer.OrdinalIgnoreCase);
+    private string _currentOptimisticPeerKey;
 
     private DateTime _lastRegularUnchoke = DateTime.MinValue;
     private DateTime _lastOptimisticUnchoke = DateTime.MinValue;
@@ -154,11 +166,15 @@ public class ChokeManager : BackgroundService, IChokeManager
             var now = DateTime.UtcNow;
 
             // Anti-snubbing detection: peers unchoked without requests for > 60s
+            // If a peer is choked by Seedarr, do not penalize it with snubbing timeouts
             foreach (var conn in connections)
             {
                 if (!conn.AmChoking)
                 {
-                    var idleTime = (now - conn.LastRequestReceived).TotalSeconds;
+                    var lastActive = conn.LastUnchokedAt.HasValue && conn.LastUnchokedAt.Value > conn.LastRequestReceived
+                        ? conn.LastUnchokedAt.Value
+                        : conn.LastRequestReceived;
+                    var idleTime = (now - lastActive).TotalSeconds;
                     if (idleTime > SnubbingThresholdSeconds)
                     {
                         if (!conn.IsSnubbed)
@@ -402,6 +418,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             if (connection.IsOptimisticUnchoked)
             {
                 connection.IsOptimisticUnchoked = false;
+                _currentOptimisticPeerKey = null;
                 Choke(connection);
                 if (!string.IsNullOrEmpty(infoHash))
                 {
@@ -437,6 +454,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                     Choke(connection);
                     if (wasOptimistic)
                     {
+                        _currentOptimisticPeerKey = null;
                         if (!string.IsNullOrEmpty(connection.InfoHash))
                         {
                             ClearOptimisticSlot(connection.InfoHash, connection);
@@ -468,6 +486,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                     Choke(connection);
                     if (wasOptimistic)
                     {
+                        _currentOptimisticPeerKey = null;
                         if (!string.IsNullOrEmpty(connection.InfoHash))
                         {
                             ClearOptimisticSlot(connection.InfoHash, connection);
@@ -482,6 +501,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                 else if (connection.IsOptimisticUnchoked)
                 {
                     connection.IsOptimisticUnchoked = false;
+                    _currentOptimisticPeerKey = null;
                     if (!string.IsNullOrEmpty(connection.InfoHash))
                     {
                         ClearOptimisticSlot(connection.InfoHash, connection);
@@ -584,22 +604,26 @@ public class ChokeManager : BackgroundService, IChokeManager
             return false;
         }
 
-        var maxUploadSlots = _connectionManager != null
-            ? _connectionManager.GetDynamicUploadSlotCount(infoHash)
-            : _configService.MaxUploadSlots;
-        if (maxUploadSlots <= 0)
+        lock (_lock)
         {
-            maxUploadSlots = _configService.MaxUploadSlots;
-        }
+            var maxUploadSlots = _connectionManager != null
+                ? _connectionManager.GetDynamicUploadSlotCount(infoHash)
+                : _configService.MaxUploadSlots;
+            if (maxUploadSlots <= 0)
+            {
+                maxUploadSlots = _configService.MaxUploadSlots;
+            }
 
-        if (maxUploadSlots <= 0)
-        {
-            return true;
-        }
+            if (maxUploadSlots <= 0)
+            {
+                return true;
+            }
 
-        var unchokedCount = _connectionManager.GetAllConnections()
-            .Count(c => !c.AmChoking && string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
-        return unchokedCount < maxUploadSlots;
+            var regularSlotCount = maxUploadSlots > 1 ? maxUploadSlots - 1 : maxUploadSlots;
+            var unchokedCount = _connectionManager.GetAllConnections()
+                .Count(c => !c.AmChoking && string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+            return unchokedCount < regularSlotCount;
+        }
     }
 
     public bool IsTorrentSeeding(string infoHash)
@@ -713,6 +737,7 @@ public class ChokeManager : BackgroundService, IChokeManager
         if (_optimisticSlots.TryGetValue(infoHash, out var slot) && (slot.Peer == null || ReferenceEquals(slot.Peer, connection)))
         {
             _optimisticSlots.Remove(infoHash);
+            _currentOptimisticPeerKey = null;
         }
     }
 
@@ -746,6 +771,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                 }
 
                 _optimisticSlots.Remove(infoHash);
+                _currentOptimisticPeerKey = null;
             }
 
             return;
@@ -780,6 +806,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                     RoundsRemaining = OptimisticUnchokeRounds
                 };
                 _optimisticSlots[infoHash] = slot;
+                _currentOptimisticPeerKey = $"{existingPeer.RemoteIp}:{existingPeer.RemotePort}";
             }
         }
 
@@ -821,6 +848,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                 previousPeer.IsOptimisticUnchoked = false;
                 Choke(previousPeer);
                 _optimisticSlots.Remove(infoHash);
+                _currentOptimisticPeerKey = null;
                 slot = null;
             }
             else
@@ -833,6 +861,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             if (slot != null)
             {
                 _optimisticSlots.Remove(infoHash);
+                _currentOptimisticPeerKey = null;
                 slot = null;
             }
         }
@@ -865,6 +894,7 @@ public class ChokeManager : BackgroundService, IChokeManager
         if (chosen != null)
         {
             chosen.IsOptimisticUnchoked = true;
+            _currentOptimisticPeerKey = $"{chosen.RemoteIp}:{chosen.RemotePort}";
             _optimisticSlots[infoHash] = new OptimisticSlot
             {
                 Peer = chosen,
@@ -922,6 +952,7 @@ public class ChokeManager : BackgroundService, IChokeManager
         {
             connection.AmChoking = false;
             connection.LastUnchokedAt = DateTime.UtcNow;
+            connection.LastRequestReceived = DateTime.UtcNow;
             try
             {
                 connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });

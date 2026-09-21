@@ -461,6 +461,12 @@ public class PeerConnection : IDisposable
     public List<PeerRequest> OutgoingBlocks => OutboundQueue;
     public event Action<PeerConnection, PeerMessage> MessageSent;
     public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
+    public DateTime? LastBlockReceived { get; set; }
+    public DateTime? LastPieceReceived
+    {
+        get => LastBlockReceived;
+        set => LastBlockReceived = value;
+    }
     public DateTime? LastUnchokedAt { get; set; }
     public DateTime LastPexReceived { get; set; } = DateTime.MinValue;
     public int PexRateLimitViolations { get; set; }
@@ -1430,6 +1436,14 @@ public class PeerConnection : IDisposable
                     var payloadSize = message.Payload != null ? message.Payload.Length : 0;
                     var pieceDataSize = payloadSize > 8 ? payloadSize - 8 : 0;
                     BytesDownloaded += pieceDataSize;
+                    LastBlockReceived = DateTime.UtcNow;
+                    IsSnubbed = false;
+                }
+
+                if (message.Type == PeerMessageType.Request)
+                {
+                    LastRequestReceived = DateTime.UtcNow;
+                    IsSnubbed = false;
                 }
 
                 LastActivity = DateTime.UtcNow;
@@ -1550,6 +1564,14 @@ public class PeerConnection : IDisposable
                 var payloadSize = message.Payload != null ? message.Payload.Length : 0;
                 var pieceDataSize = payloadSize > 8 ? payloadSize - 8 : 0;
                 BytesDownloaded += pieceDataSize;
+                LastBlockReceived = DateTime.UtcNow;
+                IsSnubbed = false;
+            }
+
+            if (message.Type == PeerMessageType.Request)
+            {
+                LastRequestReceived = DateTime.UtcNow;
+                IsSnubbed = false;
             }
 
             LastActivity = DateTime.UtcNow;
