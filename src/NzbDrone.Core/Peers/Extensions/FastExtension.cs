@@ -386,7 +386,15 @@ public class FastExtensionHandler : IFastExtensionHandler
 
         foreach (var pieceIndex in fastSet)
         {
-            connection.SendMessage(SerializeAllowedFast(pieceIndex));
+            try
+            {
+                connection.SendMessage(SerializeAllowedFast(pieceIndex));
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to send AllowedFast message to peer {0}", connection.RemoteIp);
+                break;
+            }
         }
     }
 

@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
@@ -12,6 +14,7 @@ public class FastExtensionHandlerTest
 {
     private FastExtensionHandler _handler;
     private byte[] _infoHash;
+    private static int _nextPort = 10000;
 
     [SetUp]
     public void Setup()
@@ -24,16 +27,11 @@ public class FastExtensionHandlerTest
         }
     }
 
-    private static PeerConnection CreateTestConnection()
+    private static PeerConnection CreateTestConnection(string remoteIp = "127.0.0.1")
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        var client = new TcpClient();
-        client.Connect(IPAddress.Loopback, port);
-        var serverClient = listener.AcceptTcpClient();
-        listener.Stop();
-        return new PeerConnection(serverClient);
+        var port = Interlocked.Increment(ref _nextPort);
+        var ms = new MemoryStream();
+        return new PeerConnection(ms, remoteIp, port);
     }
 
     [Test]
