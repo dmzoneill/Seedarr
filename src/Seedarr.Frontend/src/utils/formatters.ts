@@ -51,7 +51,8 @@ export function formatEta(seconds: number): string {
   return formatSeconds(seconds);
 }
 
-export function formatUptime(seconds: number): string {
+export function formatUptime(seconds?: number): string {
+  if (!seconds || seconds <= 0) return "0m";
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);

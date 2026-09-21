@@ -59,6 +59,9 @@ export function extractDefaultValue(
   params?: TranslationParams,
   defaultVal?: string,
 ): { fallbackDefault?: string; interpolationParams?: TranslationParams } {
+  if (typeof params === "string") {
+    return { fallbackDefault: params, interpolationParams: undefined };
+  }
   let fallbackDefault = defaultVal;
   let interpolationParams = params;
   if (

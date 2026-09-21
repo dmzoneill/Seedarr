@@ -13,6 +13,7 @@ import {
   type ConnectionStatus,
 } from "../api/signalr";
 import { useToast } from "../context/ToastContext";
+import { useTorrentStore } from "../stores/useTorrentStore";
 
 export {
   subscribeToTorrent,
@@ -132,6 +133,53 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
   showToastRef.current = showToast;
 
   useEffect(() => {
+    const handleTelemetryPayload = (body: unknown) => {
+      if (!body) return;
+      let updates: Array<{ id: number; [key: string]: unknown }> = [];
+      if (Array.isArray(body)) {
+        updates = body as Array<{ id: number; [key: string]: unknown }>;
+      } else if (typeof body === "object") {
+        const obj = body as Record<string, unknown>;
+        if (Array.isArray(obj.torrents)) {
+          updates = obj.torrents as Array<{ id: number; [key: string]: unknown }>;
+        } else if (typeof obj.id === "number") {
+          updates = [obj as { id: number; [key: string]: unknown }];
+        } else {
+          updates = Object.entries(obj).map(([id, data]) => ({
+            id: Number(id) || (data as { id?: number })?.id || 0,
+            ...(typeof data === "object" && data !== null ? data : {}),
+          }));
+        }
+      }
+      if (updates.length > 0) {
+        useTorrentStore.getState().updateTelemetry(updates);
+      }
+    };
+
+    const handlePieceMapPayload = (body: unknown) => {
+      if (!body || typeof body !== "object") return;
+      const b = body as { torrentId?: number; id?: number };
+      const tid = Number(b.torrentId || b.id);
+      if (tid) {
+        useTorrentStore.getState().updatePieceMap(tid, b);
+      }
+    };
+
+    const onSpeedPulse = (data: unknown) => {
+      handleTelemetryPayload(data);
+    };
+    connection.on("speedPulse", onSpeedPulse);
+
+    const onStateSnapshot = (data: unknown) => {
+      handleTelemetryPayload(data);
+    };
+    connection.on("stateSnapshot", onStateSnapshot);
+
+    const onPieceMapUpdated = (data: unknown) => {
+      handlePieceMapPayload(data);
+    };
+    connection.on("pieceMapUpdated", onPieceMapUpdated);
+
     // 1. Generic receiveMessage dispatcher for unmapped events only (e.g. tracker, category, tag)
     const onReceiveMessage = (msg: unknown) => {
       if (!msg || typeof msg !== "object") return;
@@ -141,6 +189,15 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
         action?: string;
       };
       const name = (message.name ?? "").toLowerCase();
+
+      if (name === "speedpulse" || name === "statesnapshot") {
+        handleTelemetryPayload(message.body);
+        return;
+      }
+      if (name === "piecemapupdated") {
+        handlePieceMapPayload(message.body);
+        return;
+      }
 
       // Eliminate duplicate invalidations for events already handled by named event listeners
       if (isHandledByNamedEvent(name)) {
@@ -210,6 +267,14 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
             queryClient.invalidateQueries({
               queryKey: ["torrents", torrentId, "trackers"],
             });
+
+            if (event === "TorrentDeleted") {
+              useTorrentStore.getState().removeTorrent(torrentId);
+            } else if (bodyObj) {
+              useTorrentStore.getState().updateTelemetry([
+                { id: torrentId, ...bodyObj },
+              ]);
+            }
           }
         }
 
@@ -274,6 +339,9 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
 
     return () => {
       connection.off("receiveMessage", onReceiveMessage);
+      connection.off("speedPulse", onSpeedPulse);
+      connection.off("stateSnapshot", onStateSnapshot);
+      connection.off("pieceMapUpdated", onPieceMapUpdated);
       for (const [event, handler] of handlers) {
         connection.off(event, handler);
       }

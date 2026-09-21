@@ -240,6 +240,25 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
     icon: "🧠",
     pages: [
       {
+        id: "ai",
+        groupId: "advanced-ai",
+        title: "AI & Copilot",
+        shortLabel: "AI & Copilot",
+        description: "Configure AI providers (Ollama, Gemini, ONNX), Copilot drawer, and swarm diagnostics",
+        icon: "✨",
+        badge: "AI",
+        keywords: [
+          "ai",
+          "copilot",
+          "ollama",
+          "gemini",
+          "onnx",
+          "natural language",
+          "diagnostics",
+          "floating button",
+        ],
+      },
+      {
         id: "advanced",
         groupId: "advanced-ai",
         title: "Advanced & Logs",

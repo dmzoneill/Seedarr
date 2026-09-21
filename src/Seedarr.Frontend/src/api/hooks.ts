@@ -85,6 +85,19 @@ import type {
   RemotePathMapping,
   RemotePathMappingTestResult,
   RemotePathMappingTestRequest,
+  SystemResourceTelemetrySnapshot,
+  SubsystemOverview,
+  SwitchSubsystemRequest,
+  SwitchSubsystemResult,
+  SubsystemProbeResult,
+  AiStatus,
+  AiParsedRelease,
+  AiSearchParameters,
+  AiDiagnosticReport,
+  AiMalwareRiskAssessment,
+  AiChatRequest,
+  AiChatResponse,
+  AiConfig,
 } from "./types";
 
 const DEFAULT_REFETCH_MS = 5000;
@@ -1978,5 +1991,128 @@ export function useTestCustomScript() {
     mutationFn: (req) => apiClient.testCustomScript(req),
   });
 }
+
+export function useSystemResources(refetchInterval?: number | false) {
+  const defaultInterval = useRefetchInterval();
+  const effectiveInterval =
+    refetchInterval === false
+      ? false
+      : (refetchInterval ?? defaultInterval);
+  return useQuery<SystemResourceTelemetrySnapshot>({
+    queryKey: ["system", "resources"],
+    queryFn: () => apiClient.get("/system/resources"),
+    refetchInterval: effectiveInterval,
+  });
+}
+
+export function useSubsystems() {
+  const interval = useRefetchInterval();
+  return useQuery<SubsystemOverview[]>({
+    queryKey: ["subsystems"],
+    queryFn: () => apiClient.get("/subsystems"),
+    refetchInterval: interval,
+  });
+}
+
+export function useSubsystemDetails(subsystemId: string) {
+  const interval = useRefetchInterval();
+  return useQuery<SubsystemOverview>({
+    queryKey: ["subsystems", subsystemId],
+    queryFn: () => apiClient.get(`/subsystems/${subsystemId}`),
+    enabled: !!subsystemId,
+    refetchInterval: interval,
+  });
+}
+
+export function useSwitchSubsystem() {
+  const queryClient = useQueryClient();
+  return useMutation<SwitchSubsystemResult, Error, SwitchSubsystemRequest>({
+    mutationFn: (req: SwitchSubsystemRequest) =>
+      apiClient.post(`/subsystems/${req.subsystemId}/switch`, {
+        providerId: req.providerId,
+      }),
+    onSuccess: (_, req) => {
+      queryClient.invalidateQueries({ queryKey: ["subsystems"] });
+      queryClient.invalidateQueries({
+        queryKey: ["subsystems", req.subsystemId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+    },
+  });
+}
+
+export function useProbeSubsystemProvider() {
+  return useMutation<
+    SubsystemProbeResult,
+    Error,
+    { subsystemId: string; providerId: string }
+  >({
+    mutationFn: (vars) =>
+      apiClient.post(
+        `/subsystems/${vars.subsystemId}/probe/${vars.providerId}`,
+        {},
+      ),
+  });
+}
+
+export function useAiStatus() {
+  return useQuery<AiStatus>({
+    queryKey: ["ai", "status"],
+    queryFn: () => apiClient.get("/ai/status"),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useAiParseRelease() {
+  return useMutation<AiParsedRelease, Error, { releaseName: string }>({
+    mutationFn: (vars) => apiClient.post("/ai/parse-release", vars),
+  });
+}
+
+export function useAiNaturalSearch() {
+  return useMutation<AiSearchParameters, Error, { query: string }>({
+    mutationFn: (vars) => apiClient.post("/ai/natural-search", vars),
+  });
+}
+
+export function useAiDiagnoseTorrent() {
+  return useMutation<AiDiagnosticReport, Error, number>({
+    mutationFn: (torrentId: number) =>
+      apiClient.post(`/ai/diagnose/${torrentId}`, {}),
+  });
+}
+
+export function useAiMalwareCheck() {
+  return useMutation<
+    AiMalwareRiskAssessment,
+    Error,
+    { torrentId?: number; torrentName?: string; fileNames?: string[] }
+  >({
+    mutationFn: (vars) => apiClient.post("/ai/malware-check", vars),
+  });
+}
+
+export function useAiChat() {
+  return useMutation<AiChatResponse, Error, AiChatRequest>({
+    mutationFn: (vars) => apiClient.post("/ai/chat", vars),
+  });
+}
+
+export function useAiConfig() {
+  return useQuery<AiConfig>({
+    queryKey: ["config", "ai"],
+    queryFn: () => apiClient.get("/config/ai"),
+  });
+}
+
+export function useSaveAiConfig() {
+  const queryClient = useQueryClient();
+  return useMutation<AiConfig, Error, AiConfig>({
+    mutationFn: (config) => apiClient.put("/config/ai/1", config),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["config", "ai"] }),
+  });
+}
+
 
 
