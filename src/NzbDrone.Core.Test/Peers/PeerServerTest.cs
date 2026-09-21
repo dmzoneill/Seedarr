@@ -1290,9 +1290,10 @@ public class PeerServerTest
             Source = "tracker"
         };
 
+        TcpClient acceptedClient = null;
         var acceptTask = Task.Run(() =>
         {
-            var acceptedClient = listener.AcceptTcpClient();
+            acceptedClient = listener.AcceptTcpClient();
             _clients.Add(acceptedClient);
             var stream = acceptedClient.GetStream();
 
@@ -1303,7 +1304,13 @@ public class PeerServerTest
 
             // Receive handshake from PeerServer
             var buf = new byte[68];
-            negotiatedStream.Read(buf, 0, 68);
+            var readTotal = 0;
+            while (readTotal < 68)
+            {
+                var r = negotiatedStream.Read(buf, readTotal, 68 - readTotal);
+                if (r <= 0) break;
+                readTotal += r;
+            }
 
             // Send handshake response
             var response = new byte[68];
@@ -1313,19 +1320,29 @@ public class PeerServerTest
             Encoding.ASCII.GetBytes("-SD1000-000000000000", 0, 20, response, 48);
             negotiatedStream.Write(response, 0, 68);
             negotiatedStream.Flush();
-
-            // Read the bitfield message header sent by ConnectToPeer after successful handshake
-            var msgLen = new byte[4];
-            negotiatedStream.Read(msgLen, 0, 4);
-            acceptedClient.Close();
         });
 
         var connectMethod = typeof(PeerServer).GetMethod("ConnectToPeer", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        connectMethod.Invoke(serverWithUtp, new object[] { torrent, candidate });
+        var connectTask = (Task)connectMethod.Invoke(serverWithUtp, new object[] { torrent, candidate })!;
 
-        acceptTask.Wait(TimeSpan.FromSeconds(5));
+        Assert.That(acceptTask.Wait(TimeSpan.FromSeconds(5)), Is.True);
+
+        for (var i = 0; i < 100; i++)
+        {
+            if (_connectionManager.ReceivedCalls().Any()) break;
+            Thread.Sleep(20);
+        }
 
         _connectionManager.Received().Add(Arg.Any<PeerConnection>());
+
+        try
+        {
+            acceptedClient?.Close();
+            serverWithUtp.Dispose();
+        }
+        catch
+        {
+        }
     }
 
     private IPAddress InvokeGetBindAddress(PeerServer server = null)
