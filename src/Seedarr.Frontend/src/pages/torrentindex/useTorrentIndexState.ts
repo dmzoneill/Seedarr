@@ -15,6 +15,7 @@ import { extractTrackerDomain } from "../../utils/formatters";
 import { filterTorrents } from "../../utils/filterUtils";
 import { ViewMode } from "./types";
 import type { Torrent, Tag } from "../../api/types";
+import { trackViewModeChange } from "../../utils/analytics";
 
 export interface TagGroupItem {
   id: number;
@@ -397,6 +398,7 @@ export function useTorrentIndexState() {
   function handleViewMode(mode: ViewMode) {
     setViewMode(mode);
     localStorage.setItem("seedarr-view-mode", mode);
+    trackViewModeChange(mode);
   }
 
   function handleToggleSelect(id: number) {

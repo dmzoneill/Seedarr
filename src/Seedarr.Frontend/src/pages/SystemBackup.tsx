@@ -9,6 +9,7 @@ import { apiClient } from "../api/client";
 import { usePermissions } from "../hooks/usePermissions";
 import { useToast } from "../context/ToastContext";
 import { formatBytes, formatDate } from "../utils/formatters";
+import { trackSystemMaintenanceAction } from "../utils/analytics";
 
 function BackupIcon() {
   return (
@@ -97,6 +98,7 @@ function SystemBackup() {
 
   const handleDownload = async (backupId: number, fileName: string) => {
     try {
+      trackSystemMaintenanceAction("backup_download");
       const blob = await apiClient.get<Blob>(`/backup/${backupId}/download`, {
         responseType: "blob",
       });
@@ -112,6 +114,7 @@ function SystemBackup() {
   };
 
   const handleCreateBackup = () => {
+    trackSystemMaintenanceAction("backup_create");
     createBackup.mutate(undefined, {
       onSuccess: () => showToast("Backup created successfully", "success"),
       onError: () => showToast("Failed to create backup", "error"),
@@ -119,6 +122,7 @@ function SystemBackup() {
   };
 
   const handleDeleteBackup = (id: number) => {
+    trackSystemMaintenanceAction("backup_delete");
     deleteBackup.mutate(id, {
       onSuccess: () => {
         showToast("Backup deleted", "success");
@@ -129,6 +133,7 @@ function SystemBackup() {
   };
 
   const handleRestoreBackup = (fileName: string) => {
+    trackSystemMaintenanceAction("backup_restore");
     restoreBackup.mutate(fileName, {
       onSuccess: () => {
         showToast("Backup restored. Restart required.", "info");

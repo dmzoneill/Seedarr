@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useSeedingConfig, useSaveSeedingConfig } from "../../api/hooks";
 import { formatBytes } from "../../utils/formatters";
 import type { SeedingConfig } from "../../api/types";
+import { trackSpeedModeChange } from "../../utils/analytics";
 
 export function BandwidthCard() {
   const { data: config, isLoading } = useSeedingConfig();
@@ -67,6 +68,7 @@ export function BandwidthCard() {
       : (config.maxUploadSpeedKbps ?? 0);
     setDownloadLimit(nextDl);
     setUploadLimit(nextUl);
+    trackSpeedModeChange("alternative", nextTurtle);
     handleUpdate({ alternativeSpeedEnabled: nextTurtle });
   };
 

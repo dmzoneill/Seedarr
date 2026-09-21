@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, Fragment, type CSSProperties } from "react
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
+import { trackSystemMaintenanceAction } from "../utils/analytics";
 
 interface ScheduledTask {
   id?: number;
@@ -819,6 +820,7 @@ function SystemTasks() {
       });
     },
     onSuccess: (_, task) => {
+      trackSystemMaintenanceAction("task_run", formatTaskName(task.typeName));
       showToast(`Started execution of ${formatTaskName(task.typeName)}`, "success");
       queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
@@ -851,6 +853,7 @@ function SystemTasks() {
     mutationFn: (commandId: number) =>
       apiClient.delete(`/system/command/${commandId}`),
     onSuccess: () => {
+      trackSystemMaintenanceAction("command_cancel");
       showToast("Command cancelled", "success");
       queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
       queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
@@ -868,6 +871,7 @@ function SystemTasks() {
       return apiClient.post(endpoint, {});
     },
     onSuccess: (_, task) => {
+      trackSystemMaintenanceAction("task_abort", formatTaskName(task.typeName));
       showToast(`Aborted execution of ${formatTaskName(task.typeName)}`, "success");
       setExecutingTasks((prev) => {
         const next = new Set(prev);
