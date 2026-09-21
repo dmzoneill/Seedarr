@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Text.Json;
 using Dapper;
@@ -13,17 +15,60 @@ public class EmbeddedDocumentConverter<T> : SqlMapper.TypeHandler<T>
 
     public override void SetValue(IDbDataParameter parameter, T value)
     {
-        parameter.Value = JsonSerializer.Serialize(value, Options);
+        parameter.Value = JsonSerializer.Serialize(value ?? CreateFallback(), Options);
     }
 
     public override T Parse(object value)
     {
-        var json = value as string;
-        if (string.IsNullOrWhiteSpace(json))
+        if (value is T typedValue)
         {
-            return default;
+            return typedValue;
         }
 
-        return JsonSerializer.Deserialize<T>(json, Options);
+        if (value == null || value is DBNull)
+        {
+            return CreateFallback();
+        }
+
+        if (value is not string json || string.IsNullOrWhiteSpace(json))
+        {
+            return CreateFallback();
+        }
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<T>(json, Options);
+            return result ?? CreateFallback();
+        }
+        catch (JsonException)
+        {
+            return CreateFallback();
+        }
+        catch (Exception)
+        {
+            return CreateFallback();
+        }
+    }
+
+    private static T CreateFallback()
+    {
+        if (typeof(T) == typeof(List<int>))
+        {
+            return (T)(object)new List<int>();
+        }
+
+        if (typeof(T) == typeof(List<string>))
+        {
+            return (T)(object)new List<string>();
+        }
+
+        try
+        {
+            return Activator.CreateInstance<T>() ?? default!;
+        }
+        catch
+        {
+            return default!;
+        }
     }
 }
