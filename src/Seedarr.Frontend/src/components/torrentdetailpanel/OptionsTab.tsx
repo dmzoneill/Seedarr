@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUpdateTorrent } from "../../api/hooks";
 import type { Torrent } from "../../api/types";
+import { trackTorrentOptionsSave } from "../../utils/analytics";
 
 const PRIORITY_OPTIONS = [
   { value: "0", label: "Low" },
@@ -67,10 +68,18 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
   }, [torrent, dirty]);
 
   const handleSave = () => {
+    const prioVal = parseInt(priority, 10);
+    trackTorrentOptionsSave({
+      super_seeding: superSeeding,
+      force_start: forceStart,
+      has_upload_limit: uploadLimit > 0,
+      has_download_limit: downloadLimit > 0,
+      priority: prioVal,
+    });
     updateTorrent.mutate(
       {
         ...torrent,
-        priority: parseInt(priority, 10),
+        priority: prioVal,
         uploadLimit,
         downloadLimit,
         superSeeding,

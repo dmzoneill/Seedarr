@@ -19,6 +19,7 @@ import {
 } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 import { useModalStack } from "../components/ModalProvider";
+import { trackBulkAction } from "../utils/analytics";
 
 function TorrentIndex() {
   const navigate = useNavigate();
@@ -161,6 +162,7 @@ function TorrentIndex() {
         torrentIds: ids,
         action: "start",
       });
+      trackBulkAction("start", ids.length);
       const succeeded = res.succeededIds ?? [];
 
       setSelectedIds((prev) => {
@@ -198,6 +200,7 @@ function TorrentIndex() {
         torrentIds: ids,
         action: "stop",
       });
+      trackBulkAction("stop", ids.length);
       const succeeded = res.succeededIds ?? [];
 
       setSelectedIds((prev) => {
@@ -257,6 +260,7 @@ function TorrentIndex() {
           action: "delete",
           deleteFiles,
         });
+        trackBulkAction("delete", targetIds.length);
         const succeeded = res.succeededIds ?? [];
 
         setSelectedIds((prev) => {
