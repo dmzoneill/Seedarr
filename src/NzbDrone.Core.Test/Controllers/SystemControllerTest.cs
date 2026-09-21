@@ -241,6 +241,7 @@ public class SystemControllerTest
         var status = okResult.Value as SystemResource;
         Assert.That(status, Is.Not.Null);
         Assert.That(status.DatabaseVersion, Is.EqualTo("PostgreSQL"));
+        Assert.That(status.DatabaseType, Is.EqualTo("PostgreSQL"));
     }
 
     [Test]
@@ -265,6 +266,32 @@ public class SystemControllerTest
         var status = okResult.Value as SystemResource;
         Assert.That(status, Is.Not.Null);
         Assert.That(status.DatabaseVersion, Is.EqualTo("SQLite"));
+        Assert.That(status.DatabaseType, Is.EqualTo("SQLite"));
+    }
+
+    [Test]
+    public void GetStatus_reports_database_info_when_IDatabase_is_provided()
+    {
+        var database = Substitute.For<IDatabase>();
+        database.DatabaseType.Returns(DatabaseType.PostgreSQL);
+
+        var controller = new SystemController(
+            _taskManager,
+            new List<IScheduledTask>(),
+            _commandQueueManager,
+            _appFolderInfo,
+            _lifetime,
+            _configService,
+            database);
+
+        var actionResult = controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.DatabaseVersion, Is.EqualTo("PostgreSQL"));
+        Assert.That(status.DatabaseType, Is.EqualTo("PostgreSQL"));
     }
 
     [Test]
@@ -277,6 +304,7 @@ public class SystemControllerTest
         var status = okResult.Value as SystemResource;
         Assert.That(status, Is.Not.Null);
         Assert.That(status.DatabaseVersion, Is.EqualTo("SQLite"));
+        Assert.That(status.DatabaseType, Is.EqualTo("SQLite"));
     }
 
     [Test]
