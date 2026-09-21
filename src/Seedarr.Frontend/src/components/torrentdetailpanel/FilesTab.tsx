@@ -3,6 +3,7 @@ import { useTorrentFiles } from "../../api/hooks";
 import { formatBytes } from "../../utils/formatters";
 import { PanelLoading, PanelEmpty } from "./shared";
 import { FilePriority, formatPriority } from "../../utils/fileTree";
+import { trackFilePriorityChange } from "../../utils/analytics";
 
 export function FilesTab({ torrentId }: { torrentId: number }) {
   const { data: files, isLoading, isError } = useTorrentFiles(torrentId);
@@ -10,6 +11,7 @@ export function FilesTab({ torrentId }: { torrentId: number }) {
   const [fileWanted, setFileWanted] = useState<Record<number, boolean>>({});
 
   const handleWantedChange = useCallback((fileId: number, checked: boolean) => {
+    trackFilePriorityChange(checked ? "normal" : "skip", 1);
     setFileWanted((prev) => ({ ...prev, [fileId]: checked }));
     setFilePriorities((prev) => ({
       ...prev,
@@ -18,10 +20,12 @@ export function FilesTab({ torrentId }: { torrentId: number }) {
   }, []);
 
   const handlePriorityChange = useCallback((fileId: number, priority: FilePriority) => {
+    const isSkip = formatPriority(priority) === "Do Not Download";
+    trackFilePriorityChange(isSkip ? "skip" : priority === "High" ? "high" : "normal", 1);
     setFilePriorities((prev) => ({ ...prev, [fileId]: priority }));
     setFileWanted((prev) => ({
       ...prev,
-      [fileId]: formatPriority(priority) !== "Do Not Download",
+      [fileId]: !isSkip,
     }));
   }, []);
 

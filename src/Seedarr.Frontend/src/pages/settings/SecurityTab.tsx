@@ -15,6 +15,7 @@ import {
   testBlocklistIp,
 } from "../../api/blocklist";
 import { NumberInput, SaveBar, SectionCard, SelectInput, TextInput, Toggle } from "./shared";
+import { trackSecurityConfigSave } from "../../utils/analytics";
 import {
   getStoredIdleTimeout,
   setStoredIdleTimeout,
@@ -366,6 +367,10 @@ export function SecurityTab() {
 
   const handleSave = () => {
     if (!config) return;
+    trackSecurityConfigSave({
+      auth_type: form.authenticationEnabled ? "forms" : "none",
+      has_api_key: Boolean(form.apiKey),
+    });
     saveMutation.mutate(
       {
         ...config,
