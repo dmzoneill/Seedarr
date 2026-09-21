@@ -463,8 +463,8 @@ public class ProwlarrIndexer : IIndexer
                         release.DownloadVolumeFactor = Math.Clamp(dvfVal, 0.0, 10.0);
                     }
                     else if (dvfProp.ValueKind == System.Text.Json.JsonValueKind.String &&
-                             double.TryParse(dvfProp.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dvfStr) &&
-                             double.IsFinite(dvfStr) && dvfStr >= 0.0)
+                        double.TryParse(dvfProp.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dvfStr) &&
+                        double.IsFinite(dvfStr) && dvfStr >= 0.0)
                     {
                         release.DownloadVolumeFactor = Math.Clamp(dvfStr, 0.0, 10.0);
                     }
