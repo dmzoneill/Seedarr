@@ -15,6 +15,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Blocklist;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Encryption;
@@ -4229,5 +4230,210 @@ public class PeerServerTest
 
         Assert.That(conn.CorruptionCount, Is.EqualTo(3));
         _connectionManager.Received(1).Remove(conn);
+    }
+
+    [Test]
+    public void ConnectToPeer_should_reject_outgoing_connection_when_ForceProxy_is_true_and_proxy_is_disabled()
+    {
+        _configService.ForceProxy.Returns(true);
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(false);
+
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            proxySettingsProvider: proxySettingsProvider);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "ForceProxyTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = port,
+            Source = "tracker"
+        };
+
+        InvokeConnectToPeer(server, torrent, candidate);
+
+        Assert.That(listener.Pending(), Is.False);
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+        _peerDiscovery.Received().MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+    }
+
+    [Test]
+    public void ConnectToPeer_should_reject_outgoing_connection_when_ForceProxy_is_true_and_proxy_is_null()
+    {
+        _configService.ForceProxy.Returns(true);
+
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            proxySettingsProvider: null);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "ForceProxyTorrentNull",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = port,
+            Source = "tracker"
+        };
+
+        InvokeConnectToPeer(server, torrent, candidate);
+
+        Assert.That(listener.Pending(), Is.False);
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+        _peerDiscovery.Received().MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+    }
+
+    [Test]
+    public void ConnectToPeer_should_not_attempt_utp_when_ForceProxy_is_true()
+    {
+        _configService.ForceProxy.Returns(true);
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(true);
+        proxySettingsProvider.Type.Returns(ProxyType.Socks5);
+        proxySettingsProvider.Host.Returns("127.0.0.1");
+        proxySettingsProvider.Port.Returns(1080);
+
+        var utpManager = Substitute.For<IUtpManager>();
+        utpManager.IsEnabled.Returns(true);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            utpManager: utpManager,
+            proxySettingsProvider: proxySettingsProvider);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "ForceProxyUtpTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = 12345,
+            Source = "tracker"
+        };
+
+        InvokeConnectToPeer(server, torrent, candidate);
+
+        utpManager.DidNotReceive().CreateConnection();
+    }
+
+    [Test]
+    public void ConnectToPeer_when_proxy_handshake_fails_does_not_fallback_to_unproxied_connections()
+    {
+        _configService.ForceProxy.Returns(true);
+
+        var proxyListener = new TcpListener(IPAddress.Loopback, 0);
+        proxyListener.Start();
+        _listeners.Add(proxyListener);
+        var proxyPort = ((IPEndPoint)proxyListener.LocalEndpoint).Port;
+
+        var peerListener = new TcpListener(IPAddress.Loopback, 0);
+        peerListener.Start();
+        _listeners.Add(peerListener);
+        var peerPort = ((IPEndPoint)peerListener.LocalEndpoint).Port;
+
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(true);
+        proxySettingsProvider.Type.Returns(ProxyType.Socks5);
+        proxySettingsProvider.Host.Returns("127.0.0.1");
+        proxySettingsProvider.Port.Returns(proxyPort);
+
+        var proxyServerTask = Task.Run(() =>
+        {
+            try
+            {
+                var client = proxyListener.AcceptTcpClient();
+                _clients.Add(client);
+                // Immediately close client to simulate failed proxy handshake
+                client.Close();
+            }
+            catch
+            {
+            }
+        });
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            proxySettingsProvider: proxySettingsProvider);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "HandshakeFailTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = peerPort,
+            Source = "tracker"
+        };
+
+        InvokeConnectToPeer(server, torrent, candidate);
+        proxyServerTask.Wait(TimeSpan.FromSeconds(3));
+
+        Assert.That(peerListener.Pending(), Is.False);
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+        _peerDiscovery.Received().MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+    }
+
+    [Test]
+    public async Task ProcessIncomingUtpConnectionAsync_should_reject_connection_when_ForceProxy_is_true()
+    {
+        _configService.ForceProxy.Returns(true);
+
+        var conn = Substitute.For<Transport.IUtpConnection>();
+        conn.IsConnected.Returns(true);
+        conn.RemoteEndPoint.Returns(new IPEndPoint(IPAddress.Loopback, 12345));
+
+        await _server.ProcessIncomingUtpConnectionAsync(conn);
+
+        conn.Received().Dispose();
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
     }
 }

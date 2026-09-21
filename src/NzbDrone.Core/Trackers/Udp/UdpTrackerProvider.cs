@@ -27,6 +27,7 @@ public class UdpTrackerProvider : ITrackerProvider
 
     private readonly ConcurrentDictionary<string, (long ConnectionId, DateTime ExpiresAtUtc)> _connectionCache = new();
     private readonly IConfigService _configService;
+    private readonly IProxySettingsProvider _proxySettingsProvider;
     private readonly Logger _logger;
 
     public string Name => "UDP";
@@ -34,10 +35,29 @@ public class UdpTrackerProvider : ITrackerProvider
     internal int MaxRetries { get; set; } = DefaultMaxRetries;
     internal Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
 
-    public UdpTrackerProvider(IConfigService configService)
+    public UdpTrackerProvider(IConfigService configService, IProxySettingsProvider proxySettingsProvider = null)
     {
         _configService = configService;
+        _proxySettingsProvider = proxySettingsProvider;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    private bool IsProxyEnforcedAndIncompatible(out string failureReason)
+    {
+        if (_configService?.ForceProxy == true)
+        {
+            if (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled)
+            {
+                failureReason = "ForceProxy is active but proxy is not configured or enabled.";
+                return true;
+            }
+
+            failureReason = "ForceProxy is active and UDP tracker cannot be routed through the configured proxy.";
+            return true;
+        }
+
+        failureReason = null;
+        return false;
     }
 
     public void ClearConnectionCache()
@@ -125,6 +145,11 @@ public class UdpTrackerProvider : ITrackerProvider
 
     internal virtual UdpClient CreateClient(int timeoutMs)
     {
+        if (_configService?.ForceProxy == true)
+        {
+            throw new InvalidOperationException("Strict proxy enforcement active: direct UDP sockets are prohibited.");
+        }
+
         var client = new UdpClient();
         client.Client.ReceiveTimeout = timeoutMs;
         client.Client.SendTimeout = timeoutMs;
@@ -216,6 +241,16 @@ public class UdpTrackerProvider : ITrackerProvider
 
     public async Task<TrackerAnnounceResponse> AnnounceAsync(TrackerAnnounceRequest request, CancellationToken cancellationToken = default)
     {
+        if (IsProxyEnforcedAndIncompatible(out var proxyFailureReason))
+        {
+            _logger.Warn("ForceProxy is active; suppressing UDP announce to {0}: {1}", request?.TrackerUrl, proxyFailureReason);
+            return new TrackerAnnounceResponse
+            {
+                Success = false,
+                FailureReason = proxyFailureReason
+            };
+        }
+
         string cacheKey = null;
         try
         {
@@ -267,6 +302,16 @@ public class UdpTrackerProvider : ITrackerProvider
 
     public async Task<TrackerScrapeResponse> ScrapeAsync(string infoHash, string trackerUrl, CancellationToken cancellationToken = default)
     {
+        if (IsProxyEnforcedAndIncompatible(out var proxyFailureReason))
+        {
+            _logger.Warn("ForceProxy is active; suppressing UDP scrape for {0}: {1}", trackerUrl, proxyFailureReason);
+            return new TrackerScrapeResponse
+            {
+                Success = false,
+                FailureReason = proxyFailureReason
+            };
+        }
+
         string cacheKey = null;
         try
         {
@@ -315,6 +360,23 @@ public class UdpTrackerProvider : ITrackerProvider
         var result = new Dictionary<string, TrackerScrapeResponse>(StringComparer.OrdinalIgnoreCase);
         if (infoHashes == null)
         {
+            return result;
+        }
+
+        if (IsProxyEnforcedAndIncompatible(out var proxyFailureReason))
+        {
+            _logger.Warn("ForceProxy is active; suppressing UDP batch scrape for {0}: {1}", trackerUrl, proxyFailureReason);
+            foreach (var hash in infoHashes)
+            {
+                if (!string.IsNullOrWhiteSpace(hash))
+                {
+                    result[hash.Trim()] = new TrackerScrapeResponse
+                    {
+                        Success = false,
+                        FailureReason = proxyFailureReason
+                    };
+                }
+            }
             return result;
         }
 

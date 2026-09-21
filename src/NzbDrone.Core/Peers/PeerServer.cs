@@ -1905,9 +1905,19 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     private PeerConnection CreateOutgoingPeerConnection(DiscoveredPeer candidate, IPAddress localBind)
     {
+        if (_configService?.ForceProxy == true && (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled))
+        {
+            _logger.Warn(
+                "ForceProxy is active but proxy is not configured or disabled; suppressing outgoing connection to {0}:{1}",
+                candidate?.Ip,
+                candidate?.Port);
+            return null;
+        }
+
+        var isProxyRequiredOrActive = (_configService?.ForceProxy == true) || (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled);
         PeerConnection connection = null;
 
-        if (_utpManager != null && _utpManager.IsEnabled)
+        if (!isProxyRequiredOrActive && _utpManager != null && _utpManager.IsEnabled)
         {
             try
             {
@@ -1967,6 +1977,16 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
         if (_vpnKillSwitchService?.IsFailClosedActive == true)
         {
+            return;
+        }
+
+        if (_configService?.ForceProxy == true && (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled))
+        {
+            _logger.Warn(
+                "ForceProxy is active but proxy is not configured or disabled; suppressing outgoing peer connection to {0}:{1}",
+                candidate.Ip,
+                candidate.Port);
+            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
             return;
         }
 
@@ -2377,6 +2397,13 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             if (_vpnKillSwitchService?.IsFailClosedActive == true)
             {
                 _logger.Debug("VPN fail-closed engaged; rejecting incoming uTP peer connection");
+                conn.Dispose();
+                return;
+            }
+
+            if (_configService?.ForceProxy == true)
+            {
+                _logger.Debug("ForceProxy is active; rejecting unproxied incoming uTP peer connection from {0}", conn.RemoteEndPoint);
                 conn.Dispose();
                 return;
             }

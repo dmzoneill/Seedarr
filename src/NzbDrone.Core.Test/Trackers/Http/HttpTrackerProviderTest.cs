@@ -1122,4 +1122,60 @@ public class HttpTrackerProviderTest
             return Task.FromResult(response);
         }
     }
+
+    [Test]
+    public void Announce_should_fail_closed_when_ForceProxy_is_true_and_proxy_is_disabled()
+    {
+        _configService.ForceProxy.Returns(true);
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(false);
+
+        var provider = new HttpTrackerProvider(_configService, proxySettings);
+        var request = CreateRequest();
+
+        var result = provider.Announce(request);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("ForceProxy is active but proxy is not configured or enabled"));
+    }
+
+    [Test]
+    public void Scrape_and_BatchScrape_should_fail_closed_when_ForceProxy_is_true_and_proxy_is_disabled()
+    {
+        _configService.ForceProxy.Returns(true);
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(false);
+
+        var provider = new HttpTrackerProvider(_configService, proxySettings);
+        var infoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF";
+        var trackerUrl = "http://tracker.example.com:8080/announce";
+
+        var scrapeRes = provider.Scrape(infoHash, trackerUrl);
+        Assert.That(scrapeRes.Success, Is.False);
+        Assert.That(scrapeRes.FailureReason, Does.Contain("ForceProxy is active but proxy is not configured or enabled"));
+
+        var batchRes = provider.BatchScrape(new[] { infoHash }, trackerUrl);
+        Assert.That(batchRes, Does.ContainKey(infoHash));
+        Assert.That(batchRes[infoHash].Success, Is.False);
+        Assert.That(batchRes[infoHash].FailureReason, Does.Contain("ForceProxy is active but proxy is not configured or enabled"));
+    }
+
+    [Test]
+    public void When_ForceProxy_is_true_and_proxy_handler_throws_does_not_fallback_to_direct_connection()
+    {
+        _configService.ForceProxy.Returns(true);
+        var proxySettings = Substitute.For<IProxySettingsProvider>();
+        proxySettings.IsEnabled.Returns(true);
+        proxySettings.Type.Returns(ProxyType.Http);
+        proxySettings.Host.Returns("127.0.0.1");
+        proxySettings.Port.Returns(8080);
+        proxySettings.CreateHandler().Returns(_ => throw new System.Net.Sockets.SocketException());
+
+        var provider = new HttpTrackerProvider(_configService, proxySettings);
+        var request = CreateRequest();
+
+        var result = provider.Announce(request);
+
+        Assert.That(result.Success, Is.False);
+    }
 }
