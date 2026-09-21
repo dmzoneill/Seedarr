@@ -328,6 +328,267 @@ public class UpnpServiceTest
         Assert.That(service.IsAvailable, Is.False);
     }
 
+    [Test]
+    public async Task DiscoverDeviceAsync_should_use_combined_upnp_and_pmp_port_mappers()
+    {
+        PortMapper? capturedPortMapper = null;
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+
+        var service = new UpnpService(
+            _configService,
+            _eventAggregator,
+            portMapperDiscoverer: (pm, cts) =>
+            {
+                capturedPortMapper = pm;
+                return Task.FromResult(mockDevice);
+            });
+
+        await service.CreateMappings(CancellationToken.None);
+
+        Assert.That(capturedPortMapper, Is.EqualTo(PortMapper.Upnp | PortMapper.Pmp));
+        Assert.That(UpnpService.SupportedPortMappers, Is.EqualTo(PortMapper.Upnp | PortMapper.Pmp));
+    }
+
+    [Test]
+    public async Task CreateMappings_should_map_tracker_http_port_when_tracker_server_and_http_tracker_enabled()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerHttpEnabled.Returns(true);
+        _configService.TrackerHttpPort.Returns(9696);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        await mockDevice.Received(1).CreatePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 9696 &&
+            m.PrivatePort == 9696 &&
+            m.Protocol == Protocol.Tcp &&
+            m.Description == "Seedarr Tracker HTTP"));
+    }
+
+    [Test]
+    [TestCase(false, true, 9696)]
+    [TestCase(true, false, 9696)]
+    [TestCase(true, true, 0)]
+    [TestCase(true, true, -1)]
+    public async Task CreateMappings_should_not_map_tracker_http_port_when_disabled_or_invalid_port(
+        bool serverEnabled, bool httpEnabled, int port)
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerServerEnabled.Returns(serverEnabled);
+        _configService.TrackerHttpEnabled.Returns(httpEnabled);
+        _configService.TrackerHttpPort.Returns(port);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        await mockDevice.DidNotReceive().CreatePortMapAsync(Arg.Is<Mapping>(m =>
+            m.Description == "Seedarr Tracker HTTP"));
+    }
+
+    [Test]
+    public async Task CreateMappings_should_map_tracker_udp_port_when_tracker_server_and_udp_tracker_enabled()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(6969);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        await mockDevice.Received(1).CreatePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 6969 &&
+            m.PrivatePort == 6969 &&
+            m.Protocol == Protocol.Udp &&
+            m.Description == "Seedarr Tracker UDP"));
+    }
+
+    [Test]
+    [TestCase(false, true, 6969)]
+    [TestCase(true, false, 6969)]
+    [TestCase(true, true, 0)]
+    [TestCase(true, true, -1)]
+    public async Task CreateMappings_should_not_map_tracker_udp_port_when_disabled_or_invalid_port(
+        bool serverEnabled, bool udpEnabled, int port)
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerServerEnabled.Returns(serverEnabled);
+        _configService.TrackerUdpEnabled.Returns(udpEnabled);
+        _configService.TrackerUdpPort.Returns(port);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        await mockDevice.DidNotReceive().CreatePortMapAsync(Arg.Is<Mapping>(m =>
+            m.Description == "Seedarr Tracker UDP"));
+    }
+
+    [Test]
+    public async Task RemoveMappings_should_unmap_tracker_http_and_udp_ports_when_enabled()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerHttpEnabled.Returns(true);
+        _configService.TrackerHttpPort.Returns(9696);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(6969);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+        mockDevice.DeletePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+        await service.RemoveMappings();
+
+        await mockDevice.Received(1).DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 9696 &&
+            m.Protocol == Protocol.Tcp &&
+            m.Description == "Seedarr Tracker HTTP"));
+
+        await mockDevice.Received(1).DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 6969 &&
+            m.Protocol == Protocol.Udp &&
+            m.Description == "Seedarr Tracker UDP"));
+    }
+
+    [Test]
+    public async Task RemoveMappings_should_not_unmap_tracker_ports_when_tracker_server_disabled()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerServerEnabled.Returns(false);
+        _configService.TrackerHttpEnabled.Returns(true);
+        _configService.TrackerHttpPort.Returns(9696);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(6969);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+        mockDevice.DeletePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+        await service.RemoveMappings();
+
+        await mockDevice.DidNotReceive().DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.Description == "Seedarr Tracker HTTP"));
+
+        await mockDevice.DidNotReceive().DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.Description == "Seedarr Tracker UDP"));
+
+        await mockDevice.Received(1).DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 6881 && m.Protocol == Protocol.Tcp));
+        await mockDevice.Received(1).DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 6881 && m.Protocol == Protocol.Udp));
+    }
+
+    [Test]
+    public async Task RemoveMappings_should_unmap_only_udp_tracker_when_http_tracker_disabled()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerHttpEnabled.Returns(false);
+        _configService.TrackerHttpPort.Returns(9696);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(6969);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+        mockDevice.DeletePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+        await service.RemoveMappings();
+
+        await mockDevice.DidNotReceive().DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.Description == "Seedarr Tracker HTTP"));
+
+        await mockDevice.Received(1).DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 6969 &&
+            m.Protocol == Protocol.Udp &&
+            m.Description == "Seedarr Tracker UDP"));
+    }
+
+    [Test]
+    public async Task RemoveMappings_should_unmap_only_http_tracker_when_udp_tracker_disabled()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerHttpEnabled.Returns(true);
+        _configService.TrackerHttpPort.Returns(9696);
+        _configService.TrackerUdpEnabled.Returns(false);
+        _configService.TrackerUdpPort.Returns(6969);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+        mockDevice.DeletePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+        await service.RemoveMappings();
+
+        await mockDevice.Received(1).DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 9696 &&
+            m.Protocol == Protocol.Tcp &&
+            m.Description == "Seedarr Tracker HTTP"));
+
+        await mockDevice.DidNotReceive().DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.Description == "Seedarr Tracker UDP"));
+    }
+
+    [Test]
+    public async Task CreateMappings_should_unmap_tracker_ports_when_tracker_becomes_disabled_on_renewal()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerHttpEnabled.Returns(true);
+        _configService.TrackerHttpPort.Returns(9696);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(6969);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+        mockDevice.DeletePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        await mockDevice.Received(1).CreatePortMapAsync(Arg.Is<Mapping>(m => m.PublicPort == 9696));
+        await mockDevice.Received(1).CreatePortMapAsync(Arg.Is<Mapping>(m => m.PublicPort == 6969));
+
+        _configService.TrackerServerEnabled.Returns(false);
+        await service.CreateMappings(CancellationToken.None);
+
+        await mockDevice.Received(1).DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 9696 && m.Description == "Seedarr Tracker HTTP"));
+        await mockDevice.Received(1).DeletePortMapAsync(Arg.Is<Mapping>(m =>
+            m.PublicPort == 6969 && m.Description == "Seedarr Tracker UDP"));
+    }
+
     private static MappingException CreateMappingException(int errorCode, string errorText)
     {
         var ctor = typeof(MappingException).GetConstructor(
