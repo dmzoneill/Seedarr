@@ -22,6 +22,7 @@ import {
   PresetName,
   useColumnPreferences,
 } from "./columnPreferences";
+import { DiskStorageBadge } from "../../components/quicksettings/DiskStorageBadge";
 
 interface TorrentToolbarProps {
   count: number;
@@ -355,12 +356,14 @@ export function TorrentToolbar({
                 }}
               >
                 <SlidersIcon size={13} />
-                <span>
+                <span className="quick-controls-label">
+                  <span className="quick-controls-dot" />
                   {t("torrents.quickControls", undefined, "Quick Controls")}
                 </span>
                 <kbd className="quick-controls-kbd">Q</kbd>
               </button>
             )}
+            <DiskStorageBadge compact />
           </>
         )}
       </div>

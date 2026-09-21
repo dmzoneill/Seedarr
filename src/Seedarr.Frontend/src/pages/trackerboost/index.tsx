@@ -1,0 +1,342 @@
+import { useState, useMemo } from "react";
+import { useTranslation } from "../../i18n";
+import {
+  useTorrents,
+  useDownloadHistory,
+  useTrackerBoostStatus,
+  useTrackerBoostTrackers,
+  useTrackerBoostLogs,
+} from "../../api/hooks";
+import { HarvesterPanel } from "./HarvesterPanel";
+import { MatrixView } from "./MatrixView";
+import { RadarView } from "./RadarView";
+import { LogViewer } from "./LogViewer";
+import { ImportTools, BulkImportModal } from "./ImportTools";
+import type { UnifiedDownloadItem } from "./types";
+
+export * from "./types";
+export * from "./HarvesterPanel";
+export * from "./MatrixView";
+export * from "./RadarView";
+export * from "./LogViewer";
+export * from "./ImportTools";
+
+export function TrackerBoost() {
+  const { t } = useTranslation();
+  const { data: torrents, isLoading: torrentsLoading } = useTorrents();
+  const { data: history } = useDownloadHistory();
+  const { data: status } = useTrackerBoostStatus();
+  const { data: trackers } = useTrackerBoostTrackers();
+  const { data: boostLogs } = useTrackerBoostLogs(250);
+
+  const [activeTab, setActiveTab] = useState<
+    "booster" | "matrix" | "radar" | "logs" | "settings"
+  >("booster");
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+
+  // Build unified items list
+  const unifiedItems = useMemo<UnifiedDownloadItem[]>(() => {
+    const list: UnifiedDownloadItem[] = [];
+    const seenHashes = new Set<string>();
+
+    (torrents ?? []).forEach((t) => {
+      const hash = (t.infoHash || "").toLowerCase();
+      if (hash) seenHashes.add(hash);
+      list.push({
+        key: `seedarr-${t.id}`,
+        id: t.id,
+        infoHash: t.infoHash || "",
+        name: t.name,
+        totalSize: t.totalSize,
+        ratio: t.ratio,
+        seeders: t.seeders,
+        isPrivate: t.isPrivate,
+        sourceType: "seedarr",
+        clientName: "Seedarr Seeder",
+      });
+    });
+
+    const privateHashes = new Set(
+      (torrents ?? [])
+        .filter((t) => t.isPrivate && t.infoHash)
+        .map((t) => t.infoHash.toLowerCase()),
+    );
+
+    (history ?? []).forEach((h) => {
+      const hash = (h.infoHash || "").toLowerCase();
+      if (hash && !seenHashes.has(hash)) {
+        seenHashes.add(hash);
+        list.push({
+          key: `history-${h.id}`,
+          id: h.torrentId || 0,
+          infoHash: h.infoHash,
+          name: h.title,
+          totalSize: h.totalSize,
+          ratio: 0,
+          seeders: 0,
+          isPrivate: h.isPrivate ?? privateHashes.has(hash),
+          sourceType: "real_client",
+          clientName: h.source || "Download Client",
+        });
+      }
+    });
+
+    return list;
+  }, [torrents, history]);
+
+  const torrentMetaMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        posterUrl?: string | null;
+        mediaTitle?: string | null;
+        source?: string | null;
+        year?: number | null;
+        totalSize?: number;
+      }
+    >();
+
+    (torrents ?? []).forEach((t) => {
+      if (t.infoHash) {
+        map.set(t.infoHash.toLowerCase(), {
+          posterUrl: t.posterUrl,
+          mediaTitle: t.mediaTitle,
+          source: t.source,
+          year: t.mediaYear ?? t.year,
+          totalSize: t.totalSize,
+        });
+      }
+    });
+
+    (history ?? []).forEach((h) => {
+      if (h.infoHash && !map.has(h.infoHash.toLowerCase())) {
+        map.set(h.infoHash.toLowerCase(), {
+          posterUrl: h.metadata?.posterUrl,
+          mediaTitle: h.metadata?.title || h.title,
+          source: h.source,
+          year: h.metadata?.year,
+          totalSize: h.totalSize,
+        });
+      }
+    });
+
+    return map;
+  }, [torrents, history]);
+
+  const handleInspectTorrent = (infoHash: string) => {
+    const targetKey = unifiedItems.find(
+      (u) =>
+        (u.infoHash || "").toLowerCase() === (infoHash || "").toLowerCase(),
+    )?.key;
+    if (targetKey) setSelectedKey(targetKey);
+    setActiveTab("booster");
+  };
+
+  return (
+    <div
+      className="content-area"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+        padding: "1.5rem",
+      }}
+    >
+      {/* Top Header Row */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem",
+          marginBottom: "1.5rem",
+          flexShrink: 0,
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <span>🚀</span> {t("trackerBoost.title", undefined, "Tracker Boost")}
+            <span
+              className="badge badge-primary"
+              style={{ fontSize: "0.8rem", marginLeft: "0.25rem" }}
+            >
+              {t("trackerBoost.smartBoosterBadge", undefined, "⚡ Smart Booster")}
+            </span>
+          </h1>
+          <p
+            style={{
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
+            }}
+          >
+            {t(
+              "trackerBoost.headerDescription",
+              undefined,
+              "Scrapes live tracker swarms by info_hash to discover and inject verified seeders/peers into Seedarr and download clients",
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* Global Metric Cards */}
+      <div
+        className="stats-grid"
+        style={{ marginBottom: "1rem", flexShrink: 0 }}
+      >
+        <div className="stat-card">
+          <div className="stat-value">
+            {status?.totalTrackersMonitored ?? 0}
+          </div>
+          <div className="stat-label">
+            {t("trackerBoost.trackersMonitored", undefined, "Trackers Monitored")}
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value" style={{ color: "var(--success)" }}>
+            {status?.aliveTrackersCount ?? 0}
+          </div>
+          <div className="stat-label">
+            {t("trackerBoost.aliveResponsive", undefined, "Alive & Responsive")}
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value" style={{ color: "var(--accent)" }}>
+            {status?.activeTorrentTrackersCount ?? 0}
+          </div>
+          <div className="stat-label">
+            {t("trackerBoost.harvestedFromSwarms", undefined, "Harvested from Swarms")}
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value" style={{ color: "#38bdf8" }}>
+            {status?.torrentsBoostedCount ?? 0}
+          </div>
+          <div className="stat-label">
+            {t("trackerBoost.swarmsBoosted", undefined, "Swarms Boosted")}
+          </div>
+        </div>
+      </div>
+
+      {/* Tab Navigation Bar placed right above content */}
+      <div
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          alignItems: "center",
+          marginBottom: "1rem",
+          paddingBottom: "0.75rem",
+          borderBottom: "1px solid var(--border-color, var(--border-light))",
+          flexWrap: "wrap",
+          flexShrink: 0,
+        }}
+      >
+        <button
+          className={`btn ${activeTab === "booster" ? "btn-primary" : ""}`}
+          onClick={() => setActiveTab("booster")}
+          style={{
+            padding: "0.5rem 1.15rem",
+            fontSize: "0.88rem",
+            fontWeight: activeTab === "booster" ? 600 : 500,
+          }}
+        >
+          {t("trackerBoost.tabs.swarmOptimizer", undefined, "⚡ Swarm Optimizer")}
+        </button>
+        <button
+          className={`btn ${activeTab === "matrix" ? "btn-primary" : ""}`}
+          onClick={() => setActiveTab("matrix")}
+          style={{
+            padding: "0.5rem 1.15rem",
+            fontSize: "0.88rem",
+            fontWeight: activeTab === "matrix" ? 600 : 500,
+          }}
+        >
+          {t("trackerBoost.tabs.crossMatrix", undefined, "📊 Cross-Matrix")}
+        </button>
+        <button
+          className={`btn ${activeTab === "radar" ? "btn-primary" : ""}`}
+          onClick={() => setActiveTab("radar")}
+          style={{
+            padding: "0.5rem 1.15rem",
+            fontSize: "0.88rem",
+            fontWeight: activeTab === "radar" ? 600 : 500,
+          }}
+        >
+          {t("trackerBoost.tabs.trackerRadar", {
+            count: trackers?.length || 0,
+          }, `📡 Tracker Radar (${trackers?.length || 0})`)}
+        </button>
+        <button
+          className={`btn ${activeTab === "logs" ? "btn-primary" : ""}`}
+          onClick={() => setActiveTab("logs")}
+          style={{
+            padding: "0.5rem 1.15rem",
+            fontSize: "0.88rem",
+            fontWeight: activeTab === "logs" ? 600 : 500,
+          }}
+        >
+          {t("trackerBoost.tabs.activityLogs", {
+            count:
+              boostLogs && boostLogs.length > 0 ? `(${boostLogs.length})` : "",
+          }, `📜 Activity Logs ${boostLogs && boostLogs.length > 0 ? `(${boostLogs.length})` : ""}`)}
+        </button>
+        <button
+          className={`btn ${activeTab === "settings" ? "btn-primary" : ""}`}
+          onClick={() => setActiveTab("settings")}
+          style={{
+            padding: "0.5rem 1.15rem",
+            fontSize: "0.88rem",
+            fontWeight: activeTab === "settings" ? 600 : 500,
+          }}
+        >
+          {t("trackerBoost.tabs.sourcesAutomation", undefined, "⚙️ Sources & Automation")}
+        </button>
+      </div>
+
+      {/* Render Active View */}
+      {activeTab === "booster" && (
+        <HarvesterPanel
+          unifiedItems={unifiedItems}
+          torrentsLoading={torrentsLoading}
+          selectedKey={selectedKey}
+          onSelectKey={setSelectedKey}
+        />
+      )}
+
+      {activeTab === "matrix" && (
+        <MatrixView
+          torrentMetaMap={torrentMetaMap}
+          onInspectTorrent={handleInspectTorrent}
+        />
+      )}
+
+      {activeTab === "radar" && (
+        <RadarView onOpenBulkImport={() => setShowBulkImportModal(true)} />
+      )}
+
+      {activeTab === "logs" && <LogViewer />}
+
+      {activeTab === "settings" && <ImportTools />}
+
+      <BulkImportModal
+        isOpen={showBulkImportModal}
+        onClose={() => setShowBulkImportModal(false)}
+      />
+    </div>
+  );
+}
+
+export default TrackerBoost;
