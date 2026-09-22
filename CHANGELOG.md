@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.14.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.14.0) - 2026-09-22
+
+### ✨ Features
+- feat(parity): implement Workpackage 04 Torrent Detail Drawer and Visualization Parity
+- feat(api): achieve Workpackage 03 backend REST API parity with Leecharr
+- feat(modals): modularize Add Torrent wizard, extract FolderBrowserModal, and align MediaPlayerModal with Leecharr
+- feat(terminal): replace system terminal with Leecharr PTY engine and xterm UI
+
+### 🐛 Bug Fixes
+- fix(i18n): reconcile missing translation keys, fix namespace/casing bugs, and sync 20 locales
+
+### 🔧 Maintenance & Improvements
+- chore(devops): align Containerfile, container-entrypoint, PUID/PGID support, and Makefile with Leecharr
+
 ## [v1.13.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.13.0) - 2026-09-22
 
 ### ✨ Features
