@@ -454,6 +454,27 @@ class ApiClient {
     }
     return response.text();
   }
+
+  async renameTorrentFolder(hash: string, oldPath: string, newPath: string): Promise<string> {
+    const formData = new FormData();
+    formData.append("hash", hash);
+    formData.append("oldPath", oldPath);
+    formData.append("newPath", newPath);
+    const headers: Record<string, string> = {};
+    if (this.apiKey) {
+      headers["X-Api-Key"] = this.apiKey;
+    }
+    const response = await fetch("/api/v2/torrents/renameFolder", {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      const errorMsg = await this.parseError(response);
+      throw new Error(errorMsg);
+    }
+    return response.text();
+  }
 }
 
 export const apiClient = new ApiClient();

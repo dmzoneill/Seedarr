@@ -20,12 +20,14 @@ import { TrackersTab } from "./torrentdetailpanel/TrackersTab";
 import { OptionsTab } from "./torrentdetailpanel/OptionsTab";
 import { MonitoringTab } from "./torrentdetailpanel/MonitoringTab";
 import { LogTab } from "./torrentdetailpanel/LogTab";
+import { CliTab } from "./torrentdetailpanel/CliTab";
 import PieceMap from "./PieceMap";
 
 type DetailTab =
   | "status"
   | "details"
   | "files"
+  | "cli"
   | "peers"
   | "trackers"
   | "options"
@@ -42,6 +44,13 @@ const TAB_ICONS: Record<DetailTab, React.ReactNode> = {
   status: <InfoIcon size={13} />,
   details: <ClipboardIcon size={13} />,
   files: <FileIcon size={13} />,
+  cli: (
+    <span
+      style={{ fontSize: "0.75rem", fontFamily: "monospace", fontWeight: 700 }}
+    >
+      &gt;_
+    </span>
+  ),
   peers: <UsersIcon size={13} />,
   trackers: <GlobeIcon size={13} />,
   options: <SlidersIcon size={13} />,
@@ -54,6 +63,7 @@ const DETAIL_TABS: { key: DetailTab; label: string }[] = [
   { key: "status", label: "Status" },
   { key: "details", label: "Details" },
   { key: "files", label: "Files" },
+  { key: "cli", label: "Terminal / CLI" },
   { key: "peers", label: "Peers" },
   { key: "trackers", label: "Trackers" },
   { key: "options", label: "Options" },
@@ -152,8 +162,9 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
       <div className="detail-panel-body">
         {tab === "status" && <StatusTab torrent={torrent} />}
         {tab === "details" && <DetailsTab torrent={torrent} />}
-        {tab === "files" && <FilesTab torrentId={torrent.id} />}
-        {tab === "peers" && <PeersTab torrentId={torrent.id} />}
+        {tab === "files" && <FilesTab torrent={torrent} torrentId={torrent.id} />}
+        {tab === "cli" && <CliTab torrent={torrent} />}
+        {tab === "peers" && <PeersTab torrent={torrent} torrentId={torrent.id} />}
         {tab === "trackers" && <TrackersTab torrentId={torrent.id} />}
         {tab === "options" && <OptionsTab torrent={torrent} />}
         {tab === "piecemap" && (
