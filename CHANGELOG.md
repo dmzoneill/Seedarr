@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.12.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.12.0) - 2026-09-22
+
+### ✨ Features
+- feat(ui): replace top bar live speeds with clear speed limit labels
+- feat(telemetry): wire global unhandled exception tracking and backend 5xx error telemetry
+- feat(telemetry): wire round 3 interaction telemetry for indexers, tags, categories, queue, and theme
+- feat(telemetry): wire round 2 qualitative interaction analytics
+
+### 🐛 Bug Fixes
+- fix(peerlog): synchronize flush completion via atomic pending count to resolve CI test flake
+
 ## [v1.11.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.11.0) - 2026-09-21
 
 ### ✨ Features
