@@ -1,7 +1,7 @@
 .PHONY: setup test-setup test integration build clean restore frontend \
        stack-init stack-build stack-up stack-down stack-configure stack-healthy stack-rebuild stack-clean \
        test-unit test-integration test-integration-rerun test-integration-only test-all \
-       coverage-report container-build container-build-test
+       coverage-report container-build container-build-test lint format
 
 SOLUTION := src/Seedarr.sln
 UNIT_TEST := src/NzbDrone.Core.Test/Seedarr.Core.Test.csproj
@@ -25,6 +25,18 @@ setup:
 	dotnet restore $(SOLUTION)
 	@if [ -f $(FRONTEND)/package.json ]; then cd $(FRONTEND) && npm ci; fi
 	@command -v podman-compose > /dev/null 2>&1 || pip install podman-compose 2>/dev/null || true
+
+lint:
+	@echo "🔍 Checking Prettier style..."
+	@npx prettier --check "src/Seedarr.Frontend/**/*.{ts,tsx,css,json,js,html}"
+	@echo "🔍 Checking C# format..."
+	@dotnet format $(SOLUTION) --verify-no-changes
+
+format:
+	@echo "✨ Formatting frontend with Prettier..."
+	@npx prettier --write "src/Seedarr.Frontend/**/*.{ts,tsx,css,json,js,html}"
+	@echo "✨ Formatting C# with dotnet format..."
+	@dotnet format $(SOLUTION)
 
 test-setup:
 	dotnet build $(SOLUTION) --configuration Release

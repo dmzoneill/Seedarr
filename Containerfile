@@ -52,7 +52,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
 # hadolint ignore=DL3008
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
+    apt-get install -y --no-install-recommends curl gosu && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
 
 RUN mkdir -p /config /data /app/fixtures

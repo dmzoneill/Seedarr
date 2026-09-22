@@ -20,6 +20,9 @@ services:
     environment:
       - TZ=UTC
       - COVERAGE_ENABLED=${COVERAGE_ENABLED:-1}
+      - PUID=1000
+      - PGID=1000
+      - UMASK=002
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9898/api/v1/system/status"]
       interval: 10s
