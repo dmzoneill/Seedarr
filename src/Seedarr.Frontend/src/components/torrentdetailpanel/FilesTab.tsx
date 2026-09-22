@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useTorrentFiles } from "../../api/hooks";
 import { formatBytes } from "../../utils/formatters";
 import { PanelLoading, PanelEmpty } from "./shared";
@@ -9,6 +9,8 @@ export function FilesTab({ torrentId }: { torrentId: number }) {
   const { data: files, isLoading, isError } = useTorrentFiles(torrentId);
   const [filePriorities, setFilePriorities] = useState<Record<number, FilePriority>>({});
   const [fileWanted, setFileWanted] = useState<Record<number, boolean>>({});
+  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
 
   const handleWantedChange = useCallback((fileId: number, checked: boolean) => {
     trackFilePriorityChange(checked ? "normal" : "skip", 1);
@@ -37,7 +39,7 @@ export function FilesTab({ torrentId }: { torrentId: number }) {
 
   return (
     <div className="detail-panel-table-wrap">
-      <table className="torrent-table">
+      <table className="torrent-table" role="treegrid" aria-label="Torrent Files">
         <thead>
           <tr>
             <th className="torrent-table-th" style={{ width: 60, textAlign: "center" }}>Wanted</th>
@@ -48,7 +50,7 @@ export function FilesTab({ torrentId }: { torrentId: number }) {
           </tr>
         </thead>
         <tbody>
-          {nonPaddingFiles.map((f) => {
+          {nonPaddingFiles.map((f, idx) => {
             const prio = filePriorities[f.id] ?? (f.wanted === false || f.priority === 0 ? "Do Not Download" : (f.priority === 6 || f.priority === 7 || f.priority === 2 ? "High" : "Normal"));
             const wanted = fileWanted[f.id] ?? (f.wanted !== undefined ? f.wanted : formatPriority(prio) !== "Do Not Download");
             const progress = f.bytesCompleted !== undefined && f.size > 0
@@ -56,7 +58,58 @@ export function FilesTab({ torrentId }: { torrentId: number }) {
               : (wanted ? 100 : 0);
 
             return (
-              <tr key={f.id} className="torrent-table-row">
+              <tr
+                key={f.id}
+                ref={(el) => {
+                  rowRefs.current[idx] = el;
+                }}
+                tabIndex={0}
+                role="row"
+                aria-selected={focusedIndex === idx}
+                className={`torrent-table-row${focusedIndex === idx ? " torrent-table-row-focused" : ""}`}
+                style={{
+                  outline: focusedIndex === idx ? "2px solid var(--accent, #6366f1)" : "none",
+                  outlineOffset: "-2px",
+                }}
+                onFocus={() => setFocusedIndex(idx)}
+                onKeyDown={(e) => {
+                  if (e.target instanceof HTMLSelectElement && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                    return;
+                  }
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    const next = Math.min(nonPaddingFiles.length - 1, idx + 1);
+                    setFocusedIndex(next);
+                    rowRefs.current[next]?.focus();
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const prev = Math.max(0, idx - 1);
+                    setFocusedIndex(prev);
+                    rowRefs.current[prev]?.focus();
+                  } else if (e.key === "Home") {
+                    e.preventDefault();
+                    setFocusedIndex(0);
+                    rowRefs.current[0]?.focus();
+                  } else if (e.key === "End") {
+                    e.preventDefault();
+                    const last = nonPaddingFiles.length - 1;
+                    setFocusedIndex(last);
+                    rowRefs.current[last]?.focus();
+                  } else if (e.key === " ") {
+                    e.preventDefault();
+                    handleWantedChange(f.id, !wanted);
+                  } else if (e.key === "1") {
+                    e.preventDefault();
+                    handlePriorityChange(f.id, "Normal");
+                  } else if (e.key === "2") {
+                    e.preventDefault();
+                    handlePriorityChange(f.id, "High");
+                  } else if (e.key === "0") {
+                    e.preventDefault();
+                    handlePriorityChange(f.id, "Do Not Download");
+                  }
+                }}
+              >
                 <td style={{ textAlign: "center" }}>
                   <input
                     type="checkbox"

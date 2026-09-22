@@ -103,7 +103,7 @@ export function TrackerBoost() {
           posterUrl: t.posterUrl,
           mediaTitle: t.mediaTitle,
           source: t.source,
-          year: t.mediaYear ?? t.year,
+          year: (t as any).mediaYear ?? (t as any).year,
           totalSize: t.totalSize,
         });
       }

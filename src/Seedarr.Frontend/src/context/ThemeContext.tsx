@@ -4,6 +4,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  type ReactNode,
 } from "react";
 import { useGeneralConfig } from "../api/hooks";
 import { trackThemeChange } from "../utils/analytics";

@@ -16,6 +16,7 @@ import {
   useAnnounceTorrent,
   useBulkTorrentAction,
   useMoveTorrentQueue,
+  useRecheckTorrent,
 } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 import { useModalStack } from "../components/ModalProvider";
@@ -25,6 +26,7 @@ function TorrentIndex() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const announceTorrent = useAnnounceTorrent();
+  const recheckTorrent = useRecheckTorrent();
   const bulkAction = useBulkTorrentAction();
   const { modalCount } = useModalStack();
   const {
@@ -84,6 +86,7 @@ function TorrentIndex() {
     handleToggleSelect,
     handleSelectAll,
     handleSelectRange,
+    setAnchorIndex,
     isFilterCollapsed,
     toggleFilterCollapse,
     isQuickControlsOpen,
@@ -346,9 +349,16 @@ function TorrentIndex() {
   const handleBulkMoveQueue = useCallback(
     async (position: "top" | "up" | "down" | "bottom") => {
       const activeIds = new Set((torrents ?? []).map((t) => t.id));
-      const validSelectedIds = Array.from(selectedIds).filter((id) =>
+      let validSelectedIds = Array.from(selectedIds).filter((id) =>
         activeIds.has(id),
       );
+      if (
+        validSelectedIds.length === 0 &&
+        selectedTorrentId != null &&
+        activeIds.has(selectedTorrentId)
+      ) {
+        validSelectedIds = [selectedTorrentId];
+      }
       if (validSelectedIds.length === 0) return;
 
       const orderedIds = (torrents ?? [])
@@ -379,6 +389,8 @@ function TorrentIndex() {
   // Keyboard Shortcuts Listener for Torrent Operations, Navigation & Modals
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      if (e.defaultPrevented) return;
+
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
@@ -392,6 +404,8 @@ function TorrentIndex() {
       if (
         deleteModalState?.isOpen ||
         showAddModal ||
+        bulkTagModalState?.isOpen ||
+        showImportPackageModal ||
         modalCount > 0 ||
         (typeof document !== "undefined" &&
           Boolean(
@@ -424,10 +438,35 @@ function TorrentIndex() {
         }
       }
 
+      // Ctrl+Shift+I / Cmd+Shift+I to invert selection
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "i" || e.key === "I")) {
+        e.preventDefault();
+        setSelectedIds((prev) => {
+          const next = new Set<number>();
+          filteredTorrents.forEach((t) => {
+            if (!prev.has(t.id)) {
+              next.add(t.id);
+            }
+          });
+          return next;
+        });
+        return;
+      }
+
       // Ctrl+A / Cmd+A to select all filtered torrents
       if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
         e.preventDefault();
         handleSelectAll(filteredTorrents.map((t) => t.id));
+        return;
+      }
+
+      // Ctrl + Up/Down, Ctrl + Shift + Up/Down for queue priority
+      if ((e.ctrlKey || e.metaKey) && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault();
+        const pos: "top" | "up" | "down" | "bottom" = e.shiftKey
+          ? (e.key === "ArrowUp" ? "top" : "bottom")
+          : (e.key === "ArrowUp" ? "up" : "down");
+        handleBulkMoveQueue(pos);
         return;
       }
 
@@ -453,25 +492,89 @@ function TorrentIndex() {
           setSelectedTorrentId(nextTorrent.id);
           if (e.shiftKey) {
             handleSelectRange([nextTorrent.id]);
+          } else {
+            setAnchorIndex(nextIndex);
           }
         }
         return;
       }
 
-      // Space or p / P: pause / resume (supporting single & multi-selection)
-      if (e.key === " " || e.key === "p" || e.key === "P") {
+      // Home / End to jump to first / last torrent
+      if (e.key === "Home") {
+        if (filteredTorrents.length > 0) {
+          e.preventDefault();
+          const target = filteredTorrents[0];
+          setSelectedTorrentId(target.id);
+          if (e.shiftKey) {
+            handleSelectRange([target.id]);
+          } else {
+            setAnchorIndex(0);
+          }
+        }
+        return;
+      }
+
+      if (e.key === "End") {
+        if (filteredTorrents.length > 0) {
+          e.preventDefault();
+          const target = filteredTorrents[filteredTorrents.length - 1];
+          setSelectedTorrentId(target.id);
+          if (e.shiftKey) {
+            handleSelectRange([target.id]);
+          } else {
+            setAnchorIndex(filteredTorrents.length - 1);
+          }
+        }
+        return;
+      }
+
+      // Space: toggle pause/resume or Shift/Ctrl+Space to toggle checkbox selection
+      if (e.key === " ") {
+        e.preventDefault();
+        if (e.shiftKey || e.ctrlKey || e.metaKey) {
+          if (selectedTorrentId != null) {
+            handleToggleSelect(selectedTorrentId);
+          }
+        } else {
+          handleToggleActiveSelected();
+        }
+        return;
+      }
+
+      // p / P: pause / resume (supporting single & multi-selection)
+      if (e.key === "p" || e.key === "P") {
         e.preventDefault();
         handleToggleActiveSelected();
         return;
       }
 
-      // a / A: force announce to all trackers (single selected)
-      if (e.key === "a" || e.key === "A") {
+      // Ctrl + R / F5: force recheck selected torrent(s)
+      if (((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R")) || e.key === "F5") {
+        e.preventDefault();
+        const ids =
+          selectedIds.size > 0
+            ? Array.from(selectedIds)
+            : selectedTorrentId != null
+              ? [selectedTorrentId]
+              : [];
+        ids.forEach((id) => recheckTorrent.mutate(id));
+        return;
+      }
+
+      // F6 or a / A: force announce to all trackers
+      if (e.key === "F6" || (!e.ctrlKey && !e.metaKey && (e.key === "a" || e.key === "A"))) {
         if (selectedTorrentId != null) {
           e.preventDefault();
           announceTorrent.mutate(selectedTorrentId);
           return;
         }
+      }
+
+      // Ctrl + T: open Bulk Tag modal
+      if ((e.ctrlKey || e.metaKey) && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        setBulkTagModalState({ isOpen: true, mode: "add" });
+        return;
       }
 
       // Delete / Backspace: delete torrent (supporting single & multi-selection)
@@ -490,15 +593,23 @@ function TorrentIndex() {
     isQuickControlsOpen,
     selectedTorrentId,
     setSelectedTorrentId,
+    selectedIds,
+    setSelectedIds,
     filteredTorrents,
     announceTorrent,
+    recheckTorrent,
     handleToggleActiveSelected,
     handleBulkDelete,
     handleSelectAll,
     handleSelectRange,
+    setAnchorIndex,
+    handleToggleSelect,
+    handleBulkMoveQueue,
     modalCount,
     deleteModalState?.isOpen,
     showAddModal,
+    bulkTagModalState?.isOpen,
+    showImportPackageModal,
   ]);
 
   const count = torrents?.length ?? 0;
@@ -592,6 +703,7 @@ function TorrentIndex() {
                   onSelectMultiple={setSelectedIds}
                   onDeleteSelected={handleBulkDelete}
                   onToggleActive={handleToggleActiveSelected}
+                  onOpenBulkTag={() => setBulkTagModalState({ isOpen: true, mode: "add" })}
                   visibleColumns={visibleColumns}
                   onToggleColumn={toggleColumn}
                   columnOrder={columnOrder}

@@ -120,12 +120,30 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
           </button>
         </div>
       </div>
-      <nav className="detail-panel-tabs">
-        {DETAIL_TABS.map((t) => (
+      <nav className="detail-panel-tabs" role="tablist" aria-label="Torrent Details Tabs">
+        {DETAIL_TABS.map((t, idx) => (
           <button
             key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            tabIndex={tab === t.key ? 0 : -1}
             className={`tab-btn${tab === t.key ? " tab-btn-active" : ""}`}
             onClick={() => setTab(t.key)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowRight") {
+                e.preventDefault();
+                const nextIdx = (idx + 1) % DETAIL_TABS.length;
+                setTab(DETAIL_TABS[nextIdx].key);
+                const nextBtn = e.currentTarget.parentElement?.children[nextIdx] as HTMLElement;
+                nextBtn?.focus();
+              } else if (e.key === "ArrowLeft") {
+                e.preventDefault();
+                const prevIdx = (idx - 1 + DETAIL_TABS.length) % DETAIL_TABS.length;
+                setTab(DETAIL_TABS[prevIdx].key);
+                const prevBtn = e.currentTarget.parentElement?.children[prevIdx] as HTMLElement;
+                prevBtn?.focus();
+              }
+            }}
           >
             {TAB_ICONS[t.key]} {t.label}
           </button>

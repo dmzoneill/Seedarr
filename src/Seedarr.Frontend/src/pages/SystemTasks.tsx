@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
 import { trackSystemMaintenanceAction } from "../utils/analytics";
+import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useModalRegistration } from "../components/ModalProvider";
 
 interface ScheduledTask {
   id?: number;
@@ -239,18 +241,13 @@ function TaskHistoryModal({ task, onClose }: TaskHistoryModalProps) {
     refetchInterval: 15000,
   });
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  const trapRef = useFocusTrap<HTMLDivElement>({ isOpen: true, onEscape: onClose });
+  useModalRegistration({
+    id: "task-history-modal",
+    isOpen: true,
+    onClose,
+    modalRef: trapRef,
+  });
 
   const toggleExpand = (id: number) => {
     setExpandedIds((prev) => {
@@ -277,6 +274,7 @@ function TaskHistoryModal({ task, onClose }: TaskHistoryModalProps) {
       aria-labelledby="task-history-title"
     >
       <div
+        ref={trapRef}
         className="modal"
         style={{
           maxWidth: "960px",
@@ -558,17 +556,13 @@ function EditTaskModal({ task, onClose, onSave, isSaving }: EditTaskModalProps) 
   const [interval, setInterval] = useState<number>(task.interval || 15);
   const [isEnabled, setIsEnabled] = useState<boolean>(task.isEnabled !== false);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  const trapRef = useFocusTrap<HTMLDivElement>({ isOpen: true, onEscape: onClose });
+  useModalRegistration({
+    id: "task-edit-modal",
+    isOpen: true,
+    onClose,
+    modalRef: trapRef,
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -589,6 +583,7 @@ function EditTaskModal({ task, onClose, onSave, isSaving }: EditTaskModalProps) 
       aria-labelledby="task-edit-title"
     >
       <div
+        ref={trapRef}
         className="modal"
         style={{
           maxWidth: "480px",

@@ -844,6 +844,7 @@ export interface TorrentTableRowProps {
   onSelectTorrent?: (id: number | null) => void;
   onSelect?: (torrent: Torrent) => void;
   onToggleSelect?: (id: number) => void;
+  onToggleActive?: () => void;
   onRowClick: (
     torrent: Torrent,
     index: number,
@@ -869,6 +870,7 @@ export const TorrentTableRow = React.memo<TorrentTableRowProps>(
     onSelectTorrent,
     onSelect,
     onToggleSelect,
+    onToggleActive,
     onRowClick,
     onContextMenu,
     onFocus,
@@ -888,7 +890,11 @@ export const TorrentTableRow = React.memo<TorrentTableRowProps>(
         if (e.key === " ") {
           e.preventDefault();
           e.stopPropagation?.();
-          onToggleSelect?.(t.id);
+          if (e.shiftKey || e.ctrlKey || e.metaKey) {
+            onToggleSelect?.(t.id);
+          } else {
+            onToggleActive?.();
+          }
         } else if (e.key === "Enter") {
           e.preventDefault();
           e.stopPropagation?.();
@@ -899,7 +905,7 @@ export const TorrentTableRow = React.memo<TorrentTableRowProps>(
           }
         }
       },
-      [onToggleSelect, onSelectTorrent, onSelect, isSelected, t],
+      [onToggleSelect, onToggleActive, onSelectTorrent, onSelect, isSelected, t],
     );
 
     const setRef = useCallback(
@@ -1012,6 +1018,7 @@ export interface TorrentTableProps {
   onDelete?: (payload: { id: number; deleteFiles?: boolean }) => void;
   onSearchIndexers?: (query: string) => void;
   onNavigateTab?: (nav: string, subNav?: string) => void;
+  onOpenBulkTag?: () => void;
 }
 
 export function TorrentTable({
@@ -1032,6 +1039,7 @@ export function TorrentTable({
   onSelectMultiple,
   onDeleteSelected,
   onToggleActive,
+  onOpenBulkTag,
   visibleColumns: propVisibleColumns,
   onToggleColumn: propToggleColumn,
   columnOrder: propColumnOrder,
@@ -1502,31 +1510,100 @@ export function TorrentTable({
       if (sorted.length === 0) return;
 
       if (e.key === "ArrowDown") {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          const pos: "down" | "bottom" = e.shiftKey ? "bottom" : "down";
+          const ids =
+            selectedIds.size > 0
+              ? Array.from(selectedIds)
+              : selectedTorrentId != null
+                ? [selectedTorrentId]
+                : sorted[focusedIndex]
+                  ? [sorted[focusedIndex].id]
+                  : [];
+          if (ids.length > 0) {
+            const orderedIds = sorted
+              .filter((t) => ids.includes(t.id))
+              .map((t) => t.id)
+              .reverse();
+            orderedIds.forEach((id) => {
+              moveTorrentQueue.mutate({ id, position: pos });
+            });
+          }
+          return;
+        }
         e.preventDefault();
+        e.stopPropagation();
         moveFocus(focusedIndex + 1, e.shiftKey);
         return;
       }
 
       if (e.key === "ArrowUp") {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          const pos: "up" | "top" = e.shiftKey ? "top" : "up";
+          const ids =
+            selectedIds.size > 0
+              ? Array.from(selectedIds)
+              : selectedTorrentId != null
+                ? [selectedTorrentId]
+                : sorted[focusedIndex]
+                  ? [sorted[focusedIndex].id]
+                  : [];
+          if (ids.length > 0) {
+            const orderedIds = sorted
+              .filter((t) => ids.includes(t.id))
+              .map((t) => t.id);
+            orderedIds.forEach((id) => {
+              moveTorrentQueue.mutate({ id, position: pos });
+            });
+          }
+          return;
+        }
         e.preventDefault();
+        e.stopPropagation();
         moveFocus(focusedIndex - 1, e.shiftKey);
         return;
       }
 
       if (e.key === "Home") {
         e.preventDefault();
+        e.stopPropagation();
         moveFocus(0, e.shiftKey);
         return;
       }
 
       if (e.key === "End") {
         e.preventDefault();
+        e.stopPropagation();
         moveFocus(sorted.length - 1, e.shiftKey);
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "i" || e.key === "I")) {
+        e.preventDefault();
+        e.stopPropagation();
+        const inverted = new Set<number>();
+        sorted.forEach((t) => {
+          if (!selectedIds.has(t.id)) {
+            inverted.add(t.id);
+          }
+        });
+        if (onSelectMultiple) {
+          onSelectMultiple(inverted);
+        } else if (onSelectRange) {
+          onSelectRange(Array.from(inverted));
+        } else {
+          useTorrentStore.getState().selectAllIds(Array.from(inverted));
+        }
         return;
       }
 
       if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
         e.preventDefault();
+        e.stopPropagation();
         const allIds = sorted.map((t) => t.id);
         if (onSelectMultiple) {
           onSelectMultiple(new Set(allIds));
@@ -1538,8 +1615,46 @@ export function TorrentTable({
         return;
       }
 
+      if (((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R")) || e.key === "F5") {
+        e.preventDefault();
+        e.stopPropagation();
+        const ids =
+          selectedIds.size > 0
+            ? Array.from(selectedIds)
+            : selectedTorrentId != null
+              ? [selectedTorrentId]
+              : sorted[focusedIndex]
+                ? [sorted[focusedIndex].id]
+                : [];
+        ids.forEach((id) => recheckTorrent.mutate(id));
+        return;
+      }
+
+      if (e.key === "F6" || (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && (e.key === "a" || e.key === "A"))) {
+        e.preventDefault();
+        e.stopPropagation();
+        const ids =
+          selectedIds.size > 0
+            ? Array.from(selectedIds)
+            : selectedTorrentId != null
+              ? [selectedTorrentId]
+              : sorted[focusedIndex]
+                ? [sorted[focusedIndex].id]
+                : [];
+        ids.forEach((id) => announceTorrent.mutate(id));
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenBulkTag?.();
+        return;
+      }
+
       if (e.key === "Enter") {
         e.preventDefault();
+        e.stopPropagation();
         const curr = sorted[focusedIndex];
         if (curr) {
           onSelectTorrent?.(curr.id);
@@ -1549,16 +1664,25 @@ export function TorrentTable({
 
       if (e.key === " ") {
         e.preventDefault();
-        if (onToggleActive) {
-          onToggleActive();
+        e.stopPropagation();
+        if (e.shiftKey || e.ctrlKey || e.metaKey) {
+          const curr = sorted[focusedIndex];
+          if (curr) {
+            handleToggleSelect(curr.id);
+          }
         } else {
-          handleDefaultToggleActive();
+          if (onToggleActive) {
+            onToggleActive();
+          } else {
+            handleDefaultToggleActive();
+          }
         }
         return;
       }
 
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
+        e.stopPropagation();
         if (onDeleteSelected) {
           onDeleteSelected();
         } else {
@@ -1571,7 +1695,15 @@ export function TorrentTable({
       sorted,
       focusedIndex,
       moveFocus,
+      selectedIds,
+      selectedTorrentId,
+      moveTorrentQueue,
+      recheckTorrent,
+      announceTorrent,
+      onOpenBulkTag,
+      handleToggleSelect,
       onSelectMultiple,
+      onSelectRange,
       propSelectAll,
       onSelectTorrent,
       onToggleActive,
@@ -2110,6 +2242,7 @@ export function TorrentTable({
                   onSelectTorrent={onSelectTorrent}
                   onSelect={propOnSelect}
                   onToggleSelect={handleToggleSelect}
+                  onToggleActive={onToggleActive || handleDefaultToggleActive}
                   onRowClick={handleRowClick}
                   onContextMenu={handleContextMenu}
                   onFocus={setFocusedIndex}

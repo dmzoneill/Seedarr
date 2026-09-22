@@ -93,7 +93,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <ConfirmContext.Provider value={{ confirm }}>
       {children}
-      <ErrorBoundary title="Confirmation Dialog">
+      <ErrorBoundary>
         <ConfirmModal
           isOpen={modalState.isOpen}
           title={modalState.options.title}

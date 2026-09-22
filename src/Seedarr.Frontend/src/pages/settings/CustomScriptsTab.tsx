@@ -6,6 +6,8 @@ import {
 } from "../../api/hooks";
 import type { CustomScriptTestResult } from "../../api/types";
 import { SaveBar, SectionCard, TextInput, NumberInput } from "./shared";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useModalRegistration } from "../../components/ModalProvider";
 
 interface TestModalState {
   title: string;
@@ -82,18 +84,16 @@ export function CustomScriptsTab() {
     }
   }, [config]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && testModalData) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        setTestModalData(null);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [testModalData]);
+  const testModalTrapRef = useFocusTrap<HTMLDivElement>({
+    isOpen: Boolean(testModalData),
+    onEscape: () => setTestModalData(null),
+  });
+  useModalRegistration({
+    id: "custom-scripts-test-modal",
+    isOpen: Boolean(testModalData),
+    onClose: () => setTestModalData(null),
+    modalRef: testModalTrapRef,
+  });
 
   const update = <K extends keyof typeof form>(
     key: K,
@@ -364,6 +364,7 @@ export function CustomScriptsTab() {
           }}
         >
           <div
+            ref={testModalTrapRef}
             className="modal"
             onClick={(e) => e.stopPropagation()}
             style={{

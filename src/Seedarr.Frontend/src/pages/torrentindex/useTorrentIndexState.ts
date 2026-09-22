@@ -416,12 +416,35 @@ export function useTorrentIndexState() {
     );
   }
 
+  const anchorIndexRef = useRef<number | null>(null);
+
+  const setAnchorIndex = useCallback((idx: number | null) => {
+    anchorIndexRef.current = idx;
+  }, []);
+
   function handleSelectRange(rangeIds: number[]) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      rangeIds.forEach((id) => next.add(id));
-      return next;
-    });
+    // If a single target ID is provided from keyboard navigation
+    if (rangeIds.length === 1 && filteredTorrents.length > 0) {
+      const targetId = rangeIds[0];
+      const targetIdx = filteredTorrents.findIndex((t) => t.id === targetId);
+      if (targetIdx !== -1) {
+        if (anchorIndexRef.current === null) {
+          const currIdx =
+            selectedTorrentId != null
+              ? filteredTorrents.findIndex((t) => t.id === selectedTorrentId)
+              : -1;
+          anchorIndexRef.current = currIdx !== -1 ? currIdx : targetIdx;
+        }
+        const start = Math.min(anchorIndexRef.current, targetIdx);
+        const end = Math.max(anchorIndexRef.current, targetIdx);
+        const nextIds = filteredTorrents.slice(start, end + 1).map((t) => t.id);
+        setSelectedIds(new Set(nextIds));
+        return;
+      }
+    }
+
+    // When rangeIds is explicitly passed (e.g. from table with anchor or contraction)
+    setSelectedIds(new Set(rangeIds));
   }
 
   return {
@@ -469,6 +492,7 @@ export function useTorrentIndexState() {
     handleToggleSelect,
     handleSelectAll,
     handleSelectRange,
+    setAnchorIndex,
     isFilterCollapsed,
     toggleFilterCollapse,
     isQuickControlsOpen,

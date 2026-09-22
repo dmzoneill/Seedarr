@@ -1,6 +1,7 @@
 import React from "react";
 import { useTranslation } from "../i18n";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useModalRegistration } from "./ModalProvider";
 
 export interface ConfirmModalProps {
   isOpen: boolean;
@@ -24,7 +25,14 @@ export function ConfirmModal({
   onCancel,
 }: ConfirmModalProps) {
   const { t } = useTranslation();
-  const trapRef = useFocusTrap<HTMLDivElement>({ isOpen, onClose: onCancel });
+  const trapRef = useFocusTrap<HTMLDivElement>({ isOpen, onEscape: onCancel });
+
+  useModalRegistration({
+    id: "confirm-modal",
+    isOpen,
+    onClose: onCancel,
+    modalRef: trapRef,
+  });
 
   if (!isOpen) return null;
 
