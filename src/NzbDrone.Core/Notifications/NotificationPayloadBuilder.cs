@@ -1369,7 +1369,8 @@ public static class NotificationPayloadBuilder
                     return id.ToString(CultureInfo.InvariantCulture);
 
                 case "torrent.name":
-                    var tName = torrent?.Name ?? ExtractPropertyString(genericPayload, "torrent", "name") ?? ExtractMessage(genericPayload, eventType ?? string.Empty) ?? string.Empty;
+                case "torrent.title":
+                    var tName = torrent?.Name ?? ExtractPropertyString(genericPayload, "torrent", "name") ?? ExtractPropertyString(genericPayload, "torrent", "title") ?? ExtractMessage(genericPayload, eventType ?? string.Empty) ?? string.Empty;
                     return ResolveString(tName);
 
                 case "torrent.infohash":
@@ -1384,8 +1385,9 @@ public static class NotificationPayloadBuilder
                     var stat = torrent != null ? torrent.Status.ToString() : (ExtractPropertyString(genericPayload, "torrent", "status") ?? ExtractPropertyString(genericPayload, "torrent", "state") ?? string.Empty);
                     return ResolveString(stat);
 
+                case "torrent.size":
                 case "torrent.sizeformatted":
-                    var sfBytes = torrent?.TotalSize ?? ExtractPropertyLong(genericPayload, "torrent", "totalSize") ?? 0;
+                    var sfBytes = torrent?.TotalSize ?? ExtractPropertyLong(genericPayload, "torrent", "totalSize") ?? ExtractPropertyLong(genericPayload, "torrent", "size") ?? 0;
                     return ResolveString(FormatBytes(sfBytes));
 
                 case "torrent.totalsize":
