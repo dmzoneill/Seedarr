@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
+import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useModalRegistration } from "../components/ModalProvider";
 
 type LogLevel = "Trace" | "Debug" | "Info" | "Warn" | "Error";
 
@@ -285,19 +287,13 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
   const [stackTraceExpanded, setStackTraceExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        onClose();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  const trapRef = useFocusTrap<HTMLDivElement>({ isOpen: true, onEscape: onClose });
+  useModalRegistration({
+    id: "event-details-modal",
+    isOpen: true,
+    onClose,
+    modalRef: trapRef,
+  });
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -345,6 +341,7 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
       aria-labelledby="event-details-title"
     >
       <div
+        ref={trapRef}
         className="modal"
         style={{
           maxWidth: "760px",

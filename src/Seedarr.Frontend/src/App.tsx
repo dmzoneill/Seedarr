@@ -575,16 +575,19 @@ function App() {
             ),
           ));
 
-      // Alt+M toggles sidebar collapse
-      if (e.altKey && e.key.toLowerCase() === "m") {
+      // Alt+M toggles sidebar collapse (Option+M on Mac sends code 'KeyM')
+      if (e.altKey && (e.key.toLowerCase() === "m" || e.code === "KeyM")) {
         if (isModalActive) return;
         e.preventDefault();
         toggleSidebar();
         return;
       }
 
-      // Cmd+K / Ctrl+K
+      // Cmd+K / Ctrl+K - do not intercept if focus is inside SystemTerminal
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        if (activeEl?.closest(".terminal-container")) {
+          return;
+        }
         e.preventDefault();
         toggleCommandPalette();
         return;
@@ -619,7 +622,8 @@ function App() {
       }
 
       // "g" sequence navigation (e.g. g then d => dashboard)
-      if (e.key === "g" && !pendingGKey) {
+      const keyLower = e.key.toLowerCase();
+      if (keyLower === "g" && !pendingGKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         pendingGKey = true;
         if (pendingGTimer) clearTimeout(pendingGTimer);
         pendingGTimer = setTimeout(() => {
@@ -632,27 +636,38 @@ function App() {
         pendingGKey = false;
         if (pendingGTimer) clearTimeout(pendingGTimer);
 
-        if (e.key === "d") {
+        if (keyLower === "d") {
           e.preventDefault();
+          e.stopImmediatePropagation?.();
           navigate("/");
-        } else if (e.key === "t") {
+        } else if (keyLower === "t") {
           e.preventDefault();
+          e.stopImmediatePropagation?.();
           navigate("/torrents");
-        } else if (e.key === "h") {
+        } else if (keyLower === "h") {
           e.preventDefault();
+          e.stopImmediatePropagation?.();
           navigate("/activity/history");
-        } else if (e.key === "b") {
+        } else if (keyLower === "b") {
           e.preventDefault();
+          e.stopImmediatePropagation?.();
           navigate("/tracker/trackerboost");
-        } else if (e.key === "m") {
+        } else if (keyLower === "m") {
           e.preventDefault();
+          e.stopImmediatePropagation?.();
           navigate("/activity/metrics");
-        } else if (e.key === "p") {
+        } else if (keyLower === "p") {
           e.preventDefault();
+          e.stopImmediatePropagation?.();
           navigate("/peermap");
-        } else if (e.key === "s") {
+        } else if (keyLower === "s") {
           e.preventDefault();
+          e.stopImmediatePropagation?.();
           navigate("/settings/general");
+        } else if (keyLower === "c") {
+          e.preventDefault();
+          e.stopImmediatePropagation?.();
+          navigate("/system/terminal");
         }
       }
     };
@@ -1190,6 +1205,46 @@ function App() {
             style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}
           >
             <LanguageSelector />
+            <button
+              type="button"
+              className="topbar-btn"
+              onClick={() => setShowShortcutsModal(true)}
+              title={t(
+                "topbar.keyboardShortcuts",
+                undefined,
+                "Keyboard Shortcuts (?)",
+              )}
+              aria-label={t(
+                "topbar.keyboardShortcuts",
+                undefined,
+                "Keyboard Shortcuts (?)",
+              )}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "0.25rem 0.5rem",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+              }}
+            >
+              <span style={{ fontSize: "1rem", lineHeight: 1 }}>⌨️</span>
+              <kbd
+                style={{
+                  backgroundColor: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "3px",
+                  padding: "0.05rem 0.35rem",
+                  fontSize: "0.7rem",
+                  color: "var(--text-muted)",
+                  fontFamily: "monospace",
+                  lineHeight: 1.2,
+                }}
+              >
+                ?
+              </kbd>
+            </button>
             <button
               className="btn btn-small"
               onClick={() => setShowGettingStartedModal(true)}

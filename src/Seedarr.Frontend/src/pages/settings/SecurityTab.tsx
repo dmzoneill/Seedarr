@@ -16,6 +16,8 @@ import {
 } from "../../api/blocklist";
 import { NumberInput, SaveBar, SectionCard, SelectInput, TextInput, Toggle } from "./shared";
 import { trackSecurityConfigSave } from "../../utils/analytics";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useModalRegistration } from "../../components/ModalProvider";
 import {
   getStoredIdleTimeout,
   setStoredIdleTimeout,
@@ -255,29 +257,33 @@ export function SecurityTab() {
     loadProviders();
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (showRegenerateModal) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          setShowRegenerateModal(false);
-          return;
-        }
-        if (editingProvider) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          setEditingProvider(null);
-          setShowSecret(false);
-          return;
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingProvider, showRegenerateModal]);
+  const editingProviderTrapRef = useFocusTrap<HTMLDivElement>({
+    isOpen: Boolean(editingProvider),
+    onEscape: () => {
+      setEditingProvider(null);
+      setShowSecret(false);
+    },
+  });
+  useModalRegistration({
+    id: "security-editing-provider-modal",
+    isOpen: Boolean(editingProvider),
+    onClose: () => {
+      setEditingProvider(null);
+      setShowSecret(false);
+    },
+    modalRef: editingProviderTrapRef,
+  });
+
+  const regenerateModalTrapRef = useFocusTrap<HTMLDivElement>({
+    isOpen: showRegenerateModal,
+    onEscape: () => setShowRegenerateModal(false),
+  });
+  useModalRegistration({
+    id: "security-regenerate-modal",
+    isOpen: showRegenerateModal,
+    onClose: () => setShowRegenerateModal(false),
+    modalRef: regenerateModalTrapRef,
+  });
 
   const loadProviders = async () => {
     try {
@@ -1142,6 +1148,7 @@ export function SecurityTab() {
           }}
         >
           <div
+            ref={editingProviderTrapRef}
             className="modal"
             onClick={(e) => e.stopPropagation()}
             style={{
@@ -1410,6 +1417,7 @@ export function SecurityTab() {
           onClick={() => setShowRegenerateModal(false)}
         >
           <div
+            ref={regenerateModalTrapRef}
             className="modal"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: "520px" }}

@@ -12,6 +12,8 @@ import { formatBytes } from "../../utils/formatters";
 import { useToast } from "../../context/ToastContext";
 import { SectionCard, TextInput, NumberInput, Toggle } from "./shared";
 import { trackCategoryAction } from "../../utils/analytics";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useModalRegistration } from "../../components/ModalProvider";
 
 interface CategorySettingsProps {
   embedded?: boolean;
@@ -141,6 +143,28 @@ export function CategorySettingsTab({
   const [modalError, setModalError] = useState<string | null>(null);
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
   const [browsingPath, setBrowsingPath] = useState("");
+
+  const editingCategoryTrapRef = useFocusTrap<HTMLDivElement>({
+    isOpen: Boolean(editingCategory),
+    onEscape: () => setEditingCategory(null),
+  });
+  useModalRegistration({
+    id: "category-edit-modal",
+    isOpen: Boolean(editingCategory),
+    onClose: () => setEditingCategory(null),
+    modalRef: editingCategoryTrapRef,
+  });
+
+  const folderBrowserTrapRef = useFocusTrap<HTMLDivElement>({
+    isOpen: showFolderBrowser,
+    onEscape: () => setShowFolderBrowser(false),
+  });
+  useModalRegistration({
+    id: "category-folder-browser-modal",
+    isOpen: showFolderBrowser,
+    onClose: () => setShowFolderBrowser(false),
+    modalRef: folderBrowserTrapRef,
+  });
 
   const {
     data: fsData,
@@ -578,6 +602,7 @@ export function CategorySettingsTab({
       {editingCategory && (
         <div className="modal-overlay" onClick={() => setEditingCategory(null)}>
           <div
+            ref={editingCategoryTrapRef}
             className="modal"
             onClick={(e) => e.stopPropagation()}
             style={{
@@ -903,6 +928,7 @@ export function CategorySettingsTab({
           }}
         >
           <div
+            ref={folderBrowserTrapRef}
             className="modal"
             onClick={(e) => e.stopPropagation()}
             style={{

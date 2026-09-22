@@ -56,13 +56,16 @@ function syncDomAttributes(locale: LocaleCode) {
 }
 
 export function extractDefaultValue(
-  params?: TranslationParams,
-  defaultVal?: string,
+  params?: any,
+  defaultVal?: any,
 ): { fallbackDefault?: string; interpolationParams?: TranslationParams } {
   if (typeof params === "string") {
+    if (typeof defaultVal === "object" && defaultVal !== null) {
+      return { fallbackDefault: params, interpolationParams: defaultVal };
+    }
     return { fallbackDefault: params, interpolationParams: undefined };
   }
-  let fallbackDefault = defaultVal;
+  let fallbackDefault = typeof defaultVal === "string" ? defaultVal : undefined;
   let interpolationParams = params;
   if (
     params &&
@@ -71,7 +74,7 @@ export function extractDefaultValue(
     "defaultValue" in params
   ) {
     fallbackDefault =
-      (params as { defaultValue?: string }).defaultValue ?? defaultVal;
+      (params as { defaultValue?: string }).defaultValue ?? fallbackDefault;
     const { defaultValue: _, ...rest } = params as Record<string, any>;
     interpolationParams = rest;
   }

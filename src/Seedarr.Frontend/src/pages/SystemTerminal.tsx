@@ -452,16 +452,16 @@ export function SystemTerminal() {
 
   // Command input handlers
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    // Ctrl+L to clear screen
-    if (e.ctrlKey && (e.key === "l" || e.key === "L")) {
+    // Ctrl+L or Cmd+L to clear screen
+    if ((e.ctrlKey || e.metaKey) && (e.key === "l" || e.key === "L")) {
       e.preventDefault();
       setLines([]);
       transmitInput("\x0c");
       return;
     }
 
-    // Ctrl+C to send interrupt / break (unless text is selected in the window)
-    if (e.ctrlKey && (e.key === "c" || e.key === "C")) {
+    // Ctrl+C or Cmd+C to send interrupt / break (unless text is selected in the window)
+    if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
       const selection = window.getSelection()?.toString();
       if (!selection || selection.length === 0) {
         e.preventDefault();
@@ -521,12 +521,12 @@ export function SystemTerminal() {
 
   // Keyboard shortcut listener on container
   const handleContainerKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.ctrlKey && (e.key === "l" || e.key === "L")) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "l" || e.key === "L")) {
       e.preventDefault();
       setLines([]);
       transmitInput("\x0c");
       inputRef.current?.focus();
-    } else if (e.ctrlKey && (e.key === "c" || e.key === "C")) {
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
       const selection = window.getSelection()?.toString();
       if (!selection || selection.length === 0) {
         e.preventDefault();

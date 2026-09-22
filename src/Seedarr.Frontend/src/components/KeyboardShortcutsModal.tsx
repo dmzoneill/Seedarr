@@ -47,7 +47,7 @@ export function KeyboardShortcutsModal({
         },
         { keys: ["/"], description: "Focus Search / Quick Jump" },
         {
-          keys: ["Alt", "M"],
+          keys: ["Alt / ⌥", "M"],
           description: "Toggle Main Navigation Sidebar",
         },
         { keys: ["g", "d"], description: "Go to Dashboard" },
@@ -57,28 +57,62 @@ export function KeyboardShortcutsModal({
         { keys: ["g", "m"], description: "Go to Activity Metrics" },
         { keys: ["g", "p"], description: "Go to Peer Map" },
         { keys: ["g", "s"], description: "Go to Settings" },
+        { keys: ["g", "c"], description: "Go to System Terminal" },
       ],
     },
     {
-      name: "Torrent Table Navigation",
+      name: "Torrent Table Navigation & Selection",
       shortcuts: [
         { keys: ["↑", "↓"], description: "Navigate up / down table rows" },
         {
           keys: ["Shift", "↑ / ↓"],
-          description: "Contiguous range selection expansion / contraction",
+          description: "Contiguous range selection expansion & contraction",
         },
         { keys: ["Home", "End"], description: "Jump to first / last row" },
-        {
-          keys: ["Ctrl / ⌘", "A"],
-          description: "Select all filtered torrents",
-        },
         {
           keys: ["Enter"],
           description: "Open details panel for focused torrent",
         },
         {
+          keys: ["Ctrl / ⌘", "A"],
+          description: "Select all filtered torrents",
+        },
+        {
+          keys: ["Ctrl / ⌘", "Shift", "I"],
+          description: "Invert selection across torrents",
+        },
+        {
           keys: ["Space"],
           description: "Toggle Pause / Resume on selected torrent(s)",
+        },
+        {
+          keys: ["Shift / Ctrl", "Space"],
+          description: "Toggle selection checkbox for focused row",
+        },
+      ],
+    },
+    {
+      name: "Queue Priority & Operations",
+      shortcuts: [
+        {
+          keys: ["Ctrl / ⌘", "↑ / ↓"],
+          description: "Move selected torrent up / down in queue priority",
+        },
+        {
+          keys: ["Ctrl / ⌘", "Shift", "↑ / ↓"],
+          description: "Move selected torrent to top / bottom of queue",
+        },
+        {
+          keys: ["Ctrl / ⌘", "R / F5"],
+          description: "Force recheck hash on selected torrent(s)",
+        },
+        {
+          keys: ["F6 / a"],
+          description: "Force announce to all trackers",
+        },
+        {
+          keys: ["Ctrl / ⌘", "T"],
+          description: "Open Bulk Tag modal for selected torrent(s)",
         },
         {
           keys: ["Delete / Backspace"],
@@ -87,17 +121,37 @@ export function KeyboardShortcutsModal({
       ],
     },
     {
-      name: "Torrent Operations (Selected Torrent)",
+      name: "Detail Panel & Files Navigation",
       shortcuts: [
-        { keys: ["Space"], description: "Pause / Resume Seeding" },
-        { keys: ["p"], description: "Pause / Resume Seeding" },
-        { keys: ["a"], description: "Force Announce to All Trackers" },
-        { keys: ["Delete"], description: "Delete Torrent" },
+        {
+          keys: ["←", "→"],
+          description: "Cycle tabs when detail panel tab bar is focused",
+        },
+        {
+          keys: ["↑", "↓"],
+          description: "Navigate files in Files tab",
+        },
+        {
+          keys: ["Space"],
+          description: "Toggle file download wanted in Files tab",
+        },
+        {
+          keys: ["1", "2", "0"],
+          description: "Set file priority: 1=Normal, 2=High, 0=Do Not Download",
+        },
       ],
     },
     {
-      name: "Modals & Views",
+      name: "Terminal & Modals",
       shortcuts: [
+        {
+          keys: ["Ctrl / ⌘", "L"],
+          description: "Clear terminal buffer",
+        },
+        {
+          keys: ["Ctrl / ⌘", "C"],
+          description: "Interrupt command in terminal",
+        },
         {
           keys: ["q"],
           description: "Toggle Quick Controls drawer",
@@ -106,7 +160,10 @@ export function KeyboardShortcutsModal({
           keys: ["?"],
           description: "Show this Keyboard Shortcuts cheat sheet",
         },
-        { keys: ["Esc"], description: "Close active modal or detail panel" },
+        {
+          keys: ["Esc"],
+          description: "Close active modal, detail panel, or exit code editor",
+        },
       ],
     },
   ];

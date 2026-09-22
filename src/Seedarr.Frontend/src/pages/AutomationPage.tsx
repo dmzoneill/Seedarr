@@ -2969,7 +2969,15 @@ if (torrent) {
                     value={editingScript.code || ""}
                     onChange={(e) => setEditingScript({ ...editingScript, code: e.target.value })}
                     onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.currentTarget.blur();
+                        return;
+                      }
                       if (e.key === "Tab") {
+                        if (e.shiftKey) {
+                          // Allow Shift+Tab to naturally unfocus the editor (WCAG 2.1.2)
+                          return;
+                        }
                         e.preventDefault();
                         const target = e.currentTarget;
                         const start = target.selectionStart;
