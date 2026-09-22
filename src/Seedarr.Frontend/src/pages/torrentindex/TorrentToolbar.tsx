@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { SeedingConfig } from "../../api/types";
 import { usePermissions } from "../../hooks/usePermissions";
-import { formatSpeed } from "../../utils/formatters";
 import { useTranslation } from "../../i18n";
 import { TagIcon } from "../../components/icons/NavIcons";
 import {
@@ -387,8 +386,8 @@ export function TorrentToolbar({
           className="speed-controls"
           style={{ display: "flex", alignItems: "center", gap: "4px" }}
         >
-          <span style={{ fontSize: "0.85em", opacity: 0.8 }}>
-            UL: {formatSpeed(totalUploadSpeed)}
+          <span style={{ fontSize: "0.85em", opacity: 0.8, fontWeight: 600 }}>
+            {t("torrents.uploadLimit", undefined, "UL Limit:")}
           </span>
           <button
             className="btn btn-small btn-success"
@@ -408,8 +407,8 @@ export function TorrentToolbar({
           >
             &#9660;&#9660;
           </button>
-          <span style={{ fontSize: "0.85em", opacity: 0.8, marginLeft: "8px" }}>
-            DL: {formatSpeed(totalDownloadSpeed)}
+          <span style={{ fontSize: "0.85em", opacity: 0.8, marginLeft: "8px", fontWeight: 600 }}>
+            {t("torrents.downloadLimit", undefined, "DL Limit:")}
           </span>
           <button
             className="btn btn-small btn-danger"
