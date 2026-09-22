@@ -185,6 +185,10 @@ export const ALL_COLUMNS: ColumnDef[] = [
 
 export const STORAGE_KEY = "seedarr-visible-columns-v2";
 export const LEGACY_STORAGE_KEY = "seedarr-visible-columns";
+export const CROSS_APP_STORAGE_KEYS = [
+  "leecharr_cols_v2",
+  "leecharr-visible-columns",
+];
 export const SORT_KEY_STORAGE = "seedarr-table-sort-key";
 export const SORT_ASC_STORAGE = "seedarr-table-sort-asc";
 export const PAGE_SIZE_STORAGE = "seedarr-table-page-size";
@@ -222,6 +226,14 @@ export function loadVisibleColumns(): Set<string> {
         const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
         if (legacy) {
           stored = legacy;
+        } else {
+          for (const crossKey of CROSS_APP_STORAGE_KEYS) {
+            const crossStored = localStorage.getItem(crossKey);
+            if (crossStored) {
+              stored = crossStored;
+              break;
+            }
+          }
         }
       }
       if (stored) {
