@@ -36,7 +36,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
     private readonly object _flushGate = new();
     private CancellationTokenSource _flushSignalCts = new();
     private TaskCompletionSource _pendingFlushTcs;
-    private volatile bool _isProcessingBatch;
+    private int _pendingCount;
     private bool _disposed;
 
     public PeerConnectionLogService(IPeerConnectionLogRepository repository)
@@ -90,7 +90,10 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
             Timestamp = DateTime.UtcNow,
         };
 
-        _logChannel.Writer.TryWrite(log);
+        if (_logChannel.Writer.TryWrite(log))
+        {
+            Interlocked.Increment(ref _pendingCount);
+        }
         if (connection != null)
         {
             _logger.Trace("Logged peer {0}: {1}:{2} for {3}", eventType.ToLowerInvariant(), connection.RemoteIp, connection.RemotePort, connection.InfoHash);
@@ -144,7 +147,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
         TaskCompletionSource tcs;
         lock (_flushGate)
         {
-            if (_logChannel.Reader.Count == 0 && !_isProcessingBatch)
+            if (Volatile.Read(ref _pendingCount) <= 0)
             {
                 return;
             }
@@ -157,7 +160,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
             TriggerFlush();
         }
 
-        await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
+        await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30))).ConfigureAwait(false);
     }
 
     private void TriggerFlush()
@@ -182,11 +185,6 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
                 while (batch.Count < 100 && _logChannel.Reader.TryRead(out var log))
                 {
                     batch.Add(log);
-                }
-
-                if (batch.Count > 0)
-                {
-                    _isProcessingBatch = true;
                 }
 
                 if (batch.Count < 100 && batch.Count > 0)
@@ -239,7 +237,6 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
                 {
                     FlushBatch(batch);
                     batch.Clear();
-                    _isProcessingBatch = false;
                 }
 
                 lock (_flushGate)
@@ -250,7 +247,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
                         _flushSignalCts = new CancellationTokenSource();
                     }
 
-                    if (_logChannel.Reader.Count == 0)
+                    if (Volatile.Read(ref _pendingCount) <= 0)
                     {
                         _pendingFlushTcs?.TrySetResult();
                     }
@@ -268,7 +265,10 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
         finally
         {
             DrainRemainingLogs(batch);
-            _isProcessingBatch = false;
+            lock (_flushGate)
+            {
+                _pendingFlushTcs?.TrySetResult();
+            }
         }
     }
 
@@ -291,6 +291,14 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
         finally
         {
             _flushLock.Release();
+            var remaining = Interlocked.Add(ref _pendingCount, -batch.Count);
+            lock (_flushGate)
+            {
+                if (remaining <= 0)
+                {
+                    _pendingFlushTcs?.TrySetResult();
+                }
+            }
         }
     }
 
