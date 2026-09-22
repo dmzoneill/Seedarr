@@ -118,7 +118,7 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
         </span>
         <span className="status-bar-item">
           <ActivityIcon size={14} />{" "}
-          {t("statusBar.uptime", undefined, "Uptime")}{" "}
+          {t("statusbar.uptime", undefined, "Uptime")}{" "}
           {systemStatus
             ? formatUptime(
                 systemStatus.uptimeSeconds ??
@@ -142,16 +142,16 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
           style={{ color: hasIssues ? "var(--danger)" : "var(--success)" }}
         >
           {hasIssues ? <ErrorIcon size={14} /> : <InfoIcon size={14} />}
-          {t("statusBar.health", undefined, "Health")}{" "}
+          {t("statusbar.health", undefined, "Health")}{" "}
           {hasIssues
             ? issuesCount === 1
-              ? t("statusBar.healthIssues", { count: issuesCount }, "1 Issue")
+              ? t("statusbar.healthIssues", { count: issuesCount }, "1 Issue")
               : t(
-                  "statusBar.healthIssuesPlural",
+                  "statusbar.healthIssuesPlural",
                   { count: issuesCount },
                   `${issuesCount} Issues`,
                 )
-            : t("statusBar.healthOk", undefined, "All Systems Operational")}
+            : t("statusbar.healthOk", undefined, "All Systems Operational")}
         </span>
         {(connected !== undefined || isReconnecting !== undefined) && (
           <span
@@ -166,17 +166,17 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
           >
             <WifiIcon size={14} />{" "}
             {isReconnecting
-              ? t("statusBar.reconnecting", undefined, "Reconnecting...")
+              ? t("statusbar.reconnecting", undefined, "Reconnecting...")
               : connected
-                ? t("statusBar.connected", undefined, "Connected")
-                : t("statusBar.disconnected", undefined, "Disconnected")}
+                ? t("statusbar.connected", undefined, "Connected")
+                : t("statusbar.disconnected", undefined, "Disconnected")}
           </span>
         )}
 
         <div className="status-bar-separator" style={{ flexGrow: 1 }} />
 
         <span className="status-bar-item">
-          <SeedingIcon size={14} /> {t("statusBar.active", undefined, "Active")}{" "}
+          <SeedingIcon size={14} /> {t("statusbar.active", undefined, "Active")}{" "}
           {stats?.activeTorrents ?? 0}
         </span>
         <span className="status-bar-item status-bar-download">
@@ -186,21 +186,21 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
           <UploadIcon size={14} /> {formatSpeed(uploadSpeed)}
         </span>
         <span className="status-bar-item">
-          <UsersIcon size={14} /> {t("statusBar.peers", undefined, "Peers")}{" "}
+          <UsersIcon size={14} /> {t("statusbar.peers", undefined, "Peers")}{" "}
           {totalSeeders} / {totalPeers}
         </span>
         <span className="status-bar-item">
           <UploadIcon size={14} />{" "}
-          {t("statusBar.totalUp", undefined, "Total Up")}{" "}
+          {t("statusbar.totalUp", undefined, "Total Up")}{" "}
           {formatBytes(stats?.totalUploaded ?? 0)}
         </span>
         <span className="status-bar-item">
           <DownloadIcon size={14} />{" "}
-          {t("statusBar.totalDown", undefined, "Total Down")}{" "}
+          {t("statusbar.totalDown", undefined, "Total Down")}{" "}
           {formatBytes(stats?.totalDownloaded ?? 0)}
         </span>
         <span className="status-bar-item">
-          {t("statusBar.ratio", undefined, "Ratio")}{" "}
+          {t("statusbar.ratio", undefined, "Ratio")}{" "}
           {formatRatio(
             stats?.totalDownloaded && stats.totalDownloaded > 0
               ? stats.totalUploaded / stats.totalDownloaded
@@ -208,7 +208,7 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
           )}
         </span>
         <span className="status-bar-item">
-          <WifiIcon size={14} /> {t("statusBar.ip", undefined, "Ip")}{" "}
+          <WifiIcon size={14} /> {t("statusbar.ip", undefined, "Ip")}{" "}
           {network?.externalIp || "..."}
         </span>
       </div>

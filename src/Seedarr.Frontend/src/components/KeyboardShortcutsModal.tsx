@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "../i18n";
 import { useModalRegistration } from "./ModalProvider";
 import { trackModalOpen } from "../utils/analytics";
 import { useFocusTrap } from "../hooks/useFocusTrap";
@@ -17,6 +18,7 @@ export function KeyboardShortcutsModal({
   isOpen,
   onClose,
 }: KeyboardShortcutsModalProps) {
+  const { t } = useTranslation();
   const modalRef = useFocusTrap<HTMLDivElement>({
     isOpen,
     onEscape: onClose,
@@ -39,130 +41,130 @@ export function KeyboardShortcutsModal({
 
   const groups: ShortcutGroup[] = [
     {
-      name: "Global Navigation",
+      name: t("keyboardShortcuts.categories.globalNavigation", "Global Navigation"),
       shortcuts: [
         {
           keys: ["Ctrl / ⌘", "K"],
-          description: "Open Command Palette / Quick Jump",
+          description: t("keyboardShortcuts.shortcuts.openCommandPalette", "Open Command Palette / Quick Jump"),
         },
-        { keys: ["/"], description: "Focus Search / Quick Jump" },
+        { keys: ["/"], description: t("keyboardShortcuts.shortcuts.focusSearch", "Focus Search / Quick Jump") },
         {
           keys: ["Alt / ⌥", "M"],
-          description: "Toggle Main Navigation Sidebar",
+          description: t("keyboardShortcuts.shortcuts.toggleSidebar", "Toggle Main Navigation Sidebar"),
         },
-        { keys: ["g", "d"], description: "Go to Dashboard" },
-        { keys: ["g", "t"], description: "Go to Torrents Index" },
-        { keys: ["g", "h"], description: "Go to Download History" },
-        { keys: ["g", "b"], description: "Go to Tracker Boost" },
-        { keys: ["g", "m"], description: "Go to Activity Metrics" },
-        { keys: ["g", "p"], description: "Go to Peer Map" },
-        { keys: ["g", "s"], description: "Go to Settings" },
-        { keys: ["g", "c"], description: "Go to System Terminal" },
+        { keys: ["g", "d"], description: t("keyboardShortcuts.shortcuts.goDashboard", "Go to Dashboard") },
+        { keys: ["g", "t"], description: t("keyboardShortcuts.shortcuts.goTorrents", "Go to Torrents Index") },
+        { keys: ["g", "h"], description: t("keyboardShortcuts.shortcuts.goHistory", "Go to Download History") },
+        { keys: ["g", "b"], description: t("keyboardShortcuts.shortcuts.goTrackerBoost", "Go to Tracker Boost") },
+        { keys: ["g", "m"], description: t("keyboardShortcuts.shortcuts.goMetrics", "Go to Activity Metrics") },
+        { keys: ["g", "p"], description: t("keyboardShortcuts.shortcuts.goPeerMap", "Go to Peer Map") },
+        { keys: ["g", "s"], description: t("keyboardShortcuts.shortcuts.goSettings", "Go to Settings") },
+        { keys: ["g", "c"], description: t("keyboardShortcuts.shortcuts.goTerminal", "Go to System Terminal") },
       ],
     },
     {
-      name: "Torrent Table Navigation & Selection",
+      name: t("keyboardShortcuts.categories.torrentTable", "Torrent Table Navigation & Selection"),
       shortcuts: [
-        { keys: ["↑", "↓"], description: "Navigate up / down table rows" },
+        { keys: ["↑", "↓"], description: t("keyboardShortcuts.shortcuts.navTableRows", "Navigate up / down table rows") },
         {
           keys: ["Shift", "↑ / ↓"],
-          description: "Contiguous range selection expansion & contraction",
+          description: t("keyboardShortcuts.shortcuts.rangeSelection", "Contiguous range selection expansion & contraction"),
         },
-        { keys: ["Home", "End"], description: "Jump to first / last row" },
+        { keys: ["Home", "End"], description: t("keyboardShortcuts.shortcuts.jumpFirstLast", "Jump to first / last row") },
         {
           keys: ["Enter"],
-          description: "Open details panel for focused torrent",
+          description: t("keyboardShortcuts.shortcuts.openDetailsPanel", "Open details panel for focused torrent"),
         },
         {
           keys: ["Ctrl / ⌘", "A"],
-          description: "Select all filtered torrents",
+          description: t("keyboardShortcuts.shortcuts.selectAllFiltered", "Select all filtered torrents"),
         },
         {
           keys: ["Ctrl / ⌘", "Shift", "I"],
-          description: "Invert selection across torrents",
+          description: t("keyboardShortcuts.shortcuts.invertSelection", "Invert selection across torrents"),
         },
         {
           keys: ["Space"],
-          description: "Toggle Pause / Resume on selected torrent(s)",
+          description: t("keyboardShortcuts.shortcuts.togglePauseResume", "Toggle Pause / Resume on selected torrent(s)"),
         },
         {
           keys: ["Shift / Ctrl", "Space"],
-          description: "Toggle selection checkbox for focused row",
+          description: t("keyboardShortcuts.shortcuts.toggleRowCheckbox", "Toggle selection checkbox for focused row"),
         },
       ],
     },
     {
-      name: "Queue Priority & Operations",
+      name: t("keyboardShortcuts.categories.queuePriority", "Queue Priority & Operations"),
       shortcuts: [
         {
           keys: ["Ctrl / ⌘", "↑ / ↓"],
-          description: "Move selected torrent up / down in queue priority",
+          description: t("keyboardShortcuts.shortcuts.queuePriorityUpDown", "Move selected torrent up / down in queue priority"),
         },
         {
           keys: ["Ctrl / ⌘", "Shift", "↑ / ↓"],
-          description: "Move selected torrent to top / bottom of queue",
+          description: t("keyboardShortcuts.shortcuts.queuePriorityTopBottom", "Move selected torrent to top / bottom of queue"),
         },
         {
           keys: ["Ctrl / ⌘", "R / F5"],
-          description: "Force recheck hash on selected torrent(s)",
+          description: t("keyboardShortcuts.shortcuts.forceRecheck", "Force recheck hash on selected torrent(s)"),
         },
         {
           keys: ["F6 / a"],
-          description: "Force announce to all trackers",
+          description: t("keyboardShortcuts.shortcuts.forceAnnounce", "Force announce to all trackers"),
         },
         {
           keys: ["Ctrl / ⌘", "T"],
-          description: "Open Bulk Tag modal for selected torrent(s)",
+          description: t("keyboardShortcuts.shortcuts.openBulkTag", "Open Bulk Tag modal for selected torrent(s)"),
         },
         {
           keys: ["Delete / Backspace"],
-          description: "Delete selected torrent(s)",
+          description: t("keyboardShortcuts.shortcuts.deleteTorrent", "Delete selected torrent(s)"),
         },
       ],
     },
     {
-      name: "Detail Panel & Files Navigation",
+      name: t("keyboardShortcuts.categories.detailPanel", "Detail Panel & Files Navigation"),
       shortcuts: [
         {
           keys: ["←", "→"],
-          description: "Cycle tabs when detail panel tab bar is focused",
+          description: t("keyboardShortcuts.shortcuts.cycleTabs", "Cycle tabs when detail panel tab bar is focused"),
         },
         {
           keys: ["↑", "↓"],
-          description: "Navigate files in Files tab",
+          description: t("keyboardShortcuts.shortcuts.navFiles", "Navigate files in Files tab"),
         },
         {
           keys: ["Space"],
-          description: "Toggle file download wanted in Files tab",
+          description: t("keyboardShortcuts.shortcuts.toggleFileWanted", "Toggle file download wanted in Files tab"),
         },
         {
           keys: ["1", "2", "0"],
-          description: "Set file priority: 1=Normal, 2=High, 0=Do Not Download",
+          description: t("keyboardShortcuts.shortcuts.setFilePriority", "Set file priority: 1=Normal, 2=High, 0=Do Not Download"),
         },
       ],
     },
     {
-      name: "Terminal & Modals",
+      name: t("keyboardShortcuts.categories.terminalModals", "Terminal & Modals"),
       shortcuts: [
         {
           keys: ["Ctrl / ⌘", "L"],
-          description: "Clear terminal buffer",
+          description: t("keyboardShortcuts.shortcuts.clearTerminal", "Clear terminal buffer"),
         },
         {
           keys: ["Ctrl / ⌘", "C"],
-          description: "Interrupt command in terminal",
+          description: t("keyboardShortcuts.shortcuts.interruptTerminal", "Interrupt command in terminal"),
         },
         {
           keys: ["q"],
-          description: "Toggle Quick Controls drawer",
+          description: t("keyboardShortcuts.shortcuts.toggleQuickControls", "Toggle Quick Controls drawer"),
         },
         {
           keys: ["?"],
-          description: "Show this Keyboard Shortcuts cheat sheet",
+          description: t("keyboardShortcuts.shortcuts.showShortcuts", "Show this Keyboard Shortcuts cheat sheet"),
         },
         {
           keys: ["Esc"],
-          description: "Close active modal, detail panel, or exit code editor",
+          description: t("keyboardShortcuts.shortcuts.closeActiveModal", "Close active modal, detail panel, or exit code editor"),
         },
       ],
     },
@@ -227,10 +229,10 @@ export function KeyboardShortcutsModal({
                 id="keyboard-shortcuts-title"
                 style={{ margin: 0, fontSize: "1.05rem" }}
               >
-                Keyboard Shortcuts
+                {t("modals.keyboardShortcuts.title", undefined, t("keyboardShortcuts.title", "Keyboard Shortcuts"))}
               </h2>
               <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                Seedarr navigation and hotkeys
+                {t("keyboardShortcuts.subtitle", "Seedarr navigation and hotkeys")}
               </div>
             </div>
           </div>
@@ -238,7 +240,7 @@ export function KeyboardShortcutsModal({
             type="button"
             className="btn btn-sm btn-outline"
             onClick={onClose}
-            aria-label="Close keyboard shortcuts dialog"
+            aria-label={t("keyboardShortcuts.closeAria", "Close keyboard shortcuts dialog")}
             style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
           >
             ✕
@@ -344,7 +346,7 @@ export function KeyboardShortcutsModal({
             textAlign: "right",
           }}
         >
-          Press <kbd>ESC</kbd> to close
+          {t("keyboardShortcuts.pressEscToClose", "Press ESC to close")}
         </div>
       </div>
     </div>

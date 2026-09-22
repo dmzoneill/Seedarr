@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { useTranslation } from "../i18n";
 import AddTorrentForm, { InputMode } from "./AddTorrentForm";
 import { useModalRegistration } from "./ModalProvider";
 import { usePermissions } from "../hooks/usePermissions";
@@ -15,6 +16,7 @@ function AddTorrentModal({
   initialQuery = "",
   onClose,
 }: AddTorrentModalProps) {
+  const { t } = useTranslation();
   const { canAddTorrent } = usePermissions();
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -69,7 +71,7 @@ function AddTorrentModal({
             className="modal-title"
             style={{ margin: 0, fontSize: "1.2rem" }}
           >
-            Add Torrent
+            {t("modals.addTorrent.title", "Add Torrent")}
           </h2>
           <button
             type="button"
@@ -80,8 +82,8 @@ function AddTorrentModal({
               borderRadius: "4px",
             }}
             onClick={onClose}
-            title="Close dialog"
-            aria-label="Close add torrent dialog"
+            title={t("common.close", "Close dialog")}
+            aria-label={t("modals.addTorrent.closeDialog", "Close add torrent dialog")}
           >
             ✕
           </button>
@@ -100,11 +102,11 @@ function AddTorrentModal({
                 fontSize: "0.875rem",
               }}
             >
-              🔒 You have ReadOnly permissions. Adding torrents is not permitted.
+              {t("modals.addTorrent.readOnlyWarning", "🔒 You have ReadOnly permissions. Adding torrents is not permitted.")}
             </div>
             <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
               <button className="btn btn-outline" onClick={onClose}>
-                Close
+                {t("common.close", "Close")}
               </button>
             </div>
           </div>

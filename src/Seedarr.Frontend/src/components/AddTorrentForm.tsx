@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useTranslation } from "../i18n";
 import {
   useAddTorrent,
   useTorrents,
@@ -243,6 +244,7 @@ export function AddTorrentForm({
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addTorrent = useAddTorrent();
+  const { t } = useTranslation();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -426,7 +428,14 @@ export function AddTorrentForm({
               sequential: sequentialDownload,
             });
             if (result.failed.length === 0) {
-              showToast(`Added ${result.added.length} torrent(s)`, "success");
+              showToast(
+                t(
+                  "modals.addTorrent.addedSuccess",
+                  { count: result.added.length },
+                  `Added ${result.added.length} torrent(s)`,
+                ),
+                "success",
+              );
               if (onSuccess) onSuccess();
               if (onClose) onClose();
               return;
@@ -457,7 +466,14 @@ export function AddTorrentForm({
               start_paused: startPaused,
               sequential: sequentialDownload,
             });
-            showToast("Magnet link added successfully", "success");
+            showToast(
+              t(
+                "modals.addTorrent.magnetAddedSuccess",
+                undefined,
+                "Magnet link added successfully",
+              ),
+              "success",
+            );
             setMagnetLink("");
             if (onSuccess) onSuccess();
             if (onClose) onClose();
@@ -562,7 +578,7 @@ export function AddTorrentForm({
             borderRadius: "6px",
           }}
         >
-          📁 Torrent File
+          📁 {t("modals.addTorrent.byFile", "Torrent File")}
         </button>
         <button
           type="button"
@@ -574,7 +590,7 @@ export function AddTorrentForm({
             borderRadius: "6px",
           }}
         >
-          🧲 Magnet Link
+          🧲 {t("modals.addTorrent.byMagnet", "Magnet Link")}
         </button>
         <button
           type="button"
@@ -586,7 +602,7 @@ export function AddTorrentForm({
             borderRadius: "6px",
           }}
         >
-          🔍 Indexer Search
+          🔍 {t("modals.addTorrent.bySearch", "Indexer Search")}
         </button>
       </div>
 
@@ -636,8 +652,8 @@ export function AddTorrentForm({
               <div>
                 <span style={{ fontWeight: 600, color: "var(--accent)" }}>
                   {files.length === 1
-                    ? `${files[0].name} selected`
-                    : `${files.length} torrent files selected`}
+                    ? t("modals.addTorrent.singleFileSelected", { name: files[0].name }, `${files[0].name} selected`)
+                    : t("modals.addTorrent.filesSelected", { count: files.length }, `${files.length} torrent files selected`)}
                 </span>
                 <div
                   style={{
@@ -646,13 +662,13 @@ export function AddTorrentForm({
                     marginTop: "0.25rem",
                   }}
                 >
-                  Click or drag more files to add
+                  {t("modals.addTorrent.clickOrDragMore", "Click or drag more files to add")}
                 </div>
               </div>
             ) : (
               <div>
                 <div style={{ fontWeight: 500, fontSize: "1rem" }}>
-                  Drop .torrent files here or click to browse
+                  {t("modals.addTorrent.dropHere", "Drop .torrent files here or click to browse")}
                 </div>
                 <div
                   style={{
@@ -661,7 +677,7 @@ export function AddTorrentForm({
                     marginTop: "0.35rem",
                   }}
                 >
-                  Supports multiple .torrent files simultaneously
+                  {t("modals.addTorrent.supportsMultiple", "Supports multiple .torrent files simultaneously")}
                 </div>
               </div>
             )}
@@ -693,7 +709,7 @@ export function AddTorrentForm({
                   marginBottom: "0.4rem",
                 }}
               >
-                Selected Files ({files.length})
+                {t("modals.addTorrent.selectedFiles", { count: files.length }, `Selected Files (${files.length})`)}
               </div>
               <ul
                 style={{
@@ -745,7 +761,7 @@ export function AddTorrentForm({
                         fontSize: "0.85rem",
                         padding: "0.1rem 0.3rem",
                       }}
-                      title="Remove file"
+                      title={t("modals.addTorrent.removeFile", "Remove file")}
                     >
                       ✕
                     </button>
@@ -800,7 +816,7 @@ export function AddTorrentForm({
                   margin: 0,
                 }}
               >
-                <span>🧲</span> Magnet URI / Link
+                <span>🧲</span> {t("modals.addTorrent.magnetUriLabel", "Magnet URI / Link")}
               </label>
 
               <div style={{ display: "flex", gap: "0.4rem" }}>
@@ -816,9 +832,9 @@ export function AddTorrentForm({
                     }
                   }}
                   style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
-                  title="Paste link from clipboard"
+                  title={t("modals.addTorrent.pasteTooltip", "Paste link from clipboard")}
                 >
-                  📋 Paste Clipboard
+                  📋 {t("modals.addTorrent.pasteClipboard", "Paste Clipboard")}
                 </button>
                 {magnetLink && (
                   <button
@@ -826,9 +842,9 @@ export function AddTorrentForm({
                     className="btn btn-outline btn-xs"
                     onClick={() => setMagnetLink("")}
                     style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
-                    title="Clear input"
+                    title={t("modals.addTorrent.clearTooltip", "Clear input")}
                   >
-                    ✕ Clear
+                    ✕ {t("modals.addTorrent.clear", "Clear")}
                   </button>
                 )}
               </div>
@@ -853,7 +869,7 @@ export function AddTorrentForm({
             >
               <textarea
                 className="form-control"
-                placeholder="magnet:?xt=urn:btih:..."
+                placeholder={t("modals.addTorrent.magnetPlaceholder", "magnet:?xt=urn:btih:...")}
                 value={magnetLink}
                 onChange={(e) => setMagnetLink(e.target.value)}
                 rows={isModal ? 4 : 5}
@@ -888,7 +904,7 @@ export function AddTorrentForm({
               }}
             >
               <span style={{ color: "var(--text-muted)" }}>
-                Paste any valid BitTorrent v1 or v2 magnet link.
+                {t("modals.addTorrent.pasteHelp", "Paste any valid BitTorrent v1 or v2 magnet link.")}
               </span>
               {magnetLink.trim() && (
                 <span
@@ -900,8 +916,8 @@ export function AddTorrentForm({
                   }}
                 >
                   {isMagnetValid
-                    ? "✓ Valid Magnet Format"
-                    : "✗ Must start with magnet:?"}
+                    ? t("modals.addTorrent.validMagnet", "✓ Valid Magnet Format")
+                    : t("modals.addTorrent.invalidMagnet", "✗ Must start with magnet:?")}
                 </span>
               )}
             </div>
@@ -926,7 +942,7 @@ export function AddTorrentForm({
                     <span
                       style={{ color: "var(--text-muted)", minWidth: "75px" }}
                     >
-                      Name:
+                      {t("modals.addTorrent.name", "Name:")}
                     </span>
                     <span
                       style={{
@@ -951,7 +967,7 @@ export function AddTorrentForm({
                     <span
                       style={{ color: "var(--text-muted)", minWidth: "75px" }}
                     >
-                      Info Hash:
+                      {t("modals.addTorrent.infoHash", "Info Hash:")}
                     </span>
                     <span
                       style={{
@@ -982,10 +998,10 @@ export function AddTorrentForm({
                       <span
                         style={{ color: "var(--text-muted)", minWidth: "75px" }}
                       >
-                        Trackers:
+                        {t("modals.addTorrent.trackers", "Trackers:")}
                       </span>
                       <span style={{ color: "#4ade80" }}>
-                        {magnetPreview.trackerCount} bundled tracker(s)
+                        {t("modals.addTorrent.bundledTrackers", { count: magnetPreview.trackerCount }, `${magnetPreview.trackerCount} bundled tracker(s)`)}
                       </span>
                     </div>
                   )}
@@ -1018,7 +1034,7 @@ export function AddTorrentForm({
             >
               <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🔌</div>
               <div style={{ fontWeight: 600, marginBottom: "0.4rem" }}>
-                No Enabled Indexers Configured
+                {t("modals.addTorrent.noIndexersTitle", "No Enabled Indexers Configured")}
               </div>
               <p
                 style={{
@@ -1028,8 +1044,10 @@ export function AddTorrentForm({
                   margin: "0 auto 1.25rem",
                 }}
               >
-                Connect Jackett, Prowlarr, Torznab, or Newznab indexers in
-                Settings to search releases directly.
+                {t(
+                  "modals.addTorrent.noIndexersDesc",
+                  "Connect Jackett, Prowlarr, Torznab, or Newznab indexers in Settings to search releases directly.",
+                )}
               </p>
               <button
                 type="button"
@@ -1039,7 +1057,7 @@ export function AddTorrentForm({
                   navigate("/settings/indexers");
                 }}
               >
-                ⚙️ Configure Indexers
+                {t("modals.addTorrent.configureIndexers", "⚙️ Configure Indexers")}
               </button>
             </div>
           ) : (
@@ -1594,7 +1612,7 @@ export function AddTorrentForm({
               color: "var(--text-primary)",
             }}
           >
-            ⚙️ Ingestion Options
+            {t("modals.addTorrent.ingestionOptions", "⚙️ Ingestion Options")}
           </div>
           <div
             style={{
@@ -1617,7 +1635,7 @@ export function AddTorrentForm({
                   fontWeight: 500,
                 }}
               >
-                Category
+                {t("modals.addTorrent.category", "Category")}
               </label>
               <select
                 className="form-input"
@@ -1632,7 +1650,7 @@ export function AddTorrentForm({
                   border: "1px solid var(--border-light)",
                 }}
               >
-                <option value="">(None)</option>
+                <option value="">{t("modals.addTorrent.noneCategory", "(None)")}</option>
                 {categories?.map((cat) => (
                   <option key={cat.id} value={cat.name}>
                     {cat.name} {cat.savePath ? `(${cat.savePath})` : ""}
@@ -1655,7 +1673,7 @@ export function AddTorrentForm({
                   fontWeight: 500,
                 }}
               >
-                Save Path
+                {t("modals.addTorrent.savePath", "Save Path")}
               </label>
               <input
                 type="text"
@@ -1703,7 +1721,7 @@ export function AddTorrentForm({
                 checked={startPaused}
                 onChange={(e) => setStartPaused(e.target.checked)}
               />
-              <span>⏸️ Start Paused</span>
+              <span>⏸️ {t("modals.addTorrent.startPaused", "Start Paused")}</span>
             </label>
 
             <label
@@ -1721,7 +1739,7 @@ export function AddTorrentForm({
                 checked={sequentialDownload}
                 onChange={(e) => setSequentialDownload(e.target.checked)}
               />
-              <span>⏩ Sequential Download</span>
+              <span>⏩ {t("modals.addTorrent.sequentialDownload", "Sequential Download")}</span>
             </label>
             <label
               style={{
@@ -1738,7 +1756,7 @@ export function AddTorrentForm({
                 checked={firstLastPiecePrio}
                 onChange={(e) => setFirstLastPiecePrio(e.target.checked)}
               />
-              <span>🎯 Prioritize First & Last Pieces</span>
+              <span>🎯 {t("modals.addTorrent.prioritizeFirstLast", "Prioritize First & Last Pieces")}</span>
             </label>
           </div>
         </div>
@@ -1776,7 +1794,7 @@ export function AddTorrentForm({
               disabled={addTorrent.isPending}
               style={{ borderRadius: "6px" }}
             >
-              Cancel
+              {t("common.cancel", "Cancel")}
             </button>
           )}
           <button
@@ -1786,7 +1804,9 @@ export function AddTorrentForm({
             disabled={!canSubmit || addTorrent.isPending}
             style={{ borderRadius: "6px", padding: "0.45rem 1.25rem" }}
           >
-            {addTorrent.isPending ? "Adding..." : "Add Torrent"}
+            {addTorrent.isPending
+              ? t("modals.addTorrent.adding", "Adding...")
+              : t("modals.addTorrent.submit", "Add Torrent")}
           </button>
         </div>
       )}

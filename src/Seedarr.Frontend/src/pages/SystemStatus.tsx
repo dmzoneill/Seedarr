@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "../i18n";
 import {
   useSystemStatus,
   useHealthChecks,
@@ -16,6 +17,7 @@ import { getDownloadClientUrl } from "../utils/arrLinks";
 import { trackSystemLifecycle } from "../utils/analytics";
 
 function SystemStatus() {
+  const { t } = useTranslation();
   const { data: status, isLoading: statusLoading } = useSystemStatus();
   const { data: health, isLoading: healthLoading } = useHealthChecks();
   const { data: diskSpace, isLoading: diskLoading } = useDiskSpace();
@@ -47,12 +49,23 @@ function SystemStatus() {
     window.dispatchEvent(new CustomEvent("seedarr:restarting"));
     try {
       await apiClient.post("/system/restart");
-      showToast("System is restarting. Waiting for reconnection...", "info");
+      showToast(
+        t(
+          "systemStatus.restartingToast",
+          undefined,
+          "System is restarting. Waiting for reconnection...",
+        ),
+        "info",
+      );
       pollReconnect();
     } catch (err: any) {
       setIsRestarting(false);
       showToast(
-        `Failed to trigger restart: ${err?.message || "Unknown error"}`,
+        t(
+          "systemStatus.restartFailedToast",
+          { error: err?.message || "Unknown error" },
+          `Failed to trigger restart: ${err?.message || "Unknown error"}`,
+        ),
         "error",
       );
     }
@@ -68,7 +81,14 @@ function SystemStatus() {
         if (res.ok) {
           clearInterval(interval);
           setIsRestarting(false);
-          showToast("Seedarr has reconnected successfully!", "success");
+          showToast(
+            t(
+              "systemStatus.reconnectedToast",
+              undefined,
+              "Seedarr has reconnected successfully!",
+            ),
+            "success",
+          );
           queryClient.invalidateQueries({ queryKey: ["systemStatus"] });
         }
       } catch {
@@ -79,7 +99,11 @@ function SystemStatus() {
         clearInterval(interval);
         setIsRestarting(false);
         showToast(
-          "Reconnection timed out. Please refresh the page manually.",
+          t(
+            "systemStatus.reconnectTimeoutToast",
+            undefined,
+            "Reconnection timed out. Please refresh the page manually.",
+          ),
           "error",
         );
       }
@@ -92,11 +116,22 @@ function SystemStatus() {
     setShowShutdownModal(false);
     try {
       await apiClient.post("/system/shutdown");
-      showToast("System is shutting down. Service is terminating.", "info");
+      showToast(
+        t(
+          "systemStatus.shuttingDownToast",
+          undefined,
+          "System is shutting down. Service is terminating.",
+        ),
+        "info",
+      );
     } catch (err: any) {
       setIsShuttingDown(false);
       showToast(
-        `Failed to trigger shutdown: ${err?.message || "Unknown error"}`,
+        t(
+          "systemStatus.shutdownFailedToast",
+          { error: err?.message || "Unknown error" },
+          `Failed to trigger shutdown: ${err?.message || "Unknown error"}`,
+        ),
         "error",
       );
     }
@@ -345,7 +380,7 @@ function SystemStatus() {
                     color: "var(--text-primary)",
                   }}
                 >
-                  File Descriptors &amp; Sockets
+                  {t("systemStatus.fileDescriptorsAndSockets", "File Descriptors & Sockets")}
                 </strong>
                 <span
                   style={{
@@ -357,7 +392,7 @@ function SystemStatus() {
                   {" / "}
                   {status.maxFileDescriptors && status.maxFileDescriptors > 0
                     ? status.maxFileDescriptors.toLocaleString()
-                    : "Unlimited"}
+                    : t("systemStatus.unlimited", "Unlimited")}
                   )
                 </span>
               </div>
@@ -372,14 +407,18 @@ function SystemStatus() {
                   }`}
                   style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
                 >
-                  {status.fileDescriptorUsagePercentage.toFixed(1)}% Used
+                  {t(
+                    "systemStatus.percentUsed",
+                    { percent: status.fileDescriptorUsagePercentage.toFixed(1) },
+                    `${status.fileDescriptorUsagePercentage.toFixed(1)}% Used`,
+                  )}
                 </span>
               ) : (
                 <span
                   className="badge badge-primary"
                   style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
                 >
-                  OS Handles
+                  {t("systemStatus.osHandles", "OS Handles")}
                 </span>
               )}
             </div>
@@ -1279,7 +1318,7 @@ function SystemStatus() {
             }}
           >
             <h2 style={{ margin: "0 0 0.75rem", fontSize: "1.2rem" }}>
-              Restart Seedarr
+              {t("topbar.restartConfirm", "Restart Seedarr?")}
             </h2>
             <p
               style={{
@@ -1289,8 +1328,10 @@ function SystemStatus() {
                 lineHeight: 1.4,
               }}
             >
-              Are you sure you want to restart Seedarr? Active seeding and
-              downloads will temporarily pause until the service restarts.
+              {t(
+                "systemStatus.restartModalDesc",
+                "Are you sure you want to restart Seedarr? Active seeding and downloads will temporarily pause until the service restarts.",
+              )}
             </p>
             <div
               style={{
@@ -1305,7 +1346,7 @@ function SystemStatus() {
                 onClick={() => setShowRestartModal(false)}
                 disabled={isRestarting}
               >
-                Cancel
+                {t("common.cancel", "Cancel")}
               </button>
               <button
                 type="button"
@@ -1313,7 +1354,9 @@ function SystemStatus() {
                 onClick={handleRestart}
                 disabled={isRestarting}
               >
-                {isRestarting ? "Restarting..." : "Restart"}
+                {isRestarting
+                  ? t("systemStatus.restarting", "Restarting...")
+                  : t("topbar.restart", "Restart")}
               </button>
             </div>
           </div>
@@ -1336,7 +1379,7 @@ function SystemStatus() {
             }}
           >
             <h2 style={{ margin: "0 0 0.75rem", fontSize: "1.2rem" }}>
-              Shutdown Seedarr
+              {t("topbar.shutdownConfirm", "Shutdown Seedarr?")}
             </h2>
             <p
               style={{
@@ -1346,8 +1389,10 @@ function SystemStatus() {
                 lineHeight: 1.4,
               }}
             >
-              Are you sure you want to shut down Seedarr? The host process will
-              terminate and will require manual intervention to start again.
+              {t(
+                "systemStatus.shutdownModalDesc",
+                "Are you sure you want to shut down Seedarr? The host process will terminate and will require manual intervention to start again.",
+              )}
             </p>
             <div
               style={{
@@ -1362,7 +1407,7 @@ function SystemStatus() {
                 onClick={() => setShowShutdownModal(false)}
                 disabled={isShuttingDown}
               >
-                Cancel
+                {t("common.cancel", "Cancel")}
               </button>
               <button
                 type="button"
@@ -1370,7 +1415,9 @@ function SystemStatus() {
                 onClick={handleShutdown}
                 disabled={isShuttingDown}
               >
-                {isShuttingDown ? "Shutting Down..." : "Shutdown"}
+                {isShuttingDown
+                  ? t("systemStatus.shuttingDown", "Shutting Down...")
+                  : t("topbar.shutdown", "Shutdown")}
               </button>
             </div>
           </div>
