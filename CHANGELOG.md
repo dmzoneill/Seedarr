@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.15.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.15.0) - 2026-09-22
+
+### ✨ Features
+- feat(parity): implement Workpackage 06 Notifications and Servarr Integrations Parity
+- feat(parity): implement Workpackage 05 SignalR Real-Time Protocol and Store Lifecycle Parity
+
 ## [v1.14.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.14.0) - 2026-09-22
 
 ### ✨ Features
