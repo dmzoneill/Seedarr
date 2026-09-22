@@ -57,21 +57,37 @@ export function useSignalRContext(): SignalRContextValue {
 
 export const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   TorrentAdded: [["torrents"], ["trackerboost"]],
+  torrent_added: [["torrents"], ["trackerboost"]],
+  torrentAdded: [["torrents"], ["trackerboost"]],
   TorrentUpdated: [["torrents"], ["trackerboost"]],
+  torrent_updated: [["torrents"], ["trackerboost"]],
+  torrentUpdated: [["torrents"], ["trackerboost"]],
   TorrentDeleted: [["torrents"], ["trackerboost"]],
+  torrent_deleted: [["torrents"], ["trackerboost"]],
+  torrentDeleted: [["torrents"], ["trackerboost"]],
   TorrentRecheckProgress: [["torrents"]],
+  torrent_recheck_progress: [["torrents"]],
   SeedingStatsUpdated: [["seeding", "stats"]],
+  speed_update: [["seeding", "stats"]],
+  speedPulse: [["seeding", "stats"]],
+  speedUpdate: [["seeding", "stats"]],
   HealthCheckCompleted: [["health"]],
+  health_warning: [["health"]],
+  healthWarning: [["health"]],
   CommandStarted: [["system", "status"], ["system", "commands"]],
   CommandCompleted: [["system", "status"], ["system", "commands"]],
   TaskStarted: [["system", "tasks"], ["system", "status"]],
   TaskCompleted: [["system", "tasks"], ["system", "status"]],
+  task_progress: [["system", "tasks"], ["system", "status"]],
+  taskProgress: [["system", "tasks"], ["system", "status"]],
   AutomationExecuted: [["automation", "scripts"], ["automation"]],
   AutomationTriggerEvaluated: [["automation", "scripts"], ["automation"]],
   TrackerUpdated: [["trackerboost"]],
   TrackerAnnounced: [["trackerboost"]],
   trackerUpdated: [["trackerboost"]],
   trackerAnnounced: [["trackerboost"]],
+  tracker_updated: [["trackerboost"]],
+  tracker_announced: [["trackerboost"]],
   TrackerAnnounceEvent: [["trackerboost"]],
 };
 
@@ -244,11 +260,9 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
         }
 
         // Entity-specific invalidations for torrents
+        const lowerEvent = event.toLowerCase();
         if (
-          event === "TorrentAdded" ||
-          event === "TorrentUpdated" ||
-          event === "TorrentDeleted" ||
-          event === "TorrentRecheckProgress"
+          lowerEvent.includes("torrent")
         ) {
           const bodyObj = data as Record<string, unknown> | undefined;
           const torrentId =
@@ -268,7 +282,7 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
               queryKey: ["torrents", torrentId, "trackers"],
             });
 
-            if (event === "TorrentDeleted") {
+            if (lowerEvent.includes("deleted")) {
               useTorrentStore.getState().removeTorrent(torrentId);
             } else if (bodyObj) {
               useTorrentStore.getState().updateTelemetry([
@@ -280,11 +294,7 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
 
         // Entity-specific invalidations for trackers
         if (
-          event === "TrackerUpdated" ||
-          event === "TrackerAnnounced" ||
-          event === "trackerUpdated" ||
-          event === "trackerAnnounced" ||
-          event === "TrackerAnnounceEvent"
+          lowerEvent.includes("tracker")
         ) {
           const bodyObj = data as Record<string, unknown> | undefined;
           const torrentId =
@@ -302,7 +312,7 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
         }
 
         // Fire toast notifications for key events
-        if (event === "TorrentAdded") {
+        if (lowerEvent === "torrentadded" || lowerEvent === "torrent_added") {
           const name =
             data && typeof data === "object" && "name" in data
               ? String((data as Record<string, unknown>).name)
@@ -311,9 +321,9 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
             name ? `Torrent added: ${name}` : "Torrent added",
             "success",
           );
-        } else if (event === "TorrentDeleted") {
+        } else if (lowerEvent === "torrentdeleted" || lowerEvent === "torrent_deleted") {
           showToastRef.current("Torrent removed", "info");
-        } else if (event === "AutomationExecuted") {
+        } else if (lowerEvent.includes("automationexecuted")) {
           const body = data as Record<string, unknown> | undefined;
           const isSuccess = body?.success !== false && body?.Success !== false;
           showToastRef.current(
@@ -324,6 +334,7 @@ export default function SignalRProvider({ children }: { children?: ReactNode } =
           );
         }
       };
+
       handlers.push([event, handler]);
       connection.on(event, handler);
     }

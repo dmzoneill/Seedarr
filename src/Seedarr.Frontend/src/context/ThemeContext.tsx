@@ -52,7 +52,12 @@ const VALID_ACCENTS: Accent[] = [
 
 function getInitialTheme(): Theme {
   try {
-    const stored = localStorage.getItem(STORAGE_THEME_KEY) as Theme | null;
+    const stored = (
+      localStorage.getItem(STORAGE_THEME_KEY) ||
+      localStorage.getItem("leecharr-theme-style") ||
+      localStorage.getItem("seedarr-theme") ||
+      localStorage.getItem("leecharr-theme")
+    ) as Theme | null;
     if (stored && VALID_THEMES.includes(stored)) {
       return stored;
     }
@@ -64,7 +69,10 @@ function getInitialTheme(): Theme {
 
 function getInitialAccent(): Accent {
   try {
-    const stored = localStorage.getItem(STORAGE_ACCENT_KEY);
+    const stored =
+      localStorage.getItem(STORAGE_ACCENT_KEY) ||
+      localStorage.getItem("leecharr-color-scheme") ||
+      localStorage.getItem("leecharr-accent");
     if (stored === "green") {
       return "emerald";
     }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
@@ -53,8 +54,8 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
         _hubContext?.Clients?.All?.SendAsync("receiveMessage", message)
             ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR broadcast failed"), TaskContinuationOptions.OnlyOnFaulted);
 
-        var eventName = GetNamedEvent(message);
-        if (!string.IsNullOrEmpty(eventName))
+        var eventNames = GetNamedEvents(message);
+        foreach (var eventName in eventNames)
         {
             _logger.Trace("Broadcasting direct SignalR event: {0}", eventName);
             _hubContext?.Clients?.All?.SendAsync(eventName, message.Body)
@@ -85,8 +86,8 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
         group.SendAsync("receiveMessage", message)
             ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR group broadcast failed"), TaskContinuationOptions.OnlyOnFaulted);
 
-        var eventName = GetNamedEvent(message);
-        if (!string.IsNullOrEmpty(eventName))
+        var eventNames = GetNamedEvents(message);
+        foreach (var eventName in eventNames)
         {
             _logger.Trace("Broadcasting direct SignalR event to group {0}: {1}", groupName, eventName);
             group.SendAsync(eventName, message.Body)
@@ -109,128 +110,163 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
         BroadcastToGroup($"channel-{channel.ToLowerInvariant()}", message);
     }
 
-    private static string GetNamedEvent(SignalRMessage message)
+    private static List<string> GetNamedEvents(SignalRMessage message)
     {
+        var list = new List<string>();
         if (string.IsNullOrEmpty(message?.Name))
         {
-            return null;
+            return list;
         }
 
         if (string.Equals(message.Name, "Torrent", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "Torrents", StringComparison.OrdinalIgnoreCase))
         {
-            return message.Action switch
+            switch (message.Action)
             {
-                ModelAction.Created => "TorrentAdded",
-                ModelAction.Updated => "TorrentUpdated",
-                ModelAction.Deleted => "TorrentDeleted",
-                _ => null
-            };
+                case ModelAction.Created:
+                    list.Add("TorrentAdded");
+                    list.Add("torrent_added");
+                    list.Add("torrentAdded");
+                    break;
+                case ModelAction.Updated:
+                    list.Add("TorrentUpdated");
+                    list.Add("torrent_updated");
+                    list.Add("torrentUpdated");
+                    break;
+                case ModelAction.Deleted:
+                    list.Add("TorrentDeleted");
+                    list.Add("torrent_deleted");
+                    list.Add("torrentDeleted");
+                    break;
+            }
         }
-
-        if (string.Equals(message.Name, "Seeding", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "TorrentAdded", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "torrentAdded", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "torrent_added", StringComparison.OrdinalIgnoreCase))
         {
-            return "SeedingStatsUpdated";
+            list.Add("TorrentAdded");
+            list.Add("torrent_added");
+            list.Add("torrentAdded");
         }
-
-        if (string.Equals(message.Name, "Health", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "TorrentUpdated", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "torrentUpdated", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "torrent_updated", StringComparison.OrdinalIgnoreCase))
         {
-            return "HealthCheckCompleted";
+            list.Add("TorrentUpdated");
+            list.Add("torrent_updated");
+            list.Add("torrentUpdated");
         }
-
-        if (string.Equals(message.Name, "Command", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "TorrentDeleted", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "torrentDeleted", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "torrent_deleted", StringComparison.OrdinalIgnoreCase))
         {
-            return message.Action switch
-            {
-                ModelAction.Created => "CommandStarted",
-                _ => "CommandCompleted"
-            };
+            list.Add("TorrentDeleted");
+            list.Add("torrent_deleted");
+            list.Add("torrentDeleted");
         }
-
-        if (string.Equals(message.Name, "System", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "Seeding", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "SeedingStatsUpdated", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "speedPulse", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "speed_update", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "speedUpdate", StringComparison.OrdinalIgnoreCase))
         {
-            return "CommandCompleted";
+            list.Add("SeedingStatsUpdated");
+            list.Add("speed_update");
+            list.Add("speedPulse");
+            list.Add("speedUpdate");
         }
-
-        if (string.Equals(message.Name, "Task", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "Health", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "HealthCheckCompleted", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "health_warning", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "healthWarning", StringComparison.OrdinalIgnoreCase))
         {
-            return message.Action switch
-            {
-                ModelAction.Created => "TaskStarted",
-                _ => "TaskCompleted"
-            };
+            list.Add("HealthCheckCompleted");
+            list.Add("health_warning");
+            list.Add("healthWarning");
         }
-
-        if (string.Equals(message.Name, "CommandStarted", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "Command", StringComparison.OrdinalIgnoreCase))
         {
-            return "CommandStarted";
+            var cmdEvent = message.Action == ModelAction.Created ? "CommandStarted" : "CommandCompleted";
+            list.Add(cmdEvent);
+            list.Add("task_progress");
+            list.Add("taskProgress");
         }
-
-        if (string.Equals(message.Name, "CommandCompleted", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "System", StringComparison.OrdinalIgnoreCase))
         {
-            return "CommandCompleted";
+            list.Add("CommandCompleted");
+            list.Add("task_progress");
+            list.Add("taskProgress");
         }
-
-        if (string.Equals(message.Name, "TaskStarted", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "Task", StringComparison.OrdinalIgnoreCase))
         {
-            return "TaskStarted";
+            var taskEvent = message.Action == ModelAction.Created ? "TaskStarted" : "TaskCompleted";
+            list.Add(taskEvent);
+            list.Add("task_progress");
+            list.Add("taskProgress");
         }
-
-        if (string.Equals(message.Name, "TaskCompleted", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "CommandStarted", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "CommandCompleted", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "TaskStarted", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "TaskCompleted", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "task_progress", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "taskProgress", StringComparison.OrdinalIgnoreCase))
         {
-            return "TaskCompleted";
+            list.Add(message.Name);
+            list.Add("task_progress");
+            list.Add("taskProgress");
         }
-
-        if (string.Equals(message.Name, "Automation", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message.Name, "AutomationExecution", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message.Name, "AutomationScript", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "Automation", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "AutomationExecution", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "AutomationScript", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "AutomationExecuted", StringComparison.OrdinalIgnoreCase))
         {
-            return "AutomationExecuted";
+            list.Add("AutomationExecuted");
         }
-
-        if (string.Equals(message.Name, "AutomationTriggerEvaluation", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message.Name, "AutomationTriggerEvaluated", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "AutomationTriggerEvaluation", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "AutomationTriggerEvaluated", StringComparison.OrdinalIgnoreCase))
         {
-            return "AutomationTriggerEvaluated";
+            list.Add("AutomationTriggerEvaluated");
         }
-
-        if (string.Equals(message.Name, "PieceCompleted", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "PieceCompleted", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "PieceBatchCompleted", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "pieceMapUpdated", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "piece_map_updated", StringComparison.OrdinalIgnoreCase))
         {
-            return "PieceCompleted";
+            list.Add(message.Name);
+            list.Add("pieceMapUpdated");
+            list.Add("piece_map_updated");
         }
-
-        if (string.Equals(message.Name, "PieceBatchCompleted", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "Tracker", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "Trackers", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "TrackerUpdated", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "trackerUpdated", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "tracker_updated", StringComparison.OrdinalIgnoreCase))
         {
-            return "PieceBatchCompleted";
+            list.Add("trackerUpdated");
+            list.Add("tracker_updated");
         }
-
-        if (string.Equals(message.Name, "Tracker", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message.Name, "Trackers", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message.Name, "TrackerUpdated", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message.Name, "trackerUpdated", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "TrackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "trackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "TrackerAnnounceEvent", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "tracker_announced", StringComparison.OrdinalIgnoreCase))
         {
-            return "trackerUpdated";
+            list.Add("trackerAnnounced");
+            list.Add("tracker_announced");
         }
-
-        if (string.Equals(message.Name, "TrackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message.Name, "trackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message.Name, "TrackerAnnounceEvent", StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(message.Name, "TorrentRecheckProgress", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(message.Name, "torrent_recheck_progress", StringComparison.OrdinalIgnoreCase))
         {
-            return "trackerAnnounced";
+            list.Add("TorrentRecheckProgress");
+            list.Add("torrent_recheck_progress");
         }
-
-        if (string.Equals(message.Name, "TorrentRecheckProgress", StringComparison.OrdinalIgnoreCase))
+        else
         {
-            return "TorrentRecheckProgress";
+            list.Add(message.Name);
         }
 
-        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandStarted" or "CommandCompleted" or "TaskStarted" or "TaskCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated" or "PieceCompleted" or "PieceBatchCompleted" or "TrackerUpdated" or "trackerUpdated" or "TrackerAnnounced" or "trackerAnnounced" or "TrackerAnnounceEvent" or "TorrentRecheckProgress")
-        {
-            return message.Name;
-        }
-
-        return null;
+        return list;
     }
+
 
     private bool IsDuplicate(SignalRMessage message, string groupName = null)
     {
