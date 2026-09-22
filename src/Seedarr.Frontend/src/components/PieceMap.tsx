@@ -11,6 +11,7 @@ export interface PieceMapProps {
   isSeeding?: boolean;
   className?: string;
   files?: TorrentFileInfo[];
+  initialLayout?: "bar" | "grid";
 }
 
 export type PieceMapViewMode = "status" | "rarity" | "files";
@@ -196,7 +197,9 @@ export function PieceMap({
   isSeeding = false,
   className = "",
   files: propFiles,
+  initialLayout = "grid",
 }: PieceMapProps) {
+  const [layoutMode, setLayoutMode] = useState<"bar" | "grid">(initialLayout);
   const [viewMode, setViewMode] = useState<PieceMapViewMode>("status");
   const [hoveredInfo, setHoveredInfo] = useState<HoveredPieceInfo | null>(null);
   const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(null);
@@ -204,6 +207,8 @@ export function PieceMap({
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const barContainerRef = useRef<HTMLDivElement | null>(null);
+  const barCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(650);
 
   // Fetch authentic piece map data and files
@@ -223,7 +228,7 @@ export function PieceMap({
 
   // Track container width with ResizeObserver
   useEffect(() => {
-    const el = containerRef.current;
+    const el = layoutMode === "bar" ? barContainerRef.current : containerRef.current;
     if (!el) return;
 
     const handleResize = () => {
@@ -236,7 +241,7 @@ export function PieceMap({
     const observer = new ResizeObserver(handleResize);
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [layoutMode]);
 
   // Decompress states array: 0=Missing, 1=In-flight, 2=Completed/Verified, 3=Corrupted
   const pieceStates = useMemo(() => {
@@ -494,6 +499,126 @@ export function PieceMap({
     getRarityColor,
   ]);
 
+  // Render Linear Bar directly onto Canvas
+  useEffect(() => {
+    if (layoutMode !== "bar") return;
+    const canvas = barCanvasRef.current;
+    const container = barContainerRef.current;
+    if (!canvas || !container) return;
+
+    const availWidth = Math.max(100, containerWidth - 4);
+    const height = 24;
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = Math.floor(availWidth * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.width = `${availWidth}px`;
+    canvas.style.height = `${height}px`;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, availWidth, height);
+
+    const numSlices = Math.min(totalPieces, Math.max(50, Math.floor(availWidth)));
+    const piecesPerSlice = totalPieces / numSlices;
+
+    for (let i = 0; i < numSlices; i++) {
+      const x0 = (i / numSlices) * availWidth;
+      const x1 = ((i + 1) / numSlices) * availWidth;
+      const sliceW = Math.max(0.5, x1 - x0);
+
+      const pStart = Math.floor(i * piecesPerSlice);
+      const pEnd = Math.min(totalPieces - 1, Math.floor((i + 1) * piecesPerSlice) - 1);
+      const spanLen = Math.max(1, pEnd - pStart + 1);
+
+      let fillColor = "#282520";
+
+      if (viewMode === "status") {
+        if (spanLen <= 1) {
+          fillColor = getStatusColor(pieceStates[pStart]);
+        } else {
+          let corrupted = 0;
+          let verified = 0;
+          let inFlight = 0;
+          for (let p = pStart; p <= pEnd; p++) {
+            const s = pieceStates[p];
+            if (s === 3) corrupted++;
+            else if (s === 2) verified++;
+            else if (s === 1) inFlight++;
+          }
+          if (corrupted > 0) {
+            fillColor = "#e74c3c";
+          } else if (verified === spanLen) {
+            fillColor = "#27ae60";
+          } else if (inFlight > 0) {
+            fillColor = "#3498db";
+          } else if (verified > 0) {
+            const pct = verified / spanLen;
+            fillColor = pct >= 0.5 ? "#1e824c" : "#1a5336";
+          } else {
+            fillColor = "#282520";
+          }
+        }
+      } else if (viewMode === "rarity") {
+        if (spanLen <= 1) {
+          fillColor = getRarityColor(pieceRarity[pStart] || 0);
+        } else {
+          let sum = 0;
+          for (let p = pStart; p <= pEnd; p++) {
+            sum += pieceRarity[p] || 0;
+          }
+          fillColor = getRarityColor(Math.round(sum / spanLen));
+        }
+      } else if (viewMode === "files") {
+        if (activeFileBoundary) {
+          const overlaps =
+            pStart <= activeFileBoundary.endPiece && pEnd >= activeFileBoundary.startPiece;
+          fillColor = overlaps
+            ? FILE_PALETTE[activeFileBoundary.colorIndex % FILE_PALETTE.length]
+            : "#1a1815";
+        } else {
+          const containingFb = fileBoundaries.find(
+            (fb) => pStart <= fb.endPiece && pEnd >= fb.startPiece,
+          );
+          fillColor = containingFb
+            ? FILE_PALETTE[containingFb.colorIndex % FILE_PALETTE.length]
+            : getStatusColor(pieceStates[pStart]);
+        }
+      }
+
+      ctx.fillStyle = fillColor;
+      ctx.fillRect(x0, 0, sliceW, height);
+    }
+
+    // Draw active hover highlight
+    if (hoveredInfo) {
+      const hStart = (hoveredInfo.pieceIndex / totalPieces) * availWidth;
+      const hEnd = ((hoveredInfo.pieceEndIndex + 1) / totalPieces) * availWidth;
+      const hW = Math.max(3, hEnd - hStart);
+
+      ctx.strokeStyle = "#ffd166";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(hStart, 1, hW, height - 2);
+    }
+
+    ctx.restore();
+  }, [
+    layoutMode,
+    containerWidth,
+    totalPieces,
+    pieceStates,
+    pieceRarity,
+    fileBoundaries,
+    activeFileBoundary,
+    hoveredInfo,
+    viewMode,
+    getStatusColor,
+    getRarityColor,
+  ]);
+
   // Resolve containing files and offsets for any piece
   const getFilesForPiece = useCallback(
     (pIdx: number) => {
@@ -583,6 +708,51 @@ export function PieceMap({
     });
   };
 
+  const handleBarMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = barCanvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const frac = rect.width > 0 ? x / rect.width : 0;
+
+    const targetPiece = Math.min(totalPieces - 1, Math.max(0, Math.floor(frac * totalPieces)));
+    const startBytes = targetPiece * effectivePieceLength;
+    const endBytes = Math.min(totalBytes, (targetPiece + 1) * effectivePieceLength);
+    const byteRange = `${formatBytes(startBytes)} - ${formatBytes(endBytes)}`;
+
+    const state = pieceStates[targetPiece];
+    let statusText = "Missing";
+    let statusColor = "#95a5a6";
+    if (state === 2) {
+      statusText = "Verified";
+      statusColor = "#27ae60";
+    } else if (state === 1) {
+      statusText = "In-flight";
+      statusColor = "#3498db";
+    } else if (state === 3) {
+      statusText = "Corrupted";
+      statusColor = "#e74c3c";
+    }
+
+    const availability = pieceRarity[targetPiece] || 0;
+    const matchedFiles = getFilesForPiece(targetPiece);
+
+    setHoveredInfo({
+      pieceIndex: targetPiece,
+      pieceEndIndex: targetPiece,
+      isRange: false,
+      byteRange,
+      state,
+      statusText,
+      statusColor,
+      availability,
+      files: matchedFiles,
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+  };
+
   const handleMouseLeave = () => {
     setHoveredInfo(null);
   };
@@ -639,6 +809,44 @@ export function PieceMap({
           >
             {totalPieces.toLocaleString()} pieces × {formatBytes(effectivePieceLength)}
           </span>
+
+          {/* Layout Mode Toggles (Bar vs Grid) */}
+          <div className="view-toggle" style={{ margin: 0, display: "flex", gap: "2px" }}>
+            <button
+              type="button"
+              className={`view-toggle-btn ${layoutMode === "bar" ? "active" : ""}`}
+              onClick={() => setLayoutMode("bar")}
+              style={{
+                padding: "0.2rem 0.45rem",
+                fontSize: "0.7rem",
+                backgroundColor: layoutMode === "bar" ? "var(--accent, #c8a84e)" : "transparent",
+                color: layoutMode === "bar" ? "#000" : "inherit",
+                border: "1px solid var(--border-light, #38332b)",
+                borderRadius: "3px",
+                cursor: "pointer",
+              }}
+              title="Linear Canvas Bar View"
+            >
+              Bar
+            </button>
+            <button
+              type="button"
+              className={`view-toggle-btn ${layoutMode === "grid" ? "active" : ""}`}
+              onClick={() => setLayoutMode("grid")}
+              style={{
+                padding: "0.2rem 0.45rem",
+                fontSize: "0.7rem",
+                backgroundColor: layoutMode === "grid" ? "var(--accent, #c8a84e)" : "transparent",
+                color: layoutMode === "grid" ? "#000" : "inherit",
+                border: "1px solid var(--border-light, #38332b)",
+                borderRadius: "3px",
+                cursor: "pointer",
+              }}
+              title="Matrix Grid View"
+            >
+              Grid
+            </button>
+          </div>
 
           {/* 3 View Mode Toggles */}
           <div className="view-toggle" style={{ margin: 0, display: "flex", gap: "2px" }}>
@@ -727,32 +935,64 @@ export function PieceMap({
         />
       </div>
 
-      {/* Canvas Grid Visualizer */}
-      <div
-        style={{
-          position: "relative",
-          width: "100%",
-          display: "flex",
-          justifyContent: "center",
-          backgroundColor: "#151412",
-          borderRadius: "6px",
-          padding: "4px",
-          border: "1px solid var(--border-light, #302c24)",
-          overflow: "hidden",
-        }}
-      >
-        <canvas
-          ref={canvasRef}
-          role="img"
-          aria-label="BitTorrent Piece Map Grid"
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
+      {/* Visualizer: Linear Bar or Matrix Grid */}
+      {layoutMode === "bar" ? (
+        <div
+          ref={barContainerRef}
           style={{
-            display: "block",
-            cursor: "crosshair",
+            position: "relative",
+            width: "100%",
+            height: "26px",
+            backgroundColor: "#151412",
+            borderRadius: "4px",
+            overflow: "hidden",
+            border: "1px solid var(--border-light, #302c24)",
+            display: "flex",
+            alignItems: "center",
+            padding: "1px",
           }}
-        />
-      </div>
+        >
+          <canvas
+            ref={barCanvasRef}
+            role="img"
+            aria-label="BitTorrent Piece Map Linear Bar"
+            onMouseMove={handleBarMouseMove}
+            onMouseLeave={handleMouseLeave}
+            style={{
+              display: "block",
+              width: "100%",
+              height: "24px",
+              cursor: "crosshair",
+            }}
+          />
+        </div>
+      ) : (
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            display: "flex",
+            justifyContent: "center",
+            backgroundColor: "#151412",
+            borderRadius: "6px",
+            padding: "4px",
+            border: "1px solid var(--border-light, #302c24)",
+            overflow: "hidden",
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            role="img"
+            aria-label="BitTorrent Piece Map Grid"
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+            style={{
+              display: "block",
+              cursor: "crosshair",
+            }}
+          />
+        </div>
+      )}
 
       {/* Mode C: Interactive File Boundary List */}
       {viewMode === "files" && fileBoundaries.length > 0 && (

@@ -163,6 +163,47 @@ export function useTorrentFiles(torrentId: number) {
   });
 }
 
+export function useSetFilePriority() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    void,
+    Error,
+    { torrentId: number; fileId: number; priority: number }
+  >({
+    mutationFn: ({ torrentId, fileId, priority }) =>
+      apiClient.put(`/torrent/${torrentId}/files/${fileId}/priority`, {
+        priority,
+      }),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["torrents", vars.torrentId, "files"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
+export function useSetFilesPriority() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    void,
+    Error,
+    { torrentId: number; files: Array<{ fileId: number; priority: number }> }
+  >({
+    mutationFn: async ({ torrentId, files }) => {
+      await apiClient.put(`/torrent/${torrentId}/files/priorities`, {
+        files: files.map((f) => ({ fileId: f.fileId, priority: f.priority })),
+      });
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["torrents", vars.torrentId, "files"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
 export function useRenameTorrentFile() {
   const queryClient = useQueryClient();
   return useMutation({

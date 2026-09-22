@@ -1,176 +1,1570 @@
-import { useState, useCallback, useRef } from "react";
-import { useTorrentFiles } from "../../api/hooks";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useTranslation } from "../../i18n";
+import {
+  useTorrentFiles,
+  useSetFilePriority,
+  useSetFilesPriority,
+} from "../../api/hooks";
 import { formatBytes } from "../../utils/formatters";
 import { PanelLoading, PanelEmpty } from "./shared";
-import { FilePriority, formatPriority } from "../../utils/fileTree";
+import { useToast } from "../../context/ToastContext";
+import { api } from "../../api/client";
+import type { Torrent, TorrentFileInfo } from "../../api/types";
+import { MediaPlayerModal } from "../MediaPlayerModal";
+import { isPlayableFile } from "../../utils/mediaPlayer";
 import { trackFilePriorityChange } from "../../utils/analytics";
 
-export function FilesTab({ torrentId }: { torrentId: number }) {
-  const { data: files, isLoading, isError } = useTorrentFiles(torrentId);
-  const [filePriorities, setFilePriorities] = useState<Record<number, FilePriority>>({});
-  const [fileWanted, setFileWanted] = useState<Record<number, boolean>>({});
+export const PRIORITY_OPTIONS = [
+  {
+    value: 0,
+    label: "Skip (Do not download)",
+    color: "var(--danger, #ef4444)",
+  },
+  { value: 1, label: "Low", color: "var(--info, #38bdf8)" },
+  { value: 3, label: "Normal", color: "var(--text-primary, #f8f4ed)" },
+  { value: 4, label: "High", color: "var(--accent, #ffd166)" },
+] as const;
+
+interface TreeNode {
+  id: string;
+  name: string;
+  fullPath: string;
+  isFolder: boolean;
+  file?: TorrentFileInfo;
+  children: TreeNode[];
+  descendantFiles: TorrentFileInfo[];
+  size: number;
+  bytesCompleted: number;
+  progress: number;
+  depth: number;
+}
+
+function getFileIcon(name: string, isFolder: boolean, isOpen: boolean): string {
+  if (isFolder) {
+    return isOpen ? "📂" : "📁";
+  }
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  switch (ext) {
+    case "mkv":
+    case "mp4":
+    case "avi":
+    case "mov":
+    case "wmv":
+    case "m4v":
+    case "webm":
+      return "🎬";
+    case "mp3":
+    case "flac":
+    case "wav":
+    case "aac":
+    case "ogg":
+    case "m4a":
+    case "opus":
+      return "🎵";
+    case "srt":
+    case "sub":
+    case "vtt":
+    case "ass":
+    case "idx":
+      return "💬";
+    case "zip":
+    case "rar":
+    case "7z":
+    case "tar":
+    case "gz":
+    case "iso":
+      return "📦";
+    case "jpg":
+    case "jpeg":
+    case "png":
+    case "webp":
+    case "gif":
+    case "bmp":
+      return "🖼️";
+    case "nfo":
+    case "txt":
+    case "log":
+    case "pdf":
+    case "epub":
+      return "📄";
+    default:
+      return "📄";
+  }
+}
+
+function extractFileMediaBadges(
+  filename: string,
+  torrent?: Torrent,
+): { label: string; bg: string; fg: string }[] {
+  const badges: { label: string; bg: string; fg: string }[] = [];
+  const lower = filename.toLowerCase();
+  const ext = lower.split(".").pop() || "";
+
+  if (["mkv", "mp4", "avi", "mov", "m4v"].includes(ext)) {
+    if (
+      lower.includes("2160p") ||
+      lower.includes("4k") ||
+      torrent?.resolution === "2160p"
+    ) {
+      badges.push({
+        label: "4K UHD",
+        bg: "rgba(37, 99, 235, 0.25)",
+        fg: "#60a5fa",
+      });
+    } else if (lower.includes("1080p") || torrent?.resolution === "1080p") {
+      badges.push({
+        label: "1080p",
+        bg: "rgba(37, 99, 235, 0.2)",
+        fg: "#93c5fd",
+      });
+    } else if (lower.includes("720p")) {
+      badges.push({
+        label: "720p",
+        bg: "rgba(37, 99, 235, 0.15)",
+        fg: "#bfdbfe",
+      });
+    }
+
+    if (
+      lower.includes("dv") ||
+      lower.includes("dovi") ||
+      lower.includes("dolby") ||
+      torrent?.hdrFormat?.includes("DV")
+    ) {
+      badges.push({
+        label: "DV",
+        bg: "rgba(217, 119, 6, 0.25)",
+        fg: "#fcd34d",
+      });
+    }
+    if (
+      lower.includes("hdr") ||
+      (torrent?.hdrFormat &&
+        torrent.hdrFormat !== "SDR" &&
+        !torrent.hdrFormat.includes("DV"))
+    ) {
+      badges.push({
+        label: "HDR",
+        bg: "rgba(217, 119, 6, 0.2)",
+        fg: "#fde68a",
+      });
+    }
+
+    if (
+      lower.includes("hevc") ||
+      lower.includes("x265") ||
+      lower.includes("h.265") ||
+      torrent?.videoCodec?.toLowerCase().includes("hevc")
+    ) {
+      badges.push({
+        label: "HEVC",
+        bg: "rgba(79, 70, 229, 0.25)",
+        fg: "#a5b4fc",
+      });
+    } else if (
+      lower.includes("avc") ||
+      lower.includes("x264") ||
+      lower.includes("h.264")
+    ) {
+      badges.push({
+        label: "AVC",
+        bg: "rgba(79, 70, 229, 0.2)",
+        fg: "#c7d2fe",
+      });
+    }
+
+    if (lower.includes("atmos") || lower.includes("truehd")) {
+      badges.push({
+        label: "Atmos",
+        bg: "rgba(5, 150, 105, 0.25)",
+        fg: "#6ee7b7",
+      });
+    } else if (lower.includes("dts-hd") || lower.includes("dts")) {
+      badges.push({
+        label: "DTS-HD",
+        bg: "rgba(5, 150, 105, 0.2)",
+        fg: "#a7f3d0",
+      });
+    }
+  } else if (["flac", "wav", "alac"].includes(ext)) {
+    badges.push({
+      label: "Lossless",
+      bg: "rgba(16, 185, 129, 0.25)",
+      fg: "#34d399",
+    });
+  } else if (["srt", "sub", "vtt", "ass", "idx"].includes(ext)) {
+    const parts = lower.split(".");
+    if (parts.length >= 3) {
+      const lang = parts[parts.length - 2];
+      if (lang && lang.length <= 4) {
+        badges.push({
+          label: `Sub (${lang.toUpperCase()})`,
+          bg: "rgba(168, 85, 247, 0.2)",
+          fg: "#d8b4fe",
+        });
+      }
+    } else {
+      badges.push({
+        label: "Sub",
+        bg: "rgba(168, 85, 247, 0.2)",
+        fg: "#d8b4fe",
+      });
+    }
+  }
+
+  return badges;
+}
+
+function normalizePriority(val?: number): number {
+  if (val === undefined || val === null) return 3; // Default Normal
+  if (val === 0) return 0;
+  if (val <= 2) return 1;
+  if (val === 3) return 3;
+  return 4;
+}
+
+function buildTree(files: TorrentFileInfo[]): TreeNode[] {
+  interface IntermediateNode {
+    name: string;
+    fullPath: string;
+    isFolder: boolean;
+    file?: TorrentFileInfo;
+    children: Map<string, IntermediateNode>;
+    size: number;
+    bytesCompleted: number;
+  }
+
+  const rootMap = new Map<string, IntermediateNode>();
+
+  for (const f of files) {
+    const rawPath = (f.path || "unnamed").replace(/\\/g, "/");
+    const parts = rawPath.split("/").filter(Boolean);
+
+    let currentMap = rootMap;
+    let accumulatedPath = "";
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      accumulatedPath = accumulatedPath ? `${accumulatedPath}/${part}` : part;
+      const isLast = i === parts.length - 1;
+
+      if (isLast) {
+        currentMap.set(part, {
+          name: part,
+          fullPath: accumulatedPath,
+          isFolder: false,
+          file: f,
+          children: new Map(),
+          size: f.size,
+          bytesCompleted: f.bytesCompleted ?? f.size * (f.progress ?? 0),
+        });
+      } else {
+        if (!currentMap.has(part)) {
+          currentMap.set(part, {
+            name: part,
+            fullPath: accumulatedPath,
+            isFolder: true,
+            children: new Map(),
+            size: 0,
+            bytesCompleted: 0,
+          });
+        }
+        currentMap = currentMap.get(part)!.children;
+      }
+    }
+  }
+
+  function convert(node: IntermediateNode, depth: number): TreeNode {
+    const childrenArr: TreeNode[] = [];
+    const descendantFiles: TorrentFileInfo[] = node.file ? [node.file] : [];
+    let totalSize = node.isFolder ? 0 : node.size;
+    let totalCompleted = node.isFolder ? 0 : node.bytesCompleted;
+
+    for (const child of node.children.values()) {
+      const convertedChild = convert(child, depth + 1);
+      childrenArr.push(convertedChild);
+      if (node.isFolder) {
+        totalSize += convertedChild.size;
+        totalCompleted += convertedChild.bytesCompleted;
+        descendantFiles.push(...convertedChild.descendantFiles);
+      }
+    }
+
+    // Sort: Folders first, then alphabetically
+    childrenArr.sort((a, b) => {
+      if (a.isFolder && !b.isFolder) return -1;
+      if (!a.isFolder && b.isFolder) return 1;
+      return a.name.localeCompare(b.name, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    });
+
+    const progress =
+      totalSize > 0
+        ? Math.min(1, Math.max(0, totalCompleted / totalSize))
+        : (node.file?.progress ?? 0);
+
+    return {
+      id: node.fullPath,
+      name: node.name,
+      fullPath: node.fullPath,
+      isFolder: node.isFolder,
+      file: node.file,
+      children: childrenArr,
+      descendantFiles,
+      size: totalSize,
+      bytesCompleted: totalCompleted,
+      progress,
+      depth,
+    };
+  }
+
+  const result: TreeNode[] = [];
+  for (const node of rootMap.values()) {
+    result.push(convert(node, 0));
+  }
+
+  result.sort((a, b) => {
+    if (a.isFolder && !b.isFolder) return -1;
+    if (!a.isFolder && b.isFolder) return 1;
+    return a.name.localeCompare(b.name, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+
+  return result;
+}
+
+function getDescendantFiles(node: TreeNode): TorrentFileInfo[] {
+  return node.descendantFiles || (node.file ? [node.file] : []);
+}
+
+export function FilesTab({
+  torrent,
+  torrentId,
+}: {
+  torrent?: Torrent;
+  torrentId?: number;
+}) {
+  const { t } = useTranslation();
+  const effectiveId = torrentId ?? torrent?.id ?? 0;
+  const { showToast } = useToast();
+  const savePath = torrent?.savePath || torrent?.sourcePath || null;
+  const [copiedPath, setCopiedPath] = React.useState(false);
+  const {
+    data: files,
+    isLoading,
+    isError,
+    refetch: refetchFiles,
+  } = useTorrentFiles(effectiveId);
+  const setFilePriority = useSetFilePriority();
+  const setFilesPriority = useSetFilesPriority();
+
+  const [renamingNode, setRenamingNode] = useState<{
+    fullPath: string;
+    isFolder: boolean;
+    name: string;
+  } | null>(null);
+  const [renameInput, setRenameInput] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [selectedMediaFile, setSelectedMediaFile] = useState<{
+    id: number;
+    path: string;
+    name: string;
+    size: number;
+  } | null>(null);
+
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [filterQuery, setFilterQuery] = useState("");
+  const [initializedTree, setInitializedTree] = useState(false);
+
+  useEffect(() => {
+    setInitializedTree(false);
+    setExpandedPaths(new Set());
+    setFilterQuery("");
+    setRenamingNode(null);
+    setRenameInput("");
+    setIsRenaming(false);
+  }, [effectiveId]);
+
+  const handleStartRename = (node: TreeNode, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenamingNode({
+      fullPath: node.fullPath,
+      isFolder: node.isFolder,
+      name: node.name,
+    });
+    setRenameInput(node.name);
+  };
+
+  const handleConfirmRename = async () => {
+    if (
+      !renamingNode ||
+      !renameInput.trim() ||
+      renameInput === renamingNode.name
+    ) {
+      setRenamingNode(null);
+      return;
+    }
+
+    const infoHash = torrent?.infoHash;
+    if (!infoHash) {
+      showToast("Cannot rename: Missing torrent info hash", "error");
+      return;
+    }
+
+    try {
+      setIsRenaming(true);
+      const segments = renamingNode.fullPath.split("/");
+      segments[segments.length - 1] = renameInput.trim();
+      const newFullPath = segments.join("/");
+
+      if (renamingNode.isFolder) {
+        await api.renameTorrentFolder(
+          infoHash,
+          renamingNode.fullPath,
+          newFullPath,
+        );
+      } else {
+        await api.renameTorrentFile(
+          infoHash,
+          renamingNode.fullPath,
+          newFullPath,
+        );
+      }
+
+      showToast(`Successfully renamed to '${renameInput.trim()}'`, "success");
+      setRenamingNode(null);
+      await refetchFiles();
+    } catch (err: any) {
+      showToast(err?.message || "Failed to rename item", "error");
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
+  const tree = useMemo(() => {
+    if (!files || files.length === 0) return [];
+    return buildTree(files);
+  }, [files]);
+
+  // Expand top-level folders initially
+  React.useEffect(() => {
+    if (tree.length > 0 && !initializedTree) {
+      const initialExpanded = new Set<string>();
+      const addFolders = (nodes: TreeNode[]) => {
+        for (const n of nodes) {
+          if (n.isFolder) {
+            initialExpanded.add(n.fullPath);
+            if (n.depth < 2) {
+              addFolders(n.children);
+            }
+          }
+        }
+      };
+      addFolders(tree);
+      setExpandedPaths(initialExpanded);
+      setInitializedTree(true);
+    }
+  }, [tree, initializedTree]);
+
+  const toggleFolder = useCallback((path: string) => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+
+  const expandAll = useCallback(() => {
+    const all = new Set<string>();
+    const collect = (nodes: TreeNode[]) => {
+      for (const n of nodes) {
+        if (n.isFolder) {
+          all.add(n.fullPath);
+          collect(n.children);
+        }
+      }
+    };
+    collect(tree);
+    setExpandedPaths(all);
+  }, [tree]);
+
+  const collapseAll = useCallback(() => {
+    setExpandedPaths(new Set());
+  }, []);
+
+  const handleSetPriority = useCallback(
+    (fileId: number, priority: number) => {
+      if (effectiveId <= 0) return;
+      const mapped =
+        priority === 0
+          ? "skip"
+          : priority === 4
+            ? "high"
+            : priority === 1
+              ? "low"
+              : "normal";
+      trackFilePriorityChange(mapped, 1);
+      setFilePriority.mutate({ torrentId: effectiveId, fileId, priority });
+    },
+    [effectiveId, setFilePriority],
+  );
+
+  const handleBatchSetPriority = useCallback(
+    (targetFiles: TorrentFileInfo[], priority: number) => {
+      if (effectiveId <= 0 || targetFiles.length === 0) return;
+      const mapped =
+        priority === 0
+          ? "skip"
+          : priority === 4
+            ? "high"
+            : priority === 1
+              ? "low"
+              : "normal";
+      trackFilePriorityChange(mapped, targetFiles.length);
+      setFilesPriority.mutate({
+        torrentId: effectiveId,
+        files: targetFiles.map((f) => ({ fileId: f.id, priority })),
+      });
+    },
+    [effectiveId, setFilesPriority],
+  );
+
+  const handleToggleNodeCheckbox = useCallback(
+    (node: TreeNode) => {
+      const targetFiles = getDescendantFiles(node);
+      if (targetFiles.length === 0) return;
+
+      const anyActive = targetFiles.some(
+        (f) => normalizePriority(f.priority) !== 0,
+      );
+      const newPriority = anyActive ? 0 : 3; // Toggle between Skip (0) and Normal (3)
+      handleBatchSetPriority(targetFiles, newPriority);
+    },
+    [handleBatchSetPriority],
+  );
+
+  // Flatten visible tree rows based on expanded state and filter query
+  const flatRows = useMemo(() => {
+    const rows: TreeNode[] = [];
+    const q = filterQuery.trim().toLowerCase();
+
+    function flatten(nodes: TreeNode[]) {
+      for (const node of nodes) {
+        const matchesFilter =
+          !q ||
+          node.name.toLowerCase().includes(q) ||
+          node.fullPath.toLowerCase().includes(q) ||
+          (node.isFolder &&
+            node.descendantFiles.some((f) => f.path.toLowerCase().includes(q)));
+
+        if (!matchesFilter) continue;
+
+        rows.push(node);
+
+        if (
+          node.isFolder &&
+          (expandedPaths.has(node.fullPath) || q.length > 0)
+        ) {
+          flatten(node.children);
+        }
+      }
+    }
+
+    flatten(tree);
+    return rows;
+  }, [tree, expandedPaths, filterQuery]);
+
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
-  const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
 
-  const handleWantedChange = useCallback((fileId: number, checked: boolean) => {
-    trackFilePriorityChange(checked ? "normal" : "skip", 1);
-    setFileWanted((prev) => ({ ...prev, [fileId]: checked }));
-    setFilePriorities((prev) => ({
-      ...prev,
-      [fileId]: checked ? "Normal" : "Do Not Download",
-    }));
-  }, []);
+  const rowVirtualizer = useVirtualizer({
+    count: flatRows.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 36,
+    overscan: 20,
+  });
 
-  const handlePriorityChange = useCallback((fileId: number, priority: FilePriority) => {
-    const isSkip = formatPriority(priority) === "Do Not Download";
-    trackFilePriorityChange(isSkip ? "skip" : priority === "High" ? "high" : "normal", 1);
-    setFilePriorities((prev) => ({ ...prev, [fileId]: priority }));
-    setFileWanted((prev) => ({
-      ...prev,
-      [fileId]: !isSkip,
-    }));
-  }, []);
+  const handleTableKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+      if (
+        tagName === "input" &&
+        (target as HTMLInputElement).type !== "checkbox"
+      ) {
+        return;
+      }
+      if (tagName === "textarea" || tagName === "select") {
+        return;
+      }
 
-  const nonPaddingFiles = files?.filter((f) => !f.isPaddingFile) ?? [];
+      if (flatRows.length === 0) return;
 
-  if (isLoading) return <PanelLoading>Loading files...</PanelLoading>;
-  if (isError) return <PanelEmpty>Failed to load files.</PanelEmpty>;
-  if (nonPaddingFiles.length === 0) return <PanelEmpty>No files</PanelEmpty>;
+      const currentNode = flatRows[focusedIndex];
+
+      // Up / Down navigation
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setFocusedIndex((prev) => {
+          const next = Math.min(flatRows.length - 1, prev + 1);
+          rowVirtualizer.scrollToIndex(next, { align: "auto" });
+          return next;
+        });
+        return;
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setFocusedIndex((prev) => {
+          const next = Math.max(0, prev - 1);
+          rowVirtualizer.scrollToIndex(next, { align: "auto" });
+          return next;
+        });
+        return;
+      }
+
+      // Right arrow: expand folder if collapsed
+      if (e.key === "ArrowRight") {
+        if (currentNode?.isFolder) {
+          e.preventDefault();
+          if (!expandedPaths.has(currentNode.fullPath)) {
+            setExpandedPaths((prev) => new Set([...prev, currentNode.fullPath]));
+          } else {
+            setFocusedIndex((prev) => {
+              const next = Math.min(flatRows.length - 1, prev + 1);
+              rowVirtualizer.scrollToIndex(next, { align: "auto" });
+              return next;
+            });
+          }
+        }
+        return;
+      }
+
+      // Left arrow: collapse folder if expanded, or move to parent
+      if (e.key === "ArrowLeft") {
+        if (currentNode?.isFolder && expandedPaths.has(currentNode.fullPath)) {
+          e.preventDefault();
+          setExpandedPaths((prev) => {
+            const next = new Set(prev);
+            next.delete(currentNode.fullPath);
+            return next;
+          });
+        } else if (currentNode && currentNode.depth > 0) {
+          e.preventDefault();
+          const currentDepth = currentNode.depth;
+          for (let i = focusedIndex - 1; i >= 0; i--) {
+            if (flatRows[i].isFolder && flatRows[i].depth < currentDepth) {
+              setFocusedIndex(i);
+              rowVirtualizer.scrollToIndex(i, { align: "auto" });
+              break;
+            }
+          }
+        }
+        return;
+      }
+
+      // Space: toggle selective download checkbox
+      if (e.key === " ") {
+        if (currentNode) {
+          e.preventDefault();
+          handleToggleNodeCheckbox(currentNode);
+        }
+        return;
+      }
+
+      // Priority keys: '0', '1', '2' (also '3', '4')
+      if (["0", "1", "2", "3", "4"].includes(e.key)) {
+        if (currentNode) {
+          e.preventDefault();
+          const pMap: Record<string, number> = {
+            "0": 0, // Skip
+            "1": 1, // Low
+            "2": 3, // Normal
+            "3": 3, // Normal
+            "4": 4, // High
+          };
+          const prio = pMap[e.key];
+          if (currentNode.isFolder) {
+            handleBatchSetPriority(currentNode.descendantFiles, prio);
+          } else if (currentNode.file) {
+            handleSetPriority(currentNode.file.id, prio);
+          }
+        }
+        return;
+      }
+    },
+    [
+      flatRows,
+      focusedIndex,
+      expandedPaths,
+      rowVirtualizer,
+      handleToggleNodeCheckbox,
+      handleBatchSetPriority,
+      handleSetPriority,
+    ],
+  );
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const totalHeight = rowVirtualizer.getTotalSize();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom =
+    virtualRows.length > 0
+      ? totalHeight - virtualRows[virtualRows.length - 1].end
+      : 0;
+
+  if (isLoading)
+    return <PanelLoading>{t("torrents.detail.loadingFiles")}</PanelLoading>;
+  if (isError)
+    return <PanelEmpty>{t("torrents.detail.failedToLoadFiles")}</PanelEmpty>;
+  if (!files || files.length === 0)
+    return <PanelEmpty>{t("torrents.detail.noFiles")}</PanelEmpty>;
+
+  const totalFilesCount = files.length;
+  const totalBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
+  const totalCompletedBytes = files.reduce(
+    (acc, f) => acc + (f.bytesCompleted ?? f.size * (f.progress ?? 0)),
+    0,
+  );
+  const overallProgress =
+    totalBytes > 0 ? (totalCompletedBytes / totalBytes) * 100 : 0;
 
   return (
-    <div className="detail-panel-table-wrap">
-      <table className="torrent-table" role="treegrid" aria-label="Torrent Files">
-        <thead>
-          <tr>
-            <th className="torrent-table-th" style={{ width: 60, textAlign: "center" }}>Wanted</th>
-            <th className="torrent-table-th">Path</th>
-            <th className="torrent-table-th" style={{ width: 100 }}>Size</th>
-            <th className="torrent-table-th" style={{ width: 130 }}>Progress</th>
-            <th className="torrent-table-th" style={{ width: 150 }}>Priority</th>
-          </tr>
-        </thead>
-        <tbody>
-          {nonPaddingFiles.map((f, idx) => {
-            const prio = filePriorities[f.id] ?? (f.wanted === false || f.priority === 0 ? "Do Not Download" : (f.priority === 6 || f.priority === 7 || f.priority === 2 ? "High" : "Normal"));
-            const wanted = fileWanted[f.id] ?? (f.wanted !== undefined ? f.wanted : formatPriority(prio) !== "Do Not Download");
-            const progress = f.bytesCompleted !== undefined && f.size > 0
-              ? Math.min(100, Math.max(0, (f.bytesCompleted / f.size) * 100))
-              : (wanted ? 100 : 0);
-
-            return (
-              <tr
-                key={f.id}
-                ref={(el) => {
-                  rowRefs.current[idx] = el;
-                }}
-                tabIndex={0}
-                role="row"
-                aria-selected={focusedIndex === idx}
-                className={`torrent-table-row${focusedIndex === idx ? " torrent-table-row-focused" : ""}`}
+    <div
+      className="files-tab-container"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        gap: "0.5rem",
+      }}
+    >
+      {/* Media Container Inspector Specifications Banner */}
+      {(torrent?.resolution ||
+        torrent?.videoCodec ||
+        torrent?.audioCodec ||
+        torrent?.hdrFormat) && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "0.5rem",
+            padding: "0.4rem 0.75rem",
+            backgroundColor: "rgba(23, 27, 53, 0.7)",
+            borderRadius: "6px",
+            border: "1px solid rgba(255, 209, 102, 0.25)",
+            fontSize: "0.78rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontWeight: 700,
+                color: "var(--accent-gold, #FFD166)",
+                fontSize: "0.75rem",
+              }}
+            >
+              {t("torrents.detail.mediaInspector")}
+            </span>
+            {torrent.resolution && (
+              <span
+                className="badge"
                 style={{
-                  outline: focusedIndex === idx ? "2px solid var(--accent, #6366f1)" : "none",
-                  outlineOffset: "-2px",
-                }}
-                onFocus={() => setFocusedIndex(idx)}
-                onKeyDown={(e) => {
-                  if (e.target instanceof HTMLSelectElement && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-                    return;
-                  }
-                  if (e.key === "ArrowDown") {
-                    e.preventDefault();
-                    const next = Math.min(nonPaddingFiles.length - 1, idx + 1);
-                    setFocusedIndex(next);
-                    rowRefs.current[next]?.focus();
-                  } else if (e.key === "ArrowUp") {
-                    e.preventDefault();
-                    const prev = Math.max(0, idx - 1);
-                    setFocusedIndex(prev);
-                    rowRefs.current[prev]?.focus();
-                  } else if (e.key === "Home") {
-                    e.preventDefault();
-                    setFocusedIndex(0);
-                    rowRefs.current[0]?.focus();
-                  } else if (e.key === "End") {
-                    e.preventDefault();
-                    const last = nonPaddingFiles.length - 1;
-                    setFocusedIndex(last);
-                    rowRefs.current[last]?.focus();
-                  } else if (e.key === " ") {
-                    e.preventDefault();
-                    handleWantedChange(f.id, !wanted);
-                  } else if (e.key === "1") {
-                    e.preventDefault();
-                    handlePriorityChange(f.id, "Normal");
-                  } else if (e.key === "2") {
-                    e.preventDefault();
-                    handlePriorityChange(f.id, "High");
-                  } else if (e.key === "0") {
-                    e.preventDefault();
-                    handlePriorityChange(f.id, "Do Not Download");
-                  }
+                  backgroundColor: "#2563eb",
+                  color: "#fff",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
                 }}
               >
-                <td style={{ textAlign: "center" }}>
-                  <input
-                    type="checkbox"
-                    aria-label={`Wanted for file ${f.path}`}
-                    checked={wanted}
-                    onChange={(e) => handleWantedChange(f.id, e.target.checked)}
-                    style={{ cursor: "pointer" }}
-                  />
-                </td>
-                <td className="mono">{f.path}</td>
-                <td>{formatBytes(f.size)}</td>
-                <td>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                {torrent.resolution}
+              </span>
+            )}
+            {torrent.videoCodec && (
+              <span
+                className="badge"
+                style={{
+                  backgroundColor: "#4f46e5",
+                  color: "#fff",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                }}
+              >
+                {torrent.videoCodec}
+              </span>
+            )}
+            {torrent.hdrFormat && torrent.hdrFormat !== "SDR" && (
+              <span
+                className="badge"
+                style={{
+                  backgroundColor: "#d97706",
+                  color: "#fff",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                }}
+              >
+                {torrent.hdrFormat}
+              </span>
+            )}
+            {torrent.audioCodec && (
+              <span
+                className="badge"
+                style={{
+                  backgroundColor: "#059669",
+                  color: "#fff",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                }}
+              >
+                {torrent.audioCodec}{" "}
+                {torrent.audioChannels ? `(${torrent.audioChannels})` : ""}
+              </span>
+            )}
+          </div>
+          <span
+            style={{ fontSize: "0.7rem", color: "var(--text-muted, #8a879e)" }}
+          >
+            {t("torrents.detail.taglibParser")}
+          </span>
+        </div>
+      )}
+
+      {/* PWD Context Banner */}
+      {savePath && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "0.5rem",
+            padding: "0.5rem 0.85rem",
+            backgroundColor: "rgba(23, 27, 53, 0.6)",
+            border: "1px solid var(--border-light)",
+            borderRadius: "6px",
+            fontSize: "0.82rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              overflow: "hidden",
+            }}
+          >
+            <span style={{ fontSize: "0.95rem", flexShrink: 0 }}>📂</span>
+            <span
+              style={{
+                color: "var(--text-muted, #8a879e)",
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              {t("torrents.detail.pwd")}
+            </span>
+            <code
+              style={{
+                fontFamily: "monospace",
+                fontSize: "0.78rem",
+                backgroundColor: "rgba(255, 255, 255, 0.06)",
+                padding: "0.15rem 0.45rem",
+                borderRadius: "4px",
+                color: "var(--accent, #ffd166)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+              title={savePath}
+            >
+              {savePath}
+            </code>
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{
+              padding: "0.15rem 0.45rem",
+              fontSize: "0.72rem",
+              borderRadius: "4px",
+              flexShrink: 0,
+            }}
+            onClick={() => {
+              navigator.clipboard.writeText(savePath);
+              setCopiedPath(true);
+              setTimeout(() => setCopiedPath(false), 2000);
+            }}
+            title={t("torrents.detail.copyPathTooltip")}
+          >
+            {copiedPath
+              ? t("torrents.detail.copied")
+              : t("torrents.detail.copy")}
+          </button>
+        </div>
+      )}
+
+      {/* File Controls Toolbar */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "0.4rem 0.6rem",
+          backgroundColor: "var(--bg-secondary, #171B35)",
+          borderRadius: "6px",
+          border: "1px solid var(--border)",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+          fontSize: "0.8rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <span style={{ color: "var(--text-secondary, #C7C5D3)" }}>
+            {t("torrents.detail.filesSummary", {
+              count: totalFilesCount,
+              total: formatBytes(totalBytes),
+            })}
+          </span>
+          <span
+            style={{
+              padding: "0.1rem 0.4rem",
+              borderRadius: "4px",
+              backgroundColor: "rgba(255, 209, 102, 0.12)",
+              color: "var(--accent-gold, #FFD166)",
+              fontWeight: 600,
+              fontSize: "0.75rem",
+            }}
+          >
+            {t("torrents.detail.percentVerified", {
+              percent: overallProgress.toFixed(1),
+            })}
+          </span>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <input
+            type="text"
+            placeholder={t("torrents.detail.filterFilesPlaceholder")}
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            style={{
+              backgroundColor: "var(--bg-primary, #10111A)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary, #F8F4ED)",
+              borderRadius: "4px",
+              padding: "0.2rem 0.5rem",
+              fontSize: "0.75rem",
+              outline: "none",
+              width: "140px",
+            }}
+          />
+          <button
+            type="button"
+            className="btn btn-small btn-outline"
+            onClick={expandAll}
+            style={{ fontSize: "0.72rem", padding: "0.2rem 0.5rem" }}
+          >
+            {t("torrents.detail.expandAll")}
+          </button>
+          <button
+            type="button"
+            className="btn btn-small btn-outline"
+            onClick={collapseAll}
+            style={{ fontSize: "0.72rem", padding: "0.2rem 0.5rem" }}
+          >
+            {t("torrents.detail.collapseAll")}
+          </button>
+        </div>
+      </div>
+
+      {/* Hierarchical File Tree Table */}
+      <div
+        ref={tableContainerRef}
+        tabIndex={0}
+        onKeyDown={handleTableKeyDown}
+        className="detail-panel-table-wrap"
+        style={{ flex: 1, overflow: "auto", minHeight: 0, outline: "none" }}
+      >
+        <table
+          className="torrent-table"
+          style={{ width: "100%", borderCollapse: "collapse" }}
+        >
+          <thead>
+            <tr
+              style={{
+                position: "sticky",
+                top: 0,
+                backgroundColor: "var(--bg-primary, #10111A)",
+                zIndex: 2,
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <th
+                className="torrent-table-th"
+                style={{ width: 36, textAlign: "center" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={files.every(
+                    (f) => normalizePriority(f.priority) !== 0,
+                  )}
+                  ref={(input) => {
+                    if (input) {
+                      const someActive = files.some(
+                        (f) => normalizePriority(f.priority) !== 0,
+                      );
+                      const allActive = files.every(
+                        (f) => normalizePriority(f.priority) !== 0,
+                      );
+                      input.indeterminate = someActive && !allActive;
+                    }
+                  }}
+                  onChange={() => {
+                    const allActive = files.every(
+                      (f) => normalizePriority(f.priority) !== 0,
+                    );
+                    handleBatchSetPriority(files, allActive ? 0 : 3);
+                  }}
+                  title={t("torrents.detail.toggleAllFiles")}
+                />
+              </th>
+              <th className="torrent-table-th" style={{ textAlign: "left" }}>
+                {t("torrents.detail.colName")}
+              </th>
+              <th
+                className="torrent-table-th"
+                style={{ width: 90, textAlign: "right" }}
+              >
+                {t("torrents.detail.colSize")}
+              </th>
+              <th
+                className="torrent-table-th"
+                style={{ width: 140, textAlign: "left" }}
+              >
+                {t("torrents.detail.colProgress")}
+              </th>
+              <th
+                className="torrent-table-th"
+                style={{ width: 130, textAlign: "center" }}
+              >
+                {t("torrents.detail.colPriority")}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {paddingTop > 0 && (
+              <tr>
+                <td
+                  colSpan={5}
+                  style={{ height: `${paddingTop}px`, padding: 0, border: 0 }}
+                />
+              </tr>
+            )}
+            {virtualRows.map((virtualRow) => {
+              const node = flatRows[virtualRow.index];
+              const descendantFiles = node.descendantFiles;
+              const isFolder = node.isFolder;
+              const isExpanded = expandedPaths.has(node.fullPath);
+
+              // Checkbox state
+              const allChecked = descendantFiles.every(
+                (f) => normalizePriority(f.priority) !== 0,
+              );
+              const someChecked = descendantFiles.some(
+                (f) => normalizePriority(f.priority) !== 0,
+              );
+              const isIndeterminate = someChecked && !allChecked;
+
+              // Priority for node
+              const currentPriority = isFolder
+                ? descendantFiles.every(
+                    (f) =>
+                      normalizePriority(f.priority) ===
+                      normalizePriority(descendantFiles[0]?.priority),
+                  )
+                  ? normalizePriority(descendantFiles[0]?.priority)
+                  : -1
+                : normalizePriority(node.file?.priority);
+
+              const pct = Math.floor(node.progress * 100);
+              const isKeyboardFocused = focusedIndex === virtualRow.index;
+
+              return (
+                <tr
+                  key={node.id}
+                  className="torrent-table-row"
+                  style={{
+                    backgroundColor: isKeyboardFocused
+                      ? "rgba(255, 209, 102, 0.15)"
+                      : isFolder
+                        ? "rgba(23, 27, 53, 0.4)"
+                        : "transparent",
+                    borderBottom: "1px solid rgba(35, 40, 75, 0.5)",
+                    outline: isKeyboardFocused
+                      ? "1px solid var(--accent, #ffd166)"
+                      : "none",
+                    outlineOffset: "-1px",
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setFocusedIndex(virtualRow.index)}
+                >
+                  {/* Selective Download Checkbox */}
+                  <td style={{ textAlign: "center", padding: "0.4rem 0.2rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={allChecked}
+                      ref={(input) => {
+                        if (input) input.indeterminate = isIndeterminate;
+                      }}
+                      onChange={() => handleToggleNodeCheckbox(node)}
+                      title={
+                        isFolder
+                          ? t(
+                              "components.toggleFilesInFolder",
+                              "Toggle {count} files in folder",
+                              { count: descendantFiles.length },
+                            )
+                          : t(
+                              "components.toggleSelectiveDownload",
+                              "Toggle selective download",
+                            )
+                      }
+                    />
+                  </td>
+
+                  {/* Name with indentation and folder expander */}
+                  <td style={{ padding: "0.4rem 0.5rem" }}>
                     <div
                       style={{
-                        flex: 1,
-                        minWidth: 40,
-                        maxWidth: 70,
-                        height: 6,
-                        backgroundColor: "rgba(255, 255, 255, 0.1)",
-                        borderRadius: 3,
-                        overflow: "hidden",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        paddingLeft: `${node.depth * 18}px`,
+                      }}
+                    >
+                      {isFolder ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleFolder(node.fullPath)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "var(--text-secondary, #C7C5D3)",
+                            cursor: "pointer",
+                            padding: "0 2px",
+                            fontSize: "0.75rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          {isExpanded ? "▼" : "▶"}
+                        </button>
+                      ) : (
+                        <span
+                          style={{ width: "12px", display: "inline-block" }}
+                        />
+                      )}
+
+                      <span style={{ fontSize: "0.95rem" }}>
+                        {getFileIcon(node.name, isFolder, isExpanded)}
+                      </span>
+
+                      <span
+                        style={{
+                          fontWeight: isFolder ? 600 : 400,
+                          color:
+                            currentPriority === 0
+                              ? "var(--text-muted, #8a879e)"
+                              : isFolder
+                                ? "var(--text-primary, #F8F4ED)"
+                                : "var(--text-secondary, #C7C5D3)",
+                          textDecoration:
+                            currentPriority === 0 ? "line-through" : "none",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={
+                          savePath
+                            ? `${savePath}/${node.fullPath}`
+                            : node.fullPath
+                        }
+                      >
+                        {node.name}
+                        {isFolder && (
+                          <span
+                            style={{
+                              fontSize: "0.72rem",
+                              color: "var(--text-muted, #8a879e)",
+                              marginLeft: "6px",
+                              fontWeight: 400,
+                            }}
+                          >
+                            {t("torrents.detail.items", {
+                              count: descendantFiles.length,
+                            })}
+                          </span>
+                        )}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleStartRename(node, e)}
+                        title={
+                          node.isFolder
+                            ? t("torrents.detail.renameFolder")
+                            : t("torrents.detail.renameFile")
+                        }
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: "1px 4px",
+                          fontSize: "0.75rem",
+                          color: "var(--text-muted, #8a879e)",
+                          borderRadius: "3px",
+                          marginLeft: "6px",
+                          opacity: 0.6,
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.opacity = "1")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.opacity = "0.6")
+                        }
+                      >
+                        ✏️
+                      </button>
+
+                      {!isFolder && node.file && isPlayableFile(node.name) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedMediaFile({
+                              id: node.file!.id,
+                              path: node.fullPath,
+                              name: node.name,
+                              size: node.size,
+                            });
+                          }}
+                          title={`Stream / Play ${node.name}`}
+                          aria-label={`Play ${node.name}`}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "1px 4px",
+                            fontSize: "0.8rem",
+                            color: "var(--accent-gold, #ffd166)",
+                            borderRadius: "3px",
+                            marginLeft: "4px",
+                            opacity: 0.85,
+                          }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.opacity = "1")
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.opacity = "0.85")
+                          }
+                        >
+                          ▶
+                        </button>
+                      )}
+
+                      {!isFolder && (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            gap: "4px",
+                            alignItems: "center",
+                            marginLeft: "6px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {extractFileMediaBadges(node.name, torrent).map(
+                            (b, idx) => (
+                              <span
+                                key={idx}
+                                style={{
+                                  fontSize: "0.62rem",
+                                  fontWeight: 700,
+                                  padding: "0.05rem 0.3rem",
+                                  borderRadius: "3px",
+                                  backgroundColor: b.bg,
+                                  color: b.fg,
+                                  border: `1px solid ${b.fg}40`,
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                {b.label}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Size */}
+                  <td
+                    style={{
+                      textAlign: "right",
+                      padding: "0.4rem 0.75rem",
+                      color: "var(--text-secondary, #C7C5D3)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {formatBytes(node.size)}
+                  </td>
+
+                  {/* Progress Bar & Pct */}
+                  <td style={{ padding: "0.4rem 0.75rem" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
                     >
                       <div
                         style={{
-                          width: `${progress}%`,
-                          height: "100%",
-                          backgroundColor: progress >= 100 ? "#2ecc71" : "#3498db",
+                          flex: 1,
+                          height: 5,
+                          backgroundColor: "rgba(255, 255, 255, 0.08)",
+                          borderRadius: 3,
+                          overflow: "hidden",
                         }}
-                      />
+                      >
+                        <div
+                          style={{
+                            width: `${pct}%`,
+                            height: "100%",
+                            backgroundColor:
+                              pct >= 100
+                                ? "var(--success, #10b981)"
+                                : "var(--accent-gold, #FFD166)",
+                            transition: "width 0.2s",
+                          }}
+                        />
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          width: "35px",
+                          textAlign: "right",
+                          color: "var(--text-secondary, #C7C5D3)",
+                        }}
+                      >
+                        {pct}%
+                      </span>
                     </div>
-                    <span style={{ fontSize: "0.75rem", minWidth: 38 }}>
-                      {progress.toFixed(1)}%
-                    </span>
-                  </div>
-                </td>
-                <td>
-                  <select
-                    aria-label={`Priority for file ${f.path}`}
-                    className="form-control"
-                    style={{
-                      fontSize: "0.75rem",
-                      padding: "0.15rem 0.35rem",
-                      height: "auto",
-                      width: "auto",
-                      cursor: "pointer",
-                    }}
-                    value={formatPriority(prio)}
-                    onChange={(e) => handlePriorityChange(f.id, e.target.value as FilePriority)}
-                  >
-                    <option value="Normal">Normal</option>
-                    <option value="High">High</option>
-                    <option value="Do Not Download">Do Not Download</option>
-                  </select>
-                </td>
+                  </td>
+
+                  {/* Priority Select */}
+                  <td style={{ textAlign: "center", padding: "0.3rem 0.5rem" }}>
+                    <select
+                      value={currentPriority === -1 ? "" : currentPriority}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (isNaN(val)) return;
+                        if (isFolder) {
+                          handleBatchSetPriority(descendantFiles, val);
+                        } else if (node.file) {
+                          handleSetPriority(node.file.id, val);
+                        }
+                      }}
+                      style={{
+                        backgroundColor: "var(--bg-secondary, #171B35)",
+                        border: "1px solid var(--border)",
+                        color:
+                          currentPriority === 0
+                            ? "var(--danger, #ef4444)"
+                            : currentPriority === 4
+                              ? "var(--accent-gold, #FFD166)"
+                              : "var(--text-primary, #F8F4ED)",
+                        borderRadius: "4px",
+                        padding: "0.15rem 0.35rem",
+                        fontSize: "0.72rem",
+                        fontWeight: 500,
+                        cursor: "pointer",
+                        outline: "none",
+                      }}
+                    >
+                      {currentPriority === -1 && (
+                        <option value="" disabled>
+                          {t("torrents.detail.mixed")}
+                        </option>
+                      )}
+                      {PRIORITY_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.value === 0
+                            ? t("torrents.detail.prioSkip")
+                            : opt.value === 1
+                              ? t("torrents.detail.prioLow")
+                              : opt.value === 3
+                                ? t("torrents.detail.prioNormal")
+                                : t("torrents.detail.prioHigh")}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              );
+            })}
+            {paddingBottom > 0 && (
+              <tr>
+                <td
+                  colSpan={5}
+                  style={{
+                    height: `${paddingBottom}px`,
+                    padding: 0,
+                    border: 0,
+                  }}
+                />
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {renamingNode && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={() => !isRenaming && setRenamingNode(null)}
+        >
+          <div
+            style={{
+              backgroundColor: "var(--bg-card, #171b35)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              padding: "1.5rem",
+              width: "100%",
+              maxWidth: "480px",
+              boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3
+              style={{
+                margin: "0 0 1rem",
+                fontSize: "1.1rem",
+                color: "var(--text-primary)",
+              }}
+            >
+              {renamingNode.isFolder
+                ? t("torrents.detail.renameFolder")
+                : t("torrents.detail.renameFile")}
+            </h3>
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-secondary)",
+                marginBottom: "0.75rem",
+              }}
+            >
+              {t("torrents.detail.originalPath", {
+                path: renamingNode.fullPath,
+              })}
+            </p>
+            <input
+              type="text"
+              value={renameInput}
+              onChange={(e) => setRenameInput(e.target.value)}
+              className="input-text"
+              style={{
+                width: "100%",
+                padding: "0.5rem 0.75rem",
+                fontSize: "0.9rem",
+                borderRadius: "6px",
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--bg-primary)",
+                color: "var(--text-primary)",
+                marginBottom: "1.25rem",
+              }}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleConfirmRename();
+                if (e.key === "Escape") setRenamingNode(null);
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.75rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setRenamingNode(null)}
+                disabled={isRenaming}
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleConfirmRename}
+                disabled={
+                  isRenaming ||
+                  !renameInput.trim() ||
+                  renameInput === renamingNode.name
+                }
+              >
+                {isRenaming
+                  ? t("torrents.detail.renaming")
+                  : t("torrents.detail.saveName")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {selectedMediaFile && (
+        <MediaPlayerModal
+          isOpen={Boolean(selectedMediaFile)}
+          onClose={() => setSelectedMediaFile(null)}
+          torrent={torrent ?? { id: effectiveId, name: "" }}
+          file={selectedMediaFile}
+        />
+      )}
     </div>
   );
 }
+
+export default FilesTab;

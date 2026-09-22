@@ -544,6 +544,39 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return files.Select(TorrentResourceMapper.ToFileResource).ToList();
     }
 
+    [HttpPost("{torrentId:int}/files/{fileId:int}/priority")]
+    [HttpPut("{torrentId:int}/files/{fileId:int}/priority")]
+    public ActionResult SetFilePriority(int torrentId, int fileId, [FromBody] SetFilePriorityRequest request = null, [FromQuery] int? priority = null)
+    {
+        var prio = request?.Priority ?? priority;
+        if (!prio.HasValue)
+        {
+            return BadRequest("Priority must be provided.");
+        }
+
+        var success = _torrentFileService.SetPriority(torrentId, fileId, prio.Value);
+        if (!success)
+        {
+            return NotFound("File not found or does not belong to torrent.");
+        }
+
+        return Ok(new { success = true });
+    }
+
+    [HttpPost("{torrentId:int}/files/priorities")]
+    [HttpPut("{torrentId:int}/files/priorities")]
+    public ActionResult SetFilePriorities(int torrentId, [FromBody] SetFilePrioritiesRequest request)
+    {
+        if (request?.Files == null || request.Files.Count == 0)
+        {
+            return BadRequest("At least one file priority must be specified.");
+        }
+
+        var pairs = request.Files.Select(f => (f.FileId, f.Priority));
+        var success = _torrentFileService.SetPriorities(torrentId, pairs);
+        return Ok(new { success });
+    }
+
     [HttpGet("{torrentId:int}/stream")]
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is validated against torrent save directory")]
     public ActionResult StreamTorrent(int torrentId)

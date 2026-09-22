@@ -59,6 +59,11 @@ export interface Torrent {
   isVpnPaused?: boolean;
   errorMessage?: string | null;
   magnetLink?: string | null;
+  resolution?: string | null;
+  hdrFormat?: string | null;
+  videoCodec?: string | null;
+  audioCodec?: string | null;
+  audioChannels?: string | null;
 }
 
 export interface TrackerMetric {
@@ -184,6 +189,7 @@ export interface TorrentFileInfo {
   wanted?: boolean;
   priority?: number;
   bytesCompleted?: number;
+  progress?: number;
 }
 
 export interface SubtitleTrack {
