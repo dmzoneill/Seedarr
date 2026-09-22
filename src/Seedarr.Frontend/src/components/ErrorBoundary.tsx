@@ -1,6 +1,7 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 import { trackException } from "../utils/analytics";
+import { translate } from "../i18n";
 
 interface Props {
   children: ReactNode;
@@ -114,7 +115,7 @@ class ErrorBoundary extends Component<Props, State> {
                     fontWeight: 600,
                   }}
                 >
-                  Something went wrong
+                  {translate("components.somethingWentWrong", undefined, "Something went wrong")}
                 </h2>
                 <div
                   style={{
@@ -123,7 +124,11 @@ class ErrorBoundary extends Component<Props, State> {
                     marginTop: "0.2rem",
                   }}
                 >
-                  An unexpected error occurred while rendering this component.
+                  {translate(
+                    "components.anUnexpectedErrorOccurred",
+                    undefined,
+                    "An unexpected error occurred while rendering this component.",
+                  )}
                 </div>
               </div>
             </div>
@@ -142,7 +147,8 @@ class ErrorBoundary extends Component<Props, State> {
                 wordBreak: "break-word",
               }}
             >
-              {this.state.error?.message || "An unexpected error occurred."}
+              {this.state.error?.message ||
+                translate("components.anUnexpectedErrorOccurred", undefined, "An unexpected error occurred.")}
             </p>
 
             <div
@@ -159,14 +165,14 @@ class ErrorBoundary extends Component<Props, State> {
                 className="btn btn-primary"
                 onClick={this.handleReset}
               >
-                Try Again
+                {translate("components.tryAgain", undefined, "Try Again")}
               </button>
               <button
                 type="button"
                 className="btn btn-outline"
                 onClick={this.handleReload}
               >
-                Reload Page
+                {translate("components.reloadPage", undefined, "Reload Page")}
               </button>
               <button
                 type="button"
@@ -174,7 +180,9 @@ class ErrorBoundary extends Component<Props, State> {
                 onClick={this.handleCopyStack}
                 style={{ marginLeft: "auto" }}
               >
-                {this.state.copied ? "✓ Copied Details" : "📋 Copy Error Details"}
+                {this.state.copied
+                  ? translate("components.copiedDetails", undefined, "✓ Copied Details")
+                  : translate("components.copyErrorDetails", undefined, "📋 Copy Error Details")}
               </button>
             </div>
 

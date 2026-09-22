@@ -118,7 +118,13 @@ export function DeleteTorrentModal({
             }}
           >
             <span>🔒</span>
-            <span>You have ReadOnly permissions. Torrents cannot be deleted.</span>
+            <span>
+              {t(
+                "torrents.readOnlyDeleteWarning",
+                undefined,
+                "You have ReadOnly permissions. Torrents cannot be deleted.",
+              )}
+            </span>
           </div>
         )}
 
@@ -232,7 +238,11 @@ export function DeleteTorrentModal({
             disabled={isPending || !canDeleteTorrent}
             title={
               !canDeleteTorrent
-                ? "Deleting torrents requires operator or admin role"
+                ? t(
+                    "torrents.deletePermissionRequired",
+                    undefined,
+                    "Deleting torrents requires operator or admin role",
+                  )
                 : undefined
             }
             style={{

@@ -195,9 +195,9 @@ export function GettingStartedModal({
         id: "welcome",
         stepNum: 0,
         icon: "🚀",
-        shortName: t("gettingStarted.stepWelcome", undefined, "Welcome"),
+        shortName: t("modals.gettingStarted.stepWelcome", undefined, "Welcome"),
         title: t(
-          "gettingStarted.stepWelcomeTitle",
+          "modals.gettingStarted.stepWelcomeTitle",
           undefined,
           "Welcome to Seedarr",
         ),
@@ -207,12 +207,12 @@ export function GettingStartedModal({
         stepNum: 1,
         icon: "📥",
         shortName: t(
-          "gettingStarted.stepClient",
+          "modals.gettingStarted.stepClient",
           undefined,
           "Download Client",
         ),
         title: t(
-          "gettingStarted.stepClientTitle",
+          "modals.gettingStarted.stepClientTitle",
           undefined,
           "Add Download Client",
         ),
@@ -221,9 +221,9 @@ export function GettingStartedModal({
         id: "prowlarr",
         stepNum: 2,
         icon: "🔍",
-        shortName: t("gettingStarted.stepProwlarr", undefined, "Prowlarr"),
+        shortName: t("modals.gettingStarted.stepProwlarr", undefined, "Prowlarr"),
         title: t(
-          "gettingStarted.stepProwlarrTitle",
+          "modals.gettingStarted.stepProwlarrTitle",
           undefined,
           "Add Indexer",
         ),
@@ -232,9 +232,9 @@ export function GettingStartedModal({
         id: "sonarr",
         stepNum: 3,
         icon: "📺",
-        shortName: t("gettingStarted.stepSonarr", undefined, "Sonarr"),
+        shortName: t("modals.gettingStarted.stepSonarr", undefined, "Sonarr"),
         title: t(
-          "gettingStarted.stepSonarrTitle",
+          "modals.gettingStarted.stepSonarrTitle",
           undefined,
           "Add Connection",
         ),
@@ -243,9 +243,9 @@ export function GettingStartedModal({
         id: "radarr",
         stepNum: 4,
         icon: "🎬",
-        shortName: t("gettingStarted.stepRadarr", undefined, "Radarr"),
+        shortName: t("modals.gettingStarted.stepRadarr", undefined, "Radarr"),
         title: t(
-          "gettingStarted.stepRadarrTitle",
+          "modals.gettingStarted.stepRadarrTitle",
           undefined,
           "Add Connection",
         ),
@@ -254,9 +254,9 @@ export function GettingStartedModal({
         id: "lidarr",
         stepNum: 5,
         icon: "🎵",
-        shortName: t("gettingStarted.stepLidarr", undefined, "Lidarr"),
+        shortName: t("modals.gettingStarted.stepLidarr", undefined, "Lidarr"),
         title: t(
-          "gettingStarted.stepLidarrTitle",
+          "modals.gettingStarted.stepLidarrTitle",
           undefined,
           "Add Connection",
         ),
@@ -265,9 +265,9 @@ export function GettingStartedModal({
         id: "storage",
         stepNum: 6,
         icon: "💾",
-        shortName: t("gettingStarted.stepStorage", undefined, "Storage"),
+        shortName: t("modals.gettingStarted.stepStorage", undefined, "Storage"),
         title: t(
-          "gettingStarted.stepStorageTitle",
+          "modals.gettingStarted.stepStorageTitle",
           undefined,
           "Storage & Downloads",
         ),
@@ -276,9 +276,9 @@ export function GettingStartedModal({
         id: "finish",
         stepNum: 7,
         icon: "🎉",
-        shortName: t("gettingStarted.stepFinished", undefined, "Finished"),
+        shortName: t("modals.gettingStarted.stepFinished", undefined, "Finished"),
         title: t(
-          "gettingStarted.stepFinishedTitle",
+          "modals.gettingStarted.stepFinishedTitle",
           undefined,
           "Setup Complete",
         ),
@@ -561,7 +561,7 @@ export function GettingStartedModal({
         name:
           clientForm.name?.trim() ||
           clientForm.clientType ||
-          t("gettingStarted.stepClient", undefined, "Download Client"),
+          t("modals.gettingStarted.stepClient", undefined, "Download Client"),
         implementation: `${clientForm.clientType || "QBitTorrent"}DownloadClient`,
         configContract: "DownloadClientDefinition",
       },
@@ -574,7 +574,7 @@ export function GettingStartedModal({
           setClientError(
             err.message ||
               t(
-                "gettingStarted.saveClientFailed",
+                "modals.gettingStarted.saveClientFailed",
                 undefined,
                 "Failed to save download client. Please verify connection parameters.",
               ),
@@ -622,7 +622,7 @@ export function GettingStartedModal({
           setIndexerError(
             err.message ||
               t(
-                "gettingStarted.saveIndexerFailed",
+                "modals.gettingStarted.saveIndexerFailed",
                 undefined,
                 "Failed to save indexer. Please verify host and API key.",
               ),
@@ -679,7 +679,7 @@ export function GettingStartedModal({
           setError(
             err.message ||
               t(
-                "gettingStarted.saveArrFailed",
+                "modals.gettingStarted.saveArrFailed",
                 undefined,
                 `Failed to save ${arrType} connection. Please verify credentials.`,
               ),
@@ -772,7 +772,7 @@ export function GettingStartedModal({
       setStorageError(
         err?.message ||
           t(
-            "gettingStarted.saveStorageFailed",
+            "modals.gettingStarted.saveStorageFailed",
             undefined,
             "Failed to save storage configuration.",
           ),
@@ -806,7 +806,7 @@ export function GettingStartedModal({
         >
           <span>
             {t(
-              "gettingStarted.testingTo",
+              "modals.gettingStarted.testingTo",
               { target: targetName },
               `Testing connection to ${targetName}...`,
             )}
@@ -849,12 +849,12 @@ export function GettingStartedModal({
             <div style={{ fontWeight: 600 }}>
               {result.success
                 ? t(
-                    "gettingStarted.connectionSuccess",
+                    "modals.gettingStarted.connectionSuccess",
                     undefined,
                     "Connection Successful",
                   )
                 : t(
-                    "gettingStarted.connectionFailed",
+                    "modals.gettingStarted.connectionFailed",
                     undefined,
                     "Connection Failed",
                   )}
@@ -905,7 +905,7 @@ export function GettingStartedModal({
         </span>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600 }}>
-            {t("gettingStarted.validationErrorTitle", undefined, "Configuration Error")}
+            {t("modals.gettingStarted.validationErrorTitle", undefined, "Configuration Error")}
           </div>
           <div
             style={{
@@ -979,7 +979,7 @@ export function GettingStartedModal({
             border: 0,
           }}
         >
-          {t("gettingStarted.title", undefined, "Getting Started Setup Guide")}
+          {t("modals.gettingStarted.title", undefined, "Getting Started Setup Guide")}
         </h2>
         {/* Top Header Controls: Mode Selector & Close Button */}
         <div
@@ -1017,12 +1017,12 @@ export function GettingStartedModal({
                 cursor: "pointer",
               }}
               title={t(
-                "gettingStarted.guideMode",
+                "modals.gettingStarted.guideMode",
                 undefined,
                 "Tour mode with example preview",
               )}
             >
-              👁️ {t("gettingStarted.guideMode", undefined, "Tour / Example")}
+              👁️ {t("modals.gettingStarted.guideMode", undefined, "Tour / Example")}
             </button>
             <button
               type="button"
@@ -1041,12 +1041,12 @@ export function GettingStartedModal({
                 cursor: "pointer",
               }}
               title={t(
-                "gettingStarted.liveSetupMode",
+                "modals.gettingStarted.liveSetupMode",
                 undefined,
                 "Live setup to test and save credentials",
               )}
             >
-              ⚡ {t("gettingStarted.liveSetupMode", undefined, "Live Setup")}
+              ⚡ {t("modals.gettingStarted.liveSetupMode", undefined, "Live Setup")}
             </button>
           </div>
 
@@ -1063,7 +1063,7 @@ export function GettingStartedModal({
                 lineHeight: 1,
               }}
               onClick={() => handleClose(true)}
-              title={t("gettingStarted.close", undefined, "Close Setup Guide (Esc)")}
+              title={t("modals.gettingStarted.close", undefined, "Close Setup Guide (Esc)")}
             >
               ✕
             </button>
@@ -1136,7 +1136,7 @@ export function GettingStartedModal({
                 marginBottom: "0.75rem",
               }}
             >
-              🚀 {t("gettingStarted.welcomeTitle", undefined, "Welcome to Seedarr!")}
+              🚀 {t("modals.gettingStarted.welcomeTitle", undefined, "Welcome to Seedarr!")}
             </h3>
 
             <p
@@ -1148,7 +1148,7 @@ export function GettingStartedModal({
               }}
             >
               {t(
-                "gettingStarted.welcomeBody",
+                "modals.gettingStarted.welcomeBody",
                 undefined,
                 "Seedarr is an integrated, ultra-lightweight BitTorrent client designed for high-performance private and public seeding, automation, cross-platform *arr management, and granular bandwidth orchestration.",
               )}
@@ -1171,7 +1171,7 @@ export function GettingStartedModal({
               <div>
                 <strong>
                   {t(
-                    "gettingStarted.welcomeAgent",
+                    "modals.gettingStarted.welcomeAgent",
                     undefined,
                     "1. Download Agent: Captures downloads & monitors torrent swarms.",
                   )}
@@ -1180,7 +1180,7 @@ export function GettingStartedModal({
               <div>
                 <strong>
                   {t(
-                    "gettingStarted.welcomeProwlarr",
+                    "modals.gettingStarted.welcomeProwlarr",
                     undefined,
                     "2. Prowlarr: Syncs indexers and trackers automatically.",
                   )}
@@ -1189,7 +1189,7 @@ export function GettingStartedModal({
               <div>
                 <strong>
                   {t(
-                    "gettingStarted.welcomeArr",
+                    "modals.gettingStarted.welcomeArr",
                     undefined,
                     "3. Sonarr / Radarr / Lidarr: Connects TV, movies, and music libraries.",
                   )}
@@ -1198,7 +1198,7 @@ export function GettingStartedModal({
               <div>
                 <strong>
                   {t(
-                    "gettingStarted.welcomeStorage",
+                    "modals.gettingStarted.welcomeStorage",
                     undefined,
                     "4. Storage & Downloads: Verifies payload directories and write permissions.",
                   )}
@@ -1225,7 +1225,7 @@ export function GettingStartedModal({
                   color: "var(--text-muted, #aaa)",
                 }}
               >
-                🌐 {t("gettingStarted.language", undefined, "Language:")}
+                🌐 {t("modals.gettingStarted.language", undefined, "Language:")}
               </span>
               <LanguageSelector />
             </div>
@@ -1247,7 +1247,7 @@ export function GettingStartedModal({
                 style={{ padding: "0.45rem 1.25rem" }}
               >
                 {t(
-                  "gettingStarted.startExampleTour",
+                  "modals.gettingStarted.startExampleTour",
                   undefined,
                   "Start Example Tour →",
                 )}
@@ -1263,7 +1263,7 @@ export function GettingStartedModal({
               >
                 ⚡{" "}
                 {t(
-                  "gettingStarted.startLiveSetup",
+                  "modals.gettingStarted.startLiveSetup",
                   undefined,
                   "Start Live Setup",
                 )}
@@ -1286,10 +1286,10 @@ export function GettingStartedModal({
                 marginBottom: "0.75rem",
               }}
             >
-              📥 {t("gettingStarted.step1Title", undefined, "Add Download Client")}
+              📥 {t("modals.gettingStarted.step1Title", undefined, "Add Download Client")}
             </h3>
             <TextInput
-              label={t("gettingStarted.name", undefined, "Name")}
+              label={t("modals.gettingStarted.name", undefined, "Name")}
               value={clientForm.name || ""}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -1299,7 +1299,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label={t("gettingStarted.clientType", undefined, "Client Type")}
+              label={t("modals.gettingStarted.clientType", undefined, "Client Type")}
               value={clientForm.clientType || "QBitTorrent"}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -1317,7 +1317,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.host", undefined, "Host")}
+              label={t("modals.gettingStarted.host", undefined, "Host")}
               value={clientForm.host || ""}
               onChange={(v) => {
                 setClientError(null);
@@ -1328,7 +1328,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <NumberInput
-              label={t("gettingStarted.port", undefined, "Port")}
+              label={t("modals.gettingStarted.port", undefined, "Port")}
               value={clientForm.port || 8080}
               onChange={(v) => {
                 setClientError(null);
@@ -1340,7 +1340,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.useSsl", undefined, "Use SSL")}
+              label={t("modals.gettingStarted.useSsl", undefined, "Use SSL")}
               checked={clientForm.useSsl ?? false}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -1349,7 +1349,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.username", undefined, "Username")}
+              label={t("modals.gettingStarted.username", undefined, "Username")}
               value={clientForm.username || ""}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -1358,7 +1358,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.password", undefined, "Password")}
+              label={t("modals.gettingStarted.password", undefined, "Password")}
               value={isReadOnly ? "••••••••••••" : clientForm.password || ""}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -1368,21 +1368,21 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.category", undefined, "Category")}
+              label={t("modals.gettingStarted.category", undefined, "Category")}
               value={clientForm.category || ""}
               onChange={(v) => {
                 setClientTestResult(null);
                 setClientForm({ ...clientForm, category: v });
               }}
               hint={t(
-                "gettingStarted.categoryHint",
+                "modals.gettingStarted.categoryHint",
                 undefined,
                 "Filter by category",
               )}
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.enabled", undefined, "Enabled")}
+              label={t("modals.gettingStarted.enabled", undefined, "Enabled")}
               checked={clientForm.enable ?? true}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -1415,9 +1415,9 @@ export function GettingStartedModal({
                 disabled={testClientMutation.isPending || isReadOnly}
               >
                 {testClientMutation.isPending
-                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  ? t("modals.gettingStarted.testing", undefined, "Testing...")
                   : t(
-                      "gettingStarted.testConnection",
+                      "modals.gettingStarted.testConnection",
                       undefined,
                       "Test Connection",
                     )}
@@ -1428,7 +1428,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  {t("gettingStarted.previous", undefined, "Previous")}
+                  {t("modals.gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -1438,15 +1438,15 @@ export function GettingStartedModal({
                     disabled={createClientMutation.isPending}
                   >
                     {createClientMutation.isPending
-                      ? t("gettingStarted.saving", undefined, "Saving...")
+                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
                       : clientSaved
                         ? t(
-                            "gettingStarted.savedNext",
+                            "modals.gettingStarted.savedNext",
                             undefined,
                             "Saved ✓ Next",
                           )
                         : t(
-                            "gettingStarted.saveAndNext",
+                            "modals.gettingStarted.saveAndNext",
                             undefined,
                             "Save & Next",
                           )}
@@ -1457,7 +1457,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    {t("gettingStarted.next", undefined, "Next")}
+                    {t("modals.gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -1479,10 +1479,10 @@ export function GettingStartedModal({
                 marginBottom: "0.75rem",
               }}
             >
-              🔍 {t("gettingStarted.step2Title", undefined, "Add Indexer")}
+              🔍 {t("modals.gettingStarted.step2Title", undefined, "Add Indexer")}
             </h3>
             <TextInput
-              label={t("gettingStarted.name", undefined, "Name")}
+              label={t("modals.gettingStarted.name", undefined, "Name")}
               value={indexerForm.name || ""}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -1492,7 +1492,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label={t("gettingStarted.type", undefined, "Type")}
+              label={t("modals.gettingStarted.type", undefined, "Type")}
               value={indexerForm.indexerType || "Prowlarr"}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -1509,7 +1509,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.url", undefined, "URL")}
+              label={t("modals.gettingStarted.url", undefined, "URL")}
               value={indexerForm.url || ""}
               onChange={(v) => {
                 setIndexerError(null);
@@ -1520,7 +1520,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.apiKey", undefined, "API Key")}
+              label={t("modals.gettingStarted.apiKey", undefined, "API Key")}
               value={
                 isReadOnly
                   ? "••••••••••••••••••••••••••••••••"
@@ -1535,7 +1535,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.apiPath", undefined, "API Path")}
+              label={t("modals.gettingStarted.apiPath", undefined, "API Path")}
               value={indexerForm.apiPath || "/api"}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -1545,7 +1545,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.categories", undefined, "Categories")}
+              label={t("modals.gettingStarted.categories", undefined, "Categories")}
               value={indexerForm.categories || ""}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -1555,7 +1555,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.enable", undefined, "Enable")}
+              label={t("modals.gettingStarted.enable", undefined, "Enable")}
               checked={indexerForm.enable ?? true}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -1564,7 +1564,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.enableRss", undefined, "RSS")}
+              label={t("modals.gettingStarted.enableRss", undefined, "RSS")}
               checked={indexerForm.enableRss ?? true}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -1573,7 +1573,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.enableSearch", undefined, "Search")}
+              label={t("modals.gettingStarted.enableSearch", undefined, "Search")}
               checked={indexerForm.enableSearch ?? true}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -1606,9 +1606,9 @@ export function GettingStartedModal({
                 disabled={testIndexerMutation.isPending || isReadOnly}
               >
                 {testIndexerMutation.isPending
-                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  ? t("modals.gettingStarted.testing", undefined, "Testing...")
                   : t(
-                      "gettingStarted.testConnection",
+                      "modals.gettingStarted.testConnection",
                       undefined,
                       "Test Connection",
                     )}
@@ -1619,7 +1619,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  {t("gettingStarted.previous", undefined, "Previous")}
+                  {t("modals.gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -1629,15 +1629,15 @@ export function GettingStartedModal({
                     disabled={createIndexerMutation.isPending}
                   >
                     {createIndexerMutation.isPending
-                      ? t("gettingStarted.saving", undefined, "Saving...")
+                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
                       : indexerSaved
                         ? t(
-                            "gettingStarted.savedNext",
+                            "modals.gettingStarted.savedNext",
                             undefined,
                             "Saved ✓ Next",
                           )
                         : t(
-                            "gettingStarted.saveAndNext",
+                            "modals.gettingStarted.saveAndNext",
                             undefined,
                             "Save & Next",
                           )}
@@ -1648,7 +1648,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    {t("gettingStarted.next", undefined, "Next")}
+                    {t("modals.gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -1662,7 +1662,7 @@ export function GettingStartedModal({
         {currentStep === 3 && (
           <div>
             <TextInput
-              label={t("gettingStarted.name", undefined, "Name")}
+              label={t("modals.gettingStarted.name", undefined, "Name")}
               value={sonarrForm.name || ""}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1672,7 +1672,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label={t("gettingStarted.type", undefined, "Type")}
+              label={t("modals.gettingStarted.type", undefined, "Type")}
               value={sonarrForm.arrType || "Sonarr"}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1686,7 +1686,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.url", undefined, "URL")}
+              label={t("modals.gettingStarted.url", undefined, "URL")}
               value={sonarrForm.url || ""}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1696,7 +1696,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.apiKey", undefined, "API Key")}
+              label={t("modals.gettingStarted.apiKey", undefined, "API Key")}
               value={
                 isReadOnly
                   ? "••••••••••••••••••••••••••••••••"
@@ -1711,7 +1711,7 @@ export function GettingStartedModal({
             />
             <Toggle
               label={t(
-                "gettingStarted.enableConnection",
+                "modals.gettingStarted.enableConnection",
                 undefined,
                 "Enable Connection",
               )}
@@ -1724,7 +1724,7 @@ export function GettingStartedModal({
             />
             <Toggle
               label={t(
-                "gettingStarted.syncEnabled",
+                "modals.gettingStarted.syncEnabled",
                 undefined,
                 "Sync Enabled",
               )}
@@ -1736,7 +1736,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.autoAdd", undefined, "Auto Add")}
+              label={t("modals.gettingStarted.autoAdd", undefined, "Auto Add")}
               checked={sonarrForm.enableAutomaticAdd ?? true}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1745,7 +1745,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.webhook", undefined, "Webhook")}
+              label={t("modals.gettingStarted.webhook", undefined, "Webhook")}
               checked={sonarrForm.webhookEnabled ?? true}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1756,7 +1756,7 @@ export function GettingStartedModal({
             {sonarrForm.webhookEnabled !== false && (
               <TextInput
                 label={t(
-                  "gettingStarted.webhookHost",
+                  "modals.gettingStarted.webhookHost",
                   undefined,
                   "Webhook Host",
                 )}
@@ -1767,7 +1767,7 @@ export function GettingStartedModal({
                 }}
                 placeholder="seedarr"
                 hint={t(
-                  "gettingStarted.webhookHostHint",
+                  "modals.gettingStarted.webhookHostHint",
                   undefined,
                   "Hostname or IP for *arr to reach Seedarr (leave empty to use default)",
                 )}
@@ -1799,9 +1799,9 @@ export function GettingStartedModal({
                 disabled={testArrMutation.isPending || isReadOnly}
               >
                 {testArrMutation.isPending
-                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  ? t("modals.gettingStarted.testing", undefined, "Testing...")
                   : t(
-                      "gettingStarted.testConnection",
+                      "modals.gettingStarted.testConnection",
                       undefined,
                       "Test Connection",
                     )}
@@ -1812,7 +1812,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  {t("gettingStarted.previous", undefined, "Previous")}
+                  {t("modals.gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -1824,15 +1824,15 @@ export function GettingStartedModal({
                     disabled={createArrMutation.isPending}
                   >
                     {createArrMutation.isPending
-                      ? t("gettingStarted.saving", undefined, "Saving...")
+                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
                       : sonarrSaved
                         ? t(
-                            "gettingStarted.savedNext",
+                            "modals.gettingStarted.savedNext",
                             undefined,
                             "Saved ✓ Next",
                           )
                         : t(
-                            "gettingStarted.saveAndNext",
+                            "modals.gettingStarted.saveAndNext",
                             undefined,
                             "Save & Next",
                           )}
@@ -1843,7 +1843,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    {t("gettingStarted.next", undefined, "Next")}
+                    {t("modals.gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -1857,7 +1857,7 @@ export function GettingStartedModal({
         {currentStep === 4 && (
           <div>
             <TextInput
-              label={t("gettingStarted.name", undefined, "Name")}
+              label={t("modals.gettingStarted.name", undefined, "Name")}
               value={radarrForm.name || ""}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1867,7 +1867,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label={t("gettingStarted.type", undefined, "Type")}
+              label={t("modals.gettingStarted.type", undefined, "Type")}
               value={radarrForm.arrType || "Radarr"}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1881,7 +1881,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.url", undefined, "URL")}
+              label={t("modals.gettingStarted.url", undefined, "URL")}
               value={radarrForm.url || ""}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1891,7 +1891,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.apiKey", undefined, "API Key")}
+              label={t("modals.gettingStarted.apiKey", undefined, "API Key")}
               value={
                 isReadOnly
                   ? "••••••••••••••••••••••••••••••••"
@@ -1906,7 +1906,7 @@ export function GettingStartedModal({
             />
             <Toggle
               label={t(
-                "gettingStarted.enableConnection",
+                "modals.gettingStarted.enableConnection",
                 undefined,
                 "Enable Connection",
               )}
@@ -1919,7 +1919,7 @@ export function GettingStartedModal({
             />
             <Toggle
               label={t(
-                "gettingStarted.syncEnabled",
+                "modals.gettingStarted.syncEnabled",
                 undefined,
                 "Sync Enabled",
               )}
@@ -1931,7 +1931,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.autoAdd", undefined, "Auto Add")}
+              label={t("modals.gettingStarted.autoAdd", undefined, "Auto Add")}
               checked={radarrForm.enableAutomaticAdd ?? true}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1940,7 +1940,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.webhook", undefined, "Webhook")}
+              label={t("modals.gettingStarted.webhook", undefined, "Webhook")}
               checked={radarrForm.webhookEnabled ?? true}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1951,7 +1951,7 @@ export function GettingStartedModal({
             {radarrForm.webhookEnabled !== false && (
               <TextInput
                 label={t(
-                  "gettingStarted.webhookHost",
+                  "modals.gettingStarted.webhookHost",
                   undefined,
                   "Webhook Host",
                 )}
@@ -1962,7 +1962,7 @@ export function GettingStartedModal({
                 }}
                 placeholder="seedarr"
                 hint={t(
-                  "gettingStarted.webhookHostHint",
+                  "modals.gettingStarted.webhookHostHint",
                   undefined,
                   "Hostname or IP for *arr to reach Seedarr (leave empty to use default)",
                 )}
@@ -1994,9 +1994,9 @@ export function GettingStartedModal({
                 disabled={testArrMutation.isPending || isReadOnly}
               >
                 {testArrMutation.isPending
-                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  ? t("modals.gettingStarted.testing", undefined, "Testing...")
                   : t(
-                      "gettingStarted.testConnection",
+                      "modals.gettingStarted.testConnection",
                       undefined,
                       "Test Connection",
                     )}
@@ -2007,7 +2007,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  {t("gettingStarted.previous", undefined, "Previous")}
+                  {t("modals.gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -2019,15 +2019,15 @@ export function GettingStartedModal({
                     disabled={createArrMutation.isPending}
                   >
                     {createArrMutation.isPending
-                      ? t("gettingStarted.saving", undefined, "Saving...")
+                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
                       : radarrSaved
                         ? t(
-                            "gettingStarted.savedNext",
+                            "modals.gettingStarted.savedNext",
                             undefined,
                             "Saved ✓ Next",
                           )
                         : t(
-                            "gettingStarted.saveAndNext",
+                            "modals.gettingStarted.saveAndNext",
                             undefined,
                             "Save & Next",
                           )}
@@ -2038,7 +2038,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    {t("gettingStarted.next", undefined, "Next")}
+                    {t("modals.gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -2052,7 +2052,7 @@ export function GettingStartedModal({
         {currentStep === 5 && (
           <div>
             <TextInput
-              label={t("gettingStarted.name", undefined, "Name")}
+              label={t("modals.gettingStarted.name", undefined, "Name")}
               value={lidarrForm.name || ""}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -2062,7 +2062,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label={t("gettingStarted.type", undefined, "Type")}
+              label={t("modals.gettingStarted.type", undefined, "Type")}
               value={lidarrForm.arrType || "Lidarr"}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -2076,7 +2076,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.url", undefined, "URL")}
+              label={t("modals.gettingStarted.url", undefined, "URL")}
               value={lidarrForm.url || ""}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -2086,7 +2086,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("gettingStarted.apiKey", undefined, "API Key")}
+              label={t("modals.gettingStarted.apiKey", undefined, "API Key")}
               value={
                 isReadOnly
                   ? "••••••••••••••••••••••••••••••••"
@@ -2101,7 +2101,7 @@ export function GettingStartedModal({
             />
             <Toggle
               label={t(
-                "gettingStarted.enableConnection",
+                "modals.gettingStarted.enableConnection",
                 undefined,
                 "Enable Connection",
               )}
@@ -2114,7 +2114,7 @@ export function GettingStartedModal({
             />
             <Toggle
               label={t(
-                "gettingStarted.syncEnabled",
+                "modals.gettingStarted.syncEnabled",
                 undefined,
                 "Sync Enabled",
               )}
@@ -2126,7 +2126,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.autoAdd", undefined, "Auto Add")}
+              label={t("modals.gettingStarted.autoAdd", undefined, "Auto Add")}
               checked={lidarrForm.enableAutomaticAdd ?? true}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -2135,7 +2135,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("gettingStarted.webhook", undefined, "Webhook")}
+              label={t("modals.gettingStarted.webhook", undefined, "Webhook")}
               checked={lidarrForm.webhookEnabled ?? true}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -2146,7 +2146,7 @@ export function GettingStartedModal({
             {lidarrForm.webhookEnabled !== false && (
               <TextInput
                 label={t(
-                  "gettingStarted.webhookHost",
+                  "modals.gettingStarted.webhookHost",
                   undefined,
                   "Webhook Host",
                 )}
@@ -2157,7 +2157,7 @@ export function GettingStartedModal({
                 }}
                 placeholder="seedarr"
                 hint={t(
-                  "gettingStarted.webhookHostHint",
+                  "modals.gettingStarted.webhookHostHint",
                   undefined,
                   "Hostname or IP for *arr to reach Seedarr (leave empty to use default)",
                 )}
@@ -2189,9 +2189,9 @@ export function GettingStartedModal({
                 disabled={testArrMutation.isPending || isReadOnly}
               >
                 {testArrMutation.isPending
-                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  ? t("modals.gettingStarted.testing", undefined, "Testing...")
                   : t(
-                      "gettingStarted.testConnection",
+                      "modals.gettingStarted.testConnection",
                       undefined,
                       "Test Connection",
                     )}
@@ -2202,7 +2202,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  {t("gettingStarted.previous", undefined, "Previous")}
+                  {t("modals.gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -2214,15 +2214,15 @@ export function GettingStartedModal({
                     disabled={createArrMutation.isPending}
                   >
                     {createArrMutation.isPending
-                      ? t("gettingStarted.saving", undefined, "Saving...")
+                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
                       : lidarrSaved
                         ? t(
-                            "gettingStarted.savedNext",
+                            "modals.gettingStarted.savedNext",
                             undefined,
                             "Saved ✓ Next",
                           )
                         : t(
-                            "gettingStarted.saveAndNext",
+                            "modals.gettingStarted.saveAndNext",
                             undefined,
                             "Save & Next",
                           )}
@@ -2233,7 +2233,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    {t("gettingStarted.next", undefined, "Next")}
+                    {t("modals.gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -2255,7 +2255,7 @@ export function GettingStartedModal({
                 marginBottom: "0.75rem",
               }}
             >
-              💾 {t("gettingStarted.stepStorageTitle", undefined, "Storage & Downloads Configuration")}
+              💾 {t("modals.gettingStarted.stepStorageTitle", undefined, "Storage & Downloads Configuration")}
             </h3>
             <p
               style={{
@@ -2266,14 +2266,14 @@ export function GettingStartedModal({
               }}
             >
               {t(
-                "gettingStarted.storageDescription",
+                "modals.gettingStarted.storageDescription",
                 undefined,
                 "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
               )}
             </p>
 
             <TextInput
-              label={t("gettingStarted.defaultDownloadPath", undefined, "Default Download Directory")}
+              label={t("modals.gettingStarted.defaultDownloadPath", undefined, "Default Download Directory")}
               value={storageForm.defaultDownloadPath || ""}
               onChange={(v) => {
                 setStorageError(null);
@@ -2282,7 +2282,7 @@ export function GettingStartedModal({
               }}
               placeholder="/downloads"
               hint={t(
-                "gettingStarted.defaultDownloadPathHint",
+                "modals.gettingStarted.defaultDownloadPathHint",
                 undefined,
                 "Absolute path where torrent payloads are actively downloaded",
               )}
@@ -2290,7 +2290,7 @@ export function GettingStartedModal({
             />
 
             <TextInput
-              label={t("gettingStarted.completedPath", undefined, "Completed Downloads Directory (Optional)")}
+              label={t("modals.gettingStarted.completedPath", undefined, "Completed Downloads Directory (Optional)")}
               value={storageForm.completedPath || ""}
               onChange={(v) => {
                 setStorageError(null);
@@ -2299,7 +2299,7 @@ export function GettingStartedModal({
               }}
               placeholder="/downloads/completed"
               hint={t(
-                "gettingStarted.completedPathHint",
+                "modals.gettingStarted.completedPathHint",
                 undefined,
                 "Target directory to relocate completed torrents for post-processing",
               )}
@@ -2307,7 +2307,7 @@ export function GettingStartedModal({
             />
 
             <TextInput
-              label={t("gettingStarted.watchFolderPath", undefined, "Watch Folder Path (Optional)")}
+              label={t("modals.gettingStarted.watchFolderPath", undefined, "Watch Folder Path (Optional)")}
               value={storageForm.watchFolderPath || ""}
               onChange={(v) => {
                 setStorageError(null);
@@ -2316,7 +2316,7 @@ export function GettingStartedModal({
               }}
               placeholder="/downloads/watch"
               hint={t(
-                "gettingStarted.watchFolderPathHint",
+                "modals.gettingStarted.watchFolderPathHint",
                 undefined,
                 "Filesystem directory monitored for new .torrent files",
               )}
@@ -2333,7 +2333,7 @@ export function GettingStartedModal({
                     marginBottom: "0.35rem",
                   }}
                 >
-                  {t("gettingStarted.detectedVolumes", undefined, "Detected Storage Volumes:")}
+                  {t("modals.gettingStarted.detectedVolumes", undefined, "Detected Storage Volumes:")}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
                   {diskSpace.map((d, idx) => (
@@ -2379,8 +2379,8 @@ export function GettingStartedModal({
                 disabled={isValidatingPath || isReadOnly}
               >
                 {isValidatingPath
-                  ? t("gettingStarted.validating", undefined, "Validating...")
-                  : t("gettingStarted.validateDirectory", undefined, "Validate Directory")}
+                  ? t("modals.gettingStarted.validating", undefined, "Validating...")
+                  : t("modals.gettingStarted.validateDirectory", undefined, "Validate Directory")}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -2388,7 +2388,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  {t("gettingStarted.previous", undefined, "Previous")}
+                  {t("modals.gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -2398,10 +2398,10 @@ export function GettingStartedModal({
                     disabled={isSavingStorage}
                   >
                     {isSavingStorage
-                      ? t("gettingStarted.saving", undefined, "Saving...")
+                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
                       : storageSaved
-                        ? t("gettingStarted.savedNext", undefined, "Saved ✓ Next")
-                        : t("gettingStarted.saveAndNext", undefined, "Save & Next")}
+                        ? t("modals.gettingStarted.savedNext", undefined, "Saved ✓ Next")
+                        : t("modals.gettingStarted.saveAndNext", undefined, "Save & Next")}
                   </button>
                 ) : (
                   <button
@@ -2409,7 +2409,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    {t("gettingStarted.next", undefined, "Next")}
+                    {t("modals.gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -2432,7 +2432,7 @@ export function GettingStartedModal({
               }}
             >
               {t(
-                "gettingStarted.finishDescription",
+                "modals.gettingStarted.finishDescription",
                 undefined,
                 "Your connections are set! Seedarr is ready to harvest swarm trackers, coordinate seeding, and sync with your media library.",
               )}
@@ -2456,7 +2456,7 @@ export function GettingStartedModal({
               >
                 📊{" "}
                 {t(
-                  "gettingStarted.goToDashboard",
+                  "modals.gettingStarted.goToDashboard",
                   undefined,
                   "Go to Dashboard",
                 )}
@@ -2471,7 +2471,7 @@ export function GettingStartedModal({
               >
                 📦{" "}
                 {t(
-                  "gettingStarted.viewTorrents",
+                  "modals.gettingStarted.viewTorrents",
                   undefined,
                   "View Torrents",
                 )}
@@ -2484,7 +2484,7 @@ export function GettingStartedModal({
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
-                ⚙️ {t("gettingStarted.settings", undefined, "Settings")}
+                ⚙️ {t("modals.gettingStarted.settings", undefined, "Settings")}
               </button>
             </div>
           </div>
@@ -2525,7 +2525,7 @@ export function GettingStartedModal({
             />
             <span>
               {t(
-                "gettingStarted.dontShowAgain",
+                "modals.gettingStarted.dontShowAgain",
                 undefined,
                 "Don't show this guide on startup",
               )}
@@ -2534,7 +2534,7 @@ export function GettingStartedModal({
 
           <span>
             {t(
-              "gettingStarted.stepCount",
+              "modals.gettingStarted.stepCount",
               { current: currentStep + 1, total: steps.length },
               `Step ${currentStep + 1} of ${steps.length}`,
             )}

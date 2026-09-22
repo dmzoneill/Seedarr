@@ -113,9 +113,9 @@ export const getActionGroups = (t: any): ActionGroup[] => [
   {
     group: t("automation.actions.tagsCategories"),
     items: [
-      { type: "addTag" as VisualActionType, label: t("automation.actions.addTag"), placeholder: t("automation.actions.eg4khdrVerifiedFreeleech") },
-      { type: "removeTag" as VisualActionType, label: t("automation.actions.removeTag"), placeholder: t("automation.actions.egIncompleteQueued") },
-      { type: "setCategory" as VisualActionType, label: t("automation.actions.setCategory"), placeholder: t("automation.actions.egMoviesTvAnime") },
+      { type: "addTag" as VisualActionType, label: t("automation.actions.addTag.label"), placeholder: t("automation.actions.eg4khdrVerifiedFreeleech") },
+      { type: "removeTag" as VisualActionType, label: t("automation.actions.removeTag.label"), placeholder: t("automation.actions.egIncompleteQueued") },
+      { type: "setCategory" as VisualActionType, label: t("automation.actions.setCategory.label"), placeholder: t("automation.actions.egMoviesTvAnime") },
     ],
   },
   {

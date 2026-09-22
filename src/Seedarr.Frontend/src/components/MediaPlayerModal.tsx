@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from "react";
+import { useTranslation } from "../i18n";
 import { useModalRegistration } from "./ModalProvider";
 import { useTorrentFileSubtitles } from "../api/hooks";
 import type { SubtitleTrack, Torrent } from "../api/types";
@@ -36,6 +37,7 @@ export function MediaPlayerModal({
   file,
   subtitles: propSubtitles,
 }: MediaPlayerModalProps) {
+  const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -295,7 +297,7 @@ export function MediaPlayerModal({
           <button
             type="button"
             className="btn btn-sm btn-default"
-            aria-label="Close media player"
+            aria-label={t("modals.mediaPlayer.closeAria", "Close media player")}
             onClick={handleClose}
             style={{
               padding: "0.35rem 0.65rem",
@@ -342,7 +344,7 @@ export function MediaPlayerModal({
             >
               <div style={{ fontSize: "2.5rem" }}>⚠️</div>
               <h4 style={{ margin: 0, fontSize: "1.25rem", color: "#ffb703" }}>
-                Browser Codec Playback Error
+                {t("modals.mediaPlayer.playbackErrorTitle", "Browser Codec Playback Error")}
               </h4>
               <p style={{ margin: 0, fontSize: "0.9rem", color: "#d1d5db", lineHeight: 1.5 }}>
                 {getCodecErrorMessage(errorCode, fileName)}
@@ -370,7 +372,7 @@ export function MediaPlayerModal({
                     fontWeight: 600,
                   }}
                 >
-                  <span>📺</span> Open in VLC
+                  <span>📺</span> {t("modals.mediaPlayer.openInVlc", "Open in VLC")}
                 </a>
                 <a
                   href={mpvUrl}
@@ -384,7 +386,7 @@ export function MediaPlayerModal({
                     fontWeight: 600,
                   }}
                 >
-                  <span>⚡</span> Open in MPV
+                  <span>⚡</span> {t("modals.mediaPlayer.openInMpv", "Open in MPV")}
                 </a>
                 <a
                   href={downloadUrl}
@@ -398,7 +400,7 @@ export function MediaPlayerModal({
                     gap: "0.4rem",
                   }}
                 >
-                  <span>⬇️</span> Direct Download
+                  <span>⬇️</span> {t("modals.mediaPlayer.directDownload", "Direct Download")}
                 </a>
                 <button
                   type="button"
@@ -406,7 +408,7 @@ export function MediaPlayerModal({
                   onClick={handleCopyStreamUrl}
                   style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
                 >
-                  <span>📋</span> {copied ? "Copied!" : "Copy Stream URL"}
+                  <span>📋</span> {copied ? t("modals.mediaPlayer.copied", "Copied!") : t("modals.mediaPlayer.copyStreamUrl", "Copy Stream URL")}
                 </button>
                 <button
                   type="button"
@@ -414,7 +416,7 @@ export function MediaPlayerModal({
                   onClick={handleRetryPlayback}
                   style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
                 >
-                  <span>🔄</span> Retry
+                  <span>🔄</span> {t("modals.mediaPlayer.retry", "Retry")}
                 </button>
               </div>
             </div>
@@ -508,11 +510,11 @@ export function MediaPlayerModal({
                 htmlFor="subtitle-select"
                 style={{ fontSize: "0.8rem", color: "var(--text-muted, #aaa)", fontWeight: 500 }}
               >
-                💬 Subtitles:
+                💬 {t("modals.mediaPlayer.subtitles", "Subtitles:")}
               </label>
               <select
                 id="subtitle-select"
-                aria-label="Select subtitle track"
+                aria-label={t("modals.mediaPlayer.selectSubtitleTrack", "Select subtitle track")}
                 className="form-control"
                 style={{
                   fontSize: "0.8rem",
@@ -524,7 +526,7 @@ export function MediaPlayerModal({
                 value={activeSubtitleTrackId}
                 onChange={(e) => handleSubtitleChange(e.target.value)}
               >
-                <option value="off">Off</option>
+                <option value="off">{t("modals.mediaPlayer.subtitlesOff", "Off")}</option>
                 {resolvedSubtitles.map((sub) => {
                   const labelParts = [sub.language || sub.title || `Track ${sub.trackId}`];
                   if (sub.isForced) labelParts.push("(Forced)");
@@ -544,11 +546,11 @@ export function MediaPlayerModal({
                     htmlFor="subtitle-size-select"
                     style={{ fontSize: "0.75rem", color: "var(--text-muted, #aaa)" }}
                   >
-                    Size:
+                    {t("modals.mediaPlayer.subtitleSize", "Size:")}
                   </label>
                   <select
                     id="subtitle-size-select"
-                    aria-label="Subtitle text size"
+                    aria-label={t("modals.mediaPlayer.subtitleTextSize", "Subtitle text size")}
                     className="form-control"
                     style={{
                       fontSize: "0.75rem",
@@ -559,10 +561,10 @@ export function MediaPlayerModal({
                     value={subtitleSize}
                     onChange={(e) => setSubtitleSize(e.target.value as SubtitleSize)}
                   >
-                    <option value="small">Small</option>
-                    <option value="medium">Normal</option>
-                    <option value="large">Large</option>
-                    <option value="x-large">Extra Large</option>
+                    <option value="small">{t("modals.mediaPlayer.sizeSmall", "Small")}</option>
+                    <option value="medium">{t("modals.mediaPlayer.sizeMedium", "Normal")}</option>
+                    <option value="large">{t("modals.mediaPlayer.sizeLarge", "Large")}</option>
+                    <option value="x-large">{t("modals.mediaPlayer.sizeXLarge", "Extra Large")}</option>
                   </select>
                 </div>
               )}
@@ -574,7 +576,7 @@ export function MediaPlayerModal({
             <a
               href={vlcUrl}
               className="btn btn-xs btn-default"
-              title="Open stream in VLC media player"
+              title={t("modals.mediaPlayer.vlcTooltip", "Open stream in VLC media player")}
               style={{ textDecoration: "none" }}
             >
               VLC
@@ -582,7 +584,7 @@ export function MediaPlayerModal({
             <a
               href={mpvUrl}
               className="btn btn-xs btn-default"
-              title="Open stream in MPV player"
+              title={t("modals.mediaPlayer.mpvTooltip", "Open stream in MPV player")}
               style={{ textDecoration: "none" }}
             >
               MPV
@@ -591,18 +593,18 @@ export function MediaPlayerModal({
               type="button"
               className="btn btn-xs btn-default"
               onClick={handleCopyStreamUrl}
-              title="Copy direct stream URL"
+              title={t("modals.mediaPlayer.copyUrlTooltip", "Copy direct stream URL")}
             >
-              {copied ? "Copied!" : "Copy URL"}
+              {copied ? t("modals.mediaPlayer.copied", "Copied!") : t("modals.mediaPlayer.copyUrl", "Copy URL")}
             </button>
             <a
               href={downloadUrl}
               download={fileName}
               className="btn btn-xs btn-default"
-              title="Download media file"
+              title={t("modals.mediaPlayer.downloadTooltip", "Download media file")}
               style={{ textDecoration: "none" }}
             >
-              Download
+              {t("modals.mediaPlayer.download", "Download")}
             </a>
           </div>
         </div>
