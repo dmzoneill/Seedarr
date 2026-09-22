@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.HealthCheck;
 using Seedarr.Http;
@@ -16,8 +18,9 @@ public class HealthController : Controller
     }
 
     [HttpGet]
-    public ActionResult<List<HealthCheckResult>> GetHealth()
+    public async Task<ActionResult<List<HealthCheckResult>>> GetHealth(CancellationToken cancellationToken = default)
     {
-        return _healthCheckService.PerformChecks();
+        var results = await _healthCheckService.PerformChecksAsync(cancellationToken);
+        return Ok(results);
     }
 }
