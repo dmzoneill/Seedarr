@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Datastore;
@@ -14,6 +15,7 @@ namespace NzbDrone.Core.HealthCheck;
 public interface IHealthCheckService
 {
     List<HealthCheckResult> PerformChecks();
+    System.Threading.Tasks.Task<List<HealthCheckResult>> PerformChecksAsync(System.Threading.CancellationToken cancellationToken = default);
     void ExpireCache();
 }
 
@@ -72,11 +74,16 @@ public class HealthCheckService : IHealthCheckService
 
     public List<HealthCheckResult> PerformChecks()
     {
+        return PerformChecksAsync(CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    public Task<List<HealthCheckResult>> PerformChecksAsync(CancellationToken cancellationToken = default)
+    {
         lock (_cacheLock)
         {
             if (_cachedResults != null && DateTime.UtcNow - _lastRunTimeUtc < _cacheDuration)
             {
-                return _cachedResults.ToList();
+                return Task.FromResult(_cachedResults.ToList());
             }
 
             var results = new List<HealthCheckResult>();
@@ -86,7 +93,7 @@ public class HealthCheckService : IHealthCheckService
                 try
                 {
                     var task = Task.Run(() => check.Check());
-                    if (task.Wait(_checkTimeout))
+                    if (task.Wait(_checkTimeout, cancellationToken))
                     {
                         results.Add(task.Result);
                     }
@@ -154,7 +161,7 @@ public class HealthCheckService : IHealthCheckService
                 Body = _cachedResults
             });
 
-            return results;
+            return Task.FromResult(results);
         }
     }
 

@@ -33,6 +33,7 @@ using Seedarr.Http.REST;
 namespace Seedarr.Api.V1.Torrents;
 
 [V1ApiController("torrent")]
+[Route("api/v1/torrents")]
 [Authorize(Policy = Policies.Reader)]
 public class TorrentController : RestControllerWithSignalR<TorrentResource, Torrent>
 {

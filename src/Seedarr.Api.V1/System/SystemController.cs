@@ -763,6 +763,7 @@ public class SystemController : ControllerBase
     /// <param name="maxPages">Optional query parameter specifying maxPages to reclaim.</param>
     /// <returns>Result containing reclaimed page counts and reclaimed bytes.</returns>
     [HttpPost("database/vacuum")]
+    [HttpPost("maintenance/vacuum")]
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<DatabaseVacuumResource> VacuumDatabase(
         [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] DatabaseVacuumRequest request = null,
