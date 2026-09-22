@@ -1,5 +1,12 @@
-import React, { useRef, useEffect, useState, useMemo, useCallback } from "react";
+import React, {
+  useRef,
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+} from "react";
 import { useTranslation } from "../i18n";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useModalRegistration } from "./ModalProvider";
 import { useTorrentFileSubtitles } from "../api/hooks";
 import type { SubtitleTrack, Torrent } from "../api/types";
@@ -14,6 +21,7 @@ import {
   setSubtitleTrackActive,
   getCodecErrorMessage,
 } from "../utils/mediaPlayer";
+import { trackMediaPreview } from "../utils/analytics";
 
 export interface MediaPlayerModalProps {
   isOpen: boolean;
@@ -38,14 +46,15 @@ export function MediaPlayerModal({
   subtitles: propSubtitles,
 }: MediaPlayerModalProps) {
   const { t } = useTranslation();
-  const modalRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const [hasCodecError, setHasCodecError] = useState<boolean>(false);
   const [errorCode, setErrorCode] = useState<number | undefined>(undefined);
   const [copied, setCopied] = useState<boolean>(false);
-  const [activeSubtitleTrackId, setActiveSubtitleTrackId] = useState<number | "off">("off");
+  const [activeSubtitleTrackId, setActiveSubtitleTrackId] = useState<
+    number | "off"
+  >("off");
   const [subtitleSize, setSubtitleSize] = useState<SubtitleSize>("medium");
 
   const fileName = useMemo(() => {
@@ -59,6 +68,20 @@ export function MediaPlayerModal({
     () => parseMediaBadges(fileName, torrent.name),
     [fileName, torrent.name],
   );
+
+  useEffect(() => {
+    if (isOpen) {
+      const ext = fileName.split(".").pop()?.toLowerCase() || "unknown";
+      const mimeCat = isAudio
+        ? "audio"
+        : ext === "mp4"
+          ? "video_mp4"
+          : ext === "mkv"
+            ? "video_mkv"
+            : "video_other";
+      trackMediaPreview(mimeCat);
+    }
+  }, [isOpen, isAudio, fileName]);
 
   const streamUrl = useMemo(
     () => buildStreamUrl(torrent.id, file.id),
@@ -75,7 +98,10 @@ export function MediaPlayerModal({
     isOpen ? file.id : undefined,
   );
 
-  const resolvedSubtitles = propSubtitles ?? fetchedSubtitles ?? [];
+  const resolvedSubtitles = useMemo(
+    () => propSubtitles ?? fetchedSubtitles ?? [],
+    [propSubtitles, fetchedSubtitles],
+  );
 
   // Reset state when a new file or torrent is opened
   useEffect(() => {
@@ -87,7 +113,7 @@ export function MediaPlayerModal({
       const defaultSub = resolvedSubtitles.find((s) => s.isDefault);
       setActiveSubtitleTrackId(defaultSub ? defaultSub.trackId : "off");
     }
-  }, [isOpen, file.id, torrent.id]);
+  }, [isOpen, file.id, torrent.id, resolvedSubtitles]);
 
   // Stream Lifecycle Cleanup on Unmount / Close:
   useEffect(() => {
@@ -111,11 +137,17 @@ export function MediaPlayerModal({
     onClose();
   }, [onClose]);
 
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    onEscape: handleClose,
+    onClose: handleClose,
+  });
+
   useModalRegistration({
     id: "media-player-modal",
     isOpen,
     onClose: handleClose,
-    modalRef,
+    modalRef: trapRef,
   });
 
   // Handle HTMLMediaElement onError event
@@ -135,13 +167,21 @@ export function MediaPlayerModal({
       if (val === "off") {
         setActiveSubtitleTrackId("off");
         if (videoRef.current) {
-          setSubtitleTrackActive(videoRef.current.textTracks, "off", resolvedSubtitles);
+          setSubtitleTrackActive(
+            videoRef.current.textTracks,
+            "off",
+            resolvedSubtitles,
+          );
         }
       } else {
         const id = parseInt(val, 10);
         setActiveSubtitleTrackId(id);
         if (videoRef.current) {
-          setSubtitleTrackActive(videoRef.current.textTracks, id, resolvedSubtitles);
+          setSubtitleTrackActive(
+            videoRef.current.textTracks,
+            id,
+            resolvedSubtitles,
+          );
         }
       }
     },
@@ -169,6 +209,150 @@ export function MediaPlayerModal({
       });
     }
   }, []);
+
+  // Keyboard Shortcuts: Space, Arrows, M, F, C, [/]
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const SPEED_STEPS = [0.75, 1, 1.25, 1.5, 2];
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+      if (
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      const media = videoRef.current ?? audioRef.current;
+      if (!media) return;
+
+      // Space: play/pause
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        if (media.paused) {
+          media.play().catch(() => {});
+        } else {
+          media.pause();
+        }
+        return;
+      }
+
+      // ArrowLeft / ArrowRight: seek -/+ 5s, with Shift 30s
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const delta = e.shiftKey ? 30 : 5;
+        media.currentTime = Math.max(0, media.currentTime - delta);
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const delta = e.shiftKey ? 30 : 5;
+        const dur = Number.isFinite(media.duration) ? media.duration : Infinity;
+        media.currentTime = Math.min(dur, media.currentTime + delta);
+        return;
+      }
+
+      // ArrowUp / ArrowDown: volume -/+ 5%
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        media.volume = Math.min(
+          1,
+          Math.round((media.volume + 0.05) * 100) / 100,
+        );
+        if (media.muted && media.volume > 0) media.muted = false;
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        media.volume = Math.max(
+          0,
+          Math.round((media.volume - 0.05) * 100) / 100,
+        );
+        return;
+      }
+
+      // M / m: mute
+      if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        media.muted = !media.muted;
+        return;
+      }
+
+      // F / f: fullscreen
+      if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        if (!document.fullscreenElement) {
+          const targetEl = videoRef.current ?? trapRef.current;
+          if (targetEl?.requestFullscreen) {
+            targetEl.requestFullscreen().catch(() => {});
+          }
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          }
+        }
+        return;
+      }
+
+      // C / c: cycle subtitles
+      if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        if (resolvedSubtitles.length > 0) {
+          const options: (number | "off")[] = [
+            "off",
+            ...resolvedSubtitles.map((s) => s.trackId),
+          ];
+          const currentIdx = options.indexOf(activeSubtitleTrackId);
+          const nextIdx = (currentIdx + 1) % options.length;
+          const nextVal = options[nextIdx];
+          handleSubtitleChange(String(nextVal));
+        }
+        return;
+      }
+
+      // [ / ]: speed 0.75x, 1x, 1.25x, 1.5x, 2x
+      if (e.key === "[") {
+        e.preventDefault();
+        const currentRate = media.playbackRate;
+        let nextRate = SPEED_STEPS[0];
+        for (let i = SPEED_STEPS.length - 1; i >= 0; i--) {
+          if (SPEED_STEPS[i] < currentRate - 0.05) {
+            nextRate = SPEED_STEPS[i];
+            break;
+          }
+        }
+        media.playbackRate = nextRate;
+        return;
+      }
+      if (e.key === "]") {
+        e.preventDefault();
+        const currentRate = media.playbackRate;
+        let nextRate = SPEED_STEPS[SPEED_STEPS.length - 1];
+        for (let i = 0; i < SPEED_STEPS.length; i++) {
+          if (SPEED_STEPS[i] > currentRate + 0.05) {
+            nextRate = SPEED_STEPS[i];
+            break;
+          }
+        }
+        media.playbackRate = nextRate;
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    isOpen,
+    resolvedSubtitles,
+    activeSubtitleTrackId,
+    handleSubtitleChange,
+    trapRef,
+  ]);
 
   if (!isOpen) return null;
 
@@ -228,7 +412,7 @@ export function MediaPlayerModal({
       `}</style>
 
       <div
-        ref={modalRef}
+        ref={trapRef}
         className="card media-player-dialog"
         style={{
           width: "900px",
@@ -258,7 +442,14 @@ export function MediaPlayerModal({
           }}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                flexWrap: "wrap",
+              }}
+            >
               <h3
                 id="media-player-title"
                 style={{
@@ -297,7 +488,7 @@ export function MediaPlayerModal({
           <button
             type="button"
             className="btn btn-sm btn-default"
-            aria-label={t("modals.mediaPlayer.closeAria", "Close media player")}
+            aria-label={t("mediaPlayer.close", "Close media player")}
             onClick={handleClose}
             style={{
               padding: "0.35rem 0.65rem",
@@ -344,9 +535,16 @@ export function MediaPlayerModal({
             >
               <div style={{ fontSize: "2.5rem" }}>⚠️</div>
               <h4 style={{ margin: 0, fontSize: "1.25rem", color: "#ffb703" }}>
-                {t("modals.mediaPlayer.playbackErrorTitle", "Browser Codec Playback Error")}
+                {t("mediaPlayer.playbackError", "Browser Codec Playback Error")}
               </h4>
-              <p style={{ margin: 0, fontSize: "0.9rem", color: "#d1d5db", lineHeight: 1.5 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.9rem",
+                  color: "#d1d5db",
+                  lineHeight: 1.5,
+                }}
+              >
                 {getCodecErrorMessage(errorCode, fileName)}
               </p>
 
@@ -372,7 +570,7 @@ export function MediaPlayerModal({
                     fontWeight: 600,
                   }}
                 >
-                  <span>📺</span> {t("modals.mediaPlayer.openInVlc", "Open in VLC")}
+                  <span>📺</span> {t("mediaPlayer.openInVlc", "Open in VLC")}
                 </a>
                 <a
                   href={mpvUrl}
@@ -386,7 +584,7 @@ export function MediaPlayerModal({
                     fontWeight: 600,
                   }}
                 >
-                  <span>⚡</span> {t("modals.mediaPlayer.openInMpv", "Open in MPV")}
+                  <span>⚡</span> {t("mediaPlayer.openInMpv", "Open in MPV")}
                 </a>
                 <a
                   href={downloadUrl}
@@ -400,23 +598,31 @@ export function MediaPlayerModal({
                     gap: "0.4rem",
                   }}
                 >
-                  <span>⬇️</span> {t("modals.mediaPlayer.directDownload", "Direct Download")}
+                  <span>⬇️</span> {t("mediaPlayer.directDownload", "Direct Download")}
                 </a>
                 <button
                   type="button"
                   className="btn btn-default"
                   onClick={handleCopyStreamUrl}
-                  style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                  }}
                 >
-                  <span>📋</span> {copied ? t("modals.mediaPlayer.copied", "Copied!") : t("modals.mediaPlayer.copyStreamUrl", "Copy Stream URL")}
+                  <span>📋</span> {copied ? t("mediaPlayer.copied", "Copied!") : t("mediaPlayer.copyStreamUrl", "Copy Stream URL")}
                 </button>
                 <button
                   type="button"
                   className="btn btn-default"
                   onClick={handleRetryPlayback}
-                  style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                  }}
                 >
-                  <span>🔄</span> {t("modals.mediaPlayer.retry", "Retry")}
+                  <span>🔄</span> {t("mediaPlayer.retry", "Retry")}
                 </button>
               </div>
             </div>
@@ -505,16 +711,27 @@ export function MediaPlayerModal({
         >
           {/* Subtitle controls (for video) */}
           {!isAudio && (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                flexWrap: "wrap",
+              }}
+            >
               <label
                 htmlFor="subtitle-select"
-                style={{ fontSize: "0.8rem", color: "var(--text-muted, #aaa)", fontWeight: 500 }}
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--text-muted, #aaa)",
+                  fontWeight: 500,
+                }}
               >
-                💬 {t("modals.mediaPlayer.subtitles", "Subtitles:")}
+                💬 {t("mediaPlayer.subtitles", "Subtitles:")}
               </label>
               <select
                 id="subtitle-select"
-                aria-label={t("modals.mediaPlayer.selectSubtitleTrack", "Select subtitle track")}
+                aria-label={t("mediaPlayer.selectSubtitleTrack", "Select subtitle track")}
                 className="form-control"
                 style={{
                   fontSize: "0.8rem",
@@ -526,9 +743,11 @@ export function MediaPlayerModal({
                 value={activeSubtitleTrackId}
                 onChange={(e) => handleSubtitleChange(e.target.value)}
               >
-                <option value="off">{t("modals.mediaPlayer.subtitlesOff", "Off")}</option>
+                <option value="off">{t("mediaPlayer.off", "Off")}</option>
                 {resolvedSubtitles.map((sub) => {
-                  const labelParts = [sub.language || sub.title || `Track ${sub.trackId}`];
+                  const labelParts = [
+                    sub.language || sub.title || `Track ${sub.trackId}`,
+                  ];
                   if (sub.isForced) labelParts.push("(Forced)");
                   if (sub.isHearingImpaired) labelParts.push("(CC)");
                   if (sub.isExternal) labelParts.push("[Ext]");
@@ -541,16 +760,25 @@ export function MediaPlayerModal({
               </select>
 
               {activeSubtitleTrackId !== "off" && (
-                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.3rem",
+                  }}
+                >
                   <label
                     htmlFor="subtitle-size-select"
-                    style={{ fontSize: "0.75rem", color: "var(--text-muted, #aaa)" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "var(--text-muted, #aaa)",
+                    }}
                   >
-                    {t("modals.mediaPlayer.subtitleSize", "Size:")}
+                    {t("mediaPlayer.size", "Size:")}
                   </label>
                   <select
                     id="subtitle-size-select"
-                    aria-label={t("modals.mediaPlayer.subtitleTextSize", "Subtitle text size")}
+                    aria-label={t("mediaPlayer.subtitleTextSize", "Subtitle text size")}
                     className="form-control"
                     style={{
                       fontSize: "0.75rem",
@@ -559,12 +787,14 @@ export function MediaPlayerModal({
                       width: "auto",
                     }}
                     value={subtitleSize}
-                    onChange={(e) => setSubtitleSize(e.target.value as SubtitleSize)}
+                    onChange={(e) =>
+                      setSubtitleSize(e.target.value as SubtitleSize)
+                    }
                   >
-                    <option value="small">{t("modals.mediaPlayer.sizeSmall", "Small")}</option>
-                    <option value="medium">{t("modals.mediaPlayer.sizeMedium", "Normal")}</option>
-                    <option value="large">{t("modals.mediaPlayer.sizeLarge", "Large")}</option>
-                    <option value="x-large">{t("modals.mediaPlayer.sizeXLarge", "Extra Large")}</option>
+                    <option value="small">{t("mediaPlayer.sizeSmall", "Small")}</option>
+                    <option value="medium">{t("mediaPlayer.sizeNormal", "Normal")}</option>
+                    <option value="large">{t("mediaPlayer.sizeLarge", "Large")}</option>
+                    <option value="x-large">{t("mediaPlayer.sizeExtraLarge", "Extra Large")}</option>
                   </select>
                 </div>
               )}
@@ -572,11 +802,18 @@ export function MediaPlayerModal({
           )}
 
           {/* Quick External Player Toolbar Links */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginLeft: "auto" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              marginLeft: "auto",
+            }}
+          >
             <a
               href={vlcUrl}
               className="btn btn-xs btn-default"
-              title={t("modals.mediaPlayer.vlcTooltip", "Open stream in VLC media player")}
+              title={t("mediaPlayer.tooltipVlc", "Open stream in VLC media player")}
               style={{ textDecoration: "none" }}
             >
               VLC
@@ -584,7 +821,7 @@ export function MediaPlayerModal({
             <a
               href={mpvUrl}
               className="btn btn-xs btn-default"
-              title={t("modals.mediaPlayer.mpvTooltip", "Open stream in MPV player")}
+              title={t("mediaPlayer.tooltipMpv", "Open stream in MPV player")}
               style={{ textDecoration: "none" }}
             >
               MPV
@@ -593,18 +830,18 @@ export function MediaPlayerModal({
               type="button"
               className="btn btn-xs btn-default"
               onClick={handleCopyStreamUrl}
-              title={t("modals.mediaPlayer.copyUrlTooltip", "Copy direct stream URL")}
+              title={t("mediaPlayer.tooltipCopyUrl", "Copy direct stream URL")}
             >
-              {copied ? t("modals.mediaPlayer.copied", "Copied!") : t("modals.mediaPlayer.copyUrl", "Copy URL")}
+              {copied ? t("mediaPlayer.copied", "Copied!") : t("mediaPlayer.copyUrl", "Copy URL")}
             </button>
             <a
               href={downloadUrl}
               download={fileName}
               className="btn btn-xs btn-default"
-              title={t("modals.mediaPlayer.downloadTooltip", "Download media file")}
+              title={t("mediaPlayer.tooltipDownload", "Download media file")}
               style={{ textDecoration: "none" }}
             >
-              {t("modals.mediaPlayer.download", "Download")}
+              {t("mediaPlayer.download", "Download")}
             </a>
           </div>
         </div>

@@ -67,6 +67,35 @@ public class FileSystemController : Controller
     }
 
     /// <summary>
+    /// Creates a directory at the specified path.
+    /// </summary>
+    [HttpPost("mkdir")]
+    public ActionResult CreateDirectory([FromBody] DirectoryValidationRequest request)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return BadRequest(new { message = "Path cannot be empty or whitespace." });
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(request.Path);
+            if (IsBlockedPath(fullPath))
+            {
+                return BadRequest(new { message = "Access to system directory is restricted" });
+            }
+
+            Directory.CreateDirectory(fullPath);
+            return Ok(new { success = true, path = fullPath });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+
+    /// <summary>
     /// Browses directory contents at the specified path.
     /// </summary>
     /// <param name="path">The directory path to explore. If omitted or empty, returns drive roots or system root.</param>

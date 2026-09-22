@@ -1445,6 +1445,30 @@ export interface FileSystemResource {
   isTruncated?: boolean;
 }
 
+export interface TorrentCreationRequest {
+  path: string;
+  name?: string;
+  comment?: string;
+  createdBy?: string;
+  isPrivate?: boolean;
+  pieceLength?: number;
+  trackers?: string[];
+  trackerTiers?: string[][];
+  webSeeds?: string[];
+  source?: string;
+  outputPath?: string;
+}
+
+export interface TorrentCreationResult {
+  success: boolean;
+  errorMessage?: string;
+  outputPath?: string;
+  infoHash?: string;
+  totalSize: number;
+  pieceCount: number;
+  pieceLength: number;
+}
+
 export interface CurrentUser {
   id?: number;
   identifier?: string;

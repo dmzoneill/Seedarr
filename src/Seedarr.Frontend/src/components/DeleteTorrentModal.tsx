@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "../i18n";
 import { useModalRegistration } from "./ModalProvider";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { usePermissions } from "../hooks/usePermissions";
 
 export interface DeleteTorrentModalProps {
@@ -23,8 +24,22 @@ export function DeleteTorrentModal({
   const { t } = useTranslation();
   const { canDeleteTorrent } = usePermissions();
   const [deleteFiles, setDeleteFiles] = useState(false);
-  const modalRef = useRef<HTMLDivElement>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
+
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    isOpen,
+    initialFocusRef: confirmButtonRef,
+    onEscape: () => {
+      if (!isPending) {
+        onClose();
+      }
+    },
+    onClose: () => {
+      if (!isPending) {
+        onClose();
+      }
+    },
+  });
 
   useModalRegistration({
     id: "delete-torrent-modal",
@@ -34,7 +49,7 @@ export function DeleteTorrentModal({
         onClose();
       }
     },
-    modalRef,
+    modalRef: trapRef,
   });
 
   useEffect(() => {
@@ -66,7 +81,6 @@ export function DeleteTorrentModal({
 
   return (
     <div
-      ref={modalRef}
       className="modal-overlay"
       onClick={handleBackdropClick}
       role="dialog"
@@ -75,6 +89,7 @@ export function DeleteTorrentModal({
       aria-describedby="delete-torrent-modal-desc"
     >
       <div
+        ref={trapRef}
         className="modal"
         style={{
           maxWidth: "480px",

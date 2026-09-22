@@ -13,6 +13,8 @@ import type {
   CustomScriptTestResult,
   SetupStatus,
   SetupCompleteRequest,
+  TorrentCreationRequest,
+  TorrentCreationResult,
 } from "./types";
 
 declare global {
@@ -306,6 +308,14 @@ class ApiClient {
     if (includeFiles) params.append("includeFiles", "true");
     const query = params.toString();
     return this.get<FileSystemResource>(`/filesystem${query ? `?${query}` : ""}`);
+  }
+
+  createDirectory(path: string): Promise<{ success: boolean; path: string }> {
+    return this.post<{ success: boolean; path: string }>("/filesystem/mkdir", { path });
+  }
+
+  createTorrent(request: TorrentCreationRequest): Promise<TorrentCreationResult> {
+    return this.post<TorrentCreationResult>("/torrents/create", request);
   }
 
   getAuthProviders(returnUrl?: string): Promise<AuthProvider[]> {

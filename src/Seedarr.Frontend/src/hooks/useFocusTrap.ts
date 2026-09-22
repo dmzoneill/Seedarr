@@ -187,24 +187,34 @@ export interface UseFocusTrapOptions {
   isOpen?: boolean;
   initialFocusRef?: React.RefObject<HTMLElement | null>;
   onEscape?: () => void;
+  onClose?: () => void;
   disableRestoreFocus?: boolean;
 }
 
 export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
-  options?: UseFocusTrapOptions
+  options?: UseFocusTrapOptions | boolean,
+  onCloseCallback?: () => void,
 ): React.RefObject<T | null> {
+  const normalizedOptions: UseFocusTrapOptions =
+    typeof options === "boolean"
+      ? { isOpen: options, onClose: onCloseCallback }
+      : (options ?? {});
+
   const {
     isOpen = true,
     initialFocusRef,
     onEscape,
+    onClose = onCloseCallback,
     disableRestoreFocus = false,
-  } = options ?? {};
+  } = normalizedOptions;
+
+  const effectiveEscape = onEscape ?? onClose;
 
   const containerRef = useRef<T | null>(null);
   const trapRef = useRef<FocusTrap | null>(null);
 
-  const onEscapeRef = useRef(onEscape);
-  onEscapeRef.current = onEscape;
+  const onEscapeRef = useRef(effectiveEscape);
+  onEscapeRef.current = effectiveEscape;
   const disableRestoreFocusRef = useRef(disableRestoreFocus);
   disableRestoreFocusRef.current = disableRestoreFocus;
 

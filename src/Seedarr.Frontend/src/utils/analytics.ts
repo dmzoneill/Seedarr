@@ -682,3 +682,12 @@ export function trackPeerAction(
     action_type: action,
   });
 }
+
+/**
+ * Helper to track media player preview modal.
+ */
+export function trackMediaPreview(mimeCategory: string): void {
+  trackEvent("torrent_media_preview", {
+    mime_category: mimeCategory,
+  });
+}
