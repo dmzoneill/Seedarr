@@ -1,7 +1,8 @@
-import { useRef, useEffect } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "../i18n";
 import AddTorrentForm, { InputMode } from "./AddTorrentForm";
 import { useModalRegistration } from "./ModalProvider";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import { usePermissions } from "../hooks/usePermissions";
 import { trackModalOpen } from "../utils/analytics";
 
@@ -18,17 +19,22 @@ function AddTorrentModal({
 }: AddTorrentModalProps) {
   const { t } = useTranslation();
   const { canAddTorrent } = usePermissions();
-  const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     trackModalOpen("add_torrent");
   }, []);
 
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    onEscape: onClose,
+    onClose,
+  });
+
   useModalRegistration({
     id: "add-torrent-modal",
     isOpen: true,
     onClose,
-    modalRef,
+    modalRef: trapRef,
   });
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -39,7 +45,6 @@ function AddTorrentModal({
 
   return (
     <div
-      ref={modalRef}
       className="modal-overlay"
       onClick={handleBackdropClick}
       role="dialog"
@@ -47,6 +52,7 @@ function AddTorrentModal({
       aria-labelledby="add-torrent-modal-title"
     >
       <div
+        ref={trapRef}
         className="modal"
         style={{
           maxWidth: "1020px",

@@ -531,6 +531,33 @@ export function useFileSystem(path?: string, includeFiles = false) {
   });
 }
 
+export function useCreateDirectory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (dirPath: string) => apiClient.createDirectory(dirPath),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["filesystem"] }),
+  });
+}
+
+export function useFileListing(path?: string) {
+  const query = useFileSystem(path);
+  return {
+    ...query,
+    data: query.data
+      ? {
+          path: query.data.current || path || "/",
+          parent: query.data.parent,
+          entries: (query.data.directories || []).map((d) => ({
+            name: d.name,
+            path: d.path,
+            isDirectory: true,
+            size: d.size,
+          })),
+        }
+      : undefined,
+  };
+}
+
 export function useNetworkStatus() {
   return useQuery<NetworkStatus>({
     queryKey: ["network", "status"],
