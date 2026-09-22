@@ -15,7 +15,23 @@ import type {
   SetupCompleteRequest,
 } from "./types";
 
-const BASE_URL = "/api/v1";
+declare global {
+  interface Window {
+    Seedarr?: {
+      urlBase?: string;
+      apiKey?: string;
+    };
+  }
+}
+
+export function getUrlBase(): string {
+  if (typeof window !== "undefined" && window.Seedarr?.urlBase) {
+    return window.Seedarr.urlBase.replace(/\/+$/, "");
+  }
+  return "";
+}
+
+export const BASE_URL = `${getUrlBase()}/api/v1`;
 
 class ApiClient {
   private apiKey: string | null = null;
@@ -25,7 +41,11 @@ class ApiClient {
   }
 
   getStoredApiKey(): string | null {
-    return this.apiKey;
+    return (
+      this.apiKey ||
+      (typeof window !== "undefined" ? window.Seedarr?.apiKey : null) ||
+      null
+    );
   }
 
   private async parseError(response: Response): Promise<string> {

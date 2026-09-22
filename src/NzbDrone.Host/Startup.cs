@@ -85,6 +85,7 @@ public class Startup
         services.AddSingleton<IRpcSessionStore, RpcSessionStore>();
         services.AddSingleton<ISessionRevocationService, SessionRevocationService>();
         services.AddSingleton<ILoginRateLimiter, LoginRateLimiter>();
+        services.AddSingleton<Seedarr.Http.Terminal.IPtyTerminalService, Seedarr.Http.Terminal.PtyTerminalService>();
 
         var configFileProvider = this._container.Resolve<IConfigFileProvider>();
         if (configFileProvider.EnableSsl && configFileProvider.RedirectHttpToHttps)
@@ -477,6 +478,32 @@ public class Startup
         app.MapControllers();
         app.MapHub<MessageHub>("/signalr/messages");
         app.MapHub<TerminalHub>("/signalr/terminal");
+
+        var terminalHandler = async (HttpContext context) =>
+        {
+            var configProvider = context.RequestServices.GetRequiredService<IConfigFileProvider>();
+            if (configProvider.AuthenticationEnabled)
+            {
+                var isAuthenticated = (context.User?.Identity?.IsAuthenticated == true) ||
+                                      Seedarr.Http.Security.RpcAuthenticationHelper.IsAuthenticated(context, configProvider);
+
+                if (!isAuthenticated)
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    await context.Response.WriteAsync("Authentication required for terminal access.");
+                    await context.Response.CompleteAsync();
+                    return;
+                }
+            }
+
+            var ptyService = context.RequestServices.GetRequiredService<Seedarr.Http.Terminal.IPtyTerminalService>();
+            var configService = context.RequestServices.GetRequiredService<IConfigService>();
+            await Seedarr.Http.Terminal.TerminalWebSocketHandler.HandleWebSocket(context, ptyService, configService, configProvider);
+        };
+
+        app.Map("/ws/terminal", terminalHandler);
+        app.Map("/api/v1/terminal/ws", terminalHandler);
+
         app.MapGet("/swagger-custom.css", () => Microsoft.AspNetCore.Http.Results.Content(SwaggerTheme.Css, "text/css")).AllowAnonymous();
 
         app.MapFallbackToFile("{*path:nonfile:regex(^(?!(api|signalr|swagger|fixtures)).*$)}", "index.html");
