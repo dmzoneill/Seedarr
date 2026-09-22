@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
@@ -6,6 +7,24 @@ import { TorrentToolbar } from "./TorrentToolbar";
 import type { SeedingConfig } from "../../api/types";
 
 (globalThis as any).React = React;
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+    },
+  },
+});
+
+function renderToolbar(props: any) {
+  return renderToStaticMarkup(
+    React.createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      React.createElement(TorrentToolbar, props),
+    ),
+  );
+}
 
 describe("TorrentToolbar accessibility attributes", () => {
   const mockSeedingConfig: Partial<SeedingConfig> = {
@@ -34,11 +53,21 @@ describe("TorrentToolbar accessibility attributes", () => {
     onBulkClear: () => {},
   };
 
-  it("renders speed adjustment buttons with descriptive aria-label attributes", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(TorrentToolbar, defaultProps),
-    );
+  it("renders speed adjustment buttons with descriptive aria-label attributes and limit labels", () => {
+    const html = renderToolbar(defaultProps);
 
+    assert.ok(
+      html.includes("UL Limit:"),
+      "Upload limit label must be rendered",
+    );
+    assert.ok(
+      html.includes("DL Limit:"),
+      "Download limit label must be rendered",
+    );
+    assert.ok(
+      !html.includes("UL: 512") && !html.includes("UL: 512 B/s"),
+      "Live upload speed must not be rendered in toolbar",
+    );
     assert.ok(
       html.includes('aria-label="Double upload speed limit"'),
       "Double upload speed button must have descriptive aria-label",
@@ -58,9 +87,7 @@ describe("TorrentToolbar accessibility attributes", () => {
   });
 
   it("renders filter search input with accessible aria-label", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(TorrentToolbar, defaultProps),
-    );
+    const html = renderToolbar(defaultProps);
 
     assert.ok(
       html.includes('aria-label="Filter torrents"') || html.includes('aria-label="Filter torrents..."'),
@@ -73,12 +100,10 @@ describe("TorrentToolbar accessibility attributes", () => {
   });
 
   it("reflects correct aria-pressed state on view mode toggle buttons for table mode", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(TorrentToolbar, {
-        ...defaultProps,
-        viewMode: "table",
-      }),
-    );
+    const html = renderToolbar({
+      ...defaultProps,
+      viewMode: "table",
+    });
 
     // Table view button should be aria-pressed=true, Grid view button aria-pressed=false
     assert.ok(
@@ -96,12 +121,10 @@ describe("TorrentToolbar accessibility attributes", () => {
   });
 
   it("reflects correct aria-pressed state on view mode toggle buttons for grid mode", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(TorrentToolbar, {
-        ...defaultProps,
-        viewMode: "grid",
-      }),
-    );
+    const html = renderToolbar({
+      ...defaultProps,
+      viewMode: "grid",
+    });
 
     // In grid mode: Grid view button aria-pressed=true, Table view button aria-pressed=false
     const tableMatch = html.match(/<button[^>]*title="Table view"[^>]*>/);
@@ -116,18 +139,16 @@ describe("TorrentToolbar accessibility attributes", () => {
   it("renders bulk tag assignment and removal buttons when selectedCount > 0", () => {
     let addTagsCalled = false;
     let removeTagsCalled = false;
-    const html = renderToStaticMarkup(
-      React.createElement(TorrentToolbar, {
-        ...defaultProps,
-        selectedCount: 3,
-        onBulkAddTags: () => {
-          addTagsCalled = true;
-        },
-        onBulkRemoveTags: () => {
-          removeTagsCalled = true;
-        },
-      }),
-    );
+    const html = renderToolbar({
+      ...defaultProps,
+      selectedCount: 3,
+      onBulkAddTags: () => {
+        addTagsCalled = true;
+      },
+      onBulkRemoveTags: () => {
+        removeTagsCalled = true;
+      },
+    });
 
     assert.ok(
       html.includes("bulk-add-tags-btn"),
@@ -148,12 +169,10 @@ describe("TorrentToolbar accessibility attributes", () => {
   });
 
   it("does not render bulk Force Recheck button", () => {
-    const html = renderToStaticMarkup(
-      React.createElement(TorrentToolbar, {
-        ...defaultProps,
-        selectedCount: 2,
-      }),
-    );
+    const html = renderToolbar({
+      ...defaultProps,
+      selectedCount: 2,
+    });
 
     assert.ok(
       !html.includes("bulk-recheck-btn"),
