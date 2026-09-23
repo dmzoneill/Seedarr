@@ -8,6 +8,10 @@ import {
 } from "../api/hooks";
 import { formatSpeed } from "../utils/formatters";
 import type { SpeedScheduleEntry } from "../api/types";
+import { useTranslation } from "../i18n";
+import { useToast } from "../context/ToastContext";
+import { useConfirm } from "../context/ConfirmContext";
+import { useEscapeKey } from "../hooks/useEscapeKey";
 
 const DAY_FLAGS = [
   { label: "Mon", value: 1 },
@@ -86,6 +90,8 @@ function ScheduleModal({
   onCancel: () => void;
   isPending: boolean;
 }) {
+  const { t } = useTranslation();
+  useEscapeKey(onCancel);
   const [form, setForm] = useState({ ...EMPTY_SCHEDULE, ...schedule });
 
   function toggleDay(value: number) {
@@ -105,7 +111,9 @@ function ScheduleModal({
         }}
       >
         <h2 style={{ margin: "0 0 1.25rem", fontSize: "1.25rem" }}>
-          {schedule.id ? "Edit Speed Schedule" : "Add Speed Schedule"}
+          {schedule.id
+            ? t("speedSchedule.editTitle")
+            : t("speedSchedule.addTitle")}
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <label>
@@ -118,12 +126,12 @@ function ScheduleModal({
                 fontSize: "0.82rem",
               }}
             >
-              Schedule Name
+              {t("speedSchedule.scheduleName")}
             </span>
             <input
               className="form-input"
               type="text"
-              placeholder="e.g. Night Seeding Boost"
+              placeholder={t("speedSchedule.namePlaceholder")}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               style={{ width: "100%", borderRadius: "6px" }}
@@ -131,17 +139,50 @@ function ScheduleModal({
           </label>
 
           <div>
-            <span
-              className="status-label"
+            <div
               style={{
-                display: "block",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
                 marginBottom: "0.4rem",
-                fontWeight: 600,
-                fontSize: "0.82rem",
               }}
             >
-              Active Days
-            </span>
+              <span
+                className="status-label"
+                style={{
+                  fontWeight: 600,
+                  fontSize: "0.82rem",
+                }}
+              >
+                {t("speedSchedule.activeDays")}
+              </span>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button
+                  type="button"
+                  className={`btn btn-small ${form.days === 127 ? "btn-primary" : "btn-outline"}`}
+                  onClick={() => setForm({ ...form, days: 127 })}
+                  style={{ fontSize: "0.72rem", padding: "2px 6px" }}
+                >
+                  {t("speedSchedule.allDays")}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-small ${form.days === 31 ? "btn-primary" : "btn-outline"}`}
+                  onClick={() => setForm({ ...form, days: 31 })}
+                  style={{ fontSize: "0.72rem", padding: "2px 6px" }}
+                >
+                  {t("speedSchedule.workdays")}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-small ${form.days === 96 ? "btn-primary" : "btn-outline"}`}
+                  onClick={() => setForm({ ...form, days: 96 })}
+                  style={{ fontSize: "0.72rem", padding: "2px 6px" }}
+                >
+                  {t("speedSchedule.weekends")}
+                </button>
+              </div>
+            </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {DAY_FLAGS.map((d) => (
                 <button
@@ -168,7 +209,7 @@ function ScheduleModal({
                   fontSize: "0.82rem",
                 }}
               >
-                Start Time
+                {t("speedSchedule.startTime")}
               </span>
               <input
                 className="form-input"
@@ -190,7 +231,7 @@ function ScheduleModal({
                   fontSize: "0.82rem",
                 }}
               >
-                End Time
+                {t("speedSchedule.endTime")}
               </span>
               <input
                 className="form-input"
@@ -213,7 +254,8 @@ function ScheduleModal({
                   fontSize: "0.82rem",
                 }}
               >
-                Max Upload (KB/s, -1 = unlimited, 0 = pause)
+                {t("speedSchedule.maxUploadSpeed")} (KB/s, -1 = unlimited, 0 =
+                pause)
               </span>
               <input
                 className="form-input"
@@ -242,7 +284,8 @@ function ScheduleModal({
                   fontSize: "0.82rem",
                 }}
               >
-                Max Download (KB/s, -1 = unlimited, 0 = pause)
+                {t("speedSchedule.maxDownloadSpeed")} (KB/s, -1 = unlimited, 0 =
+                pause)
               </span>
               <input
                 className="form-input"
@@ -274,7 +317,7 @@ function ScheduleModal({
                   fontSize: "0.82rem",
                 }}
               >
-                Priority
+                {t("speedSchedule.priority")}
               </span>
               <input
                 className="form-input"
@@ -304,7 +347,7 @@ function ScheduleModal({
                 }
               />
               <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>
-                Schedule Enabled
+                {t("speedSchedule.enableSchedule")}
               </span>
             </label>
           </div>
@@ -324,7 +367,7 @@ function ScheduleModal({
               onClick={onCancel}
               type="button"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               className="btn btn-primary btn-small"
@@ -332,7 +375,7 @@ function ScheduleModal({
               disabled={isPending || !form.name.trim()}
               type="button"
             >
-              {isPending ? "Saving..." : "Save Schedule"}
+              {isPending ? t("common.saving") : t("speedSchedule.saveChanges")}
             </button>
           </div>
         </div>
@@ -356,6 +399,7 @@ function WeeklyCalendar({
   onSelectRange,
   onToggleSchedule,
 }: WeeklyCalendarProps) {
+  const { t } = useTranslation();
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   const [isDragging, setIsDragging] = useState(false);
@@ -587,10 +631,11 @@ function WeeklyCalendar({
           gap: "0.5rem",
         }}
       >
-        <h3 style={{ margin: 0, fontSize: "1.05rem" }}>Weekly Schedule View</h3>
+        <h3 style={{ margin: 0, fontSize: "1.05rem" }}>
+          {t("speedSchedule.weeklyView")}
+        </h3>
         <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-          Drag across grid to paint window · Click block to toggle · Touch
-          supported
+          {t("speedSchedule.gridDragHint")}
         </span>
       </div>
 
@@ -770,17 +815,23 @@ function WeeklyCalendar({
             <span style={{ fontSize: "1.1rem" }}>✨</span>
             <div>
               <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
-                Selected Range: {daysToLabels(selectedRange.days)} (
-                {selectedRange.startTime} - {selectedRange.endTime})
+                {t("speedSchedule.selectedRange")}:{" "}
+                {daysToLabels(selectedRange.days)} ({selectedRange.startTime} -{" "}
+                {selectedRange.endTime})
               </div>
               <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                {selectedRange.maxHour - selectedRange.minHour + 1} hr
-                {selectedRange.maxHour - selectedRange.minHour + 1 > 1
-                  ? "s"
-                  : ""}{" "}
-                per day across {selectedRange.maxDay - selectedRange.minDay + 1}{" "}
-                day
-                {selectedRange.maxDay - selectedRange.minDay + 1 > 1 ? "s" : ""}
+                {t("speedSchedule.hrsPerDay", {
+                  hours: selectedRange.maxHour - selectedRange.minHour + 1,
+                  plural:
+                    selectedRange.maxHour - selectedRange.minHour + 1 > 1
+                      ? "s"
+                      : "",
+                  days: selectedRange.maxDay - selectedRange.minDay + 1,
+                  dayPlural:
+                    selectedRange.maxDay - selectedRange.minDay + 1 > 1
+                      ? "s"
+                      : "",
+                })}
               </div>
             </div>
           </div>
@@ -798,7 +849,7 @@ function WeeklyCalendar({
                 setSelectedRange(null);
               }}
             >
-              + Add Schedule for Range
+              {t("speedSchedule.addScheduleForRange")}
             </button>
             {selectedOverlappingSchedules.length > 0 && (
               <button
@@ -811,8 +862,9 @@ function WeeklyCalendar({
                   setSelectedRange(null);
                 }}
               >
-                Toggle {selectedOverlappingSchedules.length} Schedule
-                {selectedOverlappingSchedules.length > 1 ? "s" : ""}
+                {t("speedSchedule.toggleSchedules", {
+                  count: selectedOverlappingSchedules.length,
+                })}
               </button>
             )}
             <button
@@ -820,7 +872,7 @@ function WeeklyCalendar({
               className="btn btn-outline btn-small"
               onClick={() => setSelectedRange(null)}
             >
-              Clear
+              {t("speedSchedule.clearSelection")}
             </button>
           </div>
         </div>
@@ -873,6 +925,9 @@ function WeeklyCalendar({
 }
 
 function SpeedSchedule() {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
+  const confirm = useConfirm();
   const { data: schedules, isLoading, isError } = useSpeedSchedules();
   const { data: activeLimits } = useActiveSpeedLimits();
   const createSchedule = useCreateSpeedSchedule();
@@ -884,11 +939,41 @@ function SpeedSchedule() {
   function handleSave(form: Partial<SpeedScheduleEntry>) {
     if (form.id) {
       updateSchedule.mutate(form as SpeedScheduleEntry, {
-        onSuccess: () => setModal(null),
+        onSuccess: () => {
+          showToast(t("speedSchedule.updatedToast"), "info");
+          setModal(null);
+        },
+        onError: (err: any) => {
+          showToast(err?.message || t("speedSchedule.updateError"), "error");
+        },
       });
     } else {
-      createSchedule.mutate(form, { onSuccess: () => setModal(null) });
+      createSchedule.mutate(form, {
+        onSuccess: () => {
+          showToast(t("speedSchedule.createdToast"), "info");
+          setModal(null);
+        },
+        onError: (err: any) => {
+          showToast(err?.message || t("speedSchedule.createError"), "error");
+        },
+      });
     }
+  }
+
+  async function handleDelete(id: number, name: string) {
+    const ok = await confirm({
+      title: t("speedSchedule.deleteTitle"),
+      message: t("speedSchedule.deleteConfirm", { name }),
+      danger: true,
+      confirmText: t("common.delete"),
+    });
+    if (!ok) return;
+
+    deleteSchedule.mutate(id, {
+      onSuccess: () => showToast(t("speedSchedule.deletedToast"), "info"),
+      onError: (err: any) =>
+        showToast(err?.message || t("speedSchedule.deleteError"), "error"),
+    });
   }
 
   const scheduleCount = schedules?.length ?? 0;
@@ -917,7 +1002,13 @@ function SpeedSchedule() {
               gap: "0.5rem",
             }}
           >
-            <span>📅</span> Speed Schedule ({scheduleCount})
+            <span>⏱️</span> {t("speedSchedule.title")} ({scheduleCount})
+            <span
+              className="badge badge-primary"
+              style={{ fontSize: "0.8rem", marginLeft: "0.25rem" }}
+            >
+              {t("speedSchedule.bandwidthRules")}
+            </span>
           </h1>
           <p
             style={{
@@ -926,8 +1017,7 @@ function SpeedSchedule() {
               fontSize: "0.9rem",
             }}
           >
-            Manage time-based upload and download speed throttles and seeding
-            priorities
+            {t("speedSchedule.subtitle")}
           </p>
         </div>
 
@@ -936,7 +1026,7 @@ function SpeedSchedule() {
             className="btn btn-primary"
             onClick={() => setModal({ ...EMPTY_SCHEDULE })}
           >
-            + Add Schedule
+            {t("speedSchedule.addSchedule")}
           </button>
         </div>
       </div>
@@ -972,7 +1062,7 @@ function SpeedSchedule() {
               letterSpacing: "0.5px",
             }}
           >
-            Active Schedule
+            {t("speedSchedule.activeSchedule")}
           </div>
           <div
             style={{
@@ -994,14 +1084,14 @@ function SpeedSchedule() {
               </span>
             ) : (
               <span style={{ color: "var(--text-muted)", fontSize: "1.05rem" }}>
-                None (Global Rate)
+                {t("speedSchedule.noneGlobalRate")}
               </span>
             )}
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
             {activeLimits?.isScheduleActive
-              ? "Time-based scheduled rate is enforced"
-              : "Standard global rate configuration"}
+              ? t("speedSchedule.throttledDesc")
+              : t("speedSchedule.standardDesc")}
           </div>
         </div>
 
@@ -1027,7 +1117,7 @@ function SpeedSchedule() {
               letterSpacing: "0.5px",
             }}
           >
-            Active Upload Limit
+            {t("speedSchedule.activeUploadLimit")}
           </div>
           <div
             style={{
@@ -1039,14 +1129,14 @@ function SpeedSchedule() {
           >
             {activeLimits && activeLimits.maxUploadSpeed >= 0
               ? activeLimits.maxUploadSpeed === 0
-                ? "0 B/s (Paused)"
+                ? t("speedSchedule.pausedRate")
                 : formatSpeed(activeLimits.maxUploadSpeed)
-              : "Unlimited"}
+              : t("speedSchedule.unlimited")}
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
             {activeLimits && activeLimits.maxUploadSpeed >= 0
-              ? "Enforced rate throttle across active torrents"
-              : "No upload bandwidth restriction"}
+              ? t("speedSchedule.uploadThrottled")
+              : t("speedSchedule.noUploadRestriction")}
           </div>
         </div>
 
@@ -1072,7 +1162,7 @@ function SpeedSchedule() {
               letterSpacing: "0.5px",
             }}
           >
-            Active Download Limit
+            {t("speedSchedule.activeDownloadLimit")}
           </div>
           <div
             style={{
@@ -1084,14 +1174,14 @@ function SpeedSchedule() {
           >
             {activeLimits && activeLimits.maxDownloadSpeed >= 0
               ? activeLimits.maxDownloadSpeed === 0
-                ? "0 B/s (Paused)"
+                ? t("speedSchedule.pausedRate")
                 : formatSpeed(activeLimits.maxDownloadSpeed)
-              : "Unlimited"}
+              : t("speedSchedule.unlimited")}
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
             {activeLimits && activeLimits.maxDownloadSpeed >= 0
-              ? "Enforced rate throttle across downloads"
-              : "No download bandwidth restriction"}
+              ? t("speedSchedule.downloadThrottled")
+              : t("speedSchedule.noDownloadRestriction")}
           </div>
         </div>
       </div>
@@ -1137,31 +1227,41 @@ function SpeedSchedule() {
           }}
         >
           <h3 style={{ margin: 0, fontSize: "1.05rem" }}>
-            Configured Schedules ({scheduleCount})
+            {t("speedSchedule.configuredSchedules")} ({scheduleCount})
           </h3>
         </div>
 
         {isLoading ? (
-          <p className="loading">Loading schedules...</p>
+          <p className="loading">{t("speedSchedule.loadingSchedules")}</p>
         ) : isError ? (
-          <p className="error">Failed to load schedule data.</p>
+          <p className="error">{t("speedSchedule.failedToLoad")}</p>
         ) : (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
               <thead>
                 <tr>
-                  <th className="torrent-table-th">Status</th>
-                  <th className="torrent-table-th">Name</th>
-                  <th className="torrent-table-th">Days</th>
-                  <th className="torrent-table-th">Time Window</th>
-                  <th className="torrent-table-th">Upload Limit</th>
-                  <th className="torrent-table-th">Download Limit</th>
-                  <th className="torrent-table-th">Priority</th>
+                  <th className="torrent-table-th">{t("common.status")}</th>
+                  <th className="torrent-table-th">{t("common.name")}</th>
+                  <th className="torrent-table-th">
+                    {t("speedSchedule.daysCol")}
+                  </th>
+                  <th className="torrent-table-th">
+                    {t("speedSchedule.timeWindow")}
+                  </th>
+                  <th className="torrent-table-th">
+                    {t("speedSchedule.uploadLimit")}
+                  </th>
+                  <th className="torrent-table-th">
+                    {t("speedSchedule.downloadLimit")}
+                  </th>
+                  <th className="torrent-table-th">
+                    {t("speedSchedule.priority")}
+                  </th>
                   <th
                     className="torrent-table-th"
                     style={{ textAlign: "right" }}
                   >
-                    Actions
+                    {t("common.actions")}
                   </th>
                 </tr>
               </thead>
@@ -1183,7 +1283,7 @@ function SpeedSchedule() {
                           marginBottom: "0.25rem",
                         }}
                       >
-                        No speed schedules configured
+                        {t("speedSchedule.noSchedules")}
                       </div>
                       <div
                         style={{
@@ -1193,14 +1293,13 @@ function SpeedSchedule() {
                           margin: "0 auto 1.25rem",
                         }}
                       >
-                        Create scheduled speed rules to throttle bandwidth or
-                        prioritize seeding during specific hours of the day.
+                        {t("speedSchedule.createHint")}
                       </div>
                       <button
                         className="btn btn-primary btn-small"
                         onClick={() => setModal({ ...EMPTY_SCHEDULE })}
                       >
-                        + Add First Schedule
+                        {t("speedSchedule.addFirstSchedule")}
                       </button>
                     </td>
                   </tr>
@@ -1212,7 +1311,9 @@ function SpeedSchedule() {
                           className={`badge ${s.isEnabled ? "badge-primary" : "badge-secondary"}`}
                           style={{ fontSize: "0.75rem" }}
                         >
-                          {s.isEnabled ? "Enabled" : "Disabled"}
+                          {s.isEnabled
+                            ? t("common.enabled")
+                            : t("common.disabled")}
                         </span>
                       </td>
                       <td style={{ fontWeight: 600 }}>{s.name}</td>
@@ -1241,9 +1342,9 @@ function SpeedSchedule() {
                       >
                         {s.maxUploadSpeed >= 0
                           ? s.maxUploadSpeed === 0
-                            ? "0 B/s (Paused)"
+                            ? t("speedSchedule.pausedRate")
                             : formatSpeed(s.maxUploadSpeed)
-                          : "Unlimited"}
+                          : t("speedSchedule.unlimited")}
                       </td>
                       <td
                         style={{
@@ -1253,9 +1354,9 @@ function SpeedSchedule() {
                       >
                         {s.maxDownloadSpeed >= 0
                           ? s.maxDownloadSpeed === 0
-                            ? "0 B/s (Paused)"
+                            ? t("speedSchedule.pausedRate")
                             : formatSpeed(s.maxDownloadSpeed)
-                          : "Unlimited"}
+                          : t("speedSchedule.unlimited")}
                       </td>
                       <td>
                         <span
@@ -1274,13 +1375,13 @@ function SpeedSchedule() {
                             className="btn btn-small btn-outline"
                             onClick={() => setModal({ ...s })}
                           >
-                            Edit
+                            {t("common.edit")}
                           </button>
                           <button
                             className="btn btn-small btn-danger"
-                            onClick={() => deleteSchedule.mutate(s.id)}
+                            onClick={() => handleDelete(s.id, s.name)}
                           >
-                            Delete
+                            {t("common.delete")}
                           </button>
                         </div>
                       </td>
