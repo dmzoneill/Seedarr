@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
-using NzbDrone.Core.SignalR;
 using NzbDrone.Core.Telemetry;
+using NzbDrone.SignalR;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Subsystems;
