@@ -32,7 +32,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
     id: "general-security",
     title: "General & Security",
     shortLabel: "GENERAL",
-    description: "Host server endpoints, theme appearance, security gates, and watch folder automation",
+    description:
+      "Host server endpoints, theme appearance, security gates, and watch folder automation",
     icon: "⚙️",
     pages: [
       {
@@ -40,7 +41,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "general-security",
         title: "Host & Server",
         shortLabel: "Host & Server",
-        description: "Configure web server port, bind address, URL base, and SSL/HTTPS certificate",
+        description:
+          "Configure web server port, bind address, URL base, and SSL/HTTPS certificate",
         icon: "🖥️",
         badge: "Core",
       },
@@ -57,7 +59,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "general-security",
         title: "Security & API",
         shortLabel: "Security & API",
-        description: "Authentication gate, CSRF protection, SSO identity providers, and API keys",
+        description:
+          "Authentication gate, CSRF protection, SSO identity providers, and API keys",
         icon: "🔒",
         badge: "Auth",
       },
@@ -66,7 +69,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "general-security",
         title: "Watch Folder",
         shortLabel: "Watch Folder",
-        description: "Automated torrent directory drop monitoring and auto-start",
+        description:
+          "Automated torrent directory drop monitoring and auto-start",
         icon: "📁",
       },
     ],
@@ -75,7 +79,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
     id: "storage-queues",
     title: "Storage & Queues",
     shortLabel: "STORAGE",
-    description: "Storage paths, queue distribution, category routing, and lifecycle scripts",
+    description:
+      "Storage paths, queue distribution, category routing, and lifecycle scripts",
     icon: "💾",
     pages: [
       {
@@ -83,7 +88,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "storage-queues",
         title: "Categories",
         shortLabel: "Categories",
-        description: "Organize torrents into categories with dedicated save paths and ratio limits",
+        description:
+          "Organize torrents into categories with dedicated save paths and ratio limits",
         icon: "🏷️",
         badge: "Paths",
       },
@@ -92,7 +98,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "storage-queues",
         title: "Custom Scripts",
         shortLabel: "Custom Scripts",
-        description: "Execute shell scripts and webhook triggers on torrent lifecycle events",
+        description:
+          "Execute shell scripts and webhook triggers on torrent lifecycle events",
         icon: "📜",
       },
     ],
@@ -101,7 +108,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
     id: "bittorrent-engine",
     title: "BitTorrent Engine",
     shortLabel: "ENGINE",
-    description: "Core protocol parameters, extensions, swarm simulation, and embedded tracker server",
+    description:
+      "Core protocol parameters, extensions, swarm simulation, and embedded tracker server",
     icon: "⚡",
     badge: "Core",
     pages: [
@@ -110,7 +118,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "bittorrent-engine",
         title: "BitTorrent Engine",
         shortLabel: "BitTorrent Engine",
-        description: "Manage core protocol parameters, client emulation, and piece cache",
+        description:
+          "Manage core protocol parameters, client emulation, and piece cache",
         icon: "🔄",
         badge: "Core",
       },
@@ -119,7 +128,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "bittorrent-engine",
         title: "Protocols & BEP",
         shortLabel: "Protocols & BEP",
-        description: "BEP extensions, transport layers, DHT, PEX, and encryption mode",
+        description:
+          "BEP extensions, transport layers, DHT, PEX, and encryption mode",
         icon: "📡",
       },
       {
@@ -127,7 +137,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "bittorrent-engine",
         title: "Peer Protocol",
         shortLabel: "Peer Protocol",
-        description: "Handshake timeouts, keepalive intervals, and connection policies",
+        description:
+          "Handshake timeouts, keepalive intervals, and connection policies",
         icon: "🤝",
       },
       {
@@ -135,7 +146,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "bittorrent-engine",
         title: "Seeding & Ratios",
         shortLabel: "Seeding & Ratios",
-        description: "Target seed ratios, distribution algorithms, and swarm seeding policies",
+        description:
+          "Target seed ratios, distribution algorithms, and swarm seeding policies",
         icon: "🌱",
       },
       {
@@ -143,7 +155,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "bittorrent-engine",
         title: "Simulation & Swarm",
         shortLabel: "Simulation & Swarm",
-        description: "Simulated peer swarms, synthetic traffic curves, and agent behavior",
+        description:
+          "Simulated peer swarms, synthetic traffic curves, and agent behavior",
         icon: "🎲",
       },
       {
@@ -151,7 +164,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "bittorrent-engine",
         title: "Tracker Server",
         shortLabel: "Tracker Server",
-        description: "Inbuilt HTTP/UDP BitTorrent tracker server endpoints and scrape support",
+        description:
+          "Inbuilt HTTP/UDP BitTorrent tracker server endpoints and scrape support",
         icon: "🛰️",
       },
     ],
@@ -160,7 +174,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
     id: "network-bandwidth",
     title: "Network & Bandwidth",
     shortLabel: "NETWORK",
-    description: "Network interface binding, VPN killswitch, proxy tunnels, and schedule windows",
+    description:
+      "Network interface binding, VPN killswitch, proxy tunnels, and schedule windows",
     icon: "🌐",
     pages: [
       {
@@ -168,7 +183,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "network-bandwidth",
         title: "Network & Ports",
         shortLabel: "Network & Ports",
-        description: "Interface binding, listening ports, IPv6, VPN kill switch, and socket limits",
+        description:
+          "Interface binding, listening ports, IPv6, VPN kill switch, and socket limits",
         icon: "🛡️",
         badge: "VPN",
       },
@@ -177,7 +193,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "network-bandwidth",
         title: "Proxy & Tunnel",
         shortLabel: "Proxy & Tunnel",
-        description: "Outbound SOCKS5/HTTP proxy tunnel, anonymous routing, and proxy killswitch",
+        description:
+          "Outbound SOCKS5/HTTP proxy tunnel, anonymous routing, and proxy killswitch",
         icon: "🔀",
       },
       {
@@ -185,7 +202,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "network-bandwidth",
         title: "Schedule",
         shortLabel: "Schedule",
-        description: "Weekly alternative speed limit windows and active throttling rules",
+        description:
+          "Weekly alternative speed limit windows and active throttling rules",
         icon: "🕒",
       },
     ],
@@ -194,7 +212,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
     id: "integrations",
     title: "Integrations",
     shortLabel: "INTEGRATIONS",
-    description: "Prowlarr indexers, Servarr application suites, download clients, and alerts",
+    description:
+      "Prowlarr indexers, Servarr application suites, download clients, and alerts",
     icon: "🔌",
     pages: [
       {
@@ -202,7 +221,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "integrations",
         title: "Indexers & RSS",
         shortLabel: "Indexers & RSS",
-        description: "Torznab/Newznab indexer discovery and automated RSS download rules",
+        description:
+          "Torznab/Newznab indexer discovery and automated RSS download rules",
         icon: "🔍",
       },
       {
@@ -219,7 +239,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "integrations",
         title: "Download Clients",
         shortLabel: "Download Clients",
-        description: "Import state and control qBittorrent, Transmission, Deluge, rTorrent",
+        description:
+          "Import state and control qBittorrent, Transmission, Deluge, rTorrent",
         icon: "📥",
       },
       {
@@ -227,7 +248,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "integrations",
         title: "Notifications",
         shortLabel: "Notifications",
-        description: "Discord, Telegram, Gotify, Pushover, Email, and Webhook alerts",
+        description:
+          "Discord, Telegram, Gotify, Pushover, Email, and Webhook alerts",
         icon: "🔔",
       },
     ],
@@ -236,7 +258,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
     id: "advanced-ai",
     title: "Advanced & Diagnostics",
     shortLabel: "ADVANCED & AI",
-    description: "System logging verbosity, diagnostics, developer options, and subsystem flags",
+    description:
+      "System logging verbosity, diagnostics, developer options, and subsystem flags",
     icon: "🧠",
     pages: [
       {
@@ -244,7 +267,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "advanced-ai",
         title: "AI & Copilot",
         shortLabel: "AI & Copilot",
-        description: "Configure AI providers (Ollama, Gemini, ONNX), Copilot drawer, and swarm diagnostics",
+        description:
+          "Configure AI providers (Ollama, Gemini, ONNX), Copilot drawer, and swarm diagnostics",
         icon: "✨",
         badge: "AI",
         keywords: [
@@ -263,7 +287,8 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         groupId: "advanced-ai",
         title: "Advanced & Logs",
         shortLabel: "Advanced & Logs",
-        description: "System logging verbosity, diagnostics, developer flags, and database tools",
+        description:
+          "System logging verbosity, diagnostics, developer flags, and database tools",
         icon: "📋",
       },
     ],

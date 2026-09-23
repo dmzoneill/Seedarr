@@ -90,7 +90,8 @@ export function SeedingTab() {
               setDirty(false);
               trackSettingSave("seeding", {
                 uploadDistributionAlgorithm: form.uploadDistributionAlgorithm,
-                downloadDistributionAlgorithm: form.downloadDistributionAlgorithm,
+                downloadDistributionAlgorithm:
+                  form.downloadDistributionAlgorithm,
                 alternativeSpeedEnabled: form.alternativeSpeedEnabled,
                 globalSeedRatioLimit: form.globalSeedRatioLimit > 0,
                 seedGoalReachedAction: form.seedGoalReachedAction,

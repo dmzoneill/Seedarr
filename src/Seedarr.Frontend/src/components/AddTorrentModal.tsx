@@ -89,7 +89,10 @@ function AddTorrentModal({
             }}
             onClick={onClose}
             title={t("common.close", "Close dialog")}
-            aria-label={t("modals.addTorrent.closeDialog", "Close add torrent dialog")}
+            aria-label={t(
+              "modals.addTorrent.closeDialog",
+              "Close add torrent dialog",
+            )}
           >
             ✕
           </button>
@@ -108,9 +111,18 @@ function AddTorrentModal({
                 fontSize: "0.875rem",
               }}
             >
-              {t("modals.addTorrent.readOnlyWarning", "🔒 You have ReadOnly permissions. Adding torrents is not permitted.")}
+              {t(
+                "modals.addTorrent.readOnlyWarning",
+                "🔒 You have ReadOnly permissions. Adding torrents is not permitted.",
+              )}
             </div>
-            <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
+            <div
+              style={{
+                marginTop: "1rem",
+                display: "flex",
+                justifyContent: "flex-end",
+              }}
+            >
               <button className="btn btn-outline" onClick={onClose}>
                 {t("common.close", "Close")}
               </button>

@@ -63,8 +63,16 @@ describe("PeerMap: mapPreservedNodes", () => {
     assert.ok(peer1);
     assert.equal(peer1.x, 150);
     assert.equal(peer1.y, 250);
-    assert.equal(peer1.fx, 155, "fx must be preserved from previous drag state");
-    assert.equal(peer1.fy, 255, "fy must be preserved from previous drag state");
+    assert.equal(
+      peer1.fx,
+      155,
+      "fx must be preserved from previous drag state",
+    );
+    assert.equal(
+      peer1.fy,
+      255,
+      "fy must be preserved from previous drag state",
+    );
 
     const peer2 = mapped.find((n) => n.id === "peer-2");
     assert.ok(peer2);
@@ -103,7 +111,10 @@ describe("PeerMap: isTopologyChanged", () => {
       linkKeys: new Set(["node-1->node-2"]),
     };
 
-    assert.equal(isTopologyChanged(snapshot, currentNodes, currentLinks), false);
+    assert.equal(
+      isTopologyChanged(snapshot, currentNodes, currentLinks),
+      false,
+    );
   });
 
   it("returns false when links have been mutated by D3 into node object references", () => {
@@ -120,7 +131,10 @@ describe("PeerMap: isTopologyChanged", () => {
       linkKeys: new Set(["node-1->node-2"]),
     };
 
-    assert.equal(isTopologyChanged(snapshot, currentNodes, currentLinks), false);
+    assert.equal(
+      isTopologyChanged(snapshot, currentNodes, currentLinks),
+      false,
+    );
   });
 
   it("returns true when a node is added or removed", () => {
@@ -183,9 +197,7 @@ describe("PeerMap: filterValidLinks", () => {
 
   it("filters out links referencing non-existent target node", () => {
     const nodes = [{ id: "torrent-1" }];
-    const links = [
-      { source: "torrent-1", target: "missing-peer" },
-    ];
+    const links = [{ source: "torrent-1", target: "missing-peer" }];
 
     const result = filterValidLinks(links, nodes);
     assert.equal(result.length, 0);

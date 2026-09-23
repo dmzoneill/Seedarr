@@ -105,7 +105,9 @@ export function MediaArtwork({
   const initialSrc = cleanSrc || placeholderUrl;
 
   const [currentSrc, setCurrentSrc] = useState<string>(initialSrc);
-  const [artworkState, setArtworkState] = useState<MediaArtworkState>(initialState || "loading");
+  const [artworkState, setArtworkState] = useState<MediaArtworkState>(
+    initialState || "loading",
+  );
 
   useEffect(() => {
     const nextCleanSrc = sanitizeArtworkUrl(src);
@@ -146,7 +148,8 @@ export function MediaArtwork({
         : undefined;
 
   const isVerySmall = numericWidth !== undefined && numericWidth <= 30;
-  const isSmall = (numericWidth !== undefined && numericWidth <= 60) || isVerySmall;
+  const isSmall =
+    (numericWidth !== undefined && numericWidth <= 60) || isVerySmall;
 
   const glyph = fallbackIcon || getCategoryGlyph(category);
 
@@ -270,9 +273,17 @@ export function MediaArtwork({
                 border: "1px solid rgba(255, 255, 255, 0.25)",
                 borderRadius: "3px",
                 color: "var(--text-secondary, #b0a898)",
-                fontSize: isVerySmall ? "0.6rem" : isSmall ? "0.7rem" : "0.8rem",
+                fontSize: isVerySmall
+                  ? "0.6rem"
+                  : isSmall
+                    ? "0.7rem"
+                    : "0.8rem",
                 cursor: "pointer",
-                padding: isVerySmall ? "0 2px" : isSmall ? "1px 4px" : "2px 8px",
+                padding: isVerySmall
+                  ? "0 2px"
+                  : isSmall
+                    ? "1px 4px"
+                    : "2px 8px",
                 lineHeight: 1,
               }}
             >

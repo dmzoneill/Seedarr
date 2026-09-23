@@ -15,7 +15,10 @@ export function isElementConnected(el: HTMLElement): boolean {
   if (typeof el.isConnected === "boolean") {
     return el.isConnected;
   }
-  if (typeof document !== "undefined" && typeof document.contains === "function") {
+  if (
+    typeof document !== "undefined" &&
+    typeof document.contains === "function"
+  ) {
     return document.contains(el);
   }
   return true;
@@ -24,14 +27,17 @@ export function isElementConnected(el: HTMLElement): boolean {
 export function isElementVisible(el: HTMLElement): boolean {
   if (el.hidden) return false;
   if (el.getAttribute?.("aria-hidden") === "true") return false;
-  if (el.style?.display === "none" || el.style?.visibility === "hidden") return false;
+  if (el.style?.display === "none" || el.style?.visibility === "hidden")
+    return false;
   return true;
 }
 
-export function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
+export function getFocusableElements(
+  container: HTMLElement | null,
+): HTMLElement[] {
   if (!container || typeof container.querySelectorAll !== "function") return [];
   const elements = Array.from(
-    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
   );
   return elements.filter(isElementVisible);
 }
@@ -87,7 +93,10 @@ export class FocusTrap {
     if (this.isActive) return;
     this.isActive = true;
 
-    if (typeof document !== "undefined" && isHtmlElement(document.activeElement)) {
+    if (
+      typeof document !== "undefined" &&
+      isHtmlElement(document.activeElement)
+    ) {
       this.previousActiveElement = document.activeElement;
     }
 
@@ -124,7 +133,10 @@ export class FocusTrap {
   public focusInitial(): void {
     if (!this.container) return;
 
-    if (this.initialFocusElement && isElementConnected(this.initialFocusElement)) {
+    if (
+      this.initialFocusElement &&
+      isElementConnected(this.initialFocusElement)
+    ) {
       this.initialFocusElement.focus();
       return;
     }
@@ -166,7 +178,8 @@ export class FocusTrap {
 
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
-      const active = typeof document !== "undefined" ? document.activeElement : null;
+      const active =
+        typeof document !== "undefined" ? document.activeElement : null;
 
       if (event.shiftKey) {
         if (active === first || !this.container.contains(active as Node)) {
@@ -244,7 +257,8 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
       if (!trap.getIsActive() || !containerRef.current) return;
       if (
         typeof document !== "undefined" &&
-        (!document.activeElement || !containerRef.current.contains(document.activeElement))
+        (!document.activeElement ||
+          !containerRef.current.contains(document.activeElement))
       ) {
         trap.setContainer(containerRef.current);
         if (initialFocusRef?.current) {

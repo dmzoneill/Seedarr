@@ -19,7 +19,10 @@ export function SystemTerminal() {
 
   useEffect(() => {
     // If a default path is configured in Seedarr
-    if (generalConfig && typeof (generalConfig as any).defaultSavePath === "string") {
+    if (
+      generalConfig &&
+      typeof (generalConfig as any).defaultSavePath === "string"
+    ) {
       const configuredPath = (generalConfig as any).defaultSavePath;
       if (configuredPath) {
         setDownloadDir(configuredPath);
@@ -122,7 +125,11 @@ export function SystemTerminal() {
           >
             <input
               type="text"
-              placeholder={t("terminal.enterPath", undefined, "Enter directory path...")}
+              placeholder={t(
+                "terminal.enterPath",
+                undefined,
+                "Enter directory path...",
+              )}
               value={customPath}
               onChange={(e) => setCustomPath(e.target.value)}
               className="input"

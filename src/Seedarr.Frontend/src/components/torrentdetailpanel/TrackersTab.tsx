@@ -48,7 +48,8 @@ function getAttachedTrackerIndicator(
     s === "4" ||
     det?.healthStatus === "Offline" ||
     String(det?.healthStatus) === "3";
-  const isSlow = det?.healthStatus === "Slow" || String(det?.healthStatus) === "2";
+  const isSlow =
+    det?.healthStatus === "Slow" || String(det?.healthStatus) === "2";
 
   if (isAnnouncing) {
     return {

@@ -115,9 +115,12 @@ describe("useIdleTimer / IdleTimerTracker", () => {
 
   it("setStoredIdleTimeout saves to localStorage and dispatches storage event", () => {
     let receivedEvent: StorageEvent | null = null;
-    (globalThis as any).window.addEventListener("storage", (e: StorageEvent) => {
-      receivedEvent = e;
-    });
+    (globalThis as any).window.addEventListener(
+      "storage",
+      (e: StorageEvent) => {
+        receivedEvent = e;
+      },
+    );
 
     setStoredIdleTimeout(1800);
     assert.equal(mockStorage.getItem(IDLE_TIMEOUT_STORAGE_KEY), "1800");

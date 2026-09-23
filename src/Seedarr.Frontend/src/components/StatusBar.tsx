@@ -30,7 +30,10 @@ export interface StatusBarProps {
   isReconnecting?: boolean;
 }
 
-export function StatusBar({ connected = true, isReconnecting = false }: StatusBarProps = {}) {
+export function StatusBar({
+  connected = true,
+  isReconnecting = false,
+}: StatusBarProps = {}) {
   const { t } = useTranslation();
   const { data: stats } = useSeedingStats();
   const { data: network } = useNetworkStatus();
@@ -100,11 +103,9 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
   };
 
   const hasIssues =
-    healthChecks &&
-    healthChecks.some((c) => isWarningOrError(c.type));
+    healthChecks && healthChecks.some((c) => isWarningOrError(c.type));
   const issuesCount = hasIssues
-    ? healthChecks.filter((c) => isWarningOrError(c.type))
-        .length
+    ? healthChecks.filter((c) => isWarningOrError(c.type)).length
     : 0;
 
   return (
@@ -134,7 +135,8 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
         </span>
         {systemStatus?.cpuUsagePercentage != null && (
           <span className="status-bar-item">
-            <CpuIcon size={14} /> CPU: {systemStatus.cpuUsagePercentage.toFixed(1)}%
+            <CpuIcon size={14} /> CPU:{" "}
+            {systemStatus.cpuUsagePercentage.toFixed(1)}%
           </span>
         )}
         <span
@@ -204,7 +206,7 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
           {formatRatio(
             stats?.totalDownloaded && stats.totalDownloaded > 0
               ? stats.totalUploaded / stats.totalDownloaded
-              : 0
+              : 0,
           )}
         </span>
         <span className="status-bar-item">

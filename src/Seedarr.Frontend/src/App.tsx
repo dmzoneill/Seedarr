@@ -41,10 +41,7 @@ import AriaLiveAnnouncer from "./components/AriaLiveAnnouncer";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SignalRProvider from "./components/SignalRProvider";
 import { useSignalR, stopSignalR } from "./api/signalr";
-import {
-  broadcastLogout,
-  subscribeAuthChannel,
-} from "./utils/authChannel";
+import { broadcastLogout, subscribeAuthChannel } from "./utils/authChannel";
 import { useModalStack } from "./components/ModalProvider";
 import AddTorrentModal from "./components/AddTorrentModal";
 import CommandPalette from "./components/CommandPalette";
@@ -153,7 +150,9 @@ function App() {
 
   const { connected, isReconnecting, reconnect } = useSignalR();
   const { showToast } = useToast();
-  const [currentUser, setCurrentUser] = useState<import("./api/types").CurrentUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<
+    import("./api/types").CurrentUser | null
+  >(null);
   const setStoreCurrentUser = useAppStore((s) => s.setCurrentUser);
   const updateCurrentUser = useCallback(
     (user: import("./api/types").CurrentUser | null) => {
@@ -185,11 +184,7 @@ function App() {
   }, []);
 
   const handleRestart = useCallback(async () => {
-    if (
-      !confirm(
-        t("topbar.restartConfirm", undefined, "Restart Seedarr?"),
-      )
-    ) {
+    if (!confirm(t("topbar.restartConfirm", undefined, "Restart Seedarr?"))) {
       return;
     }
 
@@ -219,9 +214,7 @@ function App() {
     lockSession,
     unlockSession,
   } = useIdleTimer({
-    enabled: Boolean(
-      currentUser && location.pathname !== "/login",
-    ),
+    enabled: Boolean(currentUser && location.pathname !== "/login"),
     onIdle: () => {
       setLockReason("idle");
     },
@@ -472,14 +465,21 @@ function App() {
   const { data: generalConfig } = useGeneralConfig();
 
   useEffect(() => {
-    if (generalConfig?.uiLanguage && isSupportedLocale(generalConfig.uiLanguage)) {
+    if (
+      generalConfig?.uiLanguage &&
+      isSupportedLocale(generalConfig.uiLanguage)
+    ) {
       try {
         const stored = localStorage.getItem(STORAGE_KEY_LANGUAGE);
         if (!stored) {
-          useI18nStore.getState().setLocale(generalConfig.uiLanguage as LocaleCode);
+          useI18nStore
+            .getState()
+            .setLocale(generalConfig.uiLanguage as LocaleCode);
         }
       } catch {
-        useI18nStore.getState().setLocale(generalConfig.uiLanguage as LocaleCode);
+        useI18nStore
+          .getState()
+          .setLocale(generalConfig.uiLanguage as LocaleCode);
       }
     }
   }, [generalConfig?.uiLanguage]);
@@ -623,7 +623,13 @@ function App() {
 
       // "g" sequence navigation (e.g. g then d => dashboard)
       const keyLower = e.key.toLowerCase();
-      if (keyLower === "g" && !pendingGKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (
+        keyLower === "g" &&
+        !pendingGKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
         pendingGKey = true;
         if (pendingGTimer) clearTimeout(pendingGTimer);
         pendingGTimer = setTimeout(() => {
@@ -790,15 +796,16 @@ function App() {
                 <HistoryIcon />{" "}
                 <span>{t("nav.history", undefined, "History")}</span>
               </NavLink>
-              {downloadClients && downloadClients.filter((c) => c.enable).length > 1 && (
-                <NavLink
-                  to="/activity/client/all"
-                  className="sidebar-nav-item sidebar-nav-sub"
-                  title="All Clients"
-                >
-                  <DownloadAgentIcon /> <span>All Clients</span>
-                </NavLink>
-              )}
+              {downloadClients &&
+                downloadClients.filter((c) => c.enable).length > 1 && (
+                  <NavLink
+                    to="/activity/client/all"
+                    className="sidebar-nav-item sidebar-nav-sub"
+                    title="All Clients"
+                  >
+                    <DownloadAgentIcon /> <span>All Clients</span>
+                  </NavLink>
+                )}
               {downloadClients
                 ?.filter((c) => c.enable)
                 .map((client) => (
@@ -1260,7 +1267,11 @@ function App() {
                 fontWeight: 600,
               }}
               title={t("nav.gettingStarted", undefined, "Getting Started")}
-              aria-label={t("nav.gettingStarted", undefined, "Getting Started Guide")}
+              aria-label={t(
+                "nav.gettingStarted",
+                undefined,
+                "Getting Started Guide",
+              )}
             >
               🚀 {t("nav.gettingStarted", undefined, "Getting Started")}
             </button>
@@ -1292,7 +1303,10 @@ function App() {
                   }}
                 >
                   {showApiKey
-                    ? (unmaskedApiKey || (generalConfig.apiKey.includes("*") ? "••••••••••••••••••••••••••••••••" : generalConfig.apiKey))
+                    ? unmaskedApiKey ||
+                      (generalConfig.apiKey.includes("*")
+                        ? "••••••••••••••••••••••••••••••••"
+                        : generalConfig.apiKey)
                     : "••••••••••••••••••••••••••••••••"}
                 </span>
               </button>
@@ -1319,7 +1333,11 @@ function App() {
               target="_blank"
               rel="noopener noreferrer"
               title={t("topbar.supportSeedarr", undefined, "Support Seedarr")}
-              aria-label={t("topbar.supportSeedarr", undefined, "Support Seedarr")}
+              aria-label={t(
+                "topbar.supportSeedarr",
+                undefined,
+                "Support Seedarr",
+              )}
             >
               <HeartIcon />
             </a>
@@ -1451,19 +1469,17 @@ function App() {
                               ),
                             )
                           ) {
-                            apiClient
-                              .post("/system/shutdown")
-                              .catch((err) => {
-                                console.error("System action failed:", err);
-                                showToast(
-                                  t(
-                                    "topbar.actionFailed",
-                                    undefined,
-                                    "System action failed",
-                                  ),
-                                  "error",
-                                );
-                              });
+                            apiClient.post("/system/shutdown").catch((err) => {
+                              console.error("System action failed:", err);
+                              showToast(
+                                t(
+                                  "topbar.actionFailed",
+                                  undefined,
+                                  "System action failed",
+                                ),
+                                "error",
+                              );
+                            });
                           }
                         }}
                       >
@@ -1550,7 +1566,10 @@ function App() {
               <Route path="/settings/:section?" element={<Settings />} />
               <Route path="/system/status" element={<SystemStatus />} />
               <Route path="/system/resources" element={<SystemResources />} />
-              <Route path="/system/telemetry" element={<Navigate to="/system/resources" replace />} />
+              <Route
+                path="/system/telemetry"
+                element={<Navigate to="/system/resources" replace />}
+              />
               <Route path="/system/tasks" element={<SystemTasks />} />
               <Route path="/system/logs" element={<SystemLogs />} />
               <Route path="/system/backup" element={<SystemBackup />} />
@@ -1566,10 +1585,7 @@ function App() {
             </Routes>
           </ErrorBoundary>
         </main>
-        <StatusBar
-          connected={connected}
-          isReconnecting={isReconnecting}
-        />
+        <StatusBar connected={connected} isReconnecting={isReconnecting} />
       </div>
       <AriaLiveAnnouncer />
       <SignalRProvider />
@@ -1672,7 +1688,8 @@ function App() {
                 lineHeight: 1.5,
               }}
             >
-              Please wait while the system restarts and re-establishes connection.
+              Please wait while the system restarts and re-establishes
+              connection.
             </p>
             <div
               style={{

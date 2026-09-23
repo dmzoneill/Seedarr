@@ -18,7 +18,10 @@ const listeners = new Set<AnnounceListener>();
 /**
  * Dispatches an announcement to screen reader live regions.
  */
-export function announce(message: string, priority: AriaPriority = "polite"): void {
+export function announce(
+  message: string,
+  priority: AriaPriority = "polite",
+): void {
   const item: AriaAnnouncement = {
     id: ++announcementCounter,
     message,
@@ -97,10 +100,7 @@ export default function AriaLiveAnnouncer() {
         torrent.status === "Completed" || torrent.status === "Seeding";
 
       if (wasDownloading && isCompletedOrSeeding) {
-        announce(
-          `Torrent "${torrent.name}" completed, now seeding`,
-          "polite",
-        );
+        announce(`Torrent "${torrent.name}" completed, now seeding`, "polite");
       }
 
       // 2. Torrent error transition

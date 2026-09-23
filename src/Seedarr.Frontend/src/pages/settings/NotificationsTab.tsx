@@ -58,8 +58,14 @@ function sanitizeNotificationSettings(
     : fallback.position;
 
   let autoDismissSeconds = fallback.autoDismissSeconds;
-  if (typeof raw.autoDismissSeconds === "number" && !isNaN(raw.autoDismissSeconds)) {
-    autoDismissSeconds = Math.min(60, Math.max(1, Math.round(raw.autoDismissSeconds)));
+  if (
+    typeof raw.autoDismissSeconds === "number" &&
+    !isNaN(raw.autoDismissSeconds)
+  ) {
+    autoDismissSeconds = Math.min(
+      60,
+      Math.max(1, Math.round(raw.autoDismissSeconds)),
+    );
   }
 
   return {
@@ -78,7 +84,10 @@ function useNotificationSettings(): [
     try {
       const stored = localStorage.getItem(NOTIFICATION_SETTINGS_KEY);
       return stored
-        ? sanitizeNotificationSettings(JSON.parse(stored), defaultNotificationSettings)
+        ? sanitizeNotificationSettings(
+            JSON.parse(stored),
+            defaultNotificationSettings,
+          )
         : defaultNotificationSettings;
     } catch {
       return defaultNotificationSettings;
@@ -86,12 +95,12 @@ function useNotificationSettings(): [
   });
 
   const saveSettings = (newSettings: NotificationSettings) => {
-    const sanitized = sanitizeNotificationSettings(newSettings, defaultNotificationSettings);
-    setSettings(sanitized);
-    localStorage.setItem(
-      NOTIFICATION_SETTINGS_KEY,
-      JSON.stringify(sanitized),
+    const sanitized = sanitizeNotificationSettings(
+      newSettings,
+      defaultNotificationSettings,
     );
+    setSettings(sanitized);
+    localStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(sanitized));
   };
 
   return [settings, saveSettings];
@@ -228,7 +237,12 @@ function parseNotificationToForm(
     server: parsed.server || parsed.host || "",
     port: parsed.port ? Number(parsed.port) : 587,
     useSsl: parsed.useSsl ?? parsed.ssl ?? true,
-    ignoreSslErrors: parsed.ignoreSslErrors ?? parsed.ignoreSsl ?? parsed.allowInvalidCertificates ?? parsed.allowInvalidCert ?? false,
+    ignoreSslErrors:
+      parsed.ignoreSslErrors ??
+      parsed.ignoreSsl ??
+      parsed.allowInvalidCertificates ??
+      parsed.allowInvalidCert ??
+      false,
     password: parsed.password || parsed.pass || "",
     from: parsed.from || "",
     recipient: parsed.recipient || parsed.to || "",
@@ -418,13 +432,21 @@ function getNotificationSummary(notif: NotificationResource): string {
   try {
     const s = JSON.parse(notif.settings || "{}");
     if (notif.implementation === "Telegram") {
-      return s.chat_id || s.chatId ? `Chat ID: ${s.chat_id || s.chatId}` : "Telegram Bot";
+      return s.chat_id || s.chatId
+        ? `Chat ID: ${s.chat_id || s.chatId}`
+        : "Telegram Bot";
     }
     if (notif.implementation === "Pushover") {
-      return s.user ? `User: ${String(s.user).substring(0, 6)}...` : "Pushover Alert";
+      return s.user
+        ? `User: ${String(s.user).substring(0, 6)}...`
+        : "Pushover Alert";
     }
     if (notif.implementation === "Email") {
-      return s.recipient ? `To: ${s.recipient}` : s.server ? `${s.server}:${s.port || 587}` : "SMTP Email";
+      return s.recipient
+        ? `To: ${s.recipient}`
+        : s.server
+          ? `${s.server}:${s.port || 587}`
+          : "SMTP Email";
     }
     if (notif.implementation === "CustomScript") {
       return s.path || s.command || s.filePath || "Custom Script";
@@ -438,11 +460,14 @@ function getNotificationSummary(notif: NotificationResource): string {
 function getNotificationUrl(notif: NotificationResource): string | null {
   try {
     const s = JSON.parse(notif.settings || "{}");
-    if (typeof s.serverUrl === "string" && s.serverUrl.startsWith("http")) return s.serverUrl;
+    if (typeof s.serverUrl === "string" && s.serverUrl.startsWith("http"))
+      return s.serverUrl;
     if (typeof s.url === "string" && s.url.startsWith("http")) return s.url;
-    if (notif.settings && notif.settings.startsWith("http")) return notif.settings;
+    if (notif.settings && notif.settings.startsWith("http"))
+      return notif.settings;
   } catch {
-    if (notif.settings && notif.settings.startsWith("http")) return notif.settings;
+    if (notif.settings && notif.settings.startsWith("http"))
+      return notif.settings;
   }
   return null;
 }
@@ -457,7 +482,8 @@ export function NotificationsTab() {
   const [saved, setSaved] = useState(false);
 
   // Backend outbound notifications
-  const { data: notifications, isLoading: isLoadingNotifications } = useNotifications();
+  const { data: notifications, isLoading: isLoadingNotifications } =
+    useNotifications();
   const { data: allTags } = useTags();
   const { data: allCategories } = useCategories();
   const createMutation = useCreateNotification();
@@ -467,9 +493,13 @@ export function NotificationsTab() {
   const testDirectMutation = useTestDirectNotification();
 
   const [editing, setEditing] = useState<NotificationFormState | null>(null);
-  const [deletingNotif, setDeletingNotif] = useState<NotificationResource | null>(null);
-  const [testResults, setTestResults] = useState<Record<number, NotificationTestResult | null>>({});
-  const [modalTestResult, setModalTestResult] = useState<NotificationTestResult | null>(null);
+  const [deletingNotif, setDeletingNotif] =
+    useState<NotificationResource | null>(null);
+  const [testResults, setTestResults] = useState<
+    Record<number, NotificationTestResult | null>
+  >({});
+  const [modalTestResult, setModalTestResult] =
+    useState<NotificationTestResult | null>(null);
 
   const setToastPref = <K extends keyof NotificationSettings>(
     key: K,
@@ -503,16 +533,22 @@ export function NotificationsTab() {
 
   const handleTypeChange = (newType: string) => {
     if (!editing) return;
-    const currentDefaults = getDefaultFormForImplementation(editing.implementation);
+    const currentDefaults = getDefaultFormForImplementation(
+      editing.implementation,
+    );
     const newDefaults = getDefaultFormForImplementation(newType);
-    const isDefaultName = !editing.name || editing.name === currentDefaults.name;
+    const isDefaultName =
+      !editing.name || editing.name === currentDefaults.name;
 
     setEditing({
       ...editing,
       implementation: newType,
       name: isDefaultName ? newDefaults.name : editing.name,
       configContract: `${newType}Settings`,
-      username: newType === "Discord" && !editing.username ? "Seedarr" : editing.username,
+      username:
+        newType === "Discord" && !editing.username
+          ? "Seedarr"
+          : editing.username,
     });
     setModalTestResult(null);
   };
@@ -522,16 +558,30 @@ export function NotificationsTab() {
     const notif = notifications?.find((n) => n.id === id);
     testMutation.mutate(id, {
       onSuccess: (data) => {
-        trackNotificationAction(notif?.implementation || "unknown", "test", data.success);
+        trackNotificationAction(
+          notif?.implementation || "unknown",
+          "test",
+          data.success,
+        );
         setTestResults((prev) => ({ ...prev, [id]: data }));
         if (data.success) {
-          showToast(`Test notification for "${name}" sent successfully`, "success");
+          showToast(
+            `Test notification for "${name}" sent successfully`,
+            "success",
+          );
         } else {
-          showToast(`Test notification failed for "${name}": ${data.message || "Unknown error"}`, "error");
+          showToast(
+            `Test notification failed for "${name}": ${data.message || "Unknown error"}`,
+            "error",
+          );
         }
       },
       onError: (err: any) => {
-        trackNotificationAction(notif?.implementation || "unknown", "test", false);
+        trackNotificationAction(
+          notif?.implementation || "unknown",
+          "test",
+          false,
+        );
         const msg = err?.message || "Test failed";
         setTestResults((prev) => ({
           ...prev,
@@ -554,16 +604,27 @@ export function NotificationsTab() {
     const payload = buildNotificationPayload(editing);
     testDirectMutation.mutate(payload, {
       onSuccess: (data) => {
-        trackNotificationAction(editing.implementation || "unknown", "test", data.success);
+        trackNotificationAction(
+          editing.implementation || "unknown",
+          "test",
+          data.success,
+        );
         setModalTestResult(data);
         if (data.success) {
           showToast("Test notification sent successfully", "success");
         } else {
-          showToast(`Test notification failed: ${data.message || "Unknown error"}`, "error");
+          showToast(
+            `Test notification failed: ${data.message || "Unknown error"}`,
+            "error",
+          );
         }
       },
       onError: (err: any) => {
-        trackNotificationAction(editing.implementation || "unknown", "test", false);
+        trackNotificationAction(
+          editing.implementation || "unknown",
+          "test",
+          false,
+        );
         const msg = err?.message || "Test failed";
         setModalTestResult({ success: false, message: msg });
         showToast(`Test notification failed: ${msg}`, "error");
@@ -580,7 +641,11 @@ export function NotificationsTab() {
     const target = deletingNotif;
     deleteMutation.mutate(target.id, {
       onSuccess: () => {
-        trackNotificationAction(target.implementation || "unknown", "delete", true);
+        trackNotificationAction(
+          target.implementation || "unknown",
+          "delete",
+          true,
+        );
         showToast(`Notification "${target.name}" deleted`, "info");
         setDeletingNotif(null);
       },
@@ -783,35 +848,39 @@ export function NotificationsTab() {
                         Health
                       </span>
                     )}
-                    {notif.categories && notif.categories.length > 0 && notif.categories.map((c) => (
-                      <span
-                        key={c}
-                        className="provider-card-badge"
-                        style={{
-                          backgroundColor: "rgba(168, 85, 247, 0.15)",
-                          color: "#c084fc",
-                          border: "1px solid rgba(168, 85, 247, 0.3)",
-                        }}
-                      >
-                        {c}
-                      </span>
-                    ))}
-                    {notif.tags && notif.tags.length > 0 && notif.tags.map((tagId) => {
-                      const tag = allTags?.find((t) => t.id === tagId);
-                      return tag ? (
+                    {notif.categories &&
+                      notif.categories.length > 0 &&
+                      notif.categories.map((c) => (
                         <span
-                          key={tagId}
+                          key={c}
                           className="provider-card-badge"
                           style={{
-                            backgroundColor: "rgba(234, 179, 8, 0.15)",
-                            color: "#facc15",
-                            border: "1px solid rgba(234, 179, 8, 0.3)",
+                            backgroundColor: "rgba(168, 85, 247, 0.15)",
+                            color: "#c084fc",
+                            border: "1px solid rgba(168, 85, 247, 0.3)",
                           }}
                         >
-                          {tag.label}
+                          {c}
                         </span>
-                      ) : null;
-                    })}
+                      ))}
+                    {notif.tags &&
+                      notif.tags.length > 0 &&
+                      notif.tags.map((tagId) => {
+                        const tag = allTags?.find((t) => t.id === tagId);
+                        return tag ? (
+                          <span
+                            key={tagId}
+                            className="provider-card-badge"
+                            style={{
+                              backgroundColor: "rgba(234, 179, 8, 0.15)",
+                              color: "#facc15",
+                              border: "1px solid rgba(234, 179, 8, 0.3)",
+                            }}
+                          >
+                            {tag.label}
+                          </span>
+                        ) : null;
+                      })}
                   </div>
                   <div className="provider-card-info">{summary}</div>
                   {testResults[notif.id]?.success === true && (
@@ -870,7 +939,9 @@ export function NotificationsTab() {
               className="modal-title"
               style={{ fontSize: "1.2rem", marginBottom: "1rem" }}
             >
-              {editing.id ? "Edit Notification Channel" : "Add Notification Channel"}
+              {editing.id
+                ? "Edit Notification Channel"
+                : "Add Notification Channel"}
             </div>
 
             <TextInput
@@ -1111,7 +1182,9 @@ export function NotificationsTab() {
                 <Toggle
                   label="Ignore SSL/TLS Certificate Errors"
                   checked={editing.ignoreSslErrors}
-                  onChange={(v) => setEditing({ ...editing, ignoreSslErrors: v })}
+                  onChange={(v) =>
+                    setEditing({ ...editing, ignoreSslErrors: v })
+                  }
                   hint="Ignore SSL/TLS Certificate Errors (useful for self-signed certificates in private homelabs)"
                 />
                 <TextInput
@@ -1162,7 +1235,9 @@ export function NotificationsTab() {
                 <TextInput
                   label="Script Arguments"
                   value={editing.scriptArguments}
-                  onChange={(v) => setEditing({ ...editing, scriptArguments: v })}
+                  onChange={(v) =>
+                    setEditing({ ...editing, scriptArguments: v })
+                  }
                   placeholder="--arg1 val1"
                   hint="Command-line arguments passed to script (event details passed via SEEDARR_* env vars)"
                 />
@@ -1186,13 +1261,17 @@ export function NotificationsTab() {
               <Toggle
                 label="On Download Complete"
                 checked={editing.onDownloadComplete}
-                onChange={(v) => setEditing({ ...editing, onDownloadComplete: v })}
+                onChange={(v) =>
+                  setEditing({ ...editing, onDownloadComplete: v })
+                }
                 hint="Trigger when torrent finished downloading"
               />
               <Toggle
                 label="On Seed Goal Reached"
                 checked={editing.onSeedGoalReached}
-                onChange={(v) => setEditing({ ...editing, onSeedGoalReached: v })}
+                onChange={(v) =>
+                  setEditing({ ...editing, onSeedGoalReached: v })
+                }
                 hint="Trigger when ratio or seeding time goal is met"
               />
               <Toggle
@@ -1204,37 +1283,49 @@ export function NotificationsTab() {
               <Toggle
                 label="On Health Restored"
                 checked={editing.onHealthRestored}
-                onChange={(v) => setEditing({ ...editing, onHealthRestored: v })}
+                onChange={(v) =>
+                  setEditing({ ...editing, onHealthRestored: v })
+                }
                 hint="Trigger when system health returns to normal"
               />
               <Toggle
                 label="On Manual Interaction"
                 checked={editing.onManualInteractionRequired}
-                onChange={(v) => setEditing({ ...editing, onManualInteractionRequired: v })}
+                onChange={(v) =>
+                  setEditing({ ...editing, onManualInteractionRequired: v })
+                }
                 hint="Trigger when manual user action is required"
               />
               <Toggle
                 label="On Media Inspected"
                 checked={editing.onMediaInspected}
-                onChange={(v) => setEditing({ ...editing, onMediaInspected: v })}
+                onChange={(v) =>
+                  setEditing({ ...editing, onMediaInspected: v })
+                }
                 hint="Trigger when media metadata inspection finishes"
               />
               <Toggle
                 label="On Extract Complete"
                 checked={editing.onExtractComplete}
-                onChange={(v) => setEditing({ ...editing, onExtractComplete: v })}
+                onChange={(v) =>
+                  setEditing({ ...editing, onExtractComplete: v })
+                }
                 hint="Trigger when archive auto-extraction completes"
               />
               <Toggle
                 label="On Torrent Deleted"
                 checked={editing.onTorrentDeleted}
-                onChange={(v) => setEditing({ ...editing, onTorrentDeleted: v })}
+                onChange={(v) =>
+                  setEditing({ ...editing, onTorrentDeleted: v })
+                }
                 hint="Trigger when a torrent is removed from Seedarr"
               />
               <Toggle
                 label="On Application Update"
                 checked={editing.onApplicationUpdate}
-                onChange={(v) => setEditing({ ...editing, onApplicationUpdate: v })}
+                onChange={(v) =>
+                  setEditing({ ...editing, onApplicationUpdate: v })
+                }
                 hint="Trigger when Seedarr is updated"
               />
             </div>
@@ -1309,7 +1400,8 @@ export function NotificationsTab() {
                   </div>
                 )}
                 <span className="form-hint">
-                  Only trigger for torrents matching these tags (leave empty to allow all torrents and system events)
+                  Only trigger for torrents matching these tags (leave empty to
+                  allow all torrents and system events)
                 </span>
               </div>
             </div>
@@ -1336,7 +1428,10 @@ export function NotificationsTab() {
                     </option>
                   ))}
                   {editing.categories
-                    ?.filter((catName) => !allCategories?.some((c) => c.name === catName))
+                    ?.filter(
+                      (catName) =>
+                        !allCategories?.some((c) => c.name === catName),
+                    )
                     .map((catName) => (
                       <option key={catName} value={catName}>
                         {catName}
@@ -1380,7 +1475,8 @@ export function NotificationsTab() {
                   </div>
                 )}
                 <span className="form-hint">
-                  Only trigger for torrents matching these categories (leave empty to allow all categories)
+                  Only trigger for torrents matching these categories (leave
+                  empty to allow all categories)
                 </span>
               </div>
             </div>
@@ -1474,7 +1570,9 @@ export function NotificationsTab() {
                   onClick={handleModalTest}
                   disabled={testDirectMutation.isPending}
                 >
-                  {testDirectMutation.isPending ? "Testing..." : "Test Connection"}
+                  {testDirectMutation.isPending
+                    ? "Testing..."
+                    : "Test Connection"}
                 </button>
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -1492,7 +1590,9 @@ export function NotificationsTab() {
                   type="button"
                   className="btn btn-primary"
                   onClick={handleSave}
-                  disabled={createMutation.isPending || updateMutation.isPending}
+                  disabled={
+                    createMutation.isPending || updateMutation.isPending
+                  }
                 >
                   {createMutation.isPending || updateMutation.isPending
                     ? "Saving..."
@@ -1530,8 +1630,8 @@ export function NotificationsTab() {
                 lineHeight: 1.5,
               }}
             >
-              Are you sure you want to delete the notification channel "{deletingNotif.name}"?
-              This action cannot be undone.
+              Are you sure you want to delete the notification channel "
+              {deletingNotif.name}"? This action cannot be undone.
             </p>
             <div
               className="modal-actions"

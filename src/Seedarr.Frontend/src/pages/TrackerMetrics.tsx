@@ -186,7 +186,14 @@ export function TrackerMetrics() {
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
             <h1
               style={{
                 fontSize: "1.75rem",
@@ -234,7 +241,8 @@ export function TrackerMetrics() {
               fontSize: "0.9rem",
             }}
           >
-            Telemetry, traffic statistics, scrape responses, and latency metrics for all interacted trackers
+            Telemetry, traffic statistics, scrape responses, and latency metrics
+            for all interacted trackers
           </p>
         </div>
 
@@ -1350,8 +1358,9 @@ export function calculateHourlyActivityPoints(
   const maxTraffic = Math.max(
     ...safeData.map((d) => {
       const up = Number.isFinite(d?.uploaded) ? Math.max(0, d.uploaded) : 0;
-      const down =
-        Number.isFinite(d?.downloaded) ? Math.max(0, d.downloaded) : 0;
+      const down = Number.isFinite(d?.downloaded)
+        ? Math.max(0, d.downloaded)
+        : 0;
       return Math.max(up, down);
     }),
     1,
@@ -1389,8 +1398,9 @@ export function calculateHourlyActivityPoints(
     .map((d, i) => {
       const rawX = padding + (i / divisor) * innerWidth;
       const x = Number.isFinite(rawX) ? rawX : padding;
-      const val =
-        Number.isFinite(d?.downloaded) ? Math.max(0, d.downloaded) : 0;
+      const val = Number.isFinite(d?.downloaded)
+        ? Math.max(0, d.downloaded)
+        : 0;
       const rawY = height - padding - (val / safeMaxTraffic) * innerHeight;
       const y = Number.isFinite(rawY) ? rawY : fallbackY;
       return `${x},${y}`;
@@ -1401,8 +1411,7 @@ export function calculateHourlyActivityPoints(
     .map((d, i) => {
       const rawX = padding + (i / divisor) * innerWidth;
       const x = Number.isFinite(rawX) ? rawX : padding;
-      const val =
-        Number.isFinite(d?.announces) ? Math.max(0, d.announces) : 0;
+      const val = Number.isFinite(d?.announces) ? Math.max(0, d.announces) : 0;
       const rawY = height - padding - (val / safeMaxAnnounce) * innerHeight;
       const y = Number.isFinite(rawY) ? rawY : fallbackY;
       return `${x},${y}`;
@@ -1548,23 +1557,22 @@ export function HourlyActivitySvgChart({
           padding + (i / (data.length - 1 || 1)) * (width - 2 * padding);
         const x = Number.isFinite(rawX) ? rawX : padding;
 
-        const upVal =
-          Number.isFinite(d?.uploaded) ? Math.max(0, d.uploaded) : 0;
-        const downVal =
-          Number.isFinite(d?.downloaded) ? Math.max(0, d.downloaded) : 0;
-        const annVal =
-          Number.isFinite(d?.announces) ? Math.max(0, d.announces) : 0;
+        const upVal = Number.isFinite(d?.uploaded)
+          ? Math.max(0, d.uploaded)
+          : 0;
+        const downVal = Number.isFinite(d?.downloaded)
+          ? Math.max(0, d.downloaded)
+          : 0;
+        const annVal = Number.isFinite(d?.announces)
+          ? Math.max(0, d.announces)
+          : 0;
 
         const rawYUp =
-          height -
-          padding -
-          (upVal / maxTraffic) * (height - 2 * padding);
+          height - padding - (upVal / maxTraffic) * (height - 2 * padding);
         const yUp = Number.isFinite(rawYUp) ? rawYUp : height - padding;
 
         const rawYDown =
-          height -
-          padding -
-          (downVal / maxTraffic) * (height - 2 * padding);
+          height - padding - (downVal / maxTraffic) * (height - 2 * padding);
         const yDown = Number.isFinite(rawYDown) ? rawYDown : height - padding;
 
         return (

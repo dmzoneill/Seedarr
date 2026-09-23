@@ -55,7 +55,10 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
 
       // Also when isSeeding is true
       const seedingBlocks = calculateBlocks(NUM_BLOCKS, 100, 1.0, true);
-      assert.equal(seedingBlocks.filter((b) => b.status === "complete").length, NUM_BLOCKS);
+      assert.equal(
+        seedingBlocks.filter((b) => b.status === "complete").length,
+        NUM_BLOCKS,
+      );
     });
 
     it("default isSeeding does not force 100% complete when progress is 0", () => {
@@ -70,13 +73,22 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
       assert.equal(zeroBlocks.filter((b) => b.status === "complete").length, 0);
 
       const halfBlocks = calculateBlocks(0.5, true);
-      assert.equal(halfBlocks.filter((b) => b.status === "complete").length, NUM_BLOCKS * 0.5);
+      assert.equal(
+        halfBlocks.filter((b) => b.status === "complete").length,
+        NUM_BLOCKS * 0.5,
+      );
 
       const fullBlocks = calculateBlocks(1.0, false);
-      assert.equal(fullBlocks.filter((b) => b.status === "complete").length, NUM_BLOCKS);
+      assert.equal(
+        fullBlocks.filter((b) => b.status === "complete").length,
+        NUM_BLOCKS,
+      );
 
       const defaultBlocks = calculateBlocks(0.0);
-      assert.equal(defaultBlocks.filter((b) => b.status === "complete").length, 0);
+      assert.equal(
+        defaultBlocks.filter((b) => b.status === "complete").length,
+        0,
+      );
     });
   });
 

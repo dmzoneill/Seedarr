@@ -403,7 +403,8 @@ export function TerminalView({
           <span
             style={{ fontWeight: 600, color: "var(--text-primary, #f8f4ed)" }}
           >
-            {title || t("terminal.interactiveShell", undefined, "Interactive Shell")}
+            {title ||
+              t("terminal.interactiveShell", undefined, "Interactive Shell")}
           </span>
 
           {cwd && (
@@ -440,7 +441,9 @@ export function TerminalView({
               }}
               title={t("terminal.copyPath", undefined, "Copy Path")}
             >
-              {copied ? `✓ ${t("common.copied", undefined, "Copied")}` : t("terminal.copyPath", undefined, "Copy Path")}
+              {copied
+                ? `✓ ${t("common.copied", undefined, "Copied")}`
+                : t("terminal.copyPath", undefined, "Copy Path")}
             </button>
           )}
 

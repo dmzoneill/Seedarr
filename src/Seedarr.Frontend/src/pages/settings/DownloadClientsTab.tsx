@@ -312,7 +312,10 @@ export function DownloadClientsTab() {
                         onSuccess: () =>
                           showToast("Download client deleted", "success"),
                         onError: () =>
-                          showToast("Failed to delete download client", "error"),
+                          showToast(
+                            "Failed to delete download client",
+                            "error",
+                          ),
                       });
                     }
                   }}
@@ -340,7 +343,8 @@ export function DownloadClientsTab() {
                     SSL
                   </span>
                 )}
-                {client.backoffUntil && new Date(client.backoffUntil).getTime() > Date.now() ? (
+                {client.backoffUntil &&
+                new Date(client.backoffUntil).getTime() > Date.now() ? (
                   <span
                     className="provider-card-badge provider-card-badge-amber"
                     title={`In circuit breaker backoff until ${new Date(client.backoffUntil).toLocaleTimeString()} (${client.consecutiveFailures ?? 0} failures)`}
@@ -350,7 +354,11 @@ export function DownloadClientsTab() {
                 ) : client.isOnline === true ? (
                   <span
                     className="provider-card-badge provider-card-badge-green"
-                    title={client.version ? `Online • Version: ${client.version}` : "Client is online"}
+                    title={
+                      client.version
+                        ? `Online • Version: ${client.version}`
+                        : "Client is online"
+                    }
                   >
                     Online
                   </span>
@@ -399,7 +407,8 @@ export function DownloadClientsTab() {
                       marginTop: "0.2rem",
                     }}
                   >
-                    Last sync: {new Date(client.lastSyncTime).toLocaleTimeString()}
+                    Last sync:{" "}
+                    {new Date(client.lastSyncTime).toLocaleTimeString()}
                   </div>
                 )}
                 {client.lastErrorMessage && client.isOnline === false && (
@@ -463,7 +472,8 @@ export function DownloadClientsTab() {
           }}
         >
           <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-            Configure host-specific path mappings for remote download clients (e.g. Docker mount paths or remote seedboxes).
+            Configure host-specific path mappings for remote download clients
+            (e.g. Docker mount paths or remote seedboxes).
           </span>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
@@ -506,7 +516,8 @@ export function DownloadClientsTab() {
               border: "1px dashed var(--border-light)",
             }}
           >
-            No remote path mappings configured. Click <strong>+ Add Mapping</strong> to configure path translation.
+            No remote path mappings configured. Click{" "}
+            <strong>+ Add Mapping</strong> to configure path translation.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -584,7 +595,10 @@ export function DownloadClientsTab() {
                           }}
                           title="Test translation with this mapping"
                           onClick={() =>
-                            handleOpenTestModal(mapping.host, mapping.remotePath)
+                            handleOpenTestModal(
+                              mapping.host,
+                              mapping.remotePath,
+                            )
                           }
                         >
                           Test
@@ -794,7 +808,8 @@ export function DownloadClientsTab() {
                   </div>
                 )}
                 <span className="form-hint">
-                  Assign tags to this download client (hold Ctrl/Cmd to select multiple)
+                  Assign tags to this download client (hold Ctrl/Cmd to select
+                  multiple)
                 </span>
               </div>
             </div>
@@ -932,10 +947,7 @@ export function DownloadClientsTab() {
       )}
 
       {editingMapping && (
-        <div
-          className="modal-overlay"
-          onClick={() => setEditingMapping(null)}
-        >
+        <div className="modal-overlay" onClick={() => setEditingMapping(null)}>
           <div
             className="modal"
             onClick={(e) => e.stopPropagation()}
@@ -985,8 +997,10 @@ export function DownloadClientsTab() {
             {(createMappingMutation.isError ||
               updateMappingMutation.isError) && (
               <div className="modal-error">
-                {(createMappingMutation.error || updateMappingMutation.error)
-                  ?.message}
+                {
+                  (createMappingMutation.error || updateMappingMutation.error)
+                    ?.message
+                }
               </div>
             )}
 
@@ -1027,10 +1041,7 @@ export function DownloadClientsTab() {
       )}
 
       {testModalOpen && (
-        <div
-          className="modal-overlay"
-          onClick={() => setTestModalOpen(false)}
-        >
+        <div className="modal-overlay" onClick={() => setTestModalOpen(false)}>
           <div
             className="modal"
             onClick={(e) => e.stopPropagation()}
@@ -1054,7 +1065,8 @@ export function DownloadClientsTab() {
                 marginBottom: "1rem",
               }}
             >
-              Simulate path translation for a download client and verify whether the resolved local path exists on disk.
+              Simulate path translation for a download client and verify whether
+              the resolved local path exists on disk.
             </p>
 
             <TextInput
@@ -1130,7 +1142,8 @@ export function DownloadClientsTab() {
                           border: "1px solid rgba(34, 197, 94, 0.3)",
                         }}
                       >
-                        <span>✓</span> Rule matched &amp; local path verified on disk
+                        <span>✓</span> Rule matched &amp; local path verified on
+                        disk
                       </span>
                     )}
                   {mappingTestResult.ruleApplied &&
@@ -1149,7 +1162,8 @@ export function DownloadClientsTab() {
                           border: "1px solid rgba(245, 158, 11, 0.3)",
                         }}
                       >
-                        <span>⚠️</span> Rule matched, but local directory/file not found on disk
+                        <span>⚠️</span> Rule matched, but local directory/file
+                        not found on disk
                       </span>
                     )}
                   {!mappingTestResult.ruleApplied && (
@@ -1241,7 +1255,8 @@ export function DownloadClientsTab() {
                           Matched Rule:
                         </span>
                         <div>
-                          #{mappingTestResult.matchedRuleId} ({mappingTestResult.matchedRuleHost})
+                          #{mappingTestResult.matchedRuleId} (
+                          {mappingTestResult.matchedRuleHost})
                         </div>
                       </div>
                       <div>

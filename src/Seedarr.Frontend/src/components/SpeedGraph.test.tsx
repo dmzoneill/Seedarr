@@ -152,7 +152,10 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.ok(html.includes("Transfer Speed"), "Must render title");
       assert.ok(html.includes("Live (1s)"), "Must render live badge");
       assert.ok(html.includes("Upload:"), "Must render Upload legend label");
-      assert.ok(html.includes("Download:"), "Must render Download legend label");
+      assert.ok(
+        html.includes("Download:"),
+        "Must render Download legend label",
+      );
       assert.ok(
         html.includes("#3498db"),
         "Must use upload channel color #3498db in legend indicator",
@@ -211,7 +214,11 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
 
     it("skips division and recalibrates on non-finite or negative time deltas (prevents NaN / Infinity)", () => {
-      const prev = { totalUploaded: 1000, totalDownloaded: 2000, timestamp: 5000 };
+      const prev = {
+        totalUploaded: 1000,
+        totalDownloaded: 2000,
+        timestamp: 5000,
+      };
       const current = { totalUploaded: 1500, totalDownloaded: 2500 };
 
       // Negative timeDelta (clock drift backward)
@@ -229,7 +236,11 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
 
     it("skips calculations without resetting baseline for rapid packets under 0.2s", () => {
-      const prev = { totalUploaded: 1000, totalDownloaded: 2000, timestamp: 1000 };
+      const prev = {
+        totalUploaded: 1000,
+        totalDownloaded: 2000,
+        timestamp: 1000,
+      };
       const current = { totalUploaded: 1050, totalDownloaded: 2050 };
 
       // timeDelta = 0.1s (100ms) < 0.2s
@@ -241,7 +252,11 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
 
     it("discards impossible physical transfer spikes (> 10 GB/s on local import) as baseline recalibration", () => {
-      const prev = { totalUploaded: 1000, totalDownloaded: 2000, timestamp: 1000 };
+      const prev = {
+        totalUploaded: 1000,
+        totalDownloaded: 2000,
+        timestamp: 1000,
+      };
       // 50 GB sudden jump in 1 second
       const current = {
         totalUploaded: 1000 + 50 * 1024 * 1024 * 1024,
@@ -256,7 +271,11 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
 
     it("recalibrates baseline if telemetry counters reset", () => {
-      const prev = { totalUploaded: 50000, totalDownloaded: 60000, timestamp: 1000 };
+      const prev = {
+        totalUploaded: 50000,
+        totalDownloaded: 60000,
+        timestamp: 1000,
+      };
       // Daemon restarted and reset stats counters to 0
       const current = { totalUploaded: 100, totalDownloaded: 200 };
 
@@ -268,7 +287,11 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
 
     it("calculates exact upload and download speeds for valid telemetry updates", () => {
-      const prev = { totalUploaded: 1000, totalDownloaded: 2000, timestamp: 1000 };
+      const prev = {
+        totalUploaded: 1000,
+        totalDownloaded: 2000,
+        timestamp: 1000,
+      };
       // 2 seconds later, 2000 bytes uploaded, 4000 bytes downloaded
       const current = { totalUploaded: 3000, totalDownloaded: 6000 };
 
@@ -280,7 +303,11 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
 
     it("guarantees finite non-negative numbers for all speeds", () => {
-      const prev = { totalUploaded: 1000, totalDownloaded: 1000, timestamp: 1000 };
+      const prev = {
+        totalUploaded: 1000,
+        totalDownloaded: 1000,
+        timestamp: 1000,
+      };
       const current = { totalUploaded: 1000, totalDownloaded: 1000 };
 
       const res = calculateSpeedFromDelta(current, prev, 2000);

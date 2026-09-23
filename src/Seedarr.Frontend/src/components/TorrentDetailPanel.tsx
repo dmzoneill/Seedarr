@@ -130,7 +130,11 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
           </button>
         </div>
       </div>
-      <nav className="detail-panel-tabs" role="tablist" aria-label="Torrent Details Tabs">
+      <nav
+        className="detail-panel-tabs"
+        role="tablist"
+        aria-label="Torrent Details Tabs"
+      >
         {DETAIL_TABS.map((t, idx) => (
           <button
             key={t.key}
@@ -144,13 +148,18 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
                 e.preventDefault();
                 const nextIdx = (idx + 1) % DETAIL_TABS.length;
                 setTab(DETAIL_TABS[nextIdx].key);
-                const nextBtn = e.currentTarget.parentElement?.children[nextIdx] as HTMLElement;
+                const nextBtn = e.currentTarget.parentElement?.children[
+                  nextIdx
+                ] as HTMLElement;
                 nextBtn?.focus();
               } else if (e.key === "ArrowLeft") {
                 e.preventDefault();
-                const prevIdx = (idx - 1 + DETAIL_TABS.length) % DETAIL_TABS.length;
+                const prevIdx =
+                  (idx - 1 + DETAIL_TABS.length) % DETAIL_TABS.length;
                 setTab(DETAIL_TABS[prevIdx].key);
-                const prevBtn = e.currentTarget.parentElement?.children[prevIdx] as HTMLElement;
+                const prevBtn = e.currentTarget.parentElement?.children[
+                  prevIdx
+                ] as HTMLElement;
                 prevBtn?.focus();
               }
             }}
@@ -162,9 +171,13 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
       <div className="detail-panel-body">
         {tab === "status" && <StatusTab torrent={torrent} />}
         {tab === "details" && <DetailsTab torrent={torrent} />}
-        {tab === "files" && <FilesTab torrent={torrent} torrentId={torrent.id} />}
+        {tab === "files" && (
+          <FilesTab torrent={torrent} torrentId={torrent.id} />
+        )}
         {tab === "cli" && <CliTab torrent={torrent} />}
-        {tab === "peers" && <PeersTab torrent={torrent} torrentId={torrent.id} />}
+        {tab === "peers" && (
+          <PeersTab torrent={torrent} torrentId={torrent.id} />
+        )}
         {tab === "trackers" && <TrackersTab torrentId={torrent.id} />}
         {tab === "options" && <OptionsTab torrent={torrent} />}
         {tab === "piecemap" && (

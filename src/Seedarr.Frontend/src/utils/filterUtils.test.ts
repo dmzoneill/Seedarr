@@ -23,7 +23,11 @@ function createMockTorrent(overrides: Partial<Torrent> = {}): Torrent {
     seeders: 25,
     leechers: 2,
     trackerUrl: "https://tracker.ubuntu.com/announce",
-    trackers: overrides.trackers ?? (overrides.trackerUrl ? [overrides.trackerUrl] : ["https://tracker.ubuntu.com/announce"]),
+    trackers:
+      overrides.trackers ??
+      (overrides.trackerUrl
+        ? [overrides.trackerUrl]
+        : ["https://tracker.ubuntu.com/announce"]),
     category: "Linux",
     label: "OS",
     sourcePath: null,

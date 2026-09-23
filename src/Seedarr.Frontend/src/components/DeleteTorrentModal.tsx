@@ -148,7 +148,8 @@ export function DeleteTorrentModal({
           style={{
             padding: "0.75rem 1rem",
             backgroundColor: "var(--danger-bg-alert, rgba(239, 68, 68, 0.12))",
-            border: "1px solid var(--danger-border-alert, rgba(239, 68, 68, 0.3))",
+            border:
+              "1px solid var(--danger-border-alert, rgba(239, 68, 68, 0.3))",
             borderRadius: "6px",
             marginBottom: "1.25rem",
             fontSize: "0.875rem",

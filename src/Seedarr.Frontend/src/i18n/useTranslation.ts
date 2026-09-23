@@ -35,11 +35,7 @@ export function useTranslation() {
   };
 }
 
-export function translate(
-  key: string,
-  arg1?: any,
-  arg2?: any,
-): string {
+export function translate(key: string, arg1?: any, arg2?: any): string {
   const { fallbackDefault, interpolationParams } = extractDefaultValue(
     arg1,
     arg2,

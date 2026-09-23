@@ -140,7 +140,9 @@ function Settings() {
           }}
         >
           <span>🔒</span>
-          <span>You have ReadOnly permissions. Settings cannot be modified.</span>
+          <span>
+            You have ReadOnly permissions. Settings cannot be modified.
+          </span>
         </div>
       )}
       {/* Header Banner */}

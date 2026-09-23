@@ -9,7 +9,13 @@ import {
   useArrSync,
 } from "../../api/hooks";
 import type { ArrConnection, ArrTestResult } from "../../api/types";
-import { TextInput, SelectInput, Toggle, NumberInput, SectionCard } from "./shared";
+import {
+  TextInput,
+  SelectInput,
+  Toggle,
+  NumberInput,
+  SectionCard,
+} from "./shared";
 
 const normalizeExternalUrl = (url?: string) => {
   if (!url) return "";

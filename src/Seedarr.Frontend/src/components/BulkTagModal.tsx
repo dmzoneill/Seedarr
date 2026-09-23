@@ -177,11 +177,17 @@ export function BulkTagModal({
                 fontSize: "0.9rem",
               }}
             >
-              {t("tags.noTags", undefined, "No tags available. Please create tags first in Settings > Tags.")}
+              {t(
+                "tags.noTags",
+                undefined,
+                "No tags available. Please create tags first in Settings > Tags.",
+              )}
             </div>
           ) : (
             <>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <div
+                style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
+              >
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -225,7 +231,8 @@ export function BulkTagModal({
                   flex: 1,
                   overflowY: "auto",
                   maxHeight: "260px",
-                  border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+                  border:
+                    "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
                   borderRadius: "6px",
                   padding: "0.5rem",
                   display: "flex",
@@ -316,7 +323,8 @@ export function BulkTagModal({
             display: "flex",
             justifyContent: "flex-end",
             gap: "0.75rem",
-            borderTop: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
+            borderTop:
+              "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
           }}
         >
           <button

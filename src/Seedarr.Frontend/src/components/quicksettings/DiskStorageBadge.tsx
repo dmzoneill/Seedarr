@@ -41,8 +41,12 @@ export const DiskStorageBadge: React.FC<DiskStorageBadgeProps> = ({
   const primary =
     diskSpaces.find(
       (d) =>
-        (d.path && (d.path.toLowerCase().includes("config") || d.path.toLowerCase().includes("data"))) ||
-        (d.label && (d.label.toLowerCase().includes("config") || d.label.toLowerCase().includes("data"))),
+        (d.path &&
+          (d.path.toLowerCase().includes("config") ||
+            d.path.toLowerCase().includes("data"))) ||
+        (d.label &&
+          (d.label.toLowerCase().includes("config") ||
+            d.label.toLowerCase().includes("data"))),
     ) ?? diskSpaces[0];
   const freeBytes = primary.freeSpace ?? 0;
   const totalBytes = primary.totalSpace ?? 1;

@@ -14,8 +14,8 @@ using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
-using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Simulation.ClientBehavior;
+using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Core.TrackerServer;
 

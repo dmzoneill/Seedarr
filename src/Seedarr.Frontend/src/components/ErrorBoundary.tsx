@@ -33,7 +33,11 @@ class ErrorBoundary extends Component<Props, State> {
     console.error("ErrorBoundary caught an unhandled error:", error, errorInfo);
     this.setState({ errorInfo });
     try {
-      trackException(`${error.name || "Error"}: ${error.message}`, false, "frontend_react");
+      trackException(
+        `${error.name || "Error"}: ${error.message}`,
+        false,
+        "frontend_react",
+      );
     } catch {
       // ignore telemetry errors
     }
@@ -115,7 +119,11 @@ class ErrorBoundary extends Component<Props, State> {
                     fontWeight: 600,
                   }}
                 >
-                  {translate("components.somethingWentWrong", undefined, "Something went wrong")}
+                  {translate(
+                    "components.somethingWentWrong",
+                    undefined,
+                    "Something went wrong",
+                  )}
                 </h2>
                 <div
                   style={{
@@ -148,7 +156,11 @@ class ErrorBoundary extends Component<Props, State> {
               }}
             >
               {this.state.error?.message ||
-                translate("components.anUnexpectedErrorOccurred", undefined, "An unexpected error occurred.")}
+                translate(
+                  "components.anUnexpectedErrorOccurred",
+                  undefined,
+                  "An unexpected error occurred.",
+                )}
             </p>
 
             <div
@@ -181,8 +193,16 @@ class ErrorBoundary extends Component<Props, State> {
                 style={{ marginLeft: "auto" }}
               >
                 {this.state.copied
-                  ? translate("components.copiedDetails", undefined, "✓ Copied Details")
-                  : translate("components.copyErrorDetails", undefined, "📋 Copy Error Details")}
+                  ? translate(
+                      "components.copiedDetails",
+                      undefined,
+                      "✓ Copied Details",
+                    )
+                  : translate(
+                      "components.copyErrorDetails",
+                      undefined,
+                      "📋 Copy Error Details",
+                    )}
               </button>
             </div>
 

@@ -39,7 +39,7 @@ function SystemUpdates() {
   const [restartDone, setRestartDone] = useState(false);
 
   const { data: progress } = useUpdateProgress(
-    showInstallModal || installUpdate.isPending
+    showInstallModal || installUpdate.isPending,
   );
 
   const isUpToDate =
@@ -75,8 +75,10 @@ function SystemUpdates() {
     }
   };
 
-  const currentStage = progress?.stage ?? (installUpdate.isPending ? "Downloading" : "Idle");
-  const currentPercentage = progress?.percentage ?? (installUpdate.isPending ? 10 : 0);
+  const currentStage =
+    progress?.stage ?? (installUpdate.isPending ? "Downloading" : "Idle");
+  const currentPercentage =
+    progress?.percentage ?? (installUpdate.isPending ? 10 : 0);
   const isRestartRequired =
     currentStage === "RestartRequired" ||
     currentStage?.toLowerCase() === "restartrequired";
@@ -85,9 +87,7 @@ function SystemUpdates() {
     currentStage?.toLowerCase() === "failed" ||
     installUpdate.isError;
   const errorMessage =
-    progress?.errorMessage ||
-    (installUpdate.error as any)?.message ||
-    null;
+    progress?.errorMessage || (installUpdate.error as any)?.message || null;
 
   const getStageDescription = () => {
     switch (currentStage?.toLowerCase()) {
@@ -141,7 +141,8 @@ function SystemUpdates() {
               fontSize: "0.9rem",
             }}
           >
-            Software version history, changelogs, bug fixes, and upgrade availability
+            Software version history, changelogs, bug fixes, and upgrade
+            availability
           </p>
         </div>
       </div>
@@ -172,11 +173,18 @@ function SystemUpdates() {
                 color: "var(--info, #17a2b8)",
               }}
             >
-              <span style={{ display: "flex", alignItems: "center", fontSize: "1.2rem" }}>
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  fontSize: "1.2rem",
+                }}
+              >
                 📦
               </span>
               <div style={{ fontSize: "0.9rem" }}>
-                Seedarr is running inside a container. Update your deployment by pulling the latest image:{" "}
+                Seedarr is running inside a container. Update your deployment by
+                pulling the latest image:{" "}
                 <code
                   style={{
                     backgroundColor: "rgba(0, 0, 0, 0.25)",
@@ -217,7 +225,9 @@ function SystemUpdates() {
               flexWrap: "wrap",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+            >
               <span style={{ display: "flex", alignItems: "center" }}>
                 <CheckIcon />
               </span>
@@ -287,16 +297,21 @@ function SystemUpdates() {
                     📅 {formatDate(update.releaseDate)}
                   </span>
 
-                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <div
+                    style={{
+                      marginLeft: "auto",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
                     {update.installed && (
                       <span className="badge badge-seeding">
                         Currently Installed
                       </span>
                     )}
                     {update.latest && !update.installed && (
-                      <span className="badge badge-queued">
-                        Latest Release
-                      </span>
+                      <span className="badge badge-queued">Latest Release</span>
                     )}
                     {!update.installed && !isContainerized && (
                       <button
@@ -425,7 +440,9 @@ function SystemUpdates() {
                     marginBottom: "1rem",
                   }}
                 >
-                  {targetVersion ? `Installing version v${targetVersion}` : "Installing update..."}
+                  {targetVersion
+                    ? `Installing version v${targetVersion}`
+                    : "Installing update..."}
                 </p>
 
                 {/* Progress Bar */}
@@ -459,8 +476,8 @@ function SystemUpdates() {
                         backgroundColor: isFailed
                           ? "var(--danger, #dc3545)"
                           : isRestartRequired
-                          ? "var(--success, #28a745)"
-                          : "var(--accent, #c8a84e)",
+                            ? "var(--success, #28a745)"
+                            : "var(--accent, #c8a84e)",
                         transition: "width 0.3s ease",
                       }}
                     />
@@ -475,20 +492,20 @@ function SystemUpdates() {
                     backgroundColor: isFailed
                       ? "rgba(220, 53, 69, 0.15)"
                       : isRestartRequired
-                      ? "rgba(40, 167, 69, 0.15)"
-                      : "rgba(200, 168, 78, 0.12)",
+                        ? "rgba(40, 167, 69, 0.15)"
+                        : "rgba(200, 168, 78, 0.12)",
                     border: `1px solid ${
                       isFailed
                         ? "rgba(220, 53, 69, 0.35)"
                         : isRestartRequired
-                        ? "rgba(40, 167, 69, 0.35)"
-                        : "rgba(200, 168, 78, 0.35)"
+                          ? "rgba(40, 167, 69, 0.35)"
+                          : "rgba(200, 168, 78, 0.35)"
                     }`,
                     color: isFailed
                       ? "var(--danger, #dc3545)"
                       : isRestartRequired
-                      ? "var(--success, #28a745)"
-                      : "var(--accent, #c8a84e)",
+                        ? "var(--success, #28a745)"
+                        : "var(--accent, #c8a84e)",
                     fontSize: "0.875rem",
                     marginBottom: "1.25rem",
                     lineHeight: 1.5,
@@ -522,8 +539,8 @@ function SystemUpdates() {
                       {restartDone
                         ? "Restarting..."
                         : isRestarting
-                        ? "Initiating Restart..."
-                        : "Restart Seedarr Now"}
+                          ? "Initiating Restart..."
+                          : "Restart Seedarr Now"}
                     </button>
                   ) : isFailed ? (
                     <>
@@ -535,7 +552,9 @@ function SystemUpdates() {
                       </button>
                       <button
                         className="btn btn-primary btn-small"
-                        onClick={() => handleStartInstall(targetVersion ?? undefined)}
+                        onClick={() =>
+                          handleStartInstall(targetVersion ?? undefined)
+                        }
                       >
                         Retry
                       </button>

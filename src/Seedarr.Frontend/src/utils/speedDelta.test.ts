@@ -72,12 +72,22 @@ describe("speedDelta: computeSpeedDelta", () => {
     };
 
     // 400ms: below 0.5s
-    const r1 = computeSpeedDelta({ totalUploaded: 400, totalDownloaded: 800 }, initial, t0 + 400, 0.5);
+    const r1 = computeSpeedDelta(
+      { totalUploaded: 400, totalDownloaded: 800 },
+      initial,
+      t0 + 400,
+      0.5,
+    );
     assert.equal(r1.thresholdReached, false);
     assert.equal(r1.nextSnapshot.timestamp, t0);
 
     // 550ms: reaches 0.5s threshold
-    const r2 = computeSpeedDelta({ totalUploaded: 5500, totalDownloaded: 11000 }, r1.nextSnapshot, t0 + 550, 0.5);
+    const r2 = computeSpeedDelta(
+      { totalUploaded: 5500, totalDownloaded: 11000 },
+      r1.nextSnapshot,
+      t0 + 550,
+      0.5,
+    );
     assert.equal(r2.thresholdReached, true);
     assert.ok(r2.speed);
     assert.equal(Math.round(r2.speed.uploadSpeed), 10000);
@@ -93,7 +103,12 @@ describe("speedDelta: computeSpeedDelta", () => {
       timestamp: t0,
     };
 
-    const result = computeSpeedDelta({ totalUploaded: 100, totalDownloaded: 200 }, initial, t0 + 1000, 1.0);
+    const result = computeSpeedDelta(
+      { totalUploaded: 100, totalDownloaded: 200 },
+      initial,
+      t0 + 1000,
+      1.0,
+    );
     assert.equal(result.thresholdReached, true);
     assert.ok(result.speed);
     assert.equal(result.speed.uploadSpeed, 0);

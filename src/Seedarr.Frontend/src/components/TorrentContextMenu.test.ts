@@ -102,7 +102,9 @@ describe("TorrentContextMenu: buildMagnetLink", () => {
     assert.ok(
       result.includes("&tr=http%3A%2F%2Ftracker-primary.org%2Fannounce"),
     );
-    assert.ok(result.includes("&tr=http%3A%2F%2Ftracker-backup.org%2Fannounce"));
+    assert.ok(
+      result.includes("&tr=http%3A%2F%2Ftracker-backup.org%2Fannounce"),
+    );
     assert.ok(
       result.includes("&tr=udp%3A%2F%2Ftracker-udp.org%3A1337%2Fannounce"),
     );

@@ -170,7 +170,8 @@ function SystemStatus() {
               fontSize: "0.9rem",
             }}
           >
-            Runtime environment, service health checks, disk allocations, and integrated ecosystem endpoints
+            Runtime environment, service health checks, disk allocations, and
+            integrated ecosystem endpoints
           </p>
         </div>
 
@@ -380,7 +381,10 @@ function SystemStatus() {
                     color: "var(--text-primary)",
                   }}
                 >
-                  {t("systemStatus.fileDescriptorsAndSockets", "File Descriptors & Sockets")}
+                  {t(
+                    "systemStatus.fileDescriptorsAndSockets",
+                    "File Descriptors & Sockets",
+                  )}
                 </strong>
                 <span
                   style={{
@@ -409,7 +413,9 @@ function SystemStatus() {
                 >
                   {t(
                     "systemStatus.percentUsed",
-                    { percent: status.fileDescriptorUsagePercentage.toFixed(1) },
+                    {
+                      percent: status.fileDescriptorUsagePercentage.toFixed(1),
+                    },
                     `${status.fileDescriptorUsagePercentage.toFixed(1)}% Used`,
                   )}
                 </span>
@@ -571,7 +577,12 @@ function SystemStatus() {
                     <td style={{ textAlign: "right" }}>
                       {conn.url && (
                         <a
-                          href={conn.url.startsWith("http://") || conn.url.startsWith("https://") ? conn.url : `http://${conn.url}`}
+                          href={
+                            conn.url.startsWith("http://") ||
+                            conn.url.startsWith("https://")
+                              ? conn.url
+                              : `http://${conn.url}`
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="btn btn-small btn-outline"
@@ -1028,9 +1039,12 @@ function SystemStatus() {
                 </span>
               </div>
               <div className="status-row">
-                <span className="status-label">Available Completion Port Threads</span>
+                <span className="status-label">
+                  Available Completion Port Threads
+                </span>
                 <span className="status-value">
-                  {status.availableCompletionPortThreads?.toLocaleString() ?? "N/A"}
+                  {status.availableCompletionPortThreads?.toLocaleString() ??
+                    "N/A"}
                 </span>
               </div>
             </div>
@@ -1121,7 +1135,8 @@ function SystemStatus() {
               <div className="status-row">
                 <span className="status-label">Container / Host Limit</span>
                 <span className="status-value">
-                  {status.containerMemoryLimitBytes && status.containerMemoryLimitBytes > 0
+                  {status.containerMemoryLimitBytes &&
+                  status.containerMemoryLimitBytes > 0
                     ? formatBytes(status.containerMemoryLimitBytes)
                     : "Unlimited"}
                 </span>
@@ -1130,7 +1145,9 @@ function SystemStatus() {
                 <span className="status-label">Cgroup / Limit Scope</span>
                 <span className="status-value">
                   <span className="badge badge-primary">
-                    {status.isDocker ? "📦 Container Limit" : "💻 Host Physical Memory"}
+                    {status.isDocker
+                      ? "📦 Container Limit"
+                      : "💻 Host Physical Memory"}
                   </span>
                 </span>
               </div>
@@ -1212,7 +1229,9 @@ function SystemStatus() {
               </div>
               {status.openFileDescriptors !== undefined && (
                 <div className="status-row">
-                  <span className="status-label">File Descriptors / Handles</span>
+                  <span className="status-label">
+                    File Descriptors / Handles
+                  </span>
                   <span className="status-value">
                     {status.openFileDescriptors.toLocaleString()}
                     {status.maxFileDescriptors && status.maxFileDescriptors > 0

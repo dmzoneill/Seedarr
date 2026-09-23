@@ -11,13 +11,7 @@ import { trackThemeChange } from "../utils/analytics";
 
 export type Theme = "dark" | "light" | "indigo" | "oled" | "slate" | "system";
 export type Accent =
-  | "auto"
-  | "blue"
-  | "emerald"
-  | "purple"
-  | "rose"
-  | "cyan"
-  | "amber";
+  "auto" | "blue" | "emerald" | "purple" | "rose" | "cyan" | "amber";
 
 export interface ThemeContextValue {
   theme: Theme;
@@ -52,12 +46,10 @@ const VALID_ACCENTS: Accent[] = [
 
 function getInitialTheme(): Theme {
   try {
-    const stored = (
-      localStorage.getItem(STORAGE_THEME_KEY) ||
+    const stored = (localStorage.getItem(STORAGE_THEME_KEY) ||
       localStorage.getItem("leecharr-theme-style") ||
       localStorage.getItem("seedarr-theme") ||
-      localStorage.getItem("leecharr-theme")
-    ) as Theme | null;
+      localStorage.getItem("leecharr-theme")) as Theme | null;
     if (stored && VALID_THEMES.includes(stored)) {
       return stored;
     }
@@ -112,7 +104,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       try {
         const storedAccent = localStorage.getItem(STORAGE_ACCENT_KEY);
-        if (!storedAccent && serverAccent && VALID_ACCENTS.includes(serverAccent)) {
+        if (
+          !storedAccent &&
+          serverAccent &&
+          VALID_ACCENTS.includes(serverAccent)
+        ) {
           setAccentState(serverAccent);
         }
       } catch {

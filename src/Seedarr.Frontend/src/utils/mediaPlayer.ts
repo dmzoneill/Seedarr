@@ -238,8 +238,10 @@ export function getCodecErrorMessage(
   fileName?: string,
 ): string {
   const lower = (fileName ?? "").toLowerCase();
-  const isHevc = lower.includes("hevc") || lower.includes("x265") || lower.includes("h.265");
-  const isAc3 = lower.includes("ac3") || lower.includes("dts") || lower.includes("eac3");
+  const isHevc =
+    lower.includes("hevc") || lower.includes("x265") || lower.includes("h.265");
+  const isAc3 =
+    lower.includes("ac3") || lower.includes("dts") || lower.includes("eac3");
   const isMkv = lower.endsWith(".mkv");
 
   const hints: string[] = [];

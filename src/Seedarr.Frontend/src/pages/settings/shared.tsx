@@ -57,10 +57,7 @@ export function PendingChangesModal({
   isPending?: boolean;
 }) {
   return (
-    <div
-      className="modal-overlay"
-      onClick={isPending ? undefined : onCancel}
-    >
+    <div className="modal-overlay" onClick={isPending ? undefined : onCancel}>
       <div
         className="modal"
         onClick={(e) => e.stopPropagation()}
@@ -121,8 +118,8 @@ export function useUnsavedGuard(dirty: boolean) {
     ({ currentLocation, nextLocation }) =>
       Boolean(
         dirty &&
-          (currentLocation.pathname !== nextLocation.pathname ||
-            currentLocation.search !== nextLocation.search),
+        (currentLocation.pathname !== nextLocation.pathname ||
+          currentLocation.search !== nextLocation.search),
       ),
     [dirty],
   );
@@ -365,11 +362,7 @@ export function SectionCard({
   );
 }
 
-export function clampNumber(
-  val: number,
-  min?: number,
-  max?: number,
-): number {
+export function clampNumber(val: number, min?: number, max?: number): number {
   if (min !== undefined && val < min) return min;
   if (max !== undefined && val > max) return max;
   return val;

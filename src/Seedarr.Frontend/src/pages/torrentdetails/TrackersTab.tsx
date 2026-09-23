@@ -24,12 +24,22 @@ function getReannounceCountdown(tracker: {
   minAnnounceInterval?: number;
   announceInterval?: number;
 }): number {
-  if (!tracker.lastAnnounce || !tracker.totalAnnounces || tracker.totalAnnounces === 0) {
+  if (
+    !tracker.lastAnnounce ||
+    !tracker.totalAnnounces ||
+    tracker.totalAnnounces === 0
+  ) {
     return 0;
   }
-  const minInterval = (tracker.minAnnounceInterval ?? 0) > 0
-    ? tracker.minAnnounceInterval!
-    : Math.min((tracker.announceInterval ?? 0) > 0 ? Math.floor(tracker.announceInterval! / 2) : 60, 60);
+  const minInterval =
+    (tracker.minAnnounceInterval ?? 0) > 0
+      ? tracker.minAnnounceInterval!
+      : Math.min(
+          (tracker.announceInterval ?? 0) > 0
+            ? Math.floor(tracker.announceInterval! / 2)
+            : 60,
+          60,
+        );
 
   const lastAnnounceTime = new Date(tracker.lastAnnounce).getTime();
   if (isNaN(lastAnnounceTime)) return 0;
@@ -70,7 +80,8 @@ function getAttachedTrackerIndicator(
     s === "4" ||
     det?.healthStatus === "Offline" ||
     String(det?.healthStatus) === "3";
-  const isSlow = det?.healthStatus === "Slow" || String(det?.healthStatus) === "2";
+  const isSlow =
+    det?.healthStatus === "Slow" || String(det?.healthStatus) === "2";
 
   if (isAnnouncing) {
     return {
@@ -323,8 +334,15 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
             <thead>
               <tr>
                 <th className="torrent-table-th">URL</th>
-                <th className="torrent-table-th" style={{ width: "70px" }}>Tier</th>
-                <th className="torrent-table-th" style={{ textAlign: "center", width: "70px" }}>Enabled</th>
+                <th className="torrent-table-th" style={{ width: "70px" }}>
+                  Tier
+                </th>
+                <th
+                  className="torrent-table-th"
+                  style={{ textAlign: "center", width: "70px" }}
+                >
+                  Enabled
+                </th>
                 <th className="torrent-table-th">Status</th>
                 <th className="torrent-table-th">Seeders</th>
                 <th className="torrent-table-th">Leechers</th>
@@ -399,7 +417,9 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                           });
                         }}
                         style={{ cursor: "pointer" }}
-                        title={tracker.enabled ? "Disable tracker" : "Enable tracker"}
+                        title={
+                          tracker.enabled ? "Disable tracker" : "Enable tracker"
+                        }
                       />
                     </td>
                     <td>
@@ -534,7 +554,10 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
             fontSize: "0.875rem",
           }}
         >
-          <span>🔒 Private Swarm — Trackers are managed exclusively by the private indexer (BEP 27).</span>
+          <span>
+            🔒 Private Swarm — Trackers are managed exclusively by the private
+            indexer (BEP 27).
+          </span>
         </div>
       ) : (
         <div
@@ -584,8 +607,9 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                 </span>
               ) : (
                 <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
-                  {selectedUrls.size} Tracker{selectedUrls.size === 1 ? "" : "s"}{" "}
-                  Selected (Click to change)
+                  {selectedUrls.size} Tracker
+                  {selectedUrls.size === 1 ? "" : "s"} Selected (Click to
+                  change)
                 </span>
               )}
             </span>

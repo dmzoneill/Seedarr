@@ -74,7 +74,9 @@ export function PromptModal({
     if (inputType === "number") {
       const num = Number(value);
       if (isNaN(num)) {
-        setError(t("common.invalidNumber", undefined, "Please enter a valid number"));
+        setError(
+          t("common.invalidNumber", undefined, "Please enter a valid number"),
+        );
         return;
       }
       if (min !== undefined && num < min) {
@@ -180,7 +182,9 @@ export function PromptModal({
               className="input"
               style={{
                 width: "100%",
-                padding: suffix ? "0.6rem 3rem 0.6rem 0.75rem" : "0.6rem 0.75rem",
+                padding: suffix
+                  ? "0.6rem 3rem 0.6rem 0.75rem"
+                  : "0.6rem 0.75rem",
                 borderRadius: "6px",
                 border: error
                   ? "1px solid var(--danger, #ef4444)"

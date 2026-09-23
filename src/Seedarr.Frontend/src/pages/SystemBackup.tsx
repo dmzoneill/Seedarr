@@ -162,7 +162,10 @@ function SystemBackup() {
           }}
         >
           <span>🔒</span>
-          <span>You have ReadOnly permissions. Backup creation and restoration require Admin privileges.</span>
+          <span>
+            You have ReadOnly permissions. Backup creation and restoration
+            require Admin privileges.
+          </span>
         </div>
       )}
       {/* Header Banner */}
@@ -196,7 +199,8 @@ function SystemBackup() {
               fontSize: "0.9rem",
             }}
           >
-            Create, download, and restore Seedarr configuration and database snapshots
+            Create, download, and restore Seedarr configuration and database
+            snapshots
           </p>
         </div>
 
@@ -205,7 +209,11 @@ function SystemBackup() {
             className="btn btn-primary"
             onClick={handleCreateBackup}
             disabled={createBackup.isPending || !canManageBackups}
-            title={!canManageBackups ? "Creating backups requires Admin privileges" : undefined}
+            title={
+              !canManageBackups
+                ? "Creating backups requires Admin privileges"
+                : undefined
+            }
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -337,7 +345,12 @@ function SystemBackup() {
                           </button>
                         </div>
                       ) : (
-                        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                        <span
+                          style={{
+                            fontSize: "0.8rem",
+                            color: "var(--text-muted)",
+                          }}
+                        >
                           🔒 Read Only
                         </span>
                       )}

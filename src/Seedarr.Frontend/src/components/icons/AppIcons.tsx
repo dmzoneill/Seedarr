@@ -3,7 +3,10 @@ interface AppIconProps {
   color?: string;
 }
 
-export function TrackerIcon({ size = 16, color = "currentColor" }: AppIconProps) {
+export function TrackerIcon({
+  size = 16,
+  color = "currentColor",
+}: AppIconProps) {
   return (
     <svg
       width={size}
@@ -99,7 +102,10 @@ export function UserIcon({ size = 16, color = "currentColor" }: AppIconProps) {
   );
 }
 
-export function PeerMapIcon({ size = 16, color = "currentColor" }: AppIconProps) {
+export function PeerMapIcon({
+  size = 16,
+  color = "currentColor",
+}: AppIconProps) {
   return (
     <svg
       width={size}
@@ -120,7 +126,10 @@ export function PeerMapIcon({ size = 16, color = "currentColor" }: AppIconProps)
   );
 }
 
-export function ScheduleIcon({ size = 16, color = "currentColor" }: AppIconProps) {
+export function ScheduleIcon({
+  size = 16,
+  color = "currentColor",
+}: AppIconProps) {
   return (
     <svg
       width={size}
@@ -157,7 +166,10 @@ export function StatsIcon({ size = 16, color = "currentColor" }: AppIconProps) {
   );
 }
 
-export function HistoryIcon({ size = 16, color = "currentColor" }: AppIconProps) {
+export function HistoryIcon({
+  size = 16,
+  color = "currentColor",
+}: AppIconProps) {
   return (
     <svg
       width={size}
@@ -176,7 +188,10 @@ export function HistoryIcon({ size = 16, color = "currentColor" }: AppIconProps)
   );
 }
 
-export function SearchIcon({ size = 14, color = "currentColor" }: AppIconProps) {
+export function SearchIcon({
+  size = 14,
+  color = "currentColor",
+}: AppIconProps) {
   return (
     <svg
       width={size}

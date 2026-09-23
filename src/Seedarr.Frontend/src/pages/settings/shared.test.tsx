@@ -120,7 +120,11 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
 
     // User types "8080"
     inputProps.onChange({ target: { value: "8080" } });
-    assert.deepEqual(calls, [8, 80, 8080], "Typing 8080 should call onChange(8080)");
+    assert.deepEqual(
+      calls,
+      [8, 80, 8080],
+      "Typing 8080 should call onChange(8080)",
+    );
   });
 
   it("clamps empty input to min (or defaultValue) on blur", () => {

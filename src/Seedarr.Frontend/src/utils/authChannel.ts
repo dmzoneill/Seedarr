@@ -1,9 +1,7 @@
 import type { CurrentUser } from "../api/types";
 
 export type AuthEventType =
-  | "AUTH_LOGIN"
-  | "AUTH_LOGOUT"
-  | "AUTH_SESSION_EXPIRED";
+  "AUTH_LOGIN" | "AUTH_LOGOUT" | "AUTH_SESSION_EXPIRED";
 
 export interface AuthLoginEvent {
   type: "AUTH_LOGIN";
@@ -22,9 +20,7 @@ export interface AuthSessionExpiredEvent {
 }
 
 export type AuthEvent =
-  | AuthLoginEvent
-  | AuthLogoutEvent
-  | AuthSessionExpiredEvent;
+  AuthLoginEvent | AuthLogoutEvent | AuthSessionExpiredEvent;
 
 export type AuthChannelListener = (event: AuthEvent) => void;
 
@@ -36,7 +32,8 @@ const listeners = new Set<AuthChannelListener>();
 let channel: BroadcastChannel | null = null;
 let storageListenerAttached = false;
 
-function getBroadcastChannelClass(): (new (name: string) => BroadcastChannel) | null {
+function getBroadcastChannelClass():
+  (new (name: string) => BroadcastChannel) | null {
   if (
     typeof window !== "undefined" &&
     typeof (window as any).BroadcastChannel === "function"

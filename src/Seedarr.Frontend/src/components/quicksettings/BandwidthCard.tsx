@@ -188,18 +188,10 @@ export function BandwidthCard() {
             aria-label="Max Download Speed"
           />
           <div className="quick-settings-slider-ticks">
-            <span onClick={() => commitDownload(0)}>
-              0 (∞)
-            </span>
-            <span onClick={() => commitDownload(1250)}>
-              1.2M
-            </span>
-            <span onClick={() => commitDownload(10240)}>
-              10M
-            </span>
-            <span onClick={() => commitDownload(50000)}>
-              50M
-            </span>
+            <span onClick={() => commitDownload(0)}>0 (∞)</span>
+            <span onClick={() => commitDownload(1250)}>1.2M</span>
+            <span onClick={() => commitDownload(10240)}>10M</span>
+            <span onClick={() => commitDownload(50000)}>50M</span>
           </div>
         </div>
 
@@ -226,18 +218,10 @@ export function BandwidthCard() {
             aria-label="Max Upload Speed"
           />
           <div className="quick-settings-slider-ticks">
-            <span onClick={() => commitUpload(0)}>
-              0 (∞)
-            </span>
-            <span onClick={() => commitUpload(625)}>
-              625K
-            </span>
-            <span onClick={() => commitUpload(5120)}>
-              5M
-            </span>
-            <span onClick={() => commitUpload(50000)}>
-              50M
-            </span>
+            <span onClick={() => commitUpload(0)}>0 (∞)</span>
+            <span onClick={() => commitUpload(625)}>625K</span>
+            <span onClick={() => commitUpload(5120)}>5M</span>
+            <span onClick={() => commitUpload(50000)}>50M</span>
           </div>
         </div>
 

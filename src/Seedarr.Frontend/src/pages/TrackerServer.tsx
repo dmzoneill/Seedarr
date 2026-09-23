@@ -79,7 +79,7 @@ function TrackerServer() {
       onSuccess: (cfg) => {
         showToast(
           `Tracker server ${cfg.trackerServerEnabled ? "enabled" : "disabled"} successfully`,
-          "success"
+          "success",
         );
       },
       onError: (err: unknown) => {
@@ -129,7 +129,8 @@ function TrackerServer() {
         const matchTitle = t.mediaTitle?.toLowerCase().includes(q);
         const matchHash = t.infoHash?.toLowerCase().includes(q);
         const matchGenre = t.genres?.some((g) => g.toLowerCase().includes(q));
-        if (!matchName && !matchTitle && !matchHash && !matchGenre) return false;
+        if (!matchName && !matchTitle && !matchHash && !matchGenre)
+          return false;
       }
       return true;
     });
@@ -216,7 +217,8 @@ function TrackerServer() {
               gap: "0.5rem",
             }}
           >
-            <span>📡</span> Tracker Server ({statsLoading ? "-" : (stats?.totalTorrents ?? 0)})
+            <span>📡</span> Tracker Server (
+            {statsLoading ? "-" : (stats?.totalTorrents ?? 0)})
           </h1>
           <p
             style={{
@@ -225,7 +227,8 @@ function TrackerServer() {
               fontSize: "0.9rem",
             }}
           >
-            Inbuilt private and public BitTorrent tracker server endpoints, swarms, and peer stats
+            Inbuilt private and public BitTorrent tracker server endpoints,
+            swarms, and peer stats
           </p>
         </div>
 
@@ -458,8 +461,16 @@ function TrackerServer() {
           }}
         >
           {/* Swarm Sort Controls */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 500 }}>
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+          >
+            <span
+              style={{
+                fontSize: "0.8rem",
+                color: "var(--text-muted)",
+                fontWeight: 500,
+              }}
+            >
               Sort:
             </span>
             <select
@@ -490,7 +501,9 @@ function TrackerServer() {
             </select>
             <button
               className="btn btn-outline"
-              onClick={() => setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
+              onClick={() =>
+                setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+              }
               style={{
                 fontSize: "0.82rem",
                 padding: "0.35rem 0.6rem",
@@ -952,8 +965,13 @@ function TrackerServer() {
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Name"
                   >
-                    <span style={{ display: "inline-flex", alignItems: "center" }}>
-                      Name {sortBy === "name" && <SortArrow direction={sortDirection} />}
+                    <span
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      Name{" "}
+                      {sortBy === "name" && (
+                        <SortArrow direction={sortDirection} />
+                      )}
                     </span>
                   </th>
                   <th
@@ -962,8 +980,13 @@ function TrackerServer() {
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Seeders"
                   >
-                    <span style={{ display: "inline-flex", alignItems: "center" }}>
-                      Seeders {sortBy === "seeders" && <SortArrow direction={sortDirection} />}
+                    <span
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      Seeders{" "}
+                      {sortBy === "seeders" && (
+                        <SortArrow direction={sortDirection} />
+                      )}
                     </span>
                   </th>
                   <th
@@ -972,8 +995,13 @@ function TrackerServer() {
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Leechers"
                   >
-                    <span style={{ display: "inline-flex", alignItems: "center" }}>
-                      Leechers {sortBy === "leechers" && <SortArrow direction={sortDirection} />}
+                    <span
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      Leechers{" "}
+                      {sortBy === "leechers" && (
+                        <SortArrow direction={sortDirection} />
+                      )}
                     </span>
                   </th>
                   <th
@@ -982,8 +1010,13 @@ function TrackerServer() {
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Uploaded"
                   >
-                    <span style={{ display: "inline-flex", alignItems: "center" }}>
-                      Uploaded {sortBy === "uploaded" && <SortArrow direction={sortDirection} />}
+                    <span
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      Uploaded{" "}
+                      {sortBy === "uploaded" && (
+                        <SortArrow direction={sortDirection} />
+                      )}
                     </span>
                   </th>
                   <th
@@ -992,8 +1025,13 @@ function TrackerServer() {
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Downloaded"
                   >
-                    <span style={{ display: "inline-flex", alignItems: "center" }}>
-                      Downloaded {sortBy === "downloaded" && <SortArrow direction={sortDirection} />}
+                    <span
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      Downloaded{" "}
+                      {sortBy === "downloaded" && (
+                        <SortArrow direction={sortDirection} />
+                      )}
                     </span>
                   </th>
                   <th
@@ -1002,8 +1040,13 @@ function TrackerServer() {
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Completed"
                   >
-                    <span style={{ display: "inline-flex", alignItems: "center" }}>
-                      Completed {sortBy === "completed" && <SortArrow direction={sortDirection} />}
+                    <span
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      Completed{" "}
+                      {sortBy === "completed" && (
+                        <SortArrow direction={sortDirection} />
+                      )}
                     </span>
                   </th>
                   <th
@@ -1012,8 +1055,13 @@ function TrackerServer() {
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Total Peers"
                   >
-                    <span style={{ display: "inline-flex", alignItems: "center" }}>
-                      Peers {sortBy === "peers" && <SortArrow direction={sortDirection} />}
+                    <span
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      Peers{" "}
+                      {sortBy === "peers" && (
+                        <SortArrow direction={sortDirection} />
+                      )}
                     </span>
                   </th>
                   <th
@@ -1022,8 +1070,13 @@ function TrackerServer() {
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Last Activity"
                   >
-                    <span style={{ display: "inline-flex", alignItems: "center" }}>
-                      Last Activity {sortBy === "activity" && <SortArrow direction={sortDirection} />}
+                    <span
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      Last Activity{" "}
+                      {sortBy === "activity" && (
+                        <SortArrow direction={sortDirection} />
+                      )}
                     </span>
                   </th>
                   <th className="torrent-table-th">Info Hash</th>

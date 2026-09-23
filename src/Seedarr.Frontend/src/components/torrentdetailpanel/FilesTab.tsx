@@ -645,7 +645,9 @@ export function FilesTab({
         if (currentNode?.isFolder) {
           e.preventDefault();
           if (!expandedPaths.has(currentNode.fullPath)) {
-            setExpandedPaths((prev) => new Set([...prev, currentNode.fullPath]));
+            setExpandedPaths(
+              (prev) => new Set([...prev, currentNode.fullPath]),
+            );
           } else {
             setFocusedIndex((prev) => {
               const next = Math.min(flatRows.length - 1, prev + 1);

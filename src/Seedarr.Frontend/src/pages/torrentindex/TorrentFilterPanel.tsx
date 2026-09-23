@@ -70,12 +70,14 @@ export function TorrentFilterPanel({
   isCollapsed = false,
   onToggleCollapse,
 }: TorrentFilterPanelProps) {
-  const normalizedTagGroups: TagGroupItem[] = (tagGroups ?? []).map((tg, idx) => {
-    if (Array.isArray(tg)) {
-      return { id: idx + 1000, label: tg[0], count: tg[1] };
-    }
-    return tg;
-  });
+  const normalizedTagGroups: TagGroupItem[] = (tagGroups ?? []).map(
+    (tg, idx) => {
+      if (Array.isArray(tg)) {
+        return { id: idx + 1000, label: tg[0], count: tg[1] };
+      }
+      return tg;
+    },
+  );
   const { t } = useTranslation();
 
   const [isStateOpen, setIsStateOpen] = useState(true);
@@ -150,7 +152,9 @@ export function TorrentFilterPanel({
           className="filter-panel-section"
           style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
         >
-          <span style={{ fontSize: "0.7rem" }}>{isTrackerOpen ? "▼" : "▶"}</span>
+          <span style={{ fontSize: "0.7rem" }}>
+            {isTrackerOpen ? "▼" : "▶"}
+          </span>
           <span>{t("torrents.filterTracker", undefined, "Tracker")}</span>
         </div>
       </div>
@@ -213,7 +217,9 @@ export function TorrentFilterPanel({
           className="filter-panel-section"
           style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
         >
-          <span style={{ fontSize: "0.7rem" }}>{isCategoryOpen ? "▼" : "▶"}</span>
+          <span style={{ fontSize: "0.7rem" }}>
+            {isCategoryOpen ? "▼" : "▶"}
+          </span>
           <span>📁 {t("torrents.filterCategory", undefined, "Category")}</span>
         </div>
       </div>

@@ -223,7 +223,8 @@ export default function DownloadHistory() {
               fontSize: "0.9rem",
             }}
           >
-            Enriched download logs, cross-seed preservation history, and Arr library metadata
+            Enriched download logs, cross-seed preservation history, and Arr
+            library metadata
           </p>
         </div>
 
@@ -2020,7 +2021,10 @@ export default function DownloadHistory() {
 
       {/* History Export Modal */}
       {showExportModal && (
-        <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
+        <div
+          className="modal-overlay"
+          onClick={() => setShowExportModal(false)}
+        >
           <div
             className="modal"
             onClick={(e) => e.stopPropagation()}
@@ -2061,7 +2065,15 @@ export default function DownloadHistory() {
                 Export Format
               </label>
               <div style={{ display: "flex", gap: "1rem" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                  }}
+                >
                   <input
                     type="radio"
                     name="exportFormat"
@@ -2071,7 +2083,15 @@ export default function DownloadHistory() {
                   />
                   <span>JSON (.json)</span>
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    cursor: "pointer",
+                    fontSize: "0.9rem",
+                  }}
+                >
                   <input
                     type="radio"
                     name="exportFormat"
@@ -2106,22 +2126,31 @@ export default function DownloadHistory() {
                   setIsExporting(true);
                   try {
                     const searchParams = new URLSearchParams();
-                    if (searchTerm.trim()) searchParams.set("query", searchTerm.trim());
-                    if (statusFilter !== "all") searchParams.set("status", statusFilter);
+                    if (searchTerm.trim())
+                      searchParams.set("query", searchTerm.trim());
+                    if (statusFilter !== "all")
+                      searchParams.set("status", statusFilter);
                     const qStr = searchParams.toString();
                     const exportUrl = `/downloadhistory/export${qStr ? `?${qStr}` : ""}`;
-                    const fullData = await apiClient.get<DownloadHistoryEntry[]>(exportUrl);
+                    const fullData =
+                      await apiClient.get<DownloadHistoryEntry[]>(exportUrl);
 
                     if (!fullData || fullData.length === 0) {
-                      showToast("No download history records to export", "info");
+                      showToast(
+                        "No download history records to export",
+                        "info",
+                      );
                       return;
                     }
 
                     const dateStr = new Date().toISOString().slice(0, 10);
                     if (exportFormat === "json") {
-                      const blob = new Blob([JSON.stringify(fullData, null, 2)], {
-                        type: "application/json",
-                      });
+                      const blob = new Blob(
+                        [JSON.stringify(fullData, null, 2)],
+                        {
+                          type: "application/json",
+                        },
+                      );
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
                       a.href = url;
@@ -2170,15 +2199,23 @@ export default function DownloadHistory() {
                       URL.revokeObjectURL(url);
                     }
                     setShowExportModal(false);
-                    showToast("Download history exported successfully", "success");
+                    showToast(
+                      "Download history exported successfully",
+                      "success",
+                    );
                   } catch (err: any) {
-                    showToast(`Failed to export history: ${err.message || "Unknown error"}`, "error");
+                    showToast(
+                      `Failed to export history: ${err.message || "Unknown error"}`,
+                      "error",
+                    );
                   } finally {
                     setIsExporting(false);
                   }
                 }}
               >
-                {isExporting ? "Exporting..." : `Download ${exportFormat.toUpperCase()}`}
+                {isExporting
+                  ? "Exporting..."
+                  : `Download ${exportFormat.toUpperCase()}`}
               </button>
             </div>
           </div>

@@ -35,7 +35,9 @@ export function ImportPackageModal({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [importResult, setImportResult] = useState<PackageImportResult | null>(null);
+  const [importResult, setImportResult] = useState<PackageImportResult | null>(
+    null,
+  );
 
   useModalRegistration({
     id: "import-package-modal",
@@ -129,7 +131,9 @@ export function ImportPackageModal({
         const percent = Math.round((event.loaded / event.total) * 100);
         setUploadProgress(percent);
         if (percent === 100) {
-          setStatusMessage("Extracting package contents & verifying fastresume payloads...");
+          setStatusMessage(
+            "Extracting package contents & verifying fastresume payloads...",
+          );
         }
       }
     };
@@ -142,7 +146,8 @@ export function ImportPackageModal({
           setImportResult(res);
           setStatusMessage("Package imported successfully!");
           showToast(
-            res.message || `Successfully imported ${res.importedTorrentsCount} torrent(s)`,
+            res.message ||
+              `Successfully imported ${res.importedTorrentsCount} torrent(s)`,
             "success",
           );
           if (onSuccess) onSuccess();
@@ -152,25 +157,37 @@ export function ImportPackageModal({
       } else {
         try {
           const err = JSON.parse(xhr.responseText);
-          setErrorMessage(err.message || `Import failed with HTTP ${xhr.status}`);
+          setErrorMessage(
+            err.message || `Import failed with HTTP ${xhr.status}`,
+          );
         } catch {
-          setErrorMessage(xhr.responseText || `Import failed with HTTP ${xhr.status}`);
+          setErrorMessage(
+            xhr.responseText || `Import failed with HTTP ${xhr.status}`,
+          );
         }
       }
     };
 
     xhr.onerror = () => {
       setIsUploading(false);
-      setErrorMessage("Network error occurred while uploading package archive.");
+      setErrorMessage(
+        "Network error occurred while uploading package archive.",
+      );
     };
 
     const queryParams = new URLSearchParams();
-    if (destinationPath.trim()) queryParams.append("destinationPath", destinationPath.trim());
-    if (sourcePrefix.trim()) queryParams.append("sourcePrefix", sourcePrefix.trim());
-    if (destinationPrefix.trim()) queryParams.append("destinationPrefix", destinationPrefix.trim());
+    if (destinationPath.trim())
+      queryParams.append("destinationPath", destinationPath.trim());
+    if (sourcePrefix.trim())
+      queryParams.append("sourcePrefix", sourcePrefix.trim());
+    if (destinationPrefix.trim())
+      queryParams.append("destinationPrefix", destinationPrefix.trim());
 
     const queryString = queryParams.toString();
-    xhr.open("POST", `/api/v1/packages/import${queryString ? `?${queryString}` : ""}`);
+    xhr.open(
+      "POST",
+      `/api/v1/packages/import${queryString ? `?${queryString}` : ""}`,
+    );
     xhr.send(formData);
   };
 
@@ -200,7 +217,8 @@ export function ImportPackageModal({
           width: "92%",
           borderRadius: "8px",
           padding: "1.5rem",
-          boxShadow: "0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3)",
+          boxShadow:
+            "0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3)",
           border: "1px solid var(--border-light, rgba(255, 255, 255, 0.15))",
           maxHeight: "90vh",
           display: "flex",
@@ -258,9 +276,16 @@ export function ImportPackageModal({
                 fontSize: "0.875rem",
               }}
             >
-              🔒 You have ReadOnly permissions. Importing packages is not permitted.
+              🔒 You have ReadOnly permissions. Importing packages is not
+              permitted.
             </div>
-            <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
+            <div
+              style={{
+                marginTop: "1rem",
+                display: "flex",
+                justifyContent: "flex-end",
+              }}
+            >
               <button className="btn btn-outline" onClick={onClose}>
                 Close
               </button>
@@ -268,7 +293,9 @@ export function ImportPackageModal({
           </div>
         ) : importResult ? (
           /* Results View */
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
             <div
               style={{
                 padding: "0.75rem 1rem",
@@ -282,7 +309,12 @@ export function ImportPackageModal({
               ✓ {importResult.message || `Successfully processed package.`}
             </div>
 
-            <div style={{ fontSize: "0.85rem", color: "var(--text-muted, #94a3b8)" }}>
+            <div
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-muted, #94a3b8)",
+              }}
+            >
               Extracted files: {importResult.extractedFiles.length} (
               {formatBytes(importResult.totalBytesExtracted)})
             </div>
@@ -290,19 +322,27 @@ export function ImportPackageModal({
             {importResult.torrents.length > 0 && (
               <div
                 style={{
-                  border: "1px solid var(--border-light, rgba(255, 255, 255, 0.1))",
+                  border:
+                    "1px solid var(--border-light, rgba(255, 255, 255, 0.1))",
                   borderRadius: "6px",
                   overflow: "hidden",
                   maxHeight: "220px",
                   overflowY: "auto",
                 }}
               >
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: "0.82rem",
+                  }}
+                >
                   <thead>
                     <tr
                       style={{
                         backgroundColor: "rgba(255, 255, 255, 0.05)",
-                        borderBottom: "1px solid var(--border-light, rgba(255, 255, 255, 0.1))",
+                        borderBottom:
+                          "1px solid var(--border-light, rgba(255, 255, 255, 0.1))",
                         textAlign: "left",
                       }}
                     >
@@ -317,10 +357,13 @@ export function ImportPackageModal({
                       <tr
                         key={t.infoHash}
                         style={{
-                          borderBottom: "1px solid var(--border-light, rgba(255, 255, 255, 0.05))",
+                          borderBottom:
+                            "1px solid var(--border-light, rgba(255, 255, 255, 0.05))",
                         }}
                       >
-                        <td style={{ padding: "0.4rem 0.6rem", fontWeight: 500 }}>
+                        <td
+                          style={{ padding: "0.4rem 0.6rem", fontWeight: 500 }}
+                        >
                           {t.name}
                           {t.isDuplicate && (
                             <span
@@ -337,11 +380,23 @@ export function ImportPackageModal({
                             </span>
                           )}
                         </td>
-                        <td style={{ padding: "0.4rem 0.6rem", whiteSpace: "nowrap" }}>
+                        <td
+                          style={{
+                            padding: "0.4rem 0.6rem",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           {formatBytes(t.totalSize)}
                         </td>
-                        <td style={{ padding: "0.4rem 0.6rem" }}>{t.category || "—"}</td>
-                        <td style={{ padding: "0.4rem 0.6rem", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "0.4rem 0.6rem" }}>
+                          {t.category || "—"}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.4rem 0.6rem",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           <span
                             style={{
                               padding: "2px 6px",
@@ -351,10 +406,13 @@ export function ImportPackageModal({
                                 t.status === "Seeding"
                                   ? "rgba(34, 197, 94, 0.2)"
                                   : "rgba(56, 189, 248, 0.2)",
-                              color: t.status === "Seeding" ? "#86efac" : "#7dd3fc",
+                              color:
+                                t.status === "Seeding" ? "#86efac" : "#7dd3fc",
                             }}
                           >
-                            {t.status === "Seeding" ? "Seeding (Verified)" : t.status || "Imported"}
+                            {t.status === "Seeding"
+                              ? "Seeding (Verified)"
+                              : t.status || "Imported"}
                           </span>
                         </td>
                       </tr>
@@ -390,7 +448,9 @@ export function ImportPackageModal({
           </div>
         ) : (
           /* Upload & Configuration View */
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
             {/* Drag & Drop Area */}
             <div
               onDragOver={handleDragOver}
@@ -420,7 +480,13 @@ export function ImportPackageModal({
                 disabled={isUploading}
               />
               <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📦</div>
-              <p style={{ margin: "0 0 0.25rem 0", fontWeight: 500, fontSize: "0.95rem" }}>
+              <p
+                style={{
+                  margin: "0 0 0.25rem 0",
+                  fontWeight: 500,
+                  fontSize: "0.95rem",
+                }}
+              >
                 {selectedFile
                   ? selectedFile.name
                   : "Drag and drop package archive here (.tar.gz, .seedarr)"}
@@ -447,7 +513,8 @@ export function ImportPackageModal({
                 backgroundColor: "rgba(255, 255, 255, 0.02)",
                 padding: "0.85rem 1rem",
                 borderRadius: "6px",
-                border: "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+                border:
+                  "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
               }}
             >
               <div>
@@ -480,7 +547,8 @@ export function ImportPackageModal({
                     marginTop: "2px",
                   }}
                 >
-                  Payload files and torrent save path will be placed in this folder.
+                  Payload files and torrent save path will be placed in this
+                  folder.
                 </span>
               </div>
 
@@ -530,7 +598,11 @@ export function ImportPackageModal({
                         id="import-package-source-prefix"
                         type="text"
                         className="search-input"
-                        style={{ width: "100%", boxSizing: "border-box", fontSize: "0.8rem" }}
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          fontSize: "0.8rem",
+                        }}
                         placeholder="e.g. C:\Torrents"
                         value={sourcePrefix}
                         onChange={(e) => setSourcePrefix(e.target.value)}
@@ -553,7 +625,11 @@ export function ImportPackageModal({
                         id="import-package-destination-prefix"
                         type="text"
                         className="search-input"
-                        style={{ width: "100%", boxSizing: "border-box", fontSize: "0.8rem" }}
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          fontSize: "0.8rem",
+                        }}
                         placeholder="e.g. /mnt/storage/torrents"
                         value={destinationPrefix}
                         onChange={(e) => setDestinationPrefix(e.target.value)}

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import type { HourlyTrafficPoint } from "../api/types";
 import { calculateHourlyActivityPoints } from "./TrackerMetrics";
 
-function createTrafficPoint(overrides: Partial<HourlyTrafficPoint> = {}): HourlyTrafficPoint {
+function createTrafficPoint(
+  overrides: Partial<HourlyTrafficPoint> = {},
+): HourlyTrafficPoint {
   return {
     timeLabel: "12:00",
     timestamp: "2026-09-16T12:00:00Z",
@@ -65,8 +67,16 @@ describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
 
   it("sanitizes coordinates against NaN, null, and undefined values", () => {
     const badData = [
-      createTrafficPoint({ uploaded: NaN, downloaded: undefined as unknown as number, announces: null as unknown as number }),
-      createTrafficPoint({ uploaded: -50, downloaded: NaN, announces: undefined as unknown as number }),
+      createTrafficPoint({
+        uploaded: NaN,
+        downloaded: undefined as unknown as number,
+        announces: null as unknown as number,
+      }),
+      createTrafficPoint({
+        uploaded: -50,
+        downloaded: NaN,
+        announces: undefined as unknown as number,
+      }),
     ];
 
     const result = calculateHourlyActivityPoints(badData, 600, 160, 20);
@@ -76,13 +86,31 @@ describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
     assert.equal(result.maxAnnounce, 1);
 
     // None of the points should contain NaN or Infinity
-    assert.ok(!result.pointsUpload.includes("NaN"), "Upload points contained NaN");
-    assert.ok(!result.pointsDownload.includes("NaN"), "Download points contained NaN");
-    assert.ok(!result.pointsAnnounce.includes("NaN"), "Announce points contained NaN");
+    assert.ok(
+      !result.pointsUpload.includes("NaN"),
+      "Upload points contained NaN",
+    );
+    assert.ok(
+      !result.pointsDownload.includes("NaN"),
+      "Download points contained NaN",
+    );
+    assert.ok(
+      !result.pointsAnnounce.includes("NaN"),
+      "Announce points contained NaN",
+    );
 
-    assert.ok(!result.pointsUpload.includes("Infinity"), "Upload points contained Infinity");
-    assert.ok(!result.pointsDownload.includes("Infinity"), "Download points contained Infinity");
-    assert.ok(!result.pointsAnnounce.includes("Infinity"), "Announce points contained Infinity");
+    assert.ok(
+      !result.pointsUpload.includes("Infinity"),
+      "Upload points contained Infinity",
+    );
+    assert.ok(
+      !result.pointsDownload.includes("Infinity"),
+      "Download points contained Infinity",
+    );
+    assert.ok(
+      !result.pointsAnnounce.includes("Infinity"),
+      "Announce points contained Infinity",
+    );
 
     // When values are 0 or invalid, y coordinate falls back to height - padding (140)
     for (const point of result.pointsUpload.split(" ")) {
@@ -92,7 +120,9 @@ describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
   });
 
   it("handles a single data point without division by zero", () => {
-    const single = [createTrafficPoint({ uploaded: 1000, downloaded: 2000, announces: 10 })];
+    const single = [
+      createTrafficPoint({ uploaded: 1000, downloaded: 2000, announces: 10 }),
+    ];
     const result = calculateHourlyActivityPoints(single, 600, 160, 20);
 
     assert.equal(result.maxTraffic, 2000);

@@ -148,8 +148,7 @@ export function CustomScriptsTab() {
               success: false,
               exitCode: -1,
               stdout: "",
-              stderr:
-                err.message || "Failed to communicate with test endpoint",
+              stderr: err.message || "Failed to communicate with test endpoint",
               executionTimeMs: 0,
               timedOut: false,
             },

@@ -147,4 +147,3 @@ describe("peerUtils: getFlagBadgeColor", () => {
     assert.equal(getFlagBadgeColor("Z"), "#555555");
   });
 });
-

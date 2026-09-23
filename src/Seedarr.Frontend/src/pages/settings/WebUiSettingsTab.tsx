@@ -14,7 +14,12 @@ import { useTheme, type Theme, type Accent } from "../../context/ThemeContext";
 export function WebUiSettingsTab() {
   const { data: config, isLoading } = useGeneralConfig();
   const saveMutation = useSaveGeneralConfig();
-  const { theme: currentContextTheme, setTheme, accent: currentContextAccent, setAccent } = useTheme();
+  const {
+    theme: currentContextTheme,
+    setTheme,
+    accent: currentContextAccent,
+    setAccent,
+  } = useTheme();
 
   const [form, setForm] = useState({
     themeStyle: "dark",
@@ -30,7 +35,10 @@ export function WebUiSettingsTab() {
     if (config) {
       setForm({
         themeStyle: config.themeStyle || currentContextTheme || "dark",
-        colorScheme: config.colorScheme === "green" ? "emerald" : config.colorScheme || currentContextAccent || "auto",
+        colorScheme:
+          config.colorScheme === "green"
+            ? "emerald"
+            : config.colorScheme || currentContextAccent || "auto",
         port: config.port ?? 9898,
         bindAddress: config.bindAddress || "0.0.0.0",
         authenticationEnabled: config.authenticationEnabled ?? false,
@@ -62,7 +70,8 @@ export function WebUiSettingsTab() {
       {
         ...config,
         themeStyle: form.themeStyle,
-        colorScheme: form.colorScheme === "green" ? "emerald" : form.colorScheme,
+        colorScheme:
+          form.colorScheme === "green" ? "emerald" : form.colorScheme,
         uiTheme: form.themeStyle,
         uiAccent: form.colorScheme === "green" ? "emerald" : form.colorScheme,
         port: form.port,

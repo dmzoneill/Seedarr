@@ -129,10 +129,16 @@ describe("fileTree: buildFileTree and cascading priority", () => {
     const dirNode = tree[0];
     const ids = getDescendantFileIds(dirNode);
 
-    assert.deepEqual(ids.sort((a, b) => a - b), [10, 20, 30]);
+    assert.deepEqual(
+      ids.sort((a, b) => a - b),
+      [10, 20, 30],
+    );
 
     const aNode = findNodeByPath(tree, "Dir/A")!;
-    assert.deepEqual(getDescendantFileIds(aNode).sort((a, b) => a - b), [10, 20]);
+    assert.deepEqual(
+      getDescendantFileIds(aNode).sort((a, b) => a - b),
+      [10, 20],
+    );
   });
 
   it("should calculate directory priority as Mixed or uniform", () => {

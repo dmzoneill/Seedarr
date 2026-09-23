@@ -47,9 +47,7 @@ export function calculateTagUsageCounts(
       }
       // Also support legacy t.label match if tag.label matches, for backward compatibility
       if (t.label && tags) {
-        const labels = t.label
-          .split(",")
-          .map((s) => s.trim().toLowerCase());
+        const labels = t.label.split(",").map((s) => s.trim().toLowerCase());
         for (const tag of tags) {
           if (
             labels.includes(tag.label.toLowerCase()) &&
@@ -83,7 +81,11 @@ function Tags() {
   }, [torrents, selectedCategory, tags]);
 
   const getTagUsageCount = (tag: Tag) => {
-    if (selectedCategory === "All" && !torrents && tag.torrentCount !== undefined) {
+    if (
+      selectedCategory === "All" &&
+      !torrents &&
+      tag.torrentCount !== undefined
+    ) {
       return tag.torrentCount;
     }
     return tagUsageCounts[tag.id] ?? 0;
@@ -104,10 +106,18 @@ function Tags() {
       ...modalTag,
       label: trimmedLabel,
       color: modalTag.color?.trim() || undefined,
-      uploadLimitKbps: modalTag.uploadLimitKbps ? Number(modalTag.uploadLimitKbps) : undefined,
-      downloadLimitKbps: modalTag.downloadLimitKbps ? Number(modalTag.downloadLimitKbps) : undefined,
-      minSeedRatio: modalTag.minSeedRatio ? Number(modalTag.minSeedRatio) : undefined,
-      minSeedTimeSeconds: modalTag.minSeedTimeSeconds ? Number(modalTag.minSeedTimeSeconds) : undefined,
+      uploadLimitKbps: modalTag.uploadLimitKbps
+        ? Number(modalTag.uploadLimitKbps)
+        : undefined,
+      downloadLimitKbps: modalTag.downloadLimitKbps
+        ? Number(modalTag.downloadLimitKbps)
+        : undefined,
+      minSeedRatio: modalTag.minSeedRatio
+        ? Number(modalTag.minSeedRatio)
+        : undefined,
+      minSeedTimeSeconds: modalTag.minSeedTimeSeconds
+        ? Number(modalTag.minSeedTimeSeconds)
+        : undefined,
     };
 
     if (payload.id) {
@@ -146,8 +156,6 @@ function Tags() {
     });
   }
 
-
-
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
       {/* Header Banner */}
@@ -181,20 +189,30 @@ function Tags() {
               fontSize: "0.9rem",
             }}
           >
-            Organize and filter torrent swarms by custom labels, colors, and seeding policies
+            Organize and filter torrent swarms by custom labels, colors, and
+            seeding policies
           </p>
         </div>
 
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
           {categories && categories.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <label htmlFor="category-filter" style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
+              <label
+                htmlFor="category-filter"
+                style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}
+              >
                 Category:
               </label>
               <select
                 id="category-filter"
                 className="form-input"
-                style={{ padding: "0.35rem 0.6rem", fontSize: "0.85rem", height: "auto" }}
+                style={{
+                  padding: "0.35rem 0.6rem",
+                  fontSize: "0.85rem",
+                  height: "auto",
+                }}
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
               >
@@ -282,32 +300,59 @@ function Tags() {
                         </span>
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", fontSize: "0.8rem" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.4rem",
+                            flexWrap: "wrap",
+                            fontSize: "0.8rem",
+                          }}
+                        >
                           {tag.uploadLimitKbps ? (
-                            <span className="badge badge-secondary" title="Upload Limit">
+                            <span
+                              className="badge badge-secondary"
+                              title="Upload Limit"
+                            >
                               ↑ {tag.uploadLimitKbps} KB/s
                             </span>
                           ) : null}
                           {tag.downloadLimitKbps ? (
-                            <span className="badge badge-secondary" title="Download Limit">
+                            <span
+                              className="badge badge-secondary"
+                              title="Download Limit"
+                            >
                               ↓ {tag.downloadLimitKbps} KB/s
                             </span>
                           ) : null}
                           {tag.minSeedRatio ? (
-                            <span className="badge badge-secondary" title="Min Seed Ratio">
+                            <span
+                              className="badge badge-secondary"
+                              title="Min Seed Ratio"
+                            >
                               Ratio: {tag.minSeedRatio}
                             </span>
                           ) : null}
                           {tag.minSeedTimeSeconds ? (
-                            <span className="badge badge-secondary" title="Min Seed Time">
+                            <span
+                              className="badge badge-secondary"
+                              title="Min Seed Time"
+                            >
                               Time: {formatTime(tag.minSeedTimeSeconds)}
                             </span>
                           ) : null}
-                          {!tag.uploadLimitKbps && !tag.downloadLimitKbps && !tag.minSeedRatio && !tag.minSeedTimeSeconds && (
-                            <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
-                              Default
-                            </span>
-                          )}
+                          {!tag.uploadLimitKbps &&
+                            !tag.downloadLimitKbps &&
+                            !tag.minSeedRatio &&
+                            !tag.minSeedTimeSeconds && (
+                              <span
+                                style={{
+                                  color: "var(--text-muted)",
+                                  fontStyle: "italic",
+                                }}
+                              >
+                                Default
+                              </span>
+                            )}
                         </div>
                       </td>
                       <td>
@@ -326,9 +371,7 @@ function Tags() {
                         </span>
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        <div
-                          style={{ display: "inline-flex", gap: "0.5rem" }}
-                        >
+                        <div style={{ display: "inline-flex", gap: "0.5rem" }}>
                           <button
                             className="btn btn-outline btn-small"
                             onClick={() => setModalTag({ ...tag })}
@@ -354,10 +397,7 @@ function Tags() {
 
       {/* Add / Edit Tag Modal */}
       {modalTag && (
-        <div
-          className="modal-overlay"
-          onClick={() => setModalTag(null)}
-        >
+        <div className="modal-overlay" onClick={() => setModalTag(null)}>
           <div
             className="modal"
             onClick={(e) => e.stopPropagation()}
@@ -392,7 +432,9 @@ function Tags() {
                 className="form-input"
                 placeholder="e.g. 4k-hdr, seedbox, ptp"
                 value={modalTag.label || ""}
-                onChange={(e) => setModalTag({ ...modalTag, label: e.target.value })}
+                onChange={(e) =>
+                  setModalTag({ ...modalTag, label: e.target.value })
+                }
                 autoFocus
               />
             </div>
@@ -409,11 +451,20 @@ function Tags() {
               >
                 Color Customization
               </label>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginBottom: "0.5rem",
+                }}
+              >
                 <input
                   type="color"
                   value={modalTag.color || "#3b82f6"}
-                  onChange={(e) => setModalTag({ ...modalTag, color: e.target.value })}
+                  onChange={(e) =>
+                    setModalTag({ ...modalTag, color: e.target.value })
+                  }
                   style={{
                     width: "36px",
                     height: "36px",
@@ -429,14 +480,18 @@ function Tags() {
                   className="form-input"
                   placeholder="#3b82f6"
                   value={modalTag.color || ""}
-                  onChange={(e) => setModalTag({ ...modalTag, color: e.target.value })}
+                  onChange={(e) =>
+                    setModalTag({ ...modalTag, color: e.target.value })
+                  }
                   style={{ width: "110px" }}
                 />
                 {modalTag.color && (
                   <button
                     type="button"
                     className="btn btn-outline btn-small"
-                    onClick={() => setModalTag({ ...modalTag, color: undefined })}
+                    onClick={() =>
+                      setModalTag({ ...modalTag, color: undefined })
+                    }
                     title="Clear color"
                   >
                     Clear
@@ -457,8 +512,14 @@ function Tags() {
                   🏷️ {modalTag.label?.trim() || "Preview"}
                 </span>
               </div>
-              <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Presets:</span>
+              <div
+                style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}
+              >
+                <span
+                  style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}
+                >
+                  Presets:
+                </span>
                 {COLOR_PRESETS.map((preset) => (
                   <button
                     key={preset}
@@ -469,7 +530,10 @@ function Tags() {
                       height: "20px",
                       borderRadius: "50%",
                       backgroundColor: preset,
-                      border: modalTag.color === preset ? "2px solid #fff" : "1px solid transparent",
+                      border:
+                        modalTag.color === preset
+                          ? "2px solid #fff"
+                          : "1px solid transparent",
                       cursor: "pointer",
                       padding: 0,
                     }}
@@ -480,7 +544,14 @@ function Tags() {
             </div>
 
             {/* Bandwidth Limits */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "0.75rem",
+                marginBottom: "1rem",
+              }}
+            >
               <div>
                 <label
                   style={{
@@ -501,7 +572,9 @@ function Tags() {
                   onChange={(e) =>
                     setModalTag({
                       ...modalTag,
-                      uploadLimitKbps: e.target.value ? Number(e.target.value) : undefined,
+                      uploadLimitKbps: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
                     })
                   }
                 />
@@ -526,7 +599,9 @@ function Tags() {
                   onChange={(e) =>
                     setModalTag({
                       ...modalTag,
-                      downloadLimitKbps: e.target.value ? Number(e.target.value) : undefined,
+                      downloadLimitKbps: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
                     })
                   }
                 />
@@ -534,7 +609,14 @@ function Tags() {
             </div>
 
             {/* Seeding Policy Goals */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "0.75rem",
+                marginBottom: "1.5rem",
+              }}
+            >
               <div>
                 <label
                   style={{
@@ -556,7 +638,9 @@ function Tags() {
                   onChange={(e) =>
                     setModalTag({
                       ...modalTag,
-                      minSeedRatio: e.target.value ? Number(e.target.value) : undefined,
+                      minSeedRatio: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
                     })
                   }
                 />
@@ -581,7 +665,9 @@ function Tags() {
                   onChange={(e) =>
                     setModalTag({
                       ...modalTag,
-                      minSeedTimeSeconds: e.target.value ? Number(e.target.value) : undefined,
+                      minSeedTimeSeconds: e.target.value
+                        ? Number(e.target.value)
+                        : undefined,
                     })
                   }
                 />
@@ -607,9 +693,15 @@ function Tags() {
                 type="button"
                 className="btn btn-primary btn-small"
                 onClick={handleSaveModal}
-                disabled={!modalTag.label?.trim() || createTag.isPending || updateTag.isPending}
+                disabled={
+                  !modalTag.label?.trim() ||
+                  createTag.isPending ||
+                  updateTag.isPending
+                }
               >
-                {createTag.isPending || updateTag.isPending ? "Saving..." : "Save Tag"}
+                {createTag.isPending || updateTag.isPending
+                  ? "Saving..."
+                  : "Save Tag"}
               </button>
             </div>
           </div>
@@ -618,10 +710,7 @@ function Tags() {
 
       {/* Delete Confirmation Modal */}
       {deletingTag && (
-        <div
-          className="modal-overlay"
-          onClick={() => setDeletingTag(null)}
-        >
+        <div className="modal-overlay" onClick={() => setDeletingTag(null)}>
           <div
             className="modal"
             onClick={(e) => e.stopPropagation()}
@@ -651,7 +740,9 @@ function Tags() {
                 lineHeight: 1.4,
               }}
             >
-              ⚠️ Warning: Deleting this tag will remove it from all assigned torrents, indexers, and automated rules. This action cannot be undone.
+              ⚠️ Warning: Deleting this tag will remove it from all assigned
+              torrents, indexers, and automated rules. This action cannot be
+              undone.
             </div>
 
             <p
@@ -662,11 +753,15 @@ function Tags() {
                 lineHeight: 1.5,
               }}
             >
-              Are you sure you want to delete tag <strong>{deletingTag.label}</strong>?
+              Are you sure you want to delete tag{" "}
+              <strong>{deletingTag.label}</strong>?
               {getTagUsageCount(deletingTag) ? (
                 <>
                   <br />
-                  Currently assigned to <strong>{getTagUsageCount(deletingTag)}</strong> {getTagUsageCount(deletingTag) === 1 ? "torrent" : "torrents"}.
+                  Currently assigned to{" "}
+                  <strong>{getTagUsageCount(deletingTag)}</strong>{" "}
+                  {getTagUsageCount(deletingTag) === 1 ? "torrent" : "torrents"}
+                  .
                 </>
               ) : (
                 <>

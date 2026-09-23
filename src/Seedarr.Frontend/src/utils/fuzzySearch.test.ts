@@ -107,7 +107,8 @@ describe("fuzzySearch: scoreItem", () => {
     const match = scoreItem(
       {
         title: "Sync Trackers from Prowlarr Indexers",
-        subtitle: "Extract public and configured trackers from all Prowlarr indexers",
+        subtitle:
+          "Extract public and configured trackers from all Prowlarr indexers",
       },
       "prowlarr sync",
     );

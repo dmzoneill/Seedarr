@@ -287,7 +287,10 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
   const [stackTraceExpanded, setStackTraceExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const trapRef = useFocusTrap<HTMLDivElement>({ isOpen: true, onEscape: onClose });
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    onEscape: onClose,
+  });
   useModalRegistration({
     id: "event-details-modal",
     isOpen: true,
@@ -748,9 +751,7 @@ function SystemEvents() {
                 key={level}
                 type="button"
                 title={
-                  level === "All"
-                    ? "Show all events"
-                    : `Show ${level} events`
+                  level === "All" ? "Show all events" : `Show ${level} events`
                 }
                 className={`btn btn-small ${levelFilter === level ? "log-filter-active" : ""} ${level !== "All" ? `log-filter-${level.toLowerCase()}` : ""}`}
                 onClick={() => {

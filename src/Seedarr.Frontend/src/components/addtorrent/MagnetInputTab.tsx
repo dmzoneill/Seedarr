@@ -31,7 +31,9 @@ export function parseMagnetPreview(uri: string): MagnetInfo | null {
     // Check for v1 btih (40 hex or 32 base32 characters)
     if (!hash) {
       for (const xt of xtList) {
-        const v1Match = xt.match(/^urn:btih:([0-9a-fA-F]{40}|[2-7a-zA-Z]{32})/i);
+        const v1Match = xt.match(
+          /^urn:btih:([0-9a-fA-F]{40}|[2-7a-zA-Z]{32})/i,
+        );
         if (v1Match) {
           hash = v1Match[1];
           break;
@@ -46,7 +48,9 @@ export function parseMagnetPreview(uri: string): MagnetInfo | null {
         hash = v2Match[1].toLowerCase();
         isV2 = true;
       } else {
-        const v1Match = xt.match(/^urn:btih:([0-9a-fA-F]{40}|[2-7a-zA-Z]{32})/i);
+        const v1Match = xt.match(
+          /^urn:btih:([0-9a-fA-F]{40}|[2-7a-zA-Z]{32})/i,
+        );
         if (v1Match) {
           hash = v1Match[1];
         }
@@ -301,7 +305,13 @@ export function MagnetInputTab({
                 >
                   {t("addTorrent.infoHashLabel", "Info Hash:")}
                 </span>
-                <span style={{ fontFamily: "monospace", color: "#60a5fa", wordBreak: "break-all" }}>
+                <span
+                  style={{
+                    fontFamily: "monospace",
+                    color: "#60a5fa",
+                    wordBreak: "break-all",
+                  }}
+                >
                   {magnetPreview.hash}
                 </span>
                 {magnetPreview.isV2 && (

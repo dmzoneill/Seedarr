@@ -54,7 +54,7 @@ export function FolderBrowserModal({
     isLoading,
     isError,
     refetch,
-  } = useFileSystem(isOpen ? (currentPath || undefined) : undefined);
+  } = useFileSystem(isOpen ? currentPath || undefined : undefined);
   const mkdirMutation = useCreateDirectory();
 
   const handleNavigateUp = () => {
@@ -226,9 +226,15 @@ export function FolderBrowserModal({
               type="button"
               className="btn btn-outline btn-small"
               onClick={handleNavigateUp}
-              disabled={!currentPath || currentPath === "/" || currentPath === "\\"}
+              disabled={
+                !currentPath || currentPath === "/" || currentPath === "\\"
+              }
               title={t("folderBrowser.goToParent", "Go to parent directory")}
-              style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem", flexShrink: 0 }}
+              style={{
+                padding: "0.3rem 0.6rem",
+                fontSize: "0.8rem",
+                flexShrink: 0,
+              }}
             >
               ⬆ {t("folderBrowser.up", "Up")}
             </button>
@@ -261,7 +267,9 @@ export function FolderBrowserModal({
                         background: "none",
                         border: "none",
                         padding: "0.1rem 0.25rem",
-                        color: isLast ? "var(--accent, #ffd166)" : "var(--text-muted, #7e8092)",
+                        color: isLast
+                          ? "var(--accent, #ffd166)"
+                          : "var(--text-muted, #7e8092)",
                         fontWeight: isLast ? 700 : 400,
                         cursor: isLast ? "default" : "pointer",
                         borderRadius: "3px",
@@ -271,7 +279,12 @@ export function FolderBrowserModal({
                       {crumb.name}
                     </button>
                     {!isLast && idx !== 0 && (
-                      <span style={{ color: "var(--text-muted, #555)", userSelect: "none" }}>
+                      <span
+                        style={{
+                          color: "var(--text-muted, #555)",
+                          userSelect: "none",
+                        }}
+                      >
                         /
                       </span>
                     )}
@@ -285,7 +298,11 @@ export function FolderBrowserModal({
               className="btn btn-outline btn-small"
               onClick={() => setShowNewFolderInput((prev) => !prev)}
               title={t("folderBrowser.createNewFolder", "Create new folder")}
-              style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem", flexShrink: 0 }}
+              style={{
+                padding: "0.3rem 0.6rem",
+                fontSize: "0.8rem",
+                flexShrink: 0,
+              }}
             >
               + {t("folderBrowser.newFolder", "New Folder")}
             </button>
@@ -308,8 +325,15 @@ export function FolderBrowserModal({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleCreateFolder();
                 }}
-                placeholder={t("folderBrowser.folderNamePlaceholder", "Folder name...")}
-                style={{ flex: 1, padding: "0.3rem 0.6rem", fontSize: "0.85rem" }}
+                placeholder={t(
+                  "folderBrowser.folderNamePlaceholder",
+                  "Folder name...",
+                )}
+                style={{
+                  flex: 1,
+                  padding: "0.3rem 0.6rem",
+                  fontSize: "0.85rem",
+                }}
                 autoFocus
               />
               <button
@@ -377,11 +401,22 @@ export function FolderBrowserModal({
                 fontSize: "0.85rem",
               }}
             >
-              <div style={{ fontSize: "1.6rem", marginBottom: "0.35rem" }}>📂</div>
-              {t("folderBrowser.noSubfolders", "No subfolders in this directory.")}
+              <div style={{ fontSize: "1.6rem", marginBottom: "0.35rem" }}>
+                📂
+              </div>
+              {t(
+                "folderBrowser.noSubfolders",
+                "No subfolders in this directory.",
+              )}
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem",
+              }}
+            >
               {directories.map((dir) => (
                 <div
                   key={dir.path}
@@ -400,7 +435,8 @@ export function FolderBrowserModal({
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor =
                       "rgba(255, 209, 102, 0.12)";
-                    e.currentTarget.style.borderColor = "rgba(255, 209, 102, 0.3)";
+                    e.currentTarget.style.borderColor =
+                      "rgba(255, 209, 102, 0.3)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor =
@@ -468,7 +504,9 @@ export function FolderBrowserModal({
             }}
           >
             {t("folderBrowser.selected", "Selected:")}{" "}
-            <code style={{ color: "var(--accent, #ffd166)" }}>{currentPath}</code>
+            <code style={{ color: "var(--accent, #ffd166)" }}>
+              {currentPath}
+            </code>
           </div>
 
           <div style={{ display: "flex", gap: "0.5rem" }}>

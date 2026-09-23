@@ -46,11 +46,7 @@ function getMatchingDisk(
   return bestMatch;
 }
 
-function DiskSpaceBadge({
-  disk,
-}: {
-  disk: DiskSpaceInfo | null;
-}) {
+function DiskSpaceBadge({ disk }: { disk: DiskSpaceInfo | null }) {
   if (!disk) {
     return (
       <div
@@ -230,11 +226,13 @@ export function CategorySettingsTab({
       autoStop: Boolean(editingCategory.autoStop),
       isDefault: Boolean(editingCategory.isDefault),
       maxActiveDownloads:
-        editingCategory.maxActiveDownloads && Number(editingCategory.maxActiveDownloads) > 0
+        editingCategory.maxActiveDownloads &&
+        Number(editingCategory.maxActiveDownloads) > 0
           ? Number(editingCategory.maxActiveDownloads)
           : null,
       maxActiveUploads:
-        editingCategory.maxActiveUploads && Number(editingCategory.maxActiveUploads) > 0
+        editingCategory.maxActiveUploads &&
+        Number(editingCategory.maxActiveUploads) > 0
           ? Number(editingCategory.maxActiveUploads)
           : null,
       reservedDownloadSlots: Number(editingCategory.reservedDownloadSlots) || 0,
@@ -284,9 +282,7 @@ export function CategorySettingsTab({
     }
 
     if (
-      !window.confirm(
-        `Are you sure you want to delete category "${cat.name}"?`,
-      )
+      !window.confirm(`Are you sure you want to delete category "${cat.name}"?`)
     ) {
       return;
     }
@@ -399,7 +395,9 @@ export function CategorySettingsTab({
                   }}
                 >
                   <th style={{ padding: "0.6rem 0.8rem" }}>Name</th>
-                  <th style={{ padding: "0.6rem 0.8rem" }}>Save Path & Disk Space</th>
+                  <th style={{ padding: "0.6rem 0.8rem" }}>
+                    Save Path & Disk Space
+                  </th>
                   <th style={{ padding: "0.6rem 0.8rem" }}>Max Download</th>
                   <th style={{ padding: "0.6rem 0.8rem" }}>Max Upload</th>
                   <th style={{ padding: "0.6rem 0.8rem" }}>Slots</th>
@@ -420,7 +418,9 @@ export function CategorySettingsTab({
                         borderBottom: "1px solid var(--border-light)",
                       }}
                     >
-                      <td style={{ padding: "0.65rem 0.8rem", fontWeight: 600 }}>
+                      <td
+                        style={{ padding: "0.65rem 0.8rem", fontWeight: 600 }}
+                      >
                         <div
                           style={{
                             display: "flex",
@@ -493,13 +493,17 @@ export function CategorySettingsTab({
                           <span>
                             DL:{" "}
                             <strong>
-                              {cat.maxActiveDownloads ? cat.maxActiveDownloads : "∞"}
+                              {cat.maxActiveDownloads
+                                ? cat.maxActiveDownloads
+                                : "∞"}
                             </strong>
                           </span>
                           <span>
                             UL:{" "}
                             <strong>
-                              {cat.maxActiveUploads ? cat.maxActiveUploads : "∞"}
+                              {cat.maxActiveUploads
+                                ? cat.maxActiveUploads
+                                : "∞"}
                             </strong>
                           </span>
                           <span>
@@ -529,7 +533,10 @@ export function CategorySettingsTab({
                         )}
                       </td>
                       <td
-                        style={{ padding: "0.65rem 0.8rem", textAlign: "right" }}
+                        style={{
+                          padding: "0.65rem 0.8rem",
+                          textAlign: "right",
+                        }}
                       >
                         <div
                           style={{
@@ -681,7 +688,8 @@ export function CategorySettingsTab({
                   marginTop: "0.25rem",
                 }}
               >
-                Custom download directory for torrents assigned to this category (optional)
+                Custom download directory for torrents assigned to this category
+                (optional)
               </div>
             </div>
 

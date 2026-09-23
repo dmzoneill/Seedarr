@@ -97,7 +97,10 @@ describe("ColumnCustomizer: Column Definitions & Configuration", () => {
     const allKeys = new Set(ALL_COLUMNS.map((c) => c.key));
     assert.strictEqual(DEFAULT_VISIBLE.size, 11);
     for (const key of DEFAULT_VISIBLE) {
-      assert.ok(allKeys.has(key as ColumnKey), `Default column ${key} not in ALL_COLUMNS`);
+      assert.ok(
+        allKeys.has(key as ColumnKey),
+        `Default column ${key} not in ALL_COLUMNS`,
+      );
     }
   });
 
@@ -105,7 +108,10 @@ describe("ColumnCustomizer: Column Definitions & Configuration", () => {
     const allKeys = new Set(ALL_COLUMNS.map((c) => c.key));
     assert.strictEqual(COMPACT_VISIBLE.size, 7);
     for (const key of COMPACT_VISIBLE) {
-      assert.ok(allKeys.has(key as ColumnKey), `Compact column ${key} not in ALL_COLUMNS`);
+      assert.ok(
+        allKeys.has(key as ColumnKey),
+        `Compact column ${key} not in ALL_COLUMNS`,
+      );
     }
   });
 });
@@ -177,7 +183,11 @@ describe("ColumnCustomizer: Storage Persistence", () => {
   });
 
   it("should migrate columns from LEGACY_STORAGE_KEY when STORAGE_KEY is absent", () => {
-    mockStorage[LEGACY_STORAGE_KEY] = JSON.stringify(["name", "status", "ratio"]);
+    mockStorage[LEGACY_STORAGE_KEY] = JSON.stringify([
+      "name",
+      "status",
+      "ratio",
+    ]);
     assert.strictEqual(mockStorage[STORAGE_KEY], undefined);
 
     const loaded = loadVisibleColumns();
@@ -354,7 +364,9 @@ describe("ColumnCustomizer: Toggle & Preset Logic", () => {
 
   it("should toggle an entire category of columns", () => {
     const current = new Set(["#", "name"]);
-    const transferCols = ALL_COLUMNS.filter((c) => c.category === "transfer").map((c) => c.key);
+    const transferCols = ALL_COLUMNS.filter(
+      (c) => c.category === "transfer",
+    ).map((c) => c.key);
 
     // Some or none selected -> toggle should enable all
     const next = new Set(current);
