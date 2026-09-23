@@ -210,7 +210,7 @@ public class FastResumeBencodeSerializerTests
     public void Deserialize_throws_for_corrupt_bencode()
     {
         var corruptBytes = Encoding.UTF8.GetBytes("d10:corrupted_bytes_without_end");
-        Assert.Throws<Exception>(() => _serializer.Deserialize(corruptBytes));
+        Assert.Catch(() => _serializer.Deserialize(corruptBytes));
     }
 
     [Test]

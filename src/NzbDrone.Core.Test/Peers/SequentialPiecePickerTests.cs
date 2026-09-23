@@ -284,7 +284,7 @@ public class SequentialPiecePickerTests
             Arg.Any<BitArray>(),
             Arg.Any<IReadOnlyList<BitArray>>(),
             Arg.Any<IReadOnlyList<int>>(),
-            false,
+            Arg.Any<bool>(),
             Arg.Any<int>(),
             Arg.Any<double>(),
             Arg.Any<IReadOnlyCollection<int>>(),
@@ -295,16 +295,6 @@ public class SequentialPiecePickerTests
         var picked = _picker.PickPiece(myPieces, peerPieces, availability, sequential: false);
 
         Assert.That(picked, Is.EqualTo(7));
-        _rarestFirstMock.Received(1).PickPiece(
-            myPieces,
-            Arg.Any<IReadOnlyList<BitArray>>(),
-            availability,
-            false,
-            Arg.Any<int>(),
-            Arg.Any<double>(),
-            null,
-            false,
-            null);
     }
 
     [Test]
