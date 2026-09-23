@@ -69,7 +69,14 @@ function Statistics() {
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
             <h1
               style={{
                 fontSize: "1.75rem",
@@ -93,12 +100,20 @@ function Statistics() {
               fontSize: "0.9rem",
             }}
           >
-            Live transfer speeds, seeding milestones, swarm preservation, and tracker metrics
+            Live transfer speeds, seeding milestones, swarm preservation, and
+            tracker metrics
           </p>
         </div>
 
         {/* Tab switcher */}
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.75rem",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           <div className="view-toggle" style={{ margin: 0 }}>
             <button
               className={`view-toggle-btn ${activeTab === "overview" ? "active" : ""}`}
@@ -755,7 +770,8 @@ function Statistics() {
                                 padding: "0.15rem 0.45rem",
                                 backgroundColor: "rgba(231, 76, 60, 0.2)",
                                 color: "var(--color-danger, #e74c3c)",
-                                border: "1px solid var(--color-danger, #e74c3c)",
+                                border:
+                                  "1px solid var(--color-danger, #e74c3c)",
                                 fontWeight: 600,
                               }}
                             >

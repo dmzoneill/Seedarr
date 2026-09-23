@@ -104,7 +104,12 @@ export default function LineChart({
   }
 
   const gridLineCount = 3;
-  if (!autoSpeed && !autoRatio && niceMax < 10 && niceMax % gridLineCount !== 0) {
+  if (
+    !autoSpeed &&
+    !autoRatio &&
+    niceMax < 10 &&
+    niceMax % gridLineCount !== 0
+  ) {
     niceMax = Math.ceil(niceMax / gridLineCount) * gridLineCount;
   }
 

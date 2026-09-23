@@ -352,10 +352,7 @@ export function CommandPalette({
                 "info",
               ),
             onError: (err) =>
-              showToast(
-                `Turtle mode toggle failed: ${err.message}`,
-                "error",
-              ),
+              showToast(`Turtle mode toggle failed: ${err.message}`, "error"),
           },
         );
       },
@@ -527,7 +524,9 @@ export function CommandPalette({
 
     (torrents ?? []).forEach((t) => {
       const match =
-        (t.infoHash ? historyByHash.get(t.infoHash.toLowerCase()) : undefined) ??
+        (t.infoHash
+          ? historyByHash.get(t.infoHash.toLowerCase())
+          : undefined) ??
         (t.name ? historyByTitle.get(t.name.toLowerCase()) : undefined);
       const displayTitle = match?.metadata?.title || t.mediaTitle || t.name;
 

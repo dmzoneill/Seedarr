@@ -75,17 +75,17 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
         { client: qc },
         React.createElement(TorrentTable, {
           torrents: [torrent],
-        })
-      )
+        }),
+      ),
     );
 
     assert.ok(
       html.includes('aria-label="Select all torrents"'),
-      "Header select-all checkbox must declare aria-label=\"Select all torrents\""
+      'Header select-all checkbox must declare aria-label="Select all torrents"',
     );
   });
 
-  it("renders table rows with role=\"row\", tabIndex=0, and correct aria-selected state", () => {
+  it('renders table rows with role="row", tabIndex=0, and correct aria-selected state', () => {
     const torrent1 = createMockTorrent({ id: 1, name: "Torrent 1" });
     const torrent2 = createMockTorrent({ id: 2, name: "Torrent 2" });
     const qc = createQueryClient([torrent1, torrent2]);
@@ -98,25 +98,25 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
         React.createElement(TorrentTable, {
           torrents: [torrent1, torrent2],
           selectedTorrentId: 1,
-        })
-      )
+        }),
+      ),
     );
 
     assert.ok(
       htmlSelected1.includes('role="row"'),
-      "Table rows must render with role=\"row\""
+      'Table rows must render with role="row"',
     );
     assert.ok(
       htmlSelected1.includes('tabindex="0"'),
-      "Table rows must render with tabindex=\"0\""
+      'Table rows must render with tabindex="0"',
     );
     assert.ok(
       htmlSelected1.includes('aria-selected="true"'),
-      "Selected row must declare aria-selected=\"true\""
+      'Selected row must declare aria-selected="true"',
     );
     assert.ok(
       htmlSelected1.includes('aria-selected="false"'),
-      "Unselected row must declare aria-selected=\"false\""
+      'Unselected row must declare aria-selected="false"',
     );
 
     // Selected by selectedIds set
@@ -127,19 +127,25 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
         React.createElement(TorrentTable, {
           torrents: [torrent1, torrent2],
           selectedIds: new Set([2]),
-        })
-      )
+        }),
+      ),
     );
 
     assert.ok(
       htmlSelected2.includes('aria-selected="true"'),
-      "Row selected via selectedIds must declare aria-selected=\"true\""
+      'Row selected via selectedIds must declare aria-selected="true"',
     );
   });
 
   it("renders row checkboxes with accessible aria-label containing torrent name", () => {
-    const torrent1 = createMockTorrent({ id: 10, name: "ArchLinux-2026.09.iso" });
-    const torrent2 = createMockTorrent({ id: 20, name: "Fedora-Workstation-42.iso" });
+    const torrent1 = createMockTorrent({
+      id: 10,
+      name: "ArchLinux-2026.09.iso",
+    });
+    const torrent2 = createMockTorrent({
+      id: 20,
+      name: "Fedora-Workstation-42.iso",
+    });
     const qc = createQueryClient([torrent1, torrent2]);
 
     const html = renderToStaticMarkup(
@@ -148,22 +154,25 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
         { client: qc },
         React.createElement(TorrentTable, {
           torrents: [torrent1, torrent2],
-        })
-      )
+        }),
+      ),
     );
 
     assert.ok(
       html.includes('aria-label="Select ArchLinux-2026.09.iso"'),
-      "Row checkbox must declare aria-label=\"Select ArchLinux-2026.09.iso\""
+      'Row checkbox must declare aria-label="Select ArchLinux-2026.09.iso"',
     );
     assert.ok(
       html.includes('aria-label="Select Fedora-Workstation-42.iso"'),
-      "Row checkbox must declare aria-label=\"Select Fedora-Workstation-42.iso\""
+      'Row checkbox must declare aria-label="Select Fedora-Workstation-42.iso"',
     );
   });
 
   it("handles keyboard events on table row: Space toggles selection, Enter activates torrent", () => {
-    const torrent = createMockTorrent({ id: 42, name: "Debian-13-netinst.iso" });
+    const torrent = createMockTorrent({
+      id: 42,
+      name: "Debian-13-netinst.iso",
+    });
     const qc = createQueryClient([torrent]);
 
     let capturedTrProps: any = null;
@@ -173,7 +182,11 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
     let selectedId: number | null | undefined = undefined;
 
     try {
-      (React as any).createElement = function (type: any, props: any, ...children: any[]) {
+      (React as any).createElement = function (
+        type: any,
+        props: any,
+        ...children: any[]
+      ) {
         if (type === "tr" && props?.role === "row") {
           capturedTrProps = props;
         }
@@ -193,8 +206,8 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
             onSelectTorrent: (id: number | null) => {
               selectedId = id;
             },
-          })
-        )
+          }),
+        ),
       );
     } finally {
       (React as any).createElement = origCreateElement;
@@ -218,7 +231,11 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
       },
     });
 
-    assert.strictEqual(toggledId, 42, "Space key must toggle selection for torrent 42");
+    assert.strictEqual(
+      toggledId,
+      42,
+      "Space key must toggle selection for torrent 42",
+    );
     assert.ok(spacePrevented, "Space key must call preventDefault");
     assert.ok(spaceStopped, "Space key must call stopPropagation");
 
@@ -247,15 +264,31 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
       preventDefault: () => {},
       stopPropagation: () => {},
     });
-    assert.strictEqual(toggledId, null, "Tab key must not trigger toggle select");
-    assert.strictEqual(selectedId, undefined, "Tab key must not trigger select");
+    assert.strictEqual(
+      toggledId,
+      null,
+      "Tab key must not trigger toggle select",
+    );
+    assert.strictEqual(
+      selectedId,
+      undefined,
+      "Tab key must not trigger select",
+    );
   });
 });
 
 describe("TorrentGrid Accessibility (Issue #349)", () => {
-  it("renders grid cards with role=\"button\", tabIndex=0, and aria-selected", () => {
-    const torrent1 = createMockTorrent({ id: 1, name: "Ubuntu", mediaTitle: "Ubuntu Linux" });
-    const torrent2 = createMockTorrent({ id: 2, name: "Debian", mediaTitle: "Debian GNU/Linux" });
+  it('renders grid cards with role="button", tabIndex=0, and aria-selected', () => {
+    const torrent1 = createMockTorrent({
+      id: 1,
+      name: "Ubuntu",
+      mediaTitle: "Ubuntu Linux",
+    });
+    const torrent2 = createMockTorrent({
+      id: 2,
+      name: "Debian",
+      mediaTitle: "Debian GNU/Linux",
+    });
     const qc = createQueryClient([torrent1, torrent2]);
 
     const html = renderToStaticMarkup(
@@ -265,25 +298,25 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
         React.createElement(TorrentGrid, {
           torrents: [torrent1, torrent2],
           selectedTorrentId: 1,
-        })
-      )
+        }),
+      ),
     );
 
     assert.ok(
       html.includes('role="button"'),
-      "Grid card must render with role=\"button\""
+      'Grid card must render with role="button"',
     );
     assert.ok(
       html.includes('tabindex="0"'),
-      "Grid card must render with tabindex=\"0\""
+      'Grid card must render with tabindex="0"',
     );
     assert.ok(
       html.includes('aria-selected="true"'),
-      "Selected grid card must declare aria-selected=\"true\""
+      'Selected grid card must declare aria-selected="true"',
     );
     assert.ok(
       html.includes('aria-selected="false"'),
-      "Unselected grid card must declare aria-selected=\"false\""
+      'Unselected grid card must declare aria-selected="false"',
     );
   });
 
@@ -298,7 +331,10 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
       name: "Free.Software.Manual.pdf",
       mediaTitle: undefined,
     });
-    const qc = createQueryClient([torrentWithMediaTitle, torrentWithoutMediaTitle]);
+    const qc = createQueryClient([
+      torrentWithMediaTitle,
+      torrentWithoutMediaTitle,
+    ]);
 
     const html = renderToStaticMarkup(
       React.createElement(
@@ -306,22 +342,26 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
         { client: qc },
         React.createElement(TorrentGrid, {
           torrents: [torrentWithMediaTitle, torrentWithoutMediaTitle],
-        })
-      )
+        }),
+      ),
     );
 
     assert.ok(
       html.includes('aria-label="Select Big Buck Bunny"'),
-      "Checkbox must use mediaTitle when available: Select Big Buck Bunny"
+      "Checkbox must use mediaTitle when available: Select Big Buck Bunny",
     );
     assert.ok(
       html.includes('aria-label="Select Free.Software.Manual.pdf"'),
-      "Checkbox must fallback to name when mediaTitle is absent"
+      "Checkbox must fallback to name when mediaTitle is absent",
     );
   });
 
   it("handles keyboard events on grid card: Space toggles selection, Enter selects torrent", () => {
-    const torrent = createMockTorrent({ id: 99, name: "OpenSUSE.iso", mediaTitle: "openSUSE Leap" });
+    const torrent = createMockTorrent({
+      id: 99,
+      name: "OpenSUSE.iso",
+      mediaTitle: "openSUSE Leap",
+    });
     const qc = createQueryClient([torrent]);
 
     let capturedCardProps: any = null;
@@ -331,7 +371,11 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
     let selectedId: number | null | undefined = undefined;
 
     try {
-      (React as any).createElement = function (type: any, props: any, ...children: any[]) {
+      (React as any).createElement = function (
+        type: any,
+        props: any,
+        ...children: any[]
+      ) {
         if (type === "div" && props?.role === "button") {
           capturedCardProps = props;
         }
@@ -351,8 +395,8 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
             onSelectTorrent: (id: number | null) => {
               selectedId = id;
             },
-          })
-        )
+          }),
+        ),
       );
     } finally {
       (React as any).createElement = origCreateElement;
@@ -376,7 +420,11 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
       },
     });
 
-    assert.strictEqual(toggledId, 99, "Space key must toggle selection for torrent 99");
+    assert.strictEqual(
+      toggledId,
+      99,
+      "Space key must toggle selection for torrent 99",
+    );
     assert.ok(spacePrevented, "Space key must call preventDefault");
     assert.ok(spaceStopped, "Space key must call stopPropagation");
 

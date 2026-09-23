@@ -4,7 +4,10 @@ import { formatIndexerTestError } from "./IndexersTab";
 
 describe("IndexersTab: Error Diagnostic Formatting (Issue #308)", () => {
   it("formats string errors directly", () => {
-    assert.equal(formatIndexerTestError("Connection timed out"), "Connection timed out");
+    assert.equal(
+      formatIndexerTestError("Connection timed out"),
+      "Connection timed out",
+    );
   });
 
   it("extracts error message from API response data", () => {

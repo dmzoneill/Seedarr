@@ -75,7 +75,9 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
           false,
           `Expected port ${port} to fail validation`,
         );
-        assert.ok(res.error?.includes("Port must be an integer between 1 and 65535"));
+        assert.ok(
+          res.error?.includes("Port must be an integer between 1 and 65535"),
+        );
       }
     });
 
@@ -97,17 +99,29 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
 
   describe("validateIndexerConfig", () => {
     it("rejects empty name or URL", () => {
-      const resName = validateIndexerConfig({ name: "", url: "http://prowlarr:9696", apiKey: "secret" });
+      const resName = validateIndexerConfig({
+        name: "",
+        url: "http://prowlarr:9696",
+        apiKey: "secret",
+      });
       assert.equal(resName.valid, false);
       assert.ok(resName.error?.includes("name is required"));
 
-      const resUrl = validateIndexerConfig({ name: "Prowlarr", url: "", apiKey: "secret" });
+      const resUrl = validateIndexerConfig({
+        name: "Prowlarr",
+        url: "",
+        apiKey: "secret",
+      });
       assert.equal(resUrl.valid, false);
       assert.ok(resUrl.error?.includes("URL is required"));
     });
 
     it("rejects malformed URLs", () => {
-      const res = validateIndexerConfig({ name: "Prowlarr", url: "ftp://prowlarr:9696", apiKey: "secret" });
+      const res = validateIndexerConfig({
+        name: "Prowlarr",
+        url: "ftp://prowlarr:9696",
+        apiKey: "secret",
+      });
       assert.equal(res.valid, false);
       assert.ok(res.error?.includes("valid HTTP or HTTPS address"));
     });
@@ -131,7 +145,11 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
 
     it("accepts valid indexer config", () => {
       const res = validateIndexerConfig(
-        { name: "Prowlarr", url: "http://prowlarr:9696", apiKey: "test_key_123" },
+        {
+          name: "Prowlarr",
+          url: "http://prowlarr:9696",
+          apiKey: "test_key_123",
+        },
         true,
       );
       assert.equal(res.valid, true);
@@ -140,18 +158,33 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
 
   describe("validateArrConfig", () => {
     it("rejects empty name or URL", () => {
-      const resName = validateArrConfig({ arrType: "Sonarr", name: "", url: "http://localhost:8989", apiKey: "key" });
+      const resName = validateArrConfig({
+        arrType: "Sonarr",
+        name: "",
+        url: "http://localhost:8989",
+        apiKey: "key",
+      });
       assert.equal(resName.valid, false);
       assert.ok(resName.error?.includes("name is required"));
 
-      const resUrl = validateArrConfig({ arrType: "Sonarr", name: "Sonarr", url: "", apiKey: "key" });
+      const resUrl = validateArrConfig({
+        arrType: "Sonarr",
+        name: "Sonarr",
+        url: "",
+        apiKey: "key",
+      });
       assert.equal(resUrl.valid, false);
       assert.ok(resUrl.error?.includes("URL is required"));
     });
 
     it("requires API key in live setup mode", () => {
       const res = validateArrConfig(
-        { arrType: "Sonarr", name: "Sonarr", url: "http://localhost:8989", apiKey: "" },
+        {
+          arrType: "Sonarr",
+          name: "Sonarr",
+          url: "http://localhost:8989",
+          apiKey: "",
+        },
         true,
       );
       assert.equal(res.valid, false);
@@ -160,7 +193,12 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
 
     it("allows empty API key in tour mode", () => {
       const res = validateArrConfig(
-        { arrType: "Radarr", name: "Radarr", url: "http://localhost:7878", apiKey: "" },
+        {
+          arrType: "Radarr",
+          name: "Radarr",
+          url: "http://localhost:7878",
+          apiKey: "",
+        },
         false,
       );
       assert.equal(res.valid, true);
@@ -168,7 +206,12 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
 
     it("accepts valid Arr configuration", () => {
       const res = validateArrConfig(
-        { arrType: "Lidarr", name: "Lidarr", url: "http://localhost:8686", apiKey: "valid_lidarr_key" },
+        {
+          arrType: "Lidarr",
+          name: "Lidarr",
+          url: "http://localhost:8686",
+          apiKey: "valid_lidarr_key",
+        },
         true,
       );
       assert.equal(res.valid, true);
@@ -187,13 +230,17 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
     });
 
     it("rejects non-absolute default download path", () => {
-      const res = validateStorageConfig({ defaultDownloadPath: "downloads/data" });
+      const res = validateStorageConfig({
+        defaultDownloadPath: "downloads/data",
+      });
       assert.equal(res.valid, false);
       assert.ok(res.error?.includes("must be an absolute path"));
     });
 
     it("rejects directory traversal sequences in download or completed path", () => {
-      const res1 = validateStorageConfig({ defaultDownloadPath: "/downloads/../etc" });
+      const res1 = validateStorageConfig({
+        defaultDownloadPath: "/downloads/../etc",
+      });
       assert.equal(res1.valid, false);
       assert.ok(res1.error?.includes("cannot contain '..'"));
 

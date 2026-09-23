@@ -26,7 +26,9 @@ export const TORZNAB_CATEGORIES = [
   { id: "5070", name: "Anime (5070)" },
 ];
 
-export function buildExistingHashesSet(torrents?: { infoHash?: string | null }[]): Set<string> {
+export function buildExistingHashesSet(
+  torrents?: { infoHash?: string | null }[],
+): Set<string> {
   const set = new Set<string>();
   if (!torrents || torrents.length === 0) return set;
   for (const t of torrents) {
@@ -41,7 +43,11 @@ export function isReleaseInLibrary(
   release: Pick<ReleaseInfo, "infoHash">,
   existingHashes: Set<string>,
 ): boolean {
-  if (!release.infoHash || typeof release.infoHash !== "string" || !release.infoHash.trim()) {
+  if (
+    !release.infoHash ||
+    typeof release.infoHash !== "string" ||
+    !release.infoHash.trim()
+  ) {
     return false;
   }
   return existingHashes.has(release.infoHash.trim().toLowerCase());
@@ -52,7 +58,8 @@ export function isReleaseAdded(
   addedKeys: Set<string>,
 ): boolean {
   if (release.guid && addedKeys.has(release.guid)) return true;
-  if (release.infoHash && addedKeys.has(release.infoHash.toLowerCase())) return true;
+  if (release.infoHash && addedKeys.has(release.infoHash.toLowerCase()))
+    return true;
   if (release.title && addedKeys.has(release.title)) return true;
   return false;
 }
@@ -168,10 +175,13 @@ export function IndexerSearchTab({
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [activeSearchTerm, setActiveSearchTerm] = useState(initialQuery);
-  const [selectedIndexerId, setSelectedIndexerId] = useState<number | undefined>(undefined);
+  const [selectedIndexerId, setSelectedIndexerId] = useState<
+    number | undefined
+  >(undefined);
   const [searchCategory, setSearchCategory] = useState<string>("");
   const [sortField, setSortField] = useState<SearchSortField>("peers");
-  const [sortDirection, setSortDirection] = useState<SearchSortDirection>("desc");
+  const [sortDirection, setSortDirection] =
+    useState<SearchSortDirection>("desc");
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
   const [downloadingGuid, setDownloadingGuid] = useState<string | null>(null);
@@ -181,7 +191,10 @@ export function IndexerSearchTab({
   const { data: indexers } = useIndexers();
   const enabledIndexers = indexers?.filter((i) => i.enable) || [];
 
-  const existingHashes = useMemo(() => buildExistingHashesSet(torrents), [torrents]);
+  const existingHashes = useMemo(
+    () => buildExistingHashesSet(torrents),
+    [torrents],
+  );
 
   const searchResults = useIndexerSearch(
     {
@@ -265,10 +278,7 @@ export function IndexerSearchTab({
             if (release.title) next.add(release.title);
             return next;
           });
-          trackReleaseGrab(
-            release.title,
-            release.indexer,
-          );
+          trackReleaseGrab(release.title, release.indexer);
           showToast(
             t("addTorrent.addedToDownloadQueue", {
               title: release.title,
@@ -313,7 +323,10 @@ export function IndexerSearchTab({
         >
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🔌</div>
           <div style={{ fontWeight: 600, marginBottom: "0.4rem" }}>
-            {t("addTorrent.noEnabledIndexers", "No Enabled Indexers Configured")}
+            {t(
+              "addTorrent.noEnabledIndexers",
+              "No Enabled Indexers Configured",
+            )}
           </div>
           <p
             style={{
@@ -534,7 +547,9 @@ export function IndexerSearchTab({
                   }}
                   onClick={() => handleSort("title")}
                 >
-                  Release Name {sortField === "title" && (sortDirection === "asc" ? "▲" : "▼")}
+                  Release Name{" "}
+                  {sortField === "title" &&
+                    (sortDirection === "asc" ? "▲" : "▼")}
                 </th>
                 <th style={{ padding: "0.6rem 0.85rem" }}>Indexer</th>
                 <th
@@ -546,7 +561,9 @@ export function IndexerSearchTab({
                   }}
                   onClick={() => handleSort("size")}
                 >
-                  Size {sortField === "size" && (sortDirection === "asc" ? "▲" : "▼")}
+                  Size{" "}
+                  {sortField === "size" &&
+                    (sortDirection === "asc" ? "▲" : "▼")}
                 </th>
                 <th
                   style={{
@@ -557,7 +574,9 @@ export function IndexerSearchTab({
                   }}
                   onClick={() => handleSort("peers")}
                 >
-                  Peers {sortField === "peers" && (sortDirection === "asc" ? "▲" : "▼")}
+                  Peers{" "}
+                  {sortField === "peers" &&
+                    (sortDirection === "asc" ? "▲" : "▼")}
                 </th>
                 <th
                   style={{
@@ -568,9 +587,13 @@ export function IndexerSearchTab({
                   }}
                   onClick={() => handleSort("date")}
                 >
-                  Published {sortField === "date" && (sortDirection === "asc" ? "▲" : "▼")}
+                  Published{" "}
+                  {sortField === "date" &&
+                    (sortDirection === "asc" ? "▲" : "▼")}
                 </th>
-                <th style={{ padding: "0.6rem 0.85rem", textAlign: "right" }}>Action</th>
+                <th style={{ padding: "0.6rem 0.85rem", textAlign: "right" }}>
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -578,7 +601,10 @@ export function IndexerSearchTab({
                 const itemKey = rel.guid || rel.infoHash || rel.title;
                 const isDownloading = downloadingGuid === itemKey;
                 const isAdded = isReleaseAdded(rel, addedKeys);
-                const isAlreadyInLibrary = isReleaseInLibrary(rel, existingHashes);
+                const isAlreadyInLibrary = isReleaseInLibrary(
+                  rel,
+                  existingHashes,
+                );
                 const buttonState = getReleaseButtonState({
                   isDownloading,
                   isAdded,
@@ -590,37 +616,82 @@ export function IndexerSearchTab({
                     key={itemKey || idx}
                     style={{
                       borderBottom: "1px solid var(--border-light)",
-                      backgroundColor: idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)",
+                      backgroundColor:
+                        idx % 2 === 0
+                          ? "transparent"
+                          : "rgba(255,255,255,0.015)",
                     }}
                   >
-                    <td style={{ padding: "0.65rem 0.85rem", wordBreak: "break-word" }}>
+                    <td
+                      style={{
+                        padding: "0.65rem 0.85rem",
+                        wordBreak: "break-word",
+                      }}
+                    >
                       <div style={{ fontWeight: 500 }}>{rel.title}</div>
                       {rel.categories && rel.categories.length > 0 && (
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                        <div
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "var(--text-muted)",
+                            marginTop: "0.2rem",
+                          }}
+                        >
                           {rel.categories.join(", ")}
                         </div>
                       )}
                     </td>
-                    <td style={{ padding: "0.65rem 0.85rem", whiteSpace: "nowrap" }}>
+                    <td
+                      style={{
+                        padding: "0.65rem 0.85rem",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       <span className="badge" style={{ fontSize: "0.75rem" }}>
                         {rel.indexer || "Indexer"}
                       </span>
                     </td>
-                    <td style={{ padding: "0.65rem 0.85rem", whiteSpace: "nowrap" }}>
+                    <td
+                      style={{
+                        padding: "0.65rem 0.85rem",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {formatBytes(rel.size)}
                     </td>
-                    <td style={{ padding: "0.65rem 0.85rem", whiteSpace: "nowrap" }}>
-                      <span style={{ color: "var(--success)", fontWeight: 600 }}>
+                    <td
+                      style={{
+                        padding: "0.65rem 0.85rem",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <span
+                        style={{ color: "var(--success)", fontWeight: 600 }}
+                      >
                         ▲ {rel.seeders ?? 0}
                       </span>{" "}
-                      <span style={{ color: "var(--text-muted)", marginLeft: "0.2rem" }}>
+                      <span
+                        style={{
+                          color: "var(--text-muted)",
+                          marginLeft: "0.2rem",
+                        }}
+                      >
                         ▼ {rel.leechers ?? 0}
                       </span>
                     </td>
-                    <td style={{ padding: "0.65rem 0.85rem", fontSize: "0.8rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                    <td
+                      style={{
+                        padding: "0.65rem 0.85rem",
+                        fontSize: "0.8rem",
+                        color: "var(--text-muted)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {rel.publishDate ? formatDate(rel.publishDate) : "-"}
                     </td>
-                    <td style={{ padding: "0.65rem 0.85rem", textAlign: "right" }}>
+                    <td
+                      style={{ padding: "0.65rem 0.85rem", textAlign: "right" }}
+                    >
                       <button
                         type="button"
                         className={buttonState.className}
@@ -628,7 +699,8 @@ export function IndexerSearchTab({
                           fontSize: "0.78rem",
                           padding: "0.3rem 0.65rem",
                           borderRadius: "4px",
-                          opacity: buttonState.disabled && !isDownloading ? 0.75 : 1,
+                          opacity:
+                            buttonState.disabled && !isDownloading ? 0.75 : 1,
                           cursor: buttonState.disabled ? "default" : "pointer",
                         }}
                         onClick={() => handleAddRelease(rel)}
@@ -660,11 +732,16 @@ export function IndexerSearchTab({
             flexShrink: 0,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
             <span>
-              Showing {pagination.startIndex + 1}–{pagination.endIndex} of {pagination.totalCount} results
+              Showing {pagination.startIndex + 1}–{pagination.endIndex} of{" "}
+              {pagination.totalCount} results
             </span>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+            >
               <span style={{ fontSize: "0.8rem" }}>Per page:</span>
               <select
                 aria-label="Items per page"
@@ -713,14 +790,20 @@ export function IndexerSearchTab({
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+              onClick={() =>
+                setPage((p) => Math.min(pagination.totalPages, p + 1))
+              }
               disabled={pagination.currentPage >= pagination.totalPages}
               style={{
                 padding: "0.25rem 0.65rem",
                 fontSize: "0.8rem",
                 borderRadius: "4px",
-                cursor: pagination.currentPage >= pagination.totalPages ? "default" : "pointer",
-                opacity: pagination.currentPage >= pagination.totalPages ? 0.5 : 1,
+                cursor:
+                  pagination.currentPage >= pagination.totalPages
+                    ? "default"
+                    : "pointer",
+                opacity:
+                  pagination.currentPage >= pagination.totalPages ? 0.5 : 1,
               }}
             >
               Next ▶

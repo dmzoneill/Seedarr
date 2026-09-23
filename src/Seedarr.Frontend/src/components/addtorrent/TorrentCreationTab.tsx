@@ -263,7 +263,13 @@ export function TorrentCreationTab({
           />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", paddingTop: "1.2rem" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            paddingTop: "1.2rem",
+          }}
+        >
           <label
             style={{
               display: "inline-flex",
@@ -279,7 +285,10 @@ export function TorrentCreationTab({
               onChange={(e) => setCreateIsPrivate(e.target.checked)}
             />
             <span style={{ fontWeight: 600 }}>
-              {t("addTorrent.privateTorrentLabel", "Private Torrent (No DHT / PEX)")}
+              {t(
+                "addTorrent.privateTorrentLabel",
+                "Private Torrent (No DHT / PEX)",
+              )}
             </span>
           </label>
         </div>
@@ -302,7 +311,10 @@ export function TorrentCreationTab({
               color: "var(--text-secondary)",
             }}
           >
-            {t("addTorrent.trackersLabelWithTiers", "Tracker URLs (One per line, tiers separated by empty line)")}
+            {t(
+              "addTorrent.trackersLabelWithTiers",
+              "Tracker URLs (One per line, tiers separated by empty line)",
+            )}
           </label>
           <textarea
             rows={3}
@@ -402,35 +414,62 @@ export function TorrentCreationTab({
         >
           {createResult.success ? (
             <div>
-              <div style={{ fontWeight: 600, color: "#4ade80", marginBottom: "0.3rem" }}>
-                ✓ {t("addTorrent.torrentCreatedSuccess", "Torrent created successfully!")}
+              <div
+                style={{
+                  fontWeight: 600,
+                  color: "#4ade80",
+                  marginBottom: "0.3rem",
+                }}
+              >
+                ✓{" "}
+                {t(
+                  "addTorrent.torrentCreatedSuccess",
+                  "Torrent created successfully!",
+                )}
               </div>
               {createResult.outputPath && (
                 <div>
                   <span style={{ color: "var(--text-muted)" }}>Output: </span>
-                  <code style={{ color: "var(--accent)" }}>{createResult.outputPath}</code>
+                  <code style={{ color: "var(--accent)" }}>
+                    {createResult.outputPath}
+                  </code>
                 </div>
               )}
               {createResult.infoHash && (
                 <div>
                   <span style={{ color: "var(--text-muted)" }}>Hash: </span>
-                  <code style={{ color: "#60a5fa" }}>{createResult.infoHash}</code>
+                  <code style={{ color: "#60a5fa" }}>
+                    {createResult.infoHash}
+                  </code>
                 </div>
               )}
               <div>
                 <span style={{ color: "var(--text-muted)" }}>Size: </span>
-                {formatBytes(createResult.totalSize)} ({createResult.pieceCount} pieces @ {formatBytes(createResult.pieceLength)})
+                {formatBytes(createResult.totalSize)} ({createResult.pieceCount}{" "}
+                pieces @ {formatBytes(createResult.pieceLength)})
               </div>
             </div>
           ) : (
             <div style={{ color: "#f87171" }}>
-              ✕ {createResult.errorMessage || t("addTorrent.failedToCreateTorrent", "Failed to create torrent")}
+              ✕{" "}
+              {createResult.errorMessage ||
+                t(
+                  "addTorrent.failedToCreateTorrent",
+                  "Failed to create torrent",
+                )}
             </div>
           )}
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: "0.5rem",
+          marginTop: "0.5rem",
+        }}
+      >
         {isModal && onClose && (
           <button
             type="button"

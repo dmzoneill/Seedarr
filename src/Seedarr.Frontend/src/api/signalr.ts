@@ -40,7 +40,11 @@ export interface StateSnapshot {
  */
 export function isUnauthorizedOrForbidden(error?: unknown): boolean {
   if (!error) return false;
-  const anyErr = error as { statusCode?: number; status?: number; message?: string };
+  const anyErr = error as {
+    statusCode?: number;
+    status?: number;
+    message?: string;
+  };
   if (
     anyErr.statusCode === 401 ||
     anyErr.statusCode === 403 ||
@@ -249,7 +253,9 @@ export function getSignalRConnection(): HubConnection {
       notifyStatus("connected");
       resubscribeActiveGroups();
       try {
-        const snapshot = await connection?.invoke<StateSnapshot>("RequestStateSnapshot");
+        const snapshot = await connection?.invoke<StateSnapshot>(
+          "RequestStateSnapshot",
+        );
         if (snapshot) {
           notifySnapshot(snapshot);
         }
@@ -484,14 +490,18 @@ export function useSignalR(queryClient?: QueryClient) {
     const handleReconnected = async () => {
       const qc = queryClientRef.current;
       try {
-        const snapshot = await conn.invoke<StateSnapshot>("RequestStateSnapshot");
+        const snapshot = await conn.invoke<StateSnapshot>(
+          "RequestStateSnapshot",
+        );
         if (snapshot) {
           notifySnapshot(snapshot);
           if (qc) {
             if (snapshot.torrents) {
               qc.setQueryData(["torrents"], (old: any) => {
                 if (Array.isArray(old)) {
-                  const snapMap = new Map(snapshot.torrents.map((t) => [t.id, t]));
+                  const snapMap = new Map(
+                    snapshot.torrents.map((t) => [t.id, t]),
+                  );
                   return old.map((item) => {
                     const snap = snapMap.get(item.id);
                     return snap ? { ...item, ...snap } : item;
@@ -500,7 +510,10 @@ export function useSignalR(queryClient?: QueryClient) {
                 return snapshot.torrents;
               });
             }
-            if (snapshot.downloadSpeed !== undefined && snapshot.uploadSpeed !== undefined) {
+            if (
+              snapshot.downloadSpeed !== undefined &&
+              snapshot.uploadSpeed !== undefined
+            ) {
               qc.setQueryData(["seeding", "stats"], (old: any) => {
                 return {
                   ...(old || {}),

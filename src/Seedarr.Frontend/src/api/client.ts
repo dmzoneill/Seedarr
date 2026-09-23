@@ -120,7 +120,11 @@ class ApiClient {
       const errorMsg = await this.parseError(response);
       if (response.status >= 500) {
         const cleanEndpoint = endpoint.split("?")[0];
-        trackException(`Backend ${response.status}: ${cleanEndpoint} - ${errorMsg.slice(0, 80)}`, false, "backend_api_5xx");
+        trackException(
+          `Backend ${response.status}: ${cleanEndpoint} - ${errorMsg.slice(0, 80)}`,
+          false,
+          "backend_api_5xx",
+        );
       }
       throw new Error(errorMsg);
     }
@@ -295,26 +299,40 @@ class ApiClient {
     testTargetHost?: string;
     testTargetPort?: number;
     timeoutMs?: number;
-  }): Promise<{ success: boolean; message: string; remoteDnsVerified?: boolean }> {
-    return this.post<{ success: boolean; message: string; remoteDnsVerified?: boolean }>(
-      "/config/network/test-proxy",
-      request,
-    );
+  }): Promise<{
+    success: boolean;
+    message: string;
+    remoteDnsVerified?: boolean;
+  }> {
+    return this.post<{
+      success: boolean;
+      message: string;
+      remoteDnsVerified?: boolean;
+    }>("/config/network/test-proxy", request);
   }
 
-  getFileSystem(path?: string, includeFiles?: boolean): Promise<FileSystemResource> {
+  getFileSystem(
+    path?: string,
+    includeFiles?: boolean,
+  ): Promise<FileSystemResource> {
     const params = new URLSearchParams();
     if (path) params.append("path", path);
     if (includeFiles) params.append("includeFiles", "true");
     const query = params.toString();
-    return this.get<FileSystemResource>(`/filesystem${query ? `?${query}` : ""}`);
+    return this.get<FileSystemResource>(
+      `/filesystem${query ? `?${query}` : ""}`,
+    );
   }
 
   createDirectory(path: string): Promise<{ success: boolean; path: string }> {
-    return this.post<{ success: boolean; path: string }>("/filesystem/mkdir", { path });
+    return this.post<{ success: boolean; path: string }>("/filesystem/mkdir", {
+      path,
+    });
   }
 
-  createTorrent(request: TorrentCreationRequest): Promise<TorrentCreationResult> {
+  createTorrent(
+    request: TorrentCreationRequest,
+  ): Promise<TorrentCreationResult> {
     return this.post<TorrentCreationResult>("/torrents/create", request);
   }
 
@@ -397,8 +415,16 @@ class ApiClient {
     return this.get<SetupStatus>("/system/setup/status");
   }
 
-  completeSetup(payload: SetupCompleteRequest): Promise<{ message: string; isSetupCompleted: boolean; isAuthEnabled: boolean }> {
-    return this.post<{ message: string; isSetupCompleted: boolean; isAuthEnabled: boolean }>("/system/setup/complete", payload);
+  completeSetup(payload: SetupCompleteRequest): Promise<{
+    message: string;
+    isSetupCompleted: boolean;
+    isAuthEnabled: boolean;
+  }> {
+    return this.post<{
+      message: string;
+      isSetupCompleted: boolean;
+      isAuthEnabled: boolean;
+    }>("/system/setup/complete", payload);
   }
 
   testCustomScript(
@@ -434,7 +460,11 @@ class ApiClient {
     return response.json();
   }
 
-  async renameTorrentFile(hash: string, oldPath: string, newPath: string): Promise<string> {
+  async renameTorrentFile(
+    hash: string,
+    oldPath: string,
+    newPath: string,
+  ): Promise<string> {
     const formData = new FormData();
     formData.append("hash", hash);
     formData.append("oldPath", oldPath);
@@ -455,7 +485,11 @@ class ApiClient {
     return response.text();
   }
 
-  async renameTorrentFolder(hash: string, oldPath: string, newPath: string): Promise<string> {
+  async renameTorrentFolder(
+    hash: string,
+    oldPath: string,
+    newPath: string,
+  ): Promise<string> {
     const formData = new FormData();
     formData.append("hash", hash);
     formData.append("oldPath", oldPath);

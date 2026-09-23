@@ -70,11 +70,17 @@ describe("MediaArtwork: Helper Utilities", () => {
   describe("buildPlaceholderUrl", () => {
     it("builds URL with both title and category", () => {
       const url = buildPlaceholderUrl("Inception", "radarr");
-      assert.equal(url, "/api/v1/mediacover/placeholder?title=Inception&category=radarr");
+      assert.equal(
+        url,
+        "/api/v1/mediacover/placeholder?title=Inception&category=radarr",
+      );
     });
 
     it("properly encodes query parameters", () => {
-      const url = buildPlaceholderUrl("Breaking Bad & Better Call Saul", "TV Series / Sonarr");
+      const url = buildPlaceholderUrl(
+        "Breaking Bad & Better Call Saul",
+        "TV Series / Sonarr",
+      );
       assert.ok(url.startsWith("/api/v1/mediacover/placeholder?"));
       assert.ok(url.includes("title=Breaking+Bad+%26+Better+Call+Saul"));
       assert.ok(url.includes("category=TV+Series+%2F+Sonarr"));
@@ -100,11 +106,11 @@ describe("MediaArtwork: Helper Utilities", () => {
     it("returns trimmed valid URL", () => {
       assert.equal(
         sanitizeArtworkUrl("  https://image.tmdb.org/t/p/w500/test.jpg  "),
-        "https://image.tmdb.org/t/p/w500/test.jpg"
+        "https://image.tmdb.org/t/p/w500/test.jpg",
       );
       assert.equal(
         sanitizeArtworkUrl("/api/v1/mediacover/12/poster.jpg"),
-        "/api/v1/mediacover/12/poster.jpg"
+        "/api/v1/mediacover/12/poster.jpg",
       );
     });
 
@@ -134,17 +140,38 @@ describe("MediaArtwork: Component Rendering", () => {
         width: "150px",
         height: "225px",
         borderRadius: "4px",
-      })
+      }),
     );
 
-    assert.ok(html.includes("media-artwork-container"), "Must have container class");
-    assert.ok(html.includes("skeleton"), "Must initially have loading skeleton");
+    assert.ok(
+      html.includes("media-artwork-container"),
+      "Must have container class",
+    );
+    assert.ok(
+      html.includes("skeleton"),
+      "Must initially have loading skeleton",
+    );
     assert.ok(html.includes("<img"), "Must render img element");
-    assert.ok(html.includes('src="https://example.com/poster.jpg"'), "Img must have correct src");
-    assert.ok(html.includes('alt="The Matrix"'), "Img must have correct alt attribute");
-    assert.ok(html.includes('width:150px'), "Container must have correct width");
-    assert.ok(html.includes('height:225px'), "Container must have correct height");
-    assert.ok(html.includes('border-radius:4px'), "Container must have border-radius");
+    assert.ok(
+      html.includes('src="https://example.com/poster.jpg"'),
+      "Img must have correct src",
+    );
+    assert.ok(
+      html.includes('alt="The Matrix"'),
+      "Img must have correct alt attribute",
+    );
+    assert.ok(
+      html.includes("width:150px"),
+      "Container must have correct width",
+    );
+    assert.ok(
+      html.includes("height:225px"),
+      "Container must have correct height",
+    );
+    assert.ok(
+      html.includes("border-radius:4px"),
+      "Container must have border-radius",
+    );
   });
 
   it("renders dynamic SVG placeholder as initial src when src is null or absent", () => {
@@ -153,11 +180,15 @@ describe("MediaArtwork: Component Rendering", () => {
         src: null,
         title: "Ubuntu Desktop",
         category: "software",
-      })
+      }),
     );
 
     assert.ok(html.includes("media-artwork-container"));
-    assert.ok(html.includes("/api/v1/mediacover/placeholder?title=Ubuntu+Desktop&amp;category=software"));
+    assert.ok(
+      html.includes(
+        "/api/v1/mediacover/placeholder?title=Ubuntu+Desktop&amp;category=software",
+      ),
+    );
   });
 
   it("renders 20x28 compact thumbnail for TorrentTable without layout distortion", () => {
@@ -171,7 +202,7 @@ describe("MediaArtwork: Component Rendering", () => {
         height: "28px",
         aspectRatio: "auto",
         borderRadius: "2px",
-      })
+      }),
     );
 
     assert.ok(html.includes("width:20px"));
@@ -191,7 +222,7 @@ describe("MediaArtwork: Component Rendering", () => {
         height: "46px",
         aspectRatio: "auto",
         borderRadius: "3px",
-      })
+      }),
     );
 
     assert.ok(html.includes("width:32px"));
@@ -204,7 +235,7 @@ describe("MediaArtwork: Component Rendering", () => {
       React.createElement(MediaArtwork, {
         src: "https://example.com/eager.jpg",
         loading: "eager",
-      })
+      }),
     );
 
     assert.ok(html.includes('loading="eager"'));
@@ -219,13 +250,22 @@ describe("MediaArtwork: Fallback and Error Handling", () => {
         title: "Interstellar",
         category: "radarr",
         initialState: "error",
-      })
+      }),
     );
 
-    assert.ok(html.includes("media-artwork-fallback"), "Must render fallback container");
-    assert.ok(!html.includes("<img"), "Must NOT render broken img tag in error state");
+    assert.ok(
+      html.includes("media-artwork-fallback"),
+      "Must render fallback container",
+    );
+    assert.ok(
+      !html.includes("<img"),
+      "Must NOT render broken img tag in error state",
+    );
     assert.ok(html.includes("🎬"), "Must render category glyph for radarr");
-    assert.ok(html.includes("Interstellar"), "Must render title in non-compact fallback");
+    assert.ok(
+      html.includes("Interstellar"),
+      "Must render title in non-compact fallback",
+    );
   });
 
   it("uses custom fallbackIcon when provided", () => {
@@ -235,37 +275,44 @@ describe("MediaArtwork: Fallback and Error Handling", () => {
         category: "radarr",
         fallbackIcon: "⭐",
         initialState: "error",
-      })
+      }),
     );
 
     assert.ok(html.includes("media-artwork-fallback"));
     assert.ok(html.includes("⭐"), "Must use custom fallbackIcon");
-    assert.ok(!html.includes("🎬"), "Must not use default glyph when custom fallbackIcon is set");
+    assert.ok(
+      !html.includes("🎬"),
+      "Must not use default glyph when custom fallbackIcon is set",
+    );
   });
 
   it("renders compact 20x28 fallback thumbnail without title overflow", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
-        title: "Very Long Torrent Name That Should Not Render In Table Thumbnail",
+        title:
+          "Very Long Torrent Name That Should Not Render In Table Thumbnail",
         category: "radarr",
         width: "20px",
         height: "28px",
         aspectRatio: "auto",
         borderRadius: "2px",
         initialState: "error",
-      })
+      }),
     );
 
     assert.ok(html.includes("media-artwork-fallback"));
     assert.ok(html.includes("🎬"), "Must render glyph");
-    assert.ok(html.includes("font-size:0.85rem"), "Must use compact font size for width <= 30");
+    assert.ok(
+      html.includes("font-size:0.85rem"),
+      "Must use compact font size for width <= 30",
+    );
     assert.ok(
       !html.includes("media-artwork-title"),
-      "Must NOT render title element in compact table thumbnail"
+      "Must NOT render title element in compact table thumbnail",
     );
     assert.ok(
       !html.includes(">Very Long Torrent Name"),
-      "Must NOT render title text element in compact table thumbnail"
+      "Must NOT render title text element in compact table thumbnail",
     );
   });
 
@@ -276,10 +323,13 @@ describe("MediaArtwork: Fallback and Error Handling", () => {
         category: "radarr",
         allowRetry: true,
         initialState: "error",
-      })
+      }),
     );
 
-    assert.ok(html.includes("media-artwork-retry-btn"), "Must render retry button");
+    assert.ok(
+      html.includes("media-artwork-retry-btn"),
+      "Must render retry button",
+    );
     assert.ok(html.includes('aria-label="Retry loading artwork"'));
     assert.ok(html.includes("↻"), "Must show retry icon");
   });
@@ -291,7 +341,7 @@ describe("MediaArtwork: Fallback and Error Handling", () => {
         category: "radarr",
         allowRetry: false,
         initialState: "error",
-      })
+      }),
     );
 
     assert.ok(!html.includes("media-artwork-retry-btn"));

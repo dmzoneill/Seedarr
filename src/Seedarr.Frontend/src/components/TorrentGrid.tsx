@@ -163,7 +163,11 @@ function TorrentGrid({
       });
 
   if (filtered.length === 0) {
-    return <div className="torrent-grid-empty">{t("torrents.noTorrents", undefined, "No torrents found")}</div>;
+    return (
+      <div className="torrent-grid-empty">
+        {t("torrents.noTorrents", undefined, "No torrents found")}
+      </div>
+    );
   }
 
   return (
@@ -322,7 +326,11 @@ function TorrentGrid({
                     onClick={(e) => {
                       if (arrLink) {
                         e.stopPropagation();
-                        window.open(arrLink.url, "_blank", "noopener,noreferrer");
+                        window.open(
+                          arrLink.url,
+                          "_blank",
+                          "noopener,noreferrer",
+                        );
                       }
                     }}
                   >
@@ -423,7 +431,11 @@ function TorrentGrid({
                   ↑ {formatBytes(torrent.uploaded)}
                 </span>
                 <span
-                  className={torrent.isVpnPaused ? "badge badge-vpn-paused" : `badge badge-${torrent.status.toLowerCase()}`}
+                  className={
+                    torrent.isVpnPaused
+                      ? "badge badge-vpn-paused"
+                      : `badge badge-${torrent.status.toLowerCase()}`
+                  }
                   style={{
                     fontSize: "0.68rem",
                     padding: "0.15rem 0.45rem",
@@ -432,8 +444,18 @@ function TorrentGrid({
                   aria-label={`${torrent.status}: ${pct.toFixed(1)}% complete, Down: ${formatSpeed(torrent.downloadSpeed)}, Up: ${formatSpeed(torrent.uploadSpeed)}, ETA: ${formatEta(torrent.eta)}`}
                 >
                   {torrent.isVpnPaused
-                    ? t("torrents.pausedVpnKillSwitch", undefined, "Paused (VPN Kill Switch)")
-                    : t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status === "QueuedForChecking" ? "Queued for Recheck" : torrent.status)}
+                    ? t(
+                        "torrents.pausedVpnKillSwitch",
+                        undefined,
+                        "Paused (VPN Kill Switch)",
+                      )
+                    : t(
+                        `torrents.${torrent.status.toLowerCase()}`,
+                        undefined,
+                        torrent.status === "QueuedForChecking"
+                          ? "Queued for Recheck"
+                          : torrent.status,
+                      )}
                 </span>
               </div>
             </div>
@@ -581,9 +603,14 @@ function TorrentGrid({
                       stopSeeding.mutate(torrent.id);
                     }}
                     disabled={!canMutateTorrents}
-                    title={!canMutateTorrents ? "Pausing/stopping requires operator or admin role" : "Stop seeding"}
+                    title={
+                      !canMutateTorrents
+                        ? "Pausing/stopping requires operator or admin role"
+                        : "Stop seeding"
+                    }
                   >
-                    <span>⏹</span> <span>{t("torrents.stop", undefined, "Stop")}</span>
+                    <span>⏹</span>{" "}
+                    <span>{t("torrents.stop", undefined, "Stop")}</span>
                   </button>
                 ) : (
                   <button
@@ -602,9 +629,14 @@ function TorrentGrid({
                       startSeeding.mutate(torrent.id);
                     }}
                     disabled={!canMutateTorrents}
-                    title={!canMutateTorrents ? "Starting torrents requires operator or admin role" : "Start seeding"}
+                    title={
+                      !canMutateTorrents
+                        ? "Starting torrents requires operator or admin role"
+                        : "Start seeding"
+                    }
                   >
-                    <span>▶</span> <span>{t("torrents.start", undefined, "Start")}</span>
+                    <span>▶</span>{" "}
+                    <span>{t("torrents.start", undefined, "Start")}</span>
                   </button>
                 )}
                 <button
@@ -621,7 +653,11 @@ function TorrentGrid({
                     setTorrentToDelete(torrent);
                   }}
                   disabled={deleteTorrent.isPending || !canDeleteTorrent}
-                  title={!canDeleteTorrent ? "Deleting torrents requires operator or admin role" : "Delete torrent"}
+                  title={
+                    !canDeleteTorrent
+                      ? "Deleting torrents requires operator or admin role"
+                      : "Delete torrent"
+                  }
                 >
                   <span>{t("common.delete", undefined, "Delete")}</span>
                 </button>

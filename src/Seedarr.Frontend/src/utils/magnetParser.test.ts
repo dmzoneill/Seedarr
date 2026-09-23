@@ -70,10 +70,7 @@ describe("magnetParser: parseMagnetUri", () => {
     const result = parseMagnetUri(uri);
 
     assert.equal(result.valid, true);
-    assert.equal(
-      result.infoHash,
-      "0123456789abcdef0123456789abcdef01234567",
-    );
+    assert.equal(result.infoHash, "0123456789abcdef0123456789abcdef01234567");
     assert.equal(result.name, "Ubuntu 22.04");
     assert.deepEqual(result.trackers, ["http://tracker.example.com/announce"]);
     assert.equal(result.isV2, false);

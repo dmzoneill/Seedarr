@@ -24,7 +24,9 @@ export function AddTorrentPage() {
           }}
         >
           <span>🔒</span>
-          <span>You have ReadOnly permissions. Adding torrents is not permitted.</span>
+          <span>
+            You have ReadOnly permissions. Adding torrents is not permitted.
+          </span>
         </div>
       </div>
     );

@@ -45,7 +45,12 @@ function FileTreeRow({
   onFileWanted: (fileId: number, wanted: boolean) => void;
   filePriorities: Record<number, FilePriority>;
   fileWanted: Record<number, boolean>;
-  onPlayMedia: (file: { id: number; path: string; name: string; size: number }) => void;
+  onPlayMedia: (file: {
+    id: number;
+    path: string;
+    name: string;
+    size: number;
+  }) => void;
   editingPath: string | null;
   editingValue: string;
   onStartRename: (path: string, currentName: string) => void;
@@ -61,17 +66,20 @@ function FileTreeRow({
     : "Normal";
   const filePrio =
     !node.isDir && node.fileId !== undefined
-      ? filePriorities[node.fileId] ?? node.priority ?? "Normal"
+      ? (filePriorities[node.fileId] ?? node.priority ?? "Normal")
       : "Normal";
   const dirWanted = node.isDir
     ? getDirectoryWanted(node, fileWanted, filePriorities)
     : { isWanted: true, isIndeterminate: false };
   const isWanted =
     !node.isDir && node.fileId !== undefined
-      ? fileWanted[node.fileId] ?? node.wanted ?? (formatPriority(filePrio) !== "Do Not Download")
+      ? (fileWanted[node.fileId] ??
+        node.wanted ??
+        formatPriority(filePrio) !== "Do Not Download")
       : true;
   const progressValue = node.progress ?? 100;
-  const playable = !node.isDir && node.fileId !== undefined && isPlayableFile(node.name);
+  const playable =
+    !node.isDir && node.fileId !== undefined && isPlayableFile(node.name);
 
   return (
     <>
@@ -158,7 +166,11 @@ function FileTreeRow({
                 title="Save rename"
                 disabled={isRenaming || !editingValue.trim()}
                 onClick={() => onSaveRename(node.path, editingValue)}
-                style={{ padding: "0.15rem 0.45rem", fontSize: "0.75rem", cursor: "pointer" }}
+                style={{
+                  padding: "0.15rem 0.45rem",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                }}
               >
                 {isRenaming ? "..." : "✓"}
               </button>
@@ -169,7 +181,11 @@ function FileTreeRow({
                 title="Cancel rename"
                 disabled={isRenaming}
                 onClick={onCancelRename}
-                style={{ padding: "0.15rem 0.45rem", fontSize: "0.75rem", cursor: "pointer" }}
+                style={{
+                  padding: "0.15rem 0.45rem",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                }}
               >
                 ✕
               </button>
@@ -219,7 +235,9 @@ function FileTreeRow({
         <td>{formatBytes(node.size)}</td>
         <td>
           {!node.isDir ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
               <div
                 style={{
                   flex: 1,
@@ -235,7 +253,8 @@ function FileTreeRow({
                   style={{
                     width: `${progressValue}%`,
                     height: "100%",
-                    backgroundColor: progressValue >= 100 ? "#2ecc71" : "#3498db",
+                    backgroundColor:
+                      progressValue >= 100 ? "#2ecc71" : "#3498db",
                   }}
                 />
               </div>
@@ -244,7 +263,9 @@ function FileTreeRow({
               </span>
             </div>
           ) : (
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>
+            <span
+              style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}
+            >
               —
             </span>
           )}
@@ -303,8 +324,18 @@ function FileTreeRow({
             )}
           </div>
         </td>
-        <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, justifyContent: "center" }}>
+        <td
+          style={{ textAlign: "center" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              justifyContent: "center",
+            }}
+          >
             {playable && (
               <button
                 type="button"
@@ -351,7 +382,14 @@ function FileTreeRow({
               </button>
             )}
             {node.isDir && (
-              <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>—</span>
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  color: "var(--text-muted, #888)",
+                }}
+              >
+                —
+              </span>
             )}
           </div>
         </td>
@@ -482,7 +520,8 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
       });
       setFileWanted((prev) => {
         const next = { ...prev };
-        const isWanted = priority !== "Do Not Download" && priority !== "Skip All";
+        const isWanted =
+          priority !== "Do Not Download" && priority !== "Skip All";
         for (const id of ids) {
           next[id] = isWanted;
         }
@@ -561,13 +600,14 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
       ? 100
       : (torrent.progress ?? 0) * 100;
 
-  const tree = nonPaddingFiles.length > 0
-    ? buildFileTree(nonPaddingFiles, {
-        priorities: filePriorities,
-        wanted: fileWanted,
-        progress: torrentProgress,
-      })
-    : [];
+  const tree =
+    nonPaddingFiles.length > 0
+      ? buildFileTree(nonPaddingFiles, {
+          priorities: filePriorities,
+          wanted: fileWanted,
+          progress: torrentProgress,
+        })
+      : [];
   const hasDirectories = tree.some((n) => n.isDir);
 
   return (
@@ -610,7 +650,10 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
           <table className="torrent-table">
             <thead>
               <tr>
-                <th className="torrent-table-th" style={{ width: 60, textAlign: "center" }}>
+                <th
+                  className="torrent-table-th"
+                  style={{ width: 60, textAlign: "center" }}
+                >
                   Wanted
                 </th>
                 <th className="torrent-table-th">Path</th>
@@ -623,7 +666,10 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
                 <th className="torrent-table-th" style={{ width: 150 }}>
                   Priority
                 </th>
-                <th className="torrent-table-th" style={{ width: 140, textAlign: "center" }}>
+                <th
+                  className="torrent-table-th"
+                  style={{ width: 140, textAlign: "center" }}
+                >
                   Actions
                 </th>
               </tr>

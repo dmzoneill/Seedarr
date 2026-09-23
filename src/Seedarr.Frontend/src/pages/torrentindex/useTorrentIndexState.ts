@@ -173,9 +173,7 @@ export function useTorrentIndexState() {
           : target.trackerUrl
             ? [target.trackerUrl]
             : [];
-      const hasTracker = urls.some(
-        (u) => extractTrackerDomain(u) === current,
-      );
+      const hasTracker = urls.some((u) => extractTrackerDomain(u) === current);
       return hasTracker ? current : "All";
     });
     setSelectedCategory((current) => {

@@ -204,7 +204,6 @@ function TorrentContextMenu({
     onClose();
   };
 
-
   const handleDeleteAll = (deleteFiles: boolean) => {
     if (isMulti) {
       const ids = effectiveTorrents.map((t) => t.id);
@@ -330,7 +329,11 @@ function TorrentContextMenu({
                     textAlign: "center",
                   }}
                   onClick={() => handleMoveQueueAll("top")}
-                  title={t("torrents.contextMenu.top", undefined, "Move to Top")}
+                  title={t(
+                    "torrents.contextMenu.top",
+                    undefined,
+                    "Move to Top",
+                  )}
                 >
                   ⤒ {t("torrents.contextMenu.top", undefined, "Top")}
                 </button>
@@ -402,11 +405,17 @@ function TorrentContextMenu({
               <>
                 {isMulti ? (
                   <>
-                    <button className="context-menu-item" onClick={handleStartAll}>
+                    <button
+                      className="context-menu-item"
+                      onClick={handleStartAll}
+                    >
                       {t("torrents.resume", undefined, "Resume")}
                       {countSuffix}
                     </button>
-                    <button className="context-menu-item" onClick={handleStopAll}>
+                    <button
+                      className="context-menu-item"
+                      onClick={handleStopAll}
+                    >
                       {t("torrents.pause", undefined, "Pause")}
                       {countSuffix}
                     </button>
@@ -416,7 +425,10 @@ function TorrentContextMenu({
                     {t("torrents.pause", undefined, "Pause")}
                   </button>
                 ) : (
-                  <button className="context-menu-item" onClick={handleStartAll}>
+                  <button
+                    className="context-menu-item"
+                    onClick={handleStartAll}
+                  >
                     {t("torrents.resume", undefined, "Resume")}
                   </button>
                 )}
@@ -424,14 +436,20 @@ function TorrentContextMenu({
                 <button
                   className="context-menu-item"
                   onClick={() =>
-                    handleUpdateAll((t) => ({ ...t, forceStart: !t.forceStart }))
+                    handleUpdateAll((t) => ({
+                      ...t,
+                      forceStart: !t.forceStart,
+                    }))
                   }
                 >
                   {!isMulti && ct?.forceStart ? "✓ " : ""}
                   {t("torrents.forceStart", undefined, "Force Start")}
                   {countSuffix}
                 </button>
-                <button className="context-menu-item" onClick={handleAnnounceAll}>
+                <button
+                  className="context-menu-item"
+                  onClick={handleAnnounceAll}
+                >
                   {t("torrents.updateTracker", undefined, "Update Tracker")}
                   {countSuffix}
                 </button>
@@ -723,7 +741,11 @@ function TorrentContextMenu({
                     className="context-menu-item"
                     onClick={() => {
                       setPromptConfig({
-                        title: t("torrents.rename", undefined, "Rename Torrent"),
+                        title: t(
+                          "torrents.rename",
+                          undefined,
+                          "Rename Torrent",
+                        ),
                         description: "Enter a new name for this torrent:",
                         initialValue: ct.name,
                         inputType: "text",
@@ -747,7 +769,9 @@ function TorrentContextMenu({
                     setPromptConfig({
                       title: `${t("torrents.setLocation", undefined, "Set Location")}${countSuffix}`,
                       description: "Enter new save path directory:",
-                      initialValue: !isMulti ? (ct?.savePath || ct?.sourcePath || "") : "",
+                      initialValue: !isMulti
+                        ? ct?.savePath || ct?.sourcePath || ""
+                        : "",
                       inputType: "text",
                       validate: (val) =>
                         !val.trim() ? "Location cannot be empty" : null,
@@ -845,7 +869,10 @@ function TorrentContextMenu({
                       const anyDisabled = effectiveTorrents.some(
                         (t) => !t.superSeeding,
                       );
-                      handleUpdateAll((t) => ({ ...t, superSeeding: anyDisabled }));
+                      handleUpdateAll((t) => ({
+                        ...t,
+                        superSeeding: anyDisabled,
+                      }));
                     } else if (ct) {
                       handleUpdateAll((t) => ({
                         ...t,
@@ -924,7 +951,11 @@ function TorrentContextMenu({
                         className="context-menu-item context-menu-item-danger"
                         onClick={() => handleDeleteAll(false)}
                       >
-                        {t("torrents.removeTorrent", undefined, "Remove Torrent")}
+                        {t(
+                          "torrents.removeTorrent",
+                          undefined,
+                          "Remove Torrent",
+                        )}
                         {countSuffix}
                       </button>
                       <button

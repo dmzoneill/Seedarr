@@ -70,28 +70,42 @@ export function buildFileTree(
         const nodePath = parts.slice(0, i + 1).join("/");
         const fileId = isLast ? file.id : undefined;
         const priority = isLast
-          ? (fileId !== undefined && options?.priorities?.[fileId] !== undefined
-              ? options.priorities[fileId]
-              : (file.wanted === false || file.priority === 0
-                  ? "Do Not Download"
-                  : (file.priority === 6 || file.priority === 7 || file.priority === 2
-                      ? "High"
-                      : defaultPriority)))
+          ? fileId !== undefined && options?.priorities?.[fileId] !== undefined
+            ? options.priorities[fileId]
+            : file.wanted === false || file.priority === 0
+              ? "Do Not Download"
+              : file.priority === 6 ||
+                  file.priority === 7 ||
+                  file.priority === 2
+                ? "High"
+                : defaultPriority
           : defaultPriority;
 
         const wanted = isLast
-          ? (fileId !== undefined && options?.wanted?.[fileId] !== undefined
-              ? options.wanted[fileId]
-              : (file.wanted !== undefined
-                  ? file.wanted
-                  : formatPriority(priority) !== "Do Not Download"))
+          ? fileId !== undefined && options?.wanted?.[fileId] !== undefined
+            ? options.wanted[fileId]
+            : file.wanted !== undefined
+              ? file.wanted
+              : formatPriority(priority) !== "Do Not Download"
           : true;
 
         let nodeProgress: number | undefined = undefined;
         if (isLast) {
-          if (file.bytesCompleted !== undefined && file.size !== undefined && file.size > 0) {
-            nodeProgress = Math.min(100, Math.max(0, (file.bytesCompleted / file.size) * 100));
-          } else if (fileId !== undefined && options?.progress && typeof options.progress !== "number" && options.progress[fileId] !== undefined) {
+          if (
+            file.bytesCompleted !== undefined &&
+            file.size !== undefined &&
+            file.size > 0
+          ) {
+            nodeProgress = Math.min(
+              100,
+              Math.max(0, (file.bytesCompleted / file.size) * 100),
+            );
+          } else if (
+            fileId !== undefined &&
+            options?.progress &&
+            typeof options.progress !== "number" &&
+            options.progress[fileId] !== undefined
+          ) {
             nodeProgress = options.progress[fileId];
           } else if (typeof options?.progress === "number") {
             nodeProgress = options.progress;
@@ -134,7 +148,10 @@ export function buildFileTree(
 /**
  * Recursively applies priority to a node and all of its descendants.
  */
-function applyPriorityRecursive(node: FileTreeNode, priority: FilePriority): void {
+function applyPriorityRecursive(
+  node: FileTreeNode,
+  priority: FilePriority,
+): void {
   node.priority = priority;
   for (const child of node.children) {
     applyPriorityRecursive(child, priority);
@@ -252,13 +269,13 @@ export function getDirectoryPriority(
   const files = getDescendantFiles(node);
   if (files.length === 0) return "Normal";
   const first = formatPriority(
-    (files[0].fileId !== undefined && priorities?.[files[0].fileId] !== undefined)
+    files[0].fileId !== undefined && priorities?.[files[0].fileId] !== undefined
       ? priorities[files[0].fileId]
       : files[0].priority,
   );
   const allSame = files.every((f) => {
     const p = formatPriority(
-      (f.fileId !== undefined && priorities?.[f.fileId] !== undefined)
+      f.fileId !== undefined && priorities?.[f.fileId] !== undefined
         ? priorities[f.fileId]
         : f.priority,
     );
@@ -270,13 +287,27 @@ export function getDirectoryPriority(
 /**
  * Normalizes priority value to human-readable format.
  */
-export function formatPriority(prio: FilePriority | string | undefined): string {
+export function formatPriority(
+  prio: FilePriority | string | undefined,
+): string {
   if (prio === undefined || prio === null) return "Normal";
   const str = String(prio).toLowerCase();
-  if (str === "0" || str === "skip" || str === "do not download" || str === "skip all") {
+  if (
+    str === "0" ||
+    str === "skip" ||
+    str === "do not download" ||
+    str === "skip all"
+  ) {
     return "Do Not Download";
   }
-  if (str === "2" || str === "6" || str === "7" || str === "high" || str === "max" || str === "maximal") {
+  if (
+    str === "2" ||
+    str === "6" ||
+    str === "7" ||
+    str === "high" ||
+    str === "max" ||
+    str === "maximal"
+  ) {
     return "High";
   }
   return "Normal";
@@ -301,7 +332,7 @@ export function getDirectoryWanted(
     } else if (f.fileId !== undefined && priorities?.[f.fileId] !== undefined) {
       w = formatPriority(priorities[f.fileId]) !== "Do Not Download";
     } else {
-      w = f.wanted ?? (formatPriority(f.priority) !== "Do Not Download");
+      w = f.wanted ?? formatPriority(f.priority) !== "Do Not Download";
     }
     if (w) wantedCount++;
   }

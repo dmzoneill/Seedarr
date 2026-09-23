@@ -41,8 +41,14 @@ describe("AddTorrentForm: Library Detection & Grab Tracking (Issue #308)", () =>
     ]);
 
     it("returns false if release has no infoHash", () => {
-      assert.equal(isReleaseInLibrary({ infoHash: undefined }, existingHashes), false);
-      assert.equal(isReleaseInLibrary({ infoHash: null }, existingHashes), false);
+      assert.equal(
+        isReleaseInLibrary({ infoHash: undefined }, existingHashes),
+        false,
+      );
+      assert.equal(
+        isReleaseInLibrary({ infoHash: null }, existingHashes),
+        false,
+      );
       assert.equal(isReleaseInLibrary({ infoHash: "" }, existingHashes), false);
     });
 
@@ -319,4 +325,3 @@ describe("AddTorrentForm: Category Selector, Column Sorting & Pagination (Issue 
     });
   });
 });
-

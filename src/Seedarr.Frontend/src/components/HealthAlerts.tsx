@@ -5,7 +5,9 @@ function HealthAlerts() {
   const { data: checks } = useHealthChecks();
   const [dismissed, setDismissed] = useState<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem("seedarr_dismissed_health_alerts") || "[]");
+      return JSON.parse(
+        localStorage.getItem("seedarr_dismissed_health_alerts") || "[]",
+      );
     } catch {
       return [];
     }
@@ -16,7 +18,10 @@ function HealthAlerts() {
       if (prev.includes(source)) return prev;
       const updated = [...prev, source];
       try {
-        localStorage.setItem("seedarr_dismissed_health_alerts", JSON.stringify(updated));
+        localStorage.setItem(
+          "seedarr_dismissed_health_alerts",
+          JSON.stringify(updated),
+        );
       } catch {
         // ignore quota errors
       }
@@ -27,8 +32,7 @@ function HealthAlerts() {
   const alerts = (checks ?? []).filter((c) => {
     if (dismissed.includes(c.source)) return false;
     // Handle both string (lowercase/PascalCase) and numeric enum from ASP.NET Core
-    const isOk =
-      c.type?.toLowerCase() === "ok" || (c.type as unknown) === 0;
+    const isOk = c.type?.toLowerCase() === "ok" || (c.type as unknown) === 0;
     if (isOk) return false;
     if (!c.message || c.message.trim() === "") return false;
     return true;

@@ -168,12 +168,17 @@ export function TrackerBoost() {
               gap: "0.5rem",
             }}
           >
-            <span>🚀</span> {t("trackerBoost.title", undefined, "Tracker Boost")}
+            <span>🚀</span>{" "}
+            {t("trackerBoost.title", undefined, "Tracker Boost")}
             <span
               className="badge badge-primary"
               style={{ fontSize: "0.8rem", marginLeft: "0.25rem" }}
             >
-              {t("trackerBoost.smartBoosterBadge", undefined, "⚡ Smart Booster")}
+              {t(
+                "trackerBoost.smartBoosterBadge",
+                undefined,
+                "⚡ Smart Booster",
+              )}
             </span>
           </h1>
           <p
@@ -202,7 +207,11 @@ export function TrackerBoost() {
             {status?.totalTrackersMonitored ?? 0}
           </div>
           <div className="stat-label">
-            {t("trackerBoost.trackersMonitored", undefined, "Trackers Monitored")}
+            {t(
+              "trackerBoost.trackersMonitored",
+              undefined,
+              "Trackers Monitored",
+            )}
           </div>
         </div>
         <div className="stat-card">
@@ -218,7 +227,11 @@ export function TrackerBoost() {
             {status?.activeTorrentTrackersCount ?? 0}
           </div>
           <div className="stat-label">
-            {t("trackerBoost.harvestedFromSwarms", undefined, "Harvested from Swarms")}
+            {t(
+              "trackerBoost.harvestedFromSwarms",
+              undefined,
+              "Harvested from Swarms",
+            )}
           </div>
         </div>
         <div className="stat-card">
@@ -253,7 +266,11 @@ export function TrackerBoost() {
             fontWeight: activeTab === "booster" ? 600 : 500,
           }}
         >
-          {t("trackerBoost.tabs.swarmOptimizer", undefined, "⚡ Swarm Optimizer")}
+          {t(
+            "trackerBoost.tabs.swarmOptimizer",
+            undefined,
+            "⚡ Swarm Optimizer",
+          )}
         </button>
         <button
           className={`btn ${activeTab === "matrix" ? "btn-primary" : ""}`}
@@ -275,9 +292,13 @@ export function TrackerBoost() {
             fontWeight: activeTab === "radar" ? 600 : 500,
           }}
         >
-          {t("trackerBoost.tabs.trackerRadar", {
-            count: trackers?.length || 0,
-          }, `📡 Tracker Radar (${trackers?.length || 0})`)}
+          {t(
+            "trackerBoost.tabs.trackerRadar",
+            {
+              count: trackers?.length || 0,
+            },
+            `📡 Tracker Radar (${trackers?.length || 0})`,
+          )}
         </button>
         <button
           className={`btn ${activeTab === "logs" ? "btn-primary" : ""}`}
@@ -288,10 +309,16 @@ export function TrackerBoost() {
             fontWeight: activeTab === "logs" ? 600 : 500,
           }}
         >
-          {t("trackerBoost.tabs.activityLogs", {
-            count:
-              boostLogs && boostLogs.length > 0 ? `(${boostLogs.length})` : "",
-          }, `📜 Activity Logs ${boostLogs && boostLogs.length > 0 ? `(${boostLogs.length})` : ""}`)}
+          {t(
+            "trackerBoost.tabs.activityLogs",
+            {
+              count:
+                boostLogs && boostLogs.length > 0
+                  ? `(${boostLogs.length})`
+                  : "",
+            },
+            `📜 Activity Logs ${boostLogs && boostLogs.length > 0 ? `(${boostLogs.length})` : ""}`,
+          )}
         </button>
         <button
           className={`btn ${activeTab === "settings" ? "btn-primary" : ""}`}
@@ -302,7 +329,11 @@ export function TrackerBoost() {
             fontWeight: activeTab === "settings" ? 600 : 500,
           }}
         >
-          {t("trackerBoost.tabs.sourcesAutomation", undefined, "⚙️ Sources & Automation")}
+          {t(
+            "trackerBoost.tabs.sourcesAutomation",
+            undefined,
+            "⚙️ Sources & Automation",
+          )}
         </button>
       </div>
 

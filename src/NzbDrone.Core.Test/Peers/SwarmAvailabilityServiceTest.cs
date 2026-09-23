@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Torrents;
 using PeersPicker = NzbDrone.Core.Peers.PiecePicker;
 using PiecesPicker = NzbDrone.Core.Pieces;
-using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Peers;
 

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "../i18n";
 import { useModalRegistration } from "./ModalProvider";
@@ -221,7 +227,11 @@ export function GettingStartedModal({
         id: "prowlarr",
         stepNum: 2,
         icon: "🔍",
-        shortName: t("modals.gettingStarted.stepProwlarr", undefined, "Prowlarr"),
+        shortName: t(
+          "modals.gettingStarted.stepProwlarr",
+          undefined,
+          "Prowlarr",
+        ),
         title: t(
           "modals.gettingStarted.stepProwlarrTitle",
           undefined,
@@ -276,7 +286,11 @@ export function GettingStartedModal({
         id: "finish",
         stepNum: 7,
         icon: "🎉",
-        shortName: t("modals.gettingStarted.stepFinished", undefined, "Finished"),
+        shortName: t(
+          "modals.gettingStarted.stepFinished",
+          undefined,
+          "Finished",
+        ),
         title: t(
           "modals.gettingStarted.stepFinishedTitle",
           undefined,
@@ -587,7 +601,10 @@ export function GettingStartedModal({
   const handleTestIndexer = () => {
     setIndexerError(null);
     setIndexerTestResult(null);
-    const validation = validateIndexerConfig(indexerForm, mode === "interactive");
+    const validation = validateIndexerConfig(
+      indexerForm,
+      mode === "interactive",
+    );
     if (!validation.valid) {
       setIndexerError(validation.error || "Invalid indexer configuration");
       return;
@@ -601,7 +618,10 @@ export function GettingStartedModal({
 
   const handleSaveIndexer = () => {
     setIndexerError(null);
-    const validation = validateIndexerConfig(indexerForm, mode === "interactive");
+    const validation = validateIndexerConfig(
+      indexerForm,
+      mode === "interactive",
+    );
     if (!validation.valid) {
       setIndexerError(validation.error || "Invalid indexer configuration");
       return;
@@ -701,13 +721,13 @@ export function GettingStartedModal({
 
     setIsValidatingPath(true);
     try {
-      const res = await apiClient.post<{ isValid: boolean; errorMessage?: string }>(
-        "/filesystem/validate",
-        {
-          path: storageForm.defaultDownloadPath.trim(),
-          testWrite: true,
-        },
-      );
+      const res = await apiClient.post<{
+        isValid: boolean;
+        errorMessage?: string;
+      }>("/filesystem/validate", {
+        path: storageForm.defaultDownloadPath.trim(),
+        testWrite: true,
+      });
       if (res.isValid) {
         setPathValidationResult({
           success: true,
@@ -716,7 +736,9 @@ export function GettingStartedModal({
       } else {
         setPathValidationResult({
           success: false,
-          message: res.errorMessage || "Directory is not writable or cannot be accessed.",
+          message:
+            res.errorMessage ||
+            "Directory is not writable or cannot be accessed.",
         });
       }
     } catch (err: any) {
@@ -905,7 +927,11 @@ export function GettingStartedModal({
         </span>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600 }}>
-            {t("modals.gettingStarted.validationErrorTitle", undefined, "Configuration Error")}
+            {t(
+              "modals.gettingStarted.validationErrorTitle",
+              undefined,
+              "Configuration Error",
+            )}
           </div>
           <div
             style={{
@@ -979,7 +1005,11 @@ export function GettingStartedModal({
             border: 0,
           }}
         >
-          {t("modals.gettingStarted.title", undefined, "Getting Started Setup Guide")}
+          {t(
+            "modals.gettingStarted.title",
+            undefined,
+            "Getting Started Setup Guide",
+          )}
         </h2>
         {/* Top Header Controls: Mode Selector & Close Button */}
         <div
@@ -1022,7 +1052,12 @@ export function GettingStartedModal({
                 "Tour mode with example preview",
               )}
             >
-              👁️ {t("modals.gettingStarted.guideMode", undefined, "Tour / Example")}
+              👁️{" "}
+              {t(
+                "modals.gettingStarted.guideMode",
+                undefined,
+                "Tour / Example",
+              )}
             </button>
             <button
               type="button"
@@ -1046,7 +1081,12 @@ export function GettingStartedModal({
                 "Live setup to test and save credentials",
               )}
             >
-              ⚡ {t("modals.gettingStarted.liveSetupMode", undefined, "Live Setup")}
+              ⚡{" "}
+              {t(
+                "modals.gettingStarted.liveSetupMode",
+                undefined,
+                "Live Setup",
+              )}
             </button>
           </div>
 
@@ -1063,7 +1103,11 @@ export function GettingStartedModal({
                 lineHeight: 1,
               }}
               onClick={() => handleClose(true)}
-              title={t("modals.gettingStarted.close", undefined, "Close Setup Guide (Esc)")}
+              title={t(
+                "modals.gettingStarted.close",
+                undefined,
+                "Close Setup Guide (Esc)",
+              )}
             >
               ✕
             </button>
@@ -1136,7 +1180,12 @@ export function GettingStartedModal({
                 marginBottom: "0.75rem",
               }}
             >
-              🚀 {t("modals.gettingStarted.welcomeTitle", undefined, "Welcome to Seedarr!")}
+              🚀{" "}
+              {t(
+                "modals.gettingStarted.welcomeTitle",
+                undefined,
+                "Welcome to Seedarr!",
+              )}
             </h3>
 
             <p
@@ -1286,7 +1335,12 @@ export function GettingStartedModal({
                 marginBottom: "0.75rem",
               }}
             >
-              📥 {t("modals.gettingStarted.step1Title", undefined, "Add Download Client")}
+              📥{" "}
+              {t(
+                "modals.gettingStarted.step1Title",
+                undefined,
+                "Add Download Client",
+              )}
             </h3>
             <TextInput
               label={t("modals.gettingStarted.name", undefined, "Name")}
@@ -1299,7 +1353,11 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label={t("modals.gettingStarted.clientType", undefined, "Client Type")}
+              label={t(
+                "modals.gettingStarted.clientType",
+                undefined,
+                "Client Type",
+              )}
               value={clientForm.clientType || "QBitTorrent"}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -1438,7 +1496,11 @@ export function GettingStartedModal({
                     disabled={createClientMutation.isPending}
                   >
                     {createClientMutation.isPending
-                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
+                      ? t(
+                          "modals.gettingStarted.saving",
+                          undefined,
+                          "Saving...",
+                        )
                       : clientSaved
                         ? t(
                             "modals.gettingStarted.savedNext",
@@ -1479,7 +1541,8 @@ export function GettingStartedModal({
                 marginBottom: "0.75rem",
               }}
             >
-              🔍 {t("modals.gettingStarted.step2Title", undefined, "Add Indexer")}
+              🔍{" "}
+              {t("modals.gettingStarted.step2Title", undefined, "Add Indexer")}
             </h3>
             <TextInput
               label={t("modals.gettingStarted.name", undefined, "Name")}
@@ -1545,7 +1608,11 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label={t("modals.gettingStarted.categories", undefined, "Categories")}
+              label={t(
+                "modals.gettingStarted.categories",
+                undefined,
+                "Categories",
+              )}
               value={indexerForm.categories || ""}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -1573,7 +1640,11 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label={t("modals.gettingStarted.enableSearch", undefined, "Search")}
+              label={t(
+                "modals.gettingStarted.enableSearch",
+                undefined,
+                "Search",
+              )}
               checked={indexerForm.enableSearch ?? true}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -1629,7 +1700,11 @@ export function GettingStartedModal({
                     disabled={createIndexerMutation.isPending}
                   >
                     {createIndexerMutation.isPending
-                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
+                      ? t(
+                          "modals.gettingStarted.saving",
+                          undefined,
+                          "Saving...",
+                        )
                       : indexerSaved
                         ? t(
                             "modals.gettingStarted.savedNext",
@@ -1795,7 +1870,9 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => handleTestArr(sonarrForm, setSonarrTestResult, setSonarrError)}
+                onClick={() =>
+                  handleTestArr(sonarrForm, setSonarrTestResult, setSonarrError)
+                }
                 disabled={testArrMutation.isPending || isReadOnly}
               >
                 {testArrMutation.isPending
@@ -1819,12 +1896,21 @@ export function GettingStartedModal({
                     type="button"
                     className="btn btn-primary btn-small"
                     onClick={() =>
-                      handleSaveArr(sonarrForm, setSonarrSaved, setSonarrError, "Sonarr")
+                      handleSaveArr(
+                        sonarrForm,
+                        setSonarrSaved,
+                        setSonarrError,
+                        "Sonarr",
+                      )
                     }
                     disabled={createArrMutation.isPending}
                   >
                     {createArrMutation.isPending
-                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
+                      ? t(
+                          "modals.gettingStarted.saving",
+                          undefined,
+                          "Saving...",
+                        )
                       : sonarrSaved
                         ? t(
                             "modals.gettingStarted.savedNext",
@@ -1990,7 +2076,9 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => handleTestArr(radarrForm, setRadarrTestResult, setRadarrError)}
+                onClick={() =>
+                  handleTestArr(radarrForm, setRadarrTestResult, setRadarrError)
+                }
                 disabled={testArrMutation.isPending || isReadOnly}
               >
                 {testArrMutation.isPending
@@ -2014,12 +2102,21 @@ export function GettingStartedModal({
                     type="button"
                     className="btn btn-primary btn-small"
                     onClick={() =>
-                      handleSaveArr(radarrForm, setRadarrSaved, setRadarrError, "Radarr")
+                      handleSaveArr(
+                        radarrForm,
+                        setRadarrSaved,
+                        setRadarrError,
+                        "Radarr",
+                      )
                     }
                     disabled={createArrMutation.isPending}
                   >
                     {createArrMutation.isPending
-                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
+                      ? t(
+                          "modals.gettingStarted.saving",
+                          undefined,
+                          "Saving...",
+                        )
                       : radarrSaved
                         ? t(
                             "modals.gettingStarted.savedNext",
@@ -2185,7 +2282,9 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => handleTestArr(lidarrForm, setLidarrTestResult, setLidarrError)}
+                onClick={() =>
+                  handleTestArr(lidarrForm, setLidarrTestResult, setLidarrError)
+                }
                 disabled={testArrMutation.isPending || isReadOnly}
               >
                 {testArrMutation.isPending
@@ -2209,12 +2308,21 @@ export function GettingStartedModal({
                     type="button"
                     className="btn btn-primary btn-small"
                     onClick={() =>
-                      handleSaveArr(lidarrForm, setLidarrSaved, setLidarrError, "Lidarr")
+                      handleSaveArr(
+                        lidarrForm,
+                        setLidarrSaved,
+                        setLidarrError,
+                        "Lidarr",
+                      )
                     }
                     disabled={createArrMutation.isPending}
                   >
                     {createArrMutation.isPending
-                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
+                      ? t(
+                          "modals.gettingStarted.saving",
+                          undefined,
+                          "Saving...",
+                        )
                       : lidarrSaved
                         ? t(
                             "modals.gettingStarted.savedNext",
@@ -2255,7 +2363,12 @@ export function GettingStartedModal({
                 marginBottom: "0.75rem",
               }}
             >
-              💾 {t("modals.gettingStarted.stepStorageTitle", undefined, "Storage & Downloads Configuration")}
+              💾{" "}
+              {t(
+                "modals.gettingStarted.stepStorageTitle",
+                undefined,
+                "Storage & Downloads Configuration",
+              )}
             </h3>
             <p
               style={{
@@ -2273,7 +2386,11 @@ export function GettingStartedModal({
             </p>
 
             <TextInput
-              label={t("modals.gettingStarted.defaultDownloadPath", undefined, "Default Download Directory")}
+              label={t(
+                "modals.gettingStarted.defaultDownloadPath",
+                undefined,
+                "Default Download Directory",
+              )}
               value={storageForm.defaultDownloadPath || ""}
               onChange={(v) => {
                 setStorageError(null);
@@ -2290,7 +2407,11 @@ export function GettingStartedModal({
             />
 
             <TextInput
-              label={t("modals.gettingStarted.completedPath", undefined, "Completed Downloads Directory (Optional)")}
+              label={t(
+                "modals.gettingStarted.completedPath",
+                undefined,
+                "Completed Downloads Directory (Optional)",
+              )}
               value={storageForm.completedPath || ""}
               onChange={(v) => {
                 setStorageError(null);
@@ -2307,7 +2428,11 @@ export function GettingStartedModal({
             />
 
             <TextInput
-              label={t("modals.gettingStarted.watchFolderPath", undefined, "Watch Folder Path (Optional)")}
+              label={t(
+                "modals.gettingStarted.watchFolderPath",
+                undefined,
+                "Watch Folder Path (Optional)",
+              )}
               value={storageForm.watchFolderPath || ""}
               onChange={(v) => {
                 setStorageError(null);
@@ -2333,9 +2458,15 @@ export function GettingStartedModal({
                     marginBottom: "0.35rem",
                   }}
                 >
-                  {t("modals.gettingStarted.detectedVolumes", undefined, "Detected Storage Volumes:")}
+                  {t(
+                    "modals.gettingStarted.detectedVolumes",
+                    undefined,
+                    "Detected Storage Volumes:",
+                  )}
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                <div
+                  style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}
+                >
                   {diskSpace.map((d, idx) => (
                     <div
                       key={idx}
@@ -2348,7 +2479,8 @@ export function GettingStartedModal({
                         color: "var(--text-secondary)",
                       }}
                     >
-                      <strong>{d.path}</strong>: {formatBytes(d.freeSpace)} free of {formatBytes(d.totalSpace)}
+                      <strong>{d.path}</strong>: {formatBytes(d.freeSpace)} free
+                      of {formatBytes(d.totalSpace)}
                     </div>
                   ))}
                 </div>
@@ -2379,8 +2511,16 @@ export function GettingStartedModal({
                 disabled={isValidatingPath || isReadOnly}
               >
                 {isValidatingPath
-                  ? t("modals.gettingStarted.validating", undefined, "Validating...")
-                  : t("modals.gettingStarted.validateDirectory", undefined, "Validate Directory")}
+                  ? t(
+                      "modals.gettingStarted.validating",
+                      undefined,
+                      "Validating...",
+                    )
+                  : t(
+                      "modals.gettingStarted.validateDirectory",
+                      undefined,
+                      "Validate Directory",
+                    )}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -2398,10 +2538,22 @@ export function GettingStartedModal({
                     disabled={isSavingStorage}
                   >
                     {isSavingStorage
-                      ? t("modals.gettingStarted.saving", undefined, "Saving...")
+                      ? t(
+                          "modals.gettingStarted.saving",
+                          undefined,
+                          "Saving...",
+                        )
                       : storageSaved
-                        ? t("modals.gettingStarted.savedNext", undefined, "Saved ✓ Next")
-                        : t("modals.gettingStarted.saveAndNext", undefined, "Save & Next")}
+                        ? t(
+                            "modals.gettingStarted.savedNext",
+                            undefined,
+                            "Saved ✓ Next",
+                          )
+                        : t(
+                            "modals.gettingStarted.saveAndNext",
+                            undefined,
+                            "Save & Next",
+                          )}
                   </button>
                 ) : (
                   <button

@@ -59,7 +59,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     if (loading) return;
     if (!password) {
       setError(
-        t("login.enterPassword", undefined, "Please enter your password or API key."),
+        t(
+          "login.enterPassword",
+          undefined,
+          "Please enter your password or API key.",
+        ),
       );
       return;
     }
@@ -78,7 +82,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     } catch (err: any) {
       setError(
         err?.message ||
-          t("login.invalidCredentials", undefined, "Invalid credentials. Please verify your username and password or API key."),
+          t(
+            "login.invalidCredentials",
+            undefined,
+            "Invalid credentials. Please verify your username and password or API key.",
+          ),
       );
     } finally {
       setLoading(false);
@@ -449,9 +457,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   }}
                 >
                   {getProviderIcon(p)}
-                  <span>
-                    {p.buttonText || `Sign in with ${p.name}`}
-                  </span>
+                  <span>{p.buttonText || `Sign in with ${p.name}`}</span>
                 </a>
               ))}
             </div>

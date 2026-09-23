@@ -250,7 +250,8 @@ function Dashboard() {
               fontSize: "0.9rem",
             }}
           >
-            Global seeding overview, system health, client bridges, and telemetry
+            Global seeding overview, system health, client bridges, and
+            telemetry
           </p>
         </div>
       </div>
@@ -492,16 +493,13 @@ function Dashboard() {
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fit, minmax(180px, 1fr))",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
                     gap: "0.6rem",
                   }}
                 >
                   {storageUtilization.categoryBreakdown.map((item) => {
                     const pctOfTotal =
-                      totalSize > 0
-                        ? (item.totalBytes / totalSize) * 100
-                        : 0;
+                      totalSize > 0 ? (item.totalBytes / totalSize) * 100 : 0;
                     return (
                       <div
                         key={item.category}
@@ -656,7 +654,12 @@ function Dashboard() {
                 </div>
                 {conn.url && (
                   <a
-                    href={conn.url.startsWith("http://") || conn.url.startsWith("https://") ? conn.url : `http://${conn.url}`}
+                    href={
+                      conn.url.startsWith("http://") ||
+                      conn.url.startsWith("https://")
+                        ? conn.url
+                        : `http://${conn.url}`
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-small btn-outline"

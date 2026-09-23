@@ -91,7 +91,10 @@ describe("mediaPlayer: parseMediaBadges", () => {
 describe("mediaPlayer: URL builders", () => {
   it("should build valid torrent stream and download URLs", () => {
     assert.equal(buildStreamUrl(42, 7), "/api/v1/torrent/42/files/7/stream");
-    assert.equal(buildDownloadUrl(42, 7), "/api/v1/torrent/42/files/7/download");
+    assert.equal(
+      buildDownloadUrl(42, 7),
+      "/api/v1/torrent/42/files/7/download",
+    );
   });
 
   it("should build absolute URLs with origin", () => {
@@ -234,10 +237,7 @@ describe("mediaPlayer: Subtitle track switching and textTracks synchronization",
 
 describe("mediaPlayer: Codec error recovery message generator", () => {
   it("should generate actionable diagnostic message for MEDIA_ERR_SRC_NOT_SUPPORTED (code 4)", () => {
-    const msg = getCodecErrorMessage(
-      4,
-      "Movie.2024.1080p.HEVC.x265.AC3.mkv",
-    );
+    const msg = getCodecErrorMessage(4, "Movie.2024.1080p.HEVC.x265.AC3.mkv");
     assert.ok(msg.includes("cannot decode this media codec"));
     assert.ok(msg.includes("HEVC / H.265 video"));
     assert.ok(msg.includes("AC3 / DTS surround audio"));

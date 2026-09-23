@@ -29,7 +29,11 @@ export function LogViewer() {
     clearLogs.mutate(undefined, {
       onSuccess: () => {
         showToast(
-          t("trackerBoost.logs.logsClearedToast", undefined, "Activity logs cleared"),
+          t(
+            "trackerBoost.logs.logsClearedToast",
+            undefined,
+            "Activity logs cleared",
+          ),
           "info",
         );
       },
@@ -110,7 +114,11 @@ export function LogViewer() {
               {t("trackerBoost.logs.scrapes", undefined, "🔍 Scrapes")}
             </option>
             <option value="Health">
-              {t("trackerBoost.logs.healthProbes", undefined, "🩺 Health Probes")}
+              {t(
+                "trackerBoost.logs.healthProbes",
+                undefined,
+                "🩺 Health Probes",
+              )}
             </option>
             <option value="Discovery">
               {t("trackerBoost.logs.discovery", undefined, "📡 Discovery")}
@@ -119,7 +127,11 @@ export function LogViewer() {
               {t("trackerBoost.logs.injections", undefined, "⚡ Injections")}
             </option>
             <option value="Cycle">
-              {t("trackerBoost.logs.daemonCycles", undefined, "⚙️ Daemon Cycles")}
+              {t(
+                "trackerBoost.logs.daemonCycles",
+                undefined,
+                "⚙️ Daemon Cycles",
+              )}
             </option>
             <option value="General">
               {t("trackerBoost.general", undefined, "General")}
@@ -189,7 +201,11 @@ export function LogViewer() {
               onChange={(e) => setLogAutoRefresh(e.target.checked)}
             />
             <span>
-              {t("trackerBoost.logs.autoRefresh", undefined, "Auto-refresh (3s)")}
+              {t(
+                "trackerBoost.logs.autoRefresh",
+                undefined,
+                "Auto-refresh (3s)",
+              )}
             </span>
           </label>
 
@@ -206,7 +222,9 @@ export function LogViewer() {
           <button
             className="btn btn-danger"
             onClick={handleClearLogs}
-            disabled={clearLogs.isPending || !boostLogs || boostLogs.length === 0}
+            disabled={
+              clearLogs.isPending || !boostLogs || boostLogs.length === 0
+            }
             style={{ padding: "0.35rem 0.75rem", fontSize: "0.8rem" }}
           >
             🗑️ {t("trackerBoost.logs.clearBtn", undefined, "Clear Logs")}
@@ -237,7 +255,11 @@ export function LogViewer() {
           >
             {logsLoading
               ? t("trackerBoost.logs.loadingLogs", undefined, "Loading logs...")
-              : t("trackerBoost.logs.noLogsMatch", undefined, "No logs match the current filters.")}
+              : t(
+                  "trackerBoost.logs.noLogsMatch",
+                  undefined,
+                  "No logs match the current filters.",
+                )}
           </div>
         ) : (
           filteredLogs.map((log) => {

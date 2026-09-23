@@ -69,7 +69,9 @@ class MockElement {
   blur(): void {
     if (typeof (globalThis as any).document !== "undefined") {
       if ((globalThis as any).document.activeElement === this) {
-        (globalThis as any).document.activeElement = (globalThis as any).document.body;
+        (globalThis as any).document.activeElement = (
+          globalThis as any
+        ).document.body;
       }
     }
   }
@@ -194,7 +196,9 @@ describe("FocusTrap / useFocusTrap", () => {
       container.appendChild(negativeTabDiv);
       container.appendChild(positiveTabDiv);
 
-      const focusables = getFocusableElements(container as unknown as HTMLElement);
+      const focusables = getFocusableElements(
+        container as unknown as HTMLElement,
+      );
       const ids = focusables.map((el) => (el as unknown as MockElement).id);
 
       assert.deepEqual(ids, ["btn1", "link", "visibleInput", "positiveTabDiv"]);

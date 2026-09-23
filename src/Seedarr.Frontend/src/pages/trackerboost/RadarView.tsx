@@ -143,9 +143,17 @@ export function RadarView({ onOpenBulkImport }: RadarViewProps) {
           return false;
       }
       if (healthFilter !== "all") {
-        if (healthFilter === "alive" && t.status !== "Alive" && (t as unknown as { status: number }).status !== 1)
+        if (
+          healthFilter === "alive" &&
+          t.status !== "Alive" &&
+          (t as unknown as { status: number }).status !== 1
+        )
           return false;
-        if (healthFilter === "slow" && t.status !== "Slow" && (t as unknown as { status: number }).status !== 2)
+        if (
+          healthFilter === "slow" &&
+          t.status !== "Slow" &&
+          (t as unknown as { status: number }).status !== 2
+        )
           return false;
         if (
           healthFilter === "offline" &&
@@ -224,7 +232,11 @@ export function RadarView({ onOpenBulkImport }: RadarViewProps) {
               {t("trackerBoost.allSources", undefined, "All Sources")}
             </option>
             <option value="active">
-              {t("trackerBoost.activeSwarmHarvest", undefined, "Active Swarm Harvest")}
+              {t(
+                "trackerBoost.activeSwarmHarvest",
+                undefined,
+                "Active Swarm Harvest",
+              )}
             </option>
             <option value="prowlarr">Prowlarr</option>
             <option value="feeds">
@@ -250,7 +262,9 @@ export function RadarView({ onOpenBulkImport }: RadarViewProps) {
             <option value="alive">
               {t("trackerBoost.healthAlive", undefined, "Alive")}
             </option>
-            <option value="slow">{t("trackerBoost.healthSlow", undefined, "Slow")}</option>
+            <option value="slow">
+              {t("trackerBoost.healthSlow", undefined, "Slow")}
+            </option>
             <option value="offline">
               {t("trackerBoost.healthOffline", undefined, "Offline")}
             </option>
@@ -364,7 +378,11 @@ export function RadarView({ onOpenBulkImport }: RadarViewProps) {
           >
             <tr>
               <th className="torrent-table-th" style={{ width: "38%" }}>
-                {t("trackerBoost.matrix.trackerEndpoint", undefined, "Tracker Endpoint")}
+                {t(
+                  "trackerBoost.matrix.trackerEndpoint",
+                  undefined,
+                  "Tracker Endpoint",
+                )}
               </th>
               <th className="torrent-table-th" style={{ width: "10%" }}>
                 {t("trackerBoost.protocol", undefined, "Protocol")}
@@ -379,7 +397,11 @@ export function RadarView({ onOpenBulkImport }: RadarViewProps) {
                 {t("trackerBoost.latency", undefined, "Latency")}
               </th>
               <th className="torrent-table-th" style={{ width: "14%" }}>
-                {t("trackerBoost.radar.verifiedSwarms", undefined, "Verified Swarms")}
+                {t(
+                  "trackerBoost.radar.verifiedSwarms",
+                  undefined,
+                  "Verified Swarms",
+                )}
               </th>
               <th
                 className="torrent-table-th"
@@ -438,9 +460,13 @@ export function RadarView({ onOpenBulkImport }: RadarViewProps) {
                   {tr.latencyMs > 0 ? `${tr.latencyMs}ms` : "-"}
                 </td>
                 <td>
-                  {t("trackerBoost.radar.swarmsCountLower", {
-                    count: tr.totalVerifiedTorrents ?? tr.totalSwarmsFound,
-                  }, `${tr.totalVerifiedTorrents ?? tr.totalSwarmsFound} swarms`)}
+                  {t(
+                    "trackerBoost.radar.swarmsCountLower",
+                    {
+                      count: tr.totalVerifiedTorrents ?? tr.totalSwarmsFound,
+                    },
+                    `${tr.totalVerifiedTorrents ?? tr.totalSwarmsFound} swarms`,
+                  )}
                 </td>
                 <td style={{ textAlign: "right" }}>
                   <button

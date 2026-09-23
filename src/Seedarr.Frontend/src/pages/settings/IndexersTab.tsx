@@ -19,9 +19,21 @@ import {
   useClearRssGrabHistory,
   useIndexerCaps,
 } from "../../api/hooks";
-import type { IndexerDefinition, IndexerTestResult, RssRule, RssGrabHistory, TorznabCapabilities } from "../../api/types";
+import type {
+  IndexerDefinition,
+  IndexerTestResult,
+  RssRule,
+  RssGrabHistory,
+  TorznabCapabilities,
+} from "../../api/types";
 import { formatBytes, formatDate } from "../../utils/formatters";
-import { TextInput, SelectInput, Toggle, NumberInput, SectionCard } from "./shared";
+import {
+  TextInput,
+  SelectInput,
+  Toggle,
+  NumberInput,
+  SectionCard,
+} from "./shared";
 import { useToast } from "../../context/ToastContext";
 import { trackIndexerAction } from "../../utils/analytics";
 
@@ -29,9 +41,7 @@ export function formatIndexerTestError(error: any): string {
   if (!error) return "Connection failed";
   if (typeof error === "string") return error;
   return (
-    error?.response?.data?.message ||
-    error?.message ||
-    "Connection failed"
+    error?.response?.data?.message || error?.message || "Connection failed"
   );
 }
 
@@ -49,13 +59,21 @@ export function IndexersTab() {
   const testMutation = useTestIndexer();
   const testDirectMutation = useTestDirectIndexer();
   const syncProwlarrMutation = useSyncProwlarrIndexers();
-  const [editing, setEditing] = useState<Partial<IndexerDefinition> | null>(null);
-  const [testResults, setTestResults] = useState<Record<number, boolean | null>>({});
-  const [testErrorMessages, setTestErrorMessages] = useState<Record<number, string>>({});
-  const [modalTestResult, setModalTestResult] = useState<IndexerTestResult | null>(null);
+  const [editing, setEditing] = useState<Partial<IndexerDefinition> | null>(
+    null,
+  );
+  const [testResults, setTestResults] = useState<
+    Record<number, boolean | null>
+  >({});
+  const [testErrorMessages, setTestErrorMessages] = useState<
+    Record<number, string>
+  >({});
+  const [modalTestResult, setModalTestResult] =
+    useState<IndexerTestResult | null>(null);
   const [capsFilter, setCapsFilter] = useState<string>("");
   const { data: indexerCaps } = useIndexerCaps(editing?.id);
-  const activeCaps = modalTestResult?.capabilities || editing?.capabilities || indexerCaps;
+  const activeCaps =
+    modalTestResult?.capabilities || editing?.capabilities || indexerCaps;
 
   // RSS Rules, Categories, Tags
   const { data: rssRules, isLoading: isRssRulesLoading } = useRssRules();
@@ -68,7 +86,8 @@ export function IndexersTab() {
   const [editingRule, setEditingRule] = useState<Partial<RssRule> | null>(null);
   const [syncCooldownRemaining, setSyncCooldownRemaining] = useState<number>(0);
   const [historyStatusFilter, setHistoryStatusFilter] = useState<string>("all");
-  const { data: grabHistory, isLoading: isGrabHistoryLoading } = useRssGrabHistory(undefined, historyStatusFilter);
+  const { data: grabHistory, isLoading: isGrabHistoryLoading } =
+    useRssGrabHistory(undefined, historyStatusFilter);
   const clearGrabHistoryMutation = useClearRssGrabHistory();
 
   const defaultIndexer: Partial<IndexerDefinition> = {
@@ -198,15 +217,24 @@ export function IndexersTab() {
     setModalTestResult(null);
     testDirectMutation.mutate(editing, {
       onSuccess: (res) => {
-        trackIndexerAction("test", editing.indexerType || "indexer", res.success);
+        trackIndexerAction(
+          "test",
+          editing.indexerType || "indexer",
+          res.success,
+        );
         setModalTestResult(res);
         if (res.capabilities) {
-          setEditing((prev) => (prev ? { ...prev, capabilities: res.capabilities } : prev));
+          setEditing((prev) =>
+            prev ? { ...prev, capabilities: res.capabilities } : prev,
+          );
         }
         if (res.success) {
           showToast("Indexer connection successful", "success");
         } else {
-          showToast(`Indexer connection failed: ${res.message || "Unknown error"}`, "error");
+          showToast(
+            `Indexer connection failed: ${res.message || "Unknown error"}`,
+            "error",
+          );
         }
       },
       onError: (err: any) => {
@@ -230,7 +258,13 @@ export function IndexersTab() {
     const maxAgeDays = Number(editingRule.maxAgeDays) || 0;
     const priority = Number(editingRule.priority) || 0;
 
-    if (minSeeders < 0 || minSizeBytes < 0 || maxSizeBytes < 0 || maxAgeDays < 0 || priority < 0) {
+    if (
+      minSeeders < 0 ||
+      minSizeBytes < 0 ||
+      maxSizeBytes < 0 ||
+      maxAgeDays < 0 ||
+      priority < 0
+    ) {
       showToast("Numerical constraints cannot be negative", "error");
       return;
     }
@@ -295,7 +329,7 @@ export function IndexersTab() {
         showToast(
           res.message ||
             `Prowlarr sync complete (${res.added} added, ${res.updated} updated, ${res.removed} removed)`,
-          res.success ? "success" : "warning"
+          res.success ? "success" : "warning",
         );
       },
       onError: (err: any) => {
@@ -310,7 +344,10 @@ export function IndexersTab() {
     syncRssMutation.mutate(undefined, {
       onSuccess: (res) => {
         setSyncCooldownRemaining(15);
-        showToast(`RSS sync completed successfully (${res.grabbedCount} releases grabbed)`, "success");
+        showToast(
+          `RSS sync completed successfully (${res.grabbedCount} releases grabbed)`,
+          "success",
+        );
       },
       onError: (err: any) => {
         setSyncCooldownRemaining(15);
@@ -319,7 +356,8 @@ export function IndexersTab() {
     });
   };
 
-  if (isLoading || isRssRulesLoading) return <div className="loading">Loading indexers...</div>;
+  if (isLoading || isRssRulesLoading)
+    return <div className="loading">Loading indexers...</div>;
 
   return (
     <>
@@ -340,7 +378,9 @@ export function IndexersTab() {
             onClick={handleSyncProwlarrNow}
             disabled={syncProwlarrMutation.isPending}
           >
-            {syncProwlarrMutation.isPending ? "Syncing from Prowlarr..." : "🔄 Sync from Prowlarr"}
+            {syncProwlarrMutation.isPending
+              ? "Syncing from Prowlarr..."
+              : "🔄 Sync from Prowlarr"}
           </button>
         </div>
 
@@ -383,15 +423,30 @@ export function IndexersTab() {
                   title="Delete Indexer"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (window.confirm(`Are you sure you want to delete indexer "${idx.name}"?`)) {
+                    if (
+                      window.confirm(
+                        `Are you sure you want to delete indexer "${idx.name}"?`,
+                      )
+                    ) {
                       deleteMutation.mutate(idx.id, {
                         onSuccess: () => {
-                          trackIndexerAction("delete", idx.indexerType || "indexer", true);
+                          trackIndexerAction(
+                            "delete",
+                            idx.indexerType || "indexer",
+                            true,
+                          );
                           showToast(`Indexer "${idx.name}" deleted`, "info");
                         },
                         onError: (err) => {
-                          trackIndexerAction("delete", idx.indexerType || "indexer", false);
-                          showToast(err?.message || "Failed to delete indexer", "error");
+                          trackIndexerAction(
+                            "delete",
+                            idx.indexerType || "indexer",
+                            false,
+                          );
+                          showToast(
+                            err?.message || "Failed to delete indexer",
+                            "error",
+                          );
                         },
                       });
                     }
@@ -420,11 +475,12 @@ export function IndexersTab() {
                     Search
                   </span>
                 )}
-                {idx.capabilities?.categories && idx.capabilities.categories.length > 0 && (
-                  <span className="provider-card-badge provider-card-badge-gold">
-                    {idx.capabilities.categories.length} Discovered Categories
-                  </span>
-                )}
+                {idx.capabilities?.categories &&
+                  idx.capabilities.categories.length > 0 && (
+                    <span className="provider-card-badge provider-card-badge-gold">
+                      {idx.capabilities.categories.length} Discovered Categories
+                    </span>
+                  )}
               </div>
               <div className="provider-card-info">{idx.url}</div>
               {testResults[idx.id] === true && (
@@ -501,122 +557,142 @@ export function IndexersTab() {
 
         <div className="provider-cards">
           {[...(rssRules || [])]
-            .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id)
+            .sort(
+              (a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id,
+            )
             .map((rule) => (
-            <div
-              key={rule.id}
-              className="provider-card"
-              onClick={() => setEditingRule({ ...rule })}
-            >
-              <div className="provider-card-actions">
-                <button
-                  className="provider-card-action provider-card-action-danger"
-                  title="Delete RSS Rule"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (window.confirm(`Are you sure you want to delete the RSS rule "${rule.name}"?`)) {
-                      deleteRuleMutation.mutate(rule.id, {
-                        onSuccess: () => showToast(`RSS Rule "${rule.name}" deleted`, "info"),
-                        onError: (err: any) => showToast(err?.message || "Failed to delete RSS rule", "error"),
-                      });
-                    }
-                  }}
-                >
-                  &#x2715;
-                </button>
+              <div
+                key={rule.id}
+                className="provider-card"
+                onClick={() => setEditingRule({ ...rule })}
+              >
+                <div className="provider-card-actions">
+                  <button
+                    className="provider-card-action provider-card-action-danger"
+                    title="Delete RSS Rule"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (
+                        window.confirm(
+                          `Are you sure you want to delete the RSS rule "${rule.name}"?`,
+                        )
+                      ) {
+                        deleteRuleMutation.mutate(rule.id, {
+                          onSuccess: () =>
+                            showToast(
+                              `RSS Rule "${rule.name}" deleted`,
+                              "info",
+                            ),
+                          onError: (err: any) =>
+                            showToast(
+                              err?.message || "Failed to delete RSS rule",
+                              "error",
+                            ),
+                        });
+                      }
+                    }}
+                  >
+                    &#x2715;
+                  </button>
+                </div>
+                <div className="provider-card-name">{rule.name}</div>
+                <div className="provider-card-badges">
+                  <span
+                    className={`provider-card-badge ${
+                      rule.isEnabled
+                        ? "provider-card-badge-green"
+                        : "provider-card-badge-gray"
+                    }`}
+                  >
+                    {rule.isEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <span className="provider-card-badge provider-card-badge-blue">
+                    Priority {rule.priority ?? 0}
+                  </span>
+                  {rule.minSeeders > 0 && (
+                    <span className="provider-card-badge provider-card-badge-blue">
+                      ≥ {rule.minSeeders} seeds
+                    </span>
+                  )}
+                  {rule.freeleechOnly && (
+                    <span className="provider-card-badge provider-card-badge-gold">
+                      Freeleech
+                    </span>
+                  )}
+                  {rule.maxAgeDays != null && rule.maxAgeDays > 0 && (
+                    <span className="provider-card-badge provider-card-badge-blue">
+                      ≤ {rule.maxAgeDays}d
+                    </span>
+                  )}
+                  {rule.categoryId > 0 && (
+                    <span className="provider-card-badge provider-card-badge-blue">
+                      Cat:{" "}
+                      {categories?.find((c) => c.id === rule.categoryId)
+                        ?.name || rule.categoryId}
+                    </span>
+                  )}
+                  {rule.tags && rule.tags.length > 0 && (
+                    <span className="provider-card-badge provider-card-badge-gold">
+                      {rule.tags.length}{" "}
+                      {rule.tags.length === 1 ? "Tag" : "Tags"}
+                    </span>
+                  )}
+                  {rule.allowedResolutions &&
+                    rule.allowedResolutions.length > 0 && (
+                      <span className="provider-card-badge provider-card-badge-blue">
+                        Res: {rule.allowedResolutions.join(", ")}
+                      </span>
+                    )}
+                  {rule.allowedSources && rule.allowedSources.length > 0 && (
+                    <span className="provider-card-badge provider-card-badge-blue">
+                      Src: {rule.allowedSources.join(", ")}
+                    </span>
+                  )}
+                  {rule.allowedCodecs && rule.allowedCodecs.length > 0 && (
+                    <span className="provider-card-badge provider-card-badge-blue">
+                      Codec: {rule.allowedCodecs.join(", ")}
+                    </span>
+                  )}
+                  {rule.sequentialDownload && (
+                    <span className="provider-card-badge provider-card-badge-blue">
+                      Sequential
+                    </span>
+                  )}
+                  {rule.initialStatus === "Paused" && (
+                    <span className="provider-card-badge provider-card-badge-gold">
+                      Paused
+                    </span>
+                  )}
+                  <span className="provider-card-badge provider-card-badge-blue">
+                    {rule.indexerIds && rule.indexerIds.length > 0
+                      ? `${rule.indexerIds.length} Indexers`
+                      : "All Indexers"}
+                  </span>
+                </div>
+                <div className="provider-card-info">
+                  {rule.mustContain && (
+                    <div style={{ wordBreak: "break-all" }}>
+                      <strong>Must Contain:</strong>{" "}
+                      <code>{rule.mustContain}</code>
+                    </div>
+                  )}
+                  {rule.mustNotContain && (
+                    <div style={{ wordBreak: "break-all" }}>
+                      <strong>Must Not Contain:</strong>{" "}
+                      <code>{rule.mustNotContain}</code>
+                    </div>
+                  )}
+                  {rule.savePath && (
+                    <div style={{ wordBreak: "break-all" }}>
+                      <strong>Save Path:</strong> <code>{rule.savePath}</code>
+                    </div>
+                  )}
+                  {!rule.mustContain && !rule.mustNotContain && (
+                    <div>Catch-all rule (matches all releases)</div>
+                  )}
+                </div>
               </div>
-              <div className="provider-card-name">{rule.name}</div>
-              <div className="provider-card-badges">
-                <span
-                  className={`provider-card-badge ${
-                    rule.isEnabled
-                      ? "provider-card-badge-green"
-                      : "provider-card-badge-gray"
-                  }`}
-                >
-                  {rule.isEnabled ? "Enabled" : "Disabled"}
-                </span>
-                <span className="provider-card-badge provider-card-badge-blue">
-                  Priority {rule.priority ?? 0}
-                </span>
-                {rule.minSeeders > 0 && (
-                  <span className="provider-card-badge provider-card-badge-blue">
-                    ≥ {rule.minSeeders} seeds
-                  </span>
-                )}
-                {rule.freeleechOnly && (
-                  <span className="provider-card-badge provider-card-badge-gold">
-                    Freeleech
-                  </span>
-                )}
-                {rule.maxAgeDays != null && rule.maxAgeDays > 0 && (
-                  <span className="provider-card-badge provider-card-badge-blue">
-                    ≤ {rule.maxAgeDays}d
-                  </span>
-                )}
-                {rule.categoryId > 0 && (
-                  <span className="provider-card-badge provider-card-badge-blue">
-                    Cat: {categories?.find((c) => c.id === rule.categoryId)?.name || rule.categoryId}
-                  </span>
-                )}
-                {rule.tags && rule.tags.length > 0 && (
-                  <span className="provider-card-badge provider-card-badge-gold">
-                    {rule.tags.length} {rule.tags.length === 1 ? "Tag" : "Tags"}
-                  </span>
-                )}
-                {rule.allowedResolutions && rule.allowedResolutions.length > 0 && (
-                  <span className="provider-card-badge provider-card-badge-blue">
-                    Res: {rule.allowedResolutions.join(", ")}
-                  </span>
-                )}
-                {rule.allowedSources && rule.allowedSources.length > 0 && (
-                  <span className="provider-card-badge provider-card-badge-blue">
-                    Src: {rule.allowedSources.join(", ")}
-                  </span>
-                )}
-                {rule.allowedCodecs && rule.allowedCodecs.length > 0 && (
-                  <span className="provider-card-badge provider-card-badge-blue">
-                    Codec: {rule.allowedCodecs.join(", ")}
-                  </span>
-                )}
-                {rule.sequentialDownload && (
-                  <span className="provider-card-badge provider-card-badge-blue">
-                    Sequential
-                  </span>
-                )}
-                {rule.initialStatus === "Paused" && (
-                  <span className="provider-card-badge provider-card-badge-gold">
-                    Paused
-                  </span>
-                )}
-                <span className="provider-card-badge provider-card-badge-blue">
-                  {rule.indexerIds && rule.indexerIds.length > 0
-                    ? `${rule.indexerIds.length} Indexers`
-                    : "All Indexers"}
-                </span>
-              </div>
-              <div className="provider-card-info">
-                {rule.mustContain && (
-                  <div style={{ wordBreak: "break-all" }}>
-                    <strong>Must Contain:</strong> <code>{rule.mustContain}</code>
-                  </div>
-                )}
-                {rule.mustNotContain && (
-                  <div style={{ wordBreak: "break-all" }}>
-                    <strong>Must Not Contain:</strong> <code>{rule.mustNotContain}</code>
-                  </div>
-                )}
-                {rule.savePath && (
-                  <div style={{ wordBreak: "break-all" }}>
-                    <strong>Save Path:</strong> <code>{rule.savePath}</code>
-                  </div>
-                )}
-                {!rule.mustContain && !rule.mustNotContain && (
-                  <div>Catch-all rule (matches all releases)</div>
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
           <div
             className="provider-card-add"
             onClick={() => setEditingRule({ ...defaultRssRule })}
@@ -642,7 +718,11 @@ export function IndexersTab() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>Filter Status:</span>
+            <span
+              style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}
+            >
+              Filter Status:
+            </span>
             <select
               className="form-select"
               value={historyStatusFilter}
@@ -667,10 +747,19 @@ export function IndexersTab() {
               type="button"
               className="btn btn-outline btn-small"
               onClick={() => {
-                if (window.confirm("Are you sure you want to clear RSS grab history?")) {
+                if (
+                  window.confirm(
+                    "Are you sure you want to clear RSS grab history?",
+                  )
+                ) {
                   clearGrabHistoryMutation.mutate(undefined, {
-                    onSuccess: () => showToast("RSS grab history cleared", "info"),
-                    onError: (err: any) => showToast(err?.message || "Failed to clear history", "error"),
+                    onSuccess: () =>
+                      showToast("RSS grab history cleared", "info"),
+                    onError: (err: any) =>
+                      showToast(
+                        err?.message || "Failed to clear history",
+                        "error",
+                      ),
                   });
                 }
               }}
@@ -682,7 +771,13 @@ export function IndexersTab() {
         </div>
 
         {isGrabHistoryLoading ? (
-          <div style={{ padding: "1rem", color: "var(--text-muted)", textAlign: "center" }}>
+          <div
+            style={{
+              padding: "1rem",
+              color: "var(--text-muted)",
+              textAlign: "center",
+            }}
+          >
             Loading grab history...
           </div>
         ) : !grabHistory || grabHistory.length === 0 ? (
@@ -696,7 +791,8 @@ export function IndexersTab() {
               border: "1px dashed var(--border-light)",
             }}
           >
-            No RSS grab history recorded yet. Releases grabbed or rejected during RSS sync will appear here.
+            No RSS grab history recorded yet. Releases grabbed or rejected
+            during RSS sync will appear here.
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -733,7 +829,13 @@ export function IndexersTab() {
                       borderBottom: "1px solid var(--border-light)",
                     }}
                   >
-                    <td style={{ padding: "0.5rem", whiteSpace: "nowrap", color: "var(--text-muted)" }}>
+                    <td
+                      style={{
+                        padding: "0.5rem",
+                        whiteSpace: "nowrap",
+                        color: "var(--text-muted)",
+                      }}
+                    >
                       {formatDate(item.grabTimestamp)}
                     </td>
                     <td
@@ -751,7 +853,10 @@ export function IndexersTab() {
                     </td>
                     <td style={{ padding: "0.5rem", whiteSpace: "nowrap" }}>
                       {item.ruleName ? (
-                        <span className="badge badge-secondary" style={{ fontSize: "0.78rem" }}>
+                        <span
+                          className="badge badge-secondary"
+                          style={{ fontSize: "0.78rem" }}
+                        >
                           {item.ruleName}
                         </span>
                       ) : (
@@ -777,12 +882,19 @@ export function IndexersTab() {
                       style={{
                         padding: "0.5rem",
                         fontSize: "0.8rem",
-                        color: item.errorMessage ? "var(--danger, #dc3545)" : "var(--text-muted)",
+                        color: item.errorMessage
+                          ? "var(--danger, #dc3545)"
+                          : "var(--text-muted)",
                         maxWidth: "240px",
                         wordBreak: "break-word",
                       }}
                     >
-                      {item.errorMessage || (item.infoHash ? <code>{item.infoHash.slice(0, 10)}...</code> : "Success")}
+                      {item.errorMessage ||
+                        (item.infoHash ? (
+                          <code>{item.infoHash.slice(0, 10)}...</code>
+                        ) : (
+                          "Success"
+                        ))}
                     </td>
                   </tr>
                 ))}
@@ -998,31 +1110,62 @@ export function IndexersTab() {
               )}
             </div>
             {activeCaps?.categories && activeCaps.categories.length > 0 && (
-              <div style={{ marginBottom: "1.25rem", padding: "0.75rem", background: "rgba(255, 255, 255, 0.03)", borderRadius: "6px", border: "1px solid var(--border, rgba(255,255,255,0.1))" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <div
+                style={{
+                  marginBottom: "1.25rem",
+                  padding: "0.75rem",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border, rgba(255,255,255,0.1))",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "0.5rem",
+                  }}
+                >
                   <label style={{ fontSize: "0.85rem", fontWeight: 600 }}>
-                    Discovered Tracker Categories ({activeCaps.categories.length})
+                    Discovered Tracker Categories (
+                    {activeCaps.categories.length})
                   </label>
                   {activeCaps.serverTitle && (
                     <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>
-                      {activeCaps.serverTitle} {activeCaps.serverVersion ? `v${activeCaps.serverVersion}` : ""}
+                      {activeCaps.serverTitle}{" "}
+                      {activeCaps.serverVersion
+                        ? `v${activeCaps.serverVersion}`
+                        : ""}
                     </span>
                   )}
                 </div>
 
-                {activeCaps.searching && Object.keys(activeCaps.searching).length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.6rem" }}>
-                    {Object.entries(activeCaps.searching).map(([mode, s]) => (
-                      <span
-                        key={mode}
-                        className={`provider-card-badge ${s.available ? "provider-card-badge-green" : "provider-card-badge-gray"}`}
-                        title={s.supportedParams?.length ? `Supported params: ${s.supportedParams.join(", ")}` : undefined}
-                      >
-                        {mode} {s.available ? "✓" : "✕"}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {activeCaps.searching &&
+                  Object.keys(activeCaps.searching).length > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.35rem",
+                        marginBottom: "0.6rem",
+                      }}
+                    >
+                      {Object.entries(activeCaps.searching).map(([mode, s]) => (
+                        <span
+                          key={mode}
+                          className={`provider-card-badge ${s.available ? "provider-card-badge-green" : "provider-card-badge-gray"}`}
+                          title={
+                            s.supportedParams?.length
+                              ? `Supported params: ${s.supportedParams.join(", ")}`
+                              : undefined
+                          }
+                        >
+                          {mode} {s.available ? "✓" : "✕"}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                 <input
                   type="text"
@@ -1062,7 +1205,11 @@ export function IndexersTab() {
                       return (
                         cat.name.toLowerCase().includes(q) ||
                         String(cat.id).includes(q) ||
-                        cat.subcategories?.some((s) => s.name.toLowerCase().includes(q) || String(s.id).includes(q))
+                        cat.subcategories?.some(
+                          (s) =>
+                            s.name.toLowerCase().includes(q) ||
+                            String(s.id).includes(q),
+                        )
                       );
                     })
                     .map((cat) => {
@@ -1074,7 +1221,9 @@ export function IndexersTab() {
                         .map((s) => s.trim())
                         .filter(Boolean);
 
-                      const isCatSelected = selectedIds.includes(String(cat.id));
+                      const isCatSelected = selectedIds.includes(
+                        String(cat.id),
+                      );
 
                       const toggleId = (id: number) => {
                         const strId = String(id);
@@ -1084,12 +1233,22 @@ export function IndexersTab() {
                         } else {
                           nextIds = [...selectedIds, strId];
                         }
-                        setEditing({ ...editing, categories: nextIds.join(",") });
+                        setEditing({
+                          ...editing,
+                          categories: nextIds.join(","),
+                        });
                         setModalTestResult(null);
                       };
 
                       return (
-                        <div key={cat.id} style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                        <div
+                          key={cat.id}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.25rem",
+                          }}
+                        >
                           <div
                             onClick={() => toggleId(cat.id)}
                             style={{
@@ -1099,7 +1258,9 @@ export function IndexersTab() {
                               cursor: "pointer",
                               padding: "0.2rem 0.4rem",
                               borderRadius: "3px",
-                              backgroundColor: isCatSelected ? "rgba(40, 167, 69, 0.2)" : "transparent",
+                              backgroundColor: isCatSelected
+                                ? "rgba(40, 167, 69, 0.2)"
+                                : "transparent",
                               fontWeight: 600,
                               fontSize: "0.8rem",
                             }}
@@ -1110,41 +1271,62 @@ export function IndexersTab() {
                               onChange={() => toggleId(cat.id)}
                               style={{ cursor: "pointer" }}
                             />
-                            <span>{cat.name} ({cat.id})</span>
+                            <span>
+                              {cat.name} ({cat.id})
+                            </span>
                           </div>
 
-                          {cat.subcategories && cat.subcategories.length > 0 && (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", paddingLeft: "1.5rem" }}>
-                              {cat.subcategories
-                                .filter((sub) => {
-                                  if (!capsFilter.trim()) return true;
-                                  const q = capsFilter.toLowerCase();
-                                  return sub.name.toLowerCase().includes(q) || String(sub.id).includes(q);
-                                })
-                                .map((sub) => {
-                                  const isSubSelected = selectedIds.includes(String(sub.id));
-                                  return (
-                                    <span
-                                      key={sub.id}
-                                      onClick={() => toggleId(sub.id)}
-                                      style={{
-                                        cursor: "pointer",
-                                        fontSize: "0.72rem",
-                                        padding: "0.15rem 0.4rem",
-                                        borderRadius: "3px",
-                                        border: "1px solid",
-                                        borderColor: isSubSelected ? "var(--success, #28a745)" : "var(--border, rgba(255,255,255,0.2))",
-                                        backgroundColor: isSubSelected ? "rgba(40, 167, 69, 0.25)" : "transparent",
-                                        color: isSubSelected ? "var(--success, #28a745)" : "inherit",
-                                        userSelect: "none",
-                                      }}
-                                    >
-                                      {sub.name} ({sub.id})
-                                    </span>
-                                  );
-                                })}
-                            </div>
-                          )}
+                          {cat.subcategories &&
+                            cat.subcategories.length > 0 && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: "0.3rem",
+                                  paddingLeft: "1.5rem",
+                                }}
+                              >
+                                {cat.subcategories
+                                  .filter((sub) => {
+                                    if (!capsFilter.trim()) return true;
+                                    const q = capsFilter.toLowerCase();
+                                    return (
+                                      sub.name.toLowerCase().includes(q) ||
+                                      String(sub.id).includes(q)
+                                    );
+                                  })
+                                  .map((sub) => {
+                                    const isSubSelected = selectedIds.includes(
+                                      String(sub.id),
+                                    );
+                                    return (
+                                      <span
+                                        key={sub.id}
+                                        onClick={() => toggleId(sub.id)}
+                                        style={{
+                                          cursor: "pointer",
+                                          fontSize: "0.72rem",
+                                          padding: "0.15rem 0.4rem",
+                                          borderRadius: "3px",
+                                          border: "1px solid",
+                                          borderColor: isSubSelected
+                                            ? "var(--success, #28a745)"
+                                            : "var(--border, rgba(255,255,255,0.2))",
+                                          backgroundColor: isSubSelected
+                                            ? "rgba(40, 167, 69, 0.25)"
+                                            : "transparent",
+                                          color: isSubSelected
+                                            ? "var(--success, #28a745)"
+                                            : "inherit",
+                                          userSelect: "none",
+                                        }}
+                                      >
+                                        {sub.name} ({sub.id})
+                                      </span>
+                                    );
+                                  })}
+                              </div>
+                            )}
                         </div>
                       );
                     })}
@@ -1282,7 +1464,9 @@ export function IndexersTab() {
                 onClick={handleModalTest}
                 disabled={testDirectMutation.isPending}
               >
-                {testDirectMutation.isPending ? "Testing..." : "Test Connection"}
+                {testDirectMutation.isPending
+                  ? "Testing..."
+                  : "Test Connection"}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -1297,7 +1481,9 @@ export function IndexersTab() {
                 <button
                   className="btn btn-primary btn-small"
                   onClick={handleSave}
-                  disabled={createMutation.isPending || updateMutation.isPending}
+                  disabled={
+                    createMutation.isPending || updateMutation.isPending
+                  }
                 >
                   {createMutation.isPending || updateMutation.isPending
                     ? "Saving..."
@@ -1341,14 +1527,18 @@ export function IndexersTab() {
             <TextInput
               label="Must Contain (Regex or Substring)"
               value={editingRule.mustContain || ""}
-              onChange={(v) => setEditingRule({ ...editingRule, mustContain: v })}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, mustContain: v })
+              }
               placeholder="e.g. 1080p|720p or (?i)h265"
               hint="Regex pattern or keyword releases must match to be accepted"
             />
             <TextInput
               label="Must Not Contain (Regex or Substring)"
               value={editingRule.mustNotContain || ""}
-              onChange={(v) => setEditingRule({ ...editingRule, mustNotContain: v })}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, mustNotContain: v })
+              }
               placeholder="e.g. CAM|TS|HDCAM"
               hint="Regex pattern or keyword releases must NOT match"
             />
@@ -1362,27 +1552,35 @@ export function IndexersTab() {
             <NumberInput
               label="Minimum Seeders"
               value={editingRule.minSeeders ?? 1}
-              onChange={(v) => setEditingRule({ ...editingRule, minSeeders: v })}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, minSeeders: v })
+              }
               min={0}
             />
             <NumberInput
               label="Minimum Size (Bytes)"
               value={editingRule.minSizeBytes ?? 0}
-              onChange={(v) => setEditingRule({ ...editingRule, minSizeBytes: v })}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, minSizeBytes: v })
+              }
               min={0}
               hint="Minimum file size in bytes (0 = no minimum)"
             />
             <NumberInput
               label="Maximum Size (Bytes)"
               value={editingRule.maxSizeBytes ?? 0}
-              onChange={(v) => setEditingRule({ ...editingRule, maxSizeBytes: v })}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, maxSizeBytes: v })
+              }
               min={0}
               hint="Maximum file size in bytes (0 = no maximum)"
             />
             <NumberInput
               label="Max Age (Days)"
               value={editingRule.maxAgeDays ?? 0}
-              onChange={(v) => setEditingRule({ ...editingRule, maxAgeDays: v })}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, maxAgeDays: v })
+              }
               min={0}
               hint="Maximum age of releases in days to match (0 = no limit)"
             />
@@ -1476,7 +1674,14 @@ export function IndexersTab() {
             />
             <div className="form-group" style={{ marginBottom: "0.85rem" }}>
               <label className="form-label">Allowed Resolutions</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", padding: "0.3rem 0" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.35rem",
+                  padding: "0.3rem 0",
+                }}
+              >
                 {["2160p", "1080p", "720p", "SD"].map((res) => {
                   const current = editingRule.allowedResolutions || [];
                   const isSelected = current.includes(res);
@@ -1490,57 +1695,97 @@ export function IndexersTab() {
                         padding: "0.25rem 0.55rem",
                         fontSize: "0.82rem",
                         borderRadius: "4px",
-                        border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border-light)",
+                        border: isSelected
+                          ? "1px solid var(--accent)"
+                          : "1px solid var(--border-light)",
                         background: isSelected ? undefined : "transparent",
                       }}
                       onClick={() => {
-                        const updated = isSelected ? current.filter((r) => r !== res) : [...current, res];
-                        setEditingRule({ ...editingRule, allowedResolutions: updated });
+                        const updated = isSelected
+                          ? current.filter((r) => r !== res)
+                          : [...current, res];
+                        setEditingRule({
+                          ...editingRule,
+                          allowedResolutions: updated,
+                        });
                       }}
                     >
-                      {isSelected ? "✓ " : "+ "}{res === "2160p" ? "2160p (4K)" : res === "SD" ? "SD (480p/576p)" : res}
+                      {isSelected ? "✓ " : "+ "}
+                      {res === "2160p"
+                        ? "2160p (4K)"
+                        : res === "SD"
+                          ? "SD (480p/576p)"
+                          : res}
                     </button>
                   );
                 })}
               </div>
-              <span className="form-hint">Leave unselected to allow all resolutions</span>
+              <span className="form-hint">
+                Leave unselected to allow all resolutions
+              </span>
             </div>
 
             <div className="form-group" style={{ marginBottom: "0.85rem" }}>
               <label className="form-label">Allowed Sources</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", padding: "0.3rem 0" }}>
-                {["Remux", "BluRay", "WEB-DL", "WEBRip", "HDTV", "DVD"].map((src) => {
-                  const current = editingRule.allowedSources || [];
-                  const isSelected = current.includes(src);
-                  return (
-                    <button
-                      key={src}
-                      type="button"
-                      className={`badge ${isSelected ? "badge-primary" : "badge-secondary"}`}
-                      style={{
-                        cursor: "pointer",
-                        padding: "0.25rem 0.55rem",
-                        fontSize: "0.82rem",
-                        borderRadius: "4px",
-                        border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border-light)",
-                        background: isSelected ? undefined : "transparent",
-                      }}
-                      onClick={() => {
-                        const updated = isSelected ? current.filter((s) => s !== src) : [...current, src];
-                        setEditingRule({ ...editingRule, allowedSources: updated });
-                      }}
-                    >
-                      {isSelected ? "✓ " : "+ "}{src}
-                    </button>
-                  );
-                })}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.35rem",
+                  padding: "0.3rem 0",
+                }}
+              >
+                {["Remux", "BluRay", "WEB-DL", "WEBRip", "HDTV", "DVD"].map(
+                  (src) => {
+                    const current = editingRule.allowedSources || [];
+                    const isSelected = current.includes(src);
+                    return (
+                      <button
+                        key={src}
+                        type="button"
+                        className={`badge ${isSelected ? "badge-primary" : "badge-secondary"}`}
+                        style={{
+                          cursor: "pointer",
+                          padding: "0.25rem 0.55rem",
+                          fontSize: "0.82rem",
+                          borderRadius: "4px",
+                          border: isSelected
+                            ? "1px solid var(--accent)"
+                            : "1px solid var(--border-light)",
+                          background: isSelected ? undefined : "transparent",
+                        }}
+                        onClick={() => {
+                          const updated = isSelected
+                            ? current.filter((s) => s !== src)
+                            : [...current, src];
+                          setEditingRule({
+                            ...editingRule,
+                            allowedSources: updated,
+                          });
+                        }}
+                      >
+                        {isSelected ? "✓ " : "+ "}
+                        {src}
+                      </button>
+                    );
+                  },
+                )}
               </div>
-              <span className="form-hint">Leave unselected to allow all sources</span>
+              <span className="form-hint">
+                Leave unselected to allow all sources
+              </span>
             </div>
 
             <div className="form-group" style={{ marginBottom: "0.85rem" }}>
               <label className="form-label">Allowed Codecs</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", padding: "0.3rem 0" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "0.35rem",
+                  padding: "0.3rem 0",
+                }}
+              >
                 {["HEVC", "AVC", "AV1", "XviD"].map((cod) => {
                   const current = editingRule.allowedCodecs || [];
                   const isSelected = current.includes(cod);
@@ -1554,20 +1799,34 @@ export function IndexersTab() {
                         padding: "0.25rem 0.55rem",
                         fontSize: "0.82rem",
                         borderRadius: "4px",
-                        border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border-light)",
+                        border: isSelected
+                          ? "1px solid var(--accent)"
+                          : "1px solid var(--border-light)",
                         background: isSelected ? undefined : "transparent",
                       }}
                       onClick={() => {
-                        const updated = isSelected ? current.filter((c) => c !== cod) : [...current, cod];
-                        setEditingRule({ ...editingRule, allowedCodecs: updated });
+                        const updated = isSelected
+                          ? current.filter((c) => c !== cod)
+                          : [...current, cod];
+                        setEditingRule({
+                          ...editingRule,
+                          allowedCodecs: updated,
+                        });
                       }}
                     >
-                      {isSelected ? "✓ " : "+ "}{cod === "HEVC" ? "HEVC / x265" : cod === "AVC" ? "AVC / x264" : cod}
+                      {isSelected ? "✓ " : "+ "}
+                      {cod === "HEVC"
+                        ? "HEVC / x265"
+                        : cod === "AVC"
+                          ? "AVC / x264"
+                          : cod}
                     </button>
                   );
                 })}
               </div>
-              <span className="form-hint">Leave unselected to allow all video codecs</span>
+              <span className="form-hint">
+                Leave unselected to allow all video codecs
+              </span>
             </div>
 
             <TextInput
@@ -1581,9 +1840,14 @@ export function IndexersTab() {
             <SelectInput
               label="Initial Status"
               value={editingRule.initialStatus || "Queued"}
-              onChange={(v) => setEditingRule({ ...editingRule, initialStatus: v })}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, initialStatus: v })
+              }
               options={[
-                { value: "Queued", label: "Queued (Start download immediately)" },
+                {
+                  value: "Queued",
+                  label: "Queued (Start download immediately)",
+                },
                 { value: "Paused", label: "Paused (Add in paused state)" },
               ]}
               hint="Initial torrent status when grabbed"
@@ -1592,18 +1856,25 @@ export function IndexersTab() {
             <Toggle
               label="Sequential Download"
               checked={editingRule.sequentialDownload ?? false}
-              onChange={(v) => setEditingRule({ ...editingRule, sequentialDownload: v })}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, sequentialDownload: v })
+              }
             />
 
             <Toggle
               label="Freeleech Only"
               checked={editingRule.freeleechOnly ?? false}
-              onChange={(v) => setEditingRule({ ...editingRule, freeleechOnly: v })}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, freeleechOnly: v })
+              }
             />
 
             {(createRuleMutation.isError || updateRuleMutation.isError) && (
               <div className="modal-error">
-                {(createRuleMutation.error || updateRuleMutation.error)?.message}
+                {
+                  (createRuleMutation.error || updateRuleMutation.error)
+                    ?.message
+                }
               </div>
             )}
             <div
@@ -1626,7 +1897,9 @@ export function IndexersTab() {
                 type="button"
                 className="btn btn-primary btn-small"
                 onClick={handleSaveRule}
-                disabled={createRuleMutation.isPending || updateRuleMutation.isPending}
+                disabled={
+                  createRuleMutation.isPending || updateRuleMutation.isPending
+                }
               >
                 {createRuleMutation.isPending || updateRuleMutation.isPending
                   ? "Saving..."

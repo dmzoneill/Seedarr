@@ -299,7 +299,15 @@ export interface DiskSpaceInfo {
 }
 
 export interface HealthCheckResult {
-  type: "Ok" | "Notice" | "Warning" | "Error" | "ok" | "notice" | "warning" | "error";
+  type:
+    | "Ok"
+    | "Notice"
+    | "Warning"
+    | "Error"
+    | "ok"
+    | "notice"
+    | "warning"
+    | "error";
   source: string;
   message: string | null;
 }
@@ -1912,5 +1920,3 @@ export interface AiConfig {
   enableNaturalSearch: boolean;
   enableSwarmDiagnostics: boolean;
 }
-
-

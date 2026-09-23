@@ -37,7 +37,7 @@ export function IdleLockModal({
   const requiresPassword =
     currentUser?.requiresPassword !== undefined
       ? currentUser.requiresPassword
-      : (currentUser?.authenticationEnabled ?? (!isAnonymous));
+      : (currentUser?.authenticationEnabled ?? !isAnonymous);
 
   useEffect(() => {
     if (isOpen) {
@@ -129,7 +129,11 @@ export function IdleLockModal({
       } catch (err: any) {
         const msg =
           err?.message ||
-          t("auth.invalidPassword", undefined, "Invalid password or credentials");
+          t(
+            "auth.invalidPassword",
+            undefined,
+            "Invalid password or credentials",
+          );
         setError(msg);
         passwordInputRef.current?.select();
       } finally {
@@ -145,7 +149,9 @@ export function IdleLockModal({
 
   const isExpired = lockReason === "expired";
   const displayName =
-    currentUser?.displayName || currentUser?.username || (requiresPassword ? "Administrator" : "Guest");
+    currentUser?.displayName ||
+    currentUser?.username ||
+    (requiresPassword ? "Administrator" : "Guest");
   const userInitials = displayName.slice(0, 2).toUpperCase();
   const roleName =
     currentUser?.roles && currentUser.roles.length > 0
@@ -197,8 +203,8 @@ export function IdleLockModal({
             {!requiresPassword
               ? t("auth.sessionPaused", undefined, "Session Paused")
               : isExpired
-              ? t("auth.sessionExpired", undefined, "Session Expired")
-              : t("auth.screenLocked", undefined, "Screen Locked")}
+                ? t("auth.sessionExpired", undefined, "Session Expired")
+                : t("auth.screenLocked", undefined, "Screen Locked")}
           </h2>
           <p
             style={{
@@ -215,16 +221,16 @@ export function IdleLockModal({
                   "Seedarr is paused due to inactivity. Click Resume or press Enter to continue.",
                 )
               : isExpired
-              ? t(
-                  "auth.expiredDescription",
-                  undefined,
-                  "Your session has expired. Enter your password to resume without losing your current work.",
-                )
-              : t(
-                  "auth.lockedDescription",
-                  undefined,
-                  "Your session was locked due to inactivity. Enter your password or PIN to unlock.",
-                )}
+                ? t(
+                    "auth.expiredDescription",
+                    undefined,
+                    "Your session has expired. Enter your password to resume without losing your current work.",
+                  )
+                : t(
+                    "auth.lockedDescription",
+                    undefined,
+                    "Your session was locked due to inactivity. Enter your password or PIN to unlock.",
+                  )}
           </p>
         </div>
 
@@ -275,7 +281,12 @@ export function IdleLockModal({
         {/* Unlock Form */}
         <form
           onSubmit={handleUnlock}
-          style={{ width: "100%", display: "flex", flexDirection: "column", gap: "1rem" }}
+          style={{
+            width: "100%",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+          }}
         >
           {requiresPassword && (
             <div style={{ position: "relative", width: "100%" }}>
@@ -344,9 +355,7 @@ export function IdleLockModal({
             {isSubmitting ? (
               <>
                 <span className="spinner-small" aria-hidden="true" />
-                <span>
-                  {t("auth.unlocking", undefined, "Unlocking...")}
-                </span>
+                <span>{t("auth.unlocking", undefined, "Unlocking...")}</span>
               </>
             ) : (
               <span>
@@ -405,7 +414,10 @@ export function IdleCountdownModal({
       // Space or Enter on the warning modal stays logged in
       if (e.key === "Enter" || e.key === " ") {
         const active = document.activeElement;
-        if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) {
+        if (
+          active &&
+          (active.tagName === "INPUT" || active.tagName === "TEXTAREA")
+        ) {
           return;
         }
         e.preventDefault();

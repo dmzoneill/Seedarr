@@ -236,14 +236,19 @@ function Activity() {
               fontSize: "0.9rem",
             }}
           >
-            Real-time transfer rates, network traffic graphs, active swarms, and peer dynamics
+            Real-time transfer rates, network traffic graphs, active swarms, and
+            peer dynamics
           </p>
         </div>
 
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
           <span
             className="badge badge-success"
-            style={{ fontSize: "0.85rem", padding: "0.35rem 0.75rem", borderRadius: "4px" }}
+            style={{
+              fontSize: "0.85rem",
+              padding: "0.35rem 0.75rem",
+              borderRadius: "4px",
+            }}
           >
             ● Live (1s)
           </span>

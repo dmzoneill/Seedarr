@@ -296,7 +296,11 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     assert.equal(received[0].type, "AUTH_LOGOUT");
 
     // Test AUTH_LOGIN via localStorage fallback
-    const user: CurrentUser = { username: "charlie", roles: [], isAuthenticated: true };
+    const user: CurrentUser = {
+      username: "charlie",
+      roles: [],
+      isAuthenticated: true,
+    };
     broadcastLogin(user);
     assert.equal(received.length, 2);
     assert.equal(received[1].type, "AUTH_LOGIN");

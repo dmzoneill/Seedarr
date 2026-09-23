@@ -231,8 +231,13 @@ export function useRenameTorrentFile() {
 export function useTorrentFileSubtitles(torrentId?: number, fileId?: number) {
   return useQuery<SubtitleTrack[]>({
     queryKey: ["torrents", torrentId, "files", fileId, "subtitles"],
-    queryFn: () => apiClient.get(`/torrent/${torrentId}/files/${fileId}/subtitles`),
-    enabled: typeof torrentId === "number" && torrentId > 0 && typeof fileId === "number" && fileId > 0,
+    queryFn: () =>
+      apiClient.get(`/torrent/${torrentId}/files/${fileId}/subtitles`),
+    enabled:
+      typeof torrentId === "number" &&
+      torrentId > 0 &&
+      typeof fileId === "number" &&
+      fileId > 0,
   });
 }
 
@@ -314,7 +319,6 @@ export function useUpdateTorrentTracker() {
     },
   });
 }
-
 
 export function useTorrentLogs(
   torrentId: number,
@@ -576,7 +580,8 @@ export function useCreateDirectory() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (dirPath: string) => apiClient.createDirectory(dirPath),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["filesystem"] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["filesystem"] }),
   });
 }
 
@@ -964,11 +969,7 @@ export function useRemotePathMappings() {
 
 export function useCreateRemotePathMapping() {
   const queryClient = useQueryClient();
-  return useMutation<
-    RemotePathMapping,
-    Error,
-    Partial<RemotePathMapping>
-  >({
+  return useMutation<RemotePathMapping, Error, Partial<RemotePathMapping>>({
     mutationFn: (mapping) => apiClient.post("/remotepathmapping", mapping),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["remotepathmapping"] }),
@@ -1000,15 +1001,15 @@ export function useTestRemotePathMapping() {
     Error,
     RemotePathMappingTestRequest
   >({
-    mutationFn: (request) =>
-      apiClient.post("/remotepathmapping/test", request),
+    mutationFn: (request) => apiClient.post("/remotepathmapping/test", request),
   });
 }
 
 export function useDownloadClientItems(clientId: number | string) {
   const interval = useRefetchInterval();
   const isAll = clientId === "all";
-  const numId = typeof clientId === "number" ? clientId : parseInt(clientId, 10);
+  const numId =
+    typeof clientId === "number" ? clientId : parseInt(clientId, 10);
   const isValid = isAll || (!isNaN(numId) && numId > 0);
 
   return useQuery<DownloadClientRemoteItem[]>({
@@ -1024,10 +1025,16 @@ export function useDownloadClientItems(clientId: number | string) {
 
 export function usePauseRemoteTorrent(clientId?: number) {
   const queryClient = useQueryClient();
-  return useMutation<{ success: boolean }, Error, { clientId?: number; infoHash: string }>({
+  return useMutation<
+    { success: boolean },
+    Error,
+    { clientId?: number; infoHash: string }
+  >({
     mutationFn: ({ clientId: targetId, infoHash }) => {
       const id = targetId ?? clientId;
-      return apiClient.post(`/downloadclients/${id}/torrents/${infoHash}/pause`);
+      return apiClient.post(
+        `/downloadclients/${id}/torrents/${infoHash}/pause`,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["downloadclients"] });
@@ -1037,10 +1044,16 @@ export function usePauseRemoteTorrent(clientId?: number) {
 
 export function useResumeRemoteTorrent(clientId?: number) {
   const queryClient = useQueryClient();
-  return useMutation<{ success: boolean }, Error, { clientId?: number; infoHash: string }>({
+  return useMutation<
+    { success: boolean },
+    Error,
+    { clientId?: number; infoHash: string }
+  >({
     mutationFn: ({ clientId: targetId, infoHash }) => {
       const id = targetId ?? clientId;
-      return apiClient.post(`/downloadclients/${id}/torrents/${infoHash}/resume`);
+      return apiClient.post(
+        `/downloadclients/${id}/torrents/${infoHash}/resume`,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["downloadclients"] });
@@ -1050,10 +1063,16 @@ export function useResumeRemoteTorrent(clientId?: number) {
 
 export function useDeleteRemoteTorrent(clientId?: number) {
   const queryClient = useQueryClient();
-  return useMutation<{ success: boolean }, Error, { clientId?: number; infoHash: string; deleteData?: boolean }>({
+  return useMutation<
+    { success: boolean },
+    Error,
+    { clientId?: number; infoHash: string; deleteData?: boolean }
+  >({
     mutationFn: ({ clientId: targetId, infoHash, deleteData }) => {
       const id = targetId ?? clientId;
-      return apiClient.delete(`/downloadclients/${id}/torrents/${infoHash}?deleteData=${deleteData ?? false}`);
+      return apiClient.delete(
+        `/downloadclients/${id}/torrents/${infoHash}?deleteData=${deleteData ?? false}`,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["downloadclients"] });
@@ -1064,10 +1083,15 @@ export function useDeleteRemoteTorrent(clientId?: number) {
 
 export function useImportDownloadClientTorrent(clientId?: number) {
   const queryClient = useQueryClient();
-  return useMutation<Torrent, Error, { infoHash: string; clientId?: number } | string>({
+  return useMutation<
+    Torrent,
+    Error,
+    { infoHash: string; clientId?: number } | string
+  >({
     mutationFn: (param) => {
       const hash = typeof param === "string" ? param : param.infoHash;
-      const targetId = typeof param === "object" && param.clientId ? param.clientId : clientId;
+      const targetId =
+        typeof param === "object" && param.clientId ? param.clientId : clientId;
       return apiClient.post(`/downloadclients/${targetId}/import/${hash}`);
     },
     onSuccess: () => {
@@ -1081,11 +1105,18 @@ export function useImportDownloadClientTorrent(clientId?: number) {
 
 export function useImportDownloadClientTorrents(clientId?: number) {
   const queryClient = useQueryClient();
-  return useMutation<BatchImportResponse, Error, { infoHashes: string[]; clientId?: number } | string[]>({
+  return useMutation<
+    BatchImportResponse,
+    Error,
+    { infoHashes: string[]; clientId?: number } | string[]
+  >({
     mutationFn: (param) => {
       const hashes = Array.isArray(param) ? param : param.infoHashes;
-      const targetId = !Array.isArray(param) && param.clientId ? param.clientId : clientId;
-      return apiClient.post(`/downloadclients/${targetId}/import-torrents`, { infoHashes: hashes });
+      const targetId =
+        !Array.isArray(param) && param.clientId ? param.clientId : clientId;
+      return apiClient.post(`/downloadclients/${targetId}/import-torrents`, {
+        infoHashes: hashes,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -1141,7 +1172,11 @@ export function useTestDirectIndexer() {
 
 export function useSyncProwlarrIndexers() {
   const queryClient = useQueryClient();
-  return useMutation<ProwlarrSyncResult, Error, { prowlarrIndexerId?: number } | undefined>({
+  return useMutation<
+    ProwlarrSyncResult,
+    Error,
+    { prowlarrIndexerId?: number } | undefined
+  >({
     mutationFn: (req) => apiClient.post("/indexer/prowlarr/sync", req ?? {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["indexers"] }),
   });
@@ -1372,7 +1407,9 @@ export function useNetworkDiagnostics() {
 export function useTestPort() {
   return useMutation<PortTestResult, Error, number | undefined>({
     mutationFn: (port?: number) =>
-      apiClient.post<PortTestResult>(`/network/test-port${port ? `?port=${port}` : ""}`),
+      apiClient.post<PortTestResult>(
+        `/network/test-port${port ? `?port=${port}` : ""}`,
+      ),
   });
 }
 
@@ -1397,10 +1434,13 @@ export function useDownloadHistory(params?: {
   const searchParams = new URLSearchParams();
   if (params?.query) searchParams.set("query", params.query);
   if (params?.status) searchParams.set("status", params.status);
-  if (params?.limit !== undefined) searchParams.set("limit", String(params.limit));
-  if (params?.offset !== undefined) searchParams.set("offset", String(params.offset));
+  if (params?.limit !== undefined)
+    searchParams.set("limit", String(params.limit));
+  if (params?.offset !== undefined)
+    searchParams.set("offset", String(params.offset));
   if (params?.page !== undefined) searchParams.set("page", String(params.page));
-  if (params?.pageSize !== undefined) searchParams.set("pageSize", String(params.pageSize));
+  if (params?.pageSize !== undefined)
+    searchParams.set("pageSize", String(params.pageSize));
   const queryString = searchParams.toString();
 
   return useQuery<DownloadHistoryResponse>({
@@ -1420,7 +1460,8 @@ export function useDownloadHistory(params?: {
       const items = res.data ?? [];
       const totalHeader = res.headers.get("X-Total-Count");
       const pageHeader = res.headers.get("X-Page-Count");
-      const totalCount = totalHeader !== null ? parseInt(totalHeader, 10) : items.length;
+      const totalCount =
+        totalHeader !== null ? parseInt(totalHeader, 10) : items.length;
       const totalPages = pageHeader !== null ? parseInt(pageHeader, 10) : 1;
 
       // Return items array augmented with pagination metadata for backward compatibility
@@ -1428,7 +1469,7 @@ export function useDownloadHistory(params?: {
       result.records = items;
       result.totalCount = Number.isNaN(totalCount) ? items.length : totalCount;
       result.page = params?.page ?? 1;
-      result.pageSize = params?.pageSize ?? (params?.limit ?? 50);
+      result.pageSize = params?.pageSize ?? params?.limit ?? 50;
       result.totalPages = Number.isNaN(totalPages) ? 1 : totalPages;
       return result;
     },
@@ -1692,7 +1733,12 @@ export function useInjectTrackerToTorrent() {
   return useMutation<
     SwarmBoostResult,
     Error,
-    { torrentId?: number; infoHash?: string; trackerUrl: string; force?: boolean }
+    {
+      torrentId?: number;
+      infoHash?: string;
+      trackerUrl: string;
+      force?: boolean;
+    }
   >({
     mutationFn: (payload) => apiClient.post("/trackerboost/inject", payload),
     onSuccess: (_, vars) => {
@@ -1813,7 +1859,9 @@ export function useTrackerMetricHistory(id: number, hours = 24, limit = 500) {
   return useQuery<TrackerMetricSnapshot[]>({
     queryKey: ["trackermetrics", id, "history", hours, limit],
     queryFn: () =>
-      apiClient.get(`/trackermetrics/${id}/history?hours=${hours}&limit=${limit}`),
+      apiClient.get(
+        `/trackermetrics/${id}/history?hours=${hours}&limit=${limit}`,
+      ),
     enabled: id > 0,
   });
 }
@@ -1961,7 +2009,9 @@ export function useRssGrabHistory(ruleId?: number, status?: string) {
       if (ruleId) params.append("ruleId", ruleId.toString());
       if (status && status !== "all") params.append("status", status);
       const queryStr = params.toString();
-      return apiClient.get(queryStr ? `/rssrules/history?${queryStr}` : "/rssrules/history");
+      return apiClient.get(
+        queryStr ? `/rssrules/history?${queryStr}` : "/rssrules/history",
+      );
     },
   });
 }
@@ -1970,7 +2020,8 @@ export function useClearRssGrabHistory() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => apiClient.delete("/rssrules/history"),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rssrules-history"] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["rssrules-history"] }),
   });
 }
 
@@ -2021,9 +2072,15 @@ export function useDeleteAutomationScript() {
 
 export function useRunAutomationScript() {
   const queryClient = useQueryClient();
-  return useMutation<AutomationExecutionResult, Error, { id: number; torrentId?: number }>({
+  return useMutation<
+    AutomationExecutionResult,
+    Error,
+    { id: number; torrentId?: number }
+  >({
     mutationFn: ({ id, torrentId }) =>
-      apiClient.post(`/automation/${id}/run${torrentId ? `?torrentId=${torrentId}` : ""}`),
+      apiClient.post(
+        `/automation/${id}/run${torrentId ? `?torrentId=${torrentId}` : ""}`,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automation", "scripts"] });
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
@@ -2046,7 +2103,11 @@ export function useAutomationMarketplace() {
 
 export function useInstallMarketplaceTemplate() {
   const queryClient = useQueryClient();
-  return useMutation<AutomationScript, Error, InstallMarketplaceTemplateRequest>({
+  return useMutation<
+    AutomationScript,
+    Error,
+    InstallMarketplaceTemplateRequest
+  >({
     mutationFn: (req) => apiClient.post("/automation/marketplace/install", req),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automation", "scripts"] });
@@ -2063,9 +2124,7 @@ export function useTestCustomScript() {
 export function useSystemResources(refetchInterval?: number | false) {
   const defaultInterval = useRefetchInterval();
   const effectiveInterval =
-    refetchInterval === false
-      ? false
-      : (refetchInterval ?? defaultInterval);
+    refetchInterval === false ? false : (refetchInterval ?? defaultInterval);
   return useQuery<SystemResourceTelemetrySnapshot>({
     queryKey: ["system", "resources"],
     queryFn: () => apiClient.get("/system/resources"),
@@ -2183,6 +2242,3 @@ export function useSaveAiConfig() {
       queryClient.invalidateQueries({ queryKey: ["config", "ai"] }),
   });
 }
-
-
-

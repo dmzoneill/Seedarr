@@ -15,7 +15,8 @@ export interface TopologySnapshot {
 }
 
 export const getNodeId = (
-  endpoint: string | number | SimNode | d3.SimulationNodeDatum | null | undefined,
+  endpoint:
+    string | number | SimNode | d3.SimulationNodeDatum | null | undefined,
 ): string => {
   if (typeof endpoint === "object" && endpoint !== null) {
     return (endpoint as SimNode).id ?? "";
@@ -28,8 +29,10 @@ export const getNodeId = (
 
 export function filterValidLinks<
   T extends {
-    source: string | number | SimNode | d3.SimulationNodeDatum | null | undefined;
-    target: string | number | SimNode | d3.SimulationNodeDatum | null | undefined;
+    source:
+      string | number | SimNode | d3.SimulationNodeDatum | null | undefined;
+    target:
+      string | number | SimNode | d3.SimulationNodeDatum | null | undefined;
   },
 >(links: T[], nodes: { id: string }[]): T[] {
   const validNodeIdSet = new Set(nodes.map((n) => n.id));
@@ -43,7 +46,10 @@ export function filterValidLinks<
 export function isTopologyChanged(
   prevTopology: TopologySnapshot | null,
   currentNodes: { id: string }[],
-  currentLinks: { source: string | number | SimNode; target: string | number | SimNode }[],
+  currentLinks: {
+    source: string | number | SimNode;
+    target: string | number | SimNode;
+  }[],
 ): boolean {
   if (!prevTopology) return true;
 
@@ -159,12 +165,29 @@ function PeerMap() {
   }, [updateDimensions]);
 
   const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
-  const mainGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
-  const linkGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
-  const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const mainGroupRef = useRef<d3.Selection<
+    SVGGElement,
+    unknown,
+    null,
+    undefined
+  > | null>(null);
+  const linkGroupRef = useRef<d3.Selection<
+    SVGGElement,
+    unknown,
+    null,
+    undefined
+  > | null>(null);
+  const nodeGroupRef = useRef<d3.Selection<
+    SVGGElement,
+    unknown,
+    null,
+    undefined
+  > | null>(null);
   const linksRef = useRef<SimLink[]>([]);
   const prevTopologyRef = useRef<TopologySnapshot | null>(null);
-  const prevDimensionsRef = useRef<{ width: number; height: number } | null>(null);
+  const prevDimensionsRef = useRef<{ width: number; height: number } | null>(
+    null,
+  );
 
   // Clean up simulation on unmount to prevent memory leaks
   useEffect(() => {
@@ -216,7 +239,14 @@ function PeerMap() {
   }, []);
 
   useEffect(() => {
-    if (!graphData || !svgRef.current || !mainGroupRef.current || !linkGroupRef.current || !nodeGroupRef.current) return;
+    if (
+      !graphData ||
+      !svgRef.current ||
+      !mainGroupRef.current ||
+      !linkGroupRef.current ||
+      !nodeGroupRef.current
+    )
+      return;
 
     const { width, height } = dimensions;
 
@@ -337,7 +367,10 @@ function PeerMap() {
         (enter) =>
           enter
             .append("line")
-            .attr("stroke", (d) => LINK_COLORS[d.type] || "rgba(255, 255, 255, 0.2)")
+            .attr(
+              "stroke",
+              (d) => LINK_COLORS[d.type] || "rgba(255, 255, 255, 0.2)",
+            )
             .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2))
             .attr("stroke-dasharray", (d) =>
               d.type === "encrypted" ? "4,4" : "none",
@@ -345,7 +378,10 @@ function PeerMap() {
             .attr("opacity", 0.7),
         (update) =>
           update
-            .attr("stroke", (d) => LINK_COLORS[d.type] || "rgba(255, 255, 255, 0.2)")
+            .attr(
+              "stroke",
+              (d) => LINK_COLORS[d.type] || "rgba(255, 255, 255, 0.2)",
+            )
             .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2)),
         (exit) => exit.remove(),
       );
@@ -502,7 +538,8 @@ function PeerMap() {
             .attr("fill", "#27ae60");
 
           g.append("title").text((d) => {
-            if (d.type === "center") return "Seedarr Instance (Click for details)";
+            if (d.type === "center")
+              return "Seedarr Instance (Click for details)";
             if (d.type === "torrent")
               return `Torrent: ${d.label}\n${d.infoHash || ""}\n(Click to view details)`;
             return `Peer: ${d.label}${d.isEncrypted ? " (encrypted)" : ""}\n(Click for details)`;
@@ -511,16 +548,15 @@ function PeerMap() {
           return g;
         },
         (update) => {
-          update
-            .select(".node-label")
-            .text((d) => {
-              if (d.label.length > 18) {
-                return d.label.substring(0, 16) + "...";
-              }
-              return d.label;
-            });
+          update.select(".node-label").text((d) => {
+            if (d.label.length > 18) {
+              return d.label.substring(0, 16) + "...";
+            }
+            return d.label;
+          });
           update.select("title").text((d) => {
-            if (d.type === "center") return "Seedarr Instance (Click for details)";
+            if (d.type === "center")
+              return "Seedarr Instance (Click for details)";
             if (d.type === "torrent")
               return `Torrent: ${d.label}\n${d.infoHash || ""}\n(Click to view details)`;
             return `Peer: ${d.label}${d.isEncrypted ? " (encrypted)" : ""}\n(Click for details)`;
@@ -639,7 +675,14 @@ function PeerMap() {
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
             <h1
               style={{
                 fontSize: "1.75rem",
@@ -663,7 +706,8 @@ function PeerMap() {
               fontSize: "0.9rem",
             }}
           >
-            Live swarm topology visualization connecting Seedarr, active torrents, and remote peers
+            Live swarm topology visualization connecting Seedarr, active
+            torrents, and remote peers
           </p>
         </div>
       </div>

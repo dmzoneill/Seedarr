@@ -4,7 +4,10 @@ import { useGeneralConfig, useSaveGeneralConfig } from "../../api/hooks";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../context/ToastContext";
 import { useTheme, type Theme, type Accent } from "../../context/ThemeContext";
-import type { GeneralConfig, SslCertificateValidationResult } from "../../api/types";
+import type {
+  GeneralConfig,
+  SslCertificateValidationResult,
+} from "../../api/types";
 import {
   SaveBar,
   Toggle,
@@ -64,7 +67,10 @@ export function GeneralTab() {
     if (config) {
       setForm({
         ...config,
-        colorScheme: config.colorScheme === "green" ? "emerald" : config.colorScheme || "auto",
+        colorScheme:
+          config.colorScheme === "green"
+            ? "emerald"
+            : config.colorScheme || "auto",
         enableSsl: config.enableSsl ?? false,
         sslPort: config.sslPort ?? 9899,
         sslCertPath: config.sslCertPath ?? "",
@@ -192,9 +198,11 @@ export function GeneralTab() {
           save.mutate(
             {
               ...form,
-              colorScheme: form.colorScheme === "green" ? "emerald" : form.colorScheme,
+              colorScheme:
+                form.colorScheme === "green" ? "emerald" : form.colorScheme,
               uiTheme: form.themeStyle,
-              uiAccent: form.colorScheme === "green" ? "emerald" : form.colorScheme,
+              uiAccent:
+                form.colorScheme === "green" ? "emerald" : form.colorScheme,
             },
             {
               onSuccess: () => {
@@ -298,8 +306,8 @@ export function GeneralTab() {
           type={showApiKey ? "text" : "password"}
           value={
             showApiKey
-              ? (revealedApiKey || (form.apiKey.includes("*") ? "" : form.apiKey))
-              : (revealedApiKey || form.apiKey)
+              ? revealedApiKey || (form.apiKey.includes("*") ? "" : form.apiKey)
+              : revealedApiKey || form.apiKey
           }
           onChange={(v) => {
             setRevealedApiKey(null);
@@ -664,10 +672,10 @@ export function GeneralTab() {
                   TLS Certificate Provisioning Note:
                 </strong>{" "}
                 When Certificate Path is left empty, Seedarr automatically
-                generates, signs, and caches an internal 2048-bit RSA self-signed
-                certificate in the application configuration directory. Web
-                server port and SSL changes take effect upon restarting the
-                application daemon or container.
+                generates, signs, and caches an internal 2048-bit RSA
+                self-signed certificate in the application configuration
+                directory. Web server port and SSL changes take effect upon
+                restarting the application daemon or container.
               </div>
             </>
           )}
@@ -739,7 +747,9 @@ export function GeneralTab() {
             setTelemetryEnabled(v);
             setTelemetryEnabledState(v);
             showToast(
-              v ? "Anonymous telemetry enabled" : "Anonymous telemetry disabled",
+              v
+                ? "Anonymous telemetry enabled"
+                : "Anonymous telemetry disabled",
               "info",
             );
           }}

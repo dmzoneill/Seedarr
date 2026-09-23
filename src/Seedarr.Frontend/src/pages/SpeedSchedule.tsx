@@ -48,7 +48,7 @@ function isScheduleInSlot(
   s: SpeedScheduleEntry,
   dayValue: number,
   prevDayValue: number,
-  hour: number
+  hour: number,
 ): boolean {
   const start = timeToHour(s.startTime);
   const end = timeToHour(s.endTime);
@@ -219,7 +219,9 @@ function ScheduleModal({
                 className="form-input"
                 type="number"
                 min={-1}
-                value={form.maxUploadSpeed < 0 ? -1 : form.maxUploadSpeed / 1024}
+                value={
+                  form.maxUploadSpeed < 0 ? -1 : form.maxUploadSpeed / 1024
+                }
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   setForm({
@@ -246,7 +248,9 @@ function ScheduleModal({
                 className="form-input"
                 type="number"
                 min={-1}
-                value={form.maxDownloadSpeed < 0 ? -1 : form.maxDownloadSpeed / 1024}
+                value={
+                  form.maxDownloadSpeed < 0 ? -1 : form.maxDownloadSpeed / 1024
+                }
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   setForm({
@@ -383,29 +387,26 @@ function WeeklyCalendar({
   const onToggleScheduleRef = useRef(onToggleSchedule);
   onToggleScheduleRef.current = onToggleSchedule;
 
-  const getScheduleForSlot = useCallback(
-    (dayIdx: number, hour: number) => {
-      const currentSchedules = schedulesRef.current;
-      const day = DAY_FLAGS[dayIdx];
-      const prevDay = DAY_FLAGS[(dayIdx + 6) % 7];
-      const matching = currentSchedules.filter((s) =>
-        isScheduleInSlot(s, day.value, prevDay.value, hour)
-      );
-      const active = matching.filter((s) => s.isEnabled);
-      if (active.length > 0) {
-        return [...active].sort(
-          (a, b) => (a.priority ?? 999) - (b.priority ?? 999)
-        )[0];
-      }
-      if (matching.length > 0) {
-        return [...matching].sort(
-          (a, b) => (a.priority ?? 999) - (b.priority ?? 999)
-        )[0];
-      }
-      return null;
-    },
-    []
-  );
+  const getScheduleForSlot = useCallback((dayIdx: number, hour: number) => {
+    const currentSchedules = schedulesRef.current;
+    const day = DAY_FLAGS[dayIdx];
+    const prevDay = DAY_FLAGS[(dayIdx + 6) % 7];
+    const matching = currentSchedules.filter((s) =>
+      isScheduleInSlot(s, day.value, prevDay.value, hour),
+    );
+    const active = matching.filter((s) => s.isEnabled);
+    if (active.length > 0) {
+      return [...active].sort(
+        (a, b) => (a.priority ?? 999) - (b.priority ?? 999),
+      )[0];
+    }
+    if (matching.length > 0) {
+      return [...matching].sort(
+        (a, b) => (a.priority ?? 999) - (b.priority ?? 999),
+      )[0];
+    }
+    return null;
+  }, []);
 
   const finishDrag = useCallback(() => {
     if (!isDraggingRef.current) return;
@@ -477,7 +478,7 @@ function WeeklyCalendar({
   const handleMouseDown = (
     e: React.MouseEvent,
     dayIdx: number,
-    hour: number
+    hour: number,
   ) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -506,7 +507,7 @@ function WeeklyCalendar({
   const handleTouchStart = (
     e: React.TouchEvent,
     dayIdx: number,
-    hour: number
+    hour: number,
   ) => {
     isDraggingRef.current = true;
     dragStartRef.current = { dayIdx, hour };
@@ -588,7 +589,8 @@ function WeeklyCalendar({
       >
         <h3 style={{ margin: 0, fontSize: "1.05rem" }}>Weekly Schedule View</h3>
         <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-          Drag across grid to paint window · Click block to toggle · Touch supported
+          Drag across grid to paint window · Click block to toggle · Touch
+          supported
         </span>
       </div>
 
@@ -646,15 +648,15 @@ function WeeklyCalendar({
             {DAY_FLAGS.map((day, dayIdx) => {
               const prevDay = DAY_FLAGS[(dayIdx + 6) % 7];
               const matching = schedules.filter((s) =>
-                isScheduleInSlot(s, day.value, prevDay.value, hour)
+                isScheduleInSlot(s, day.value, prevDay.value, hour),
               );
               const active = matching.filter((s) => s.isEnabled);
               const top = [...active].sort(
-                (a, b) => (a.priority ?? 999) - (b.priority ?? 999)
+                (a, b) => (a.priority ?? 999) - (b.priority ?? 999),
               )[0];
               const inactiveTop = !top
                 ? [...matching].sort(
-                    (a, b) => (a.priority ?? 999) - (b.priority ?? 999)
+                    (a, b) => (a.priority ?? 999) - (b.priority ?? 999),
                   )[0]
                 : undefined;
 
@@ -706,24 +708,24 @@ function WeeklyCalendar({
                     backgroundColor: isHighlighted
                       ? "rgba(200, 168, 78, 0.45)"
                       : top
-                      ? BLOCK_COLORS[
-                          schedules.indexOf(top) % BLOCK_COLORS.length
-                        ]
-                      : inactiveTop
-                      ? "rgba(255, 255, 255, 0.05)"
-                      : "transparent",
+                        ? BLOCK_COLORS[
+                            schedules.indexOf(top) % BLOCK_COLORS.length
+                          ]
+                        : inactiveTop
+                          ? "rgba(255, 255, 255, 0.05)"
+                          : "transparent",
                     opacity: isHighlighted
                       ? 1
                       : top
-                      ? 0.85
-                      : inactiveTop
-                      ? 0.35
-                      : 1,
+                        ? 0.85
+                        : inactiveTop
+                          ? 0.35
+                          : 1,
                     outline: isHighlighted
                       ? "2px solid var(--accent, #c8a84e)"
                       : inactiveTop
-                      ? "1px dashed rgba(255, 255, 255, 0.2)"
-                      : "none",
+                        ? "1px dashed rgba(255, 255, 255, 0.2)"
+                        : "none",
                     outlineOffset: isHighlighted ? "-2px" : "-1px",
                     cursor: "pointer",
                     touchAction: "none",
@@ -737,10 +739,10 @@ function WeeklyCalendar({
                     isHighlighted
                       ? `Selected: ${day.label} ${String(hour).padStart(2, "0")}:00`
                       : top
-                      ? `${top.name} (Active - click to toggle): ${top.maxUploadSpeed >= 0 ? (top.maxUploadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(top.maxUploadSpeed)) : "Unlimited"} up / ${top.maxDownloadSpeed >= 0 ? (top.maxDownloadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(top.maxDownloadSpeed)) : "Unlimited"} down`
-                      : inactiveTop
-                      ? `${inactiveTop.name} (Disabled - click to enable)`
-                      : `Unthrottled (${day.label} ${String(hour).padStart(2, "0")}:00 - click to toggle, drag to paint)`
+                        ? `${top.name} (Active - click to toggle): ${top.maxUploadSpeed >= 0 ? (top.maxUploadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(top.maxUploadSpeed)) : "Unlimited"} up / ${top.maxDownloadSpeed >= 0 ? (top.maxDownloadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(top.maxDownloadSpeed)) : "Unlimited"} down`
+                        : inactiveTop
+                          ? `${inactiveTop.name} (Disabled - click to enable)`
+                          : `Unthrottled (${day.label} ${String(hour).padStart(2, "0")}:00 - click to toggle, drag to paint)`
                   }
                 />
               );
@@ -773,9 +775,11 @@ function WeeklyCalendar({
               </div>
               <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                 {selectedRange.maxHour - selectedRange.minHour + 1} hr
-                {selectedRange.maxHour - selectedRange.minHour + 1 > 1 ? "s" : ""}{" "}
-                per day across{" "}
-                {selectedRange.maxDay - selectedRange.minDay + 1} day
+                {selectedRange.maxHour - selectedRange.minHour + 1 > 1
+                  ? "s"
+                  : ""}{" "}
+                per day across {selectedRange.maxDay - selectedRange.minDay + 1}{" "}
+                day
                 {selectedRange.maxDay - selectedRange.minDay + 1 > 1 ? "s" : ""}
               </div>
             </div>
@@ -802,7 +806,7 @@ function WeeklyCalendar({
                 className="btn btn-outline btn-small"
                 onClick={() => {
                   selectedOverlappingSchedules.forEach((s) =>
-                    onToggleSchedule?.(s)
+                    onToggleSchedule?.(s),
                   );
                   setSelectedRange(null);
                 }}
@@ -922,7 +926,8 @@ function SpeedSchedule() {
               fontSize: "0.9rem",
             }}
           >
-            Manage time-based upload and download speed throttles and seeding priorities
+            Manage time-based upload and download speed throttles and seeding
+            priorities
           </p>
         </div>
 
@@ -1033,7 +1038,9 @@ function SpeedSchedule() {
             }}
           >
             {activeLimits && activeLimits.maxUploadSpeed >= 0
-              ? (activeLimits.maxUploadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(activeLimits.maxUploadSpeed))
+              ? activeLimits.maxUploadSpeed === 0
+                ? "0 B/s (Paused)"
+                : formatSpeed(activeLimits.maxUploadSpeed)
               : "Unlimited"}
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
@@ -1076,7 +1083,9 @@ function SpeedSchedule() {
             }}
           >
             {activeLimits && activeLimits.maxDownloadSpeed >= 0
-              ? (activeLimits.maxDownloadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(activeLimits.maxDownloadSpeed))
+              ? activeLimits.maxDownloadSpeed === 0
+                ? "0 B/s (Paused)"
+                : formatSpeed(activeLimits.maxDownloadSpeed)
               : "Unlimited"}
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
@@ -1231,7 +1240,9 @@ function SpeedSchedule() {
                         }}
                       >
                         {s.maxUploadSpeed >= 0
-                          ? (s.maxUploadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(s.maxUploadSpeed))
+                          ? s.maxUploadSpeed === 0
+                            ? "0 B/s (Paused)"
+                            : formatSpeed(s.maxUploadSpeed)
                           : "Unlimited"}
                       </td>
                       <td
@@ -1241,7 +1252,9 @@ function SpeedSchedule() {
                         }}
                       >
                         {s.maxDownloadSpeed >= 0
-                          ? (s.maxDownloadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(s.maxDownloadSpeed))
+                          ? s.maxDownloadSpeed === 0
+                            ? "0 B/s (Paused)"
+                            : formatSpeed(s.maxDownloadSpeed)
                           : "Unlimited"}
                       </td>
                       <td>

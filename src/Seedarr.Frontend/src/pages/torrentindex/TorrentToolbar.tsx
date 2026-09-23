@@ -61,7 +61,10 @@ interface TorrentToolbarProps {
   onSelectAllColumns?: () => void;
   onDeselectAllColumns?: () => void;
   onApplyColumnPreset?: (preset: PresetName) => void;
-  onToggleCategoryColumns?: (category: ColumnCategory, enable?: boolean) => void;
+  onToggleCategoryColumns?: (
+    category: ColumnCategory,
+    enable?: boolean,
+  ) => void;
   isColumnCustomizerOpen?: boolean;
   onToggleColumnCustomizer?: () => void;
 }
@@ -105,8 +108,10 @@ export function TorrentToolbar({
   isColumnCustomizerOpen,
   onToggleColumnCustomizer,
 }: TorrentToolbarProps) {
-  const { canMutateTorrents, canAddTorrent, canDeleteTorrent } = usePermissions();
-  const [isInternalCustomizerOpen, setIsInternalCustomizerOpen] = useState(false);
+  const { canMutateTorrents, canAddTorrent, canDeleteTorrent } =
+    usePermissions();
+  const [isInternalCustomizerOpen, setIsInternalCustomizerOpen] =
+    useState(false);
   const defaultPrefs = useColumnPreferences();
 
   const isCustomizerOpen =
@@ -137,7 +142,8 @@ export function TorrentToolbar({
   const handleSelectAll = onSelectAllColumns ?? defaultPrefs.selectAll;
   const handleDeselectAll = onDeselectAllColumns ?? defaultPrefs.deselectAll;
   const handleApplyPreset = onApplyColumnPreset ?? defaultPrefs.applyPreset;
-  const handleToggleCategory = onToggleCategoryColumns ?? defaultPrefs.toggleCategory;
+  const handleToggleCategory =
+    onToggleCategoryColumns ?? defaultPrefs.toggleCategory;
   const { t } = useTranslation();
   const [localFilter, setLocalFilter] = useState(filter);
 
@@ -208,9 +214,14 @@ export function TorrentToolbar({
                 onClick={onBulkAddTags}
                 disabled={bulkPending || !canMutateTorrents}
                 title={t("torrents.bulkAddTags", undefined, "Assign Tags")}
-                style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
               >
-                <TagIcon size={13} /> {t("torrents.bulkAddTags", undefined, "Assign Tags")}
+                <TagIcon size={13} />{" "}
+                {t("torrents.bulkAddTags", undefined, "Assign Tags")}
               </button>
             )}
             {onBulkRemoveTags && (
@@ -220,9 +231,14 @@ export function TorrentToolbar({
                 onClick={onBulkRemoveTags}
                 disabled={bulkPending || !canMutateTorrents}
                 title={t("torrents.bulkRemoveTags", undefined, "Remove Tags")}
-                style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
               >
-                <TagIcon size={13} /> {t("torrents.bulkRemoveTags", undefined, "Remove Tags")}
+                <TagIcon size={13} />{" "}
+                {t("torrents.bulkRemoveTags", undefined, "Remove Tags")}
               </button>
             )}
             <button
@@ -324,7 +340,9 @@ export function TorrentToolbar({
                 }}
               >
                 <UploadIcon size={13} />{" "}
-                <span>{t("torrents.importPackage", undefined, "Import Package")}</span>
+                <span>
+                  {t("torrents.importPackage", undefined, "Import Package")}
+                </span>
               </button>
             )}
             {onSearchIndexers && (
@@ -407,7 +425,14 @@ export function TorrentToolbar({
           >
             &#9660;&#9660;
           </button>
-          <span style={{ fontSize: "0.85em", opacity: 0.8, marginLeft: "8px", fontWeight: 600 }}>
+          <span
+            style={{
+              fontSize: "0.85em",
+              opacity: 0.8,
+              marginLeft: "8px",
+              fontWeight: 600,
+            }}
+          >
             {t("torrents.downloadLimit", undefined, "DL Limit:")}
           </span>
           <button

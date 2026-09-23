@@ -1,7 +1,8 @@
 .PHONY: setup test-setup test integration build clean restore frontend \
        stack-init stack-build stack-up stack-down stack-configure stack-healthy stack-rebuild stack-clean \
        test-unit test-integration test-integration-rerun test-integration-only test-all \
-       coverage-report container-build container-build-test lint format
+       coverage-report quality-report container-build container-build-test lint format \
+       bump-patch bump-minor bump-major
 
 SOLUTION := src/Seedarr.sln
 UNIT_TEST := src/NzbDrone.Core.Test/Seedarr.Core.Test.csproj
@@ -28,13 +29,13 @@ setup:
 
 lint:
 	@echo "🔍 Checking Prettier style..."
-	@npx prettier --check "src/Seedarr.Frontend/**/*.{ts,tsx,css,json,js,html}"
+	@npx --yes prettier --check "src/Seedarr.Frontend/**/*.{ts,tsx,css,json,js,html}"
 	@echo "🔍 Checking C# format..."
 	@dotnet format $(SOLUTION) --verify-no-changes
 
 format:
 	@echo "✨ Formatting frontend with Prettier..."
-	@npx prettier --write "src/Seedarr.Frontend/**/*.{ts,tsx,css,json,js,html}"
+	@npx --yes prettier --write "src/Seedarr.Frontend/**/*.{ts,tsx,css,json,js,html}"
 	@echo "✨ Formatting C# with dotnet format..."
 	@dotnet format $(SOLUTION)
 
@@ -206,5 +207,41 @@ container-build:
 
 container-build-test:
 	podman build --target test --build-arg COVERAGE_TOOLS=true -t seedarr:test -f Containerfile .
+
+quality-report:
+	@mkdir -p _reports/jscpd _reports/coverage
+	@echo "📊 ==> Running C# Static Analysis (Roslynator)..."
+	@PATH="$$PATH:$$HOME/.dotnet/tools" roslynator analyze $(SOLUTION) --output _reports/roslynator.xml || true
+	@echo "📊 ==> Running Duplicate Code Detection (jscpd)..."
+	@cd $(FRONTEND) && npx jscpd ../../src --reporters html,json --output ../../_reports/jscpd --ignore "**/*.json,**/*.xml,**/bin/**,**/obj/**,**/node_modules/**" || true
+	@echo "📊 ==> Running TypeScript Type Coverage..."
+	@cd $(FRONTEND) && npx type-coverage --detail || true
+	@echo "📊 ==> Quality reports generated in _reports/"
+	@echo "    - C# Roslynator: _reports/roslynator.xml"
+	@echo "    - Duplication (HTML): _reports/jscpd/html/index.html"
+
+bump-patch:
+	@CURRENT=$$(grep '^version=' version | cut -d= -f2); \
+	IFS='.' read -r major minor patch <<< "$$CURRENT"; \
+	NEW_VER="$$major.$$minor.$$((patch + 1))"; \
+	echo "Bumping version: $$CURRENT -> $$NEW_VER"; \
+	echo "version=$$NEW_VER" > version; \
+	if [ -f $(FRONTEND)/package.json ]; then (cd $(FRONTEND) && npm version $$NEW_VER --no-git-tag-version --allow-same-version); fi
+
+bump-minor:
+	@CURRENT=$$(grep '^version=' version | cut -d= -f2); \
+	IFS='.' read -r major minor patch <<< "$$CURRENT"; \
+	NEW_VER="$$major.$$((minor + 1)).0"; \
+	echo "Bumping version: $$CURRENT -> $$NEW_VER"; \
+	echo "version=$$NEW_VER" > version; \
+	if [ -f $(FRONTEND)/package.json ]; then (cd $(FRONTEND) && npm version $$NEW_VER --no-git-tag-version --allow-same-version); fi
+
+bump-major:
+	@CURRENT=$$(grep '^version=' version | cut -d= -f2); \
+	IFS='.' read -r major minor patch <<< "$$CURRENT"; \
+	NEW_VER="$$((major + 1)).0.0"; \
+	echo "Bumping version: $$CURRENT -> $$NEW_VER"; \
+	echo "version=$$NEW_VER" > version; \
+	if [ -f $(FRONTEND)/package.json ]; then (cd $(FRONTEND) && npm version $$NEW_VER --no-git-tag-version --allow-same-version); fi
 
 

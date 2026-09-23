@@ -31,7 +31,9 @@ export function getStoredIdleTimeout(): number {
       return DEFAULT_IDLE_TIMEOUT_SECONDS;
     }
     const parsed = parseInt(raw, 10);
-    return Number.isNaN(parsed) || parsed < 0 ? DEFAULT_IDLE_TIMEOUT_SECONDS : parsed;
+    return Number.isNaN(parsed) || parsed < 0
+      ? DEFAULT_IDLE_TIMEOUT_SECONDS
+      : parsed;
   } catch {
     return DEFAULT_IDLE_TIMEOUT_SECONDS;
   }
@@ -228,7 +230,10 @@ export class IdleTimerTracker {
   }
 
   private setupListeners(): void {
-    if (typeof window === "undefined" || typeof window.addEventListener !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.addEventListener !== "function"
+    ) {
       return;
     }
 
@@ -246,7 +251,9 @@ export class IdleTimerTracker {
     };
 
     events.forEach((evt) => {
-      window.addEventListener(evt, this.boundActivityHandler!, { passive: true });
+      window.addEventListener(evt, this.boundActivityHandler!, {
+        passive: true,
+      });
     });
 
     this.boundStorageHandler = (e: StorageEvent) => {
@@ -329,7 +336,9 @@ export interface UseIdleTimerReturn {
 /**
  * React Hook for tracking user activity and session inactivity timeout.
  */
-export function useIdleTimer(options: UseIdleTimerOptions = {}): UseIdleTimerReturn {
+export function useIdleTimer(
+  options: UseIdleTimerOptions = {},
+): UseIdleTimerReturn {
   const {
     timeoutSeconds: explicitTimeout,
     warningSeconds = DEFAULT_WARNING_SECONDS,

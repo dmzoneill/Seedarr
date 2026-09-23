@@ -159,8 +159,16 @@ export function ColumnCustomizerModal({
       >
         <div className="column-customizer-header">
           <div>
-            <h2 id="column-customizer-title" className="modal-title" style={{ margin: 0 }}>
-              {t("torrents.columnCustomizer.title", undefined, "Customize Columns")}
+            <h2
+              id="column-customizer-title"
+              className="modal-title"
+              style={{ margin: 0 }}
+            >
+              {t(
+                "torrents.columnCustomizer.title",
+                undefined,
+                "Customize Columns",
+              )}
             </h2>
             <div className="column-customizer-subtitle">
               {t(
@@ -217,10 +225,16 @@ export function ColumnCustomizerModal({
             <button
               type="button"
               className="btn btn-small btn-outline preset-btn"
-              onClick={() => onApplyPreset ? onApplyPreset("default") : onResetToDefaults?.()}
+              onClick={() =>
+                onApplyPreset ? onApplyPreset("default") : onResetToDefaults?.()
+              }
               title="Reset to default 11 columns"
             >
-              {t("torrents.columnCustomizer.presetDefault", undefined, "Default")}
+              {t(
+                "torrents.columnCustomizer.presetDefault",
+                undefined,
+                "Default",
+              )}
             </button>
             <button
               type="button"
@@ -228,12 +242,18 @@ export function ColumnCustomizerModal({
               onClick={() => onApplyPreset?.("compact")}
               title="Essential columns only"
             >
-              {t("torrents.columnCustomizer.presetCompact", undefined, "Compact")}
+              {t(
+                "torrents.columnCustomizer.presetCompact",
+                undefined,
+                "Compact",
+              )}
             </button>
             <button
               type="button"
               className="btn btn-small btn-outline preset-btn"
-              onClick={() => onApplyPreset ? onApplyPreset("all") : onSelectAll?.()}
+              onClick={() =>
+                onApplyPreset ? onApplyPreset("all") : onSelectAll?.()
+              }
               title="Enable all 39 columns"
             >
               {t("torrents.columnCustomizer.presetAll", undefined, "All")}
@@ -319,7 +339,9 @@ export function ColumnCustomizerModal({
                             onChange={() => onToggleColumn(col.key)}
                             aria-label={col.displayLabel}
                           />
-                          <span className="column-name">{col.displayLabel}</span>
+                          <span className="column-name">
+                            {col.displayLabel}
+                          </span>
                         </label>
                       );
                     })}

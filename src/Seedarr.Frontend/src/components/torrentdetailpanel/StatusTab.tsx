@@ -9,7 +9,10 @@ import { InfoRow } from "./shared";
 
 export function StatusTab({ torrent }: { torrent: Torrent }) {
   const rows: [string, string][] = [
-    ["Status", torrent.isVpnPaused ? "Paused (VPN Kill Switch)" : torrent.status],
+    [
+      "Status",
+      torrent.isVpnPaused ? "Paused (VPN Kill Switch)" : torrent.status,
+    ],
     ["Progress", `${(torrent.progress * 100).toFixed(1)}%`],
     ["Uploaded", formatBytes(torrent.uploaded)],
     ["Downloaded", formatBytes(torrent.downloaded)],

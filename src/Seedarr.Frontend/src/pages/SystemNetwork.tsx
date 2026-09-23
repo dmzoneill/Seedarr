@@ -171,7 +171,10 @@ function EncryptionDonut({
   );
 }
 
-function getProtocolBadge(protocol?: string): { label: string; className: string } {
+function getProtocolBadge(protocol?: string): {
+  label: string;
+  className: string;
+} {
   const p = (protocol || "").toUpperCase();
   if (p === "PCP") {
     return { label: "PCP v2", className: "badge badge-primary" };
@@ -185,7 +188,10 @@ function getProtocolBadge(protocol?: string): { label: string; className: string
   return { label: "Inactive", className: "badge badge-stopped" };
 }
 
-function formatCountdown(expiryUtc: string | null | undefined, leaseSeconds?: number): string {
+function formatCountdown(
+  expiryUtc: string | null | undefined,
+  leaseSeconds?: number,
+): string {
   if (!expiryUtc) {
     if (leaseSeconds && leaseSeconds > 0) {
       const h = Math.floor(leaseSeconds / 3600);
@@ -232,7 +238,7 @@ function SystemNetwork() {
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Failed to refresh port mappings",
-        "error"
+        "error",
       );
     }
   };
@@ -292,11 +298,19 @@ function SystemNetwork() {
               fontSize: "0.9rem",
             }}
           >
-            Peer-to-peer connection endpoints, listening ports, proxy routes, DHT node counts, and encryption metrics
+            Peer-to-peer connection endpoints, listening ports, proxy routes,
+            DHT node counts, and encryption metrics
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.75rem",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           <span
             className="badge badge-seeding"
             style={{ padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
@@ -312,7 +326,9 @@ function SystemNetwork() {
             disabled={testPortMutation.isPending}
             title="Test external reachability of BitTorrent listening port"
           >
-            {testPortMutation.isPending ? "Testing..." : "Test Port Reachability"}
+            {testPortMutation.isPending
+              ? "Testing..."
+              : "Test Port Reachability"}
           </button>
 
           {testPortMutation.data && (
@@ -321,8 +337,12 @@ function SystemNetwork() {
               style={{
                 padding: "0.35rem 0.75rem",
                 fontSize: "0.85rem",
-                backgroundColor: testPortMutation.data.isOpen ? "rgba(40, 167, 69, 0.2)" : "rgba(220, 53, 69, 0.2)",
-                color: testPortMutation.data.isOpen ? "var(--success, #28a745)" : "var(--danger, #dc3545)",
+                backgroundColor: testPortMutation.data.isOpen
+                  ? "rgba(40, 167, 69, 0.2)"
+                  : "rgba(220, 53, 69, 0.2)",
+                color: testPortMutation.data.isOpen
+                  ? "var(--success, #28a745)"
+                  : "var(--danger, #dc3545)",
                 border: `1px solid ${testPortMutation.data.isOpen ? "var(--success, #28a745)" : "var(--danger, #dc3545)"}`,
               }}
             >
@@ -528,7 +548,8 @@ function SystemNetwork() {
               plaintext={diag.plaintextConnections}
             />
             {(Number(diag.encryptedConnections) || 0) +
-              (Number(diag.plaintextConnections) || 0) === 0 && (
+              (Number(diag.plaintextConnections) || 0) ===
+              0 && (
               <p
                 style={{
                   color: "var(--text-muted)",
@@ -605,7 +626,9 @@ function SystemNetwork() {
       </div>
 
       {/* Port Mappings Card */}
-      {((diag.portMappings && diag.portMappings.length > 0) || (portMapping?.mappings && portMapping.mappings.length > 0) || portMapping?.protocol) && (
+      {((diag.portMappings && diag.portMappings.length > 0) ||
+        (portMapping?.mappings && portMapping.mappings.length > 0) ||
+        portMapping?.protocol) && (
         <div
           className="card"
           style={{
@@ -629,7 +652,9 @@ function SystemNetwork() {
             }}
           >
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}
+              >
                 <h2
                   style={{
                     fontSize: "1.05rem",
@@ -658,7 +683,8 @@ function SystemNetwork() {
                 }}
               >
                 <span>
-                  Gateway: <strong>{portMapping?.gatewayIp || "Auto-discovered"}</strong>
+                  Gateway:{" "}
+                  <strong>{portMapping?.gatewayIp || "Auto-discovered"}</strong>
                 </span>
                 {portMapping?.routerModel && (
                   <span>
@@ -682,7 +708,9 @@ function SystemNetwork() {
                 disabled={refreshMappingsMutation.isPending}
                 title="Trigger an immediate gateway probe and lease refresh"
               >
-                {refreshMappingsMutation.isPending ? "Refreshing..." : "Refresh Mappings"}
+                {refreshMappingsMutation.isPending
+                  ? "Refreshing..."
+                  : "Refresh Mappings"}
               </button>
             </div>
           </div>
@@ -712,8 +740,10 @@ function SystemNetwork() {
                       externalPort: pm.externalPort,
                       protocol: pm.protocol,
                       description: pm.description,
-                      leaseSeconds: (pm as { leaseSeconds?: number }).leaseSeconds || 7200,
-                      expiryUtc: (pm as { expiryUtc?: string }).expiryUtc || null,
+                      leaseSeconds:
+                        (pm as { leaseSeconds?: number }).leaseSeconds || 7200,
+                      expiryUtc:
+                        (pm as { expiryUtc?: string }).expiryUtc || null,
                       isActive: pm.isActive,
                       status: pm.isActive ? "Active" : "Inactive",
                       errorMessage: pm.errorMessage,
@@ -726,7 +756,12 @@ function SystemNetwork() {
                     <td>{pm.internalPort}</td>
                     <td>{pm.externalPort}</td>
                     <td>{pm.description}</td>
-                    <td style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                    <td
+                      style={{
+                        color: "var(--text-muted)",
+                        fontSize: "0.85rem",
+                      }}
+                    >
                       {formatCountdown(pm.expiryUtc, pm.leaseSeconds)}
                     </td>
                     <td style={{ textAlign: "right" }}>

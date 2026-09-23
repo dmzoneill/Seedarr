@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "../i18n";
-import {
-  useAddTorrent,
-  useCategories,
-  AddTorrentResult,
-} from "../api/hooks";
+import { useAddTorrent, useCategories, AddTorrentResult } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 import { trackTorrentAdd } from "../utils/analytics";
 import {
@@ -104,10 +100,15 @@ export function AddTorrentForm({
         },
         {
           onSuccess: (result: AddTorrentResult) => {
-            trackTorrentAdd("file", result?.added?.length || files.length, selectedCategory, {
-              start_paused: startPaused,
-              sequential: sequentialDownload,
-            });
+            trackTorrentAdd(
+              "file",
+              result?.added?.length || files.length,
+              selectedCategory,
+              {
+                start_paused: startPaused,
+                sequential: sequentialDownload,
+              },
+            );
             if (result && result.failed && result.failed.length === 0) {
               showToast(
                 t("addTorrent.addedTorrentsSuccess", {
@@ -132,7 +133,10 @@ export function AddTorrentForm({
               showToast(summaryMsg, "error");
             } else {
               showToast(
-                t("addTorrent.torrentAddedSuccess", "Torrent(s) added successfully"),
+                t(
+                  "addTorrent.torrentAddedSuccess",
+                  "Torrent(s) added successfully",
+                ),
                 "success",
               );
               setFiles([]);
@@ -169,7 +173,10 @@ export function AddTorrentForm({
               sequential: sequentialDownload,
             });
             showToast(
-              t("addTorrent.magnetAddedSuccess", "Magnet link added successfully"),
+              t(
+                "addTorrent.magnetAddedSuccess",
+                "Magnet link added successfully",
+              ),
               "success",
             );
             setMagnetLink("");
@@ -299,10 +306,7 @@ export function AddTorrentForm({
         )}
 
         {mode === "create" && (
-          <TorrentCreationTab
-            isModal={isModal}
-            onClose={onClose}
-          />
+          <TorrentCreationTab isModal={isModal} onClose={onClose} />
         )}
       </div>
 
@@ -328,7 +332,10 @@ export function AddTorrentForm({
               color: "var(--text-primary)",
             }}
           >
-            {t("addTorrent.ingestionOptions", "⚙️ Ingestion & Simulator Options")}
+            {t(
+              "addTorrent.ingestionOptions",
+              "⚙️ Ingestion & Simulator Options",
+            )}
           </div>
 
           <div
@@ -456,7 +463,9 @@ export function AddTorrentForm({
                 checked={sequentialDownload}
                 onChange={(e) => setSequentialDownload(e.target.checked)}
               />
-              <span>⏩ {t("torrents.sequentialDownload", "Sequential Download")}</span>
+              <span>
+                ⏩ {t("torrents.sequentialDownload", "Sequential Download")}
+              </span>
             </label>
 
             <label
@@ -474,7 +483,13 @@ export function AddTorrentForm({
                 checked={firstLastPiecePrio}
                 onChange={(e) => setFirstLastPiecePrio(e.target.checked)}
               />
-              <span>🎯 {t("torrents.firstLastPiecePrio", "Prioritize First & Last Pieces")}</span>
+              <span>
+                🎯{" "}
+                {t(
+                  "torrents.firstLastPiecePrio",
+                  "Prioritize First & Last Pieces",
+                )}
+              </span>
             </label>
           </div>
         </div>

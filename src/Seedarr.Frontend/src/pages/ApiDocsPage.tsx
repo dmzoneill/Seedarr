@@ -172,11 +172,19 @@ function ApiDocsPage() {
               fontSize: "0.9rem",
             }}
           >
-            Interactive REST API explorer, parameter definitions, and endpoint schemas
+            Interactive REST API explorer, parameter definitions, and endpoint
+            schemas
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.75rem",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           <button
             className="btn btn-outline"
             onClick={handleCopyKey}

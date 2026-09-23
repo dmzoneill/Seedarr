@@ -6,7 +6,14 @@ import {
   useNetworkInterfaces,
   useTestPort,
 } from "../../api/hooks";
-import { SaveBar, SectionCard, NumberInput, TextInput, SelectInput, Toggle } from "./shared";
+import {
+  SaveBar,
+  SectionCard,
+  NumberInput,
+  TextInput,
+  SelectInput,
+  Toggle,
+} from "./shared";
 import { trackNetworkConfigSave } from "../../utils/analytics";
 
 export function NetworkSettingsTab() {
@@ -76,7 +83,9 @@ export function NetworkSettingsTab() {
     if (!config) return;
     trackNetworkConfigSave({
       upnp_enabled: form.upnpEnabled,
-      has_vpn_interface: Boolean(form.bindInterface && form.bindInterface !== ""),
+      has_vpn_interface: Boolean(
+        form.bindInterface && form.bindInterface !== "",
+      ),
     });
     saveMutation.mutate(
       {
@@ -156,12 +165,17 @@ export function NetworkSettingsTab() {
                   fontSize: "0.78rem",
                   padding: "0.2rem 0.6rem",
                   borderRadius: "4px",
-                  backgroundColor: netStatus.isVpnKillSwitchActive ? "rgba(40, 167, 69, 0.2)" : "rgba(200, 168, 78, 0.2)",
-                  color: netStatus.isVpnKillSwitchActive ? "var(--success, #28a745)" : "var(--accent, #c8a84e)",
+                  backgroundColor: netStatus.isVpnKillSwitchActive
+                    ? "rgba(40, 167, 69, 0.2)"
+                    : "rgba(200, 168, 78, 0.2)",
+                  color: netStatus.isVpnKillSwitchActive
+                    ? "var(--success, #28a745)"
+                    : "var(--accent, #c8a84e)",
                   border: `1px solid ${netStatus.isVpnKillSwitchActive ? "var(--success, #28a745)" : "var(--accent, #c8a84e)"}`,
                 }}
               >
-                {netStatus.isVpnKillSwitchActive ? "🛡️ " : ""}Bound: {netStatus.boundInterface} ({netStatus.boundIp || "Unplumbed"})
+                {netStatus.isVpnKillSwitchActive ? "🛡️ " : ""}Bound:{" "}
+                {netStatus.boundInterface} ({netStatus.boundIp || "Unplumbed"})
               </span>
             )}
           </div>
@@ -175,11 +189,15 @@ export function NetworkSettingsTab() {
           >
             <div>
               BitTorrent Swarm IP:{" "}
-              <strong>{netStatus.boundIp || netStatus.localIp || "0.0.0.0"}</strong>
+              <strong>
+                {netStatus.boundIp || netStatus.localIp || "0.0.0.0"}
+              </strong>
             </div>
             <div>
               Host Physical IP:{" "}
-              <strong>{netStatus.physicalIp || netStatus.localIp || "0.0.0.0"}</strong>
+              <strong>
+                {netStatus.physicalIp || netStatus.localIp || "0.0.0.0"}
+              </strong>
             </div>
             <div>
               Bound Interface:{" "}
@@ -187,18 +205,29 @@ export function NetworkSettingsTab() {
             </div>
             <div>
               VPN Kill Switch:{" "}
-              <strong style={{ color: netStatus.isVpnKillSwitchActive ? "var(--success, #28a745)" : "var(--text-secondary)" }}>
-                {netStatus.isVpnKillSwitchActive ? "🛡️ Operational" : "Direct / Off"}
+              <strong
+                style={{
+                  color: netStatus.isVpnKillSwitchActive
+                    ? "var(--success, #28a745)"
+                    : "var(--text-secondary)",
+                }}
+              >
+                {netStatus.isVpnKillSwitchActive
+                  ? "🛡️ Operational"
+                  : "Direct / Off"}
               </strong>
             </div>
             <div>
-              Public IP: <strong>{netStatus.externalIp || "Not Detected"}</strong>
+              Public IP:{" "}
+              <strong>{netStatus.externalIp || "Not Detected"}</strong>
             </div>
             <div>
-              UPnP Active: <strong>{netStatus.upnpAvailable ? "Yes" : "No"}</strong>
+              UPnP Active:{" "}
+              <strong>{netStatus.upnpAvailable ? "Yes" : "No"}</strong>
             </div>
             <div>
-              Active Port Mappings: <strong>{netStatus.portMappings?.length ?? 0}</strong>
+              Active Port Mappings:{" "}
+              <strong>{netStatus.portMappings?.length ?? 0}</strong>
             </div>
           </div>
         </div>
@@ -224,7 +253,15 @@ export function NetworkSettingsTab() {
               max={65535}
               hint="TCP/UDP port for inbound swarm peer connections (default: 51413 / 6881)"
             />
-            <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              style={{
+                marginTop: "0.5rem",
+                display: "flex",
+                gap: "0.5rem",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 type="button"
                 className="btn btn-outline"
@@ -233,7 +270,9 @@ export function NetworkSettingsTab() {
                 disabled={testPortMutation.isPending}
                 title="Test external reachability of configured listening port"
               >
-                {testPortMutation.isPending ? "Testing..." : "Test Port Reachability"}
+                {testPortMutation.isPending
+                  ? "Testing..."
+                  : "Test Port Reachability"}
               </button>
 
               {testPortMutation.data && (
@@ -242,8 +281,12 @@ export function NetworkSettingsTab() {
                   style={{
                     padding: "0.3rem 0.65rem",
                     fontSize: "0.8rem",
-                    backgroundColor: testPortMutation.data.isOpen ? "rgba(40, 167, 69, 0.2)" : "rgba(220, 53, 69, 0.2)",
-                    color: testPortMutation.data.isOpen ? "var(--success, #28a745)" : "var(--danger, #dc3545)",
+                    backgroundColor: testPortMutation.data.isOpen
+                      ? "rgba(40, 167, 69, 0.2)"
+                      : "rgba(220, 53, 69, 0.2)",
+                    color: testPortMutation.data.isOpen
+                      ? "var(--success, #28a745)"
+                      : "var(--danger, #dc3545)",
                     border: `1px solid ${testPortMutation.data.isOpen ? "var(--success, #28a745)" : "var(--danger, #dc3545)"}`,
                   }}
                 >
@@ -264,7 +307,8 @@ export function NetworkSettingsTab() {
                     border: "1px solid var(--danger, #dc3545)",
                   }}
                 >
-                  Error: {testPortMutation.error?.message || "Failed to test port"}
+                  Error:{" "}
+                  {testPortMutation.error?.message || "Failed to test port"}
                 </span>
               )}
             </div>
@@ -414,11 +458,12 @@ export function NetworkSettingsTab() {
                             {selected.status}
                           </strong>
                         </span>
-                        {selected.addresses && selected.addresses.length > 0 && (
-                          <span>
-                            IP: <code>{selected.addresses.join(", ")}</code>
-                          </span>
-                        )}
+                        {selected.addresses &&
+                          selected.addresses.length > 0 && (
+                            <span>
+                              IP: <code>{selected.addresses.join(", ")}</code>
+                            </span>
+                          )}
                         <button
                           type="button"
                           className="btn btn-outline btn-small"
@@ -496,7 +541,8 @@ export function NetworkSettingsTab() {
                 marginBottom: "0.5rem",
               }}
             >
-              Max Connections Per Torrent cannot exceed Maximum Global Connections.
+              Max Connections Per Torrent cannot exceed Maximum Global
+              Connections.
             </div>
           )}
 

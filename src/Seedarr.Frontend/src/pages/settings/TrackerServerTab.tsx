@@ -293,7 +293,9 @@ export function TrackerServerTab() {
           >
             <span>⚠️</span>
             <span>
-              Port 9696 is the default port for Prowlarr. If running Prowlarr on the same network interface, choose an alternate port (e.g. 7070) to avoid socket collisions.
+              Port 9696 is the default port for Prowlarr. If running Prowlarr on
+              the same network interface, choose an alternate port (e.g. 7070)
+              to avoid socket collisions.
             </span>
           </div>
         )}

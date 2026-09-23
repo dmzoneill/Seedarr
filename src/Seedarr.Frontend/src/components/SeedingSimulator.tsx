@@ -47,14 +47,16 @@ export function SeedingSimulator({
   };
 
   // HnR Safety check
-  const hasHnrRequirement = typeof minSeedingHours === "number" && minSeedingHours > 0;
+  const hasHnrRequirement =
+    typeof minSeedingHours === "number" && minSeedingHours > 0;
   const requiredSeedingSeconds = hasHnrRequirement ? minSeedingHours * 3600 : 0;
   const hnrRemainingSeconds = hasHnrRequirement
     ? Math.max(0, requiredSeedingSeconds - seedingTimeSeconds)
     : 0;
-  const hnrProgress = hasHnrRequirement && requiredSeedingSeconds > 0
-    ? Math.min(1.0, seedingTimeSeconds / requiredSeedingSeconds)
-    : 0;
+  const hnrProgress =
+    hasHnrRequirement && requiredSeedingSeconds > 0
+      ? Math.min(1.0, seedingTimeSeconds / requiredSeedingSeconds)
+      : 0;
   const isHnrCleared = hasHnrRequirement
     ? hnrRemainingSeconds <= 0 || currentRatio >= 1.0
     : false;
@@ -161,7 +163,9 @@ export function SeedingSimulator({
             className="stat-value"
             style={{ fontSize: "1.1rem", color: "var(--accent)" }}
           >
-            {totalSize > 0 ? formatBytes(targetUploadBytes) : "Pending metadata..."}
+            {totalSize > 0
+              ? formatBytes(targetUploadBytes)
+              : "Pending metadata..."}
           </div>
           <div className="stat-label" style={{ fontSize: "0.72rem" }}>
             Target Upload
@@ -170,7 +174,9 @@ export function SeedingSimulator({
 
         <div className="stat-card" style={{ padding: "0.6rem" }}>
           <div className="stat-value" style={{ fontSize: "1.1rem" }}>
-            {totalSize > 0 ? formatBytes(remainingUploadBytes) : "Pending metadata..."}
+            {totalSize > 0
+              ? formatBytes(remainingUploadBytes)
+              : "Pending metadata..."}
           </div>
           <div className="stat-label" style={{ fontSize: "0.72rem" }}>
             Upload Needed
@@ -188,7 +194,9 @@ export function SeedingSimulator({
                   : "inherit",
             }}
           >
-            {totalSize <= 0 ? "Pending metadata..." : formatDuration(etaSeconds)}
+            {totalSize <= 0
+              ? "Pending metadata..."
+              : formatDuration(etaSeconds)}
           </div>
           <div className="stat-label" style={{ fontSize: "0.72rem" }}>
             Estimated Time

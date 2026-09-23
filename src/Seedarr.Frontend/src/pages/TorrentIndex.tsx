@@ -118,7 +118,8 @@ function TorrentIndex() {
 
   const handleConfirmBulkTag = useCallback(
     async (tagIds: number[]) => {
-      if (!bulkTagModalState || selectedIds.size === 0 || tagIds.length === 0) return;
+      if (!bulkTagModalState || selectedIds.size === 0 || tagIds.length === 0)
+        return;
       const mode = bulkTagModalState.mode;
       const ids = Array.from(selectedIds);
       setBulkPending(true);
@@ -231,7 +232,6 @@ function TorrentIndex() {
       setBulkPending(false);
     }
   }, [selectedIds, bulkAction, setSelectedIds, showToast]);
-
 
   const handleBulkDelete = useCallback(() => {
     const targetIds =
@@ -439,7 +439,11 @@ function TorrentIndex() {
       }
 
       // Ctrl+Shift+I / Cmd+Shift+I to invert selection
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "i" || e.key === "I")) {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        (e.key === "i" || e.key === "I")
+      ) {
         e.preventDefault();
         setSelectedIds((prev) => {
           const next = new Set<number>();
@@ -461,11 +465,18 @@ function TorrentIndex() {
       }
 
       // Ctrl + Up/Down, Ctrl + Shift + Up/Down for queue priority
-      if ((e.ctrlKey || e.metaKey) && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key === "ArrowUp" || e.key === "ArrowDown")
+      ) {
         e.preventDefault();
         const pos: "top" | "up" | "down" | "bottom" = e.shiftKey
-          ? (e.key === "ArrowUp" ? "top" : "bottom")
-          : (e.key === "ArrowUp" ? "up" : "down");
+          ? e.key === "ArrowUp"
+            ? "top"
+            : "bottom"
+          : e.key === "ArrowUp"
+            ? "up"
+            : "down";
         handleBulkMoveQueue(pos);
         return;
       }
@@ -549,7 +560,10 @@ function TorrentIndex() {
       }
 
       // Ctrl + R / F5: force recheck selected torrent(s)
-      if (((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R")) || e.key === "F5") {
+      if (
+        ((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R")) ||
+        e.key === "F5"
+      ) {
         e.preventDefault();
         const ids =
           selectedIds.size > 0
@@ -562,7 +576,10 @@ function TorrentIndex() {
       }
 
       // F6 or a / A: force announce to all trackers
-      if (e.key === "F6" || (!e.ctrlKey && !e.metaKey && (e.key === "a" || e.key === "A"))) {
+      if (
+        e.key === "F6" ||
+        (!e.ctrlKey && !e.metaKey && (e.key === "a" || e.key === "A"))
+      ) {
         if (selectedTorrentId != null) {
           e.preventDefault();
           announceTorrent.mutate(selectedTorrentId);
@@ -703,7 +720,9 @@ function TorrentIndex() {
                   onSelectMultiple={setSelectedIds}
                   onDeleteSelected={handleBulkDelete}
                   onToggleActive={handleToggleActiveSelected}
-                  onOpenBulkTag={() => setBulkTagModalState({ isOpen: true, mode: "add" })}
+                  onOpenBulkTag={() =>
+                    setBulkTagModalState({ isOpen: true, mode: "add" })
+                  }
                   visibleColumns={visibleColumns}
                   onToggleColumn={toggleColumn}
                   columnOrder={columnOrder}

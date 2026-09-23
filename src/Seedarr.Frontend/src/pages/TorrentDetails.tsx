@@ -117,7 +117,8 @@ function TorrentDetails() {
               fontSize: "0.9rem",
             }}
           >
-            {torrent.status} &bull; {torrent.infoHash || "Torrent Details & Analytics"}
+            {torrent.status} &bull;{" "}
+            {torrent.infoHash || "Torrent Details & Analytics"}
           </p>
         </div>
 

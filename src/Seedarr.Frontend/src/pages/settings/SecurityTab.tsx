@@ -14,7 +14,14 @@ import {
   useSyncBlocklist,
   testBlocklistIp,
 } from "../../api/blocklist";
-import { NumberInput, SaveBar, SectionCard, SelectInput, TextInput, Toggle } from "./shared";
+import {
+  NumberInput,
+  SaveBar,
+  SectionCard,
+  SelectInput,
+  TextInput,
+  Toggle,
+} from "./shared";
 import { trackSecurityConfigSave } from "../../utils/analytics";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useModalRegistration } from "../../components/ModalProvider";
@@ -434,10 +441,7 @@ export function SecurityTab() {
       await loadProviders();
       showToast("Identity provider saved successfully", "success");
     } catch (err: any) {
-      showToast(
-        err?.message || "Failed to save identity provider",
-        "error",
-      );
+      showToast(err?.message || "Failed to save identity provider", "error");
     }
   };
 
@@ -452,10 +456,7 @@ export function SecurityTab() {
       await loadProviders();
       showToast("Identity provider removed", "success");
     } catch (err: any) {
-      showToast(
-        err?.message || "Failed to delete identity provider",
-        "error",
-      );
+      showToast(err?.message || "Failed to delete identity provider", "error");
     }
   };
 
@@ -531,10 +532,10 @@ export function SecurityTab() {
               <div
                 style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}
               >
-                When Web UI Authentication is enabled, all requests will require valid
-                session credentials or basic authentication. Ensure at least one Identity
-                Provider is configured or default admin credentials are known before locking
-                down access.
+                When Web UI Authentication is enabled, all requests will require
+                valid session credentials or basic authentication. Ensure at
+                least one Identity Provider is configured or default admin
+                credentials are known before locking down access.
               </div>
             </div>
           )}
@@ -688,7 +689,8 @@ export function SecurityTab() {
                 fontSize: "0.9rem",
               }}
             >
-              No identity providers configured. Click a quick-add button above to configure SSO.
+              No identity providers configured. Click a quick-add button above
+              to configure SSO.
             </div>
           ) : (
             <div
@@ -795,8 +797,9 @@ export function SecurityTab() {
                 type={showApiKey ? "text" : "password"}
                 value={
                   showApiKey
-                    ? (revealedApiKey || (form.apiKey.includes("*") ? "" : form.apiKey))
-                    : (revealedApiKey || form.apiKey)
+                    ? revealedApiKey ||
+                      (form.apiKey.includes("*") ? "" : form.apiKey)
+                    : revealedApiKey || form.apiKey
                 }
                 onChange={(v) => {
                   setRevealedApiKey(null);
@@ -814,14 +817,10 @@ export function SecurityTab() {
                       padding: "0 0.75rem",
                     }}
                     title={
-                      showApiKey
-                        ? "Hide API Key"
-                        : "Show Unmasked API Key"
+                      showApiKey ? "Hide API Key" : "Show Unmasked API Key"
                     }
                     aria-label={
-                      showApiKey
-                        ? "Hide API Key"
-                        : "Show Unmasked API Key"
+                      showApiKey ? "Hide API Key" : "Show Unmasked API Key"
                     }
                     disabled={loadingApiKey}
                   >
@@ -863,7 +862,9 @@ export function SecurityTab() {
         title="Peer IP Blocklist"
         description="Block incoming and outgoing BitTorrent peer connections from known hostile IP ranges, monitoring agencies, and corrupt peers"
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
+        >
           {/* Live Status Summary Banner */}
           <div
             style={{
@@ -878,7 +879,14 @@ export function SecurityTab() {
               border: "1px solid var(--border)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                flexWrap: "wrap",
+              }}
+            >
               <span
                 style={{
                   display: "inline-flex",
@@ -890,14 +898,22 @@ export function SecurityTab() {
                   backgroundColor: blocklistForm.enabled
                     ? "rgba(16, 185, 129, 0.15)"
                     : "rgba(107, 114, 128, 0.15)",
-                  color: blocklistForm.enabled ? "var(--success, #10B981)" : "var(--text-muted, #9CA3AF)",
+                  color: blocklistForm.enabled
+                    ? "var(--success, #10B981)"
+                    : "var(--text-muted, #9CA3AF)",
                   border: `1px solid ${blocklistForm.enabled ? "rgba(16, 185, 129, 0.3)" : "rgba(107, 114, 128, 0.3)"}`,
                 }}
               >
                 {blocklistForm.enabled ? "● Enforced" : "○ Disabled"}
               </span>
 
-              <span style={{ fontSize: "0.85rem", color: "var(--text-primary)", fontWeight: 500 }}>
+              <span
+                style={{
+                  fontSize: "0.85rem",
+                  color: "var(--text-primary)",
+                  fontWeight: 500,
+                }}
+              >
                 {blocklistData
                   ? `${blocklistData.totalRuleCount.toLocaleString()} rules active (${blocklistData.ipv4RuleCount.toLocaleString()} IPv4 / ${blocklistData.ipv6RuleCount.toLocaleString()} IPv6)`
                   : "0 rules active"}
@@ -917,11 +933,13 @@ export function SecurityTab() {
                     padding: "2px 6px",
                     borderRadius: "4px",
                     backgroundColor:
-                      blocklistData.lastSyncStatus === "Success" || blocklistData.lastSyncStatus.includes("Not Modified")
+                      blocklistData.lastSyncStatus === "Success" ||
+                      blocklistData.lastSyncStatus.includes("Not Modified")
                         ? "rgba(16, 185, 129, 0.1)"
                         : "rgba(239, 68, 68, 0.1)",
                     color:
-                      blocklistData.lastSyncStatus === "Success" || blocklistData.lastSyncStatus.includes("Not Modified")
+                      blocklistData.lastSyncStatus === "Success" ||
+                      blocklistData.lastSyncStatus.includes("Not Modified")
                         ? "var(--success, #10B981)"
                         : "var(--danger, #EF4444)",
                   }}
@@ -936,9 +954,15 @@ export function SecurityTab() {
               className="btn btn-outline"
               onClick={handleSyncBlocklist}
               disabled={syncBlocklistMutation.isPending}
-              style={{ fontSize: "0.8rem", padding: "4px 12px", whiteSpace: "nowrap" }}
+              style={{
+                fontSize: "0.8rem",
+                padding: "4px 12px",
+                whiteSpace: "nowrap",
+              }}
             >
-              {syncBlocklistMutation.isPending ? "⏳ Syncing..." : "🔄 Sync Now"}
+              {syncBlocklistMutation.isPending
+                ? "⏳ Syncing..."
+                : "🔄 Sync Now"}
             </button>
           </div>
 
@@ -966,11 +990,22 @@ export function SecurityTab() {
           />
 
           {blocklistForm.autoUpdateEnabled && (
-            <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "1rem",
+                alignItems: "flex-end",
+                flexWrap: "wrap",
+              }}
+            >
               <div style={{ flex: 1, minWidth: "220px" }}>
                 <SelectInput
                   label="Update Interval"
-                  value={customInterval ? "custom" : String(blocklistForm.autoUpdateIntervalDays)}
+                  value={
+                    customInterval
+                      ? "custom"
+                      : String(blocklistForm.autoUpdateIntervalDays)
+                  }
                   options={[
                     { value: "1", label: "Daily (Every 24 hours)" },
                     { value: "3", label: "Every 3 days" },
@@ -998,7 +1033,9 @@ export function SecurityTab() {
                     value={blocklistForm.autoUpdateIntervalDays}
                     min={1}
                     max={365}
-                    onChange={(v) => updateBlocklist("autoUpdateIntervalDays", v)}
+                    onChange={(v) =>
+                      updateBlocklist("autoUpdateIntervalDays", v)
+                    }
                     suffix="days"
                   />
                 </div>
@@ -1007,7 +1044,13 @@ export function SecurityTab() {
           )}
 
           {/* Save blocklist settings bar if dirty */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "0.5rem",
+            }}
+          >
             <button
               type="button"
               className={`btn ${blocklistDirty ? "btn-primary" : "btn-outline"}`}
@@ -1064,10 +1107,22 @@ export function SecurityTab() {
                   gap: "0.75rem",
                 }}
               >
-                <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                  Verify whether a specific IPv4 or IPv6 peer address is blocked by the active ruleset:
+                <div
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  Verify whether a specific IPv4 or IPv6 peer address is blocked
+                  by the active ruleset:
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    alignItems: "flex-end",
+                  }}
+                >
                   <div style={{ flex: 1 }}>
                     <TextInput
                       label="Peer IP Address"
@@ -1084,7 +1139,11 @@ export function SecurityTab() {
                     className="btn btn-primary"
                     onClick={handleCheckIp}
                     disabled={testingIp || !testIpInput.trim()}
-                    style={{ marginBottom: "0.25rem", whiteSpace: "nowrap", height: "36px" }}
+                    style={{
+                      marginBottom: "0.25rem",
+                      whiteSpace: "nowrap",
+                      height: "36px",
+                    }}
                   >
                     {testingIp ? "Checking..." : "Check IP"}
                   </button>
@@ -1109,8 +1168,17 @@ export function SecurityTab() {
                         : "var(--success, #10B981)",
                     }}
                   >
-                    <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span>{ipTestResult.isBlocked ? "🚫 BLOCKED" : "✓ ALLOWED"}</span>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>
+                        {ipTestResult.isBlocked ? "🚫 BLOCKED" : "✓ ALLOWED"}
+                      </span>
                       <span>—</span>
                       <span>
                         {ipTestResult.isBlocked
@@ -1360,7 +1428,9 @@ export function SecurityTab() {
                       ? "var(--success-bg)"
                       : "var(--danger-bg-alert)",
                     border: `1px solid ${testResult.success ? "var(--success)" : "var(--danger-border-alert)"}`,
-                    color: testResult.success ? "var(--success)" : "var(--danger)",
+                    color: testResult.success
+                      ? "var(--success)"
+                      : "var(--danger)",
                   }}
                 >
                   {testResult.success ? "✓ " : "✕ "} {testResult.message}
@@ -1434,8 +1504,10 @@ export function SecurityTab() {
             </h2>
             <div
               style={{
-                backgroundColor: "var(--danger-bg-alert, rgba(239, 68, 68, 0.1))",
-                border: "1px solid var(--danger-border-alert, rgba(239, 68, 68, 0.3))",
+                backgroundColor:
+                  "var(--danger-bg-alert, rgba(239, 68, 68, 0.1))",
+                border:
+                  "1px solid var(--danger-border-alert, rgba(239, 68, 68, 0.3))",
                 color: "var(--danger, #ef4444)",
                 padding: "12px 16px",
                 borderRadius: "6px",
@@ -1444,7 +1516,9 @@ export function SecurityTab() {
                 marginBottom: "20px",
               }}
             >
-              Regenerating the API key will immediately invalidate the existing token and disconnect Sonarr, Radarr, Lidarr, Prowlarr, and external automation scripts. Are you sure you want to regenerate?
+              Regenerating the API key will immediately invalidate the existing
+              token and disconnect Sonarr, Radarr, Lidarr, Prowlarr, and
+              external automation scripts. Are you sure you want to regenerate?
             </div>
             <div
               className="modal-actions"

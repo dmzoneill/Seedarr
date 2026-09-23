@@ -141,7 +141,11 @@ describe("Tags: calculateTagUsageCounts", () => {
     assert.equal(moviesCounts[1], 1);
     assert.equal(moviesCounts[2], undefined);
 
-    const uncatCounts = calculateTagUsageCounts(torrents, "Uncategorized", tags);
+    const uncatCounts = calculateTagUsageCounts(
+      torrents,
+      "Uncategorized",
+      tags,
+    );
     assert.equal(uncatCounts[1], 1);
   });
 });

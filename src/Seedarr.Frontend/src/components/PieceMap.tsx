@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import { formatBytes } from "../utils/formatters";
 import { usePieceMap, useTorrentFiles } from "../api/hooks";
 import type { TorrentFileInfo } from "../api/types";
@@ -168,7 +174,11 @@ export function calculatePieceStates(
   } else if (pieceMapData?.spans && pieceMapData.spans.length > 0) {
     let offset = 0;
     for (const span of pieceMapData.spans) {
-      states.fill(span.state, offset, Math.min(totalPieces, offset + span.count));
+      states.fill(
+        span.state,
+        offset,
+        Math.min(totalPieces, offset + span.count),
+      );
       offset += span.count;
     }
   } else {
@@ -202,7 +212,9 @@ export function PieceMap({
   const [layoutMode, setLayoutMode] = useState<"bar" | "grid">(initialLayout);
   const [viewMode, setViewMode] = useState<PieceMapViewMode>("status");
   const [hoveredInfo, setHoveredInfo] = useState<HoveredPieceInfo | null>(null);
-  const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(null);
+  const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(
+    null,
+  );
   const [hoveredFileIndex, setHoveredFileIndex] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -216,10 +228,7 @@ export function PieceMap({
   const { data: fetchedFiles } = useTorrentFiles(torrentId ?? 0);
   const files = propFiles || fetchedFiles || [];
 
-  const totalPieces = Math.max(
-    1,
-    pieceMapData?.totalPieces || pieceCount || 1,
-  );
+  const totalPieces = Math.max(1, pieceMapData?.totalPieces || pieceCount || 1);
   const effectivePieceLength = Math.max(
     16384,
     pieceMapData?.pieceLength || pieceLength || 262144,
@@ -228,7 +237,8 @@ export function PieceMap({
 
   // Track container width with ResizeObserver
   useEffect(() => {
-    const el = layoutMode === "bar" ? barContainerRef.current : containerRef.current;
+    const el =
+      layoutMode === "bar" ? barContainerRef.current : containerRef.current;
     if (!el) return;
 
     const handleResize = () => {
@@ -253,7 +263,10 @@ export function PieceMap({
     const rarity = new Uint16Array(totalPieces);
     if (pieceMapData?.rarity && pieceMapData.rarity.length > 0) {
       rarity.set(pieceMapData.rarity.slice(0, totalPieces));
-    } else if (pieceMapData?.raritySpans && pieceMapData.raritySpans.length > 0) {
+    } else if (
+      pieceMapData?.raritySpans &&
+      pieceMapData.raritySpans.length > 0
+    ) {
       let offset = 0;
       for (const [count, val] of pieceMapData.raritySpans) {
         rarity.fill(val, offset, Math.min(totalPieces, offset + count));
@@ -261,7 +274,8 @@ export function PieceMap({
       }
     } else {
       // Fallback swarm availability
-      const defaultAvail = isSeeding && progress >= 1.0 ? 3 : progress >= 1.0 ? 5 : 1;
+      const defaultAvail =
+        isSeeding && progress >= 1.0 ? 3 : progress >= 1.0 ? 5 : 1;
       rarity.fill(defaultAvail);
     }
     return rarity;
@@ -307,7 +321,9 @@ export function PieceMap({
     const totalCells = cols * rows;
     const isBinned = totalPieces > totalCells;
     const piecesPerCell = isBinned ? totalPieces / totalCells : 1;
-    const activeCells = isBinned ? totalCells : Math.min(totalCells, totalPieces);
+    const activeCells = isBinned
+      ? totalCells
+      : Math.min(totalCells, totalPieces);
 
     const width = cols * cellSize - gap + padding * 2;
     const height = rows * cellSize - gap + padding * 2;
@@ -353,7 +369,8 @@ export function PieceMap({
   }, []);
 
   // Active highlighted file
-  const activeFileIndex = hoveredFileIndex !== null ? hoveredFileIndex : selectedFileIndex;
+  const activeFileIndex =
+    hoveredFileIndex !== null ? hoveredFileIndex : selectedFileIndex;
   const activeFileBoundary =
     activeFileIndex !== null && fileBoundaries[activeFileIndex]
       ? fileBoundaries[activeFileIndex]
@@ -366,8 +383,17 @@ export function PieceMap({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const { cellSize, gap, padding, cols, rows, piecesPerCell, activeCells, width, height } =
-      gridLayout;
+    const {
+      cellSize,
+      gap,
+      padding,
+      cols,
+      rows,
+      piecesPerCell,
+      activeCells,
+      width,
+      height,
+    } = gridLayout;
     const dpr = window.devicePixelRatio || 1;
 
     canvas.width = width * dpr;
@@ -388,7 +414,10 @@ export function PieceMap({
       const y = padding + row * cellSize;
 
       const pStart = Math.floor(i * piecesPerCell);
-      const pEnd = Math.min(totalPieces - 1, Math.floor((i + 1) * piecesPerCell) - 1);
+      const pEnd = Math.min(
+        totalPieces - 1,
+        Math.floor((i + 1) * piecesPerCell) - 1,
+      );
       const spanLen = Math.max(1, pEnd - pStart + 1);
 
       let fillColor = "#282520";
@@ -438,9 +467,11 @@ export function PieceMap({
         if (activeFileBoundary) {
           // Check if this bin overlaps with the active file
           const overlaps =
-            pStart <= activeFileBoundary.endPiece && pEnd >= activeFileBoundary.startPiece;
+            pStart <= activeFileBoundary.endPiece &&
+            pEnd >= activeFileBoundary.startPiece;
           if (overlaps) {
-            fillColor = FILE_PALETTE[activeFileBoundary.colorIndex % FILE_PALETTE.length];
+            fillColor =
+              FILE_PALETTE[activeFileBoundary.colorIndex % FILE_PALETTE.length];
           } else {
             fillColor = "#1a1815";
           }
@@ -450,7 +481,8 @@ export function PieceMap({
             (fb) => pStart <= fb.endPiece && pEnd >= fb.startPiece,
           );
           if (containingFb) {
-            fillColor = FILE_PALETTE[containingFb.colorIndex % FILE_PALETTE.length];
+            fillColor =
+              FILE_PALETTE[containingFb.colorIndex % FILE_PALETTE.length];
           } else {
             fillColor = getStatusColor(pieceStates[pStart]);
           }
@@ -461,9 +493,16 @@ export function PieceMap({
       ctx.fillRect(x, y, blockSize, blockSize);
 
       // In Mode C: draw subtle file boundary vertical divider if a file starts inside this cell
-      if (viewMode === "files" && !activeFileBoundary && fileBoundaries.length > 1) {
+      if (
+        viewMode === "files" &&
+        !activeFileBoundary &&
+        fileBoundaries.length > 1
+      ) {
         const boundaryInCell = fileBoundaries.some(
-          (fb) => fb.startPiece >= pStart && fb.startPiece <= pEnd && fb.startPiece > 0,
+          (fb) =>
+            fb.startPiece >= pStart &&
+            fb.startPiece <= pEnd &&
+            fb.startPiece > 0,
         );
         if (boundaryInCell) {
           ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
@@ -522,7 +561,10 @@ export function PieceMap({
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, availWidth, height);
 
-    const numSlices = Math.min(totalPieces, Math.max(50, Math.floor(availWidth)));
+    const numSlices = Math.min(
+      totalPieces,
+      Math.max(50, Math.floor(availWidth)),
+    );
     const piecesPerSlice = totalPieces / numSlices;
 
     for (let i = 0; i < numSlices; i++) {
@@ -531,7 +573,10 @@ export function PieceMap({
       const sliceW = Math.max(0.5, x1 - x0);
 
       const pStart = Math.floor(i * piecesPerSlice);
-      const pEnd = Math.min(totalPieces - 1, Math.floor((i + 1) * piecesPerSlice) - 1);
+      const pEnd = Math.min(
+        totalPieces - 1,
+        Math.floor((i + 1) * piecesPerSlice) - 1,
+      );
       const spanLen = Math.max(1, pEnd - pStart + 1);
 
       let fillColor = "#282520";
@@ -575,7 +620,8 @@ export function PieceMap({
       } else if (viewMode === "files") {
         if (activeFileBoundary) {
           const overlaps =
-            pStart <= activeFileBoundary.endPiece && pEnd >= activeFileBoundary.startPiece;
+            pStart <= activeFileBoundary.endPiece &&
+            pEnd >= activeFileBoundary.startPiece;
           fillColor = overlaps
             ? FILE_PALETTE[activeFileBoundary.colorIndex % FILE_PALETTE.length]
             : "#1a1815";
@@ -665,7 +711,10 @@ export function PieceMap({
       return;
     }
 
-    const pStart = Math.min(totalPieces - 1, Math.floor(cellIdx * piecesPerCell));
+    const pStart = Math.min(
+      totalPieces - 1,
+      Math.floor(cellIdx * piecesPerCell),
+    );
     const pEnd = Math.min(
       totalPieces - 1,
       Math.floor((cellIdx + 1) * piecesPerCell) - 1,
@@ -716,9 +765,15 @@ export function PieceMap({
     const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
     const frac = rect.width > 0 ? x / rect.width : 0;
 
-    const targetPiece = Math.min(totalPieces - 1, Math.max(0, Math.floor(frac * totalPieces)));
+    const targetPiece = Math.min(
+      totalPieces - 1,
+      Math.max(0, Math.floor(frac * totalPieces)),
+    );
     const startBytes = targetPiece * effectivePieceLength;
-    const endBytes = Math.min(totalBytes, (targetPiece + 1) * effectivePieceLength);
+    const endBytes = Math.min(
+      totalBytes,
+      (targetPiece + 1) * effectivePieceLength,
+    );
     const byteRange = `${formatBytes(startBytes)} - ${formatBytes(endBytes)}`;
 
     const state = pieceStates[targetPiece];
@@ -799,7 +854,14 @@ export function PieceMap({
           </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            flexWrap: "wrap",
+          }}
+        >
           <span
             style={{
               fontSize: "0.74rem",
@@ -807,11 +869,15 @@ export function PieceMap({
               fontFamily: "monospace",
             }}
           >
-            {totalPieces.toLocaleString()} pieces × {formatBytes(effectivePieceLength)}
+            {totalPieces.toLocaleString()} pieces ×{" "}
+            {formatBytes(effectivePieceLength)}
           </span>
 
           {/* Layout Mode Toggles (Bar vs Grid) */}
-          <div className="view-toggle" style={{ margin: 0, display: "flex", gap: "2px" }}>
+          <div
+            className="view-toggle"
+            style={{ margin: 0, display: "flex", gap: "2px" }}
+          >
             <button
               type="button"
               className={`view-toggle-btn ${layoutMode === "bar" ? "active" : ""}`}
@@ -819,7 +885,10 @@ export function PieceMap({
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
-                backgroundColor: layoutMode === "bar" ? "var(--accent, #c8a84e)" : "transparent",
+                backgroundColor:
+                  layoutMode === "bar"
+                    ? "var(--accent, #c8a84e)"
+                    : "transparent",
                 color: layoutMode === "bar" ? "#000" : "inherit",
                 border: "1px solid var(--border-light, #38332b)",
                 borderRadius: "3px",
@@ -836,7 +905,10 @@ export function PieceMap({
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
-                backgroundColor: layoutMode === "grid" ? "var(--accent, #c8a84e)" : "transparent",
+                backgroundColor:
+                  layoutMode === "grid"
+                    ? "var(--accent, #c8a84e)"
+                    : "transparent",
                 color: layoutMode === "grid" ? "#000" : "inherit",
                 border: "1px solid var(--border-light, #38332b)",
                 borderRadius: "3px",
@@ -849,7 +921,10 @@ export function PieceMap({
           </div>
 
           {/* 3 View Mode Toggles */}
-          <div className="view-toggle" style={{ margin: 0, display: "flex", gap: "2px" }}>
+          <div
+            className="view-toggle"
+            style={{ margin: 0, display: "flex", gap: "2px" }}
+          >
             <button
               type="button"
               className={`view-toggle-btn ${viewMode === "status" ? "active" : ""}`}
@@ -857,7 +932,10 @@ export function PieceMap({
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
-                backgroundColor: viewMode === "status" ? "var(--accent, #c8a84e)" : "transparent",
+                backgroundColor:
+                  viewMode === "status"
+                    ? "var(--accent, #c8a84e)"
+                    : "transparent",
                 color: viewMode === "status" ? "#000" : "inherit",
                 border: "1px solid var(--border-light, #38332b)",
                 borderRadius: "3px",
@@ -874,7 +952,10 @@ export function PieceMap({
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
-                backgroundColor: viewMode === "rarity" ? "var(--accent, #c8a84e)" : "transparent",
+                backgroundColor:
+                  viewMode === "rarity"
+                    ? "var(--accent, #c8a84e)"
+                    : "transparent",
                 color: viewMode === "rarity" ? "#000" : "inherit",
                 border: "1px solid var(--border-light, #38332b)",
                 borderRadius: "3px",
@@ -891,7 +972,10 @@ export function PieceMap({
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
-                backgroundColor: viewMode === "files" ? "var(--accent, #c8a84e)" : "transparent",
+                backgroundColor:
+                  viewMode === "files"
+                    ? "var(--accent, #c8a84e)"
+                    : "transparent",
                 color: viewMode === "files" ? "#000" : "inherit",
                 border: "1px solid var(--border-light, #38332b)",
                 borderRadius: "3px",
@@ -1062,7 +1146,10 @@ export function PieceMap({
                       : isHovered
                         ? `1px solid ${color}`
                         : "1px solid var(--border-light, #302c24)",
-                    backgroundColor: isSelected || isHovered ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.3)",
+                    backgroundColor:
+                      isSelected || isHovered
+                        ? "rgba(255,255,255,0.12)"
+                        : "rgba(0,0,0,0.3)",
                     color: "#fff",
                     cursor: "pointer",
                   }}
@@ -1076,10 +1163,22 @@ export function PieceMap({
                       backgroundColor: color,
                     }}
                   />
-                  <span style={{ maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span
+                    style={{
+                      maxWidth: "160px",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {fileName}
                   </span>
-                  <span style={{ color: "var(--text-muted, #888)", fontSize: "0.64rem" }}>
+                  <span
+                    style={{
+                      color: "var(--text-muted, #888)",
+                      fontSize: "0.64rem",
+                    }}
+                  >
                     ({formatBytes(fb.file.size)})
                   </span>
                 </button>
@@ -1104,57 +1203,209 @@ export function PieceMap({
         {/* Mode-specific Legend */}
         {viewMode === "status" && (
           <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#27ae60" }} />
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.3rem",
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "2px",
+                  backgroundColor: "#27ae60",
+                }}
+              />
               Verified ({stats.verified})
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#3498db" }} />
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.3rem",
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "2px",
+                  backgroundColor: "#3498db",
+                }}
+              />
               In-flight ({stats.inFlight})
             </span>
             {stats.corrupted > 0 && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-                <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#e74c3c" }} />
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.3rem",
+                }}
+              >
+                <span
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "2px",
+                    backgroundColor: "#e74c3c",
+                  }}
+                />
                 Corrupted ({stats.corrupted})
               </span>
             )}
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#282520" }} />
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.3rem",
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "2px",
+                  backgroundColor: "#282520",
+                }}
+              />
               Missing ({stats.missing})
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.3rem",
+              }}
+            >
               {stats.completeCount} / {totalPieces} Complete
             </span>
           </div>
         )}
 
         {viewMode === "rarity" && (
-          <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.6rem",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
             <span>Availability:</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#282520" }} /> 0
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "2px",
+                  backgroundColor: "#282520",
+                }}
+              />{" "}
+              0
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#e74c3c" }} /> 1 (Rare)
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "2px",
+                  backgroundColor: "#e74c3c",
+                }}
+              />{" "}
+              1 (Rare)
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#e67e22" }} /> 2-3
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "2px",
+                  backgroundColor: "#e67e22",
+                }}
+              />{" "}
+              2-3
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#f1c40f" }} /> 4-5
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "2px",
+                  backgroundColor: "#f1c40f",
+                }}
+              />{" "}
+              4-5
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#82c91e" }} /> 6-9
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "2px",
+                  backgroundColor: "#82c91e",
+                }}
+              />{" "}
+              6-9
             </span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-              <span style={{ width: "8px", height: "8px", borderRadius: "2px", backgroundColor: "#27ae60" }} /> 10+
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "2px",
+                  backgroundColor: "#27ae60",
+                }}
+              />{" "}
+              10+
             </span>
           </div>
         )}
 
         {viewMode === "files" && (
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <span>File count: {fileBoundaries.length} file{fileBoundaries.length === 1 ? "" : "s"}</span>
+            <span>
+              File count: {fileBoundaries.length} file
+              {fileBoundaries.length === 1 ? "" : "s"}
+            </span>
           </div>
         )}
 
@@ -1200,7 +1451,8 @@ export function PieceMap({
             }}
           >
             Piece #{hoveredInfo.pieceIndex}
-            {hoveredInfo.isRange ? ` - #${hoveredInfo.pieceEndIndex}` : ""} [{hoveredInfo.byteRange}]
+            {hoveredInfo.isRange ? ` - #${hoveredInfo.pieceEndIndex}` : ""} [
+            {hoveredInfo.byteRange}]
           </div>
 
           {/* Status: Verified / In-flight / Missing / Corrupted */}
@@ -1213,9 +1465,12 @@ export function PieceMap({
 
           {/* Swarm Availability */}
           <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: "var(--text-muted, #9c9484)" }}>Swarm Availability:</span>
+            <span style={{ color: "var(--text-muted, #9c9484)" }}>
+              Swarm Availability:
+            </span>
             <span style={{ fontWeight: 600 }}>
-              {hoveredInfo.availability} peer{hoveredInfo.availability === 1 ? "" : "s"}
+              {hoveredInfo.availability} peer
+              {hoveredInfo.availability === 1 ? "" : "s"}
             </span>
           </div>
 
@@ -1231,7 +1486,12 @@ export function PieceMap({
                 gap: "0.2rem",
               }}
             >
-              <span style={{ color: "var(--text-muted, #9c9484)", fontSize: "0.7rem" }}>
+              <span
+                style={{
+                  color: "var(--text-muted, #9c9484)",
+                  fontSize: "0.7rem",
+                }}
+              >
                 Containing file{hoveredInfo.files.length > 1 ? "s" : ""}:
               </span>
               {hoveredInfo.files.map((f, idx) => (
@@ -1257,7 +1517,12 @@ export function PieceMap({
                   >
                     📄 {f.name}
                   </span>
-                  <span style={{ color: "var(--text-muted, #888)", fontSize: "0.66rem" }}>
+                  <span
+                    style={{
+                      color: "var(--text-muted, #888)",
+                      fontSize: "0.66rem",
+                    }}
+                  >
                     Offset: {formatBytes(f.offset)} / {formatBytes(f.size)}
                   </span>
                 </div>

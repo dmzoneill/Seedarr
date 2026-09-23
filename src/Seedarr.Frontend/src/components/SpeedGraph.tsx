@@ -122,7 +122,9 @@ export function calculateSpeedFromDelta(
   }
 
   const uploadSpeed = Number.isFinite(rawUpload) ? Math.max(0, rawUpload) : 0;
-  const downloadSpeed = Number.isFinite(rawDownload) ? Math.max(0, rawDownload) : 0;
+  const downloadSpeed = Number.isFinite(rawDownload)
+    ? Math.max(0, rawDownload)
+    : 0;
 
   return {
     uploadSpeed,
@@ -571,10 +573,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
       ctx.imageSmoothingEnabled = true;
       ctx.clearRect(0, 0, width, height);
 
-      const curChartWidth = Math.max(
-        100,
-        width - PADDING.left - PADDING.right,
-      );
+      const curChartWidth = Math.max(100, width - PADDING.left - PADDING.right);
       const curChartHeight = height - PADDING.top - PADDING.bottom;
       const niceMax = Math.max(1024, renderedMaxRef.current);
 
@@ -693,12 +692,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
             4,
           );
         } else {
-          ctx.rect(
-            PADDING.left,
-            PADDING.top,
-            curChartWidth,
-            curChartHeight,
-          );
+          ctx.rect(PADDING.left, PADDING.top, curChartWidth, curChartHeight);
         }
         ctx.fill();
         ctx.stroke();
@@ -712,9 +706,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
         for (let i = 0; i <= gridLineCount; i++) {
           const value = (targetNiceMax / gridLineCount) * i;
           const y =
-            PADDING.top +
-            curChartHeight -
-            (i / gridLineCount) * curChartHeight;
+            PADDING.top + curChartHeight - (i / gridLineCount) * curChartHeight;
 
           ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
           ctx.lineWidth = 1;
@@ -735,11 +727,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
         ctx.textBaseline = "alphabetic";
 
         ctx.textAlign = "left";
-        ctx.fillText(
-          currentRangeConfig.startLabel,
-          PADDING.left,
-          height - 6,
-        );
+        ctx.fillText(currentRangeConfig.startLabel, PADDING.left, height - 6);
 
         ctx.textAlign = "center";
         ctx.fillText(
@@ -818,9 +806,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
               curChartWidth;
           const py = Math.max(
             PADDING.top,
-            PADDING.top +
-              curChartHeight -
-              (pt[key] / niceMax) * curChartHeight,
+            PADDING.top + curChartHeight - (pt[key] / niceMax) * curChartHeight,
           );
           if (i === 0) {
             ctx.moveTo(px, py);
@@ -843,9 +829,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
               curChartWidth;
           const py = Math.max(
             PADDING.top,
-            PADDING.top +
-              curChartHeight -
-              (pt[key] / niceMax) * curChartHeight,
+            PADDING.top + curChartHeight - (pt[key] / niceMax) * curChartHeight,
           );
           ctx.beginPath();
           ctx.arc(px, py, 2, 0, Math.PI * 2);

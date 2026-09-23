@@ -180,7 +180,11 @@ export function BulkImportModal({ isOpen, onClose }: BulkImportModalProps) {
                   undefined,
                   "Importing Trackers...",
                 )
-              : t("trackerBoost.settings.importTrackersBtn", undefined, "Import Trackers")}
+              : t(
+                  "trackerBoost.settings.importTrackersBtn",
+                  undefined,
+                  "Import Trackers",
+                )}
           </button>
         </div>
       </div>
@@ -491,7 +495,9 @@ export function ImportTools({ showModal, onCloseModal }: ImportToolsProps) {
               </span>
             ))}
           {enabledClientsCount === 0 && (
-            <span style={{ fontSize: "0.85rem", color: "var(--warning, #f59e0b)" }}>
+            <span
+              style={{ fontSize: "0.85rem", color: "var(--warning, #f59e0b)" }}
+            >
               {t(
                 "trackerBoost.settings.noClientsWarning",
                 undefined,
@@ -579,8 +585,16 @@ export function ImportTools({ showModal, onCloseModal }: ImportToolsProps) {
             disabled={harvestFeeds.isPending}
           >
             {harvestFeeds.isPending
-              ? t("trackerBoost.settings.syncingFeeds", undefined, "⏳ Syncing Feeds...")
-              : t("trackerBoost.settings.syncFeeds", undefined, "🌐 Sync Curated Feeds")}
+              ? t(
+                  "trackerBoost.settings.syncingFeeds",
+                  undefined,
+                  "⏳ Syncing Feeds...",
+                )
+              : t(
+                  "trackerBoost.settings.syncFeeds",
+                  undefined,
+                  "🌐 Sync Curated Feeds",
+                )}
           </button>
           <button
             className="btn btn-action"
@@ -593,7 +607,11 @@ export function ImportTools({ showModal, onCloseModal }: ImportToolsProps) {
                   undefined,
                   "⏳ Probing Trackers...",
                 )
-              : t("trackerBoost.probeAllTrackers", undefined, "📡 Probe All Trackers")}
+              : t(
+                  "trackerBoost.probeAllTrackers",
+                  undefined,
+                  "📡 Probe All Trackers",
+                )}
           </button>
         </div>
       </div>

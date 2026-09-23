@@ -139,10 +139,7 @@ function getSortValue(
       return t.active ? 1 : 0;
     default:
       return (t as unknown as Record<string, unknown>)[key] as
-        | string
-        | number
-        | null
-        | undefined;
+        string | number | null | undefined;
   }
 }
 
@@ -309,7 +306,11 @@ export const TorrentStatusCell: React.FC<{
     if (isVpnPaused) {
       return (
         <span className="badge badge-vpn-paused" aria-label={ariaLabel}>
-          {t("torrents.pausedVpnKillSwitch", undefined, "Paused (VPN Kill Switch)")}
+          {t(
+            "torrents.pausedVpnKillSwitch",
+            undefined,
+            "Paused (VPN Kill Switch)",
+          )}
         </span>
       );
     }
@@ -601,9 +602,7 @@ export const TorrentCell: React.FC<TorrentCellProps> = React.memo(
         return <span>{rowIndex + 1}</span>;
 
       case "queuePosition":
-        return (
-          <span>{t.sortOrder != null ? t.sortOrder + 1 : "-"}</span>
-        );
+        return <span>{t.sortOrder != null ? t.sortOrder + 1 : "-"}</span>;
 
       case "name":
         return (
@@ -770,9 +769,7 @@ export const TorrentCell: React.FC<TorrentCellProps> = React.memo(
 
       case "uploadLimit":
         return (
-          <span>
-            {t.uploadLimit > 0 ? `${t.uploadLimit} KB/s` : "Global"}
-          </span>
+          <span>{t.uploadLimit > 0 ? `${t.uploadLimit} KB/s` : "Global"}</span>
         );
 
       case "downloadLimit":
@@ -808,9 +805,7 @@ export const TorrentCell: React.FC<TorrentCellProps> = React.memo(
 
       case "threshold":
         return (
-          <span>
-            {t.threshold !== undefined ? `${t.threshold}%` : "-"}
-          </span>
+          <span>{t.threshold !== undefined ? `${t.threshold}%` : "-"}</span>
         );
 
       case "smallTorrentLimit":
@@ -901,11 +896,20 @@ export const TorrentTableRow = React.memo<TorrentTableRowProps>(
           if (onSelectTorrent) {
             onSelectTorrent(isSelected ? null : t.id);
           } else if (onSelect) {
-            onSelect(applyTelemetry(t, useTorrentStore.getState().telemetry[t.id]));
+            onSelect(
+              applyTelemetry(t, useTorrentStore.getState().telemetry[t.id]),
+            );
           }
         }
       },
-      [onToggleSelect, onToggleActive, onSelectTorrent, onSelect, isSelected, t],
+      [
+        onToggleSelect,
+        onToggleActive,
+        onSelectTorrent,
+        onSelect,
+        isSelected,
+        t,
+      ],
     );
 
     const setRef = useCallback(
@@ -1144,8 +1148,7 @@ export function TorrentTable({
         | ((prev: Record<string, number>) => Record<string, number>),
     ) => {
       if (propOnColumnWidthsChange) {
-        const resolved =
-          typeof next === "function" ? next(columnWidths) : next;
+        const resolved = typeof next === "function" ? next(columnWidths) : next;
         propOnColumnWidthsChange(resolved);
       } else {
         setInternalColumnWidths((prev) => {
@@ -1428,13 +1431,9 @@ export function TorrentTable({
     });
 
     if (anyActive) {
-      ids.forEach((id) =>
-        onPause ? onPause(id) : stopSeeding.mutate(id),
-      );
+      ids.forEach((id) => (onPause ? onPause(id) : stopSeeding.mutate(id)));
     } else {
-      ids.forEach((id) =>
-        onResume ? onResume(id) : startSeeding.mutate(id),
-      );
+      ids.forEach((id) => (onResume ? onResume(id) : startSeeding.mutate(id)));
     }
   }, [
     selectedIds,
@@ -1582,7 +1581,11 @@ export function TorrentTable({
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "i" || e.key === "I")) {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        (e.key === "i" || e.key === "I")
+      ) {
         e.preventDefault();
         e.stopPropagation();
         const inverted = new Set<number>();
@@ -1615,7 +1618,10 @@ export function TorrentTable({
         return;
       }
 
-      if (((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R")) || e.key === "F5") {
+      if (
+        ((e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R")) ||
+        e.key === "F5"
+      ) {
         e.preventDefault();
         e.stopPropagation();
         const ids =
@@ -1630,7 +1636,14 @@ export function TorrentTable({
         return;
       }
 
-      if (e.key === "F6" || (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && (e.key === "a" || e.key === "A"))) {
+      if (
+        e.key === "F6" ||
+        (!e.ctrlKey &&
+          !e.metaKey &&
+          !e.shiftKey &&
+          !e.altKey &&
+          (e.key === "a" || e.key === "A"))
+      ) {
         e.preventDefault();
         e.stopPropagation();
         const ids =
@@ -1790,11 +1803,14 @@ export function TorrentTable({
     dragColRef.current = key;
   }, []);
 
-  const handleColDragOver = useCallback((e: React.DragEvent, key: ColumnKey) => {
-    e.preventDefault();
-    dragOverColRef.current = key;
-    setDragOverKey(key);
-  }, []);
+  const handleColDragOver = useCallback(
+    (e: React.DragEvent, key: ColumnKey) => {
+      e.preventDefault();
+      dragOverColRef.current = key;
+      setDragOverKey(key);
+    },
+    [],
+  );
 
   const handleColDrop = useCallback(
     (e: React.DragEvent, targetKey: ColumnKey) => {
@@ -1925,17 +1941,11 @@ export function TorrentTable({
   const handleRowClick = useCallback(
     (torrent: Torrent, index: number, e: React.MouseEvent) => {
       setFocusedIndex(index);
-      if (
-        e.shiftKey &&
-        (anchorIndex !== null || lastClickedIndex !== null)
-      ) {
-        const base =
-          anchorIndex !== null ? anchorIndex : lastClickedIndex!;
+      if (e.shiftKey && (anchorIndex !== null || lastClickedIndex !== null)) {
+        const base = anchorIndex !== null ? anchorIndex : lastClickedIndex!;
         const start = Math.min(base, index);
         const end = Math.max(base, index);
-        const rangeIds = sorted
-          .slice(start, end + 1)
-          .map((item) => item.id);
+        const rangeIds = sorted.slice(start, end + 1).map((item) => item.id);
         if (onSelectMultiple) {
           onSelectMultiple(new Set(rangeIds));
         } else if (onSelectRange) {
@@ -1944,17 +1954,32 @@ export function TorrentTable({
           propSelectAll(rangeIds);
         }
         onSelectTorrent?.(torrent.id);
-        propOnSelect?.(applyTelemetry(torrent, useTorrentStore.getState().telemetry[torrent.id]));
+        propOnSelect?.(
+          applyTelemetry(
+            torrent,
+            useTorrentStore.getState().telemetry[torrent.id],
+          ),
+        );
       } else if (e.ctrlKey || e.metaKey) {
         setAnchorIndex(index);
         handleToggleSelect(torrent.id);
         onSelectTorrent?.(torrent.id);
-        propOnSelect?.(applyTelemetry(torrent, useTorrentStore.getState().telemetry[torrent.id]));
+        propOnSelect?.(
+          applyTelemetry(
+            torrent,
+            useTorrentStore.getState().telemetry[torrent.id],
+          ),
+        );
         setLastClickedIndex(index);
       } else {
         setAnchorIndex(index);
         onSelectTorrent?.(selectedTorrentId === torrent.id ? null : torrent.id);
-        propOnSelect?.(applyTelemetry(torrent, useTorrentStore.getState().telemetry[torrent.id]));
+        propOnSelect?.(
+          applyTelemetry(
+            torrent,
+            useTorrentStore.getState().telemetry[torrent.id],
+          ),
+        );
         setLastClickedIndex(index);
       }
     },
@@ -2181,8 +2206,7 @@ export function TorrentTable({
 
                   <div
                     onMouseDown={(e) => {
-                      const th = e.currentTarget
-                        .parentElement as HTMLElement;
+                      const th = e.currentTarget.parentElement as HTMLElement;
                       handleResizeMouseDown(e, col.key, th);
                     }}
                     onClick={(e) => e.stopPropagation()}
@@ -2340,9 +2364,7 @@ export function TorrentTable({
             )
           }
           onSearchIndexers={
-            onSearchIndexers
-              ? onSearchIndexers
-              : (q) => setSearchModalQuery(q)
+            onSearchIndexers ? onSearchIndexers : (q) => setSearchModalQuery(q)
           }
         />
       )}

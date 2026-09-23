@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, Fragment, type CSSProperties } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  Fragment,
+  type CSSProperties,
+} from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
@@ -68,7 +74,10 @@ function formatInterval(minutes: number): string {
   return `${hours}h ${minutes % 60}m`;
 }
 
-function formatRelativeTime(dateStr: string | null, isNextExecution = false): string {
+function formatRelativeTime(
+  dateStr: string | null,
+  isNextExecution = false,
+): string {
   if (!dateStr) return "-";
   const date = new Date(dateStr);
   if (isNaN(date.getTime()) || date.getFullYear() <= 1970) return "-";
@@ -241,7 +250,10 @@ function TaskHistoryModal({ task, onClose }: TaskHistoryModalProps) {
     refetchInterval: 15000,
   });
 
-  const trapRef = useFocusTrap<HTMLDivElement>({ isOpen: true, onEscape: onClose });
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    onEscape: onClose,
+  });
   useModalRegistration({
     id: "task-history-modal",
     isOpen: true,
@@ -433,7 +445,9 @@ function TaskHistoryModal({ task, onClose }: TaskHistoryModalProps) {
                             </div>
                           </td>
                           <td>
-                            <code style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                            <code
+                              style={{ fontSize: "0.85rem", fontWeight: 600 }}
+                            >
                               {formatDurationMs(item.durationMs)}
                             </code>
                           </td>
@@ -473,12 +487,18 @@ function TaskHistoryModal({ task, onClose }: TaskHistoryModalProps) {
                           </td>
                         </tr>
                         {isExpanded && hasError && (
-                          <tr style={{ backgroundColor: "rgba(231, 76, 60, 0.05)" }}>
+                          <tr
+                            style={{
+                              backgroundColor: "rgba(231, 76, 60, 0.05)",
+                            }}
+                          >
                             <td colSpan={6} style={{ padding: "0.75rem 1rem" }}>
                               {item.errorMessage && (
                                 <div
                                   style={{
-                                    marginBottom: item.exceptionDetails ? "0.5rem" : 0,
+                                    marginBottom: item.exceptionDetails
+                                      ? "0.5rem"
+                                      : 0,
                                     color: "var(--color-danger, #e55353)",
                                     fontWeight: 500,
                                   }}
@@ -552,11 +572,19 @@ interface EditTaskModalProps {
   isSaving: boolean;
 }
 
-function EditTaskModal({ task, onClose, onSave, isSaving }: EditTaskModalProps) {
+function EditTaskModal({
+  task,
+  onClose,
+  onSave,
+  isSaving,
+}: EditTaskModalProps) {
   const [interval, setInterval] = useState<number>(task.interval || 15);
   const [isEnabled, setIsEnabled] = useState<boolean>(task.isEnabled !== false);
 
-  const trapRef = useFocusTrap<HTMLDivElement>({ isOpen: true, onEscape: onClose });
+  const trapRef = useFocusTrap<HTMLDivElement>({
+    isOpen: true,
+    onEscape: onClose,
+  });
   useModalRegistration({
     id: "task-edit-modal",
     isOpen: true,
@@ -755,8 +783,10 @@ function EditTaskModal({ task, onClose, onSave, isSaving }: EditTaskModalProps) 
 function SystemTasks() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-  const [selectedHistoryTask, setSelectedHistoryTask] = useState<ScheduledTask | null>(null);
-  const [selectedEditTask, setSelectedEditTask] = useState<ScheduledTask | null>(null);
+  const [selectedHistoryTask, setSelectedHistoryTask] =
+    useState<ScheduledTask | null>(null);
+  const [selectedEditTask, setSelectedEditTask] =
+    useState<ScheduledTask | null>(null);
   const [executingTasks, setExecutingTasks] = useState<Set<string>>(new Set());
   const timeoutIdsRef = useRef<number[]>([]);
 
@@ -788,7 +818,9 @@ function SystemTasks() {
     retry: false,
     refetchInterval: (query) => {
       const data = query.state.data as ScheduledTask[] | undefined;
-      const hasActiveCmd = commands?.some((c) => c.status === "queued" || c.status === "started");
+      const hasActiveCmd = commands?.some(
+        (c) => c.status === "queued" || c.status === "started",
+      );
       const hasRunning =
         (data && data.some((t) => t.isRunning)) ||
         executingTasks.size > 0 ||
@@ -816,7 +848,10 @@ function SystemTasks() {
     },
     onSuccess: (_, task) => {
       trackSystemMaintenanceAction("task_run", formatTaskName(task.typeName));
-      showToast(`Started execution of ${formatTaskName(task.typeName)}`, "success");
+      showToast(
+        `Started execution of ${formatTaskName(task.typeName)}`,
+        "success",
+      );
       queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
       const timer = window.setTimeout(() => {
@@ -867,7 +902,10 @@ function SystemTasks() {
     },
     onSuccess: (_, task) => {
       trackSystemMaintenanceAction("task_abort", formatTaskName(task.typeName));
-      showToast(`Aborted execution of ${formatTaskName(task.typeName)}`, "success");
+      showToast(
+        `Aborted execution of ${formatTaskName(task.typeName)}`,
+        "success",
+      );
       setExecutingTasks((prev) => {
         const next = new Set(prev);
         next.delete(task.typeName);
@@ -974,7 +1012,8 @@ function SystemTasks() {
               fontSize: "0.9rem",
             }}
           >
-            Scheduled background maintenance jobs, integration sync intervals, and command execution queue
+            Scheduled background maintenance jobs, integration sync intervals,
+            and command execution queue
           </p>
         </div>
 
@@ -1050,7 +1089,12 @@ function SystemTasks() {
                   <th className="torrent-table-th">Last Execution</th>
                   <th className="torrent-table-th">Last Duration</th>
                   <th className="torrent-table-th">Next Execution</th>
-                  <th className="torrent-table-th" style={{ textAlign: "right" }}>Actions</th>
+                  <th
+                    className="torrent-table-th"
+                    style={{ textAlign: "right" }}
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -1059,42 +1103,51 @@ function SystemTasks() {
                   const isAborting =
                     abortTaskMutation.isPending &&
                     (abortTaskMutation.variables?.typeName === task.typeName ||
-                      (task.id !== undefined && abortTaskMutation.variables?.id === task.id));
+                      (task.id !== undefined &&
+                        abortTaskMutation.variables?.id === task.id));
                   return (
                     <tr key={task.typeName} className="torrent-table-row">
                       <td>
                         <strong style={{ color: "var(--text-primary)" }}>
                           {formatTaskName(task.typeName)}
                         </strong>
-                        {task.lastStatus === "Failed" && task.lastErrorMessage && (
-                          <div
-                            style={{
-                              fontSize: "0.75rem",
-                              color: "#e74c3c",
-                              marginTop: "0.2rem",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              maxWidth: "280px",
-                            }}
-                            title={task.lastErrorMessage}
-                          >
-                            ⚠️ {task.lastErrorMessage}
-                          </div>
-                        )}
+                        {task.lastStatus === "Failed" &&
+                          task.lastErrorMessage && (
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "#e74c3c",
+                                marginTop: "0.2rem",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                maxWidth: "280px",
+                              }}
+                              title={task.lastErrorMessage}
+                            >
+                              ⚠️ {task.lastErrorMessage}
+                            </div>
+                          )}
                       </td>
                       <td>
                         {running ? (
                           <span
                             className="badge badge-seeding"
-                            style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.5rem",
+                            }}
                           >
                             ⏳ Running
                           </span>
                         ) : task.isEnabled === false ? (
                           <span
                             className="badge badge-secondary"
-                            style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem", opacity: 0.7 }}
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.5rem",
+                              opacity: 0.7,
+                            }}
                           >
                             ⏸️ Disabled
                           </span>
@@ -1104,19 +1157,28 @@ function SystemTasks() {
                             style={{
                               fontSize: "0.75rem",
                               padding: "0.2rem 0.5rem",
-                              cursor: task.lastErrorMessage ? "help" : "default",
+                              cursor: task.lastErrorMessage
+                                ? "help"
+                                : "default",
                               backgroundColor: "rgba(231, 76, 60, 0.2)",
                               color: "#e74c3c",
                               borderColor: "#e74c3c",
                             }}
-                            title={task.lastErrorMessage ? `Error: ${task.lastErrorMessage}` : "Task failed during last execution"}
+                            title={
+                              task.lastErrorMessage
+                                ? `Error: ${task.lastErrorMessage}`
+                                : "Task failed during last execution"
+                            }
                           >
                             ✕ Failed
                           </span>
                         ) : (
                           <span
                             className="badge badge-secondary"
-                            style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.2rem 0.5rem",
+                            }}
                           >
                             ● Idle
                           </span>
@@ -1147,13 +1209,22 @@ function SystemTasks() {
                         )}
                       </td>
                       <td
-                        title={task.isEnabled === false ? "Task is disabled" : formatDateTime(task.nextExecution)}
+                        title={
+                          task.isEnabled === false
+                            ? "Task is disabled"
+                            : formatDateTime(task.nextExecution)
+                        }
                         style={{
-                          color: task.isEnabled === false ? "var(--text-muted)" : "var(--accent, #c8a84e)",
+                          color:
+                            task.isEnabled === false
+                              ? "var(--text-muted)"
+                              : "var(--accent, #c8a84e)",
                           fontWeight: 500,
                         }}
                       >
-                        {task.isEnabled === false ? "Disabled" : formatRelativeTime(task.nextExecution, true)}
+                        {task.isEnabled === false
+                          ? "Disabled"
+                          : formatRelativeTime(task.nextExecution, true)}
                       </td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <button
@@ -1199,7 +1270,11 @@ function SystemTasks() {
                           }}
                           onClick={() => executeMutation.mutate(task)}
                           disabled={running}
-                          title={running ? "Task is currently running" : "Execute task now"}
+                          title={
+                            running
+                              ? "Task is currently running"
+                              : "Execute task now"
+                          }
                         >
                           {running ? "⏳ Running..." : "⚡ Run Now"}
                         </button>
@@ -1295,7 +1370,12 @@ function SystemTasks() {
                   <th className="torrent-table-th">Started</th>
                   <th className="torrent-table-th">Ended</th>
                   <th className="torrent-table-th">Duration</th>
-                  <th className="torrent-table-th" style={{ textAlign: "right" }}>Actions</th>
+                  <th
+                    className="torrent-table-th"
+                    style={{ textAlign: "right" }}
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -1335,7 +1415,8 @@ function SystemTasks() {
                       </code>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      {(cmd.status === "queued" || cmd.status === "started") && (
+                      {(cmd.status === "queued" ||
+                        cmd.status === "started") && (
                         <button
                           className="btn btn-outline"
                           style={{

@@ -194,32 +194,35 @@ export function NetworkSwarmCard() {
             <span>
               Swarm IP:{" "}
               <strong>
-                {networkStatus?.boundIp || networkStatus?.localIp || "127.0.0.1"}
+                {networkStatus?.boundIp ||
+                  networkStatus?.localIp ||
+                  "127.0.0.1"}
               </strong>
-              {networkStatus?.boundInterface && networkStatus.boundInterface !== "Any" && (
-                <span
-                  style={{
-                    marginLeft: "0.35rem",
-                    fontSize: "0.72rem",
-                    padding: "0.1rem 0.35rem",
-                    borderRadius: "4px",
-                    backgroundColor: isKillSwitchActive
-                      ? "rgba(40, 167, 69, 0.2)"
-                      : "rgba(200, 168, 78, 0.2)",
-                    color: isKillSwitchActive
-                      ? "var(--success, #28a745)"
-                      : "var(--accent, #c8a84e)",
-                    border: `1px solid ${
-                      isKillSwitchActive
+              {networkStatus?.boundInterface &&
+                networkStatus.boundInterface !== "Any" && (
+                  <span
+                    style={{
+                      marginLeft: "0.35rem",
+                      fontSize: "0.72rem",
+                      padding: "0.1rem 0.35rem",
+                      borderRadius: "4px",
+                      backgroundColor: isKillSwitchActive
+                        ? "rgba(40, 167, 69, 0.2)"
+                        : "rgba(200, 168, 78, 0.2)",
+                      color: isKillSwitchActive
                         ? "var(--success, #28a745)"
-                        : "var(--accent, #c8a84e)"
-                    }`,
-                  }}
-                >
-                  {isKillSwitchActive ? "🛡️ " : ""}
-                  {networkStatus.boundInterface}
-                </span>
-              )}
+                        : "var(--accent, #c8a84e)",
+                      border: `1px solid ${
+                        isKillSwitchActive
+                          ? "var(--success, #28a745)"
+                          : "var(--accent, #c8a84e)"
+                      }`,
+                    }}
+                  >
+                    {isKillSwitchActive ? "🛡️ " : ""}
+                    {networkStatus.boundInterface}
+                  </span>
+                )}
             </span>
             {networkStatus?.physicalIp && (
               <span

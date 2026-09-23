@@ -32,7 +32,10 @@ export function BitTorrentTab() {
     if (config) {
       setForm({
         ...config,
-        encryptionMode: config.encryptionMode === "forced" ? "required" : config.encryptionMode,
+        encryptionMode:
+          config.encryptionMode === "forced"
+            ? "required"
+            : config.encryptionMode,
       });
       setDirty(false);
     }
@@ -96,7 +99,9 @@ export function BitTorrentTab() {
         />
         <SelectInput
           label="Encryption"
-          value={form.encryptionMode === "forced" ? "required" : form.encryptionMode}
+          value={
+            form.encryptionMode === "forced" ? "required" : form.encryptionMode
+          }
           onChange={(v) => set("encryptionMode", v)}
           options={[
             { value: "disabled", label: "Disabled (Plain Only)" },

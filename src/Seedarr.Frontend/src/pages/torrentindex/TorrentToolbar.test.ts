@@ -90,7 +90,8 @@ describe("TorrentToolbar accessibility attributes", () => {
     const html = renderToolbar(defaultProps);
 
     assert.ok(
-      html.includes('aria-label="Filter torrents"') || html.includes('aria-label="Filter torrents..."'),
+      html.includes('aria-label="Filter torrents"') ||
+        html.includes('aria-label="Filter torrents..."'),
       "Filter input must have accessible aria-label",
     );
     assert.ok(
@@ -108,14 +109,16 @@ describe("TorrentToolbar accessibility attributes", () => {
     // Table view button should be aria-pressed=true, Grid view button aria-pressed=false
     assert.ok(
       html.includes('title="Table view" aria-pressed="true"') ||
-      html.includes('aria-pressed="true" title="Table view"') ||
-      (html.includes('title="Table view"') && html.includes('aria-pressed="true"')),
+        html.includes('aria-pressed="true" title="Table view"') ||
+        (html.includes('title="Table view"') &&
+          html.includes('aria-pressed="true"')),
       "Table view button should have aria-pressed=true",
     );
     assert.ok(
       html.includes('title="Grid view" aria-pressed="false"') ||
-      html.includes('aria-pressed="false" title="Grid view"') ||
-      (html.includes('title="Grid view"') && html.includes('aria-pressed="false"')),
+        html.includes('aria-pressed="false" title="Grid view"') ||
+        (html.includes('title="Grid view"') &&
+          html.includes('aria-pressed="false"')),
       "Grid view button should have aria-pressed=false",
     );
   });
@@ -129,11 +132,17 @@ describe("TorrentToolbar accessibility attributes", () => {
     // In grid mode: Grid view button aria-pressed=true, Table view button aria-pressed=false
     const tableMatch = html.match(/<button[^>]*title="Table view"[^>]*>/);
     assert.ok(tableMatch, "Table button found");
-    assert.ok(tableMatch[0].includes('aria-pressed="false"'), "Table button should be aria-pressed=false");
+    assert.ok(
+      tableMatch[0].includes('aria-pressed="false"'),
+      "Table button should be aria-pressed=false",
+    );
 
     const gridMatch = html.match(/<button[^>]*title="Grid view"[^>]*>/);
     assert.ok(gridMatch, "Grid button found");
-    assert.ok(gridMatch[0].includes('aria-pressed="true"'), "Grid button should be aria-pressed=true");
+    assert.ok(
+      gridMatch[0].includes('aria-pressed="true"'),
+      "Grid button should be aria-pressed=true",
+    );
   });
 
   it("renders bulk tag assignment and removal buttons when selectedCount > 0", () => {

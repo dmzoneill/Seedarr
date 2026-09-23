@@ -43,11 +43,7 @@ export type ColumnKey =
   | "smallTorrentLimit";
 
 export type ColumnCategory =
-  | "basic"
-  | "transfer"
-  | "swarm"
-  | "activity"
-  | "metadata";
+  "basic" | "transfer" | "swarm" | "activity" | "metadata";
 
 export interface ColumnDef {
   key: ColumnKey;
@@ -144,41 +140,141 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { key: "priority", label: "Priority", sortable: true, category: "basic" },
 
   // Transfer & Speeds
-  { key: "uploaded", label: "Total Uploaded", sortable: true, category: "transfer" },
-  { key: "downloaded", label: "Total Downloaded", sortable: true, category: "transfer" },
-  { key: "sessionUploaded", label: "Session Uploaded", sortable: true, category: "transfer" },
-  { key: "sessionDownloaded", label: "Session Downloaded", sortable: true, category: "transfer" },
-  { key: "uploadSpeed", label: "Upload Speed", sortable: true, category: "transfer" },
-  { key: "downloadSpeed", label: "Download Speed", sortable: true, category: "transfer" },
+  {
+    key: "uploaded",
+    label: "Total Uploaded",
+    sortable: true,
+    category: "transfer",
+  },
+  {
+    key: "downloaded",
+    label: "Total Downloaded",
+    sortable: true,
+    category: "transfer",
+  },
+  {
+    key: "sessionUploaded",
+    label: "Session Uploaded",
+    sortable: true,
+    category: "transfer",
+  },
+  {
+    key: "sessionDownloaded",
+    label: "Session Downloaded",
+    sortable: true,
+    category: "transfer",
+  },
+  {
+    key: "uploadSpeed",
+    label: "Upload Speed",
+    sortable: true,
+    category: "transfer",
+  },
+  {
+    key: "downloadSpeed",
+    label: "Download Speed",
+    sortable: true,
+    category: "transfer",
+  },
   { key: "ratio", label: "Ratio", sortable: true, category: "transfer" },
   { key: "eta", label: "ETA", sortable: true, category: "transfer" },
-  { key: "uploadLimit", label: "Upload Limit", sortable: true, category: "transfer" },
-  { key: "downloadLimit", label: "Download Limit", sortable: true, category: "transfer" },
+  {
+    key: "uploadLimit",
+    label: "Upload Limit",
+    sortable: true,
+    category: "transfer",
+  },
+  {
+    key: "downloadLimit",
+    label: "Download Limit",
+    sortable: true,
+    category: "transfer",
+  },
 
   // Swarm & Peers
   { key: "seeders", label: "Seeders", sortable: true, category: "swarm" },
   { key: "leechers", label: "Leechers", sortable: true, category: "swarm" },
   { key: "trackerUrl", label: "Tracker", sortable: true, category: "swarm" },
-  { key: "announceInterval", label: "Announce Interval", sortable: true, category: "swarm" },
-  { key: "nextUpdate", label: "Next Update", sortable: true, category: "swarm" },
-  { key: "availability", label: "Availability", sortable: true, category: "swarm" },
+  {
+    key: "announceInterval",
+    label: "Announce Interval",
+    sortable: true,
+    category: "swarm",
+  },
+  {
+    key: "nextUpdate",
+    label: "Next Update",
+    sortable: true,
+    category: "swarm",
+  },
+  {
+    key: "availability",
+    label: "Availability",
+    sortable: true,
+    category: "swarm",
+  },
 
   // Activity & Settings
   { key: "active", label: "Active", sortable: true, category: "activity" },
-  { key: "superSeeding", label: "Super Seeding", sortable: true, category: "activity" },
-  { key: "sequentialDownload", label: "Sequential", sortable: true, category: "activity" },
-  { key: "forceStart", label: "Force Start", sortable: true, category: "activity" },
-  { key: "threshold", label: "Threshold", sortable: true, category: "activity" },
-  { key: "smallTorrentLimit", label: "Small Torrent Limit", sortable: true, category: "activity" },
+  {
+    key: "superSeeding",
+    label: "Super Seeding",
+    sortable: true,
+    category: "activity",
+  },
+  {
+    key: "sequentialDownload",
+    label: "Sequential",
+    sortable: true,
+    category: "activity",
+  },
+  {
+    key: "forceStart",
+    label: "Force Start",
+    sortable: true,
+    category: "activity",
+  },
+  {
+    key: "threshold",
+    label: "Threshold",
+    sortable: true,
+    category: "activity",
+  },
+  {
+    key: "smallTorrentLimit",
+    label: "Small Torrent Limit",
+    sortable: true,
+    category: "activity",
+  },
 
   // Dates & Details
   { key: "dateAdded", label: "Added", sortable: true, category: "metadata" },
-  { key: "lastActive", label: "Last Active", sortable: true, category: "metadata" },
-  { key: "creationDate", label: "Created", sortable: true, category: "metadata" },
-  { key: "createdBy", label: "Created By", sortable: true, category: "metadata" },
+  {
+    key: "lastActive",
+    label: "Last Active",
+    sortable: true,
+    category: "metadata",
+  },
+  {
+    key: "creationDate",
+    label: "Created",
+    sortable: true,
+    category: "metadata",
+  },
+  {
+    key: "createdBy",
+    label: "Created By",
+    sortable: true,
+    category: "metadata",
+  },
   { key: "comment", label: "Comment", sortable: true, category: "metadata" },
   { key: "pieceCount", label: "Pieces", sortable: true, category: "metadata" },
-  { key: "pieceLength", label: "Piece Length", sortable: true, category: "metadata" },
+  {
+    key: "pieceLength",
+    label: "Piece Length",
+    sortable: true,
+    category: "metadata",
+  },
   { key: "isPrivate", label: "Private", sortable: true, category: "metadata" },
   { key: "infoHash", label: "Info Hash", sortable: true, category: "metadata" },
 ];
@@ -469,17 +565,26 @@ export interface ColumnPreferencesHook {
   setSort: (key: ColumnKey | null, asc?: boolean) => void;
   resetSort: () => void;
   columnOrder: ColumnKey[];
-  setColumnOrder: (orderOrUpdater: ColumnKey[] | ((prev: ColumnKey[]) => ColumnKey[])) => void;
+  setColumnOrder: (
+    orderOrUpdater: ColumnKey[] | ((prev: ColumnKey[]) => ColumnKey[]),
+  ) => void;
   resetColumnOrder: () => void;
   columnWidths: Record<string, number>;
-  setColumnWidths: (widthsOrUpdater: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  setColumnWidths: (
+    widthsOrUpdater:
+      | Record<string, number>
+      | ((prev: Record<string, number>) => Record<string, number>),
+  ) => void;
   resetColumnWidths: () => void;
 }
 
 export function useColumnPreferences(): ColumnPreferencesHook {
-  const [visibleColumns, setVisibleColumnsState] = useState<Set<string>>(loadVisibleColumns);
-  const [columnOrder, setColumnOrderState] = useState<ColumnKey[]>(loadColumnOrder);
-  const [columnWidths, setColumnWidthsState] = useState<Record<string, number>>(loadColumnWidths);
+  const [visibleColumns, setVisibleColumnsState] =
+    useState<Set<string>>(loadVisibleColumns);
+  const [columnOrder, setColumnOrderState] =
+    useState<ColumnKey[]>(loadColumnOrder);
+  const [columnWidths, setColumnWidthsState] =
+    useState<Record<string, number>>(loadColumnWidths);
   const [sortState, setSortState] = useState<{
     sortKey: ColumnKey | null;
     sortAsc: boolean;
@@ -614,26 +719,31 @@ export function useColumnPreferences(): ColumnPreferencesHook {
     saveVisibleColumns(next);
   }, []);
 
-  const toggleCategory = useCallback((category: ColumnCategory, enable?: boolean) => {
-    const categoryKeys = ALL_COLUMNS.filter((c) => c.category === category).map((c) => c.key);
-    setVisibleColumnsState((prev) => {
-      const next = new Set(prev);
-      const allEnabled = categoryKeys.every((k) => next.has(k));
-      const shouldEnable = enable !== undefined ? enable : !allEnabled;
+  const toggleCategory = useCallback(
+    (category: ColumnCategory, enable?: boolean) => {
+      const categoryKeys = ALL_COLUMNS.filter(
+        (c) => c.category === category,
+      ).map((c) => c.key);
+      setVisibleColumnsState((prev) => {
+        const next = new Set(prev);
+        const allEnabled = categoryKeys.every((k) => next.has(k));
+        const shouldEnable = enable !== undefined ? enable : !allEnabled;
 
-      if (shouldEnable) {
-        categoryKeys.forEach((k) => next.add(k));
-      } else {
-        categoryKeys.forEach((k) => {
-          if (next.size > 1) {
-            next.delete(k);
-          }
-        });
-      }
-      saveVisibleColumns(next);
-      return next;
-    });
-  }, []);
+        if (shouldEnable) {
+          categoryKeys.forEach((k) => next.add(k));
+        } else {
+          categoryKeys.forEach((k) => {
+            if (next.size > 1) {
+              next.delete(k);
+            }
+          });
+        }
+        saveVisibleColumns(next);
+        return next;
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     function handleStorage(e: StorageEvent) {

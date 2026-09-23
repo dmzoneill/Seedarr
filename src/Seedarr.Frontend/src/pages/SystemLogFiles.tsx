@@ -168,7 +168,8 @@ function SystemLogFiles() {
               fontSize: "0.9rem",
             }}
           >
-            Rotating plain text log files stored on disk for offline debugging and diagnostic exports
+            Rotating plain text log files stored on disk for offline debugging
+            and diagnostic exports
           </p>
         </div>
 

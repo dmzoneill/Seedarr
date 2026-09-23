@@ -66,12 +66,16 @@ describe("SignalRProvider: configuration maps", () => {
     assert.ok(EVENT_INVALIDATION_MAP.TrackerAnnounced);
 
     // Ensure torrent events invalidate torrents and trackerboost
-    const torrentUpdatedKeys = EVENT_INVALIDATION_MAP.TorrentUpdated.map((k) => k.join("/"));
+    const torrentUpdatedKeys = EVENT_INVALIDATION_MAP.TorrentUpdated.map((k) =>
+      k.join("/"),
+    );
     assert.ok(torrentUpdatedKeys.includes("torrents"));
     assert.ok(torrentUpdatedKeys.includes("trackerboost"));
 
     // Ensure 1Hz seeding tick events ONLY invalidate seeding stats and NOT torrents
-    const seedingKeys = EVENT_INVALIDATION_MAP.SeedingStatsUpdated.map((k) => k.join("/"));
+    const seedingKeys = EVENT_INVALIDATION_MAP.SeedingStatsUpdated.map((k) =>
+      k.join("/"),
+    );
     assert.ok(seedingKeys.includes("seeding/stats"));
     assert.equal(seedingKeys.includes("torrents"), false);
   });
