@@ -3,8 +3,12 @@ import { useSeedingConfig, useSaveSeedingConfig } from "../../api/hooks";
 import { formatBytes } from "../../utils/formatters";
 import type { SeedingConfig } from "../../api/types";
 import { trackSpeedModeChange } from "../../utils/analytics";
+import { useTranslation } from "../../i18n";
+import { useToast } from "../../context/ToastContext";
 
 export function BandwidthCard() {
+  const { t } = useTranslation();
+  const { showToast } = useToast();
   const { data: config, isLoading } = useSeedingConfig();
   const save = useSaveSeedingConfig();
 
@@ -53,7 +57,14 @@ export function BandwidthCard() {
     if (updates.alternativeSpeedEnabled !== undefined) {
       setTurtleMode(updates.alternativeSpeedEnabled);
     }
-    save.mutate(newConfig);
+    save.mutate(newConfig, {
+      onError: (err: any) => {
+        showToast(
+          t("quickSettings.failedToUpdateSpeed", { 0: err?.message || err }),
+          "error",
+        );
+      },
+    });
   };
 
   const handleToggleTurtle = () => {
@@ -125,24 +136,28 @@ export function BandwidthCard() {
   };
 
   const formatLimit = (kbps: number) => {
-    if (kbps <= 0) return "∞ Unlimited";
+    if (kbps <= 0) return t("quickSettings.unlimited");
     return `${formatBytes(kbps * 1024)}/s`;
   };
 
   const presets = [
-    { label: "🐢 Throttled", dl: 100, ul: 50 },
-    { label: "⚡ Balanced", dl: 1250, ul: 625 },
-    { label: "🚀 High Speed", dl: 10240, ul: 5120 },
-    { label: "∞ Unlimited", dl: 0, ul: 0 },
+    { label: t("quickSettings.presetThrottled"), dl: 100, ul: 50 },
+    { label: t("quickSettings.presetBalanced"), dl: 1250, ul: 625 },
+    { label: t("quickSettings.presetHighSpeed"), dl: 10240, ul: 5120 },
+    { label: t("quickSettings.presetUnlimited"), dl: 0, ul: 0 },
   ];
 
   if (isLoading) {
     return (
       <div className="quick-settings-card">
         <div className="quick-settings-card-header">
-          <span className="quick-settings-card-title">Bandwidth Limits</span>
+          <span className="quick-settings-card-title">
+            {t("quickSettings.bandwidthLimits")}
+          </span>
         </div>
-        <div className="quick-settings-loading">Loading limits...</div>
+        <div className="quick-settings-loading">
+          {t("quickSettings.loadingBandwidth")}
+        </div>
       </div>
     );
   }
@@ -152,15 +167,20 @@ export function BandwidthCard() {
       <div className="quick-settings-card-header">
         <div className="quick-settings-card-title-group">
           <span className="quick-settings-card-icon">⚡</span>
-          <span className="quick-settings-card-title">Bandwidth Limits</span>
+          <span className="quick-settings-card-title">
+            {t("quickSettings.bandwidthLimits")}
+          </span>
         </div>
         <button
           type="button"
           className={`quick-settings-turtle-btn ${turtleMode ? "active" : ""}`}
           onClick={handleToggleTurtle}
-          title="Toggle Turtle Mode (Alternative Rate Limits)"
+          title={t("quickSettings.turtleModeToggle")}
         >
-          🐢 {turtleMode ? "Turtle ON" : "Turtle Mode"}
+          🐢{" "}
+          {turtleMode
+            ? t("quickSettings.turtleOn")
+            : t("quickSettings.turtleMode")}
         </button>
       </div>
 
@@ -168,7 +188,9 @@ export function BandwidthCard() {
         {/* Download Speed Slider */}
         <div className="quick-settings-control-group">
           <div className="quick-settings-label-row">
-            <span className="quick-settings-label">Max Download</span>
+            <span className="quick-settings-label">
+              {t("quickSettings.maxDownload")}
+            </span>
             <span className="quick-settings-val quick-settings-val-dl">
               {formatLimit(downloadLimit)}
             </span>
@@ -185,7 +207,7 @@ export function BandwidthCard() {
             onTouchEnd={() => commitDownload()}
             onKeyUp={() => commitDownload()}
             onBlur={() => commitDownload()}
-            aria-label="Max Download Speed"
+            aria-label={t("quickSettings.maxDownload")}
           />
           <div className="quick-settings-slider-ticks">
             <span onClick={() => commitDownload(0)}>0 (∞)</span>
@@ -198,7 +220,9 @@ export function BandwidthCard() {
         {/* Upload Speed Slider */}
         <div className="quick-settings-control-group">
           <div className="quick-settings-label-row">
-            <span className="quick-settings-label">Max Upload</span>
+            <span className="quick-settings-label">
+              {t("quickSettings.maxUpload")}
+            </span>
             <span className="quick-settings-val quick-settings-val-ul">
               {formatLimit(uploadLimit)}
             </span>
@@ -215,7 +239,7 @@ export function BandwidthCard() {
             onTouchEnd={() => commitUpload()}
             onKeyUp={() => commitUpload()}
             onBlur={() => commitUpload()}
-            aria-label="Max Upload Speed"
+            aria-label={t("quickSettings.maxUpload")}
           />
           <div className="quick-settings-slider-ticks">
             <span onClick={() => commitUpload(0)}>0 (∞)</span>
@@ -227,7 +251,9 @@ export function BandwidthCard() {
 
         {/* Presets */}
         <div className="quick-settings-presets-section">
-          <span className="quick-settings-sublabel">Speed Presets:</span>
+          <span className="quick-settings-sublabel">
+            {t("quickSettings.speedPresets")}
+          </span>
           <div className="quick-settings-chips">
             {presets.map((p) => (
               <button
