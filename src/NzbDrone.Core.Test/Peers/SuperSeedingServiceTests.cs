@@ -11,7 +11,6 @@ using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Peers.SuperSeeding;
-using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.SuperSeedingTests;
@@ -142,7 +141,6 @@ public class SuperSeedingServiceTests
         };
     }
 
-    #region Piece Revealing Sequence
 
     [Test]
     public void SendInitialAvailability_WhenFastExtensionSupported_SendsHaveNone()
@@ -282,9 +280,7 @@ public class SuperSeedingServiceTests
         server3.AssignedSuperSeedingPiece.Should().BeNull();
     }
 
-    #endregion
 
-    #region Proxy Seeding Logic (Request Filtering & Block Uploading)
 
     [Test]
     public void IsRequestAllowed_WhenPieceMatchesAssignedPiece_ReturnsTrue()
@@ -403,9 +399,7 @@ public class SuperSeedingServiceTests
         tracker.GetPieceState(2).Should().Be(SuperSeedingPieceState.Uploaded);
     }
 
-    #endregion
 
-    #region Feedback Detection (HAVE, Bitfield, Timeouts, Disconnect)
 
     [Test]
     public void OnPeerHave_FeedbackFromAssignedPeer_ConfirmsUploaded_DoesNotPropagate()
@@ -553,9 +547,7 @@ public class SuperSeedingServiceTests
         serverConn.AssignedPieceBytesUploaded.Should().Be(0);
     }
 
-    #endregion
 
-    #region Transitioning Out of Super-Seeding Mode
 
     [Test]
     public void ExitSuperSeeding_WhenPeerSendsHaveAll_ExitsAndBroadcastsFullAvailability()
@@ -645,9 +637,7 @@ public class SuperSeedingServiceTests
         msg2.Type.Should().Be(PeerMessageType.HaveAll);
     }
 
-    #endregion
 
-    #region SuperSeedingTracker Unit Tests (State, Bitfields, Eligibility)
 
     [Test]
     public void SuperSeedingTracker_TracksStateCountsAccurately()
@@ -727,5 +717,4 @@ public class SuperSeedingServiceTests
         tracker.GetPieceState(2).Should().Be(SuperSeedingPieceState.Unseeded);
     }
 
-    #endregion
 }
