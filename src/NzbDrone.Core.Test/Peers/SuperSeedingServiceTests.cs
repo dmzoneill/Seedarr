@@ -11,6 +11,8 @@ using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Peers.SuperSeeding;
+using NzbDrone.Core.Seeding;
+using SuperSeedingTracker = NzbDrone.Core.Peers.SuperSeeding.SuperSeedingTracker;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.SuperSeedingTests;
@@ -707,5 +709,4 @@ public class SuperSeedingServiceTests
         reset.Should().BeTrue();
         tracker.GetPieceState(2).Should().Be(SuperSeedingPieceState.Unseeded);
     }
-
 }
