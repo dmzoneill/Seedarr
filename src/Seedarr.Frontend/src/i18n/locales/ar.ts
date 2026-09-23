@@ -1551,6 +1551,23 @@ const ar = {
     percentUsed: "{percent}% Used",
   },
   settingsTabs: {
+    shared: {
+      failedToSave: "Failed to save: ",
+      changesSaved: "✓ Changes Saved Successfully",
+      unsavedChangesTitle: "Unsaved Changes",
+      unsavedChangesDesc:
+        "You have unsaved changes in this settings section. What would you like to do?",
+      unsavedChangesPrompt:
+        "You have unsaved changes in settings. If you leave this page, your changes will be discarded. Are you sure you want to leave?",
+      stayOnPage: "Stay on Page",
+      discardChanges: "Discard Changes",
+      discardAndLeave: "Discard and Leave",
+      saveChanges: "Save Changes",
+      savingChangesBtn: "Saving Changes...",
+      saveChangesBtn: "💾 Save Changes",
+      noChangesBtn: "✓ No Changes",
+      unsavedChangesBadge: "● Unsaved Changes",
+    },
     ai: {
       runDiagnosticDesc: "Run live diagnostic probe and model test",
       switchSuccess: "Switched AI provider to {provider}",

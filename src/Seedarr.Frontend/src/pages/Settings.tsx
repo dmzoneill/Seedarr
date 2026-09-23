@@ -1,5 +1,12 @@
+import { useContext } from "react";
 import { useParams } from "react-router";
 import { usePermissions } from "../hooks/usePermissions";
+import {
+  useSettingsDirty,
+  SettingsDirtyContext,
+  SettingsDirtyProvider,
+  defaultSettingsDirtyContext,
+} from "./settings/SettingsDirtyContext";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SeedingTab } from "./settings/SeedingTab";
 import { BitTorrentTab } from "./settings/BitTorrentTab";
@@ -109,8 +116,23 @@ const TAB_COMPONENTS: Record<string, React.ComponentType> = {
   advanced: AdvancedTab,
 };
 
-function Settings() {
+export { useSettingsDirty, SettingsDirtyContext, SettingsDirtyProvider };
+
+export function Settings() {
+  const dirtyCtx = useContext(SettingsDirtyContext);
+  if (dirtyCtx === defaultSettingsDirtyContext) {
+    return (
+      <SettingsDirtyProvider>
+        <SettingsContent />
+      </SettingsDirtyProvider>
+    );
+  }
+  return <SettingsContent />;
+}
+
+function SettingsContent() {
   const { canSaveSettings } = usePermissions();
+  const { isDirty } = useSettingsDirty();
   const { section } = useParams<{ section?: string }>();
   const activeSection = section || "general";
   const title = sectionTitles[activeSection] || "Settings";
@@ -168,6 +190,22 @@ function Settings() {
             }}
           >
             <span>⚙️</span> {title}
+            {isDirty && (
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  marginLeft: "0.5rem",
+                  backgroundColor: "rgba(234, 179, 8, 0.2)",
+                  color: "#eab308",
+                  border: "1px solid rgba(234, 179, 8, 0.4)",
+                  padding: "2px 8px",
+                  borderRadius: "9999px",
+                  fontWeight: 600,
+                }}
+              >
+                ● Unsaved Changes
+              </span>
+            )}
           </h1>
           <p
             style={{
