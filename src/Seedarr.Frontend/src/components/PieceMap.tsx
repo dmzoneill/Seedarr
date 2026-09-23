@@ -343,7 +343,6 @@ export function PieceMap({
     };
   }, [containerWidth, totalPieces]);
 
-  // Get color for Status mode
   const getStatusColor = useCallback((state: number): string => {
     switch (state) {
       case 2:
@@ -358,7 +357,6 @@ export function PieceMap({
     }
   }, []);
 
-  // Get color for Swarm Availability mode (Heatmap)
   const getRarityColor = useCallback((count: number): string => {
     if (count <= 0) return "#282520"; // Missing / 0
     if (count === 1) return "#e74c3c"; // Rare red

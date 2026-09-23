@@ -172,7 +172,6 @@ public class YamlScriptRunner : IScriptRunner
                 {
                     try
                     {
-                        // Execute HTTP step
                         if (step.Http != null)
                         {
                             var url = SubstituteVariables(step.Http.Url ?? string.Empty, variableContext);
@@ -265,7 +264,6 @@ public class YamlScriptRunner : IScriptRunner
                             }
                         }
 
-                        // Execute actions
                         if (step.Actions != null)
                         {
                             foreach (var action in step.Actions)

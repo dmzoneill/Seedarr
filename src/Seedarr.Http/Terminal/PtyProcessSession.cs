@@ -9,11 +9,13 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using NLog;
 
 namespace Seedarr.Http.Terminal;
 
 public sealed class PtyProcessSession : ITerminalSession
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private const string PythonPtyScript = @"import os, pty, struct, fcntl, termios, sys, select, signal
 
 cwd = sys.argv[1] if len(sys.argv) > 1 else '/tmp'
@@ -215,8 +217,9 @@ else:
                 {
                     controlPipeStream.Dispose();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to dispose control pipe stream during terminal session cleanup");
                 }
             }
 
@@ -226,8 +229,9 @@ else:
                 {
                     File.Delete(controlPipePath);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to delete control pipe path {0} during terminal session cleanup", controlPipePath);
                 }
             }
 
@@ -242,8 +246,9 @@ else:
 
                     proc.Dispose();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to terminate process during terminal session cleanup");
                 }
             }
 

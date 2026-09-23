@@ -236,7 +236,17 @@ public class UpnpService : BackgroundService, IUpnpService
             var mapping = new Mapping(protocol, port, port, LifetimeSeconds, description);
             await device.CreatePortMapAsync(mapping).WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
-            UpdateMappingStatus(port, protocolName, description, true, null, LifetimeSeconds, DateTime.UtcNow.AddSeconds(LifetimeSeconds));
+            UpdateMappingStatus(new PortMapping
+            {
+                InternalPort = port,
+                ExternalPort = port,
+                Protocol = protocolName,
+                Description = description,
+                IsActive = true,
+                ErrorMessage = null,
+                LeaseSeconds = LifetimeSeconds,
+                ExpiryUtc = DateTime.UtcNow.AddSeconds(LifetimeSeconds)
+            });
             _logger.Info("UPnP: mapped {0} port {1} ({2})", protocolName, port, description);
             return true;
         }
@@ -252,7 +262,17 @@ public class UpnpService : BackgroundService, IUpnpService
                 _logger.Warn(ex, "UPnP: failed to map {0} port {1}: {2}", protocolName, port, ex.Message);
             }
 
-            UpdateMappingStatus(port, protocolName, description, false, errorMsg, 0, null);
+            UpdateMappingStatus(new PortMapping
+            {
+                InternalPort = port,
+                ExternalPort = port,
+                Protocol = protocolName,
+                Description = description,
+                IsActive = false,
+                ErrorMessage = errorMsg,
+                LeaseSeconds = 0,
+                ExpiryUtc = null
+            });
             return false;
         }
     }
@@ -371,33 +391,23 @@ public class UpnpService : BackgroundService, IUpnpService
         return (false, ex.Message);
     }
 
-    private void UpdateMappingStatus(int port, string protocolName, string description, bool isActive, string errorMessage = null, int leaseSeconds = 0, DateTime? expiryUtc = null)
+    private void UpdateMappingStatus(PortMapping mapping)
     {
         lock (_mappings)
         {
-            var existing = _mappings.Find(m => m.InternalPort == port && m.Protocol == protocolName);
+            var existing = _mappings.Find(m => m.InternalPort == mapping.InternalPort && m.Protocol == mapping.Protocol);
             if (existing != null)
             {
-                existing.IsActive = isActive;
-                existing.ErrorMessage = errorMessage;
-                existing.ExternalPort = port;
-                existing.Description = description;
-                existing.LeaseSeconds = leaseSeconds;
-                existing.ExpiryUtc = expiryUtc;
+                existing.IsActive = mapping.IsActive;
+                existing.ErrorMessage = mapping.ErrorMessage;
+                existing.ExternalPort = mapping.ExternalPort;
+                existing.Description = mapping.Description;
+                existing.LeaseSeconds = mapping.LeaseSeconds;
+                existing.ExpiryUtc = mapping.ExpiryUtc;
             }
             else
             {
-                _mappings.Add(new PortMapping
-                {
-                    InternalPort = port,
-                    ExternalPort = port,
-                    Protocol = protocolName,
-                    Description = description,
-                    IsActive = isActive,
-                    ErrorMessage = errorMessage,
-                    LeaseSeconds = leaseSeconds,
-                    ExpiryUtc = expiryUtc
-                });
+                _mappings.Add(mapping);
             }
         }
     }

@@ -132,7 +132,6 @@ public class JintScriptRunner : IScriptRunner
                 engine.SetValue("torrent", (object?)null);
             }
 
-            // Execute script
             engine.Execute(script.Code ?? string.Empty);
 
             result.Success = true;

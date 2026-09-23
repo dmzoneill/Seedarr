@@ -81,8 +81,8 @@ class ApiClient {
           errorMessage = text;
         }
       }
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.warn("Failed to extract error details from response:", err);
     }
     return errorMessage;
   }
