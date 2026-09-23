@@ -779,10 +779,13 @@ public class TorrentService : ITorrentService,
             return;
         }
 
-        _logger.Info("VPN kill switch triggered: pausing {0} active torrents.", activeTorrents.Count);
+        var ifaceName = message?.InterfaceName ?? "unknown";
+        _logger.Warn("[State Machine] VPN kill switch triggered on interface '{0}': halting {1} active torrents.", ifaceName, activeTorrents.Count);
         foreach (var torrent in activeTorrents)
         {
             torrent.IsVpnPaused = true;
+            _logger.Warn("[State Machine] Torrent #{0} ('{1}') halted by VPN kill switch on interface '{2}'.", torrent.Id, torrent.Name, ifaceName);
+            _torrentEventLogService?.Warn(torrent.Id, "State Machine", $"Torrent halted: VPN kill switch triggered on interface '{ifaceName}'");
         }
 
         _repository.UpdateMany(activeTorrents);
@@ -814,10 +817,12 @@ public class TorrentService : ITorrentService,
             return;
         }
 
-        _logger.Info("VPN restored: unpausing {0} VPN-paused torrents.", pausedTorrents.Count);
+        _logger.Info("[State Machine] VPN restored: unpausing {0} VPN-paused torrents.", pausedTorrents.Count);
         foreach (var torrent in pausedTorrents)
         {
             torrent.IsVpnPaused = false;
+            _logger.Info("[State Machine] Torrent #{0} ('{1}') resumed after VPN interface restored.", torrent.Id, torrent.Name);
+            _torrentEventLogService?.Info(torrent.Id, "State Machine", "Torrent resumed: VPN interface restored");
         }
 
         _repository.UpdateMany(pausedTorrents);
@@ -836,6 +841,7 @@ public class TorrentService : ITorrentService,
             return null;
         }
 
+        var oldStatus = torrent.Status;
         ValidateDiskSpaceForTorrent(torrent);
 
         var files = _torrentFileService?.GetByTorrentId(torrent.Id) ?? torrent.Files;
@@ -847,7 +853,13 @@ public class TorrentService : ITorrentService,
             torrent.ErrorMessage = null;
         }
 
-        return Update(torrent);
+        var updated = Update(torrent);
+        _logger.Info("[State Machine] Torrent #{0} ('{1}') started/resumed (Status: {2} -> {3}).",
+            torrent.Id, torrent.Name, oldStatus, torrent.Status);
+        _torrentEventLogService?.Info(torrent.Id, "State Machine", $"Torrent started/resumed (Status: {oldStatus} -> {torrent.Status})");
+        _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, torrent.Status, "Torrent started/resumed"));
+
+        return updated;
     }
 
     public Torrent Pause(int id, string reason = null)
@@ -858,13 +870,21 @@ public class TorrentService : ITorrentService,
             return null;
         }
 
+        var oldStatus = torrent.Status;
         torrent.Pause();
         if (!string.IsNullOrEmpty(reason))
         {
             torrent.ErrorMessage = reason;
         }
 
-        return Update(torrent);
+        var updated = Update(torrent);
+        var effectiveReason = !string.IsNullOrEmpty(reason) ? reason : "User requested pause";
+        _logger.Info("[State Machine] Torrent #{0} ('{1}') pause requested (Status: {2} -> Paused) [Reason: {3}].",
+            torrent.Id, torrent.Name, oldStatus, effectiveReason);
+        _torrentEventLogService?.Info(torrent.Id, "State Machine", $"Torrent paused: {effectiveReason}");
+        _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused, effectiveReason));
+
+        return updated;
     }
 
     public void ValidateDiskSpaceForTorrent(Torrent torrent)
@@ -930,11 +950,16 @@ public class TorrentService : ITorrentService,
             return;
         }
 
-        _logger.Warn("Emergency low disk space on volume {0}: pausing {1} active downloading torrents.", message.DrivePath, matchingTorrents.Count);
+        var reason = EmergencyDiskSpacePausePrefix + message.DrivePath;
+        _logger.Warn("[State Machine] Emergency low disk space on volume {0}: pausing {1} active downloading torrents.", message.DrivePath, matchingTorrents.Count);
         foreach (var torrent in matchingTorrents)
         {
+            var oldStatus = torrent.Status;
             torrent.Pause();
-            torrent.ErrorMessage = EmergencyDiskSpacePausePrefix + message.DrivePath;
+            torrent.ErrorMessage = reason;
+            _logger.Warn("[State Machine] Torrent #{0} ('{1}') auto-paused due to low disk space on volume '{2}'.", torrent.Id, torrent.Name, message.DrivePath);
+            _torrentEventLogService?.Warn(torrent.Id, "State Machine", $"Torrent auto-paused: Low disk space on volume '{message.DrivePath}'");
+            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused, reason));
         }
 
         _repository.UpdateMany(matchingTorrents);
@@ -972,11 +997,14 @@ public class TorrentService : ITorrentService,
             return;
         }
 
-        _logger.Info("Disk space restored on volume {0}: resuming {1} auto-paused torrents.", message.DrivePath, matchingTorrents.Count);
+        _logger.Info("[State Machine] Disk space restored on volume {0}: resuming {1} auto-paused torrents.", message.DrivePath, matchingTorrents.Count);
         foreach (var torrent in matchingTorrents)
         {
             torrent.ErrorMessage = null;
             torrent.Resume();
+            _logger.Info("[State Machine] Torrent #{0} ('{1}') auto-resumed: disk space restored on volume '{2}'.", torrent.Id, torrent.Name, message.DrivePath);
+            _torrentEventLogService?.Info(torrent.Id, "State Machine", $"Torrent auto-resumed: Disk space restored on volume '{message.DrivePath}'");
+            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Paused, torrent.Status, $"Disk space restored on volume '{message.DrivePath}'"));
         }
 
         _repository.UpdateMany(matchingTorrents);

@@ -67,12 +67,12 @@ public class TorrentStateMachine : ITorrentStateMachine
         if (torrent.Progress >= effectiveThreshold && torrent.Status == TorrentStatus.Downloading)
         {
             var oldStatus = torrent.Status;
-            _logger.Info("Torrent {0} reached download threshold ({1}%), switching to seeding", torrent.Name, (int)(effectiveThreshold * 100));
+            _logger.Info("[State Machine] Torrent #{0} ('{1}') reached download threshold ({2}%), switching to seeding", torrent.Id, torrent.Name, (int)(effectiveThreshold * 100));
             _eventLogService.Info(torrent.Id, "Seeding", $"Download reached threshold ({(int)(effectiveThreshold * 100)}%), switching to seeding");
             torrent.Status = TorrentStatus.Seeding;
             _eventAggregator?.PublishEvent(new TorrentDownloadCompletedEvent(torrent));
             _eventAggregator?.PublishEvent(new TorrentFinishedEvent(torrent));
-            _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Seeding));
+            _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Seeding, $"Download reached threshold ({(int)(effectiveThreshold * 100)}%), switching to seeding"));
             return true;
         }
 
@@ -144,7 +144,7 @@ public class TorrentStateMachine : ITorrentStateMachine
                         ? $"Seed ratio limit reached ({torrent.Ratio:F2} >= {effectiveRatioLimit:F2})"
                         : $"Seed time limit reached ({torrent.SeedingTime}s >= {effectiveTimeLimitSeconds}s)";
 
-                _logger.Info("Torrent {0} reached {1}, action: {2}", torrent.Name, reason, effectiveAction);
+                _logger.Info("[State Machine] Torrent #{0} ('{1}') reached {2}, action: {3}", torrent.Id, torrent.Name, reason, effectiveAction);
                 _eventLogService?.Info(torrent.Id, "Seeding", $"{reason}, action: {effectiveAction}");
 
                 var oldStatus = torrent.Status;
@@ -169,7 +169,7 @@ public class TorrentStateMachine : ITorrentStateMachine
                     _eventAggregator?.PublishEvent(new TorrentSeedingTimeReachedEvent(torrent, TimeSpan.FromSeconds(torrent.SeedingTime)));
                 }
 
-                _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, newStatus));
+                _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, newStatus, $"{reason}, action: {effectiveAction}"));
 
                 if (string.Equals(effectiveAction, "RemoveTorrent", StringComparison.OrdinalIgnoreCase))
                 {
