@@ -509,7 +509,7 @@ public class PortMappingEngineTests
         Assert.That(enrichedPcp.Protocol, Is.EqualTo("TCP"));
         Assert.That(enrichedPcp.Description, Is.EqualTo("PCP Mapping"));
         Assert.That(enrichedPcp.LeaseSeconds, Is.EqualTo(3600));
-        Assert.That(enrichedPcp.IsActive, Is.True));
+        Assert.That(enrichedPcp.IsActive, Is.True);
         Assert.That(enrichedPcp.Status, Is.EqualTo("Active"));
 
         var enrichedUpnp = status.Mappings[1];
@@ -517,7 +517,7 @@ public class PortMappingEngineTests
         Assert.That(enrichedUpnp.ExternalPort, Is.EqualTo(51413));
         Assert.That(enrichedUpnp.Protocol, Is.EqualTo("UDP"));
         Assert.That(enrichedUpnp.Description, Is.EqualTo("Seedarr UPnP"));
-        Assert.That(enrichedUpnp.IsActive, Is.False));
+        Assert.That(enrichedUpnp.IsActive, Is.False);
         Assert.That(enrichedUpnp.Status, Is.EqualTo("Inactive"));
         Assert.That(enrichedUpnp.ErrorMessage, Is.EqualTo("Port conflicted"));
     }
