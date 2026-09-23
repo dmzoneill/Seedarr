@@ -141,6 +141,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
         catch (OperationCanceledException)
         {
+            _logger.Debug("HTTP tracker background service stopping due to cancellation");
         }
         finally
         {
@@ -228,9 +229,11 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
         catch (OperationCanceledException)
         {
+            _logger.Debug("HTTP tracker accept loop canceled");
         }
-        catch (ObjectDisposedException)
+        catch (ObjectDisposedException ex)
         {
+            _logger.Debug(ex, "HTTP tracker listener disposed during accept loop");
         }
         finally
         {
@@ -742,6 +745,11 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private byte[] HandleScrape(string path)
     {
+        if (!_configService.TrackerEnableScrape)
+        {
+            return Encoding.ASCII.GetBytes("d14:failure reason15:Scrape disablede");
+        }
+
         var infoHashes = ExtractInfoHashes(path);
 
         _peerDatabase.IncrementScrapes();
@@ -832,7 +840,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private static byte[] BuildCompactPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
     {
-        if (maxPeers <= 0)
+        if (peers == null || peers.Count == 0 || maxPeers <= 0)
         {
             return Array.Empty<byte>();
         }
@@ -882,7 +890,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private static byte[] BuildCompactPeers6(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
     {
-        if (maxPeers <= 0)
+        if (peers == null || peers.Count == 0 || maxPeers <= 0)
         {
             return Array.Empty<byte>();
         }
@@ -923,7 +931,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private static BList BuildDictionaryPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
     {
-        if (maxPeers <= 0)
+        if (peers == null || peers.Count == 0 || maxPeers <= 0)
         {
             return new BList();
         }

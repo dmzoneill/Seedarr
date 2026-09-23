@@ -389,7 +389,7 @@ public class PackageManagementTests
         cts.Cancel();
 
         using var ms = new MemoryStream();
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        Assert.CatchAsync<OperationCanceledException>(async () =>
         {
             await _exportService.ExportPackageAsync(ms, new[] { 1 }, includePayload: false, cancellationToken: cts.Token);
         });
