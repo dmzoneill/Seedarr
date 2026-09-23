@@ -62,13 +62,14 @@ export function ImportPackageModal({
     const isPackage =
       lowerName.endsWith(".tar.gz") ||
       lowerName.endsWith(".seedarr") ||
+      lowerName.endsWith(".leecharr") ||
       lowerName.endsWith(".tar") ||
       lowerName.endsWith(".tgz") ||
       lowerName.endsWith(".gz");
 
     if (!isPackage) {
       showToast(
-        "Please select a valid package archive (.tar.gz or .seedarr)",
+        "Please select a valid package archive (.seedarr, .leecharr, or .tar.gz)",
         "warning",
       );
     }
@@ -474,7 +475,7 @@ export function ImportPackageModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".tar.gz,.seedarr,.tar,.gz,.tgz,application/gzip,application/x-tar,application/x-gzip"
+                accept=".tar.gz,.seedarr,.leecharr,.tar,.gz,.tgz,application/gzip,application/x-tar,application/x-gzip"
                 style={{ display: "none" }}
                 onChange={handleInputChange}
                 disabled={isUploading}
@@ -489,7 +490,7 @@ export function ImportPackageModal({
               >
                 {selectedFile
                   ? selectedFile.name
-                  : "Drag and drop package archive here (.tar.gz, .seedarr)"}
+                  : "Drag and drop package archive here (.seedarr, .leecharr, .tar.gz)"}
               </p>
               <p
                 style={{
