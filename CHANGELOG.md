@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.19.1](https://github.com/dmzoneill/Seedarr/releases/tag/v1.19.1) - 2026-09-23
+
+### 🐛 Bug Fixes
+- fix(test): resolve NSubstitute argument matching and bencode catch assertion
+- fix(test): resolve namespace collision and import missing ModelAction
+
+### 🔧 Maintenance & Improvements
+- ci(test): optimize worker count for 2-vCPU CI runners and remove invalid maxcpucount flag
+- test(coverage): add comprehensive unit test suites for Subsystems, FastResume, Discord, GeoIp, IntervalTree, and PiecePicker
+
 ## [v1.19.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.19.0) - 2026-09-23
 
 ### ✨ Features
