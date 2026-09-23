@@ -130,7 +130,6 @@ public class TrackerServerServiceTests
         return (BList)method.Invoke(null, new object[] { peers, excludeIp, excludePort, maxPeers });
     }
 
-    #region Announce Requests (Start, Stop, Completed)
 
     [Test]
     public void Announce_StartEvent_RegistersPeerInDatabase_AndIncrementsAnnounces()
@@ -280,9 +279,7 @@ public class TrackerServerServiceTests
         _trackerUserService.Received(1).RecordAnnounce(passkey, 1500L, 700L);
     }
 
-    #endregion
 
-    #region Scrape Requests
 
     [Test]
     public void Scrape_SingleInfoHash_ReturnsStatsForRequestedHash()
@@ -363,9 +360,7 @@ public class TrackerServerServiceTests
         response.Should().Contain("Scrape disabled");
     }
 
-    #endregion
 
-    #region Peer Storage (PeerDatabase)
 
     [Test]
     public void PeerDatabase_AddPeer_StoresLeecherAndSeederProperly()
@@ -449,9 +444,7 @@ public class TrackerServerServiceTests
         allStats["hash2"].Incomplete.Should().Be(1);
     }
 
-    #endregion
 
-    #region Compact vs Dictionary Peer Formats
 
     [Test]
     public void BuildCompactPeers_IPv4_FormatsSixBytesPerPeer_InNetworkOrder()
@@ -573,9 +566,7 @@ public class TrackerServerServiceTests
         dictList.Count.Should().Be(5);
     }
 
-    #endregion
 
-    #region Interval Calculations
 
     [Test]
     public void Announce_ResponseIntervals_MatchConfiguration()
@@ -606,9 +597,7 @@ public class TrackerServerServiceTests
         dict["min_request_interval"].As<BNumber>().Value.Should().Be(1200);
     }
 
-    #endregion
 
-    #region Whitelist / Blacklist Checks (Passkey Auth, Private Mode, Rate Limiting)
 
     [Test]
     public void PasskeyAuth_WhenEnabledAndPasskeyMissing_ReturnsMissingPasskeyError()
@@ -753,5 +742,4 @@ public class TrackerServerServiceTests
         }
     }
 
-    #endregion
 }
