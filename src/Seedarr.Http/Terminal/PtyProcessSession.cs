@@ -15,7 +15,6 @@ namespace Seedarr.Http.Terminal;
 
 public sealed class PtyProcessSession : ITerminalSession
 {
-    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private const string PythonPtyScript = @"import os, pty, struct, fcntl, termios, sys, select, signal
 
 cwd = sys.argv[1] if len(sys.argv) > 1 else '/tmp'
@@ -120,6 +119,7 @@ else:
             pass
 ";
 
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly Process _process;
     private readonly Stream _inputStream;
     private readonly Stream _outputStream;
