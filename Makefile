@@ -62,7 +62,6 @@ clean:
 test:
 	dotnet test $(UNIT_TEST) --configuration Release --no-build \
 		--settings .runsettings \
-		-maxcpucount:4 \
 		--logger "console;verbosity=normal" \
 		--logger "trx;LogFileName=test-results.trx" \
 		--collect:"XPlat Code Coverage"
