@@ -7,7 +7,7 @@ using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Peers.PiecePicker;
 
-namespace NzbDrone.Core.Test.Peers.PiecePicker;
+namespace NzbDrone.Core.Test.Peers;
 
 [TestFixture]
 public class SequentialPiecePickerTests

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Telemetry;
 using NzbDrone.SignalR;
 using Seedarr.Api.V1.Subsystems;
