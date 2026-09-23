@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.18.1](https://github.com/dmzoneill/Seedarr/releases/tag/v1.18.1) - 2026-09-23
+
+### ✨ Features
+- feat(parity): implement Workpackage 12 bandwidth scheduling, turtle mode, and interactive calendar parity
+- feat(parity): workpackage 11 - pluggable subsystems matrix & runtime hot-swapping
+- feat(parity): implement Workpackage 10 package import and health check parity
+
+### 🐛 Bug Fixes
+- fix(ci): correct SignalR namespace import in SubsystemsController
+
 ## [v1.18.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.18.0) - 2026-09-23
 
 ### ✨ Features
