@@ -2,18 +2,15 @@ const pt = {
   auth: {
     screenLocked: "Screen Locked",
     sessionExpired: "Session Expired",
-    lockedDescription:
-      "Your session was locked due to inactivity. Enter your password or PIN to unlock.",
-    expiredDescription:
-      "Your session has expired. Enter your password to resume without losing your current work.",
+    lockedDescription: "Your session was locked due to inactivity. Enter your password or PIN to unlock.",
+    expiredDescription: "Your session has expired. Enter your password to resume without losing your current work.",
     unlockButton: "Unlock Session",
     unlocking: "Unlocking...",
     stayLoggedIn: "Stay Signed In",
     lockNow: "Lock Now",
     signOut: "Sign Out",
     inactivityWarning: "Inactivity Warning",
-    inactivityWarningDesc:
-      "Your session will automatically lock due to inactivity in:",
+    inactivityWarningDesc: "Your session will automatically lock due to inactivity in:",
     activityHint: "Move your mouse or press any key to remain active.",
     passwordPlaceholder: "Enter password or API key",
     passwordRequired: "Password or API key is required",
@@ -23,8 +20,7 @@ const pt = {
     loggedOutOtherTab: "You were logged out in another tab.",
     loggedInOtherTab: "Signed in from another tab.",
     sessionPaused: "Session Paused",
-    screenSaverDescription:
-      "Seedarr is paused due to inactivity. Click Resume or press Enter to continue.",
+    screenSaverDescription: "Seedarr is paused due to inactivity. Click Resume or press Enter to continue.",
     resumeSession: "Resume Session",
     welcomeBack: "BitTorrent Seeding Simulator",
     username: "Username",
@@ -276,7 +272,7 @@ const pt = {
       resetDefaults: "Reset to Defaults",
       resetSort: "Reset Sort",
       minOneColumn: "At least one column must remain visible",
-      noMatches: 'No columns match "{query}"',
+      noMatches: "No columns match \"{query}\"",
       categories: {
         basic: "Basic Info",
         transfer: "Transfer & Speeds",
@@ -293,16 +289,13 @@ const pt = {
     removeTags: "Remove",
     deleteTorrentsTitle: "Delete Torrents",
     deleteTorrentTitle: "Delete Torrent",
-    readOnlyDeleteWarning:
-      "You have ReadOnly permissions. Torrents cannot be deleted.",
+    readOnlyDeleteWarning: "You have ReadOnly permissions. Torrents cannot be deleted.",
     deleteMultipleConfirm: "Are you sure you want to delete ${count} torrents?",
     deleteSingleConfirm: "Are you sure you want to delete",
     deleteSingleConfirmGeneric: "Are you sure you want to delete this torrent?",
     deleteFilesFromDisk: "Also delete downloaded files from disk",
-    deleteFilesWarning:
-      "All downloaded files associated with this torrent will be permanently deleted.",
-    deletePermissionRequired:
-      "Deleting torrents requires operator or admin role",
+    deleteFilesWarning: "All downloaded files associated with this torrent will be permanently deleted.",
+    deletePermissionRequired: "Deleting torrents requires operator or admin role",
     contextMenu: {
       top: "Move to Top",
       up: "Move Up",
@@ -333,8 +326,7 @@ const pt = {
       diagTitle: "AI Swarm & Tracker Diagnostics",
       diagCollapse: "Collapse Diagnostics",
       diagExpand: "Expand Diagnostics",
-      diagPromptText:
-        "Analyze swarm health, peer distribution, tracker connectivity, and get recommendations.",
+      diagPromptText: "Analyze swarm health, peer distribution, tracker connectivity, and get recommendations.",
       diagDiagnoseSwarm: "Diagnose Swarm Health",
       diagAnalyzing: "Analyzing Swarm & Trackers...",
       diagSwarm: "Swarm Analysis:",
@@ -346,8 +338,7 @@ const pt = {
       diagForceRecheck: "Force Recheck Pieces",
       diagReEvaluate: "Re-evaluate Swarm",
       workingDirectory: "Working Directory",
-      workingDirectoryDesc:
-        "Interactive terminal shell scoped to torrent directory",
+      workingDirectoryDesc: "Interactive terminal shell scoped to torrent directory",
       quickTips: "Quick Tips:",
       loadingFiles: "Loading files...",
       failedToLoadFiles: "Failed to load files.",
@@ -382,11 +373,9 @@ const pt = {
       loadingPeers: "Loading peers...",
       failedToLoadPeers: "Failed to load peers.",
       noPeers: "No peers connected",
-      privateSwarmTooltip:
-        "BEP 27 Private Swarm: DHT, PEX, and LSD are disabled to protect tracker passkeys",
+      privateSwarmTooltip: "BEP 27 Private Swarm: DHT, PEX, and LSD are disabled to protect tracker passkeys",
       privateSwarmBadge: "Private (BEP 27)",
-      publicSwarmTooltip:
-        "Public BitTorrent Swarm: DHT and PEX peer discovery enabled",
+      publicSwarmTooltip: "Public BitTorrent Swarm: DHT and PEX peer discovery enabled",
       publicSwarmBadge: "Public Swarm",
       pieceMapLinearBarView: "Linear Bar View",
       pieceMapBar: "Bar",
@@ -400,8 +389,7 @@ const pt = {
       pieceMapVerifiedSeeded: "Verified / Seeded",
       pieceMapPartial: "Downloading / Partial",
       pieceMapMissing: "Missing",
-      peersPrivateBanner:
-        "Private Torrent (BEP 27): DHT, PEX, and LSD are disabled to protect passkey privacy.",
+      peersPrivateBanner: "Private Torrent (BEP 27): DHT, PEX, and LSD are disabled to protect passkey privacy.",
       colAddress: "Address",
       colClient: "Client",
       colUpSpeed: "Up Speed",
@@ -414,8 +402,7 @@ const pt = {
   },
   quicksettings: {
     title: "Quick Controls",
-    subtitle:
-      "Live transfer limits, queue concurrency, protocol swarms & seeding automation",
+    subtitle: "Live transfer limits, queue concurrency, protocol swarms & seeding automation",
     fullSettings: "Full Settings",
     bandwidth: "Bandwidth",
     queueConcurrency: "Queue & Concurrency",
@@ -491,8 +478,7 @@ const pt = {
     network: "Rede",
     logs: "Logs",
     realTimeTelemetry: "Real-Time Telemetry",
-    realTime:
-      "Real-time engine metrics, memory allocation, and socket utilization",
+    realTime: "Real-time engine metrics, memory allocation, and socket utilization",
     realTimeHardwareUtilization: "Real-Time Hardware Utilization",
     processCpuThreads: "Process CPU & Threads",
     cores: "cores",
@@ -525,13 +511,11 @@ const pt = {
     seedsLeechers: "Seeds / Leechers:",
     overheadRatio: "Overhead Ratio:",
     subsystemsOperationalStatus: "Subsystems Operational Status",
-    activeModularSubsystems:
-      "Active modular subsystems for indexing, search, trackers, and proxy tunneling.",
+    activeModularSubsystems: "Active modular subsystems for indexing, search, trackers, and proxy tunneling.",
     configureSubsystems: "Configure Subsystems",
     provider: "Provider:",
     perTorrentBreakdown: "Per-Torrent Telemetry & Sockets",
-    sessionTelemetryPerSwarm:
-      "Detailed session telemetry, protocol overhead, and buffer distribution per swarm.",
+    sessionTelemetryPerSwarm: "Detailed session telemetry, protocol overhead, and buffer distribution per swarm.",
     filterTorrents: "Filter torrents by name or hash...",
     swarms: "swarms",
     noActiveTorrentsMatch: "No active torrents match the filter.",
@@ -603,8 +587,7 @@ const pt = {
       prioritizeFirstLast: "Prioritize First & Last Pieces",
       adding: "Adding...",
       closeDialog: "Close add torrent dialog",
-      readOnlyWarning:
-        "🔒 You have ReadOnly permissions. Adding torrents is not permitted.",
+      readOnlyWarning: "🔒 You have ReadOnly permissions. Adding torrents is not permitted.",
     },
     keyboardShortcuts: {
       title: "Atalhos do Teclado",
@@ -632,8 +615,7 @@ const pt = {
       stepFinished: "Finalizado",
       stepFinishedTitle: "Configuração concluída",
       welcomeHeading: "Bem-vindo ao Seedarr",
-      welcomeDescription:
-        "Seedarr é um cliente BitTorrent de alto desempenho com enriquecimento automatizado de metadados e integração *arr nativa. Siga este guia para conectar seus indexadores e aplicativos de gerenciamento de mídia.",
+      welcomeDescription: "Seedarr é um cliente BitTorrent de alto desempenho com enriquecimento automatizado de metadados e integração *arr nativa. Siga este guia para conectar seus indexadores e aplicativos de gerenciamento de mídia.",
       port7889Title: "Título Port7889",
       port7889Desc: "Port7889 Descrição",
       mediaEnrichmentTitle: "Enriquecimento de mídia",
@@ -644,13 +626,10 @@ const pt = {
       tipDesc: "Descrição da dica",
       prowlarrDesc: "Prowlarr Descrição",
       prowlarrInstructionsCardTitle: "Como conectar o Prowlarr",
-      prowlarrStep1:
-        "No Prowlarr, navegue até Configurações > Geral e copie sua chave API.",
-      prowlarrStep2:
-        "Mude para o modo de configuração ao vivo acima (ou vá para Configurações > Indexadores) e insira seu URL Prowlarr (padrão: http://localhost:9696).",
+      prowlarrStep1: "No Prowlarr, navegue até Configurações > Geral e copie sua chave API.",
+      prowlarrStep2: "Mude para o modo de configuração ao vivo acima (ou vá para Configurações > Indexadores) e insira seu URL Prowlarr (padrão: http://localhost:9696).",
       prowlarrStep3: "Cole sua chave de API Prowlarr no campo Chave de API.",
-      prowlarrStep4:
-        "Clique em 'Testar conexão' e em 'Salvar e continuar' para importar automaticamente seus indexadores.",
+      prowlarrStep4: "Clique em 'Testar conexão' e em 'Salvar e continuar' para importar automaticamente seus indexadores.",
       next: "Próximo",
       testConnection: "Conexão de teste",
       saveAndContinue: "Salvar e continuar",
@@ -659,14 +638,10 @@ const pt = {
       saving: "Salvando...",
       sonarrDescription: "Descrição do sonar",
       instructionsSonarrCardTitle: "Instruções Título do cartão Sonarr",
-      sonarrStep1:
-        "No Sonarr, navegue até Configurações> Geral e copie sua chave de API do Sonarr.",
-      sonarrStep2:
-        "No Seedarr, insira seu URL do Sonarr (padrão: http://localhost:8989) e cole sua chave API.",
-      sonarrStep3:
-        "No Sonarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
-      sonarrStep4:
-        "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação do programa de TV.",
+      sonarrStep1: "No Sonarr, navegue até Configurações> Geral e copie sua chave de API do Sonarr.",
+      sonarrStep2: "No Seedarr, insira seu URL do Sonarr (padrão: http://localhost:8989) e cole sua chave API.",
+      sonarrStep3: "No Sonarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
+      sonarrStep4: "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação do programa de TV.",
       name: "Nome",
       type: "Tipo",
       url: "URL",
@@ -677,30 +652,21 @@ const pt = {
       webhook: "Webhook",
       webhookHost: "Host de webhook",
       externalUrl: "URL público/externo (opcional)",
-      externalUrlHint:
-        "URL pública opcional para links diretos do navegador (por exemplo, ao acessar Seedarr remotamente).",
+      externalUrlHint: "URL pública opcional para links diretos do navegador (por exemplo, ao acessar Seedarr remotamente).",
       connectionSuccess: "Sucesso de conexão",
       connectionFailed: "Falha na conexão",
       radarrDescription: "Descrição do Radar",
       instructionsRadarrCardTitle: "Título do cartão Radarr de instruções",
-      radarrStep1:
-        "No Radarr, navegue até Configurações > Geral e copie sua chave de API do Radarr.",
-      radarrStep2:
-        "No Seedarr, insira seu URL do Radarr (padrão: http://localhost:7878) e cole sua chave API.",
-      radarrStep3:
-        "No Radarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
-      radarrStep4:
-        "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação do filme.",
+      radarrStep1: "No Radarr, navegue até Configurações > Geral e copie sua chave de API do Radarr.",
+      radarrStep2: "No Seedarr, insira seu URL do Radarr (padrão: http://localhost:7878) e cole sua chave API.",
+      radarrStep3: "No Radarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
+      radarrStep4: "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação do filme.",
       lidarrDescription: "Descrição do Lidarr",
       instructionsLidarrCardTitle: "Instruções Título do cartão Lidarr",
-      lidarrStep1:
-        "No Lidarr, navegue até Configurações> Geral e copie sua chave API Lidarr.",
-      lidarrStep2:
-        "No Seedarr, insira seu URL Lidarr (padrão: http://localhost:8686) e cole sua chave API.",
-      lidarrStep3:
-        "No Lidarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
-      lidarrStep4:
-        "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação musical.",
+      lidarrStep1: "No Lidarr, navegue até Configurações> Geral e copie sua chave API Lidarr.",
+      lidarrStep2: "No Seedarr, insira seu URL Lidarr (padrão: http://localhost:8686) e cole sua chave API.",
+      lidarrStep3: "No Lidarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
+      lidarrStep4: "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação musical.",
       finishTitle: "Finalizar título",
       finishDescription: "Descrição do acabamento",
       goToQueue: "Ir para a fila",
@@ -732,25 +698,19 @@ const pt = {
       settings: "Settings",
       stepStorage: "Storage",
       stepStorageTitle: "Storage & Downloads",
-      saveClientFailed:
-        "Failed to save download client. Please verify connection parameters.",
-      saveIndexerFailed:
-        "Failed to save indexer. Please verify host and API key.",
-      saveArrFailed:
-        "Failed to save ${arrType} connection. Please verify credentials.",
+      saveClientFailed: "Failed to save download client. Please verify connection parameters.",
+      saveIndexerFailed: "Failed to save indexer. Please verify host and API key.",
+      saveArrFailed: "Failed to save ${arrType} connection. Please verify credentials.",
       saveStorageFailed: "Failed to save storage configuration.",
       testingTo: "Testing connection to ${targetName}...",
       validationErrorTitle: "Configuration Error",
       title: "Getting Started Setup Guide",
       welcomeTitle: "Welcome to Seedarr!",
       welcomeBody: "Seedarr is an integrate",
-      welcomeAgent:
-        "1. Download Agent: Captures downloads & monitors torrent swarms.",
-      welcomeProwlarr:
-        "2. Prowlarr: Syncs indexers and trackers automatically.",
+      welcomeAgent: "1. Download Agent: Captures downloads & monitors torrent swarms.",
+      welcomeProwlarr: "2. Prowlarr: Syncs indexers and trackers automatically.",
       welcomeArr: "3. Sonarr / Radarr / Lidarr: Connects T",
-      welcomeStorage:
-        "4. Storage & Downloads: Verifies payload directories and write permissions.",
+      welcomeStorage: "4. Storage & Downloads: Verifies payload directories and write permissions.",
       language: "Language:",
       step1Title: "Add Download Client",
       enabled: "Enabled",
@@ -760,19 +720,14 @@ const pt = {
       enable: "Enable",
       enableRss: "RSS",
       enableSearch: "Search",
-      webhookHostHint:
-        "Hostname or IP for *arr to reach Seedarr (leave empty to use defaul",
-      storageDescription:
-        "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
+      webhookHostHint: "Hostname or IP for *arr to reach Seedarr (leave empty to use defaul",
+      storageDescription: "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
       defaultDownloadPath: "Default Download Directory",
-      defaultDownloadPathHint:
-        "Absolute path where torrent payloads are actively downloaded",
+      defaultDownloadPathHint: "Absolute path where torrent payloads are actively downloaded",
       completedPath: "Completed Downloads Directory (Optiona",
-      completedPathHint:
-        "Target directory to relocate completed torrents for post-processing",
+      completedPathHint: "Target directory to relocate completed torrents for post-processing",
       watchFolderPath: "Watch Folder Path (Optiona",
-      watchFolderPathHint:
-        "Filesystem directory monitored for new .torrent files",
+      watchFolderPathHint: "Filesystem directory monitored for new .torrent files",
       detectedVolumes: "Detected Storage Volumes:",
       validating: "Validating...",
       validateDirectory: "Validate Directory",
@@ -806,8 +761,7 @@ const pt = {
   },
   automation: {
     title: "Automation & Scripts",
-    subtitle:
-      "Build visual pipelines, run scripts, and automate Seedarr workflows.",
+    subtitle: "Build visual pipelines, run scripts, and automate Seedarr workflows.",
     tabs: {
       visual: "Visual Editor",
       marketplace: "Marketplace",
@@ -861,8 +815,7 @@ const pt = {
       onCriticalDiskSpaceEmergency: "🚨 On Critical Disk Space Emergency",
       onFileMovePathError: "❌ On File Move / Path Error",
       onMediaEnriched: "🎬 On Media Enriched",
-      onMediaCorruptionInspectionFai:
-        "🎞️ On Media Corruption / Inspection Failed",
+      onMediaCorruptionInspectionFai: "🎞️ On Media Corruption / Inspection Failed",
       onArchiveExtracted: "📦 On Archive Extracted",
       onExtractionFailed: "❌ On Extraction Failed",
       onServarrImportCompleted: "📬 On Servarr Import Completed",
@@ -1053,8 +1006,7 @@ const pt = {
       pauseTorrent: "⏸️ Pause Torrent",
       resumeTorrent: "▶️ Resume Torrent",
       removeTorrent: "🗑️ Remove Torrent",
-      deletesTorrentFromClientOption:
-        "Deletes torrent from client (optional data deletion)",
+      deletesTorrentFromClientOption: "Deletes torrent from client (optional data deletion)",
       verifiesPieceHashesOnDisk: "Verifies piece hashes on disk",
       forceReannounce: "📢 Force Reannounce",
       forcesImmediateTrackerUpdate: "Forces immediate tracker update",
@@ -1119,8 +1071,7 @@ const pt = {
       GeoIpUpdate: "Update MaxMind GeoIP database",
       RssSync: "Poll RSS indexers for releases",
       createFullDatabaseConfigBackup: "Create full database & config backup",
-      syncConnectedSonarrRadarrInsta:
-        "Sync connected Sonarr / Radarr instances",
+      syncConnectedSonarrRadarrInsta: "Sync connected Sonarr / Radarr instances",
       scanWatchFolderForTorrents: "Scan watch folder for torrents",
       scanOptimizeCandidateTrackers: "Scan & optimize candidate trackers",
       updatePeerIpBlocklist: "Update peer IP blocklist",
@@ -1212,8 +1163,7 @@ const pt = {
       egDownloadscomplete: "e.g. '/downloads/complete'",
       customVariableExpression: "✏️ Custom Variable / Expression...",
       customDynamic: "Custom / Dynamic",
-      egInputsminratioOrSystemfreedi:
-        "e.g. ${inputs.minRatio} or ${system.freeDiskBytes}",
+      egInputsminratioOrSystemfreedi: "e.g. ${inputs.minRatio} or ${system.freeDiskBytes}",
       seedingTimeMinutes: "Seeding Time (Minutes)",
       diskFreeSpace: "Free Disk Space (Bytes)",
       eg288048Hours: "e.g. 2880 (48 hours)",
@@ -1276,15 +1226,13 @@ const pt = {
     },
     ui: {
       automationPipelinesMarketplace: "Automation Pipelines & Marketplace",
-      visualDraganddropWorkflowBuild:
-        "Visual drag-and-drop workflow builder, low-code scripting engine, and community pipeline registry.",
+      visualDraganddropWorkflowBuild: "Visual drag-and-drop workflow builder, low-code scripting engine, and community pipeline registry.",
       allTriggers: "All Triggers",
       javascriptScript: "💻 + JavaScript Script",
       loadingAutomationPipelines: "Loading automation pipelines...",
       text1: "⚙️",
       noAutomationPipelinesFound: "No Automation Pipelines Found",
-      createAutomatedActionsForWhen:
-        "Create automated actions for when torrents are added, completed, hit ratio goals, or browse the Community Marketplace.",
+      createAutomatedActionsForWhen: "Create automated actions for when torrents are added, completed, hit ratio goals, or browse the Community Marketplace.",
       buildVisualPipeline: "✨ Build Visual Pipeline",
       browseMarketplace: "🛍️ Browse Marketplace",
       text2: "📁",
@@ -1293,15 +1241,13 @@ const pt = {
       edit: "✏️ Edit",
       text3: "🗑️",
       pipelineExecutionHistory: "📊 Pipeline Execution History",
-      detailedExecutionTracesAndStep:
-        "Detailed execution traces and step-by-step performance metrics for recent pipeline runs.",
+      detailedExecutionTracesAndStep: "Detailed execution traces and step-by-step performance metrics for recent pipeline runs.",
       status: "Status",
       pipelineName: "Pipeline Name",
       trigger: "Trigger",
       executedAt: "Executed At",
       actions: "Actions",
-      noPipelineExecutionRunsRecorde:
-        "No pipeline execution runs recorded yet. Trigger a run or wait for an event.",
+      noPipelineExecutionRunsRecorde: "No pipeline execution runs recorded yet. Trigger a run or wait for an event.",
       traceInspector: "🔍 Trace Inspector",
       loadingMarketplaceCatalog: "Loading marketplace catalog...",
       by: "by",
@@ -1316,8 +1262,7 @@ const pt = {
       addStep: "➕ Add Step",
       text4: "⬆️",
       text5: "⬇️",
-      onlyRunThisStepIf:
-        "Only run this step if condition matches (IF condition)",
+      onlyRunThisStepIf: "Only run this step if condition matches (IF condition)",
       customExpressionVariable: "✏️ Custom Expression / Variable...",
       quickSet: "Quick set:",
       presets: "🔄 Presets",
@@ -1328,8 +1273,7 @@ const pt = {
       alert: "🔔 + Alert",
       servarr: "📬 + Servarr",
       command: "⚙️ + Command",
-      noActionsAddedClickAny:
-        "No actions added. Click any button above or select from the actions library below.",
+      noActionsAddedClickAny: "No actions added. Click any button above or select from the actions library below.",
       highPriority: "⚡ High Priority",
       normalPriority: "🔹 Normal Priority",
       lowPriority: "🔻 Low Priority",
@@ -1342,10 +1286,8 @@ const pt = {
       lidarrMusic: "🎵 Lidarr (Music)",
       readarrBooks: "📚 Readarr (Books)",
       whisparrAdult: "🔞 Whisparr (Adult)",
-      alsoPermanentlyDeleteDownloade:
-        "🗑️ Also permanently delete downloaded files from disk",
-      autoappliesToActiveSwarmTorren:
-        "✨ Auto-applies to active swarm & torrent",
+      alsoPermanentlyDeleteDownloade: "🗑️ Also permanently delete downloaded files from disk",
+      autoappliesToActiveSwarmTorren: "✨ Auto-applies to active swarm & torrent",
       get: "GET",
       post: "POST",
       put: "PUT",
@@ -1363,8 +1305,7 @@ const pt = {
       apiget: "api.get()",
       torrentaddtag: "torrent.addTag()",
       liveDryRunInspector: "⚡ Live Dry Run Inspector",
-      testPipelineExecutionLogicSafe:
-        "Test pipeline execution logic safely against active torrents without writing mutations.",
+      testPipelineExecutionLogicSafe: "Test pipeline execution logic safely against active torrents without writing mutations.",
       sampleTorrentBigBuckBunny: "Sample Torrent (Big Buck Bunny 1080p)",
       gb: "GB)",
       duration: "Duration:",
@@ -1390,20 +1331,17 @@ const pt = {
       deleteScript: "Delete Script",
       searchCommunityTemplates: "Search community templates...",
       eg4kMovieAutozapBackup: "e.g. 4K Movie Auto-Zap & Backup",
-      summaryOfWhatThisAutomation:
-        "Summary of what this automation pipeline performs...",
+      summaryOfWhatThisAutomation: "Summary of what this automation pipeline performs...",
       stepName: "Step Name",
       egInputsmyproperty: "e.g. ${inputs.myProperty}",
       switchBackToPresetsDropdown: "Switch back to presets dropdown",
-      httpsexternalservicecomapiv1we:
-        "https://external.service.com/api/v1/webhook",
+      httpsexternalservicecomapiv1we: "https://external.service.com/api/v1/webhook",
       insertTorrentJsonPayload: "✨ Insert Torrent JSON Payload",
       registerVariable: "Register Variable",
       timeoutS: "Timeout (s)",
       deleteAction: "Delete Action",
       targetCategories: "Target Categories",
-      targetCategoriesHint:
-        "Filter by categories (leave empty to apply to all)",
+      targetCategoriesHint: "Filter by categories (leave empty to apply to all)",
       targetTags: "Target Tags",
       targetTagsHint: "Filter by tags (leave empty to apply to all)",
     },
@@ -1411,8 +1349,7 @@ const pt = {
   terminal: {
     title: "Terminal",
     subtitle: "Interactive web console with PTY session management",
-    executeCommands:
-      "Execute shell commands, inspect torrent payload files, and manage host system utilities.",
+    executeCommands: "Execute shell commands, inspect torrent payload files, and manage host system utilities.",
     downloadsRoot: "Downloads Root",
     incomplete: "Incomplete",
     enterPath: "Enter directory path...",
@@ -1433,8 +1370,7 @@ const pt = {
     adminRequired: "Administrator privileges required for terminal access",
     accessDisabled: "Terminal access is disabled in Security settings",
     inputPlaceholder: "Enter command...",
-    shortcutsHint:
-      "Ctrl+L to clear, Ctrl+C to interrupt, Up/Down for command history",
+    shortcutsHint: "Ctrl+L to clear, Ctrl+C to interrupt, Up/Down for command history",
     dimensions: "Dimensions",
   },
   signalr: {
@@ -1453,8 +1389,7 @@ const pt = {
     group: "Group",
     risk: "Risk",
     somethingWentWrong: "Something went wrong",
-    anUnexpectedErrorOccurred:
-      "An unexpected error occurred while rendering this component.",
+    anUnexpectedErrorOccurred: "An unexpected error occurred while rendering this component.",
     tryAgain: "Try Again",
     reloadPage: "Reload Page",
     copiedDetails: "✓ Copied Details",
@@ -1526,27 +1461,21 @@ const pt = {
   },
   login: {
     enterPassword: "Please enter your password or API key.",
-    invalidCredentials:
-      "Invalid credentials. Please verify your username and password or API key.",
+    invalidCredentials: "Invalid credentials. Please verify your username and password or API key.",
   },
   systemStatus: {
     restartingToast: "System is restarting. Waiting for reconnection...",
-    restartFailedToast:
-      'Failed to trigger restart: ${err?.message || "Unknown error"}',
+    restartFailedToast: "Failed to trigger restart: ${err?.message || \"Unknown error\"}",
     reconnectedToast: "Seedarr has reconnected successfully!",
-    reconnectTimeoutToast:
-      "Reconnection timed out. Please refresh the page manually.",
+    reconnectTimeoutToast: "Reconnection timed out. Please refresh the page manually.",
     shuttingDownToast: "System is shutting down. Service is terminating.",
-    shutdownFailedToast:
-      'Failed to trigger shutdown: ${err?.message || "Unknown error"}',
+    shutdownFailedToast: "Failed to trigger shutdown: ${err?.message || \"Unknown error\"}",
     fileDescriptorsAndSockets: "File Descriptors & Sockets",
     unlimited: "Unlimited",
     osHandles: "OS Handles",
-    restartModalDesc:
-      "Are you sure you want to restart Seedarr? Active seeding and downloads will temporarily pause until the service restarts.",
+    restartModalDesc: "Are you sure you want to restart Seedarr? Active seeding and downloads will temporarily pause until the service restarts.",
     restarting: "Restarting...",
-    shutdownModalDesc:
-      "Are you sure you want to shut down Seedarr? The host process will terminate and will require manual intervention to start again.",
+    shutdownModalDesc: "Are you sure you want to shut down Seedarr? The host process will terminate and will require manual intervention to start again.",
     shuttingDown: "Shutting Down...",
     percentUsed: "{percent}% Used",
   },
@@ -1555,10 +1484,8 @@ const pt = {
       failedToSave: "Failed to save: ",
       changesSaved: "✓ Changes Saved Successfully",
       unsavedChangesTitle: "Unsaved Changes",
-      unsavedChangesDesc:
-        "You have unsaved changes in this settings section. What would you like to do?",
-      unsavedChangesPrompt:
-        "You have unsaved changes in settings. If you leave this page, your changes will be discarded. Are you sure you want to leave?",
+      unsavedChangesDesc: "You have unsaved changes in this settings section. What would you like to do?",
+      unsavedChangesPrompt: "You have unsaved changes in settings. If you leave this page, your changes will be discarded. Are you sure you want to leave?",
       stayOnPage: "Stay on Page",
       discardChanges: "Discard Changes",
       discardAndLeave: "Discard and Leave",
@@ -1576,13 +1503,11 @@ const pt = {
       resetSuccess: "AI Copilot button position reset to bottom right",
       loading: "Loading AI settings...",
       engineTitle: "AI Engine Configuration",
-      engineDescription:
-        "Select and configure the intelligence provider powering Copilot, release parsing, and swarm diagnostics.",
+      engineDescription: "Select and configure the intelligence provider powering Copilot, release parsing, and swarm diagnostics.",
       testHealth: "Test Health",
       activateProvider: "Activate Provider",
       connectionTitle: "Provider Connection Settings",
-      connectionDescription:
-        "Configure API keys, local URLs, and models for the selected provider.",
+      connectionDescription: "Configure API keys, local URLs, and models for the selected provider.",
       ollamaTitle: "Ollama (Local LLM)",
       ollamaUrl: "Ollama Endpoint URL",
       defaultModelName: "Model Name",
@@ -1598,8 +1523,7 @@ const pt = {
       onnxTitle: "ONNX Runtime (Embedded)",
       onnxPath: "Local Model Path",
       uiFeaturesTitle: "UI Features & Overlays",
-      uiFeaturesDescription:
-        "Enable or disable individual AI features across the Seedarr web interface.",
+      uiFeaturesDescription: "Enable or disable individual AI features across the Seedarr web interface.",
       enableCopilot: "Enable Floating AI Copilot",
       enableSearch: "Enable Semantic Smart Search",
       enableDiagnostics: "Enable Swarm Health Diagnostics",
@@ -1609,31 +1533,53 @@ const pt = {
       unknownError: "An unknown error occurred",
     },
     subsystems: {
+      loadingPluggable: "Loading pluggable subsystems...",
+      errorLoading: "Error loading subsystems: ",
+      retry: "Retry",
+      architectureTitle: "Pluggable Architecture & Subsystem Hot-Swapping",
+      architectureDescription: "Switch underlying engines, inspectors, geolocation resolvers, and security layers at runtime with zero downtime.",
+      allSubsystems: "All Subsystems",
       statusActive: "Active",
+      statusReady: "READY",
+      statusEmulated: "EMULATED",
       probing: "Probing...",
+      testProbe: "🔍 Test / Probe",
+      switch: "⚡ Switch",
+      hotSwapTitle: "Hot-Swap Subsystem Provider",
+      confirmSwitchStart: "Are you sure you want to switch ",
+      confirmSwitchMiddle: " to ",
+      providerSwitchingInfo: "ℹ️ Provider switching executes atomically with zero application restart. Active workloads will seamlessly migrate to the new provider.",
+      cancel: "Cancel",
+      switching: "Switching...",
+      confirmHotSwap: "Confirm Hot-Swap",
+      probeDiagnosticTitle: "Provider Diagnostic Probe",
+      healthyReady: "HEALTHY / READY",
+      warningUnhealthy: "WARNING / UNHEALTHY",
+      status: "Status:",
+      dependencyVerification: "Dependency Verification:",
+      diagnosticsWarnings: "Diagnostics & Warnings:",
+      close: "Close",
+      probeFailed: "Probe failed: ",
+      switchSuccess: "Successfully switched provider.",
+      switchFailed: "Failed to switch provider: ",
     },
   },
   trackerBoost: {
     probedEndpointsSuccess: "Probed {count} tracker endpoints",
     probeTrackersFailed: "Failed to probe trackers: {error}",
-    harvestedTrackersSuccess:
-      "Harvested {count} new trackers from active downloads",
+    harvestedTrackersSuccess: "Harvested {count} new trackers from active downloads",
     harvestFailed: "Failed to harvest from downloads: {error}",
     boostFailed: "Failed to boost: {error}",
     injectFailed: "Failed to inject tracker: {error}",
-    boostAllSuccess:
-      "Boosted {swarms} swarms: injected {trackers} verified trackers (+{seeds} seeds discovere",
+    boostAllSuccess: "Boosted {swarms} swarms: injected {trackers} verified trackers (+{seeds} seeds discovere",
     boostDownloadsFailed: "Failed to boost downloads: {error}",
-    scrapeAllTooltip:
-      "Scrape candidate trackers and inject only verified positive matches across all active downloads",
+    scrapeAllTooltip: "Scrape candidate trackers and inject only verified positive matches across all active downloads",
     scrapingBoosting: "⚡ Scraping & Boosting...",
     boostAllDownloads: "⚡ Boost All Downloads (Verified Onl",
-    harvestTooltip:
-      "Extract and discover tracker URLs from active download swarms in Seedarr and download clients",
+    harvestTooltip: "Extract and discover tracker URLs from active download swarms in Seedarr and download clients",
     harvesting: "🔄 Harvesting...",
     harvestFromLiveSwarms: "🔄 Harvest from Live Swarms",
-    probeTooltip:
-      "Ping and probe health across all monitored tracker endpoints",
+    probeTooltip: "Ping and probe health across all monitored tracker endpoints",
     probing: "📡 Probing...",
     probeAllTrackers: "📡 Probe All Trackers",
     filterAllSwarms: "All Swarms ({count",
@@ -1657,12 +1603,10 @@ const pt = {
     publicSwarmBadge: "🌐 Public Swarm",
     rescrapeTooltip: "Re-scrape candidate trackers for this info_hash",
     rescrapeSwarm: "🔄 Re-Scrape Swarm",
-    injectCandidateTooltip:
-      "Inject verified candidate trackers into this torrent",
+    injectCandidateTooltip: "Inject verified candidate trackers into this torrent",
     boostTorrentVerified: "⚡ Boost Torrent (Inject Verifie",
     privateSwarmWarningStrong: "Private Tracker Swarm:",
-    privateSwarmWarningText:
-      "Cross-swarm public tracker injection is protected and disabled to comply with BitTorrent private tracker rules (BEP 2",
+    privateSwarmWarningText: "Cross-swarm public tracker injection is protected and disabled to comply with BitTorrent private tracker rules (BEP 2",
     attachedTrackers: "Attached Trackers",
     verifiedCandidates: "Verified Candidates",
     totalChecked: "Total Checked",
@@ -1678,14 +1622,12 @@ const pt = {
     seedsCountLower: "{count} seeds",
     leechesCountLower: "{count} leeches",
     attachedBadge: "✓ Attached",
-    privateGuardTitle:
-      "BEP 27: Public tracker injection is disabled for private torrents",
+    privateGuardTitle: "BEP 27: Public tracker injection is disabled for private torrents",
     privateGuardBadge: "🔒 Private Guard",
     injectThisTooltip: "Inject this verified tracker into the torrent",
     inject: "⚡ Inject",
     offline: "Offline",
-    selectDownloadHint:
-      "Select a download from the left list to inspect live tracker scrape results.",
+    selectDownloadHint: "Select a download from the left list to inspect live tracker scrape results.",
     settings: {
       noValidUrlsFound: "No valid http:/",
       bulkImportModalTitle: "📥 Bulk Import Tracker URLs",
@@ -1693,29 +1635,21 @@ const pt = {
       importingTrackers: "Importing Trackers...",
       importTrackersBtn: "Import Trackers",
       updatedToast: "TrackerBoost settings updated",
-      harvestedProwlarrToast:
-        "Harvested ${res.harvestedCount} trackers from Prowlarr",
+      harvestedProwlarrToast: "Harvested ${res.harvestedCount} trackers from Prowlarr",
       harvestProwlarrFailed: "Failed to harvest from Prowlarr: ${err.message}",
-      harvestedFeedsToast:
-        "Harvested ${res.harvestedCount} trackers from public feeds",
+      harvestedFeedsToast: "Harvested ${res.harvestedCount} trackers from public feeds",
       harvestFeedsFailed: "Failed to harvest from feeds: ${err.message}",
       automationTitle: "⚡ Automation & Background Optimization",
-      automationDesc:
-        "TrackerBoost runs as a background service to constantly discover new tracker",
+      automationDesc: "TrackerBoost runs as a background service to constantly discover new tracker",
       autoBoostLabel: "Automatic Background Swarm Boosting (Enabled by Defaul",
-      autoBoostDesc:
-        "Periodically queries candidate trackers and automatically injects verified positive matches into active downloads.",
+      autoBoostDesc: "Periodically queries candidate trackers and automatically injects verified positive matches into active downloads.",
       autoHarvestLabel: "Automatic Swarm Tracker Harvesting (Enabled by Defaul",
-      autoHarvestDesc:
-        "Continuously extracts and catalogues new public tracker endpoints from downloading torrents to grow the tracker database.",
+      autoHarvestDesc: "Continuously extracts and catalogues new public tracker endpoints from downloading torrents to grow the tracker database.",
       onlyVerifiedLabel: "Scrape Verification Guard (Strict Mod",
-      onlyVerifiedDesc:
-        "Only injects trackers that respond with active seeders or leechers for the specific info_has",
+      onlyVerifiedDesc: "Only injects trackers that respond with active seeders or leechers for the specific info_has",
       connectedClientsTitle: "Connected Download Agents",
-      connectedClientsDesc:
-        "TrackerBoost coordinates with your download clients (qBittorren",
-      noClientsWarning:
-        "No download agents currently configured. Add qBittorrent or Transmission in Settings ⚙️ to boost real downloads.",
+      connectedClientsDesc: "TrackerBoost coordinates with your download clients (qBittorren",
+      noClientsWarning: "No download agents currently configured. Add qBittorrent or Transmission in Settings ⚙️ to boost real downloads.",
       manualDiscoveryTitle: "Manual Discovery & Import Triggers",
       bulkImportTrackersBtn: "📥 Bulk Import Trackers",
       harvestingSwarms: "⏳ Harvesting Swarms...",
@@ -1751,8 +1685,7 @@ const pt = {
     error: "Error",
     matrix: {
       title: "Swarm Cross-Matrix Explorer",
-      subtitle:
-        "Bi-directional mapping between library torrents and verified BitTorrent tracker endpoints",
+      subtitle: "Bi-directional mapping between library torrents and verified BitTorrent tracker endpoints",
       torrentsToTrackers: "Torrents → Trackers",
       trackersToTorrents: "Trackers → Torrents",
       posters: "🎬 Posters",
@@ -1770,8 +1703,7 @@ const pt = {
       inspect: "⚡ Inspect",
       noLibraryTorrentsMatch: "No library torrents match the search query.",
       torrentsCount: "{count} Torrents",
-      noTorrentsRegisteredOnEndpoint:
-        "No library torrents currently registered on this tracker endpoint.",
+      noTorrentsRegisteredOnEndpoint: "No library torrents currently registered on this tracker endpoint.",
       noTrackersMatch: "No tracker endpoints match the search query.",
       trackerEndpoint: "Tracker Endpoint",
       matchedLibraryTorrents: "Matched Library Torrents",
@@ -1783,8 +1715,7 @@ const pt = {
     radar: {
       copiedUrlsToast: "Copied ${trackers.length} tracker URLs to clipboard!",
       noTrackersExport: "No trackers available to export",
-      exportedTrackersToast:
-        "Exported ${trackers.length} tracker endpoints to .txt!",
+      exportedTrackersToast: "Exported ${trackers.length} tracker endpoints to .txt!",
       trackerAddedSuccess: "Custom tracker added successfully",
       trackerAddFailed: "Failed to add tracker: ${err.message}",
       copyAll: "📋 Copy All",
@@ -1810,8 +1741,7 @@ const pt = {
     pasteMultiple: "Paste multiple tracker URLs at once",
     title: "Tracker Boost",
     smartBoosterBadge: "⚡ Smart Booster",
-    headerDescription:
-      "Scrapes live tracker swarms by info_hash to discover and inject verified seeders/peers into Seedarr and download clients",
+    headerDescription: "Scrapes live tracker swarms by info_hash to discover and inject verified seeders/peers into Seedarr and download clients",
     trackersMonitored: "Trackers Monitored",
     aliveResponsive: "Alive & Responsive",
     harvestedFromSwarms: "Harvested from Swarms",
@@ -1825,8 +1755,7 @@ const pt = {
     },
   },
   copilot: {
-    welcomeMessage:
-      "Hi! I'm your Seedarr AI Copilot. How can I help you manage your torrents today?",
+    welcomeMessage: "Hi! I'm your Seedarr AI Copilot. How can I help you manage your torrents today?",
     buttonTitle: "AI Copilot",
     title: "AI Copilot",
     compact: "Compact view",
@@ -1840,8 +1769,7 @@ const pt = {
     piecePickers: "Analyze Piece Pickers",
     vpnSecurity: "Check VPN & Security",
     thinking: "Thinking ({provider})...",
-    inputPlaceholder:
-      "Ask about your torrents, seed ratio, speed optimization...",
+    inputPlaceholder: "Ask about your torrents, seed ratio, speed optimization...",
     rawSceneRelease: "Raw Scene / Torrent Release Name",
     rawScenePlaceholder: "e.g. Big.Buck.Bunny.2008.1080p.BluRay.x264-SEEDARR",
     deobfuscate: "Parse & Deobfuscate",
@@ -1873,8 +1801,7 @@ const pt = {
     stepFinished: "Finalizado",
     stepFinishedTitle: "Configuração concluída",
     welcomeHeading: "Bem-vindo ao Seedarr",
-    welcomeDescription:
-      "Seedarr é um cliente BitTorrent de alto desempenho com enriquecimento automatizado de metadados e integração *arr nativa. Siga este guia para conectar seus indexadores e aplicativos de gerenciamento de mídia.",
+    welcomeDescription: "Seedarr é um cliente BitTorrent de alto desempenho com enriquecimento automatizado de metadados e integração *arr nativa. Siga este guia para conectar seus indexadores e aplicativos de gerenciamento de mídia.",
     port7889Title: "Título Port7889",
     port7889Desc: "Port7889 Descrição",
     mediaEnrichmentTitle: "Enriquecimento de mídia",
@@ -1885,13 +1812,10 @@ const pt = {
     tipDesc: "Descrição da dica",
     prowlarrDesc: "Prowlarr Descrição",
     prowlarrInstructionsCardTitle: "Como conectar o Prowlarr",
-    prowlarrStep1:
-      "No Prowlarr, navegue até Configurações > Geral e copie sua chave API.",
-    prowlarrStep2:
-      "Mude para o modo de configuração ao vivo acima (ou vá para Configurações > Indexadores) e insira seu URL Prowlarr (padrão: http://localhost:9696).",
+    prowlarrStep1: "No Prowlarr, navegue até Configurações > Geral e copie sua chave API.",
+    prowlarrStep2: "Mude para o modo de configuração ao vivo acima (ou vá para Configurações > Indexadores) e insira seu URL Prowlarr (padrão: http://localhost:9696).",
     prowlarrStep3: "Cole sua chave de API Prowlarr no campo Chave de API.",
-    prowlarrStep4:
-      "Clique em 'Testar conexão' e em 'Salvar e continuar' para importar automaticamente seus indexadores.",
+    prowlarrStep4: "Clique em 'Testar conexão' e em 'Salvar e continuar' para importar automaticamente seus indexadores.",
     next: "Próximo",
     testConnection: "Conexão de teste",
     saveAndContinue: "Salvar e continuar",
@@ -1900,14 +1824,10 @@ const pt = {
     saving: "Salvando...",
     sonarrDescription: "Descrição do sonar",
     instructionsSonarrCardTitle: "Instruções Título do cartão Sonarr",
-    sonarrStep1:
-      "No Sonarr, navegue até Configurações> Geral e copie sua chave de API do Sonarr.",
-    sonarrStep2:
-      "No Seedarr, insira seu URL do Sonarr (padrão: http://localhost:8989) e cole sua chave API.",
-    sonarrStep3:
-      "No Sonarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
-    sonarrStep4:
-      "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação do programa de TV.",
+    sonarrStep1: "No Sonarr, navegue até Configurações> Geral e copie sua chave de API do Sonarr.",
+    sonarrStep2: "No Seedarr, insira seu URL do Sonarr (padrão: http://localhost:8989) e cole sua chave API.",
+    sonarrStep3: "No Sonarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
+    sonarrStep4: "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação do programa de TV.",
     name: "Nome",
     type: "Tipo",
     url: "URL",
@@ -1918,30 +1838,21 @@ const pt = {
     webhook: "Webhook",
     webhookHost: "Host de webhook",
     externalUrl: "URL público/externo (opcional)",
-    externalUrlHint:
-      "URL pública opcional para links diretos do navegador (por exemplo, ao acessar Seedarr remotamente).",
+    externalUrlHint: "URL pública opcional para links diretos do navegador (por exemplo, ao acessar Seedarr remotamente).",
     connectionSuccess: "Sucesso de conexão",
     connectionFailed: "Falha na conexão",
     radarrDescription: "Descrição do Radar",
     instructionsRadarrCardTitle: "Título do cartão Radarr de instruções",
-    radarrStep1:
-      "No Radarr, navegue até Configurações > Geral e copie sua chave de API do Radarr.",
-    radarrStep2:
-      "No Seedarr, insira seu URL do Radarr (padrão: http://localhost:7878) e cole sua chave API.",
-    radarrStep3:
-      "No Radarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
-    radarrStep4:
-      "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação do filme.",
+    radarrStep1: "No Radarr, navegue até Configurações > Geral e copie sua chave de API do Radarr.",
+    radarrStep2: "No Seedarr, insira seu URL do Radarr (padrão: http://localhost:7878) e cole sua chave API.",
+    radarrStep3: "No Radarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
+    radarrStep4: "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação do filme.",
     lidarrDescription: "Descrição do Lidarr",
     instructionsLidarrCardTitle: "Instruções Título do cartão Lidarr",
-    lidarrStep1:
-      "No Lidarr, navegue até Configurações> Geral e copie sua chave API Lidarr.",
-    lidarrStep2:
-      "No Seedarr, insira seu URL Lidarr (padrão: http://localhost:8686) e cole sua chave API.",
-    lidarrStep3:
-      "No Lidarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
-    lidarrStep4:
-      "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação musical.",
+    lidarrStep1: "No Lidarr, navegue até Configurações> Geral e copie sua chave API Lidarr.",
+    lidarrStep2: "No Seedarr, insira seu URL Lidarr (padrão: http://localhost:8686) e cole sua chave API.",
+    lidarrStep3: "No Lidarr, vá para Configurações> Baixar clientes, clique em '+', selecione qBittorrent e defina Host como Seedarr IP e Porta como 7889.",
+    lidarrStep4: "Clique em 'Testar conexão' no Seedarr e em 'Salvar e continuar' para ativar a automação musical.",
     finishTitle: "Finalizar título",
     finishDescription: "Descrição do acabamento",
     goToQueue: "Ir para a fila",
@@ -1973,24 +1884,19 @@ const pt = {
     settings: "Settings",
     stepStorage: "Storage",
     stepStorageTitle: "Storage & Downloads",
-    saveClientFailed:
-      "Failed to save download client. Please verify connection parameters.",
-    saveIndexerFailed:
-      "Failed to save indexer. Please verify host and API key.",
-    saveArrFailed:
-      "Failed to save ${arrType} connection. Please verify credentials.",
+    saveClientFailed: "Failed to save download client. Please verify connection parameters.",
+    saveIndexerFailed: "Failed to save indexer. Please verify host and API key.",
+    saveArrFailed: "Failed to save ${arrType} connection. Please verify credentials.",
     saveStorageFailed: "Failed to save storage configuration.",
     testingTo: "Testing connection to ${targetName}...",
     validationErrorTitle: "Configuration Error",
     title: "Getting Started Setup Guide",
     welcomeTitle: "Welcome to Seedarr!",
     welcomeBody: "Seedarr is an integrate",
-    welcomeAgent:
-      "1. Download Agent: Captures downloads & monitors torrent swarms.",
+    welcomeAgent: "1. Download Agent: Captures downloads & monitors torrent swarms.",
     welcomeProwlarr: "2. Prowlarr: Syncs indexers and trackers automatically.",
     welcomeArr: "3. Sonarr / Radarr / Lidarr: Connects T",
-    welcomeStorage:
-      "4. Storage & Downloads: Verifies payload directories and write permissions.",
+    welcomeStorage: "4. Storage & Downloads: Verifies payload directories and write permissions.",
     language: "Language:",
     step1Title: "Add Download Client",
     enabled: "Enabled",
@@ -2000,19 +1906,14 @@ const pt = {
     enable: "Enable",
     enableRss: "RSS",
     enableSearch: "Search",
-    webhookHostHint:
-      "Hostname or IP for *arr to reach Seedarr (leave empty to use defaul",
-    storageDescription:
-      "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
+    webhookHostHint: "Hostname or IP for *arr to reach Seedarr (leave empty to use defaul",
+    storageDescription: "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
     defaultDownloadPath: "Default Download Directory",
-    defaultDownloadPathHint:
-      "Absolute path where torrent payloads are actively downloaded",
+    defaultDownloadPathHint: "Absolute path where torrent payloads are actively downloaded",
     completedPath: "Completed Downloads Directory (Optiona",
-    completedPathHint:
-      "Target directory to relocate completed torrents for post-processing",
+    completedPathHint: "Target directory to relocate completed torrents for post-processing",
     watchFolderPath: "Watch Folder Path (Optiona",
-    watchFolderPathHint:
-      "Filesystem directory monitored for new .torrent files",
+    watchFolderPathHint: "Filesystem directory monitored for new .torrent files",
     detectedVolumes: "Detected Storage Volumes:",
     validating: "Validating...",
     validateDirectory: "Validate Directory",
@@ -2020,8 +1921,7 @@ const pt = {
   addTorrent: {
     title: "Adicionar novo torrent",
     closeDialog: "Fechar caixa de diálogo para adicionar torrent",
-    readOnlyWarning:
-      "🔒 Você tem permissões ReadOnly. Adicionar torrents não é permitido.",
+    readOnlyWarning: "🔒 Você tem permissões ReadOnly. Adicionar torrents não é permitido.",
     subtitle: "Faça upload de arquivos torrent ou baixe via link magnético",
     torrentFileTab: "Arquivo Torrent",
     magnetLinkTab: "Link Magnet",
@@ -2040,8 +1940,7 @@ const pt = {
     clearInput: "Limpar",
     clearInputTooltip: "Limpar entrada",
     magnetPlaceholder: "Cole magnet:?xt=urn:btih:... ou info hash",
-    validMagnetDescription:
-      "Cole qualquer link magnético válido do BitTorrent v1 ou v2.",
+    validMagnetDescription: "Cole qualquer link magnético válido do BitTorrent v1 ou v2.",
     validMagnetFormat: "✓ Formato magnético válido",
     invalidMagnetFormat: "✗ Deve começar com ímã:?",
     nameLabel: "Nome:",
@@ -2049,19 +1948,15 @@ const pt = {
     trackersLabel: "Rastreadores:",
     bundledTrackers: "{{count}} rastreadores incluídos",
     noEnabledIndexers: "Nenhum indexador habilitado configurado",
-    connectIndexersDesc:
-      "Conecte os indexadores Jackett, Prowlarr, Torznab ou Newznab em Configurações para pesquisar lançamentos diretamente.",
-    searchReleasesPlaceholder:
-      "Pesquise versões (por exemplo, Ubuntu, Debian, 1080p, 4k)...",
+    connectIndexersDesc: "Conecte os indexadores Jackett, Prowlarr, Torznab ou Newznab em Configurações para pesquisar lançamentos diretamente.",
+    searchReleasesPlaceholder: "Pesquise versões (por exemplo, Ubuntu, Debian, 1080p, 4k)...",
     allIndexersCount: "Todos os indexadores ({{count}})",
     searching: "Procurando...",
     searchingIndexers: "Pesquisando indexadores configurados...",
     searchFailed: "Falha na pesquisa:",
     checkIndexerConnection: "Verifique a conexão do indexador",
-    noReleasesFound:
-      'Nenhuma versão encontrada para "{{query}}". Experimente diferentes palavras-chave ou indexador.',
-    typeKeywordPrompt:
-      "Digite uma palavra-chave acima para pesquisar nos indexadores configurados ({{indexers}}).",
+    noReleasesFound: "Nenhuma versão encontrada para \"{{query}}\". Experimente diferentes palavras-chave ou indexador.",
+    typeKeywordPrompt: "Digite uma palavra-chave acima para pesquisar nos indexadores configurados ({{indexers}}).",
     colTitle: "Título",
     colIndexer: "Indexador",
     colSize: "Tamanho",
@@ -2079,8 +1974,7 @@ const pt = {
     pieceSizeAuto: "Automático (tamanho ideal com base no conteúdo)",
     privateTorrentLabel: "Torrente Privada",
     privateTorrentBep27: "Torrent privado (BEP 27 - Desativa DHT e PEX)",
-    trackersLabelWithTiers:
-      "URLs do rastreador (um por linha, camadas separadas por linha vazia)",
+    trackersLabelWithTiers: "URLs do rastreador (um por linha, camadas separadas por linha vazia)",
     webSeedsLabel: "URLs de sementes da Web (um por linha)",
     commentLabel: "Comentário",
     commentPlaceholder: "Descrição opcional ou informações de licença",
@@ -2102,8 +1996,7 @@ const pt = {
     addingTorrent: "Adicionando...",
     createSourcePath: "Caminho de origem (Arquivo ou pasta)",
     optimalPieceSize: "Tamanho ideal de pedaço (Automático)",
-    trackerUrlsPrompt:
-      "URLs de trackers (uma por linha, linha em branco entre níveis)",
+    trackerUrlsPrompt: "URLs de trackers (uma por linha, linha em branco entre níveis)",
     webSeedUrlsPrompt: "URLs Web Seed (uma por linha)",
     commentPrompt: "Comentário / Descrição",
     savePathPrompt: "Caminho de destino do .torrent",
@@ -2112,10 +2005,9 @@ const pt = {
     failedToUploadTorrents: "Falha ao enviar torrents: {{message}}",
     magnetAddedSuccess: "Link magnético adicionado com sucesso",
     failedToAddMagnet: "Falha ao adicionar ímã: {{message}}",
-    addedToDownloadQueue: 'Adicionado "{{title}}" à fila de download',
+    addedToDownloadQueue: "Adicionado \"{{title}}\" à fila de download",
     failedToAddRelease: "Falha ao adicionar versão: {{message}}",
-    sourcePathRequired:
-      "O caminho de origem é necessário para criar um torrent",
+    sourcePathRequired: "O caminho de origem é necessário para criar um torrent",
     failedToCreateTorrent: "Falha ao criar torrent",
     failedToAddTorrent: "Falha ao adicionar torrent",
     bulkAddSummary: "Resumo de adição em massa",

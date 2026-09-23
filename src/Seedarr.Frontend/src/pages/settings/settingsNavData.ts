@@ -283,6 +283,27 @@ export const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
         ],
       },
       {
+        id: "subsystems",
+        groupId: "advanced-ai",
+        title: "Pluggable Subsystems Matrix",
+        shortLabel: "Subsystems",
+        description:
+          "Zero-downtime hot-swappable providers for BitTorrent engines, archive extractors, media inspectors, and GeoIP",
+        icon: "🔌",
+        badge: "Modular",
+        keywords: [
+          "subsystems",
+          "hot-swap",
+          "provider",
+          "bittorrent",
+          "extractor",
+          "mediainspector",
+          "geoip",
+          "blocklist",
+          "probe",
+        ],
+      },
+      {
         id: "advanced",
         groupId: "advanced-ai",
         title: "Advanced & Logs",
