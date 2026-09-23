@@ -40,6 +40,7 @@ public class TrackerServerServiceTests
         _scrapeCache = new ScrapeCache();
 
         _torrentService.ExistsByInfoHash(DefaultInfoHash).Returns(true);
+        _peerDatabase.GetPeers(Arg.Any<string>()).Returns(new List<TrackerPeerEntry>());
 
         _configService.TrackerServerEnabled.Returns(true);
         _configService.TrackerHttpEnabled.Returns(true);
@@ -452,13 +453,13 @@ public class TrackerServerServiceTests
 
         bytes.Length.Should().Be(12);
 
-        // First peer: 192.168.1.1:6881 (0x1AD1)
+        // First peer: 192.168.1.1:6881 (0x1AE1)
         bytes[0].Should().Be(192);
         bytes[1].Should().Be(168);
         bytes[2].Should().Be(1);
         bytes[3].Should().Be(1);
         bytes[4].Should().Be(0x1A);
-        bytes[5].Should().Be(0xD1);
+        bytes[5].Should().Be(0xE1);
 
         // Second peer: 10.0.0.1:51413 (0xC8D5)
         bytes[6].Should().Be(10);
@@ -481,7 +482,7 @@ public class TrackerServerServiceTests
 
         bytes.Length.Should().Be(18);
         bytes[16].Should().Be(0x1A);
-        bytes[17].Should().Be(0xD1);
+        bytes[17].Should().Be(0xE1);
     }
 
     [Test]

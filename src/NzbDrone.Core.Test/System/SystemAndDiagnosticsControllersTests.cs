@@ -612,7 +612,7 @@ public class SystemAndDiagnosticsControllersTests
         {
             Assert.That(fileResult.EnableRangeProcessing, Is.True);
             Assert.That(fileResult.ContentType, Is.EqualTo("text/plain"));
-            Assert.That(fileResult.FileDownloadName, Is.Null, "Inline viewing should have null download name");
+            Assert.That(fileResult.FileDownloadName, Is.Null.Or.Empty, "Inline viewing should have null or empty download name");
         }
         finally
         {

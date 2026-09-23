@@ -23,6 +23,7 @@ public class PortMappingEngineTests
     public void SetUp()
     {
         _gatewayService = Substitute.For<IGatewayDiscoveryService>();
+        _gatewayService.GetDefaultGatewayAsync().Returns(Task.FromResult(IPAddress.Parse("192.168.1.1")));
         _upnpService = Substitute.For<IUpnpService>();
         _pcpClient = Substitute.For<IPcpClient>();
     }
