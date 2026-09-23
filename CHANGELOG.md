@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.16.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.16.0) - 2026-09-23
+
+### ✨ Features
+- feat(parity): implement Workpackage 07 Code Quality, Linters & CI/CD Pipelines Parity
+
 ## [v1.15.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.15.0) - 2026-09-22
 
 ### ✨ Features
