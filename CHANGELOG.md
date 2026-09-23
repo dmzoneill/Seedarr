@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.19.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.19.0) - 2026-09-23
+
+### ✨ Features
+- feat(logging): track automatic state changes and reasons in state machine and event logs
+
 ## [v1.18.1](https://github.com/dmzoneill/Seedarr/releases/tag/v1.18.1) - 2026-09-23
 
 ### ✨ Features
