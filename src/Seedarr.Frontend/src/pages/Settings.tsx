@@ -27,6 +27,7 @@ import { CustomScriptsTab } from "./settings/CustomScriptsTab";
 import { WebUiSettingsTab } from "./settings/WebUiSettingsTab";
 import { SecurityTab } from "./settings/SecurityTab";
 import { AiTab } from "./settings/AiTab";
+import { SubsystemsTab } from "./settings/SubsystemsTab";
 
 const sectionTitles: Record<string, string> = {
   general: "General",
@@ -49,6 +50,7 @@ const sectionTitles: Record<string, string> = {
   connections: "Connections",
   "download-clients": "Download Clients",
   ai: "AI & Copilot",
+  subsystems: "Subsystems",
   advanced: "Advanced",
 };
 
@@ -90,6 +92,8 @@ const sectionDescriptions: Record<string, string> = {
   "download-clients":
     "Manage download agents (qBittorrent, Transmission, Deluge, rTorrent)",
   ai: "Configure AI providers (Ollama, Gemini, ONNX), Copilot drawer, and swarm diagnostics",
+  subsystems:
+    "Zero-downtime hot-swappable providers for BitTorrent engines, extractors, and inspectors",
   advanced: "System logging verbosity, diagnostics, and developer flags",
 };
 
@@ -113,6 +117,7 @@ const TAB_COMPONENTS: Record<string, React.ComponentType> = {
   connections: ConnectionsTab,
   "download-clients": DownloadClientsTab,
   ai: AiTab,
+  subsystems: SubsystemsTab,
   advanced: AdvancedTab,
 };
 

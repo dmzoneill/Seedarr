@@ -2,18 +2,15 @@ const bn = {
   auth: {
     screenLocked: "Screen Locked",
     sessionExpired: "Session Expired",
-    lockedDescription:
-      "Your session was locked due to inactivity. Enter your password or PIN to unlock.",
-    expiredDescription:
-      "Your session has expired. Enter your password to resume without losing your current work.",
+    lockedDescription: "Your session was locked due to inactivity. Enter your password or PIN to unlock.",
+    expiredDescription: "Your session has expired. Enter your password to resume without losing your current work.",
     unlockButton: "Unlock Session",
     unlocking: "Unlocking...",
     stayLoggedIn: "Stay Signed In",
     lockNow: "Lock Now",
     signOut: "Sign Out",
     inactivityWarning: "Inactivity Warning",
-    inactivityWarningDesc:
-      "Your session will automatically lock due to inactivity in:",
+    inactivityWarningDesc: "Your session will automatically lock due to inactivity in:",
     activityHint: "Move your mouse or press any key to remain active.",
     passwordPlaceholder: "Enter password or API key",
     passwordRequired: "Password or API key is required",
@@ -23,8 +20,7 @@ const bn = {
     loggedOutOtherTab: "You were logged out in another tab.",
     loggedInOtherTab: "Signed in from another tab.",
     sessionPaused: "Session Paused",
-    screenSaverDescription:
-      "Seedarr is paused due to inactivity. Click Resume or press Enter to continue.",
+    screenSaverDescription: "Seedarr is paused due to inactivity. Click Resume or press Enter to continue.",
     resumeSession: "Resume Session",
     welcomeBack: "BitTorrent Seeding Simulator",
     username: "Username",
@@ -276,7 +272,7 @@ const bn = {
       resetDefaults: "Reset to Defaults",
       resetSort: "Reset Sort",
       minOneColumn: "At least one column must remain visible",
-      noMatches: 'No columns match "{query}"',
+      noMatches: "No columns match \"{query}\"",
       categories: {
         basic: "Basic Info",
         transfer: "Transfer & Speeds",
@@ -293,16 +289,13 @@ const bn = {
     removeTags: "Remove",
     deleteTorrentsTitle: "Delete Torrents",
     deleteTorrentTitle: "Delete Torrent",
-    readOnlyDeleteWarning:
-      "You have ReadOnly permissions. Torrents cannot be deleted.",
+    readOnlyDeleteWarning: "You have ReadOnly permissions. Torrents cannot be deleted.",
     deleteMultipleConfirm: "Are you sure you want to delete ${count} torrents?",
     deleteSingleConfirm: "Are you sure you want to delete",
     deleteSingleConfirmGeneric: "Are you sure you want to delete this torrent?",
     deleteFilesFromDisk: "Also delete downloaded files from disk",
-    deleteFilesWarning:
-      "All downloaded files associated with this torrent will be permanently deleted.",
-    deletePermissionRequired:
-      "Deleting torrents requires operator or admin role",
+    deleteFilesWarning: "All downloaded files associated with this torrent will be permanently deleted.",
+    deletePermissionRequired: "Deleting torrents requires operator or admin role",
     contextMenu: {
       top: "Move to Top",
       up: "Move Up",
@@ -333,8 +326,7 @@ const bn = {
       diagTitle: "AI Swarm & Tracker Diagnostics",
       diagCollapse: "Collapse Diagnostics",
       diagExpand: "Expand Diagnostics",
-      diagPromptText:
-        "Analyze swarm health, peer distribution, tracker connectivity, and get recommendations.",
+      diagPromptText: "Analyze swarm health, peer distribution, tracker connectivity, and get recommendations.",
       diagDiagnoseSwarm: "Diagnose Swarm Health",
       diagAnalyzing: "Analyzing Swarm & Trackers...",
       diagSwarm: "Swarm Analysis:",
@@ -346,8 +338,7 @@ const bn = {
       diagForceRecheck: "Force Recheck Pieces",
       diagReEvaluate: "Re-evaluate Swarm",
       workingDirectory: "Working Directory",
-      workingDirectoryDesc:
-        "Interactive terminal shell scoped to torrent directory",
+      workingDirectoryDesc: "Interactive terminal shell scoped to torrent directory",
       quickTips: "Quick Tips:",
       loadingFiles: "Loading files...",
       failedToLoadFiles: "Failed to load files.",
@@ -382,11 +373,9 @@ const bn = {
       loadingPeers: "Loading peers...",
       failedToLoadPeers: "Failed to load peers.",
       noPeers: "No peers connected",
-      privateSwarmTooltip:
-        "BEP 27 Private Swarm: DHT, PEX, and LSD are disabled to protect tracker passkeys",
+      privateSwarmTooltip: "BEP 27 Private Swarm: DHT, PEX, and LSD are disabled to protect tracker passkeys",
       privateSwarmBadge: "Private (BEP 27)",
-      publicSwarmTooltip:
-        "Public BitTorrent Swarm: DHT and PEX peer discovery enabled",
+      publicSwarmTooltip: "Public BitTorrent Swarm: DHT and PEX peer discovery enabled",
       publicSwarmBadge: "Public Swarm",
       pieceMapLinearBarView: "Linear Bar View",
       pieceMapBar: "Bar",
@@ -400,8 +389,7 @@ const bn = {
       pieceMapVerifiedSeeded: "Verified / Seeded",
       pieceMapPartial: "Downloading / Partial",
       pieceMapMissing: "Missing",
-      peersPrivateBanner:
-        "Private Torrent (BEP 27): DHT, PEX, and LSD are disabled to protect passkey privacy.",
+      peersPrivateBanner: "Private Torrent (BEP 27): DHT, PEX, and LSD are disabled to protect passkey privacy.",
       colAddress: "Address",
       colClient: "Client",
       colUpSpeed: "Up Speed",
@@ -414,8 +402,7 @@ const bn = {
   },
   quicksettings: {
     title: "Quick Controls",
-    subtitle:
-      "Live transfer limits, queue concurrency, protocol swarms & seeding automation",
+    subtitle: "Live transfer limits, queue concurrency, protocol swarms & seeding automation",
     fullSettings: "Full Settings",
     bandwidth: "Bandwidth",
     queueConcurrency: "Queue & Concurrency",
@@ -491,8 +478,7 @@ const bn = {
     network: "নেটওয়ার্ক",
     logs: "লগ",
     realTimeTelemetry: "Real-Time Telemetry",
-    realTime:
-      "Real-time engine metrics, memory allocation, and socket utilization",
+    realTime: "Real-time engine metrics, memory allocation, and socket utilization",
     realTimeHardwareUtilization: "Real-Time Hardware Utilization",
     processCpuThreads: "Process CPU & Threads",
     cores: "cores",
@@ -525,13 +511,11 @@ const bn = {
     seedsLeechers: "Seeds / Leechers:",
     overheadRatio: "Overhead Ratio:",
     subsystemsOperationalStatus: "Subsystems Operational Status",
-    activeModularSubsystems:
-      "Active modular subsystems for indexing, search, trackers, and proxy tunneling.",
+    activeModularSubsystems: "Active modular subsystems for indexing, search, trackers, and proxy tunneling.",
     configureSubsystems: "Configure Subsystems",
     provider: "Provider:",
     perTorrentBreakdown: "Per-Torrent Telemetry & Sockets",
-    sessionTelemetryPerSwarm:
-      "Detailed session telemetry, protocol overhead, and buffer distribution per swarm.",
+    sessionTelemetryPerSwarm: "Detailed session telemetry, protocol overhead, and buffer distribution per swarm.",
     filterTorrents: "Filter torrents by name or hash...",
     swarms: "swarms",
     noActiveTorrentsMatch: "No active torrents match the filter.",
@@ -603,8 +587,7 @@ const bn = {
       prioritizeFirstLast: "Prioritize First & Last Pieces",
       adding: "Adding...",
       closeDialog: "Close add torrent dialog",
-      readOnlyWarning:
-        "🔒 You have ReadOnly permissions. Adding torrents is not permitted.",
+      readOnlyWarning: "🔒 You have ReadOnly permissions. Adding torrents is not permitted.",
     },
     keyboardShortcuts: {
       title: "কীবোর্ড শর্টকাট",
@@ -632,8 +615,7 @@ const bn = {
       stepFinished: "সমাপ্ত",
       stepFinishedTitle: "সেটআপ সম্পূর্ণ",
       welcomeHeading: "Seedarr স্বাগতম",
-      welcomeDescription:
-        "Seedarr হল স্বয়ংক্রিয় মেটাডেটা সমৃদ্ধকরণ এবং নেটিভ *arr ইন্টিগ্রেশন সহ একটি উচ্চ-কর্মক্ষমতা সম্পন্ন BitTorrent ক্লায়েন্ট। আপনার ইনডেক্সার এবং মিডিয়া ম্যানেজমেন্ট অ্যাপ্লিকেশানগুলিকে সংযুক্ত করতে এই নির্দেশিকা অনুসরণ করুন৷",
+      welcomeDescription: "Seedarr হল স্বয়ংক্রিয় মেটাডেটা সমৃদ্ধকরণ এবং নেটিভ *arr ইন্টিগ্রেশন সহ একটি উচ্চ-কর্মক্ষমতা সম্পন্ন BitTorrent ক্লায়েন্ট। আপনার ইনডেক্সার এবং মিডিয়া ম্যানেজমেন্ট অ্যাপ্লিকেশানগুলিকে সংযুক্ত করতে এই নির্দেশিকা অনুসরণ করুন৷",
       port7889Title: "Port7889 শিরোনাম",
       port7889Desc: "পোর্ট7889 ডেস্ক",
       mediaEnrichmentTitle: "মিডিয়া সমৃদ্ধকরণ",
@@ -644,13 +626,10 @@ const bn = {
       tipDesc: "টিপ বিবরণ",
       prowlarrDesc: "Prowlarr Desc",
       prowlarrInstructionsCardTitle: "Prowlarr কিভাবে সংযোগ করবেন",
-      prowlarrStep1:
-        "Prowlarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার API কী অনুলিপি করুন।",
-      prowlarrStep2:
-        "উপরের লাইভ সেটআপ মোডে স্যুইচ করুন (বা সেটিংস > সূচকগুলিতে যান) এবং আপনার Prowlarr URL লিখুন (ডিফল্ট: http://localhost:9696)।",
+      prowlarrStep1: "Prowlarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার API কী অনুলিপি করুন।",
+      prowlarrStep2: "উপরের লাইভ সেটআপ মোডে স্যুইচ করুন (বা সেটিংস > সূচকগুলিতে যান) এবং আপনার Prowlarr URL লিখুন (ডিফল্ট: http://localhost:9696)।",
       prowlarrStep3: "API কী ক্ষেত্রে আপনার Prowlarr API কী পেস্ট করুন।",
-      prowlarrStep4:
-        "'টেস্ট কানেকশন'-এ ক্লিক করুন, তারপর স্বয়ংক্রিয়ভাবে আপনার ইনডেক্সার আমদানি করতে 'সংরক্ষণ করুন এবং চালিয়ে যান'-এ ক্লিক করুন।",
+      prowlarrStep4: "'টেস্ট কানেকশন'-এ ক্লিক করুন, তারপর স্বয়ংক্রিয়ভাবে আপনার ইনডেক্সার আমদানি করতে 'সংরক্ষণ করুন এবং চালিয়ে যান'-এ ক্লিক করুন।",
       next: "পরবর্তী",
       testConnection: "পরীক্ষা সংযোগ",
       saveAndContinue: "সংরক্ষণ করুন এবং চালিয়ে যান",
@@ -659,14 +638,10 @@ const bn = {
       saving: "সংরক্ষণ করা হচ্ছে...",
       sonarrDescription: "সোনার বর্ণনা",
       instructionsSonarrCardTitle: "নির্দেশাবলী সোনার কার্ডের শিরোনাম",
-      sonarrStep1:
-        "Sonarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Sonarr API কী কপি করুন।",
-      sonarrStep2:
-        "Seedarr-এ, আপনার Sonarr URL লিখুন (ডিফল্ট: http://localhost:8989) এবং আপনার API কী পেস্ট করুন।",
-      sonarrStep3:
-        "Sonarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্ট-এ যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং Port-এ 7889-এ সেট করুন।",
-      sonarrStep4:
-        "টিভি শো অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
+      sonarrStep1: "Sonarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Sonarr API কী কপি করুন।",
+      sonarrStep2: "Seedarr-এ, আপনার Sonarr URL লিখুন (ডিফল্ট: http://localhost:8989) এবং আপনার API কী পেস্ট করুন।",
+      sonarrStep3: "Sonarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্ট-এ যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং Port-এ 7889-এ সেট করুন।",
+      sonarrStep4: "টিভি শো অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
       name: "নাম",
       type: "টাইপ",
       url: "URL",
@@ -677,30 +652,21 @@ const bn = {
       webhook: "ওয়েবহুক",
       webhookHost: "ওয়েবহুক হোস্ট",
       externalUrl: "সর্বজনীন / বহিরাগত URL (ঐচ্ছিক)",
-      externalUrlHint:
-        "ব্রাউজার ডিপ লিঙ্কের জন্য ঐচ্ছিক পাবলিক URL (যেমন যখন Seedarr দূরবর্তীভাবে অ্যাক্সেস করা হয়)।",
+      externalUrlHint: "ব্রাউজার ডিপ লিঙ্কের জন্য ঐচ্ছিক পাবলিক URL (যেমন যখন Seedarr দূরবর্তীভাবে অ্যাক্সেস করা হয়)।",
       connectionSuccess: "সংযোগ সফল",
       connectionFailed: "সংযোগ ব্যর্থ হয়েছে৷",
       radarrDescription: "রাডার বর্ণনা",
       instructionsRadarrCardTitle: "নির্দেশনা রাডার কার্ডের শিরোনাম",
-      radarrStep1:
-        "Radarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Radarr API কী কপি করুন।",
-      radarrStep2:
-        "Seedarr-এ, আপনার Radarr URL লিখুন (ডিফল্ট: http://localhost:7878) এবং আপনার API কী পেস্ট করুন।",
-      radarrStep3:
-        "Radarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্টে যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং পোর্ট 7889-এ সেট করুন।",
-      radarrStep4:
-        "মুভি অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
+      radarrStep1: "Radarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Radarr API কী কপি করুন।",
+      radarrStep2: "Seedarr-এ, আপনার Radarr URL লিখুন (ডিফল্ট: http://localhost:7878) এবং আপনার API কী পেস্ট করুন।",
+      radarrStep3: "Radarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্টে যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং পোর্ট 7889-এ সেট করুন।",
+      radarrStep4: "মুভি অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
       lidarrDescription: "লিডার বর্ণনা",
       instructionsLidarrCardTitle: "নির্দেশাবলী Lidarr কার্ড শিরোনাম",
-      lidarrStep1:
-        "Lidarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Lidarr API কী কপি করুন।",
-      lidarrStep2:
-        "Seedarr-এ, আপনার Lidarr URL লিখুন (ডিফল্ট: http://localhost:8686) এবং আপনার API কী পেস্ট করুন।",
-      lidarrStep3:
-        "Lidarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্টে যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং পোর্ট 7889-এ সেট করুন।",
-      lidarrStep4:
-        "মিউজিক অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
+      lidarrStep1: "Lidarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Lidarr API কী কপি করুন।",
+      lidarrStep2: "Seedarr-এ, আপনার Lidarr URL লিখুন (ডিফল্ট: http://localhost:8686) এবং আপনার API কী পেস্ট করুন।",
+      lidarrStep3: "Lidarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্টে যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং পোর্ট 7889-এ সেট করুন।",
+      lidarrStep4: "মিউজিক অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
       finishTitle: "শিরোনাম শেষ করুন",
       finishDescription: "বর্ণনা শেষ করুন",
       goToQueue: "সারিতে যান",
@@ -732,25 +698,19 @@ const bn = {
       settings: "Settings",
       stepStorage: "Storage",
       stepStorageTitle: "Storage & Downloads",
-      saveClientFailed:
-        "Failed to save download client. Please verify connection parameters.",
-      saveIndexerFailed:
-        "Failed to save indexer. Please verify host and API key.",
-      saveArrFailed:
-        "Failed to save ${arrType} connection. Please verify credentials.",
+      saveClientFailed: "Failed to save download client. Please verify connection parameters.",
+      saveIndexerFailed: "Failed to save indexer. Please verify host and API key.",
+      saveArrFailed: "Failed to save ${arrType} connection. Please verify credentials.",
       saveStorageFailed: "Failed to save storage configuration.",
       testingTo: "Testing connection to ${targetName}...",
       validationErrorTitle: "Configuration Error",
       title: "Getting Started Setup Guide",
       welcomeTitle: "Welcome to Seedarr!",
       welcomeBody: "Seedarr is an integrate",
-      welcomeAgent:
-        "1. Download Agent: Captures downloads & monitors torrent swarms.",
-      welcomeProwlarr:
-        "2. Prowlarr: Syncs indexers and trackers automatically.",
+      welcomeAgent: "1. Download Agent: Captures downloads & monitors torrent swarms.",
+      welcomeProwlarr: "2. Prowlarr: Syncs indexers and trackers automatically.",
       welcomeArr: "3. Sonarr / Radarr / Lidarr: Connects T",
-      welcomeStorage:
-        "4. Storage & Downloads: Verifies payload directories and write permissions.",
+      welcomeStorage: "4. Storage & Downloads: Verifies payload directories and write permissions.",
       language: "Language:",
       step1Title: "Add Download Client",
       enabled: "Enabled",
@@ -760,19 +720,14 @@ const bn = {
       enable: "Enable",
       enableRss: "RSS",
       enableSearch: "Search",
-      webhookHostHint:
-        "Hostname or IP for *arr to reach Seedarr (leave empty to use defaul",
-      storageDescription:
-        "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
+      webhookHostHint: "Hostname or IP for *arr to reach Seedarr (leave empty to use defaul",
+      storageDescription: "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
       defaultDownloadPath: "Default Download Directory",
-      defaultDownloadPathHint:
-        "Absolute path where torrent payloads are actively downloaded",
+      defaultDownloadPathHint: "Absolute path where torrent payloads are actively downloaded",
       completedPath: "Completed Downloads Directory (Optiona",
-      completedPathHint:
-        "Target directory to relocate completed torrents for post-processing",
+      completedPathHint: "Target directory to relocate completed torrents for post-processing",
       watchFolderPath: "Watch Folder Path (Optiona",
-      watchFolderPathHint:
-        "Filesystem directory monitored for new .torrent files",
+      watchFolderPathHint: "Filesystem directory monitored for new .torrent files",
       detectedVolumes: "Detected Storage Volumes:",
       validating: "Validating...",
       validateDirectory: "Validate Directory",
@@ -806,8 +761,7 @@ const bn = {
   },
   automation: {
     title: "Automation & Scripts",
-    subtitle:
-      "Build visual pipelines, run scripts, and automate Seedarr workflows.",
+    subtitle: "Build visual pipelines, run scripts, and automate Seedarr workflows.",
     tabs: {
       visual: "Visual Editor",
       marketplace: "Marketplace",
@@ -861,8 +815,7 @@ const bn = {
       onCriticalDiskSpaceEmergency: "🚨 On Critical Disk Space Emergency",
       onFileMovePathError: "❌ On File Move / Path Error",
       onMediaEnriched: "🎬 On Media Enriched",
-      onMediaCorruptionInspectionFai:
-        "🎞️ On Media Corruption / Inspection Failed",
+      onMediaCorruptionInspectionFai: "🎞️ On Media Corruption / Inspection Failed",
       onArchiveExtracted: "📦 On Archive Extracted",
       onExtractionFailed: "❌ On Extraction Failed",
       onServarrImportCompleted: "📬 On Servarr Import Completed",
@@ -1053,8 +1006,7 @@ const bn = {
       pauseTorrent: "⏸️ Pause Torrent",
       resumeTorrent: "▶️ Resume Torrent",
       removeTorrent: "🗑️ Remove Torrent",
-      deletesTorrentFromClientOption:
-        "Deletes torrent from client (optional data deletion)",
+      deletesTorrentFromClientOption: "Deletes torrent from client (optional data deletion)",
       verifiesPieceHashesOnDisk: "Verifies piece hashes on disk",
       forceReannounce: "📢 Force Reannounce",
       forcesImmediateTrackerUpdate: "Forces immediate tracker update",
@@ -1119,8 +1071,7 @@ const bn = {
       GeoIpUpdate: "Update MaxMind GeoIP database",
       RssSync: "Poll RSS indexers for releases",
       createFullDatabaseConfigBackup: "Create full database & config backup",
-      syncConnectedSonarrRadarrInsta:
-        "Sync connected Sonarr / Radarr instances",
+      syncConnectedSonarrRadarrInsta: "Sync connected Sonarr / Radarr instances",
       scanWatchFolderForTorrents: "Scan watch folder for torrents",
       scanOptimizeCandidateTrackers: "Scan & optimize candidate trackers",
       updatePeerIpBlocklist: "Update peer IP blocklist",
@@ -1212,8 +1163,7 @@ const bn = {
       egDownloadscomplete: "e.g. '/downloads/complete'",
       customVariableExpression: "✏️ Custom Variable / Expression...",
       customDynamic: "Custom / Dynamic",
-      egInputsminratioOrSystemfreedi:
-        "e.g. ${inputs.minRatio} or ${system.freeDiskBytes}",
+      egInputsminratioOrSystemfreedi: "e.g. ${inputs.minRatio} or ${system.freeDiskBytes}",
       seedingTimeMinutes: "Seeding Time (Minutes)",
       diskFreeSpace: "Free Disk Space (Bytes)",
       eg288048Hours: "e.g. 2880 (48 hours)",
@@ -1276,15 +1226,13 @@ const bn = {
     },
     ui: {
       automationPipelinesMarketplace: "Automation Pipelines & Marketplace",
-      visualDraganddropWorkflowBuild:
-        "Visual drag-and-drop workflow builder, low-code scripting engine, and community pipeline registry.",
+      visualDraganddropWorkflowBuild: "Visual drag-and-drop workflow builder, low-code scripting engine, and community pipeline registry.",
       allTriggers: "All Triggers",
       javascriptScript: "💻 + JavaScript Script",
       loadingAutomationPipelines: "Loading automation pipelines...",
       text1: "⚙️",
       noAutomationPipelinesFound: "No Automation Pipelines Found",
-      createAutomatedActionsForWhen:
-        "Create automated actions for when torrents are added, completed, hit ratio goals, or browse the Community Marketplace.",
+      createAutomatedActionsForWhen: "Create automated actions for when torrents are added, completed, hit ratio goals, or browse the Community Marketplace.",
       buildVisualPipeline: "✨ Build Visual Pipeline",
       browseMarketplace: "🛍️ Browse Marketplace",
       text2: "📁",
@@ -1293,15 +1241,13 @@ const bn = {
       edit: "✏️ Edit",
       text3: "🗑️",
       pipelineExecutionHistory: "📊 Pipeline Execution History",
-      detailedExecutionTracesAndStep:
-        "Detailed execution traces and step-by-step performance metrics for recent pipeline runs.",
+      detailedExecutionTracesAndStep: "Detailed execution traces and step-by-step performance metrics for recent pipeline runs.",
       status: "Status",
       pipelineName: "Pipeline Name",
       trigger: "Trigger",
       executedAt: "Executed At",
       actions: "Actions",
-      noPipelineExecutionRunsRecorde:
-        "No pipeline execution runs recorded yet. Trigger a run or wait for an event.",
+      noPipelineExecutionRunsRecorde: "No pipeline execution runs recorded yet. Trigger a run or wait for an event.",
       traceInspector: "🔍 Trace Inspector",
       loadingMarketplaceCatalog: "Loading marketplace catalog...",
       by: "by",
@@ -1316,8 +1262,7 @@ const bn = {
       addStep: "➕ Add Step",
       text4: "⬆️",
       text5: "⬇️",
-      onlyRunThisStepIf:
-        "Only run this step if condition matches (IF condition)",
+      onlyRunThisStepIf: "Only run this step if condition matches (IF condition)",
       customExpressionVariable: "✏️ Custom Expression / Variable...",
       quickSet: "Quick set:",
       presets: "🔄 Presets",
@@ -1328,8 +1273,7 @@ const bn = {
       alert: "🔔 + Alert",
       servarr: "📬 + Servarr",
       command: "⚙️ + Command",
-      noActionsAddedClickAny:
-        "No actions added. Click any button above or select from the actions library below.",
+      noActionsAddedClickAny: "No actions added. Click any button above or select from the actions library below.",
       highPriority: "⚡ High Priority",
       normalPriority: "🔹 Normal Priority",
       lowPriority: "🔻 Low Priority",
@@ -1342,10 +1286,8 @@ const bn = {
       lidarrMusic: "🎵 Lidarr (Music)",
       readarrBooks: "📚 Readarr (Books)",
       whisparrAdult: "🔞 Whisparr (Adult)",
-      alsoPermanentlyDeleteDownloade:
-        "🗑️ Also permanently delete downloaded files from disk",
-      autoappliesToActiveSwarmTorren:
-        "✨ Auto-applies to active swarm & torrent",
+      alsoPermanentlyDeleteDownloade: "🗑️ Also permanently delete downloaded files from disk",
+      autoappliesToActiveSwarmTorren: "✨ Auto-applies to active swarm & torrent",
       get: "GET",
       post: "POST",
       put: "PUT",
@@ -1363,8 +1305,7 @@ const bn = {
       apiget: "api.get()",
       torrentaddtag: "torrent.addTag()",
       liveDryRunInspector: "⚡ Live Dry Run Inspector",
-      testPipelineExecutionLogicSafe:
-        "Test pipeline execution logic safely against active torrents without writing mutations.",
+      testPipelineExecutionLogicSafe: "Test pipeline execution logic safely against active torrents without writing mutations.",
       sampleTorrentBigBuckBunny: "Sample Torrent (Big Buck Bunny 1080p)",
       gb: "GB)",
       duration: "Duration:",
@@ -1390,20 +1331,17 @@ const bn = {
       deleteScript: "Delete Script",
       searchCommunityTemplates: "Search community templates...",
       eg4kMovieAutozapBackup: "e.g. 4K Movie Auto-Zap & Backup",
-      summaryOfWhatThisAutomation:
-        "Summary of what this automation pipeline performs...",
+      summaryOfWhatThisAutomation: "Summary of what this automation pipeline performs...",
       stepName: "Step Name",
       egInputsmyproperty: "e.g. ${inputs.myProperty}",
       switchBackToPresetsDropdown: "Switch back to presets dropdown",
-      httpsexternalservicecomapiv1we:
-        "https://external.service.com/api/v1/webhook",
+      httpsexternalservicecomapiv1we: "https://external.service.com/api/v1/webhook",
       insertTorrentJsonPayload: "✨ Insert Torrent JSON Payload",
       registerVariable: "Register Variable",
       timeoutS: "Timeout (s)",
       deleteAction: "Delete Action",
       targetCategories: "Target Categories",
-      targetCategoriesHint:
-        "Filter by categories (leave empty to apply to all)",
+      targetCategoriesHint: "Filter by categories (leave empty to apply to all)",
       targetTags: "Target Tags",
       targetTagsHint: "Filter by tags (leave empty to apply to all)",
     },
@@ -1411,8 +1349,7 @@ const bn = {
   terminal: {
     title: "Terminal",
     subtitle: "Interactive web console with PTY session management",
-    executeCommands:
-      "Execute shell commands, inspect torrent payload files, and manage host system utilities.",
+    executeCommands: "Execute shell commands, inspect torrent payload files, and manage host system utilities.",
     downloadsRoot: "Downloads Root",
     incomplete: "Incomplete",
     enterPath: "Enter directory path...",
@@ -1433,8 +1370,7 @@ const bn = {
     adminRequired: "Administrator privileges required for terminal access",
     accessDisabled: "Terminal access is disabled in Security settings",
     inputPlaceholder: "Enter command...",
-    shortcutsHint:
-      "Ctrl+L to clear, Ctrl+C to interrupt, Up/Down for command history",
+    shortcutsHint: "Ctrl+L to clear, Ctrl+C to interrupt, Up/Down for command history",
     dimensions: "Dimensions",
   },
   signalr: {
@@ -1453,8 +1389,7 @@ const bn = {
     group: "Group",
     risk: "Risk",
     somethingWentWrong: "Something went wrong",
-    anUnexpectedErrorOccurred:
-      "An unexpected error occurred while rendering this component.",
+    anUnexpectedErrorOccurred: "An unexpected error occurred while rendering this component.",
     tryAgain: "Try Again",
     reloadPage: "Reload Page",
     copiedDetails: "✓ Copied Details",
@@ -1526,27 +1461,21 @@ const bn = {
   },
   login: {
     enterPassword: "Please enter your password or API key.",
-    invalidCredentials:
-      "Invalid credentials. Please verify your username and password or API key.",
+    invalidCredentials: "Invalid credentials. Please verify your username and password or API key.",
   },
   systemStatus: {
     restartingToast: "System is restarting. Waiting for reconnection...",
-    restartFailedToast:
-      'Failed to trigger restart: ${err?.message || "Unknown error"}',
+    restartFailedToast: "Failed to trigger restart: ${err?.message || \"Unknown error\"}",
     reconnectedToast: "Seedarr has reconnected successfully!",
-    reconnectTimeoutToast:
-      "Reconnection timed out. Please refresh the page manually.",
+    reconnectTimeoutToast: "Reconnection timed out. Please refresh the page manually.",
     shuttingDownToast: "System is shutting down. Service is terminating.",
-    shutdownFailedToast:
-      'Failed to trigger shutdown: ${err?.message || "Unknown error"}',
+    shutdownFailedToast: "Failed to trigger shutdown: ${err?.message || \"Unknown error\"}",
     fileDescriptorsAndSockets: "File Descriptors & Sockets",
     unlimited: "Unlimited",
     osHandles: "OS Handles",
-    restartModalDesc:
-      "Are you sure you want to restart Seedarr? Active seeding and downloads will temporarily pause until the service restarts.",
+    restartModalDesc: "Are you sure you want to restart Seedarr? Active seeding and downloads will temporarily pause until the service restarts.",
     restarting: "Restarting...",
-    shutdownModalDesc:
-      "Are you sure you want to shut down Seedarr? The host process will terminate and will require manual intervention to start again.",
+    shutdownModalDesc: "Are you sure you want to shut down Seedarr? The host process will terminate and will require manual intervention to start again.",
     shuttingDown: "Shutting Down...",
     percentUsed: "{percent}% Used",
   },
@@ -1555,10 +1484,8 @@ const bn = {
       failedToSave: "Failed to save: ",
       changesSaved: "✓ Changes Saved Successfully",
       unsavedChangesTitle: "Unsaved Changes",
-      unsavedChangesDesc:
-        "You have unsaved changes in this settings section. What would you like to do?",
-      unsavedChangesPrompt:
-        "You have unsaved changes in settings. If you leave this page, your changes will be discarded. Are you sure you want to leave?",
+      unsavedChangesDesc: "You have unsaved changes in this settings section. What would you like to do?",
+      unsavedChangesPrompt: "You have unsaved changes in settings. If you leave this page, your changes will be discarded. Are you sure you want to leave?",
       stayOnPage: "Stay on Page",
       discardChanges: "Discard Changes",
       discardAndLeave: "Discard and Leave",
@@ -1576,13 +1503,11 @@ const bn = {
       resetSuccess: "AI Copilot button position reset to bottom right",
       loading: "Loading AI settings...",
       engineTitle: "AI Engine Configuration",
-      engineDescription:
-        "Select and configure the intelligence provider powering Copilot, release parsing, and swarm diagnostics.",
+      engineDescription: "Select and configure the intelligence provider powering Copilot, release parsing, and swarm diagnostics.",
       testHealth: "Test Health",
       activateProvider: "Activate Provider",
       connectionTitle: "Provider Connection Settings",
-      connectionDescription:
-        "Configure API keys, local URLs, and models for the selected provider.",
+      connectionDescription: "Configure API keys, local URLs, and models for the selected provider.",
       ollamaTitle: "Ollama (Local LLM)",
       ollamaUrl: "Ollama Endpoint URL",
       defaultModelName: "Model Name",
@@ -1598,8 +1523,7 @@ const bn = {
       onnxTitle: "ONNX Runtime (Embedded)",
       onnxPath: "Local Model Path",
       uiFeaturesTitle: "UI Features & Overlays",
-      uiFeaturesDescription:
-        "Enable or disable individual AI features across the Seedarr web interface.",
+      uiFeaturesDescription: "Enable or disable individual AI features across the Seedarr web interface.",
       enableCopilot: "Enable Floating AI Copilot",
       enableSearch: "Enable Semantic Smart Search",
       enableDiagnostics: "Enable Swarm Health Diagnostics",
@@ -1609,31 +1533,53 @@ const bn = {
       unknownError: "An unknown error occurred",
     },
     subsystems: {
+      loadingPluggable: "Loading pluggable subsystems...",
+      errorLoading: "Error loading subsystems: ",
+      retry: "Retry",
+      architectureTitle: "Pluggable Architecture & Subsystem Hot-Swapping",
+      architectureDescription: "Switch underlying engines, inspectors, geolocation resolvers, and security layers at runtime with zero downtime.",
+      allSubsystems: "All Subsystems",
       statusActive: "Active",
+      statusReady: "READY",
+      statusEmulated: "EMULATED",
       probing: "Probing...",
+      testProbe: "🔍 Test / Probe",
+      switch: "⚡ Switch",
+      hotSwapTitle: "Hot-Swap Subsystem Provider",
+      confirmSwitchStart: "Are you sure you want to switch ",
+      confirmSwitchMiddle: " to ",
+      providerSwitchingInfo: "ℹ️ Provider switching executes atomically with zero application restart. Active workloads will seamlessly migrate to the new provider.",
+      cancel: "Cancel",
+      switching: "Switching...",
+      confirmHotSwap: "Confirm Hot-Swap",
+      probeDiagnosticTitle: "Provider Diagnostic Probe",
+      healthyReady: "HEALTHY / READY",
+      warningUnhealthy: "WARNING / UNHEALTHY",
+      status: "Status:",
+      dependencyVerification: "Dependency Verification:",
+      diagnosticsWarnings: "Diagnostics & Warnings:",
+      close: "Close",
+      probeFailed: "Probe failed: ",
+      switchSuccess: "Successfully switched provider.",
+      switchFailed: "Failed to switch provider: ",
     },
   },
   trackerBoost: {
     probedEndpointsSuccess: "Probed {count} tracker endpoints",
     probeTrackersFailed: "Failed to probe trackers: {error}",
-    harvestedTrackersSuccess:
-      "Harvested {count} new trackers from active downloads",
+    harvestedTrackersSuccess: "Harvested {count} new trackers from active downloads",
     harvestFailed: "Failed to harvest from downloads: {error}",
     boostFailed: "Failed to boost: {error}",
     injectFailed: "Failed to inject tracker: {error}",
-    boostAllSuccess:
-      "Boosted {swarms} swarms: injected {trackers} verified trackers (+{seeds} seeds discovere",
+    boostAllSuccess: "Boosted {swarms} swarms: injected {trackers} verified trackers (+{seeds} seeds discovere",
     boostDownloadsFailed: "Failed to boost downloads: {error}",
-    scrapeAllTooltip:
-      "Scrape candidate trackers and inject only verified positive matches across all active downloads",
+    scrapeAllTooltip: "Scrape candidate trackers and inject only verified positive matches across all active downloads",
     scrapingBoosting: "⚡ Scraping & Boosting...",
     boostAllDownloads: "⚡ Boost All Downloads (Verified Onl",
-    harvestTooltip:
-      "Extract and discover tracker URLs from active download swarms in Seedarr and download clients",
+    harvestTooltip: "Extract and discover tracker URLs from active download swarms in Seedarr and download clients",
     harvesting: "🔄 Harvesting...",
     harvestFromLiveSwarms: "🔄 Harvest from Live Swarms",
-    probeTooltip:
-      "Ping and probe health across all monitored tracker endpoints",
+    probeTooltip: "Ping and probe health across all monitored tracker endpoints",
     probing: "📡 Probing...",
     probeAllTrackers: "📡 Probe All Trackers",
     filterAllSwarms: "All Swarms ({count",
@@ -1657,12 +1603,10 @@ const bn = {
     publicSwarmBadge: "🌐 Public Swarm",
     rescrapeTooltip: "Re-scrape candidate trackers for this info_hash",
     rescrapeSwarm: "🔄 Re-Scrape Swarm",
-    injectCandidateTooltip:
-      "Inject verified candidate trackers into this torrent",
+    injectCandidateTooltip: "Inject verified candidate trackers into this torrent",
     boostTorrentVerified: "⚡ Boost Torrent (Inject Verifie",
     privateSwarmWarningStrong: "Private Tracker Swarm:",
-    privateSwarmWarningText:
-      "Cross-swarm public tracker injection is protected and disabled to comply with BitTorrent private tracker rules (BEP 2",
+    privateSwarmWarningText: "Cross-swarm public tracker injection is protected and disabled to comply with BitTorrent private tracker rules (BEP 2",
     attachedTrackers: "Attached Trackers",
     verifiedCandidates: "Verified Candidates",
     totalChecked: "Total Checked",
@@ -1678,14 +1622,12 @@ const bn = {
     seedsCountLower: "{count} seeds",
     leechesCountLower: "{count} leeches",
     attachedBadge: "✓ Attached",
-    privateGuardTitle:
-      "BEP 27: Public tracker injection is disabled for private torrents",
+    privateGuardTitle: "BEP 27: Public tracker injection is disabled for private torrents",
     privateGuardBadge: "🔒 Private Guard",
     injectThisTooltip: "Inject this verified tracker into the torrent",
     inject: "⚡ Inject",
     offline: "Offline",
-    selectDownloadHint:
-      "Select a download from the left list to inspect live tracker scrape results.",
+    selectDownloadHint: "Select a download from the left list to inspect live tracker scrape results.",
     settings: {
       noValidUrlsFound: "No valid http:/",
       bulkImportModalTitle: "📥 Bulk Import Tracker URLs",
@@ -1693,29 +1635,21 @@ const bn = {
       importingTrackers: "Importing Trackers...",
       importTrackersBtn: "Import Trackers",
       updatedToast: "TrackerBoost settings updated",
-      harvestedProwlarrToast:
-        "Harvested ${res.harvestedCount} trackers from Prowlarr",
+      harvestedProwlarrToast: "Harvested ${res.harvestedCount} trackers from Prowlarr",
       harvestProwlarrFailed: "Failed to harvest from Prowlarr: ${err.message}",
-      harvestedFeedsToast:
-        "Harvested ${res.harvestedCount} trackers from public feeds",
+      harvestedFeedsToast: "Harvested ${res.harvestedCount} trackers from public feeds",
       harvestFeedsFailed: "Failed to harvest from feeds: ${err.message}",
       automationTitle: "⚡ Automation & Background Optimization",
-      automationDesc:
-        "TrackerBoost runs as a background service to constantly discover new tracker",
+      automationDesc: "TrackerBoost runs as a background service to constantly discover new tracker",
       autoBoostLabel: "Automatic Background Swarm Boosting (Enabled by Defaul",
-      autoBoostDesc:
-        "Periodically queries candidate trackers and automatically injects verified positive matches into active downloads.",
+      autoBoostDesc: "Periodically queries candidate trackers and automatically injects verified positive matches into active downloads.",
       autoHarvestLabel: "Automatic Swarm Tracker Harvesting (Enabled by Defaul",
-      autoHarvestDesc:
-        "Continuously extracts and catalogues new public tracker endpoints from downloading torrents to grow the tracker database.",
+      autoHarvestDesc: "Continuously extracts and catalogues new public tracker endpoints from downloading torrents to grow the tracker database.",
       onlyVerifiedLabel: "Scrape Verification Guard (Strict Mod",
-      onlyVerifiedDesc:
-        "Only injects trackers that respond with active seeders or leechers for the specific info_has",
+      onlyVerifiedDesc: "Only injects trackers that respond with active seeders or leechers for the specific info_has",
       connectedClientsTitle: "Connected Download Agents",
-      connectedClientsDesc:
-        "TrackerBoost coordinates with your download clients (qBittorren",
-      noClientsWarning:
-        "No download agents currently configured. Add qBittorrent or Transmission in Settings ⚙️ to boost real downloads.",
+      connectedClientsDesc: "TrackerBoost coordinates with your download clients (qBittorren",
+      noClientsWarning: "No download agents currently configured. Add qBittorrent or Transmission in Settings ⚙️ to boost real downloads.",
       manualDiscoveryTitle: "Manual Discovery & Import Triggers",
       bulkImportTrackersBtn: "📥 Bulk Import Trackers",
       harvestingSwarms: "⏳ Harvesting Swarms...",
@@ -1751,8 +1685,7 @@ const bn = {
     error: "Error",
     matrix: {
       title: "Swarm Cross-Matrix Explorer",
-      subtitle:
-        "Bi-directional mapping between library torrents and verified BitTorrent tracker endpoints",
+      subtitle: "Bi-directional mapping between library torrents and verified BitTorrent tracker endpoints",
       torrentsToTrackers: "Torrents → Trackers",
       trackersToTorrents: "Trackers → Torrents",
       posters: "🎬 Posters",
@@ -1770,8 +1703,7 @@ const bn = {
       inspect: "⚡ Inspect",
       noLibraryTorrentsMatch: "No library torrents match the search query.",
       torrentsCount: "{count} Torrents",
-      noTorrentsRegisteredOnEndpoint:
-        "No library torrents currently registered on this tracker endpoint.",
+      noTorrentsRegisteredOnEndpoint: "No library torrents currently registered on this tracker endpoint.",
       noTrackersMatch: "No tracker endpoints match the search query.",
       trackerEndpoint: "Tracker Endpoint",
       matchedLibraryTorrents: "Matched Library Torrents",
@@ -1783,8 +1715,7 @@ const bn = {
     radar: {
       copiedUrlsToast: "Copied ${trackers.length} tracker URLs to clipboard!",
       noTrackersExport: "No trackers available to export",
-      exportedTrackersToast:
-        "Exported ${trackers.length} tracker endpoints to .txt!",
+      exportedTrackersToast: "Exported ${trackers.length} tracker endpoints to .txt!",
       trackerAddedSuccess: "Custom tracker added successfully",
       trackerAddFailed: "Failed to add tracker: ${err.message}",
       copyAll: "📋 Copy All",
@@ -1810,8 +1741,7 @@ const bn = {
     pasteMultiple: "Paste multiple tracker URLs at once",
     title: "Tracker Boost",
     smartBoosterBadge: "⚡ Smart Booster",
-    headerDescription:
-      "Scrapes live tracker swarms by info_hash to discover and inject verified seeders/peers into Seedarr and download clients",
+    headerDescription: "Scrapes live tracker swarms by info_hash to discover and inject verified seeders/peers into Seedarr and download clients",
     trackersMonitored: "Trackers Monitored",
     aliveResponsive: "Alive & Responsive",
     harvestedFromSwarms: "Harvested from Swarms",
@@ -1825,8 +1755,7 @@ const bn = {
     },
   },
   copilot: {
-    welcomeMessage:
-      "Hi! I'm your Seedarr AI Copilot. How can I help you manage your torrents today?",
+    welcomeMessage: "Hi! I'm your Seedarr AI Copilot. How can I help you manage your torrents today?",
     buttonTitle: "AI Copilot",
     title: "AI Copilot",
     compact: "Compact view",
@@ -1840,8 +1769,7 @@ const bn = {
     piecePickers: "Analyze Piece Pickers",
     vpnSecurity: "Check VPN & Security",
     thinking: "Thinking ({provider})...",
-    inputPlaceholder:
-      "Ask about your torrents, seed ratio, speed optimization...",
+    inputPlaceholder: "Ask about your torrents, seed ratio, speed optimization...",
     rawSceneRelease: "Raw Scene / Torrent Release Name",
     rawScenePlaceholder: "e.g. Big.Buck.Bunny.2008.1080p.BluRay.x264-SEEDARR",
     deobfuscate: "Parse & Deobfuscate",
@@ -1873,8 +1801,7 @@ const bn = {
     stepFinished: "সমাপ্ত",
     stepFinishedTitle: "সেটআপ সম্পূর্ণ",
     welcomeHeading: "Seedarr স্বাগতম",
-    welcomeDescription:
-      "Seedarr হল স্বয়ংক্রিয় মেটাডেটা সমৃদ্ধকরণ এবং নেটিভ *arr ইন্টিগ্রেশন সহ একটি উচ্চ-কর্মক্ষমতা সম্পন্ন BitTorrent ক্লায়েন্ট। আপনার ইনডেক্সার এবং মিডিয়া ম্যানেজমেন্ট অ্যাপ্লিকেশানগুলিকে সংযুক্ত করতে এই নির্দেশিকা অনুসরণ করুন৷",
+    welcomeDescription: "Seedarr হল স্বয়ংক্রিয় মেটাডেটা সমৃদ্ধকরণ এবং নেটিভ *arr ইন্টিগ্রেশন সহ একটি উচ্চ-কর্মক্ষমতা সম্পন্ন BitTorrent ক্লায়েন্ট। আপনার ইনডেক্সার এবং মিডিয়া ম্যানেজমেন্ট অ্যাপ্লিকেশানগুলিকে সংযুক্ত করতে এই নির্দেশিকা অনুসরণ করুন৷",
     port7889Title: "Port7889 শিরোনাম",
     port7889Desc: "পোর্ট7889 ডেস্ক",
     mediaEnrichmentTitle: "মিডিয়া সমৃদ্ধকরণ",
@@ -1885,13 +1812,10 @@ const bn = {
     tipDesc: "টিপ বিবরণ",
     prowlarrDesc: "Prowlarr Desc",
     prowlarrInstructionsCardTitle: "Prowlarr কিভাবে সংযোগ করবেন",
-    prowlarrStep1:
-      "Prowlarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার API কী অনুলিপি করুন।",
-    prowlarrStep2:
-      "উপরের লাইভ সেটআপ মোডে স্যুইচ করুন (বা সেটিংস > সূচকগুলিতে যান) এবং আপনার Prowlarr URL লিখুন (ডিফল্ট: http://localhost:9696)।",
+    prowlarrStep1: "Prowlarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার API কী অনুলিপি করুন।",
+    prowlarrStep2: "উপরের লাইভ সেটআপ মোডে স্যুইচ করুন (বা সেটিংস > সূচকগুলিতে যান) এবং আপনার Prowlarr URL লিখুন (ডিফল্ট: http://localhost:9696)।",
     prowlarrStep3: "API কী ক্ষেত্রে আপনার Prowlarr API কী পেস্ট করুন।",
-    prowlarrStep4:
-      "'টেস্ট কানেকশন'-এ ক্লিক করুন, তারপর স্বয়ংক্রিয়ভাবে আপনার ইনডেক্সার আমদানি করতে 'সংরক্ষণ করুন এবং চালিয়ে যান'-এ ক্লিক করুন।",
+    prowlarrStep4: "'টেস্ট কানেকশন'-এ ক্লিক করুন, তারপর স্বয়ংক্রিয়ভাবে আপনার ইনডেক্সার আমদানি করতে 'সংরক্ষণ করুন এবং চালিয়ে যান'-এ ক্লিক করুন।",
     next: "পরবর্তী",
     testConnection: "পরীক্ষা সংযোগ",
     saveAndContinue: "সংরক্ষণ করুন এবং চালিয়ে যান",
@@ -1900,14 +1824,10 @@ const bn = {
     saving: "সংরক্ষণ করা হচ্ছে...",
     sonarrDescription: "সোনার বর্ণনা",
     instructionsSonarrCardTitle: "নির্দেশাবলী সোনার কার্ডের শিরোনাম",
-    sonarrStep1:
-      "Sonarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Sonarr API কী কপি করুন।",
-    sonarrStep2:
-      "Seedarr-এ, আপনার Sonarr URL লিখুন (ডিফল্ট: http://localhost:8989) এবং আপনার API কী পেস্ট করুন।",
-    sonarrStep3:
-      "Sonarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্ট-এ যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং Port-এ 7889-এ সেট করুন।",
-    sonarrStep4:
-      "টিভি শো অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
+    sonarrStep1: "Sonarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Sonarr API কী কপি করুন।",
+    sonarrStep2: "Seedarr-এ, আপনার Sonarr URL লিখুন (ডিফল্ট: http://localhost:8989) এবং আপনার API কী পেস্ট করুন।",
+    sonarrStep3: "Sonarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্ট-এ যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং Port-এ 7889-এ সেট করুন।",
+    sonarrStep4: "টিভি শো অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
     name: "নাম",
     type: "টাইপ",
     url: "URL",
@@ -1918,30 +1838,21 @@ const bn = {
     webhook: "ওয়েবহুক",
     webhookHost: "ওয়েবহুক হোস্ট",
     externalUrl: "সর্বজনীন / বহিরাগত URL (ঐচ্ছিক)",
-    externalUrlHint:
-      "ব্রাউজার ডিপ লিঙ্কের জন্য ঐচ্ছিক পাবলিক URL (যেমন যখন Seedarr দূরবর্তীভাবে অ্যাক্সেস করা হয়)।",
+    externalUrlHint: "ব্রাউজার ডিপ লিঙ্কের জন্য ঐচ্ছিক পাবলিক URL (যেমন যখন Seedarr দূরবর্তীভাবে অ্যাক্সেস করা হয়)।",
     connectionSuccess: "সংযোগ সফল",
     connectionFailed: "সংযোগ ব্যর্থ হয়েছে৷",
     radarrDescription: "রাডার বর্ণনা",
     instructionsRadarrCardTitle: "নির্দেশনা রাডার কার্ডের শিরোনাম",
-    radarrStep1:
-      "Radarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Radarr API কী কপি করুন।",
-    radarrStep2:
-      "Seedarr-এ, আপনার Radarr URL লিখুন (ডিফল্ট: http://localhost:7878) এবং আপনার API কী পেস্ট করুন।",
-    radarrStep3:
-      "Radarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্টে যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং পোর্ট 7889-এ সেট করুন।",
-    radarrStep4:
-      "মুভি অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
+    radarrStep1: "Radarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Radarr API কী কপি করুন।",
+    radarrStep2: "Seedarr-এ, আপনার Radarr URL লিখুন (ডিফল্ট: http://localhost:7878) এবং আপনার API কী পেস্ট করুন।",
+    radarrStep3: "Radarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্টে যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং পোর্ট 7889-এ সেট করুন।",
+    radarrStep4: "মুভি অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
     lidarrDescription: "লিডার বর্ণনা",
     instructionsLidarrCardTitle: "নির্দেশাবলী Lidarr কার্ড শিরোনাম",
-    lidarrStep1:
-      "Lidarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Lidarr API কী কপি করুন।",
-    lidarrStep2:
-      "Seedarr-এ, আপনার Lidarr URL লিখুন (ডিফল্ট: http://localhost:8686) এবং আপনার API কী পেস্ট করুন।",
-    lidarrStep3:
-      "Lidarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্টে যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং পোর্ট 7889-এ সেট করুন।",
-    lidarrStep4:
-      "মিউজিক অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
+    lidarrStep1: "Lidarr-এ, সেটিংস > সাধারণ-এ নেভিগেট করুন এবং আপনার Lidarr API কী কপি করুন।",
+    lidarrStep2: "Seedarr-এ, আপনার Lidarr URL লিখুন (ডিফল্ট: http://localhost:8686) এবং আপনার API কী পেস্ট করুন।",
+    lidarrStep3: "Lidarr-এ, সেটিংস > ডাউনলোড ক্লায়েন্টে যান, '+' ক্লিক করুন, qBittorrent নির্বাচন করুন এবং Host-কে Seedarr IP এবং পোর্ট 7889-এ সেট করুন।",
+    lidarrStep4: "মিউজিক অটোমেশন সক্ষম করতে Seedarr-এ 'Test Connection' এবং 'Save and Continue'-এ ক্লিক করুন।",
     finishTitle: "শিরোনাম শেষ করুন",
     finishDescription: "বর্ণনা শেষ করুন",
     goToQueue: "সারিতে যান",
@@ -1973,24 +1884,19 @@ const bn = {
     settings: "Settings",
     stepStorage: "Storage",
     stepStorageTitle: "Storage & Downloads",
-    saveClientFailed:
-      "Failed to save download client. Please verify connection parameters.",
-    saveIndexerFailed:
-      "Failed to save indexer. Please verify host and API key.",
-    saveArrFailed:
-      "Failed to save ${arrType} connection. Please verify credentials.",
+    saveClientFailed: "Failed to save download client. Please verify connection parameters.",
+    saveIndexerFailed: "Failed to save indexer. Please verify host and API key.",
+    saveArrFailed: "Failed to save ${arrType} connection. Please verify credentials.",
     saveStorageFailed: "Failed to save storage configuration.",
     testingTo: "Testing connection to ${targetName}...",
     validationErrorTitle: "Configuration Error",
     title: "Getting Started Setup Guide",
     welcomeTitle: "Welcome to Seedarr!",
     welcomeBody: "Seedarr is an integrate",
-    welcomeAgent:
-      "1. Download Agent: Captures downloads & monitors torrent swarms.",
+    welcomeAgent: "1. Download Agent: Captures downloads & monitors torrent swarms.",
     welcomeProwlarr: "2. Prowlarr: Syncs indexers and trackers automatically.",
     welcomeArr: "3. Sonarr / Radarr / Lidarr: Connects T",
-    welcomeStorage:
-      "4. Storage & Downloads: Verifies payload directories and write permissions.",
+    welcomeStorage: "4. Storage & Downloads: Verifies payload directories and write permissions.",
     language: "Language:",
     step1Title: "Add Download Client",
     enabled: "Enabled",
@@ -2000,19 +1906,14 @@ const bn = {
     enable: "Enable",
     enableRss: "RSS",
     enableSearch: "Search",
-    webhookHostHint:
-      "Hostname or IP for *arr to reach Seedarr (leave empty to use defaul",
-    storageDescription:
-      "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
+    webhookHostHint: "Hostname or IP for *arr to reach Seedarr (leave empty to use defaul",
+    storageDescription: "Configure your default download directory and optional completed payload destination. Seedarr validates write permissions before saving to avoid runtime failures.",
     defaultDownloadPath: "Default Download Directory",
-    defaultDownloadPathHint:
-      "Absolute path where torrent payloads are actively downloaded",
+    defaultDownloadPathHint: "Absolute path where torrent payloads are actively downloaded",
     completedPath: "Completed Downloads Directory (Optiona",
-    completedPathHint:
-      "Target directory to relocate completed torrents for post-processing",
+    completedPathHint: "Target directory to relocate completed torrents for post-processing",
     watchFolderPath: "Watch Folder Path (Optiona",
-    watchFolderPathHint:
-      "Filesystem directory monitored for new .torrent files",
+    watchFolderPathHint: "Filesystem directory monitored for new .torrent files",
     detectedVolumes: "Detected Storage Volumes:",
     validating: "Validating...",
     validateDirectory: "Validate Directory",
@@ -2020,8 +1921,7 @@ const bn = {
   addTorrent: {
     title: "নতুন টোরেন্ট যোগ করুন",
     closeDialog: "টরেন্ট ডায়ালগ যুক্ত করুন বন্ধ করুন",
-    readOnlyWarning:
-      "🔒 আপনার কাছে শুধুমাত্র পঠনযোগ্য অনুমতি আছে। টরেন্ট যোগ করা অনুমোদিত নয়.",
+    readOnlyWarning: "🔒 আপনার কাছে শুধুমাত্র পঠনযোগ্য অনুমতি আছে। টরেন্ট যোগ করা অনুমোদিত নয়.",
     subtitle: "টরেন্ট ফাইল আপলোড করুন বা চুম্বক লিঙ্কের মাধ্যমে ডাউনলোড করুন",
     torrentFileTab: "টোরেন্ট ফাইল",
     magnetLinkTab: "ম্যাগনেট লিংক",
@@ -2040,8 +1940,7 @@ const bn = {
     clearInput: "পরিষ্কার করুন",
     clearInputTooltip: "ইনপুট পরিষ্কার করুন",
     magnetPlaceholder: "magnet:?xt=urn:btih:... বা ইনফো হ্যাশ পেস্ট করুন",
-    validMagnetDescription:
-      "যেকোনো বৈধ BitTorrent v1 বা v2 ম্যাগনেট লিঙ্ক পেস্ট করুন।",
+    validMagnetDescription: "যেকোনো বৈধ BitTorrent v1 বা v2 ম্যাগনেট লিঙ্ক পেস্ট করুন।",
     validMagnetFormat: "✓ বৈধ চুম্বক বিন্যাস",
     invalidMagnetFormat: "✗ চুম্বক দিয়ে শুরু করতে হবে:?",
     nameLabel: "নাম:",
@@ -2049,19 +1948,15 @@ const bn = {
     trackersLabel: "ট্র্যাকার:",
     bundledTrackers: "{{count}} বান্ডিল ট্র্যাকার(গুলি)",
     noEnabledIndexers: "কোনো সক্রিয় সূচক কনফিগার করা নেই",
-    connectIndexersDesc:
-      "সরাসরি রিলিজ অনুসন্ধান করতে সেটিংসে Jackett, Prowlarr, Torznab বা Newznab সূচকের সাথে সংযোগ করুন।",
-    searchReleasesPlaceholder:
-      "সার্চ রিলিজ (যেমন উবুন্টু, ডেবিয়ান, 1080p, 4k)...",
+    connectIndexersDesc: "সরাসরি রিলিজ অনুসন্ধান করতে সেটিংসে Jackett, Prowlarr, Torznab বা Newznab সূচকের সাথে সংযোগ করুন।",
+    searchReleasesPlaceholder: "সার্চ রিলিজ (যেমন উবুন্টু, ডেবিয়ান, 1080p, 4k)...",
     allIndexersCount: "সমস্ত সূচক ({{count}})",
     searching: "অনুসন্ধান করা হচ্ছে...",
     searchingIndexers: "কনফিগার করা সূচক অনুসন্ধান করা হচ্ছে...",
     searchFailed: "অনুসন্ধান ব্যর্থ হয়েছে:",
     checkIndexerConnection: "ইনডেক্সার সংযোগ পরীক্ষা করুন",
-    noReleasesFound:
-      '"{{query}}" এর জন্য কোন রিলিজ পাওয়া যায়নি। বিভিন্ন কীওয়ার্ড বা ইনডেক্সার চেষ্টা করুন।',
-    typeKeywordPrompt:
-      "কনফিগার করা সূচক ({{indexers}}) জুড়ে অনুসন্ধান করতে উপরে একটি কীওয়ার্ড টাইপ করুন।",
+    noReleasesFound: "\"{{query}}\" এর জন্য কোন রিলিজ পাওয়া যায়নি। বিভিন্ন কীওয়ার্ড বা ইনডেক্সার চেষ্টা করুন।",
+    typeKeywordPrompt: "কনফিগার করা সূচক ({{indexers}}) জুড়ে অনুসন্ধান করতে উপরে একটি কীওয়ার্ড টাইপ করুন।",
     colTitle: "শিরোনাম",
     colIndexer: "সূচক",
     colSize: "আকার",
@@ -2078,10 +1973,8 @@ const bn = {
     pieceSizeLabel: "টুকরা আকার",
     pieceSizeAuto: "স্বয়ংক্রিয় (সামগ্রীর উপর ভিত্তি করে সর্বোত্তম আকার)",
     privateTorrentLabel: "প্রাইভেট টরেন্ট",
-    privateTorrentBep27:
-      "ব্যক্তিগত টোরেন্ট (BEP 27 - DHT এবং PEX নিষ্ক্রিয় করে)",
-    trackersLabelWithTiers:
-      "ট্র্যাকার URL (প্রতি লাইনে একটি, খালি লাইন দ্বারা বিভক্ত স্তর)",
+    privateTorrentBep27: "ব্যক্তিগত টোরেন্ট (BEP 27 - DHT এবং PEX নিষ্ক্রিয় করে)",
+    trackersLabelWithTiers: "ট্র্যাকার URL (প্রতি লাইনে একটি, খালি লাইন দ্বারা বিভক্ত স্তর)",
     webSeedsLabel: "ওয়েব সিড ইউআরএল (প্রতি লাইনে একটি)",
     commentLabel: "মন্তব্য করুন",
     commentPlaceholder: "ঐচ্ছিক বিবরণ বা লাইসেন্স তথ্য",
@@ -2103,8 +1996,7 @@ const bn = {
     addingTorrent: "যোগ করা হচ্ছে...",
     createSourcePath: "উৎস পথ (ফাইল বা ফোল্ডার)",
     optimalPieceSize: "অনুকূল টুকরো আকার (স্বয়ংক্রিয়)",
-    trackerUrlsPrompt:
-      "ট্র্যাকার URL (প্রতি লাইনে একটি, স্তরের মাঝে খালি লাইন)",
+    trackerUrlsPrompt: "ট্র্যাকার URL (প্রতি লাইনে একটি, স্তরের মাঝে খালি লাইন)",
     webSeedUrlsPrompt: "ওয়েব সিড URL (প্রতি লাইনে একটি)",
     commentPrompt: "মন্তব্য / বিবরণ",
     savePathPrompt: ".torrent গন্তব্য পথ",
@@ -2113,7 +2005,7 @@ const bn = {
     failedToUploadTorrents: "টরেন্ট আপলোড করতে ব্যর্থ হয়েছে: {{message}}",
     magnetAddedSuccess: "চুম্বক লিঙ্ক সফলভাবে যোগ করা হয়েছে",
     failedToAddMagnet: "চুম্বক যোগ করতে ব্যর্থ হয়েছে: {{message}}",
-    addedToDownloadQueue: 'সারিতে ডাউনলোড করতে "{{title}}" যোগ করা হয়েছে',
+    addedToDownloadQueue: "সারিতে ডাউনলোড করতে \"{{title}}\" যোগ করা হয়েছে",
     failedToAddRelease: "রিলিজ যোগ করতে ব্যর্থ হয়েছে: {{message}}",
     sourcePathRequired: "একটি টরেন্ট তৈরি করতে সোর্স পাথ প্রয়োজন",
     failedToCreateTorrent: "টরেন্ট তৈরি করতে ব্যর্থ হয়েছে৷",
