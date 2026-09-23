@@ -22,7 +22,7 @@ using Seedarr.Api.V1.DiskSpace;
 using Seedarr.Api.V1.Health;
 using Seedarr.Api.V1.System;
 
-namespace NzbDrone.Core.Test.System;
+namespace NzbDrone.Core.Test.SystemTests;
 
 [TestFixture]
 public class SystemAndDiagnosticsControllersTests
