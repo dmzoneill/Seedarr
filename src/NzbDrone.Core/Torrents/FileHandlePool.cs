@@ -126,7 +126,7 @@ public class FileHandlePool : IFileHandlePool
 
                     canWrite = true;
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     handle = File.OpenHandle(
                         normalizedPath,

@@ -5,6 +5,7 @@ using System.Net.Mime;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http;
 
@@ -13,6 +14,7 @@ namespace Seedarr.Api.V1.System;
 [V1ApiController("system/setup")]
 public class SetupController : Controller
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly IConfigService _configService;
     private readonly IConfigFileProvider _configFileProvider;
 
@@ -42,8 +44,9 @@ public class SetupController : Controller
                 HasAdminUser = hasAdminUser,
             });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.Warn(ex, "Failed to retrieve setup status; returning default status");
             return Ok(new SetupStatusResource
             {
                 IsSetupCompleted = false,

@@ -1854,11 +1854,15 @@ if (torrent) {
         return;
       }
       if (val && field.type === "url") {
+        let isValidUrl = false;
         try {
           const u = new URL(val);
-          if (u.protocol !== "http:" && u.protocol !== "https:")
-            throw new Error();
+          isValidUrl = u.protocol === "http:" || u.protocol === "https:";
         } catch {
+          isValidUrl = false;
+        }
+
+        if (!isValidUrl) {
           alert(`Field "${field.label}" must be a valid HTTP or HTTPS URL.`);
           return;
         }

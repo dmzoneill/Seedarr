@@ -140,10 +140,7 @@ public class SwarmAnalyzer : ISwarmAnalyzer
         {
             var confidence = Math.Clamp(1.0 - (metrics.PieceAvailabilityScore * 0.5), 0.0, 1.0);
             return (SeedingRecommendation.Boost,
-                string.Format(
-                    "Rare content: only {0} seed(s) with piece availability {1:F1}; boosting preserves swarm health",
-                    snapshot.SeedCount,
-                    snapshot.PieceAvailability),
+                $"Rare content: only {snapshot.SeedCount} seed(s) with piece availability {snapshot.PieceAvailability:F1}; boosting preserves swarm health",
                 confidence);
         }
 
@@ -153,22 +150,14 @@ public class SwarmAnalyzer : ISwarmAnalyzer
         {
             var confidence = Math.Clamp(0.6 + ((metrics.SeedLeechRatio - HighRatioThreshold) * 0.1), 0.0, 1.0);
             return (SeedingRecommendation.Reduce,
-                string.Format(
-                    "Oversaturated swarm: seed/leech ratio {0:F1} with {1} seeds vs {2} leeches; reducing frees bandwidth",
-                    metrics.SeedLeechRatio,
-                    snapshot.SeedCount,
-                    snapshot.LeechCount),
+                $"Oversaturated swarm: seed/leech ratio {metrics.SeedLeechRatio:F1} with {snapshot.SeedCount} seeds vs {snapshot.LeechCount} leeches; reducing frees bandwidth",
                 confidence);
         }
 
         var maintainConfidence = metrics.IsSwarmHealthy ? 0.8 : 0.5;
         var healthLabel = metrics.IsSwarmHealthy ? "healthy" : "moderate";
         return (SeedingRecommendation.Maintain,
-            string.Format(
-                "Swarm is {0}: seed/leech ratio {1:F1}, availability score {2:F2}; maintaining current seeding level",
-                healthLabel,
-                metrics.SeedLeechRatio,
-                metrics.PieceAvailabilityScore),
+            $"Swarm is {healthLabel}: seed/leech ratio {metrics.SeedLeechRatio:F1}, availability score {metrics.PieceAvailabilityScore:F2}; maintaining current seeding level",
             maintainConfidence);
     }
 }
