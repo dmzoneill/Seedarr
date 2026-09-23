@@ -141,7 +141,6 @@ public class SuperSeedingServiceTests
         };
     }
 
-
     [Test]
     public void SendInitialAvailability_WhenFastExtensionSupported_SendsHaveNone()
     {
@@ -280,8 +279,6 @@ public class SuperSeedingServiceTests
         server3.AssignedSuperSeedingPiece.Should().BeNull();
     }
 
-
-
     [Test]
     public void IsRequestAllowed_WhenPieceMatchesAssignedPiece_ReturnsTrue()
     {
@@ -398,8 +395,6 @@ public class SuperSeedingServiceTests
 
         tracker.GetPieceState(2).Should().Be(SuperSeedingPieceState.Uploaded);
     }
-
-
 
     [Test]
     public void OnPeerHave_FeedbackFromAssignedPeer_ConfirmsUploaded_DoesNotPropagate()
@@ -547,8 +542,6 @@ public class SuperSeedingServiceTests
         serverConn.AssignedPieceBytesUploaded.Should().Be(0);
     }
 
-
-
     [Test]
     public void ExitSuperSeeding_WhenPeerSendsHaveAll_ExitsAndBroadcastsFullAvailability()
     {
@@ -636,8 +629,6 @@ public class SuperSeedingServiceTests
         msg2.Should().NotBeNull();
         msg2.Type.Should().Be(PeerMessageType.HaveAll);
     }
-
-
 
     [Test]
     public void SuperSeedingTracker_TracksStateCountsAccurately()

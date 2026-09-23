@@ -130,7 +130,6 @@ public class TrackerServerServiceTests
         return (BList)method.Invoke(null, new object[] { peers, excludeIp, excludePort, maxPeers });
     }
 
-
     [Test]
     public void Announce_StartEvent_RegistersPeerInDatabase_AndIncrementsAnnounces()
     {
@@ -279,8 +278,6 @@ public class TrackerServerServiceTests
         _trackerUserService.Received(1).RecordAnnounce(passkey, 1500L, 700L);
     }
 
-
-
     [Test]
     public void Scrape_SingleInfoHash_ReturnsStatsForRequestedHash()
     {
@@ -359,8 +356,6 @@ public class TrackerServerServiceTests
         var response = InvokeHandleScrapeText($"/scrape?info_hash={DefaultInfoHash}");
         response.Should().Contain("Scrape disabled");
     }
-
-
 
     [Test]
     public void PeerDatabase_AddPeer_StoresLeecherAndSeederProperly()
@@ -443,8 +438,6 @@ public class TrackerServerServiceTests
         allStats["hash1"].Complete.Should().Be(1);
         allStats["hash2"].Incomplete.Should().Be(1);
     }
-
-
 
     [Test]
     public void BuildCompactPeers_IPv4_FormatsSixBytesPerPeer_InNetworkOrder()
@@ -566,8 +559,6 @@ public class TrackerServerServiceTests
         dictList.Count.Should().Be(5);
     }
 
-
-
     [Test]
     public void Announce_ResponseIntervals_MatchConfiguration()
     {
@@ -596,8 +587,6 @@ public class TrackerServerServiceTests
 
         dict["min_request_interval"].As<BNumber>().Value.Should().Be(1200);
     }
-
-
 
     [Test]
     public void PasskeyAuth_WhenEnabledAndPasskeyMissing_ReturnsMissingPasskeyError()
