@@ -883,7 +883,8 @@ public class AutomationService : IAutomationService
             var oldStatus = torrent.Status;
             torrent.Status = TorrentStatus.Checking;
             torrent.Progress = 0;
-            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Checking));
+            _logger.Info("[State Machine] Torrent #{0} ('{1}') force recheck triggered by automation script.", torrent.Id, torrent.Name);
+            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Checking, "Force recheck triggered by automation script"));
             changed = true;
         }
         else if (result.ShouldPause)
@@ -893,7 +894,8 @@ public class AutomationService : IAutomationService
             _eventAggregator.PublishEvent(new TorrentPausedEvent(torrent));
             if (oldStatus != TorrentStatus.Paused)
             {
-                _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused));
+                _logger.Info("[State Machine] Torrent #{0} ('{1}') auto-paused by automation script.", torrent.Id, torrent.Name);
+                _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused, "Auto-paused by automation script"));
                 changed = true;
             }
         }
@@ -904,7 +906,8 @@ public class AutomationService : IAutomationService
                 ? TorrentStatus.Seeding
                 : TorrentStatus.Downloading;
             _eventAggregator.PublishEvent(new TorrentStartedEvent(torrent));
-            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, torrent.Status));
+            _logger.Info("[State Machine] Torrent #{0} ('{1}') resumed by automation script (Status: Paused -> {2}).", torrent.Id, torrent.Name, torrent.Status);
+            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, torrent.Status, "Resumed by automation script"));
             changed = true;
         }
 

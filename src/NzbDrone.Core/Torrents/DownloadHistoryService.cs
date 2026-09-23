@@ -768,6 +768,13 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
 
                 case TorrentStatus.Paused:
                     entry.Status = "Paused";
+                    var pauseReason = !string.IsNullOrWhiteSpace(message.Reason)
+                        ? message.Reason
+                        : (!string.IsNullOrWhiteSpace(torrent.ErrorMessage) ? torrent.ErrorMessage : null);
+                    if (!string.IsNullOrWhiteSpace(pauseReason))
+                    {
+                        entry.RemovalReason = pauseReason;
+                    }
                     EnrichDataJson(entry);
                     updated = true;
                     break;

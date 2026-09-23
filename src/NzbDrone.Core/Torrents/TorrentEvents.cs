@@ -61,6 +61,12 @@ public class TorrentStatusChangedEvent : IEvent
 
     public string ErrorMessage { get; set; }
 
+    public string Reason
+    {
+        get => this.ErrorMessage;
+        set => this.ErrorMessage = value;
+    }
+
     public TorrentStatusChangedEvent()
     {
     }
