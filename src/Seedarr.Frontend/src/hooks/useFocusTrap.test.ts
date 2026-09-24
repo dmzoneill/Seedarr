@@ -5,7 +5,6 @@ import {
   getFocusableElements,
   isElementVisible,
   isElementConnected,
-  FOCUSABLE_SELECTOR,
 } from "./useFocusTrap";
 
 class MockElement {
