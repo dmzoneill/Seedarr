@@ -1410,9 +1410,9 @@ public class DelugeJsonRpcController : ControllerBase
                         {
                             bytes = Convert.FromBase64String(pathOrDump);
                         }
-                        catch (FormatException)
+                        catch (FormatException ex)
                         {
-                            // Not base64
+                            _logger.Trace(ex, "Payload is not valid base64 encoded torrent data");
                         }
                     }
 
