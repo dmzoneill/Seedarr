@@ -383,7 +383,6 @@ public class AutomationEventService :
             {
                 if (torrent != null)
                 {
-                    // Category filter
                     if (script.TargetCategories != null && script.TargetCategories.Count > 0)
                     {
                         if (string.IsNullOrEmpty(torrent.Category) || !script.TargetCategories.Contains(torrent.Category, StringComparer.OrdinalIgnoreCase))
@@ -392,7 +391,6 @@ public class AutomationEventService :
                         }
                     }
 
-                    // Tag filter
                     if (script.TargetTagIds != null && script.TargetTagIds.Count > 0)
                     {
                         if (torrent.TagIds == null || !script.TargetTagIds.Any(t => torrent.TagIds.Contains(t)))

@@ -1092,7 +1092,6 @@ export function FilesTab({
               const isFolder = node.isFolder;
               const isExpanded = expandedPaths.has(node.fullPath);
 
-              // Checkbox state
               const allChecked = descendantFiles.every(
                 (f) => normalizePriority(f.priority) !== 0,
               );
@@ -1101,7 +1100,6 @@ export function FilesTab({
               );
               const isIndeterminate = someChecked && !allChecked;
 
-              // Priority for node
               const currentPriority = isFolder
                 ? descendantFiles.every(
                     (f) =>
