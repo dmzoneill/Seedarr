@@ -4,6 +4,4 @@ public interface IPexService
 {
     void BroadcastPex();
     void BroadcastPex(string infoHash);
-    void BroadcastTick();
-    void BroadcastPexTick();
 }

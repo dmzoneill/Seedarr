@@ -6,12 +6,12 @@ namespace NzbDrone.Core.Network;
 
 public static class BandwidthPacer
 {
-    public const int MinThrottledBufferSize = 8 * 1024;      // 8 KB
-    public const int MaxThrottledBufferSize = 64 * 1024;     // 64 KB
-    public const int DefaultUnthrottledBufferSize = 256 * 1024; // 256 KB
-    public const double DefaultEstimatedRttSeconds = 0.1;    // 100 ms
-    public const int DefaultPacingChunkSize = 2048;          // 2 KB
-    public const int DefaultPacketPacingIntervalMicroseconds = 50; // 50 microseconds
+    public const int MinThrottledBufferSize = 8 * 1024;
+    public const int MaxThrottledBufferSize = 64 * 1024;
+    public const int DefaultUnthrottledBufferSize = 256 * 1024;
+    public const double DefaultEstimatedRttSeconds = 0.1;
+    public const int DefaultPacingChunkSize = 2 * 1024;
+    public const int DefaultPacketPacingIntervalMicroseconds = 50;
 
     /// <summary>
     /// Calculates the dynamic BDP (Bandwidth-Delay Product) socket buffer size.

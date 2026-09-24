@@ -31,10 +31,6 @@ public class PexService : BackgroundService, IPexService
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void BroadcastTick() => BroadcastPex();
-
-    public void BroadcastPexTick() => BroadcastPex();
-
     public void BroadcastPex() => BroadcastPex(null);
 
     public void BroadcastPex(string infoHash)
