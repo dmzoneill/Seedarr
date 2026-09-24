@@ -574,7 +574,7 @@ public class NewznabIndexer : IIndexer
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Newznab search returned status code {0}", response.StatusCode);
-                var ex = new HttpRequestException($"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}", null, response.StatusCode);
+                var httpEx = new HttpRequestException($"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}", null, response.StatusCode);
                 TimeSpan? retryAfter = null;
                 if (response.Headers.RetryAfter != null)
                 {
@@ -596,31 +596,23 @@ public class NewznabIndexer : IIndexer
 
                 if (retryAfter.HasValue)
                 {
-                    ex.Data["RetryAfter"] = retryAfter.Value;
+                    httpEx.Data["RetryAfter"] = retryAfter.Value;
                 }
 
                 if (definition != null && definition.Id > 0 && _indexerStatusService != null)
                 {
-                    _indexerStatusService.RecordFailure(definition.Id, (int)response.StatusCode, ex.Message, ex, retryAfter);
-                    ex.Data["Recorded"] = true;
+                    _indexerStatusService.RecordFailure(definition.Id, (int)response.StatusCode, httpEx.Message, httpEx, retryAfter);
+                    httpEx.Data["Recorded"] = true;
                 }
 
-                throw ex;
+                throw httpEx;
             }
 
             using var reader = new System.IO.StreamReader(response.Content.ReadAsStream());
             var xml = reader.ReadToEnd();
             return ParseResponse(xml, definition);
         }
-        catch (HttpRequestException)
-        {
-            throw;
-        }
-        catch (IndexerException)
-        {
-            throw;
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not HttpRequestException and not IndexerException)
         {
             _logger.Error(ex, "Failed to search Newznab at {0} for query '{1}'", definition.Url, searchQuery.Query);
         }

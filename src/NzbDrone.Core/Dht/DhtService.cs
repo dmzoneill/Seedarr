@@ -694,11 +694,7 @@ public class DhtService : BackgroundService, IDhtService,
                     }
                 }
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.Debug(ex, "DHT bootstrap failed for {0}", node);
             }

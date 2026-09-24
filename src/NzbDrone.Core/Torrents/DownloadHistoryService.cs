@@ -459,11 +459,7 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
                         }
                     }
                 }
-                catch (InvalidOperationException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not InvalidOperationException)
                 {
                     _logger.Debug(ex, "Failed to check download client {0} for duplicate torrent {1}", clientDef.Name, entry.InfoHash);
                 }

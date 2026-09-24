@@ -194,10 +194,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         base.Dispose(disposing);
     }
 
-    protected virtual TResource GetResourceById(TModel model)
-    {
-        throw new NotImplementedException($"{GetType().Name} must override GetResourceById");
-    }
+    protected abstract TResource GetResourceById(TModel model);
 
     protected void BroadcastResourceChange(ModelAction action, TResource resource)
     {

@@ -128,16 +128,12 @@ public class BackupService : IBackupService
                     {
                         var msg = $"Insufficient disk space to create backup. Required: {requiredSpace / (1024 * 1024)} MB, Available: {drive.AvailableFreeSpace / (1024 * 1024)} MB.";
                         _logger.Warn(msg);
-                        var ex = new InvalidOperationException(msg);
-                        _eventAggregator?.PublishEvent(new BackupFailedEvent(type, msg, ex));
-                        throw ex;
+                        var failureEx = new InvalidOperationException(msg);
+                        _eventAggregator?.PublishEvent(new BackupFailedEvent(type, msg, failureEx));
+                        throw failureEx;
                     }
                 }
-                catch (InvalidOperationException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not InvalidOperationException)
                 {
                     _logger.Warn(ex, "Unable to determine free disk space for backup pre-flight check");
                 }
@@ -236,11 +232,7 @@ public class BackupService : IBackupService
 
             return backupInfo;
         }
-        catch (InvalidOperationException)
-        {
-            throw;
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not InvalidOperationException)
         {
             _logger.Error(ex, "Failed to create backup");
             _eventAggregator?.PublishEvent(new BackupFailedEvent(type, ex.Message, ex));
