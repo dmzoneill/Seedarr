@@ -30,6 +30,7 @@ public class DatabaseTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }

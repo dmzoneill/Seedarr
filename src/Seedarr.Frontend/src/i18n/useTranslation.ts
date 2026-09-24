@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { extractDefaultValue, useI18nStore } from "./i18nStore";
 import { SUPPORTED_LANGUAGES, getLanguageMetadata } from "./languages";
-import { LocaleCode, TranslationParams } from "./types";
+import { TranslationParams } from "./types";
 
 export type TFunction = {
   (key: string, defaultValue?: string, params?: TranslationParams): string;

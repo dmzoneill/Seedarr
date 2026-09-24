@@ -436,7 +436,7 @@ public class TrackerBoostService : ITrackerBoostService
         });
     }
 
-    public async Task<int> HarvestFromActiveDownloadsAsync(CancellationToken cancellationToken = default)
+    public Task<int> HarvestFromActiveDownloadsAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var discovered = 0;
@@ -525,7 +525,7 @@ public class TrackerBoostService : ITrackerBoostService
             LogActivity("Error", "Discovery", $"Error harvesting from download clients: {ex.Message}");
         }
 
-        return discovered;
+        return Task.FromResult(discovered);
     }
 
     private async Task<int> HarvestQBitTorrentTrackersAsync(DownloadClientDefinition clientDef)

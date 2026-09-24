@@ -36,6 +36,7 @@ public class NzbDroneLoggerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }

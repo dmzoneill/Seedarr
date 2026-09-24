@@ -60,6 +60,7 @@ public class TorrentRelocationServiceTests
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -71,6 +72,7 @@ public class TorrentRelocationServiceTests
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }

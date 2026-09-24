@@ -502,7 +502,6 @@ export const TorrentNameCell: React.FC<{
   historyMatch?: DownloadHistoryEntry;
   arrConnections?: any;
 }> = React.memo(({ torrent, historyMatch, arrConnections }) => {
-  const { t } = useTranslation();
   const meta = historyMatch?.metadata;
   const arrLink = historyMatch
     ? getMediaDeepLink(historyMatch, arrConnections)
@@ -595,8 +594,6 @@ export interface TorrentCellProps {
 
 export const TorrentCell: React.FC<TorrentCellProps> = React.memo(
   ({ columnKey, torrent: t, rowIndex, historyMatch, arrConnections }) => {
-    const { t: translate } = useTranslation();
-
     switch (columnKey) {
       case "#":
         return <span>{rowIndex + 1}</span>;
@@ -857,7 +854,7 @@ export const TorrentTableRow = React.memo<TorrentTableRowProps>(
   ({
     torrent: t,
     rowIndex,
-    virtualRow,
+    virtualRow: _virtualRow,
     columns,
     isSelected,
     isChecked,

@@ -232,6 +232,28 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
             </button>
           ))}
         </div>
+        {sources.length > 1 && (
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            style={{
+              fontSize: "0.68rem",
+              padding: "0.1rem 0.35rem",
+              height: "24px",
+              backgroundColor: "var(--bg-primary)",
+              color: "inherit",
+              borderRadius: "4px",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <option value="ALL">All Sources</option>
+            {sources.map((src) => (
+              <option key={src} value={src}>
+                {src}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Table wrap */}

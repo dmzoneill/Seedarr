@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -40,13 +41,15 @@ public class TagsTests : ApiTestBase
                         await DeleteAsync($"{SeedarrUrl}/api/v1/tag/{id}");
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Console.WriteLine($"[Test Cleanup Tag Item] {ex.Message}");
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[Test Cleanup Tags] {ex.Message}");
         }
     }
 

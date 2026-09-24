@@ -86,6 +86,7 @@ public class PeerServerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -97,6 +98,7 @@ public class PeerServerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -108,6 +110,7 @@ public class PeerServerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -1346,8 +1349,9 @@ public class PeerServerTest
             serverWithUtp.Dispose();
         }
         catch
-        {
-        }
+            {
+                // Best-effort test cleanup
+            }
     }
 
     private IPAddress InvokeGetBindAddress(PeerServer server = null)
@@ -4410,6 +4414,7 @@ public class PeerServerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         });
 
@@ -4532,6 +4537,7 @@ public class PeerServerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         });
 

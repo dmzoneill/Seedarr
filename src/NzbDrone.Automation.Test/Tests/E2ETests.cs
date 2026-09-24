@@ -181,8 +181,9 @@ public class E2ETests : ApiTestBase
                 deleteLocalData = true
             });
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[Test Cleanup Torrent] {ex.Message}");
         }
 
         if (string.IsNullOrEmpty(radarrKey))
@@ -214,8 +215,9 @@ public class E2ETests : ApiTestBase
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[Test Cleanup Queue] {ex.Message}");
         }
 
         try
@@ -262,8 +264,9 @@ public class E2ETests : ApiTestBase
                 await Client.SendAsync(addRequest);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[Test Cleanup Movie] {ex.Message}");
         }
     }
 

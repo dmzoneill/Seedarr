@@ -185,6 +185,39 @@ export function TorrentCreationTab({
         </div>
       </div>
 
+      <div>
+        <label
+          style={{
+            display: "block",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            marginBottom: "0.3rem",
+            color: "var(--text-secondary)",
+          }}
+        >
+          {t("addTorrent.commentLabel", "Comment (Optional)")}
+        </label>
+        <input
+          type="text"
+          value={createComment}
+          onChange={(e) => setCreateComment(e.target.value)}
+          placeholder={t(
+            "addTorrent.commentPlaceholder",
+            "Optional comment embedded in .torrent",
+          )}
+          className="form-input"
+          style={{
+            width: "100%",
+            padding: "0.5rem 0.75rem",
+            fontSize: "0.85rem",
+            borderRadius: "6px",
+            border: "1px solid var(--border-light)",
+            backgroundColor: "var(--bg-primary, #10111a)",
+            color: "inherit",
+          }}
+        />
+      </div>
+
       <div
         style={{
           display: "grid",

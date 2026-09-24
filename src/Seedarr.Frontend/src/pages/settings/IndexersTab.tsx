@@ -23,8 +23,6 @@ import type {
   IndexerDefinition,
   IndexerTestResult,
   RssRule,
-  RssGrabHistory,
-  TorznabCapabilities,
 } from "../../api/types";
 import { formatBytes, formatDate } from "../../utils/formatters";
 import {

@@ -91,7 +91,7 @@ public class InstallUpdateService : IInstallUpdateService
         }
     }
 
-    public async Task<bool> StageAndInstallAsync(
+    public Task<bool> StageAndInstallAsync(
         string packageFilePath,
         string expectedChecksum = null,
         string targetVersion = null,
@@ -138,7 +138,7 @@ public class InstallUpdateService : IInstallUpdateService
             // 4. Transition to RestartRequired
             SetProgress(UpdateInstallStage.RestartRequired, 100, null, targetVersion);
             _logger.Info("Update to version {0} staged successfully. Restart required.", targetVersion);
-            return true;
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {

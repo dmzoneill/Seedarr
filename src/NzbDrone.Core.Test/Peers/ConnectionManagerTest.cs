@@ -63,6 +63,7 @@ public class ConnectionManagerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -74,6 +75,7 @@ public class ConnectionManagerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -85,6 +87,7 @@ public class ConnectionManagerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }

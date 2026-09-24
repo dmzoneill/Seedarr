@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -52,13 +53,15 @@ public class SpeedScheduleTests : ApiTestBase
                         await DeleteAsync($"{SeedarrUrl}/api/v1/speedschedule/{id}");
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Console.WriteLine($"[Test Cleanup Schedule Item] {ex.Message}");
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[Test Cleanup SpeedSchedules] {ex.Message}");
         }
     }
 

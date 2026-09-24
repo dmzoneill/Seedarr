@@ -65,7 +65,7 @@ public class CpuUsageServiceTest
     [Test]
     public void GetThreadPoolStats_handles_exception_gracefully()
     {
-        ThreadPoolStatsAccessor failingAccessor = (out int w, out int c) => throw new InvalidOperationException("Failed");
+        ThreadPoolStatsAccessor failingAccessor = (out int w, out int c) => throw new InvalidOperationException("Failed to retrieve thread pool statistics");
 
         var service = new CpuUsageService(availableThreadsAccessor: failingAccessor);
         var stats = service.GetThreadPoolStats();

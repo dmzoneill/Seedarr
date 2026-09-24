@@ -1446,10 +1446,6 @@ function tAction(
   });
 }
 
-function tCommand(t: any, name: string, defaultDesc: string) {
-  return t("automation.commands." + name, { defaultValue: defaultDesc });
-}
-
 export function detectPotentialLoops(
   trigger: string | undefined,
   steps: VisualStep[],

@@ -179,7 +179,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         var model = ToModel(resource);
         model.Id = id;
 
-        // If client secret is masked (e.g. "********" or "******") or empty, preserve original
+        // If client secret is masked with asterisks or empty, preserve original
         if (string.IsNullOrWhiteSpace(model.ClientSecretEncrypted) ||
             model.ClientSecretEncrypted == MaskedSecret ||
             model.ClientSecretEncrypted == AlternateMaskedSecret)

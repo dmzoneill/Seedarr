@@ -70,6 +70,7 @@ public class EndgameManagerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -81,6 +82,7 @@ public class EndgameManagerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -92,6 +94,7 @@ public class EndgameManagerTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 

@@ -119,13 +119,15 @@ public abstract class ApiTestBase
                     }
                 }
                 catch
-                {
-                }
+            {
+                // Best-effort test cleanup
+            }
             }
         }
         catch
-        {
-        }
+            {
+                // Best-effort test cleanup
+            }
     }
 
     protected async Task<string> TransmissionRpcAsync(string method, object arguments)
