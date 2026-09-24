@@ -270,7 +270,6 @@ public class TrackerServerPasskeyTests
     {
         var service = new TrackerUserService();
 
-        // Add
         var user1 = service.AddUser("alice");
         Assert.That(user1.Id, Is.GreaterThan(0));
         Assert.That(user1.Username, Is.EqualTo("alice"));
@@ -281,16 +280,13 @@ public class TrackerServerPasskeyTests
         var user2 = service.AddUser("bob", "custombobpasskey1234567890123456");
         Assert.That(user2.Passkey, Is.EqualTo("custombobpasskey1234567890123456"));
 
-        // GetById & GetByPasskey
         Assert.That(service.GetById(user1.Id), Is.SameAs(user1));
         Assert.That(service.GetByPasskey(user1.Passkey), Is.SameAs(user1));
         Assert.That(service.GetByPasskey("nonexistent"), Is.Null);
 
-        // GetAll
         var all = service.GetAll();
         Assert.That(all.Count, Is.EqualTo(2));
 
-        // Update
         user1.Username = "alice_updated";
         user1.Passkey = "newalicepasskey1234567890123456"; // gitleaks:allow
         service.UpdateUser(user1);
@@ -298,7 +294,6 @@ public class TrackerServerPasskeyTests
         Assert.That(service.GetById(user1.Id).Username, Is.EqualTo("alice_updated"));
         Assert.That(service.GetByPasskey("newalicepasskey1234567890123456"), Is.SameAs(user1));
 
-        // Delete
         var deleted = service.DeleteUser(user1.Id);
         Assert.That(deleted, Is.True);
         Assert.That(service.GetById(user1.Id), Is.Null);
