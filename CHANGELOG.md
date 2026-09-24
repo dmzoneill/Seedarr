@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.19.3](https://github.com/dmzoneill/Seedarr/releases/tag/v1.19.3) - 2026-09-24
+
+### 🐛 Bug Fixes
+- fix(frontend): remove unused imports and prefix unused props in TorrentGrid
+- fix(frontend): remove unused imports in modals and tests
+- fix(script): resolve character literal tab escaping in CustomScriptService
+- fix(logging): add descriptive error logging and align frontend types
+
+### 🔧 Maintenance & Improvements
+- chore: remove untracked artifact and report files
+
 ## [v1.19.2](https://github.com/dmzoneill/Seedarr/releases/tag/v1.19.2) - 2026-09-24
 
 ### ✨ Features
