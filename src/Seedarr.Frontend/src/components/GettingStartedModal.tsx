@@ -37,8 +37,6 @@ import {
   Toggle,
   NumberInput,
 } from "../pages/settings/shared";
-import SeedarrLogo from "./icons/SeedarrLogo";
-import SeedarrText from "./icons/SeedarrText";
 import { LanguageSelector } from "./LanguageSelector";
 import { apiClient } from "../api/client";
 

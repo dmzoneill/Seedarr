@@ -1,11 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  isPlayableFile,
   buildStreamUrl,
   buildDownloadUrl,
   buildExternalPlayerUrl,
-  getAbsoluteUrl,
   cleanUpMediaElement,
   setSubtitleTrackActive,
   getCodecErrorMessage,
