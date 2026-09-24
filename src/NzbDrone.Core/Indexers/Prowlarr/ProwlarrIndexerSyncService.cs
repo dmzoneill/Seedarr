@@ -181,14 +181,12 @@ public class ProwlarrIndexerSyncService : IProwlarrIndexerSyncService
 
         foreach (var indexerElem in doc.RootElement.EnumerateArray())
         {
-            // Protocol must be torrent
             if (!indexerElem.TryGetProperty("protocol", out var protocolProp) ||
                 !string.Equals(protocolProp.GetString(), "torrent", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            // Enable must be true
             if (!indexerElem.TryGetProperty("enable", out var enableProp))
             {
                 continue;
@@ -203,7 +201,6 @@ public class ProwlarrIndexerSyncService : IProwlarrIndexerSyncService
                 continue;
             }
 
-            // Id must exist
             if (!indexerElem.TryGetProperty("id", out var idProp) || !idProp.TryGetInt32(out var prowlarrIndexerId))
             {
                 continue;

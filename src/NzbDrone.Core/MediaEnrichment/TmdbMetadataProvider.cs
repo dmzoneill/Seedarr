@@ -430,7 +430,6 @@ public class TmdbMetadataProvider : ITmdbMetadataProvider
             metadata.ImdbId = extImdb.GetString();
         }
 
-        // Genres
         if (root.TryGetProperty("genres", out var genresProp) && genresProp.ValueKind == JsonValueKind.Array)
         {
             var genres = new List<string>();
@@ -460,7 +459,6 @@ public class TmdbMetadataProvider : ITmdbMetadataProvider
             }
         }
 
-        // Cast
         var castContainer = default(JsonElement);
         if (root.TryGetProperty("credits", out var creditsProp) && creditsProp.TryGetProperty("cast", out var creditsCast))
         {
@@ -575,7 +573,6 @@ public class TmdbMetadataProvider : ITmdbMetadataProvider
             metadata.ImdbId = imdbProp.GetString();
         }
 
-        // Genres
         if (root.TryGetProperty("genres", out var genresProp) && genresProp.ValueKind == JsonValueKind.Array)
         {
             var genres = new List<string>();
@@ -605,7 +602,6 @@ public class TmdbMetadataProvider : ITmdbMetadataProvider
             }
         }
 
-        // Cast
         var castContainer = default(JsonElement);
         if (root.TryGetProperty("credits", out var creditsProp) && creditsProp.TryGetProperty("cast", out var creditsCast))
         {
