@@ -65,7 +65,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
     private readonly IMediaFilterService _mediaFilterService;
     private readonly HttpClient _explicitHttpClient;
     private readonly HttpClient _httpClient;
-    private readonly Logger _logger;
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _torrentLocks = new();
     private readonly object _evictionLock = new();
 
@@ -106,7 +106,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
 
         var trimmed = host.Trim().Trim('[', ']');
         return KnownSafeArtworkHosts.Contains(trimmed) ||
-               KnownSafeArtworkHosts.Any(domain => trimmed.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase));
+                KnownSafeArtworkHosts.Any(domain => trimmed.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase));
     }
 
     private static readonly Regex ImdbIdRegex = new(@"\b(tt\d{7,10})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -136,7 +136,6 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         _mediaFilterService = mediaFilterService ?? new MediaFilterService();
         _explicitHttpClient = httpClient;
         _httpClient = httpClient ?? ArrConnectionResources.SharedClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        _logger = LogManager.GetCurrentClassLogger();
     }
 
     public MediaEnrichmentService(
@@ -695,8 +694,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                             {
                                 File.Delete(tmpLocalFile);
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                _logger.Trace(ex, "Failed to delete tmpLocalFile: {0}", tmpLocalFile);
                             }
                         }
                     }
@@ -802,8 +802,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                     {
                         File.Delete(tmpFile);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Trace(ex, "Failed to delete tmpFile: {0}", tmpFile);
                     }
                 }
             }
@@ -852,13 +853,15 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 {
                     File.Delete(fullPath);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Failed to delete alternative format file: {0}", fullPath);
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to clean up alternative formats in {0}", cacheDir);
         }
     }
 
@@ -956,8 +959,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                         {
                             file.Delete();
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            _logger.Trace(ex, "Failed to delete orphaned tmp artwork file: {0}", file.FullName);
                         }
 
                         continue;
@@ -983,8 +987,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                     {
                         totalSize += file.Length;
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Trace(ex, "Failed to get artwork file length: {0}", file.FullName);
                     }
                 }
 
@@ -1054,8 +1059,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 return access;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to get LastAccessTimeUtc for {0}", file.FullName);
         }
 
         try
@@ -1066,8 +1072,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 return write;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to get LastWriteTimeUtc for {0}", file.FullName);
         }
 
         return DateTime.UtcNow;
@@ -1099,8 +1106,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             {
                 directory.Delete();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Trace(ex, "Failed to delete empty subdirectory: {0}", directory.FullName);
             }
         }
     }
@@ -1126,8 +1134,8 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
 
         var basePath = servarrUri.AbsolutePath.TrimEnd('/');
         return string.IsNullOrEmpty(basePath) ||
-               uri.AbsolutePath.Equals(basePath, StringComparison.OrdinalIgnoreCase) ||
-               uri.AbsolutePath.StartsWith(basePath + "/", StringComparison.OrdinalIgnoreCase);
+                uri.AbsolutePath.Equals(basePath, StringComparison.OrdinalIgnoreCase) ||
+                uri.AbsolutePath.StartsWith(basePath + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool IsConfiguredServarrHost(Uri uri)

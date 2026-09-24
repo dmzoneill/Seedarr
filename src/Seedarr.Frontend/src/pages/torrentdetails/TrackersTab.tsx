@@ -18,12 +18,15 @@ import TrackerMultiSelectModal, {
   TrackerPickerItem,
 } from "../../components/TrackerMultiSelectModal";
 
-function getReannounceCountdown(tracker: {
-  lastAnnounce?: string | null;
-  totalAnnounces?: number;
-  minAnnounceInterval?: number;
-  announceInterval?: number;
-}): number {
+function getReannounceCountdown(
+  tracker: {
+    lastAnnounce?: string | null;
+    totalAnnounces?: number;
+    minAnnounceInterval?: number;
+    announceInterval?: number;
+  },
+  now: number = Date.now(),
+): number {
   if (
     !tracker.lastAnnounce ||
     !tracker.totalAnnounces ||
@@ -44,7 +47,7 @@ function getReannounceCountdown(tracker: {
   const lastAnnounceTime = new Date(tracker.lastAnnounce).getTime();
   if (isNaN(lastAnnounceTime)) return 0;
   const earliestAllowed = lastAnnounceTime + minInterval * 1000;
-  const remainingSeconds = Math.ceil((earliestAllowed - Date.now()) / 1000);
+  const remainingSeconds = Math.ceil((earliestAllowed - now) / 1000);
   return remainingSeconds > 0 ? remainingSeconds : 0;
 }
 
@@ -137,7 +140,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   const hasActiveCountdown = useMemo(() => {
-    return (trackers ?? []).some((t) => getReannounceCountdown(t) > 0);
+    return (trackers ?? []).some((t) => getReannounceCountdown(t, currentTime) > 0);
   }, [trackers, currentTime]);
 
   useEffect(() => {

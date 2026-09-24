@@ -248,8 +248,9 @@ public class PackageImportService : IPackageImportService
                         {
                             File.SetLastWriteTimeUtc(destinationPath, entry.ModificationTime.UtcDateTime);
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            _logger.Trace(ex, "Failed to set modification time on extracted file {0}", destinationPath);
                         }
                     }
 
@@ -293,8 +294,9 @@ public class PackageImportService : IPackageImportService
                 {
                     Directory.Delete(canonicalTargetRoot, true);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to delete sandbox directory on error: {0}", canonicalTargetRoot);
                 }
             }
 
@@ -311,8 +313,9 @@ public class PackageImportService : IPackageImportService
                 {
                     Directory.Delete(canonicalTargetRoot, true);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to delete sandbox directory on missing manifest: {0}", canonicalTargetRoot);
                 }
             }
 
@@ -335,8 +338,9 @@ public class PackageImportService : IPackageImportService
                     {
                         Directory.Delete(canonicalTargetRoot, true);
                     }
-                    catch
+                    catch (Exception exDelete)
                     {
+                        _logger.Debug(exDelete, "Failed to delete sandbox directory on manifest parse error: {0}", canonicalTargetRoot);
                     }
                 }
 
@@ -352,8 +356,9 @@ public class PackageImportService : IPackageImportService
                 {
                     Directory.Delete(canonicalTargetRoot, true);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to delete sandbox directory on invalid schema version: {0}", canonicalTargetRoot);
                 }
             }
 
@@ -407,8 +412,9 @@ public class PackageImportService : IPackageImportService
                     var fileInfo = new FileInfo(file);
                     File.SetLastWriteTimeUtc(destFile, fileInfo.LastWriteTimeUtc);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Failed to set last write time on copied package file {0}", destFile);
                 }
             }
         }

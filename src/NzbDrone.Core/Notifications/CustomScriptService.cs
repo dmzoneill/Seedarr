@@ -127,12 +127,12 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
             if (remainder != null)
             {
-                if (remainder.StartsWith("-S ") || remainder.StartsWith("-S	"))
+                if (remainder.StartsWith("-S ") || remainder.StartsWith("-S    "))
                 {
                     remainder = remainder.Substring(3).Trim();
                 }
 
-                var parts = remainder.Split(new[] { ' ', '	' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                var parts = remainder.Split(new[] { ' ', '    ' }, 2, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {
                     interpreter = parts[0];
@@ -142,7 +142,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
             }
             else
             {
-                var parts = line.Split(new[] { ' ', '	' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                var parts = line.Split(new[] { ' ', '    ' }, 2, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {
                     interpreter = parts[0];
@@ -997,8 +997,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
             {
                 pid = process.Id;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Trace(ex, "Failed to get process ID for custom script process");
             }
 
             if (pid > 0)
@@ -1024,8 +1025,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     {
                         await streamCts.CancelAsync().ConfigureAwait(false);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Debug(ex, "Failed to cancel stream CTS on custom script timeout");
                     }
 
                     await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
@@ -1051,8 +1053,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                         {
                             await streamCts.CancelAsync().ConfigureAwait(false);
                         }
-                        catch
+                        catch (Exception exDrain)
                         {
+                            _logger.Debug(exDrain, "Failed to cancel stream CTS on custom script stream drain timeout");
                         }
                     }
 
@@ -1073,8 +1076,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     {
                         await streamCts.CancelAsync().ConfigureAwait(false);
                     }
-                    catch
+                    catch (Exception exDrain)
                     {
+                        _logger.Debug(exDrain, "Failed to cancel stream CTS on custom script stream drain exception");
                     }
                 }
                 finally
@@ -1234,8 +1238,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 {
                     pid = process.Id;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Failed to get process ID for custom script test process");
                 }
 
                 if (pid > 0)
@@ -1263,8 +1268,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                         {
                             await streamCts.CancelAsync().ConfigureAwait(false);
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            _logger.Debug(ex, "Failed to cancel stream CTS on custom script test timeout");
                         }
 
                         await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
@@ -1292,8 +1298,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                             {
                                 await streamCts.CancelAsync().ConfigureAwait(false);
                             }
-                            catch
+                            catch (Exception exDrain)
                             {
+                                _logger.Debug(exDrain, "Failed to cancel stream CTS on test stream drain timeout");
                             }
                         }
 
@@ -1314,8 +1321,9 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                         {
                             await streamCts.CancelAsync().ConfigureAwait(false);
                         }
-                        catch
+                        catch (Exception exDrain)
                         {
+                            _logger.Debug(exDrain, "Failed to cancel stream CTS on test stream drain exception");
                         }
                     }
                     finally

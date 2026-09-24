@@ -12,6 +12,7 @@ using NzbDrone.Core.Indexers.Newznab;
 using NzbDrone.Core.Indexers.Prowlarr;
 using NzbDrone.Core.Indexers.Torznab;
 using NzbDrone.Core.MediaEnrichment;
+using NLog;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
@@ -24,6 +25,7 @@ namespace Seedarr.Api.V1.Indexers;
 [Route("api/v1/indexer")]
 public class IndexerController : Controller
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient DefaultClient = new();
     private readonly HttpClient _httpClient;
     private readonly IProxySettingsProvider _proxySettingsProvider;
@@ -733,8 +735,9 @@ public class IndexerController : Controller
         {
             indexer = CreateIndexer(definition);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.Warn(ex, "Failed to create indexer {0} for capabilities check", definition?.Name);
             return Ok(new TorznabCapabilities());
         }
 

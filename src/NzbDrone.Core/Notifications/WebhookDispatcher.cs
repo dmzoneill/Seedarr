@@ -48,9 +48,9 @@ public class WebhookDispatcher : IWebhookDispatcher
         Timeout = TimeSpan.FromSeconds(10)
     };
 
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly HttpClient _httpClient;
     private readonly AsyncRetryPolicy<HttpResponseMessage> _retryPolicy;
-    private readonly Logger _logger;
     private readonly TimeSpan _timeout;
     private readonly bool _allowLoopback;
 
@@ -68,7 +68,6 @@ public class WebhookDispatcher : IWebhookDispatcher
         _httpClient = httpClient ?? (timeout == null || timeout == TimeSpan.FromSeconds(10)
             ? SharedDefaultClient
             : new HttpClient(SharedHandler, disposeHandler: false) { Timeout = _timeout });
-        _logger = LogManager.GetCurrentClassLogger();
         _retryPolicy = retryPolicy ?? CreateRetryPolicy();
     }
 
@@ -300,8 +299,9 @@ public class WebhookDispatcher : IWebhookDispatcher
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to parse Retry-After header");
         }
 
         return null;
@@ -522,8 +522,9 @@ public class WebhookDispatcher : IWebhookDispatcher
                     return dictFromJson;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Trace(ex, "Failed to parse JSON string payload for parse_mode strip");
             }
         }
 
@@ -545,8 +546,9 @@ public class WebhookDispatcher : IWebhookDispatcher
                 return dictFromJson;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to serialize and parse payload for parse_mode strip");
         }
 
         return payload;
@@ -737,8 +739,9 @@ public class WebhookDispatcher : IWebhookDispatcher
                 return bodySnippet;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to extract error snippet from response body");
         }
 
         return string.Empty;

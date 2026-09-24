@@ -368,13 +368,13 @@ public class PieceCache : IPieceCache
                         RandomAccess.FlushToDisk(handle);
                     }
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is IOException or ObjectDisposedException or UnauthorizedAccessException)
                 {
                     // Best effort OS fsync
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or UnauthorizedAccessException)
         {
             // Best effort OS fsync
         }

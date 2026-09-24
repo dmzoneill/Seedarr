@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using NLog;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http.Security;
 
@@ -17,6 +18,7 @@ namespace Seedarr.Http.Terminal;
 
 public static class TerminalWebSocketHandler
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     public static bool IsAuthorized(HttpContext context, IConfigFileProvider configFileProvider)
     {
         if (configFileProvider == null || !configFileProvider.AuthenticationEnabled)
@@ -233,10 +235,10 @@ public static class TerminalWebSocketHandler
                                         }
                                     }
                                     else if (type == "resize" &&
-                                             root.TryGetProperty("cols", out var colsProp) &&
-                                             root.TryGetProperty("rows", out var rowsProp) &&
-                                             colsProp.TryGetInt32(out var cols) &&
-                                             rowsProp.TryGetInt32(out var rows))
+                                            root.TryGetProperty("cols", out var colsProp) &&
+                                            root.TryGetProperty("rows", out var rowsProp) &&
+                                            colsProp.TryGetInt32(out var cols) &&
+                                            rowsProp.TryGetInt32(out var rows))
                                     {
                                         session.Resize(cols, rows);
                                     }
@@ -280,8 +282,13 @@ public static class TerminalWebSocketHandler
         {
             await Task.WhenAll(readPtyTask, receiveWsTask);
         }
-        catch
+        catch (OperationCanceledException ex)
         {
+            _logger.Trace(ex, "Terminal WebSocket tasks cancelled");
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Unexpected error awaiting terminal WebSocket tasks");
         }
 
         try

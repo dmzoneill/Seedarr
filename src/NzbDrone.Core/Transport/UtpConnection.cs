@@ -116,8 +116,9 @@ public class UtpConnection : IUtpConnection
                 {
                     _udpClient.Client.SendBufferSize = value;
                 }
-                catch
+                catch (SocketException ex)
                 {
+                    _logger.Trace(ex, "Failed to set SendBufferSize to {0} on uTP socket", value);
                 }
             }
         }
@@ -134,8 +135,9 @@ public class UtpConnection : IUtpConnection
                 {
                     _udpClient.Client.ReceiveBufferSize = value;
                 }
-                catch
+                catch (SocketException ex)
                 {
+                    _logger.Trace(ex, "Failed to set ReceiveBufferSize to {0} on uTP socket", value);
                 }
             }
         }
@@ -155,8 +157,9 @@ public class UtpConnection : IUtpConnection
             var rttSeconds = _srtt > 0 ? _srtt / 1000.0 : DefaultEstimatedRttSeconds;
             _udpClient.Client.SendBufferSize = CalculateBdpBufferSize(_uploadRateLimit, rttSeconds);
         }
-        catch
+        catch (SocketException ex)
         {
+            _logger.Trace(ex, "Failed to update SendBufferSize on uTP socket");
         }
 
         try
@@ -164,8 +167,9 @@ public class UtpConnection : IUtpConnection
             var rttSeconds = _srtt > 0 ? _srtt / 1000.0 : DefaultEstimatedRttSeconds;
             _udpClient.Client.ReceiveBufferSize = CalculateBdpBufferSize(_downloadRateLimit, rttSeconds);
         }
-        catch
+        catch (SocketException ex)
         {
+            _logger.Trace(ex, "Failed to update ReceiveBufferSize on uTP socket");
         }
     }
 
@@ -458,8 +462,9 @@ public class UtpConnection : IUtpConnection
                     {
                         _udpClient.Client.ReceiveTimeout = rtoMs;
                     }
-                    catch
+                    catch (SocketException ex)
                     {
+                        _logger.Trace(ex, "Failed to set ReceiveTimeout to {0}ms during SYN", rtoMs);
                     }
                 }
 
@@ -483,8 +488,9 @@ public class UtpConnection : IUtpConnection
                             {
                                 _udpClient.Client.ReceiveTimeout = _connectionTimeoutSeconds > 0 ? _connectionTimeoutSeconds * 1000 : 3000;
                             }
-                            catch
+                            catch (SocketException ex)
                             {
+                                _logger.Trace(ex, "Failed to set connection ReceiveTimeout on uTP socket");
                             }
                         }
 
@@ -675,8 +681,9 @@ public class UtpConnection : IUtpConnection
                                 break;
                             }
                         }
-                        catch
+                        catch (SocketException ex)
                         {
+                            _logger.Trace(ex, "SocketException while polling/receiving uTP packet");
                         }
                     }
 
@@ -720,8 +727,9 @@ public class UtpConnection : IUtpConnection
                     _udpClient.Client.ReceiveTimeout = effectiveTimeoutMs;
                 }
             }
-            catch
+            catch (SocketException ex)
             {
+                _logger.Trace(ex, "Failed to set ReceiveTimeout to {0}ms in Receive", effectiveTimeoutMs);
             }
         }
 

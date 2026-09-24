@@ -71,8 +71,8 @@ interface TorrentToolbarProps {
 
 export function TorrentToolbar({
   count,
-  totalUploadSpeed,
-  totalDownloadSpeed,
+  totalUploadSpeed: _totalUploadSpeed,
+  totalDownloadSpeed: _totalDownloadSpeed,
   seedingConfig,
   adjustSpeed,
   filter,

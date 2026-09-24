@@ -316,8 +316,9 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
                 NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
                 NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Debug(ex, "Error unregistering network change events during disposal");
             }
 
             _heartbeatTimer?.Dispose();
@@ -453,7 +454,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
         try
         {
             var ip = ResolveInterfaceIpDefault(interfaceName, AddressFamily.InterNetwork) ??
-                     ResolveInterfaceIpDefault(interfaceName, AddressFamily.InterNetworkV6);
+                    ResolveInterfaceIpDefault(interfaceName, AddressFamily.InterNetworkV6);
 
             if (ip == null)
             {

@@ -121,8 +121,9 @@ public class AppLifetime : IHostedService, IDisposable
             {
                 await Task.WhenAny(_watchdogLoopTask, Task.Delay(2000, cancellationToken));
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Debug(ex, "Watchdog loop task cancellation error during shutdown");
             }
         }
 
@@ -170,8 +171,9 @@ public class AppLifetime : IHostedService, IDisposable
                     {
                         await Task.WhenAny(allAnnounces, timeoutTask);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Debug(ex, "Tracker stopped announces awaiting timed out or failed during shutdown");
                     }
                 }
             }

@@ -157,8 +157,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
             {
                 await _workerTask.ConfigureAwait(false);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.Trace(ex, "LPD worker task faulted during shutdown");
             }
         }
     }
@@ -242,8 +243,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                         client.Close();
                         client.Dispose();
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
+                        _logger.Trace(ex, "Error disposing LPD IPv4 client");
                     }
 
                     client = null;
@@ -262,8 +264,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                     {
                         socketV6.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
                     }
-                    catch
+                    catch (SocketException ex)
                     {
+                        _logger.Trace(ex, "IPv6Only socket option not supported");
                     }
 
                     socketV6.Bind(new IPEndPoint(IPAddress.IPv6Any, MulticastPort));
@@ -309,8 +312,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                             clientV6.Close();
                             clientV6.Dispose();
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
+                            _logger.Trace(ex, "Error disposing LPD IPv6 client");
                         }
 
                         clientV6 = null;
@@ -327,8 +331,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                             clientV6.Close();
                             clientV6.Dispose();
                         }
-                        catch (Exception)
+                        catch (Exception clientEx)
                         {
+                            _logger.Trace(clientEx, "Error disposing LPD IPv6 client on exception");
                         }
 
                         clientV6 = null;
@@ -372,8 +377,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                 {
                     await Task.WhenAll(tasks).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException ex)
                 {
+                    _logger.Trace(ex, "LPD tasks cancelled");
                 }
             });
         }
@@ -391,8 +397,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                 {
                     _workerCts.Cancel();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Error cancelling LPD worker CTS");
                 }
 
                 _workerCts.Dispose();
@@ -405,8 +412,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                 {
                     _client.DropMulticastGroup(IPAddress.Parse(MulticastAddress));
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Error dropping LPD multicast group IPv4");
                 }
 
                 try
@@ -414,8 +422,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                     _client.Close();
                     _client.Dispose();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Error closing LPD IPv4 client");
                 }
 
                 _client = null;
@@ -427,8 +436,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                 {
                     _clientV6.DropMulticastGroup(IPAddress.Parse(MulticastAddressV6));
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Error dropping LPD multicast group IPv6");
                 }
 
                 try
@@ -436,8 +446,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                     _clientV6.Close();
                     _clientV6.Dispose();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Error closing LPD IPv6 client");
                 }
 
                 _clientV6 = null;
@@ -586,8 +597,9 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                     {
                         ifSender.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastInterface, unicast.Address.GetAddressBytes());
                     }
-                    catch
+                    catch (SocketException ex)
                     {
+                        _logger.Trace(ex, "MulticastInterface socket option not supported on {0}", unicast.Address);
                     }
 
                     await ifSender.SendAsync(data, endpoint, stoppingToken);

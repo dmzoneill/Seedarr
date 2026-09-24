@@ -106,11 +106,11 @@ public class ExternalIpService : BackgroundService, IExternalIpService
     {
         var bindIface = _configService?.BindInterface?.Trim();
         return !string.IsNullOrWhiteSpace(bindIface) &&
-               !bindIface.Equals("Any", StringComparison.OrdinalIgnoreCase) &&
-               !bindIface.Equals("all", StringComparison.OrdinalIgnoreCase) &&
-               !bindIface.Equals("*", StringComparison.OrdinalIgnoreCase) &&
-               !bindIface.Equals("0.0.0.0", StringComparison.OrdinalIgnoreCase) &&
-               !bindIface.Equals("::", StringComparison.OrdinalIgnoreCase);
+                !bindIface.Equals("Any", StringComparison.OrdinalIgnoreCase) &&
+                !bindIface.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+                !bindIface.Equals("*", StringComparison.OrdinalIgnoreCase) &&
+                !bindIface.Equals("0.0.0.0", StringComparison.OrdinalIgnoreCase) &&
+                !bindIface.Equals("::", StringComparison.OrdinalIgnoreCase);
     }
 
     internal IPAddress ResolveBindIp(string bindInterface)
@@ -350,6 +350,7 @@ public class ExternalIpService : BackgroundService, IExternalIpService
         }
         catch (OperationCanceledException)
         {
+            _logger.Debug("External IP monitoring stopped due to cancellation");
         }
         finally
         {

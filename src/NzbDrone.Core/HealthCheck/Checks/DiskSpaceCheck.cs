@@ -17,8 +17,8 @@ public class DiskSpaceCheck : IHealthCheck
     private readonly IConfigService _configService;
     private readonly IDiskSpaceService _diskSpaceService;
     private readonly Func<string, long?> _getFreeSpaceOverride;
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly Func<string, string> _getPathRootOverride;
-    private readonly Logger _logger;
 
     public DiskSpaceCheck(
         IAppFolderInfo appFolderInfo,
@@ -32,7 +32,6 @@ public class DiskSpaceCheck : IHealthCheck
         _diskSpaceService = diskSpaceService;
         _getFreeSpaceOverride = getFreeSpaceOverride;
         _getPathRootOverride = getPathRootOverride;
-        _logger = LogManager.GetCurrentClassLogger();
     }
 
     public DiskSpaceCheck(
@@ -240,8 +239,9 @@ public class DiskSpaceCheck : IHealthCheck
                     return info;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Trace(ex, "Failed to query DiskSpaceService for path {0}", path);
             }
         }
 
@@ -313,8 +313,9 @@ public class DiskSpaceCheck : IHealthCheck
                 return true;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to check root existence for path {0}", path);
         }
 
         return false;
@@ -345,8 +346,9 @@ public class DiskSpaceCheck : IHealthCheck
                 return root;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to get volume root for path {0}", path);
         }
 
         return "/";

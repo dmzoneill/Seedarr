@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using NzbDrone.Core.Notifications;
 using Seedarr.Http;
 
@@ -20,6 +21,7 @@ namespace Seedarr.Api.V1.Notifications;
 [Route("api/v1/notification")]
 public class NotificationController : Controller
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     public const string PasswordMask = "********";
 
     private readonly INotificationRepository _notificationRepository;
@@ -937,8 +939,9 @@ public class NotificationController : Controller
                     }
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Settings payload is not JSON; falling back to regex matching");
             }
         }
 

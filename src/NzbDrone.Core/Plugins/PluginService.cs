@@ -213,8 +213,9 @@ public class PluginService : IPluginService, IHandle<ApplicationShutdownRequeste
             {
                 host.Dispose();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Debug(ex, "Failed to dispose plugin host");
             }
         }
 

@@ -73,8 +73,9 @@ public class TerminalHub : Hub
                                     isAuth = true;
                                 }
                             }
-                            catch
+                            catch (FormatException ex)
                             {
+                                _logger.Debug(ex, "Failed to decode basic authentication parameter in TerminalHub");
                             }
                         }
                     }

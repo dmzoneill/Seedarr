@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using NLog;
 
 namespace NzbDrone.Core.MediaInspection;
 
 public class MediaContainerInfo
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     public string ContainerFormat { get; set; }
 
     public string VideoCodec { get; set; }
@@ -47,6 +49,7 @@ public interface IMediaContainerInspector
 
 public class MediaContainerInspector : IMediaContainerInspector
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly IFFprobeMediaInspector _ffprobeInspector;
     private readonly NzbDrone.Core.Subtitles.ISubtitleDiscoveryService _subtitleDiscoveryService;
 
@@ -101,8 +104,9 @@ public class MediaContainerInspector : IMediaContainerInspector
                 {
                     stream.Position = initialPos;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Failed to restore stream position after inspecting media header");
                 }
             }
         }

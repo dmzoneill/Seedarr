@@ -73,6 +73,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private readonly IEventAggregator _eventAggregator;
     private readonly IPeerBlocklistSyncService _blocklistService;
     private readonly IEndgameManager _endgameManager;
+    private static readonly Logger _staticLogger = LogManager.GetCurrentClassLogger();
     private readonly Logger _logger;
     private readonly object _listenerLock = new();
     private readonly SemaphoreSlim _rebindSignal = new(0, 1);
@@ -1159,8 +1160,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             _serverLifecycleCts.Cancel();
             _serverLifecycleCts.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to cancel or dispose serverLifecycleCts");
         }
 
         StopListener();
@@ -1188,8 +1190,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 {
                     _listenerCts.Cancel();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Failed to cancel listenerCts");
                 }
             }
 
@@ -1199,8 +1202,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 {
                     _listener.Stop();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Failed to stop listener");
                 }
 
                 _listener = null;
@@ -1219,8 +1223,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 _rebindSignal.Release();
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to release rebind signal");
         }
     }
 
@@ -1402,8 +1407,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             {
                 _serverLifecycleCts.Cancel();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Trace(ex, "Failed to cancel serverLifecycleCts in stoppingToken registration");
             }
         });
 
@@ -1591,8 +1597,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     {
                         listener.Stop();
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Trace(ex, "Failed to stop listener in finally block");
                     }
 
                     if (_listener == listener)
@@ -1658,8 +1665,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     client.Client.ReceiveTimeout = UnauthenticatedHandshakeTimeoutMs;
                 }
             }
-            catch
+            catch (SocketException ex)
             {
+                _logger.Trace(ex, "Failed to set ReceiveTimeout on incoming client from {0}", clientIp);
             }
 
             try
@@ -1780,8 +1788,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            _logger.Trace(ex, "Peer contact loop cancelled");
         }
     }
 
@@ -1819,8 +1828,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 await Task.Delay(TimeSpan.FromSeconds(currentInterval), stoppingToken);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            _logger.Trace(ex, "PeerServer PEX broadcast loop cancelled");
         }
         catch (Exception ex)
         {
@@ -2586,8 +2596,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             {
                 client.Client.ReceiveTimeout = UnauthenticatedHandshakeTimeoutMs;
             }
-            catch
+            catch (SocketException ex)
             {
+                _logger.Trace(ex, "Failed to set ReceiveTimeout on inbound client");
             }
         }
 
@@ -2603,8 +2614,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     {
                         client.Client.ReceiveTimeout = connection.MessageReadTimeoutMs > 0 ? connection.MessageReadTimeoutMs : 0;
                     }
-                    catch
+                    catch (SocketException ex)
                     {
+                        _logger.Trace(ex, "Failed to update ReceiveTimeout on inbound client");
                     }
                 }
             });
@@ -2874,8 +2886,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             {
                 torrent = _torrentService.GetAll()?.FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Trace(ex, "Failed to retrieve all torrents to lookup info hash {0}", infoHash);
             }
         }
 
@@ -3832,8 +3845,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 Payload = rejectPayload
             });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _staticLogger.Trace(ex, "Failed to send RejectRequest message");
         }
     }
 

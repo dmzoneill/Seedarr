@@ -130,6 +130,7 @@ public class DiskSpaceService : IDiskSpaceService
     public const long NormalRecoveryBytesThreshold = 6L * 1024 * 1024 * 1024; // 6 GB
     public const double NormalRecoveryPercentThreshold = 0.06; // 6%
 
+    private static readonly Logger _staticLogger = LogManager.GetCurrentClassLogger();
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly ICategoryRepository _categoryRepository;
     private readonly ICategoryService _categoryService;
@@ -742,8 +743,9 @@ public class DiskSpaceService : IDiskSpaceService
             {
                 label = drive.VolumeLabel ?? string.Empty;
             }
-            catch
+            catch (Exception ex)
             {
+                _staticLogger.Trace(ex, "Failed to query volume label for drive {0}", drive.Name);
             }
 
             string fsType = null;
@@ -751,8 +753,9 @@ public class DiskSpaceService : IDiskSpaceService
             {
                 fsType = drive.DriveFormat;
             }
-            catch
+            catch (Exception ex)
             {
+                _staticLogger.Trace(ex, "Failed to query drive format for drive {0}", drive.Name);
             }
 
             return new DriveSpaceStats
@@ -764,8 +767,9 @@ public class DiskSpaceService : IDiskSpaceService
                 IsReadOnly = false,
             };
         }
-        catch
+        catch (Exception ex)
         {
+            _staticLogger.Trace(ex, "Failed to get stats for drive {0}", drive.Name);
             return null;
         }
     }
@@ -844,8 +848,9 @@ public class DiskSpaceService : IDiskSpaceService
                 return directDrive;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _staticLogger.Trace(ex, "Failed to inspect direct DriveInfo for path {0}", fullPath);
         }
 
         if (bestMatch != null)
@@ -861,8 +866,9 @@ public class DiskSpaceService : IDiskSpaceService
                 return new DriveInfo(root);
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _staticLogger.Trace(ex, "Failed to inspect root DriveInfo for path {0}", fullPath);
         }
 
         return null;

@@ -60,7 +60,6 @@ public class MseHandshake
         var yb = ReadExact(stream, DhKeyLength);
         _sharedSecret = _keyDerivation.ComputeSharedSecret(yb);
 
-        // Initialize the RC4 ciphers
         var encKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyAPrefix);
         var decKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyBPrefix);
         _outCipher = new Rc4StreamCipher(encKey);
@@ -173,7 +172,7 @@ public class MseHandshake
 
         stream = synchronizedStream;
 
-        // Initialize RC4 ciphers (reversed roles for incoming side)
+        // Reversed roles for incoming side: KeyA decrypts, KeyB encrypts
         var decKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyAPrefix);
         var encKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyBPrefix);
         _inCipher = new Rc4StreamCipher(decKey);
@@ -259,7 +258,6 @@ public class MseHandshake
         var yb = await ReadExactAsync(stream, DhKeyLength, cancellationToken);
         _sharedSecret = _keyDerivation.ComputeSharedSecret(yb);
 
-        // Initialize the RC4 ciphers
         var encKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyAPrefix);
         var decKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyBPrefix);
         _outCipher = new Rc4StreamCipher(encKey);
@@ -382,7 +380,7 @@ public class MseHandshake
 
         stream = synchronizedStream;
 
-        // Initialize RC4 ciphers (reversed roles for incoming side)
+        // Reversed roles for incoming side: KeyA decrypts, KeyB encrypts
         var decKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyAPrefix);
         var encKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyBPrefix);
         _inCipher = new Rc4StreamCipher(decKey);

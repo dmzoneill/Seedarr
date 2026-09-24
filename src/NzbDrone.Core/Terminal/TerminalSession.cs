@@ -1,11 +1,13 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using NLog;
 
 namespace NzbDrone.Core.Terminal;
 
 public class TerminalSession : IDisposable
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private int _disposed;
 
     public TerminalSession(string connectionId, IPtyProcess process)
@@ -33,24 +35,27 @@ public class TerminalSession : IDisposable
         {
             CancellationTokenSource?.Cancel();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Debug(ex, "Failed to cancel cancellation token during terminal session disposal");
         }
 
         try
         {
             CancellationTokenSource?.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Debug(ex, "Failed to dispose cancellation token source in terminal session");
         }
 
         try
         {
             Process?.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Debug(ex, "Failed to dispose PTY process in terminal session");
         }
     }
 }

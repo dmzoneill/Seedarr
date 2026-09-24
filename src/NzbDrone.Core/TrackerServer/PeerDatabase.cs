@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using NLog;
 
 namespace NzbDrone.Core.TrackerServer;
 
@@ -45,6 +46,7 @@ public class ScrapeStats
 public class PeerDatabase : IPeerDatabase, IDisposable
 {
     private const int PeerTtlMinutes = 45;
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     private readonly Dictionary<string, List<TrackerPeerEntry>> _peers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _completed = new(StringComparer.OrdinalIgnoreCase);
@@ -73,9 +75,9 @@ public class PeerDatabase : IPeerDatabase, IDisposable
         {
             PruneStalePeers();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Prevent unhandled timer exceptions from terminating the process
+            _logger.Warn(ex, "Unexpected error occurred during periodic peer eviction");
         }
     }
 

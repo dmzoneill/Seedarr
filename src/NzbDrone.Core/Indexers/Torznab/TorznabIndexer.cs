@@ -444,8 +444,9 @@ public class TorznabIndexer : IIndexer
                         };
                     }
                 }
-                catch (XmlException)
+                catch (XmlException ex)
                 {
+                    _logger.Trace(ex, "Response body from {0} was not valid XML in TestCapabilities", definition?.Url);
                 }
             }
 

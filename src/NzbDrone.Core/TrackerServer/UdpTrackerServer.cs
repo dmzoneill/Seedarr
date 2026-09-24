@@ -118,6 +118,7 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
         catch (OperationCanceledException)
         {
+            _logger.Debug("UDP tracker background service stopping due to cancellation");
         }
         finally
         {
@@ -227,12 +228,15 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
         catch (OperationCanceledException)
         {
+            _logger.Debug("UDP tracker receive loop canceled");
         }
-        catch (ObjectDisposedException)
+        catch (ObjectDisposedException ex)
         {
+            _logger.Debug(ex, "UDP tracker client disposed during receive loop");
         }
-        catch (SocketException) when (ct.IsCancellationRequested)
+        catch (SocketException ex) when (ct.IsCancellationRequested)
         {
+            _logger.Debug(ex, "UDP tracker socket closed during cancellation");
         }
         catch (Exception ex)
         {

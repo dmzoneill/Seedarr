@@ -123,8 +123,9 @@ public class TorrentRecheckService : ITorrentRecheckService
             {
                 cts.Cancel();
             }
-            catch (ObjectDisposedException)
+            catch (ObjectDisposedException ex)
             {
+                _logger.Trace(ex, "Cancellation token already disposed for recheck torrent {0}", id);
             }
         }
     }

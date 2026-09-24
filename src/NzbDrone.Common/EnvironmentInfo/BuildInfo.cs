@@ -39,8 +39,9 @@ public static class BuildInfo
                 candidates.Add(Path.Combine(dir.FullName, "version"));
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Trace(ex, "Failed to inspect parent directories of BaseDirectory for version file");
         }
 
         try
@@ -50,8 +51,9 @@ public static class BuildInfo
                 candidates.Add(Path.Combine(dir.FullName, "version"));
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Trace(ex, "Failed to inspect parent directories of CurrentDirectory for version file");
         }
 
         foreach (var path in candidates)
@@ -114,8 +116,9 @@ public static class BuildInfo
                 candidates.Add(Path.Combine(dir.FullName, "version"));
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Trace(ex, "Failed to inspect parent directories of BaseDirectory for commit hash file");
         }
 
         try
@@ -125,8 +128,9 @@ public static class BuildInfo
                 candidates.Add(Path.Combine(dir.FullName, "version"));
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Trace(ex, "Failed to inspect parent directories of CurrentDirectory for commit hash file");
         }
 
         foreach (var path in candidates)

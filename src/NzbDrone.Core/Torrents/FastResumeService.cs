@@ -162,8 +162,9 @@ public class FastResumeService : IFastResumeService
                         mtime = fi.LastWriteTimeUtc;
                         length = fi.Length;
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Trace(ex, "Failed to query file info for fastresume entry: {0}", diskPath);
                     }
                 }
 
@@ -190,8 +191,9 @@ public class FastResumeService : IFastResumeService
                         Mtime = fi.LastWriteTimeUtc
                     });
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Failed to query single file info for fastresume entry: {0}", singleFile);
                 }
             }
             else if (File.Exists(basePath))
@@ -206,8 +208,9 @@ public class FastResumeService : IFastResumeService
                         Mtime = fi.LastWriteTimeUtc
                     });
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Failed to query base path info for fastresume entry: {0}", basePath);
                 }
             }
         }
@@ -235,8 +238,9 @@ public class FastResumeService : IFastResumeService
                     File.Delete(tempPath);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Debug(ex, "Failed to clean up temporary fastresume file: {0}", tempPath);
             }
 
             throw;

@@ -18,7 +18,7 @@ namespace NzbDrone.Core.Terminal;
 
 public class WindowsPtyProcess : IPtyProcess
 {
-    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly int _pid;
     private readonly IntPtr _hProcess;
     private readonly IntPtr _hThread;
@@ -75,8 +75,9 @@ public class WindowsPtyProcess : IPtyProcess
         {
             return StartWithConPty(cols, rows, shellPath, cmdLine, workingDirectory, environment);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.Debug(ex, "ConPty failed to start; falling back to standard process session");
             return StartFallback(shellPath, args, workingDirectory, environment);
         }
     }

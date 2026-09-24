@@ -94,7 +94,8 @@ function getBroadcastChannel(): BroadcastChannel | null {
       channel.onmessageerror = (err) => {
         console.warn("[AuthChannel] BroadcastChannel message error:", err);
       };
-    } catch {
+    } catch (err) {
+      console.warn("[AuthChannel] BroadcastChannel initialization failed:", err);
       channel = null;
     }
   }

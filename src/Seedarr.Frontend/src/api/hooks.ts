@@ -1464,7 +1464,7 @@ export function useDownloadHistory(params?: {
         totalHeader !== null ? parseInt(totalHeader, 10) : items.length;
       const totalPages = pageHeader !== null ? parseInt(pageHeader, 10) : 1;
 
-      // Return items array augmented with pagination metadata for backward compatibility
+      // Augment items array with pagination metadata for backward compatibility
       const result = items as DownloadHistoryResponse;
       result.records = items;
       result.totalCount = Number.isNaN(totalCount) ? items.length : totalCount;

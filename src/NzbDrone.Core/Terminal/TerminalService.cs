@@ -218,8 +218,9 @@ public class TerminalService : ITerminalService, IHandle<ApplicationShutdownRequ
                 {
                     await session.CancellationTokenSource.CancelAsync();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Error cancelling terminal session token for {0}", connectionId);
                 }
 
                 try
@@ -235,8 +236,9 @@ public class TerminalService : ITerminalService, IHandle<ApplicationShutdownRequ
                 {
                     session.Dispose();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Error disposing terminal session for {0}", connectionId);
                 }
             }
         }
