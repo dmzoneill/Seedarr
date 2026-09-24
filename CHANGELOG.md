@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.19.2](https://github.com/dmzoneill/Seedarr/releases/tag/v1.19.2) - 2026-09-24
+
+### ✨ Features
+- feat(test): add Mcp, Plugins, TrackerServer, and SuperSeeding test suites + fix SA1203 in PtyProcessSession
+
+### 🐛 Bug Fixes
+- fix(test): resolve edge case assertions and mocks across Seedarr test suites
+- fix(test): add missing System.Net.Sockets using directive in PortMappingEngineTests
+- fix(test): rename namespace in SystemAndDiagnosticsControllersTests to avoid shadowing global System namespace
+- fix(test): remove extraneous closing parenthesis in PortMappingEngineTests
+
+### 🔧 Maintenance & Improvements
+- test: resolve SuperSeeding ambiguity, missing types, and SA1508
+- style: remove consecutive blank lines in tests
+- test: remove regions and resolve SuperSeedingTracker ambiguity
+- chore(test): add FluentAssertions package reference to Seedarr.Core.Test
+- test(coverage): add 5 comprehensive test suites for port mapping, rarest piece picker, file handle pool, package management, and system controllers
+
 ## [v1.19.1](https://github.com/dmzoneill/Seedarr/releases/tag/v1.19.1) - 2026-09-23
 
 ### 🐛 Bug Fixes
