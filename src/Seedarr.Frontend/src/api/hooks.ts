@@ -63,8 +63,6 @@ import type {
   TrackerBoostSettings,
   TrackerCrossMatrixResult,
   TrackerBoostLogEntry,
-  DownloadPlusPlusTracker,
-  DownloadPlusPlusStatusSummary,
   SwarmBoostResult,
   TorrentTrackerInspectionResult,
   TrackerMetric,

@@ -127,12 +127,12 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
             if (remainder != null)
             {
-                if (remainder.StartsWith("-S ") || remainder.StartsWith("-S    "))
+                if (remainder.StartsWith("-S ") || remainder.StartsWith("-S\t"))
                 {
                     remainder = remainder.Substring(3).Trim();
                 }
 
-                var parts = remainder.Split(new[] { ' ', '    ' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                var parts = remainder.Split(new[] { ' ', '\t' }, 2, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {
                     interpreter = parts[0];
@@ -142,7 +142,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
             }
             else
             {
-                var parts = line.Split(new[] { ' ', '    ' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                var parts = line.Split(new[] { ' ', '\t' }, 2, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {
                     interpreter = parts[0];
