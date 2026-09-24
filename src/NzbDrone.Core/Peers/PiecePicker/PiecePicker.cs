@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using NLog;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers.PiecePicker;
@@ -101,6 +102,7 @@ public interface IDownloadManager : IPieceBlockDownloader
 
 public class PiecePicker : IDownloadManager, IPiecePicker
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly ConcurrentDictionary<int, ActivePiece> _activePieces = new();
     private readonly object _syncLock = new();
     private readonly IPiecePicker _sequentialPicker;
@@ -474,8 +476,9 @@ public class PiecePicker : IDownloadManager, IPiecePicker
                             block.TimeoutCts.Cancel();
                             block.TimeoutCts.Dispose();
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            _logger.Trace(ex, "Failed to cancel or dispose block TimeoutCts");
                         }
 
                         block.TimeoutCts = null;
@@ -506,8 +509,9 @@ public class PiecePicker : IDownloadManager, IPiecePicker
                             block.TimeoutCts.Cancel();
                             block.TimeoutCts.Dispose();
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            _logger.Trace(ex, "Failed to cancel or dispose block TimeoutCts");
                         }
 
                         block.TimeoutCts = null;
@@ -571,8 +575,9 @@ public class PiecePicker : IDownloadManager, IPiecePicker
                                 block.TimeoutCts.Cancel();
                                 block.TimeoutCts.Dispose();
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                _logger.Trace(ex, "Failed to cancel or dispose block TimeoutCts during timeout processing");
                             }
 
                             block.TimeoutCts = null;
@@ -627,8 +632,9 @@ public class PiecePicker : IDownloadManager, IPiecePicker
                 block.TimeoutCts.Cancel();
                 block.TimeoutCts.Dispose();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Trace(ex, "Failed to cancel or dispose block TimeoutCts during block assignment");
             }
         }
 

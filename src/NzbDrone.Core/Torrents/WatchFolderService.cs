@@ -97,8 +97,9 @@ public class WatchFolderService : BackgroundService
                     _watcher.EnableRaisingEvents = false;
                     _watcher.Dispose();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to disable or dispose file system watcher on shutdown");
                 }
             }
         });
@@ -231,7 +232,7 @@ public class WatchFolderService : BackgroundService
         }
 
         return filePath.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) ||
-               filePath.EndsWith(".magnet", StringComparison.OrdinalIgnoreCase);
+                filePath.EndsWith(".magnet", StringComparison.OrdinalIgnoreCase);
     }
 
     internal bool WaitForFileReady(string filePath, int maxAttempts = 5, int initialDelayMs = 100, int stabilityDelayMs = 25)

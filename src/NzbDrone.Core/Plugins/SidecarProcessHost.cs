@@ -177,8 +177,9 @@ public class SidecarProcessHost : ISidecarProcessHost
                     await writerToClose.FlushAsync();
                     writerToClose.Close();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to send clean shutdown message to plugin '{0}' stdin", _manifest.Id);
                 }
             }
 
@@ -209,8 +210,9 @@ public class SidecarProcessHost : ISidecarProcessHost
                 {
                     _supervisor.UnregisterProcess(processToStop.Id);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to unregister process {0} from supervisor", processToStop.Id);
                 }
             }
 
@@ -360,8 +362,9 @@ public class SidecarProcessHost : ISidecarProcessHost
         {
             Kill();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Debug(ex, "Failed to kill plugin process on dispose for '{0}'", _manifest.Id);
         }
     }
 
@@ -505,6 +508,7 @@ public class SidecarProcessHost : ISidecarProcessHost
         }
         catch (OperationCanceledException)
         {
+            _logger.Debug("Reading stdout canceled for plugin '{0}'", _manifest.Id);
         }
         catch (Exception ex)
         {
@@ -529,6 +533,7 @@ public class SidecarProcessHost : ISidecarProcessHost
         }
         catch (OperationCanceledException)
         {
+            _logger.Debug("Reading stderr canceled for plugin '{0}'", _manifest.Id);
         }
         catch (Exception ex)
         {

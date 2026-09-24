@@ -409,12 +409,12 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
                     var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: false);
                     totalBytesRead += ReadSlice(handle, destinationBuffer, slice, sliceLen);
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     // Gracefully ignore file read errors and treat missing bytes as zeros
                 }
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Gracefully ignore file read errors and treat missing bytes as zeros
             }
@@ -632,12 +632,12 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
                         var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: false);
                         totalBytesRead += ReadSliceFromHandle(handle, destinationBuffer, bufferOffset, fileOffset, sliceLength);
                     }
-                    catch (Exception)
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
                         // Gracefully ignore file read errors and treat missing bytes as zeros
                     }
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     // Gracefully ignore file read errors and treat missing bytes as zeros
                 }

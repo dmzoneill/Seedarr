@@ -8,12 +8,14 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Web;
+using NLog;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Notifications;
 
 public static class NotificationPayloadBuilder
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     public static (string ChatId, string Token, string User) ExtractProviderSettings(string settings)
     {
         var chatId = string.Empty;
@@ -46,8 +48,9 @@ public static class NotificationPayloadBuilder
                     user = u.GetString() ?? u.ToString();
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
             }
         }
 
@@ -122,8 +125,9 @@ public static class NotificationPayloadBuilder
                     }
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
             }
         }
         else
@@ -190,8 +194,9 @@ public static class NotificationPayloadBuilder
                     candidateUrl = u.GetString() ?? trimmed;
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
             }
         }
         else if (trimmed.Contains("url="))
@@ -262,8 +267,9 @@ public static class NotificationPayloadBuilder
                     }
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
             }
         }
 
@@ -317,8 +323,9 @@ public static class NotificationPayloadBuilder
                     }
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
             }
         }
 
@@ -366,8 +373,9 @@ public static class NotificationPayloadBuilder
                     }
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
             }
         }
 
@@ -436,8 +444,9 @@ public static class NotificationPayloadBuilder
                     }
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
             }
         }
 
@@ -490,8 +499,9 @@ public static class NotificationPayloadBuilder
                             return JsonSerializer.Serialize(dict);
                         }
                     }
-                    catch
+                    catch (JsonException ex)
                     {
+                        _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
                     }
                 }
 
@@ -533,8 +543,9 @@ public static class NotificationPayloadBuilder
                         return JsonSerializer.Serialize(dict);
                     }
                 }
-                catch
+                catch (JsonException ex)
                 {
+                    _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
                 }
             }
 
@@ -1143,8 +1154,9 @@ public static class NotificationPayloadBuilder
                     }
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
             }
         }
         else
@@ -1236,8 +1248,9 @@ public static class NotificationPayloadBuilder
                     }
                 }
             }
-            catch
+            catch (JsonException ex)
             {
+                _logger.Trace(ex, "Failed to parse notification payload settings as JSON; falling back to alternative format");
             }
         }
         else
@@ -1681,8 +1694,9 @@ public static class NotificationPayloadBuilder
                 return parsed;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Trace(ex, "Failed to extract Year metadata via reflection");
         }
 
         return null;

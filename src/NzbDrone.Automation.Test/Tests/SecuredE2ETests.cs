@@ -239,7 +239,10 @@ public class WebhookAuthE2ETests : ApiTestBase
                 await PostJsonAsync($"{RadarrUrl}/api/v3/movie", movieObj, _radarrKey);
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Test Cleanup] {ex.Message}");
+        }
     }
 
     private async Task CleanupTorrentByHashAsync(string infoHash)
@@ -260,7 +263,10 @@ public class WebhookAuthE2ETests : ApiTestBase
                 await DeleteAsync($"{SeedarrUrl}/api/v1/torrent/{id}");
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Test Cleanup] {ex.Message}");
+        }
     }
 
     private async Task CleanupAsync()
@@ -281,13 +287,19 @@ public class WebhookAuthE2ETests : ApiTestBase
                 await DeleteAsync($"{SeedarrUrl}/api/v1/torrent/{id}");
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Test Cleanup] {ex.Message}");
+        }
 
         try
         {
             await TransmissionRpcAsync("torrent-remove", new { ids = new[] { TestTorrentHash }, deleteLocalData = true });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Test Cleanup] {ex.Message}");
+        }
 
         if (string.IsNullOrEmpty(_radarrKey))
         {
@@ -329,7 +341,10 @@ public class WebhookAuthE2ETests : ApiTestBase
                     _radarrKey);
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Test Cleanup] {ex.Message}");
+        }
     }
 
     private async Task DeleteWithKeyAsync(string url, string apiKey)

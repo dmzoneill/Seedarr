@@ -5,6 +5,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using NLog;
 
 namespace NzbDrone.Core.Network;
 
@@ -13,6 +14,7 @@ public static class SocketInterfaceBindingExtensions
     private const int SO_BINDTODEVICE = 25; // Linux socket level
     private const int IP_UNICAST_IF = 31;   // Windows IP level
     private const int IPV6_UNICAST_IF = 31; // Windows IPv6 level
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public static void BindToNetworkInterface(this Socket socket, string interfaceName, IPAddress localIp = null, int port = 0)
     {
@@ -63,8 +65,9 @@ public static class SocketInterfaceBindingExtensions
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Debug(ex, "Failed to bind socket option to interface name {0}", interfaceName);
             }
         }
 

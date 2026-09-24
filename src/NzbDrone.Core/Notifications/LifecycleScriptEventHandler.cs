@@ -48,8 +48,9 @@ public class LifecycleScriptEventHandler :
         {
             _cts.Cancel();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Debug(ex, "Failed to cancel lifecycle script CTS on shutdown");
         }
     }
 
@@ -253,8 +254,9 @@ public class LifecycleScriptEventHandler :
                 {
                     _scriptSemaphore.Release();
                 }
-                catch (ObjectDisposedException)
+                catch (ObjectDisposedException ex)
                 {
+                    _logger.Trace(ex, "Script semaphore already disposed upon release");
                 }
             }
         });
@@ -312,8 +314,9 @@ public class LifecycleScriptEventHandler :
         {
             _cts.Cancel();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Debug(ex, "Failed to cancel lifecycle script CTS on dispose");
         }
 
         _cts.Dispose();

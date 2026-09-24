@@ -400,8 +400,9 @@ public class RssSyncService : IRssSyncService
                             {
                                 infoHash = MagnetLinkParser.Parse(release.MagnetUrl)?.InfoHash;
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                _logger.Trace(ex, "Failed to parse magnet link for release '{0}'", release.Title);
                             }
                         }
 

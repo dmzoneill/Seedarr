@@ -473,7 +473,7 @@ public class MultiTrackerManager : IMultiTrackerManager
             return true;
         }
 
-        if (Volatile.Read(ref state.ConsecutiveFailures) < maxFailures)
+        if (state.ConsecutiveFailures < maxFailures)
         {
             return false;
         }
@@ -512,7 +512,7 @@ public class MultiTrackerManager : IMultiTrackerManager
             ? _configService.FailoverMaxConsecutiveFailures
             : 5;
 
-        return state.IsDisabled || Volatile.Read(ref state.ConsecutiveFailures) >= maxFailures;
+        return state.IsDisabled || state.ConsecutiveFailures >= maxFailures;
     }
 
     public double GetAverageResponseTime(string trackerUrl)
@@ -565,7 +565,7 @@ public class MultiTrackerManager : IMultiTrackerManager
             : GetTorrentKey(infoHash, trackerUrl);
 
         var state = _failureStates.GetOrAdd(key, _ => new TrackerFailureState());
-        var failures = Interlocked.Increment(ref state.ConsecutiveFailures);
+        var failures = state.IncrementFailures();
 
         var baseSeconds = _configService.FailoverBackoffBaseSeconds > 0
             ? _configService.FailoverBackoffBaseSeconds
@@ -749,8 +749,9 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     private class TrackerFailureState
     {
-        public int ConsecutiveFailures;
-        public bool IsDisabled;
+        private int _consecutiveFailures;
+        public int ConsecutiveFailures => Volatile.Read(ref _consecutiveFailures);
+        public bool IsDisabled { get; set; }
         private long _backoffUntilTicks;
 
         public DateTime BackoffUntil
@@ -758,12 +759,14 @@ public class MultiTrackerManager : IMultiTrackerManager
             get => new DateTime(Interlocked.Read(ref _backoffUntilTicks));
             set => Interlocked.Exchange(ref _backoffUntilTicks, value.Ticks);
         }
+
+        public int IncrementFailures() => Interlocked.Increment(ref _consecutiveFailures);
     }
 
     private class TrackerPerformanceState
     {
-        public double AverageResponseTimeMs;
-        public double LastResponseTimeMs;
+        public double AverageResponseTimeMs { get; set; }
+        public double LastResponseTimeMs { get; set; }
 
         public void RecordResponseTime(double responseTimeMs, double alpha = 0.2)
         {

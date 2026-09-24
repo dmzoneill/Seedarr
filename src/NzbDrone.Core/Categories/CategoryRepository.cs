@@ -1,10 +1,13 @@
+using System;
 using Dapper;
+using NLog;
 using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Categories;
 
 public class CategoryRepository : BasicRepository<Category>, ICategoryRepository
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     public CategoryRepository(IDatabase database)
         : base(database)
     {
@@ -54,8 +57,9 @@ public class CategoryRepository : BasicRepository<Category>, ICategoryRepository
                 {
                     tx.Rollback();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Transaction rollback failed in SetDefaultCategory");
                 }
 
                 throw;

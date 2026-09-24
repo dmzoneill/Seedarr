@@ -29,7 +29,7 @@ public class PeerConnection : IDisposable
 
     private readonly TcpClient _client;
     private readonly Stream _networkStream;
-    private readonly Logger _logger;
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly object _writeLock = new();
     private readonly object _disposeLock = new();
     private bool _isDisposed;
@@ -600,8 +600,9 @@ public class PeerConnection : IDisposable
                 {
                     _client.Client.SendBufferSize = value;
                 }
-                catch
+                catch (SocketException ex)
                 {
+                    _logger.Trace(ex, "Failed to set SendBufferSize to {0} for peer {1}:{2}", value, RemoteIp, RemotePort);
                 }
             }
         }
@@ -618,8 +619,9 @@ public class PeerConnection : IDisposable
                 {
                     _client.Client.ReceiveBufferSize = value;
                 }
-                catch
+                catch (SocketException ex)
                 {
+                    _logger.Trace(ex, "Failed to set ReceiveBufferSize to {0} for peer {1}:{2}", value, RemoteIp, RemotePort);
                 }
             }
         }
@@ -650,16 +652,18 @@ public class PeerConnection : IDisposable
             {
                 _client.Client.SendBufferSize = CalculateBdpBufferSize(_uploadRateLimit, _estimatedRttSeconds);
             }
-            catch
+            catch (SocketException ex)
             {
+                _logger.Trace(ex, "Failed to update SendBufferSize for peer {0}:{1}", RemoteIp, RemotePort);
             }
 
             try
             {
                 _client.Client.ReceiveBufferSize = CalculateBdpBufferSize(_downloadRateLimit, _estimatedRttSeconds);
             }
-            catch
+            catch (SocketException ex)
             {
+                _logger.Trace(ex, "Failed to update ReceiveBufferSize for peer {0}:{1}", RemoteIp, RemotePort);
             }
         }
     }
@@ -673,7 +677,6 @@ public class PeerConnection : IDisposable
         _client = client;
         _networkStream = client?.GetStream();
         _activeStream = _networkStream;
-        _logger = LogManager.GetCurrentClassLogger();
         if (client?.Client?.RemoteEndPoint is not IPEndPoint endpoint)
         {
             RemoteIp = "0.0.0.0";
@@ -696,7 +699,6 @@ public class PeerConnection : IDisposable
         DhKeyPool = dhKeyPool;
         _networkStream = stream ?? throw new ArgumentNullException(nameof(stream));
         _activeStream = _networkStream;
-        _logger = LogManager.GetCurrentClassLogger();
         RemoteIp = remoteIp;
         RemotePort = remotePort;
         ConnectedAt = DateTime.UtcNow;
@@ -761,7 +763,6 @@ public class PeerConnection : IDisposable
             }
 
             _activeStream = _networkStream;
-            _logger = LogManager.GetCurrentClassLogger();
             RemoteIp = host;
             RemotePort = port;
             ConnectedAt = DateTime.UtcNow;
@@ -1179,8 +1180,9 @@ public class PeerConnection : IDisposable
                     {
                         _client.Client.Poll(200_000, SelectMode.SelectRead);
                     }
-                    catch
+                    catch (SocketException ex)
                     {
+                        _logger.Trace(ex, "Poll failed during info hash probe for peer {0}:{1}", RemoteIp, RemotePort);
                     }
                 }
 
@@ -1984,8 +1986,9 @@ public class PeerConnection : IDisposable
             {
                 client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, dscp << 2);
             }
-            catch
+            catch (SocketException ex)
             {
+                _logger.Trace(ex, "Failed to set DSCP socket option");
             }
         }
         else if (tos > 0)
@@ -1994,8 +1997,9 @@ public class PeerConnection : IDisposable
             {
                 client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, tos);
             }
-            catch
+            catch (SocketException ex)
             {
+                _logger.Trace(ex, "Failed to set TOS socket option");
             }
         }
 
@@ -2003,16 +2007,18 @@ public class PeerConnection : IDisposable
         {
             client.Client.SendBufferSize = CalculateBdpBufferSize(sendRateLimit, rttSeconds);
         }
-        catch
+        catch (SocketException ex)
         {
+            _logger.Trace(ex, "Failed to set SendBufferSize socket option");
         }
 
         try
         {
             client.Client.ReceiveBufferSize = CalculateBdpBufferSize(receiveRateLimit, rttSeconds);
         }
-        catch
+        catch (SocketException ex)
         {
+            _logger.Trace(ex, "Failed to set ReceiveBufferSize socket option");
         }
     }
 

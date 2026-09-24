@@ -11,6 +11,8 @@ namespace NzbDrone.Core.Dht;
 
 public class Node
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
     public string NodeId { get; set; }
     public string Ip { get; set; }
     public int Port { get; set; }
@@ -90,8 +92,9 @@ public class Node
             {
                 return Convert.FromHexString(nodeId);
             }
-            catch
+            catch (FormatException ex)
             {
+                _logger.Trace(ex, "Failed to parse nodeId as hex string: {0}", nodeId);
             }
         }
 
@@ -103,8 +106,9 @@ public class Node
                 return fromBase64;
             }
         }
-        catch
+        catch (FormatException ex)
         {
+            _logger.Trace(ex, "Failed to parse nodeId as base64 string: {0}", nodeId);
         }
 
         if (nodeId.Length == 20)

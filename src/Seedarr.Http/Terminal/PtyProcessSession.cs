@@ -328,8 +328,9 @@ else:
                 {
                     this._controlPipeStream.Dispose();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to dispose control pipe stream for PID {0}", this.ProcessId);
                 }
 
                 this._controlPipeStream = null;
@@ -341,8 +342,9 @@ else:
                 {
                     File.Delete(this._controlPipePath);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to delete control pipe path {0}", this._controlPipePath);
                 }
             }
 

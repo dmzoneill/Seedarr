@@ -282,8 +282,9 @@ public class DhtService : BackgroundService, IDhtService,
         {
             await Task.Delay(Timeout.Infinite, stoppingToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            _logger.Trace(ex, "DHT service stoppingToken cancelled");
         }
         finally
         {
@@ -294,8 +295,13 @@ public class DhtService : BackgroundService, IDhtService,
                 {
                     await _workerTask.ConfigureAwait(false);
                 }
-                catch (Exception)
+                catch (OperationCanceledException ex)
                 {
+                    _logger.Trace(ex, "DHT worker task cancelled during stop");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Unexpected error awaiting DHT worker task during stop");
                 }
             }
         }
@@ -369,8 +375,9 @@ public class DhtService : BackgroundService, IDhtService,
                 {
                     _workerCts.Cancel();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Error cancelling DHT worker cancellation token");
                 }
 
                 _workerCts.Dispose();
@@ -384,8 +391,9 @@ public class DhtService : BackgroundService, IDhtService,
                     _udpClient.Close();
                     _udpClient.Dispose();
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Error closing DHT UDP client during shutdown");
                 }
 
                 _udpClient = null;
@@ -1955,7 +1963,7 @@ public class DhtService : BackgroundService, IDhtService,
         {
             infoHashBytes = Convert.FromHexString(infoHash);
         }
-        catch (Exception)
+        catch (FormatException)
         {
             _logger.Debug("Invalid hex infoHash: {0}", infoHash);
             return;

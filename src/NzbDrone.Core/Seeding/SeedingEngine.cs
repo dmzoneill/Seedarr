@@ -215,8 +215,9 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         {
             _shutdownCts.Cancel();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Debug(ex, "Failed to cancel shutdown CTS in Handle(ApplicationShutdownRequested)");
         }
     }
 
@@ -234,8 +235,9 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         {
             await _shutdownCts.CancelAsync();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.Debug(ex, "Failed to cancel shutdown CTS in StopAsync");
         }
 
         try

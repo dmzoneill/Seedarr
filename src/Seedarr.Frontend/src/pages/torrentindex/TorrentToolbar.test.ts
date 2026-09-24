@@ -146,17 +146,11 @@ describe("TorrentToolbar accessibility attributes", () => {
   });
 
   it("renders bulk tag assignment and removal buttons when selectedCount > 0", () => {
-    let addTagsCalled = false;
-    let removeTagsCalled = false;
     const html = renderToolbar({
       ...defaultProps,
       selectedCount: 3,
-      onBulkAddTags: () => {
-        addTagsCalled = true;
-      },
-      onBulkRemoveTags: () => {
-        removeTagsCalled = true;
-      },
+      onBulkAddTags: () => {},
+      onBulkRemoveTags: () => {},
     });
 
     assert.ok(

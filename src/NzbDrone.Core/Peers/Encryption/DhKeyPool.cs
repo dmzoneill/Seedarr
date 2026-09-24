@@ -109,11 +109,13 @@ public class DhKeyPool : BackgroundService, IDhKeyPool
                 _replenishSignal.Release();
             }
         }
-        catch (ObjectDisposedException)
+        catch (ObjectDisposedException ex)
         {
+            _logger.Trace(ex, "DhKeyPool replenish signal semaphore disposed");
         }
-        catch (SemaphoreFullException)
+        catch (SemaphoreFullException ex)
         {
+            _logger.Trace(ex, "DhKeyPool replenish signal semaphore full");
         }
     }
 }

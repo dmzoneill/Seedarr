@@ -113,7 +113,8 @@ export function parseMagnetUri(uri: string): ParsedMagnetUri {
       trackers,
       isV2,
     };
-  } catch {
+  } catch (err) {
+    console.warn("Failed to parse magnet URI:", err);
     return { valid: false, trackers: [] };
   }
 }

@@ -10,11 +10,13 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using NLog;
 
 namespace Seedarr.Http.Terminal;
 
 public sealed class LinuxPtySession : ITerminalSession
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly int _masterFd;
     private readonly int _pid;
     private int _disposed;
@@ -211,8 +213,9 @@ public sealed class LinuxPtySession : ITerminalSession
             {
                 NativePty.Kill(this._pid, 15); // SIGTERM
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Debug(ex, "Failed to send SIGTERM to Linux PTY process {0}", this._pid);
             }
 
             var sw = Stopwatch.StartNew();
@@ -236,8 +239,9 @@ public sealed class LinuxPtySession : ITerminalSession
                 {
                     NativePty.Kill(this._pid, 9); // SIGKILL
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Debug(ex, "Failed to send SIGKILL to Linux PTY process {0}", this._pid);
                 }
 
                 var killSw = Stopwatch.StartNew();

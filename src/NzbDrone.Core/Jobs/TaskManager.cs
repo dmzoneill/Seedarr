@@ -190,15 +190,16 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
             {
                 cts.Dispose();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Debug(ex, "Failed to dispose CancellationTokenSource for task {0}", typeName);
             }
         }
 
         _activeExecutionInfo.TryRemove(typeName, out var execInfo);
 
         var isCanceled = (_taskStatuses.TryGetValue(typeName, out var status) && string.Equals(status, "Canceled", StringComparison.OrdinalIgnoreCase)) ||
-                         (execInfo?.Cts != null && execInfo.Cts.IsCancellationRequested);
+                        (execInfo?.Cts != null && execInfo.Cts.IsCancellationRequested);
         var isFailed = string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase);
 
         if (!isCanceled && !isFailed)
@@ -208,7 +209,7 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 
         var task = _repository.All()
             .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase) ||
-                                 string.Equals(t.TypeName.Split('.').LastOrDefault(), typeName, StringComparison.OrdinalIgnoreCase));
+                                string.Equals(t.TypeName.Split('.').LastOrDefault(), typeName, StringComparison.OrdinalIgnoreCase));
 
         if (task != null)
         {
@@ -277,7 +278,7 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 
         var task = _repository.All()
             .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase) ||
-                                 string.Equals(t.TypeName.Split('.').LastOrDefault(), typeName, StringComparison.OrdinalIgnoreCase));
+                                string.Equals(t.TypeName.Split('.').LastOrDefault(), typeName, StringComparison.OrdinalIgnoreCase));
 
         if (task != null)
         {

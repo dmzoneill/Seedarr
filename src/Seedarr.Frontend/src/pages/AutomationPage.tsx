@@ -1660,17 +1660,10 @@ export function AutomationPage() {
             "TorrentCompleted",
             initialSteps,
           )
-        : `// JavaScript Contexts: torrent, system, api, http, html, inputs, secrets, console
-console.log('Processing torrent: ' + (torrent ? torrent.name : 'System Event'));
-
-if (torrent) {
-  if (torrent.size > 5000000000) {
-    torrent.addTag('Large-Release');
-  }
+        : `// Contexts: torrent, system, api, http, html, inputs, secrets, console
+if (torrent && torrent.size > 5000000000) {
+  torrent.addTag('Large-Release');
 }
-
-// Execute system command
-// system.runCommand('Backup');
 `;
 
     setEditingScript({

@@ -433,8 +433,9 @@ public class FileSystemController : Controller
                                     free = drive.AvailableFreeSpace;
                                 }
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                _logger.Trace(ex, "Failed to query DriveInfo for mount point {0}", mount);
                             }
 
                             result.Directories.Add(new FileSystemEntryResource
@@ -447,8 +448,9 @@ public class FileSystemController : Controller
                             });
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Debug(ex, "Failed to enumerate mount points in GetRootListing");
                     }
                 }
 
@@ -489,8 +491,9 @@ public class FileSystemController : Controller
                                     LastModified = dir.LastWriteTimeUtc == DateTime.MinValue ? null : dir.LastWriteTimeUtc,
                                 });
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                _logger.Trace(ex, "Failed to query directory entry {0} under root", dir.FullName);
                             }
                         }
                     }

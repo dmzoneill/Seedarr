@@ -199,7 +199,6 @@ function PeerMap() {
     };
   }, []);
 
-  // Initialize SVG container & zoom behavior once
   useEffect(() => {
     if (!svgRef.current) return;
 

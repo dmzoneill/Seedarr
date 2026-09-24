@@ -8,11 +8,13 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
+using NLog;
 
 namespace NzbDrone.Core.Terminal;
 
 public class WindowsPtyStream : Stream
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly FileStream _inputStream;
     private readonly FileStream _outputStream;
     private int _disposed;
@@ -102,8 +104,9 @@ public class WindowsPtyStream : Stream
             await _inputStream.WriteAsync(buffer, cancellationToken);
             await _inputStream.FlushAsync(cancellationToken);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
+            _logger.Trace(ex, "IOException writing to Windows PTY input stream (process may have exited)");
         }
     }
 

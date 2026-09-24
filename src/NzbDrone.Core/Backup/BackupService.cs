@@ -372,8 +372,9 @@ public class BackupService : IBackupService
                     {
                         File.Delete(tempRestorePath);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Debug(ex, "Failed to delete temporary restore file {0}", tempRestorePath);
                     }
                 }
             }

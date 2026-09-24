@@ -14,7 +14,7 @@ import {
 import { extractTrackerDomain } from "../../utils/formatters";
 import { filterTorrents } from "../../utils/filterUtils";
 import { ViewMode } from "./types";
-import type { Torrent, Tag } from "../../api/types";
+import type { Torrent } from "../../api/types";
 import { trackViewModeChange } from "../../utils/analytics";
 
 export interface TagGroupItem {
@@ -201,7 +201,7 @@ export function useTorrentIndexState() {
         ? current
         : "";
     });
-  }, []);
+  }, [tagMatchMode]);
 
   // When torrents load or update, ensure pending deep-linked selection is visible
   useEffect(() => {

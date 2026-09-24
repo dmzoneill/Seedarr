@@ -168,9 +168,9 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
                 {
                     var claims = context.Principal?.Claims.ToList() ?? new List<Claim>();
                     var sub = claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub")?.Value
-                              ?? Guid.NewGuid().ToString();
+                                ?? Guid.NewGuid().ToString();
                     var username = claims.FirstOrDefault(c => c.Type == ClaimTypes.Name || c.Type == "preferred_username" || c.Type == "nickname")?.Value
-                                   ?? sub;
+                                    ?? sub;
                     var email = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email || c.Type == "email")?.Value;
                     var displayName = claims.FirstOrDefault(c => c.Type == "name")?.Value ?? username;
 
@@ -212,6 +212,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             options.MetadataAddress = provider.MetadataUrl;
         }
 
+        var hadPostConfigureError = false;
         try
         {
             if (oidcPostConfigure != null)
@@ -221,7 +222,9 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         }
         catch (Exception ex)
         {
+            hadPostConfigureError = true;
             _logger.Warn(ex, "Post-configuration for OIDC provider '{0}' ({1}) encountered an error. Proceeding with deferred metadata discovery.", provider.Name, provider.ProviderId);
+            ScheduleRetry(provider);
         }
 
         oidcOptionsCache.TryAdd(schemeName, options);
@@ -229,7 +232,10 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         var newScheme = new AuthenticationScheme(schemeName, provider.Name, typeof(OpenIdConnectHandler));
         schemeProvider.AddScheme(newScheme);
 
-        _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+        if (!hadPostConfigureError)
+        {
+            _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+        }
 
         _logger.Info("Registered dynamic OIDC authentication scheme: {0} ({1})", schemeName, provider.Name);
     }

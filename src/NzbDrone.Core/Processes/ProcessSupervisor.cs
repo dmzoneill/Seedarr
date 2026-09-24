@@ -69,8 +69,9 @@ public class ProcessSupervisor : ISidecarProcessSupervisor, IHandle<ApplicationS
                         UnregisterProcess(pid);
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger.Trace(ex, "Failed to check if process {0} has exited", pid);
                 }
 
                 AssignToWindowsJob(process, pid);
@@ -139,8 +140,9 @@ public class ProcessSupervisor : ISidecarProcessSupervisor, IHandle<ApplicationS
                                 });
                                 killProc?.WaitForExit(500);
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                _logger.Debug(ex, "Failed to execute kill -9 on process group for PID {0}", pid);
                             }
                         }
                         else
@@ -156,8 +158,9 @@ public class ProcessSupervisor : ISidecarProcessSupervisor, IHandle<ApplicationS
                                 });
                                 taskkillProc?.WaitForExit(500);
                             }
-                            catch
+                            catch (Exception ex)
                             {
+                                _logger.Debug(ex, "Failed to execute taskkill on PID {0}", pid);
                             }
                         }
                     }
@@ -173,8 +176,9 @@ public class ProcessSupervisor : ISidecarProcessSupervisor, IHandle<ApplicationS
                         var waitMs = (int)Math.Min(1000, killTimeout.TotalMilliseconds);
                         process.WaitForExit(waitMs);
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger.Debug(ex, "WaitForExit failed for PID {0}", pid);
                     }
                 }
             }
@@ -201,8 +205,9 @@ public class ProcessSupervisor : ISidecarProcessSupervisor, IHandle<ApplicationS
                 CloseHandle(_jobHandle);
                 _jobHandle = IntPtr.Zero;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.Debug(ex, "Failed to close Windows job handle");
             }
         }
     }
