@@ -46,7 +46,6 @@ public static class TorznabCapsParser
             return caps;
         }
 
-        // Server info
         var serverNode = doc.SelectSingleNode("//server") ?? doc.SelectSingleNode("//*[local-name()='server']");
         if (serverNode?.Attributes != null)
         {
@@ -54,7 +53,6 @@ public static class TorznabCapsParser
             caps.ServerVersion = serverNode.Attributes["version"]?.Value;
         }
 
-        // Searching capabilities
         var searchingNode = doc.SelectSingleNode("//searching") ?? doc.SelectSingleNode("//*[local-name()='searching']");
         if (searchingNode != null)
         {
@@ -88,7 +86,6 @@ public static class TorznabCapsParser
             }
         }
 
-        // Categories
         var categoriesNode = doc.SelectSingleNode("//categories") ?? doc.SelectSingleNode("//*[local-name()='categories']");
         if (categoriesNode != null)
         {
@@ -117,7 +114,6 @@ public static class TorznabCapsParser
                         caps.Categories.Add(category);
                     }
 
-                    // Subcategories
                     var subNodes = catNode.SelectNodes(".//*[local-name()='subcat']");
                     if (subNodes != null)
                     {
