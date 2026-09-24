@@ -246,7 +246,6 @@ public class PackageExportService : IPackageExportService
         var infoHash = !string.IsNullOrWhiteSpace(torrent.InfoHash) ? torrent.InfoHash.ToLowerInvariant() : "unknown";
         var entryName = $"metainfo/{infoHash}.torrent";
 
-        // Check if SourcePath exists on disk
         if (!string.IsNullOrWhiteSpace(torrent.SourcePath) && File.Exists(torrent.SourcePath))
         {
             try
