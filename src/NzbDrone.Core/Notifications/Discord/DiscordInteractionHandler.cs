@@ -99,11 +99,11 @@ public class DiscordInteractionHandler : IDiscordInteractionHandler
         return false;
     }
 
-    public async Task<DiscordInteractionResponse> HandleInteractionAsync(string interactionJson, CancellationToken cancellationToken = default)
+    public Task<DiscordInteractionResponse> HandleInteractionAsync(string interactionJson, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(interactionJson))
         {
-            return new DiscordInteractionResponse { Success = false, Handled = false };
+            return Task.FromResult(new DiscordInteractionResponse { Success = false, Handled = false });
         }
 
         DiscordInteraction interaction;
@@ -114,13 +114,18 @@ public class DiscordInteractionHandler : IDiscordInteractionHandler
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to deserialize Discord interaction JSON");
-            return new DiscordInteractionResponse { Success = false, Handled = false };
+            return Task.FromResult(new DiscordInteractionResponse { Success = false, Handled = false });
         }
 
-        return await HandleInteractionAsync(interaction, cancellationToken).ConfigureAwait(false);
+        return Task.FromResult(HandleInteraction(interaction, cancellationToken));
     }
 
-    public async Task<DiscordInteractionResponse> HandleInteractionAsync(DiscordInteraction interaction, CancellationToken cancellationToken = default)
+    public Task<DiscordInteractionResponse> HandleInteractionAsync(DiscordInteraction interaction, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(HandleInteraction(interaction, cancellationToken));
+    }
+
+    private DiscordInteractionResponse HandleInteraction(DiscordInteraction interaction, CancellationToken cancellationToken)
     {
         if (interaction == null)
         {
@@ -156,7 +161,7 @@ public class DiscordInteractionHandler : IDiscordInteractionHandler
 
         if (interaction.Type == DiscordInteractionType.MessageComponent)
         {
-            return await HandleMessageComponentAsync(interaction, cancellationToken).ConfigureAwait(false);
+            return HandleMessageComponent(interaction, cancellationToken);
         }
 
         return new DiscordInteractionResponse { Success = true, Handled = false };
@@ -521,7 +526,7 @@ public class DiscordInteractionHandler : IDiscordInteractionHandler
         return response;
     }
 
-    private async Task<DiscordInteractionResponse> HandleMessageComponentAsync(
+    private DiscordInteractionResponse HandleMessageComponent(
         DiscordInteraction interaction,
         CancellationToken cancellationToken)
     {

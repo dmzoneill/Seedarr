@@ -53,6 +53,7 @@ public class ProcessSupervisorTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }
@@ -137,6 +138,7 @@ public class ProcessSupervisorTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
 
             try
@@ -148,6 +150,7 @@ public class ProcessSupervisorTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }
@@ -176,6 +179,7 @@ public class ProcessSupervisorTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }
@@ -209,6 +213,7 @@ public class ProcessSupervisorTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }

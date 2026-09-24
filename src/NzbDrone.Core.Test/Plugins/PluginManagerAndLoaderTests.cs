@@ -48,6 +48,7 @@ public class PluginManagerAndLoaderTests
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }

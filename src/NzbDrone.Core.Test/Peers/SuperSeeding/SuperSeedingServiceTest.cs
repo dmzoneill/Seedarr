@@ -59,6 +59,7 @@ public class SuperSeedingServiceTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -70,6 +71,7 @@ public class SuperSeedingServiceTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -81,6 +83,7 @@ public class SuperSeedingServiceTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }

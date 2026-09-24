@@ -42,6 +42,7 @@ public class PeerConnectionTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -53,6 +54,7 @@ public class PeerConnectionTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -64,6 +66,7 @@ public class PeerConnectionTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }

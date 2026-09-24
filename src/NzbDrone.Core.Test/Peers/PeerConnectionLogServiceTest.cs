@@ -49,6 +49,7 @@ public class PeerConnectionLogServiceTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -60,6 +61,7 @@ public class PeerConnectionLogServiceTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
 
@@ -71,6 +73,7 @@ public class PeerConnectionLogServiceTest
             }
             catch
             {
+                // Best-effort test cleanup
             }
         }
     }

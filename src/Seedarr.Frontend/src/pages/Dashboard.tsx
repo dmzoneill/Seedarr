@@ -9,7 +9,6 @@ import {
   useDownloadClients,
   useDownloadHistory,
   useDiskSpace,
-  useCategories,
 } from "../api/hooks";
 import {
   formatBytes,
@@ -131,7 +130,6 @@ function Dashboard() {
   const { data: downloadClients } = useDownloadClients();
   const { data: history } = useDownloadHistory();
   const { data: diskSpace, isLoading: diskLoading } = useDiskSpace();
-  const { data: categories } = useCategories();
 
   const achievements = useMemo(
     () => calculateAchievements(torrents, stats),

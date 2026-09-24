@@ -72,8 +72,9 @@ public class PackageImportSecurityTests
             }
         }
         catch
-        {
-        }
+            {
+                // Best-effort test cleanup
+            }
     }
 
     [Test]

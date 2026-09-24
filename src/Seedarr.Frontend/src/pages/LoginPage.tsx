@@ -36,7 +36,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [providers, setProviders] = useState<AuthProvider[]>([]);
-  const [loadingProviders, setLoadingProviders] = useState(true);
 
   useEffect(() => {
     loadProviders(returnUrl);
@@ -44,13 +43,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   const loadProviders = async (redirectUrl?: string) => {
     try {
-      setLoadingProviders(true);
       const data = await api.getAuthProviders(redirectUrl);
       setProviders(data || []);
     } catch {
       // Ignore if providers cannot be loaded
-    } finally {
-      setLoadingProviders(false);
     }
   };
 

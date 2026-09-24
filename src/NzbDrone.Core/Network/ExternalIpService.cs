@@ -21,7 +21,7 @@ public interface IExternalIpService
 
 public class ExternalIpService : BackgroundService, IExternalIpService
 {
-    private const string PrimaryEndpointTemplate = "https://www.seedarr.net/ip/?uuid={0}";
+    private const string PrimaryEndpointBaseUrl = "https://www.seedarr.net/ip/?uuid=";
 
     private static readonly TimeSpan FallbackInterval = TimeSpan.FromHours(6);
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(1);
@@ -455,7 +455,7 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
             var sources = new List<string>
             {
-                string.Format(PrimaryEndpointTemplate, Uri.EscapeDataString(uuid))
+                $"{PrimaryEndpointBaseUrl}{Uri.EscapeDataString(uuid)}"
             };
             sources.AddRange(FallbackSources);
 

@@ -129,8 +129,9 @@ public class TorrentPackageServiceTest
             }
         }
         catch
-        {
-        }
+            {
+                // Best-effort test cleanup
+            }
     }
 
     [Test]

@@ -109,7 +109,7 @@ export function GeneralTab() {
         setRevealedApiKey(res.apiKey);
         setShowApiKey(true);
       }
-    } catch (_err) {
+    } catch {
       showToast("Failed to retrieve unmasked API key", "error");
     } finally {
       setLoadingApiKey(false);
@@ -134,7 +134,7 @@ export function GeneralTab() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       showToast("API key copied to clipboard", "success");
-    } catch (_err) {
+    } catch {
       showToast("Failed to copy API key", "error");
     }
   };

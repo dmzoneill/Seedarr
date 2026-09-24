@@ -96,6 +96,7 @@ public class McpControllerTest
         }
         catch (OperationCanceledException)
         {
+            // Expected cancellation when CTS times out during SSE stream test
         }
 
         stream.Position = 0;

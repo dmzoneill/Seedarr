@@ -63,8 +63,9 @@ public class PostUpdateVerificationServiceTest
             }
         }
         catch
-        {
-        }
+            {
+                // Best-effort test cleanup
+            }
     }
 
     [Test]

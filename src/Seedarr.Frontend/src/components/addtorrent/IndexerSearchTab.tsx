@@ -165,8 +165,8 @@ export interface IndexerSearchTabProps {
 
 export function IndexerSearchTab({
   initialQuery = "",
-  selectedCategory = "",
-  isModal = false,
+  selectedCategory: _selectedCategory = "",
+  isModal: _isModal = false,
   onClose,
 }: IndexerSearchTabProps) {
   const { t } = useTranslation();

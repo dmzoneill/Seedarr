@@ -93,8 +93,9 @@ public class PackageExportServiceTests
             }
         }
         catch
-        {
-        }
+            {
+                // Best-effort test cleanup
+            }
     }
 
     [Test]

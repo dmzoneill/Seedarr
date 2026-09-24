@@ -6,7 +6,6 @@ import {
   setStoredIdleTimeout,
   IDLE_TIMEOUT_STORAGE_KEY,
   DEFAULT_IDLE_TIMEOUT_SECONDS,
-  DEFAULT_WARNING_SECONDS,
   TIMEOUT_OPTIONS,
 } from "./useIdleTimer";
 
