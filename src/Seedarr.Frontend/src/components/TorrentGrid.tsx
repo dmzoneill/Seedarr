@@ -16,9 +16,7 @@ import {
   formatSpeed,
   formatRatio,
   formatDate,
-  formatDuration,
   formatEta,
-  extractTrackerDomain,
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
 import { filterTorrents } from "../utils/filterUtils";
@@ -56,7 +54,7 @@ function TorrentGrid({
   tagMatchMode,
   selectedIds,
   onToggleSelect,
-  onSelectAll,
+  onSelectAll: _onSelectAll,
   selectedTorrentId,
   onSelectTorrent,
 }: TorrentGridProps) {
