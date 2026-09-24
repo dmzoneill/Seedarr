@@ -784,8 +784,9 @@ public class UtpConnection : IUtpConnection
 
                 continue;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.Trace(ex, "Exception while receiving uTP packet data");
                 break;
             }
 
