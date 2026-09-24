@@ -507,10 +507,6 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 }
             }
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
         catch (Exception ex) when (cancellationToken.IsCancellationRequested && (ex is ObjectDisposedException or IOException))
         {
             throw new OperationCanceledException("Stream read canceled.", ex, cancellationToken);

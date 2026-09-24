@@ -350,11 +350,7 @@ public class UpnpService : BackgroundService, IUpnpService
                     portMapping.ErrorMessage = "Mapping removed";
                     _logger.Info("UPnP: removed {0} port {1}", portMapping.Protocol, portMapping.InternalPort);
                 }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.Debug(ex, "UPnP: failed to remove mapping {0}:{1}", portMapping.Protocol, portMapping.InternalPort);
                 }

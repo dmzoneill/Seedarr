@@ -455,11 +455,7 @@ public class TorrentFileParser : ITorrentFileParser
 
             return result;
         }
-        catch (InvalidTorrentFileException)
-        {
-            throw;
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not InvalidTorrentFileException)
         {
             throw new InvalidTorrentFileException($"Failed to parse torrent file: {ex.Message}", ex);
         }

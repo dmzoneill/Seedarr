@@ -494,11 +494,7 @@ public class TrackerBoostService : ITrackerBoostService
                         }
                     }
                 }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.Debug(ex, "Failed to harvest trackers from client {0}", clientDef.Name);
                 }
@@ -515,11 +511,7 @@ public class TrackerBoostService : ITrackerBoostService
                 LogActivity("Info", "Discovery", "Harvested active download clients: all client swarms up to date");
             }
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.Warn(ex, "Error harvesting trackers from active downloads");
             LogActivity("Error", "Discovery", $"Error harvesting from download clients: {ex.Message}");
@@ -799,11 +791,7 @@ public class TrackerBoostService : ITrackerBoostService
             _logger.Info("Harvested {0} trackers from connected Prowlarr indexers", harvestedCount);
             LogActivity(harvestedCount > 0 ? "Success" : "Info", "Discovery", $"Prowlarr sync complete: {harvestedCount} tracker(s) harvested from indexers");
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.Warn(ex, "Failed to harvest trackers from Prowlarr");
             LogActivity("Warn", "Discovery", $"Failed to harvest from Prowlarr: {ex.Message}");
@@ -856,11 +844,7 @@ public class TrackerBoostService : ITrackerBoostService
                     }
                 }
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.Warn(ex, "Failed to download tracker feed from {0}", feed);
                 LogActivity("Warn", "Discovery", $"Failed to download tracker feed from {feed}: {ex.Message}");
@@ -918,11 +902,7 @@ public class TrackerBoostService : ITrackerBoostService
                 updatedTrackers.Add(tracker);
                 Interlocked.Increment(ref testedCount);
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 tracker.Status = TrackerHealthStatus.Offline;
                 tracker.FailedScrapes++;
@@ -1384,10 +1364,6 @@ public class TrackerBoostService : ITrackerBoostService
                     detections.Add(detection);
                 }
             }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
             finally
             {
                 semaphore.Release();
@@ -1815,21 +1791,13 @@ public class TrackerBoostService : ITrackerBoostService
                         }
                     }
                 }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.Warn(ex, "Failed to boost items for client {0}", clientDef.Name);
                 }
             }
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.Warn(ex, "Failed to boost download client swarms");
         }
@@ -2028,11 +1996,7 @@ public class TrackerBoostService : ITrackerBoostService
                             }
                         }
                     }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception clientEx)
+                    catch (Exception clientEx) when (clientEx is not OperationCanceledException)
                     {
                         _logger.Debug(clientEx, "Failed to inspect download client {0} for torrent {1}", clientDef.Name, torrent.InfoHash);
                     }
@@ -2050,22 +2014,14 @@ public class TrackerBoostService : ITrackerBoostService
                             recoveredCount++;
                         }
                     }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception boostEx)
+                    catch (Exception boostEx) when (boostEx is not OperationCanceledException)
                     {
                         _logger.Debug(boostEx, "Failed to auto-boost torrent {0} during recovery", torrent.InfoHash);
                     }
                 }
             }
         }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.Error(ex, "Failed to run RecoverMissingTrackersAsync");
         }
