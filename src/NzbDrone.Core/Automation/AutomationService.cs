@@ -732,7 +732,6 @@ public class AutomationService : IAutomationService
         var changed = false;
         var tagsModified = false;
 
-        // Tags to add
         if (result.TagsToAdd.Count > 0)
         {
             var tagIdsToAdd = _tagService.SyncTagsFromLabels(result.TagsToAdd);
@@ -748,7 +747,6 @@ public class AutomationService : IAutomationService
             }
         }
 
-        // Tags to remove
         if (result.TagsToRemove.Count > 0 && torrent.TagIds != null && torrent.TagIds.Count > 0 && _tagService != null)
         {
             var allTags = _tagService.GetAll();
@@ -775,56 +773,48 @@ public class AutomationService : IAutomationService
             torrent.Label = string.Join(", ", _tagService.GetLabelsForTagIds(torrent.TagIds));
         }
 
-        // Category change
         if (!string.IsNullOrWhiteSpace(result.NewCategory) && !string.Equals(torrent.Category, result.NewCategory, StringComparison.OrdinalIgnoreCase))
         {
             torrent.Category = result.NewCategory;
             changed = true;
         }
 
-        // Save Path
         if (!string.IsNullOrWhiteSpace(result.NewSavePath) && !string.Equals(torrent.SavePath, result.NewSavePath, StringComparison.OrdinalIgnoreCase))
         {
             torrent.SavePath = result.NewSavePath;
             changed = true;
         }
 
-        // Upload limit
         if (result.NewUploadLimitKbps.HasValue && torrent.UploadLimit != result.NewUploadLimitKbps.Value)
         {
             torrent.UploadLimit = result.NewUploadLimitKbps.Value;
             changed = true;
         }
 
-        // Download limit
         if (result.NewDownloadLimitKbps.HasValue && torrent.DownloadLimit != result.NewDownloadLimitKbps.Value)
         {
             torrent.DownloadLimit = result.NewDownloadLimitKbps.Value;
             changed = true;
         }
 
-        // Priority
         if (result.NewPriority.HasValue && torrent.Priority != result.NewPriority.Value)
         {
             torrent.Priority = result.NewPriority.Value;
             changed = true;
         }
 
-        // Sequential download
         if (result.NewSequentialDownload.HasValue && torrent.SequentialDownload != result.NewSequentialDownload.Value)
         {
             torrent.SequentialDownload = result.NewSequentialDownload.Value;
             changed = true;
         }
 
-        // Super seeding
         if (result.NewSuperSeeding.HasValue && torrent.SuperSeeding != result.NewSuperSeeding.Value)
         {
             torrent.SuperSeeding = result.NewSuperSeeding.Value;
             changed = true;
         }
 
-        // Tracker remove
         if (result.TrackersToRemove.Count > 0 && !string.IsNullOrWhiteSpace(torrent.TrackerUrl))
         {
             foreach (var trackerToRemove in result.TrackersToRemove)
@@ -840,7 +830,6 @@ public class AutomationService : IAutomationService
             }
         }
 
-        // Tracker replace
         if (result.TrackersToReplace.Count > 0 && !string.IsNullOrWhiteSpace(torrent.TrackerUrl))
         {
             foreach (var kvp in result.TrackersToReplace)
@@ -853,7 +842,6 @@ public class AutomationService : IAutomationService
             }
         }
 
-        // Tracker add
         if (result.TrackersToAdd.Count > 0 && string.IsNullOrWhiteSpace(torrent.TrackerUrl))
         {
             torrent.TrackerUrl = result.TrackersToAdd[0];

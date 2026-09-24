@@ -109,7 +109,6 @@ public static class TriggerEvaluator
 
         if (torrent != null)
         {
-            // Category filter
             if (script.TargetCategories != null && script.TargetCategories.Count > 0)
             {
                 if (string.IsNullOrEmpty(torrent.Category) || !script.TargetCategories.Any(c => string.Equals(c, torrent.Category, StringComparison.OrdinalIgnoreCase)))
@@ -118,7 +117,6 @@ public static class TriggerEvaluator
                 }
             }
 
-            // Tag filter
             if (script.TargetTagIds != null && script.TargetTagIds.Count > 0)
             {
                 if (torrent.TagIds == null || !script.TargetTagIds.Any(t => torrent.TagIds.Contains(t)))
