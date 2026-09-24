@@ -215,7 +215,7 @@ public class JintScriptRunner : IScriptRunner
 public class ScriptConsoleContext
 {
     public const int MaxLogLines = 1000;
-    public const int MaxLogCharacters = 65536; // 64 KB
+    public const int MaxLogCharacters = 64 * 1024;
     public const string TruncationWarning = "\n[WARN] Log truncated: maximum output limit reached.";
 
     private readonly StringBuilder _logBuilder;

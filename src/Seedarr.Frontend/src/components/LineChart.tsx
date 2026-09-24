@@ -4,6 +4,8 @@ import { formatSpeed } from "../utils/formatters";
 const DEFAULT_CHART_WIDTH = 600;
 const CHART_HEIGHT = 170;
 const PADDING = { top: 10, right: 16, bottom: 24, left: 70 };
+const MIN_RATE_SCALE_BYTES = 1024;
+const MIN_DISCRETE_SCALE_COUNT = 3;
 
 function getNiceMax(value: number): number {
   if (value <= 0) return 1;
@@ -91,11 +93,11 @@ export default function LineChart({
   // Prevent duplicate 0 B/s or 0/1 counts at idle by enforcing minimum sensible niceMax
   let minNiceMax = 1;
   if (autoSpeed) {
-    minNiceMax = 1024; // 1 KB/s minimum scale for transfer rates
+    minNiceMax = MIN_RATE_SCALE_BYTES;
   } else if (autoRatio) {
     minNiceMax = 1;
   } else {
-    minNiceMax = 3; // Minimum 3 units for discrete counts
+    minNiceMax = MIN_DISCRETE_SCALE_COUNT;
   }
 
   let niceMax = getNiceMax(maxVal > 0 ? maxVal * 1.1 : minNiceMax);

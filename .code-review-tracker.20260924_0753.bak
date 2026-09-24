@@ -1,0 +1,48 @@
+# Code Review Tracker
+**Created:** 2026-09-24 06:15 | **Updated:** 2026-09-24 06:40 | **Iteration:** 1/3 | **Status:** COMPLETE
+
+| # | Code | File | Line(s) | Smell | Sev | Status | Note |
+|---|------|------|---------|-------|-----|--------|------|
+| 1 | S-11 | src/NzbDrone.Core/Update/InstallUpdateService.cs | 94 | Unnecessary async | 🟡 | DONE | Removed async state machine; returns Task.FromResult(true) |
+| 2 | S-11 | src/NzbDrone.Core/Notifications/Discord/DiscordInteractionHandler.cs | 524 | Unnecessary async | 🟡 | DONE | Synchronous handler returning Task.FromResult |
+| 3 | S-11 | src/NzbDrone.Core/TrackerBoost/TrackerBoostService.cs | 439 | Unnecessary async | 🟡 | DONE | Removed async state machine; returns Task.FromResult(discovered) |
+| 4 | S-6 | src/Seedarr.Http/REST/RestControllerWithSignalR.cs | 197-200 | Stub throwing NotImplementedException | 🟡 | DONE | Converted to protected abstract TResource GetResourceById |
+| 5 | S-12 | src/NzbDrone.Core/Peers/Extensions/PexService.cs | 34, 36 | Redundant wrapper methods | 🟡 | DONE | Removed dead wrapper methods BroadcastTick and BroadcastPexTick |
+| 6 | S-12 | src/NzbDrone.Core/Peers/PeerServer.cs | 1366 | Redundant wrapper method | 🟡 | DONE | Removed redundant wrapper GetListenAddress() |
+| 7 | S-1 | src/Seedarr.Frontend/src/hooks/usePermissions.ts | 28, 31, 34, 41 | Captain Obvious comments | 🟢 | DONE | Removed trivial comments |
+| 8 | S-1 | src/Seedarr.Frontend/src/components/PieceMap.tsx | 308, 466 | Captain Obvious comments | 🟢 | DONE | Removed trivial comments |
+| 9 | S-1 | src/NzbDrone.Core/Packages/PackageExportService.cs | 249 | Captain Obvious comment | 🟢 | DONE | Removed trivial comment |
+| 10 | S-5 | src/Seedarr.Frontend/src/api/hooks.ts | 66, 67 | Orphan imports | 🟡 | DONE | Cleaned unused imports |
+| 11 | S-5 | src/Seedarr.Frontend/src/components/AiCopilotDrawer.tsx | 11, 12 | Orphan imports | 🟡 | DONE | Cleaned unused imports |
+| 12 | S-5 | src/Seedarr.Frontend/src/components/GettingStartedModal.tsx | 40, 41 | Orphan imports | 🟡 | DONE | Cleaned unused imports |
+| 13 | S-5 | src/Seedarr.Frontend/src/components/ImportPackageModal.tsx | 1 | Orphan import | 🟡 | DONE | Cleaned unused import |
+| 14 | S-5 | src/Seedarr.Frontend/src/components/MediaPlayerModal.test.ts | 4, 8 | Orphan imports | 🟡 | DONE | Cleaned unused imports |
+| 15 | S-5 | src/Seedarr.Frontend/src/components/TorrentGrid.tsx | 19, 21 | Orphan imports | 🟡 | DONE | Cleaned unused imports |
+| 16 | S-5 | src/Seedarr.Frontend/src/components/TrackerMultiSelectModal.tsx | 1 | Orphan import | 🟡 | DONE | Cleaned unused import |
+| 17 | S-5 | src/Seedarr.Frontend/src/components/quicksettings/NetworkSwarmCard.tsx | 1 | Orphan imports | 🟡 | DONE | Cleaned unused imports |
+| 18 | S-5 | src/Seedarr.Frontend/src/hooks/useFocusTrap.test.ts | 8 | Orphan import | 🟡 | DONE | Cleaned unused import |
+| 19 | S-5 | src/Seedarr.Frontend/src/hooks/useIdleTimer.test.ts | 9 | Orphan import | 🟡 | DONE | Cleaned unused import |
+| 20 | S-5 | src/Seedarr.Frontend/src/i18n/useTranslation.ts | 4 | Orphan import | 🟡 | DONE | Cleaned unused import |
+| 21 | S-5 | src/Seedarr.Frontend/src/pages/Dashboard.tsx | 12 | Orphan import | 🟡 | DONE | Cleaned unused import |
+| 22 | S-5 | src/Seedarr.Frontend/src/pages/SystemEvents.tsx | 1 | Orphan import | 🟡 | DONE | Cleaned unused import |
+| 23 | S-5 | src/Seedarr.Frontend/src/pages/settings/AiTab.tsx | 13, 15 | Orphan imports | 🟡 | DONE | Cleaned unused imports |
+| 24 | S-5 | src/Seedarr.Frontend/src/pages/settings/IndexersTab.tsx | 26, 27 | Orphan imports | 🟡 | DONE | Cleaned unused imports |
+| 25 | S-8 | src/Seedarr.Frontend/src/components/PieceMap.tsx | 389 | Unused destructured variable | 🟢 | DONE | Removed unused destructured variable rows |
+| 26 | S-8 | src/Seedarr.Frontend/src/components/TorrentContextMenu.tsx | 87, 93 | Unused props | 🟢 | DONE | Prefixed unused props _onRecheck, _onBatchRecheck |
+| 27 | S-8 | src/Seedarr.Frontend/src/components/TorrentGrid.tsx | 59 | Unused prop | 🟢 | DONE | Prefixed unused prop _onSelectAll |
+| 28 | S-8 | src/Seedarr.Frontend/src/components/TorrentTable.tsx | 505, 598, 860 | Unused hooks/props | 🟢 | DONE | Removed unused t, translate hooks; prefixed _virtualRow |
+| 29 | S-8 | src/Seedarr.Frontend/src/components/addtorrent/IndexerSearchTab.tsx | 168, 169 | Unused props | 🟢 | DONE | Prefixed unused props _selectedCategory, _isModal |
+| 30 | S-8 | src/Seedarr.Frontend/src/components/addtorrent/TorrentCreationTab.tsx | 22 | Unused state setter | 🟢 | DONE | Wired createComment into Comment UI input field |
+| 31 | S-8 | src/Seedarr.Frontend/src/components/torrentdetailpanel/LogTab.tsx | 63, 80 | Unused state & calculation | 🟢 | DONE | Wired sources and setSourceFilter into source filter dropdown |
+| 32 | S-8 | src/Seedarr.Frontend/src/pages/AutomationPage.tsx | 1449 | Dead function | 🟢 | DONE | Removed dead helper function tCommand |
+| 33 | S-8 | src/Seedarr.Frontend/src/pages/Dashboard.tsx | 134 | Unused hook call | 🟢 | DONE | Removed unused useCategories() call |
+| 34 | S-8 | src/Seedarr.Frontend/src/pages/LoginPage.tsx | 39 | Unused state variable | 🟢 | DONE | Removed unused loadingProviders state variable |
+| 35 | S-8 | src/Seedarr.Frontend/src/pages/TrackerMetrics.tsx | 49 | Unused destructured variable | 🟢 | DONE | Removed unused isLoadingSummary |
+| 36 | S-8 | src/Seedarr.Frontend/src/pages/settings/AiTab.tsx | 48, 89 | Dead state setter | 🟢 | DONE | Wired switchSuccessMsg banner into UI |
+| 37 | S-8 | src/Seedarr.Frontend/src/pages/settings/GeneralTab.tsx | 112, 137 | Unused catch variable | 🟢 | DONE | Converted catch (_err) to modern optional catch binding |
+| 38 | S-8 | src/Seedarr.Frontend/src/pages/settings/SecurityTab.tsx | 344, 376 | Unused catch variable | 🟢 | DONE | Converted catch (_err) to modern optional catch binding |
+| 39 | O-15 | Multiple Test Assemblies | Multiple | Silent catch blocks in test fixtures | 🟡 | DONE | Added explanatory cleanup comments across test catch blocks |
+| 40 | O-9 | src/NzbDrone.Core/Network/ExternalIpService.cs | 458 | Outdated string formatting | 🟢 | DONE | Refactored string.Format to string interpolation with constant |
+| 41 | S-3 | src/Seedarr.Api.V1/Config/IdentityProviderConfigController.cs | 182 | Markdown asterisks in comment | 🟢 | DONE | Rephrased comment to avoid bold markdown ambiguity |
+
+**Statuses:** TODO | DONE | SKIP | FAIL — **Stats:** Total: 41 | Done: 41 | Left: 0

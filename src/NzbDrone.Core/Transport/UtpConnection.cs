@@ -85,7 +85,7 @@ public class UtpConnection : IUtpConnection
         set
         {
             _uploadRateLimit = value;
-            ApplySocketBuffers();
+            UpdateSocketBuffers();
         }
     }
 
@@ -95,7 +95,7 @@ public class UtpConnection : IUtpConnection
         set
         {
             _downloadRateLimit = value;
-            ApplySocketBuffers();
+            UpdateSocketBuffers();
         }
     }
 
@@ -143,9 +143,7 @@ public class UtpConnection : IUtpConnection
         }
     }
 
-    public void UpdateSocketBuffers() => ApplySocketBuffers();
-
-    private void ApplySocketBuffers()
+    public void UpdateSocketBuffers()
     {
         if (_udpClient?.Client == null)
         {
@@ -374,7 +372,7 @@ public class UtpConnection : IUtpConnection
                 _logger.Debug(ex, "Failed to set socket timeouts");
             }
 
-            ApplySocketBuffers();
+            UpdateSocketBuffers();
         }
     }
 
@@ -411,7 +409,7 @@ public class UtpConnection : IUtpConnection
                 _logger.Debug(ex, "Failed to set socket timeouts");
             }
 
-            ApplySocketBuffers();
+            UpdateSocketBuffers();
         }
     }
 
