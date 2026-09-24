@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import TrackerFavicon from "./TrackerFavicon";
 import { useModalRegistration } from "./ModalProvider";
 import { useFocusTrap } from "../hooks/useFocusTrap";
