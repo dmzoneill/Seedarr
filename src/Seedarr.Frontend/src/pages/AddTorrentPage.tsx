@@ -34,13 +34,11 @@ export function AddTorrentPage() {
 
   return (
     <div
-      className="content-area"
+      className="content-area add-torrent-page"
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
         minHeight: 0,
-        overflow: "hidden",
       }}
     >
       <div
@@ -90,7 +88,6 @@ export function AddTorrentPage() {
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
-          overflow: "hidden",
           width: "100%",
         }}
       >

@@ -221,13 +221,13 @@ function ApiDocsPage() {
         style={{
           flex: 1,
           padding: 0,
-          overflow: "hidden",
           borderRadius: "8px",
           border: "1px solid var(--border-light)",
           boxShadow:
             "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
           display: "flex",
           flexDirection: "column",
+          minHeight: "450px",
         }}
       >
         <iframe
