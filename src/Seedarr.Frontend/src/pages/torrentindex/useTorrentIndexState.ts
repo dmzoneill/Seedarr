@@ -142,6 +142,9 @@ export function useTorrentIndexState() {
     },
   );
   const [isFilterCollapsed, setIsFilterCollapsed] = useState<boolean>(() => {
+    if (typeof window !== "undefined" && window.innerWidth <= 768) {
+      return true;
+    }
     return localStorage.getItem("seedarr_filter_collapsed") === "true";
   });
   const [isQuickControlsOpen, setIsQuickControlsOpen] = useState<boolean>(
