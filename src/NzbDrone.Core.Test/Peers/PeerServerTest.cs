@@ -1349,9 +1349,9 @@ public class PeerServerTest
             serverWithUtp.Dispose();
         }
         catch
-            {
-                // Best-effort test cleanup
-            }
+        {
+            // Best-effort test cleanup
+        }
     }
 
     private IPAddress InvokeGetBindAddress(PeerServer server = null)
