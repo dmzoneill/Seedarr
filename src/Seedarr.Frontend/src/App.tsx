@@ -32,6 +32,7 @@ import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
 import SystemTerminal from "./pages/SystemTerminal";
 import DatabaseExplorer from "./pages/DatabaseExplorer";
+import DeveloperDiagnostics from "./pages/DeveloperDiagnostics";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
 import { AutomationPage } from "./pages/AutomationPage";
@@ -68,6 +69,7 @@ import {
   SystemIcon,
   DownloadAgentIcon,
   AutomationIcon,
+  CodeIcon,
 } from "./components/icons/NavIcons";
 import {
   ActivityIcon,
@@ -113,9 +115,13 @@ const systemSubItems = [
   { path: "/system/events", label: "Events" },
   { path: "/system/logfiles", label: "Log Files" },
   { path: "/system/network", label: "Network" },
-  { path: "/system/terminal", label: "Terminal", labelKey: "nav.terminal" },
-  { path: "/system/database", label: "Database", labelKey: "nav.database" },
-  { path: "/system/api", label: "API Reference" },
+];
+
+const developerSubItems = [
+  { path: "/developer/database", label: "Database", labelKey: "nav.database" },
+  { path: "/developer/terminal", label: "Terminal", labelKey: "nav.terminal" },
+  { path: "/developer/api", label: "API Reference", labelKey: "nav.apiReference" },
+  { path: "/developer/diagnostics", label: "Diagnostics", labelKey: "nav.diagnostics" },
 ];
 
 function LegacyTorrentRedirect() {
@@ -464,6 +470,7 @@ function App() {
     location.pathname.startsWith("/downloadplusplus");
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isSystemRoute = location.pathname.startsWith("/system");
+  const isDeveloperRoute = location.pathname.startsWith("/developer");
   const { data: generalConfig } = useGeneralConfig();
 
   useEffect(() => {
@@ -1052,6 +1059,30 @@ function App() {
                 </NavLink>
               );
             })}
+
+          <NavLink
+            to="/developer/database"
+            className={`sidebar-nav-item ${isDeveloperRoute ? "active" : ""}`}
+            title={t("nav.developer", undefined, "Developer")}
+          >
+            <CodeIcon /> <span>{t("nav.developer", undefined, "Developer")}</span>
+          </NavLink>
+          {isDeveloperRoute &&
+            developerSubItems.map((item) => {
+              const labelText = (item as any).labelKey
+                ? t((item as any).labelKey, undefined, item.label)
+                : item.label;
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className="sidebar-nav-item sidebar-nav-sub"
+                  title={labelText}
+                >
+                  <span>{labelText}</span>
+                </NavLink>
+              );
+            })}
         </nav>
       </aside>
 
@@ -1579,11 +1610,41 @@ function App() {
               <Route path="/system/events" element={<SystemEvents />} />
               <Route path="/system/logfiles" element={<SystemLogFiles />} />
               <Route path="/system/network" element={<SystemNetwork />} />
-              <Route path="/system/terminal" element={<SystemTerminal />} />
-              <Route path="/system/database" element={<DatabaseExplorer />} />
-              <Route path="/system/api" element={<ApiDocsPage />} />
-              <Route path="/system/swagger" element={<ApiDocsPage />} />
-              <Route path="/api-docs" element={<ApiDocsPage />} />
+              {/* Developer Tools */}
+              <Route
+                path="/developer"
+                element={<Navigate to="/developer/database" replace />}
+              />
+              <Route path="/developer/database" element={<DatabaseExplorer />} />
+              <Route path="/developer/terminal" element={<SystemTerminal />} />
+              <Route path="/developer/api" element={<ApiDocsPage />} />
+              <Route path="/developer/diagnostics" element={<DeveloperDiagnostics />} />
+
+              {/* Legacy Navigation Redirects */}
+              <Route
+                path="/terminal"
+                element={<Navigate to="/developer/terminal" replace />}
+              />
+              <Route
+                path="/system/terminal"
+                element={<Navigate to="/developer/terminal" replace />}
+              />
+              <Route
+                path="/system/database"
+                element={<Navigate to="/developer/database" replace />}
+              />
+              <Route
+                path="/system/api"
+                element={<Navigate to="/developer/api" replace />}
+              />
+              <Route
+                path="/system/swagger"
+                element={<Navigate to="/developer/api" replace />}
+              />
+              <Route
+                path="/api-docs"
+                element={<Navigate to="/developer/api" replace />}
+              />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </ErrorBoundary>
