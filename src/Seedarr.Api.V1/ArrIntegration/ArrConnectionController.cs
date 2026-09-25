@@ -66,6 +66,16 @@ public class ArrConnectionController : Controller
             definition.Name = definition.ArrType ?? "ArrConnection";
         }
 
+        if (string.IsNullOrWhiteSpace(definition.Implementation))
+        {
+            definition.Implementation = $"{definition.ArrType ?? "Sonarr"}Connection";
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.ConfigContract))
+        {
+            definition.ConfigContract = "ArrConnectionDefinition";
+        }
+
         if (!ArrConnectionResources.TryNormalizeUrl(definition.Url, out var normalizedUrl, out var urlError))
         {
             return BadRequest(urlError);
@@ -110,6 +120,16 @@ public class ArrConnectionController : Controller
         if (string.IsNullOrWhiteSpace(definition.Name))
         {
             definition.Name = existing.Name ?? definition.ArrType ?? "ArrConnection";
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.Implementation))
+        {
+            definition.Implementation = existing.Implementation ?? $"{definition.ArrType ?? "Sonarr"}Connection";
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.ConfigContract))
+        {
+            definition.ConfigContract = existing.ConfigContract ?? "ArrConnectionDefinition";
         }
 
         if (!ArrConnectionResources.TryNormalizeUrl(definition.Url, out var updateNormalizedUrl, out var updateUrlError))

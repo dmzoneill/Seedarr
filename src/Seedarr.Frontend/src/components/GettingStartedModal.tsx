@@ -14,7 +14,9 @@ import {
   useTestDirectDownloadClient,
   useCreateIndexer,
   useTestDirectIndexer,
+  useArrConnections,
   useCreateArrConnection,
+  useUpdateArrConnection,
   useTestDirectArrConnection,
   useCategories,
   useCreateCategory,
@@ -343,7 +345,7 @@ export function GettingStartedModal({
     syncEnabled: true,
     enableAutomaticAdd: true,
     webhookEnabled: true,
-    webhookHost: "seedarr",
+    webhookHost: "",
   });
   const [sonarrTestResult, setSonarrTestResult] =
     useState<ArrTestResult | null>(null);
@@ -359,7 +361,7 @@ export function GettingStartedModal({
     syncEnabled: true,
     enableAutomaticAdd: true,
     webhookEnabled: true,
-    webhookHost: "seedarr",
+    webhookHost: "",
   });
   const [radarrTestResult, setRadarrTestResult] =
     useState<ArrTestResult | null>(null);
@@ -375,11 +377,40 @@ export function GettingStartedModal({
     syncEnabled: true,
     enableAutomaticAdd: true,
     webhookEnabled: true,
-    webhookHost: "seedarr",
+    webhookHost: "",
   });
   const [lidarrTestResult, setLidarrTestResult] =
     useState<ArrTestResult | null>(null);
   const [lidarrSaved, setLidarrSaved] = useState(false);
+
+  const { data: existingConnections } = useArrConnections();
+  const updateArrMutation = useUpdateArrConnection();
+
+  useEffect(() => {
+    if (existingConnections && existingConnections.length > 0) {
+      const sonarr = existingConnections.find(
+        (c) => c.arrType?.toLowerCase() === "sonarr",
+      );
+      if (sonarr) {
+        setSonarrForm((prev) => ({ ...prev, ...sonarr }));
+        setSonarrSaved(true);
+      }
+      const radarr = existingConnections.find(
+        (c) => c.arrType?.toLowerCase() === "radarr",
+      );
+      if (radarr) {
+        setRadarrForm((prev) => ({ ...prev, ...radarr }));
+        setRadarrSaved(true);
+      }
+      const lidarr = existingConnections.find(
+        (c) => c.arrType?.toLowerCase() === "lidarr",
+      );
+      if (lidarr) {
+        setLidarrForm((prev) => ({ ...prev, ...lidarr }));
+        setLidarrSaved(true);
+      }
+    }
+  }, [existingConnections]);
 
   // Category & Storage Hooks / State
   const { data: categories } = useCategories();
@@ -440,6 +471,8 @@ export function GettingStartedModal({
 
   const testArrMutation = useTestDirectArrConnection();
   const createArrMutation = useCreateArrConnection();
+  const isSavingArr =
+    createArrMutation.isPending || updateArrMutation.isPending;
 
   const currentStepRef = useRef(currentStep);
   currentStepRef.current = currentStep;
@@ -680,15 +713,16 @@ export function GettingStartedModal({
       setError(validation.error || `Invalid ${arrType} configuration`);
       return;
     }
-    createArrMutation.mutate(
-      {
-        ...form,
-        arrType,
-        name: form.name?.trim() || arrType,
-        implementation: `${arrType}Connection`,
-        configContract: "ArrConnectionDefinition",
-      },
-      {
+    const payload = {
+      ...form,
+      arrType,
+      name: form.name?.trim() || arrType,
+      implementation: `${arrType}Connection`,
+      configContract: "ArrConnectionDefinition",
+    };
+
+    if (payload.id) {
+      updateArrMutation.mutate(payload as ArrConnection, {
         onSuccess: () => {
           setSaved(true);
           handleNext();
@@ -703,8 +737,28 @@ export function GettingStartedModal({
               ),
           );
         },
-      },
-    );
+      });
+    } else {
+      createArrMutation.mutate(
+        payload,
+        {
+          onSuccess: () => {
+            setSaved(true);
+            handleNext();
+          },
+          onError: (err) => {
+            setError(
+              err.message ||
+                t(
+                  "modals.gettingStarted.saveArrFailed",
+                  undefined,
+                  `Failed to save ${arrType} connection. Please verify credentials.`,
+                ),
+            );
+          },
+        },
+      );
+    }
   };
 
   // Storage Handlers
@@ -1901,9 +1955,9 @@ export function GettingStartedModal({
                         "Sonarr",
                       )
                     }
-                    disabled={createArrMutation.isPending}
+                    disabled={isSavingArr}
                   >
-                    {createArrMutation.isPending
+                    {isSavingArr
                       ? t(
                           "modals.gettingStarted.saving",
                           undefined,
@@ -2107,9 +2161,9 @@ export function GettingStartedModal({
                         "Radarr",
                       )
                     }
-                    disabled={createArrMutation.isPending}
+                    disabled={isSavingArr}
                   >
-                    {createArrMutation.isPending
+                    {isSavingArr
                       ? t(
                           "modals.gettingStarted.saving",
                           undefined,
@@ -2313,9 +2367,9 @@ export function GettingStartedModal({
                         "Lidarr",
                       )
                     }
-                    disabled={createArrMutation.isPending}
+                    disabled={isSavingArr}
                   >
-                    {createArrMutation.isPending
+                    {isSavingArr
                       ? t(
                           "modals.gettingStarted.saving",
                           undefined,

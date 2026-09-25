@@ -183,6 +183,20 @@ function SystemStatus() {
             flexWrap: "wrap",
           }}
         >
+          <Link
+            to="/system/database"
+            className="btn btn-small"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              backgroundColor: "rgba(59, 130, 246, 0.15)",
+              color: "#60a5fa",
+              border: "1px solid rgba(59, 130, 246, 0.3)",
+            }}
+          >
+            <span>🗄️</span> Database Explorer
+          </Link>
           {status && (
             <span
               className="badge badge-seeding"
@@ -922,7 +936,16 @@ function SystemStatus() {
               </div>
               <div className="status-row">
                 <span className="status-label">Database</span>
-                <span className="status-value">{status.databaseVersion}</span>
+                <span className="status-value" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+                  {status.databaseVersion}
+                  <Link
+                    to="/system/database"
+                    className="btn btn-outline btn-small"
+                    style={{ padding: "0.1rem 0.5rem", fontSize: "0.75rem" }}
+                  >
+                    🗄️ Open Explorer
+                  </Link>
+                </span>
               </div>
               <div className="status-row">
                 <span className="status-label">Database Migration</span>

@@ -34,11 +34,17 @@ function interpolate(text: string, params?: TranslationParams): string {
   let result = text;
   if (Array.isArray(params)) {
     params.forEach((val, idx) => {
-      result = result.split(`{${idx}}`).join(String(val));
+      result = result
+        .split(`\${${idx}}`)
+        .join(String(val))
+        .split(`{${idx}}`)
+        .join(String(val));
     });
   } else if (typeof params === "object") {
     for (const [key, val] of Object.entries(params)) {
       result = result
+        .split(`\${${key}}`)
+        .join(String(val))
         .split(`{{${key}}}`)
         .join(String(val))
         .split(`{${key}}`)

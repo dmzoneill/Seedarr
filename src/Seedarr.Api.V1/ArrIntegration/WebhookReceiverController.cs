@@ -10,6 +10,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.ArrIntegration;
 
 [V1ApiController("webhook")]
+[Route("api/v1/webhooks")]
 public class WebhookReceiverController : Controller
 {
     private const string ApiKeyHeader = "X-Api-Key";

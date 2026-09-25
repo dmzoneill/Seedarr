@@ -44,7 +44,12 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
     public bool RegisterWebhook(ArrConnectionDefinition connection)
     {
-        if (!connection.WebhookEnabled)
+        if (connection == null || !connection.Enable || !connection.WebhookEnabled)
+        {
+            return true;
+        }
+
+        if (string.Equals(connection.ArrType, "Prowlarr", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
@@ -142,7 +147,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
     public bool UnregisterWebhook(ArrConnectionDefinition connection)
     {
-        if (connection == null || string.IsNullOrWhiteSpace(connection.Url))
+        if (connection == null || string.IsNullOrWhiteSpace(connection.Url) || string.Equals(connection.ArrType, "Prowlarr", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
@@ -231,7 +236,9 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                     }
 
                     var isSeedarr = string.Equals(name, "Seedarr", StringComparison.OrdinalIgnoreCase) ||
-                                    (url != null && url.Contains("/api/v1/webhook/arr", StringComparison.OrdinalIgnoreCase));
+                                    (url != null && url.Contains("seedarr", StringComparison.OrdinalIgnoreCase) &&
+                                     (url.Contains("/api/v1/webhook/arr", StringComparison.OrdinalIgnoreCase) ||
+                                      url.Contains("/api/v1/webhooks/arr", StringComparison.OrdinalIgnoreCase)));
 
                     if (isSeedarr && notification.TryGetProperty("id", out var idProp))
                     {

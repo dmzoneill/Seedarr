@@ -160,7 +160,7 @@ const en = {
     ratio: "Ratio: {ratio}",
     ip: "IP: {ip}",
     healthIssues: "1 Issue",
-    healthIssuesPlural: "${issuesCount} Issues",
+    healthIssuesPlural: "{count} Issues",
     healthOk: "All Systems Operational",
     reconnecting: "Reconnecting...",
     connected: "Connected",

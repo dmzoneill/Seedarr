@@ -108,6 +108,19 @@ export function StatusBar({
     ? healthChecks.filter((c) => isWarningOrError(c.type)).length
     : 0;
 
+  const formattedUptime = systemStatus
+    ? formatUptime(
+        systemStatus.uptimeSeconds ??
+          (systemStatus.startTime
+            ? Math.floor(
+                (Date.now() -
+                  new Date(systemStatus.startTime).getTime()) /
+                  1000,
+              )
+            : 0),
+      )
+    : "...";
+
   return (
     <footer className="status-bar">
       <div className="status-bar-content">
@@ -119,19 +132,11 @@ export function StatusBar({
         </span>
         <span className="status-bar-item">
           <ActivityIcon size={14} />{" "}
-          {t("statusbar.uptime", undefined, "Uptime")}{" "}
-          {systemStatus
-            ? formatUptime(
-                systemStatus.uptimeSeconds ??
-                  (systemStatus.startTime
-                    ? Math.floor(
-                        (Date.now() -
-                          new Date(systemStatus.startTime).getTime()) /
-                          1000,
-                      )
-                    : 0),
-              )
-            : "..."}
+          {t(
+            "statusbar.uptime",
+            { uptime: formattedUptime },
+            `Uptime: ${formattedUptime}`,
+          )}
         </span>
         {systemStatus?.cpuUsagePercentage != null && (
           <span className="status-bar-item">
@@ -144,16 +149,25 @@ export function StatusBar({
           style={{ color: hasIssues ? "var(--danger)" : "var(--success)" }}
         >
           {hasIssues ? <ErrorIcon size={14} /> : <InfoIcon size={14} />}
-          {t("statusbar.health", undefined, "Health")}{" "}
-          {hasIssues
-            ? issuesCount === 1
-              ? t("statusbar.healthIssues", { count: issuesCount }, "1 Issue")
-              : t(
-                  "statusbar.healthIssuesPlural",
-                  { count: issuesCount },
-                  `${issuesCount} Issues`,
-                )
-            : t("statusbar.healthOk", undefined, "All Systems Operational")}
+          {t(
+            "statusbar.health",
+            {
+              health: hasIssues
+                ? issuesCount === 1
+                  ? t("statusbar.healthIssues", { count: issuesCount, issuesCount }, "1 Issue")
+                  : t(
+                      "statusbar.healthIssuesPlural",
+                      { count: issuesCount, issuesCount },
+                      `${issuesCount} Issues`,
+                    )
+                : t("statusbar.healthOk", undefined, "All Systems Operational"),
+            },
+            `Health: ${
+              hasIssues
+                ? `${issuesCount} Issue${issuesCount !== 1 ? "s" : ""}`
+                : "All Systems Operational"
+            }`,
+          )}
         </span>
         {(connected !== undefined || isReconnecting !== undefined) && (
           <span
@@ -178,8 +192,12 @@ export function StatusBar({
         <div className="status-bar-separator" style={{ flexGrow: 1 }} />
 
         <span className="status-bar-item">
-          <SeedingIcon size={14} /> {t("statusbar.active", undefined, "Active")}{" "}
-          {stats?.activeTorrents ?? 0}
+          <SeedingIcon size={14} />{" "}
+          {t(
+            "statusbar.active",
+            { count: stats?.activeTorrents ?? 0 },
+            `Active: ${stats?.activeTorrents ?? 0}`,
+          )}
         </span>
         <span className="status-bar-item status-bar-download">
           <DownloadIcon size={14} /> {formatSpeed(downloadSpeed)}
@@ -188,30 +206,53 @@ export function StatusBar({
           <UploadIcon size={14} /> {formatSpeed(uploadSpeed)}
         </span>
         <span className="status-bar-item">
-          <UsersIcon size={14} /> {t("statusbar.peers", undefined, "Peers")}{" "}
-          {totalSeeders} / {totalPeers}
-        </span>
-        <span className="status-bar-item">
-          <UploadIcon size={14} />{" "}
-          {t("statusbar.totalUp", undefined, "Total Up")}{" "}
-          {formatBytes(stats?.totalUploaded ?? 0)}
-        </span>
-        <span className="status-bar-item">
-          <DownloadIcon size={14} />{" "}
-          {t("statusbar.totalDown", undefined, "Total Down")}{" "}
-          {formatBytes(stats?.totalDownloaded ?? 0)}
-        </span>
-        <span className="status-bar-item">
-          {t("statusbar.ratio", undefined, "Ratio")}{" "}
-          {formatRatio(
-            stats?.totalDownloaded && stats.totalDownloaded > 0
-              ? stats.totalUploaded / stats.totalDownloaded
-              : 0,
+          <UsersIcon size={14} />{" "}
+          {t(
+            "statusbar.peers",
+            { seeders: totalSeeders, total: totalPeers },
+            `Peers: ${totalSeeders} / ${totalPeers}`,
           )}
         </span>
         <span className="status-bar-item">
-          <WifiIcon size={14} /> {t("statusbar.ip", undefined, "Ip")}{" "}
-          {network?.externalIp || "..."}
+          <UploadIcon size={14} />{" "}
+          {t(
+            "statusbar.totalUp",
+            { bytes: formatBytes(stats?.totalUploaded ?? 0) },
+            `Total Up: ${formatBytes(stats?.totalUploaded ?? 0)}`,
+          )}
+        </span>
+        <span className="status-bar-item">
+          <DownloadIcon size={14} />{" "}
+          {t(
+            "statusbar.totalDown",
+            { bytes: formatBytes(stats?.totalDownloaded ?? 0) },
+            `Total Down: ${formatBytes(stats?.totalDownloaded ?? 0)}`,
+          )}
+        </span>
+        <span className="status-bar-item">
+          {t(
+            "statusbar.ratio",
+            {
+              ratio: formatRatio(
+                stats?.totalDownloaded && stats.totalDownloaded > 0
+                  ? stats.totalUploaded / stats.totalDownloaded
+                  : 0,
+              ),
+            },
+            `Ratio: ${formatRatio(
+              stats?.totalDownloaded && stats.totalDownloaded > 0
+                ? stats.totalUploaded / stats.totalDownloaded
+                : 0,
+            )}`,
+          )}
+        </span>
+        <span className="status-bar-item">
+          <WifiIcon size={14} />{" "}
+          {t(
+            "statusbar.ip",
+            { ip: network?.externalIp || "..." },
+            `IP: ${network?.externalIp || "..."}`,
+          )}
         </span>
       </div>
     </footer>

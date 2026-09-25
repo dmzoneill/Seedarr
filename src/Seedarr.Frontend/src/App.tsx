@@ -31,6 +31,7 @@ import TrackerMetrics from "./pages/TrackerMetrics";
 import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
 import SystemTerminal from "./pages/SystemTerminal";
+import DatabaseExplorer from "./pages/DatabaseExplorer";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
 import { AutomationPage } from "./pages/AutomationPage";
@@ -113,6 +114,7 @@ const systemSubItems = [
   { path: "/system/logfiles", label: "Log Files" },
   { path: "/system/network", label: "Network" },
   { path: "/system/terminal", label: "Terminal", labelKey: "nav.terminal" },
+  { path: "/system/database", label: "Database", labelKey: "nav.database" },
   { path: "/system/api", label: "API Reference" },
 ];
 
@@ -1578,6 +1580,7 @@ function App() {
               <Route path="/system/logfiles" element={<SystemLogFiles />} />
               <Route path="/system/network" element={<SystemNetwork />} />
               <Route path="/system/terminal" element={<SystemTerminal />} />
+              <Route path="/system/database" element={<DatabaseExplorer />} />
               <Route path="/system/api" element={<ApiDocsPage />} />
               <Route path="/system/swagger" element={<ApiDocsPage />} />
               <Route path="/api-docs" element={<ApiDocsPage />} />
