@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { apiClient } from "../api/client";
-import { DeveloperNav } from "../components/DeveloperNav";
 import type { DeveloperEventItem, DeveloperEventsResponse } from "../api/types";
 
 export default function DeveloperEvents() {
@@ -64,9 +63,7 @@ export default function DeveloperEvents() {
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "1600px", margin: "0 auto" }}>
-      <DeveloperNav isSeedarr />
-
+    <div className="content-area" style={{ padding: "1.5rem" }}>
       {/* Top Banner */}
       <div
         style={{
