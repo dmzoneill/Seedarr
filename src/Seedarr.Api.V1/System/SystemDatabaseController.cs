@@ -527,13 +527,6 @@ public class SystemDatabaseController : Controller
 
         try
         {
-            if (request.ReadOnly)
-            {
-                using var pragma = connection.CreateCommand();
-                pragma.CommandText = "PRAGMA query_only = ON;";
-                pragma.ExecuteNonQuery();
-            }
-
             using var cmd = connection.CreateCommand();
             cmd.CommandText = trimmedQuery;
             cmd.CommandTimeout = 30;
