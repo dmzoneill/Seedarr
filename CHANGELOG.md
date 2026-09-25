@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.19.4](https://github.com/dmzoneill/Seedarr/releases/tag/v1.19.4) - 2026-09-25
+
+### ✨ Features
+- feat: add SQLite database explorer with interactive ERD visualizer and Arr webhook integration tests
+
+### 🐛 Bug Fixes
+- fix(lint): fix indentation to multiple of 4 in ArrWebhookRegistration and ArrConnectionController
+- fix(slop): log exceptions in UtpConnection and DelugeJsonRpcController instead of silent catches
+- fix(frontend): remove orphan imports in modals and quicksettings
+
+### 🔧 Maintenance & Improvements
+- test: clean up redundant narration comments in passkey tests
+- refactor(slop): remove captain obvious comments in indexers and metadata providers
+- refactor(slop): remove captain obvious narration comments across automation and frontend
+- refactor(slop): modernize exception filtering, remove cargo-cult catches and stubs
+- refactor(slop): remove redundant wrappers, self-document constants, and eliminate magic numbers
+- refactor(slop-manager): resolve slop issues across backend and frontend
+
 ## [v1.19.3](https://github.com/dmzoneill/Seedarr/releases/tag/v1.19.3) - 2026-09-24
 
 ### 🐛 Bug Fixes
