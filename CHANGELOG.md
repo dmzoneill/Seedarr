@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.2](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.2) - 2026-09-25
+
+### 🐛 Bug Fixes
+- fix(terminal): enable WebSocket middleware, fix title formatting, and resolve test race
+
+### 🔧 Maintenance & Improvements
+- style: fix indentation in Startup.cs for editorconfig linter
+
 ## [v1.20.1](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.1) - 2026-09-25
 
 ### ✨ Features
