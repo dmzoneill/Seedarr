@@ -72,7 +72,7 @@ public static class Bootstrap
         try
         {
             var loggingReconfig = app.Services.GetService<ILoggingReconfigurationService>()
-                                  ?? (ILoggingReconfigurationService)app.Services.GetService<LoggingReconfigurationService>();
+                ?? (ILoggingReconfigurationService)app.Services.GetService<LoggingReconfigurationService>();
             loggingReconfig?.Initialize();
         }
         catch (Exception ex)

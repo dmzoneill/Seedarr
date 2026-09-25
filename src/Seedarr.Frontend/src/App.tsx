@@ -33,6 +33,12 @@ import SystemNetwork from "./pages/SystemNetwork";
 import SystemTerminal from "./pages/SystemTerminal";
 import DatabaseExplorer from "./pages/DatabaseExplorer";
 import DeveloperDiagnostics from "./pages/DeveloperDiagnostics";
+import DeveloperEvents from "./pages/DeveloperEvents";
+import DeveloperCommands from "./pages/DeveloperCommands";
+import DeveloperNetwork from "./pages/DeveloperNetwork";
+import DeveloperWebhooks from "./pages/DeveloperWebhooks";
+import DeveloperConfig from "./pages/DeveloperConfig";
+import DeveloperSimulation from "./pages/DeveloperSimulation";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
 import { AutomationPage } from "./pages/AutomationPage";
@@ -119,6 +125,12 @@ const systemSubItems = [
 
 const developerSubItems = [
   { path: "/developer/database", label: "Database", labelKey: "nav.database" },
+  { path: "/developer/events", label: "Event Bus", labelKey: "nav.events" },
+  { path: "/developer/commands", label: "Commands", labelKey: "nav.commands" },
+  { path: "/developer/network", label: "Network", labelKey: "nav.network" },
+  { path: "/developer/webhooks", label: "Webhooks", labelKey: "nav.webhooks" },
+  { path: "/developer/config", label: "Config & Env", labelKey: "nav.config" },
+  { path: "/developer/simulation", label: "Simulation Lab", labelKey: "nav.simulation" },
   { path: "/developer/terminal", label: "Terminal", labelKey: "nav.terminal" },
   { path: "/developer/api", label: "API Reference", labelKey: "nav.apiReference" },
   { path: "/developer/diagnostics", label: "Diagnostics", labelKey: "nav.diagnostics" },
@@ -1616,6 +1628,12 @@ function App() {
                 element={<Navigate to="/developer/database" replace />}
               />
               <Route path="/developer/database" element={<DatabaseExplorer />} />
+              <Route path="/developer/events" element={<DeveloperEvents />} />
+              <Route path="/developer/commands" element={<DeveloperCommands />} />
+              <Route path="/developer/network" element={<DeveloperNetwork />} />
+              <Route path="/developer/webhooks" element={<DeveloperWebhooks />} />
+              <Route path="/developer/config" element={<DeveloperConfig />} />
+              <Route path="/developer/simulation" element={<DeveloperSimulation />} />
               <Route path="/developer/terminal" element={<SystemTerminal />} />
               <Route path="/developer/api" element={<ApiDocsPage />} />
               <Route path="/developer/diagnostics" element={<DeveloperDiagnostics />} />
