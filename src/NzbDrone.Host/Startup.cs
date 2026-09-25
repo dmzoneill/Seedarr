@@ -527,7 +527,7 @@ public class Startup
             if (configProvider.AuthenticationEnabled)
             {
                 var isAuthenticated = (context.User?.Identity?.IsAuthenticated == true) ||
-                                      Seedarr.Http.Security.RpcAuthenticationHelper.IsAuthenticated(context, configProvider);
+                    Seedarr.Http.Security.RpcAuthenticationHelper.IsAuthenticated(context, configProvider);
 
                 if (!isAuthenticated)
                 {
