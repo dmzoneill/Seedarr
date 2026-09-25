@@ -3023,7 +3023,19 @@ public class UtpConnectionTest
         var sendData = new byte[4000];
         var sendTask = Task.Run(() => connection.Send(sendData, 0, sendData.Length));
 
-        Thread.Sleep(50);
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (sentPackets)
+            {
+                if (sentPackets.Count >= 2)
+                {
+                    break;
+                }
+            }
+
+            Thread.Sleep(10);
+        }
 
         lock (sentPackets)
         {

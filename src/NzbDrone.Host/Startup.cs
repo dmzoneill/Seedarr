@@ -472,12 +472,54 @@ public class Startup
 
         app.UseRouting();
 
+        app.UseWebSockets(new Microsoft.AspNetCore.Builder.WebSocketOptions
+        {
+            KeepAliveInterval = TimeSpan.FromSeconds(30),
+        });
+
         app.UseAuthentication();
         app.UseAuthorization();
 
         app.MapControllers();
         app.MapHub<MessageHub>("/signalr/messages");
         app.MapHub<TerminalHub>("/signalr/terminal");
+
+        app.Use(async (context, next) =>
+        {
+            if ((context.Request.Path == "/ws/terminal" || context.Request.Path == "/api/v1/terminal/ws") &&
+                context.WebSockets.IsWebSocketRequest)
+            {
+                var configFileProvider = context.RequestServices.GetRequiredService<IConfigFileProvider>();
+                if (configFileProvider.AuthenticationEnabled)
+                {
+                    var user = context.User;
+                    if (user?.Identity?.IsAuthenticated == true)
+                    {
+                        if (!user.IsInRole("Admin") && !user.HasClaim(global::System.Security.Claims.ClaimTypes.Role, "Admin"))
+                        {
+                            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                            await context.Response.WriteAsync("Admin role required for terminal access.");
+                            await context.Response.CompleteAsync();
+                            return;
+                        }
+                    }
+                    else if (!Seedarr.Http.Security.RpcAuthenticationHelper.IsAuthenticated(context, configFileProvider))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        await context.Response.WriteAsync("Authentication required for terminal access.");
+                        await context.Response.CompleteAsync();
+                        return;
+                    }
+                }
+
+                var ptyService = context.RequestServices.GetRequiredService<Seedarr.Http.Terminal.IPtyTerminalService>();
+                var configService = context.RequestServices.GetRequiredService<IConfigService>();
+                await Seedarr.Http.Terminal.TerminalWebSocketHandler.HandleWebSocket(context, ptyService, configService, configFileProvider);
+                return;
+            }
+
+            await next();
+        });
 
         var terminalHandler = async (HttpContext context) =>
         {
