@@ -161,7 +161,7 @@ export function SystemTerminal() {
         <TerminalView
           key={activePath}
           cwd={activePath}
-          title={t("terminal.shellTitle", undefined, `Shell: ${activePath}`)}
+          title={t("terminal.interactiveShell", undefined, "Interactive Shell")}
         />
       </div>
     </div>

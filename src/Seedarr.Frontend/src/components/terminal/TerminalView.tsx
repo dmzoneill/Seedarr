@@ -407,7 +407,7 @@ export function TerminalView({
               t("terminal.interactiveShell", undefined, "Interactive Shell")}
           </span>
 
-          {cwd && (
+          {cwd && !title?.includes(cwd) && (
             <span
               style={{
                 fontFamily: "monospace",
