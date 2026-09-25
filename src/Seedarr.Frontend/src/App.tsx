@@ -455,14 +455,23 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("seedarr_sidebar_collapsed") === "true";
   });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem("seedarr_sidebar_collapsed", String(next));
-      return next;
-    });
-  };
+  const toggleSidebar = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth <= 768) {
+      setIsMobileMenuOpen((prev) => !prev);
+    } else {
+      setIsSidebarCollapsed((prev) => {
+        const next = !prev;
+        localStorage.setItem("seedarr_sidebar_collapsed", String(next));
+        return next;
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const isTorrentsRoute =
     (location.pathname.startsWith("/torrents") &&
@@ -596,6 +605,11 @@ function App() {
             ),
           ));
 
+      if (e.key === "Escape" && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+        return;
+      }
+
       // Alt+M toggles sidebar collapse (Option+M on Mac sends code 'KeyM')
       if (e.altKey && (e.key.toLowerCase() === "m" || e.code === "KeyM")) {
         if (isModalActive) return;
@@ -720,7 +734,11 @@ function App() {
   }
 
   return (
-    <div className={`app ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <div
+      className={`app ${isSidebarCollapsed ? "sidebar-collapsed" : ""} ${
+        isMobileMenuOpen ? "mobile-sidebar-open" : ""
+      }`}
+    >
       <aside className="sidebar" aria-label="Main Navigation">
         <div className="sidebar-header">
           <a
@@ -752,6 +770,14 @@ function App() {
             ) : (
               <ChevronsLeftIcon size={14} />
             )}
+          </button>
+          <button
+            type="button"
+            className="mobile-sidebar-close-btn"
+            onClick={() => setIsMobileMenuOpen(false)}
+            aria-label="Close navigation"
+          >
+            ✕
           </button>
         </div>
         <nav className="sidebar-nav">
@@ -1098,6 +1124,14 @@ function App() {
         </nav>
       </aside>
 
+      {isMobileMenuOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setIsMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       <div className="main-wrapper">
         {!connected && (
           <div
@@ -1238,6 +1272,7 @@ function App() {
                 style={{ cursor: "pointer" }}
               />
               <kbd
+                className="topbar-search-kbd"
                 style={{
                   backgroundColor: "rgba(255, 255, 255, 0.08)",
                   border: "1px solid var(--border)",
@@ -1259,7 +1294,7 @@ function App() {
             <LanguageSelector />
             <button
               type="button"
-              className="topbar-btn"
+              className="topbar-btn topbar-shortcuts-btn"
               onClick={() => setShowShortcutsModal(true)}
               title={t(
                 "topbar.keyboardShortcuts",
