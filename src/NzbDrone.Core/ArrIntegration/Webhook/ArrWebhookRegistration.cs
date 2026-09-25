@@ -57,7 +57,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
         try
         {
             var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
+                string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
             var seedarrUrl = GetSeedarrBaseUrl(connection);
             var webhookUrl = $"{seedarrUrl}/api/v1/webhook/arr";
             var currentApiKey = _configFileProvider.ApiKey ?? string.Empty;
@@ -155,7 +155,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
         try
         {
             var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
+                string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
             var existing = FindExistingWebhook(connection, apiVersion);
             if (existing == null)
             {
@@ -236,9 +236,9 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                     }
 
                     var isSeedarr = string.Equals(name, "Seedarr", StringComparison.OrdinalIgnoreCase) ||
-                                    (url != null && url.Contains("seedarr", StringComparison.OrdinalIgnoreCase) &&
-                                     (url.Contains("/api/v1/webhook/arr", StringComparison.OrdinalIgnoreCase) ||
-                                      url.Contains("/api/v1/webhooks/arr", StringComparison.OrdinalIgnoreCase)));
+                        (url != null && url.Contains("seedarr", StringComparison.OrdinalIgnoreCase) &&
+                            (url.Contains("/api/v1/webhook/arr", StringComparison.OrdinalIgnoreCase) ||
+                                url.Contains("/api/v1/webhooks/arr", StringComparison.OrdinalIgnoreCase)));
 
                     if (isSeedarr && notification.TryGetProperty("id", out var idProp))
                     {

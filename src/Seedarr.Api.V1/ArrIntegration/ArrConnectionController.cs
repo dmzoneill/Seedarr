@@ -146,8 +146,8 @@ public class ArrConnectionController : Controller
         }
 
         var shouldUnregister = (existing.WebhookEnabled && !definition.WebhookEnabled) ||
-                               (existing.Enable && !definition.Enable) ||
-                               (!string.Equals(existing.Url?.TrimEnd('/'), definition.Url?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
+            (existing.Enable && !definition.Enable) ||
+            (!string.Equals(existing.Url?.TrimEnd('/'), definition.Url?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
 
         if (shouldUnregister)
         {

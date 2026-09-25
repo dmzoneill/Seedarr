@@ -46,9 +46,9 @@ public class FastResumeServiceTest
             }
         }
         catch
-            {
-                // Best-effort test cleanup
-            }
+        {
+            // Best-effort test cleanup
+        }
     }
 
     [Test]

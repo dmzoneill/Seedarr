@@ -63,15 +63,15 @@ public class ArrConnectionCrudTests : ApiTestBase
                     }
                 }
                 catch
-            {
-                // Best-effort test cleanup
-            }
+                {
+                    // Best-effort test cleanup
+                }
             }
         }
         catch
-            {
-                // Best-effort test cleanup
-            }
+        {
+            // Best-effort test cleanup
+        }
     }
 
     private async Task<int> CreateTestConnectionAsync()

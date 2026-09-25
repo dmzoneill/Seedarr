@@ -113,9 +113,9 @@ public class AppFolderPermissionsCheckTest
                     Directory.Delete(tempDir, true);
                 }
                 catch
-            {
-                // Best-effort test cleanup
-            }
+                {
+                    // Best-effort test cleanup
+                }
             }
         }
     }
