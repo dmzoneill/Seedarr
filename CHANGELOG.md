@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.1](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.1) - 2026-09-25
+
+### ✨ Features
+- feat(developer): add Event Bus, Command Console, Network Wiretap, Webhooks, Config, and Simulation Lab suite
+
+### 🐛 Bug Fixes
+- fix(developer): remove duplicate top tabbed menu and align page content to full width
+- fix(database): avoid poisoning pooled sqlite connection with PRAGMA query_only
+
 ## [v1.20.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.0) - 2026-09-25
 
 ### ✨ Features
