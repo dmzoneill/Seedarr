@@ -294,6 +294,9 @@ if (torrent && torrent.uploadSpeed === 0 && torrent.downloadSpeed === 0) {
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S5542:Encryption algorithms should be robust", Justification = "RSASignaturePadding.Pkcs1 is required for compatibility with existing marketplace signatures")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S5542", Justification = "RSASignaturePadding.Pkcs1 is required for compatibility with existing marketplace signatures")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S5542", Justification = "RSASignaturePadding.Pkcs1 is required for compatibility with existing marketplace signatures")]
     public static bool VerifySignature(string sha256Hex, string signatureBase64, string publicKeyPem)
     {
         if (string.IsNullOrWhiteSpace(sha256Hex) || string.IsNullOrWhiteSpace(signatureBase64) || string.IsNullOrWhiteSpace(publicKeyPem))
@@ -315,6 +318,9 @@ if (torrent && torrent.uploadSpeed === 0 && torrent.downloadSpeed === 0) {
         }
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S5542:Encryption algorithms should be robust", Justification = "RSASignaturePadding.Pkcs1 is required for compatibility with existing marketplace signatures")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S5542", Justification = "RSASignaturePadding.Pkcs1 is required for compatibility with existing marketplace signatures")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S5542", Justification = "RSASignaturePadding.Pkcs1 is required for compatibility with existing marketplace signatures")]
     public static string SignHash(string sha256Hex, string privateKeyPem)
     {
         ArgumentNullException.ThrowIfNull(sha256Hex);

@@ -14,6 +14,8 @@ namespace NzbDrone.Core.Automation;
 
 public class ScriptHttpContext
 {
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S4830:Server certificates should be verified", Justification = "Custom automation scripts may target self-signed internal endpoints")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S4830", Justification = "Custom automation scripts may target self-signed internal endpoints")]
     private static readonly Lazy<HttpClient> InsecureClient = new(() => CreatePooledClient(allowInsecure: true));
     private static readonly Lazy<HttpClient> SecureClient = new(() => CreatePooledClient(allowInsecure: false));
 
@@ -34,6 +36,8 @@ public class ScriptHttpContext
         _allowPrivateNetworks = allowPrivateNetworks;
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S4830:Server certificates should be verified", Justification = "Custom automation scripts may target self-signed internal endpoints")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S4830", Justification = "Custom automation scripts may target self-signed internal endpoints")]
     private static HttpClient CreatePooledClient(bool allowInsecure)
     {
         var handler = new SocketsHttpHandler

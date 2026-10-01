@@ -276,56 +276,52 @@ public class ReadarrConnection : IArrConnection
     private MediaMetadata ParseLookupMedia(string json, string title)
     {
         using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+        if (doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0)
         {
             return null;
         }
 
-        foreach (var item in doc.RootElement.EnumerateArray())
+        var item = doc.RootElement[0];
+        var bookElem = item.TryGetProperty("book", out var b) ? b : item;
+
+        var id = bookElem.TryGetProperty("id", out var idProp) && idProp.TryGetInt32(out var idVal) ? idVal : 0;
+        var bookTitle = bookElem.TryGetProperty("title", out var tProp) ? tProp.GetString() : title;
+        var metadata = new MediaMetadata
         {
-            var bookElem = item.TryGetProperty("book", out var b) ? b : item;
+            MediaType = "book",
+            MediaId = id,
+            Title = bookTitle,
+            BookTitle = bookTitle,
+            Overview = bookElem.TryGetProperty("overview", out var ov) ? ov.GetString() : null
+        };
 
-            var id = bookElem.TryGetProperty("id", out var idProp) && idProp.TryGetInt32(out var idVal) ? idVal : 0;
-            var bookTitle = bookElem.TryGetProperty("title", out var tProp) ? tProp.GetString() : title;
-            var metadata = new MediaMetadata
-            {
-                MediaType = "book",
-                MediaId = id,
-                Title = bookTitle,
-                BookTitle = bookTitle,
-                Overview = bookElem.TryGetProperty("overview", out var ov) ? ov.GetString() : null
-            };
-
-            if (bookElem.TryGetProperty("releaseDate", out var rd) && rd.TryGetDateTime(out var rdVal))
-            {
-                metadata.ReleaseDate = rdVal;
-                metadata.Year = rdVal.Year;
-            }
-
-            if (bookElem.TryGetProperty("author", out var authorElem))
-            {
-                var authorName = authorElem.TryGetProperty("authorName", out var an) ? an.GetString()
-                    : (authorElem.TryGetProperty("name", out var n) ? n.GetString() : null);
-                metadata.Author = authorName;
-                metadata.StudioOrNetwork = authorName;
-                metadata.Studio = authorName;
-            }
-            else if (bookElem.TryGetProperty("authorTitle", out var atProp))
-            {
-                var authorName = atProp.GetString();
-                metadata.Author = authorName;
-                metadata.StudioOrNetwork = authorName;
-                metadata.Studio = authorName;
-            }
-
-            ExtractBookFields(bookElem, metadata);
-            ExtractImages(bookElem, metadata);
-            ExtractGenres(bookElem, metadata);
-
-            return metadata;
+        if (bookElem.TryGetProperty("releaseDate", out var rd) && rd.TryGetDateTime(out var rdVal))
+        {
+            metadata.ReleaseDate = rdVal;
+            metadata.Year = rdVal.Year;
         }
 
-        return null;
+        if (bookElem.TryGetProperty("author", out var authorElem))
+        {
+            var authorName = authorElem.TryGetProperty("authorName", out var an) ? an.GetString()
+                : (authorElem.TryGetProperty("name", out var n) ? n.GetString() : null);
+            metadata.Author = authorName;
+            metadata.StudioOrNetwork = authorName;
+            metadata.Studio = authorName;
+        }
+        else if (bookElem.TryGetProperty("authorTitle", out var atProp))
+        {
+            var authorName = atProp.GetString();
+            metadata.Author = authorName;
+            metadata.StudioOrNetwork = authorName;
+            metadata.Studio = authorName;
+        }
+
+        ExtractBookFields(bookElem, metadata);
+        ExtractImages(bookElem, metadata);
+        ExtractGenres(bookElem, metadata);
+
+        return metadata;
     }
 
     private static void ExtractBookFields(JsonElement root, MediaMetadata metadata)
@@ -373,77 +369,71 @@ public class ReadarrConnection : IArrConnection
             metadata.SeriesPosition = spProp.GetString();
         }
 
-        if (root.TryGetProperty("editions", out var editionsArray) && editionsArray.ValueKind == JsonValueKind.Array)
+        if (root.TryGetProperty("editions", out var editionsArray) &&
+            editionsArray.ValueKind == JsonValueKind.Array &&
+            editionsArray.GetArrayLength() > 0)
         {
-            foreach (var edition in editionsArray.EnumerateArray())
+            var edition = editionsArray[0];
+            if (string.IsNullOrEmpty(metadata.Isbn))
             {
-                if (string.IsNullOrEmpty(metadata.Isbn))
+                if (edition.TryGetProperty("isbn13", out var edIsbn13))
                 {
-                    if (edition.TryGetProperty("isbn13", out var edIsbn13))
-                    {
-                        metadata.Isbn = edIsbn13.GetString();
-                    }
-                    else if (edition.TryGetProperty("isbn", out var edIsbn))
-                    {
-                        metadata.Isbn = edIsbn.GetString();
-                    }
-                    else if (edition.TryGetProperty("isbn10", out var edIsbn10))
-                    {
-                        metadata.Isbn = edIsbn10.GetString();
-                    }
+                    metadata.Isbn = edIsbn13.GetString();
                 }
-
-                if (string.IsNullOrEmpty(metadata.Publisher) && edition.TryGetProperty("publisher", out var edPub))
+                else if (edition.TryGetProperty("isbn", out var edIsbn))
                 {
-                    metadata.Publisher = edPub.GetString();
+                    metadata.Isbn = edIsbn.GetString();
                 }
-
-                if (!metadata.PageCount.HasValue && edition.TryGetProperty("pageCount", out var edPc) && edPc.TryGetInt32(out var edPcVal))
+                else if (edition.TryGetProperty("isbn10", out var edIsbn10))
                 {
-                    metadata.PageCount = edPcVal;
+                    metadata.Isbn = edIsbn10.GetString();
                 }
+            }
 
-                if (string.IsNullOrEmpty(metadata.PackagingFormat) && edition.TryGetProperty("format", out var edFmt))
-                {
-                    metadata.PackagingFormat = edFmt.GetString();
-                }
+            if (string.IsNullOrEmpty(metadata.Publisher) && edition.TryGetProperty("publisher", out var edPub))
+            {
+                metadata.Publisher = edPub.GetString();
+            }
 
-                if (string.IsNullOrEmpty(metadata.Asin) && edition.TryGetProperty("asin", out var edAsin))
-                {
-                    metadata.Asin = edAsin.GetString();
-                }
+            if (!metadata.PageCount.HasValue && edition.TryGetProperty("pageCount", out var edPc) && edPc.TryGetInt32(out var edPcVal))
+            {
+                metadata.PageCount = edPcVal;
+            }
 
-                break;
+            if (string.IsNullOrEmpty(metadata.PackagingFormat) && edition.TryGetProperty("format", out var edFmt))
+            {
+                metadata.PackagingFormat = edFmt.GetString();
+            }
+
+            if (string.IsNullOrEmpty(metadata.Asin) && edition.TryGetProperty("asin", out var edAsin))
+            {
+                metadata.Asin = edAsin.GetString();
             }
         }
 
         if (root.TryGetProperty("series", out var seriesProp))
         {
-            if (seriesProp.ValueKind == JsonValueKind.Array)
+            if (seriesProp.ValueKind == JsonValueKind.Array && seriesProp.GetArrayLength() > 0)
             {
-                foreach (var sItem in seriesProp.EnumerateArray())
+                var sItem = seriesProp[0];
+                if (string.IsNullOrEmpty(metadata.SeriesName))
                 {
-                    if (string.IsNullOrEmpty(metadata.SeriesName))
+                    if (sItem.TryGetProperty("series", out var innerSeries) && innerSeries.TryGetProperty("title", out var innerTitle))
                     {
-                        if (sItem.TryGetProperty("series", out var innerSeries) && innerSeries.TryGetProperty("title", out var innerTitle))
-                        {
-                            metadata.SeriesName = innerTitle.GetString();
-                        }
-                        else if (sItem.TryGetProperty("title", out var sTitle))
-                        {
-                            metadata.SeriesName = sTitle.GetString();
-                        }
+                        metadata.SeriesName = innerTitle.GetString();
                     }
-
-                    if (string.IsNullOrEmpty(metadata.SeriesPosition))
+                    else if (sItem.TryGetProperty("title", out var sTitle))
                     {
-                        if (sItem.TryGetProperty("position", out var posProp))
-                        {
-                            metadata.SeriesPosition = posProp.GetString();
-                        }
+                        metadata.SeriesName = sTitle.GetString();
                     }
+                }
 
-                    break;
+                if (string.IsNullOrEmpty(metadata.SeriesPosition))
+                {
+                    if (sItem.TryGetProperty("position", out var posProp))
+                    {
+                        metadata.SeriesPosition = posProp.GetString();
+                    }
                 }
             }
             else if (seriesProp.ValueKind == JsonValueKind.Object)

@@ -125,6 +125,8 @@ public class ArrWebhookService : IArrWebhookService
     {
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3427", Justification = "Overload with default parameters")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S3427", Justification = "Overload with default parameters")]
     public ArrWebhookService(
         IArrConnectionFactory connectionFactory,
         ITorrentService torrentService,
