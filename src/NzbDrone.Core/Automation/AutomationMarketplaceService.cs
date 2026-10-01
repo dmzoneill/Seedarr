@@ -225,16 +225,16 @@ if (res.ok) {
             Signature = "IY/b7q8paSbyYApgWBh7hZIxF0QuHAEi6fpCS0+kSRMF5z0BmzpnMwe0qdk6xpREaBvgAuKtrsSYeBn/asOhrzxwgCM1z6wmsDK9dfp4vIBWZhHrHMWf6tSJ1JPdjJodVTbOgcJo6S5Og9xei1bt1qTOQCjJX8pcj6ER7cmO7pWmTzRB0n+zXz1r0Q5CaiiHaDRi0ZS3U8dWUXpWQCLWB7jQAf0WwyLPImmj/l7CCYaTze8+WwlD5/ynVYjQjJHvR5TF027pIsx6ML1zKMhTM8U2pNYnKZqkRqo5bqACkJB0vRGoeVfyw63hg80Nix0OaJumH2qUZkZu4VDoQ13WCg==",
             InputFields = new List<TemplateInputField>(),
             Code = "name: 'Auto Categorize Media'\n" +
-                   "trigger: 'TorrentAdded'\n" +
-                   "steps:\n" +
-                   "  - name: 'Check for TV Show'\n" +
-                   "    condition: '${torrent.name}'\n" +
-                   "    actions:\n" +
-                   "      - addTag: 'Automated'\n\n" +
-                   "  - name: 'Tag Fast Seeding'\n" +
-                   "    condition: '${torrent.size} > 1000000000'\n" +
-                   "    actions:\n" +
-                   "      - addTag: 'LargeTorrent'\n",
+                "trigger: 'TorrentAdded'\n" +
+                "steps:\n" +
+                "  - name: 'Check for TV Show'\n" +
+                "    condition: '${torrent.name}'\n" +
+                "    actions:\n" +
+                "      - addTag: 'Automated'\n\n" +
+                "  - name: 'Tag Fast Seeding'\n" +
+                "    condition: '${torrent.size} > 1000000000'\n" +
+                "    actions:\n" +
+                "      - addTag: 'LargeTorrent'\n",
         },
         new AutomationMarketplaceTemplate
         {
