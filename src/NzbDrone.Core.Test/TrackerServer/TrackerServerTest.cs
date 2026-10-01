@@ -151,7 +151,7 @@ public class TrackerServerTest
     {
         var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
             "ParseRequest",
-            BindingFlags.NonPublic | BindingFlags.Instance);
+            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
         return ((Dictionary<string, string> Parameters, string Error))method.Invoke(_trackerServer, new object[] { path });
     }
 
