@@ -116,6 +116,7 @@ const ja = {
     system: "システム",
     terminal: "Terminal",
     automation: "Automation",
+    developer: "Developer",
     gettingStarted: "Getting Started",
   },
   topbar: {
@@ -469,6 +470,8 @@ const ja = {
   },
   system: {
     title: "システム",
+    databaseExplorer: "Database Explorer",
+    databaseExplorerSubtitle: "Inspect SQLite database tables, schema, storage allocation, and run ad-hoc queries.",
     status: "ステータス",
     tasks: "タスク",
     backup: "バックアップ",
@@ -542,6 +545,9 @@ const ja = {
     piecesInFlight: "pieces in flight",
     piece: "piece",
     swarmCryptoNetwork: "Swarm Crypto & Network",
+  },
+  developer: {
+    diagnostics: "Runtime & Diagnostics",
   },
   modals: {
     addTorrent: {

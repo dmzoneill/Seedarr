@@ -116,6 +116,7 @@ const tr = {
     system: "Sistem",
     terminal: "Terminal",
     automation: "Automation",
+    developer: "Developer",
     gettingStarted: "Getting Started",
   },
   topbar: {
@@ -469,6 +470,8 @@ const tr = {
   },
   system: {
     title: "Sistem",
+    databaseExplorer: "Database Explorer",
+    databaseExplorerSubtitle: "Inspect SQLite database tables, schema, storage allocation, and run ad-hoc queries.",
     status: "Durum",
     tasks: "Görevler",
     backup: "Yedekleme",
@@ -542,6 +545,9 @@ const tr = {
     piecesInFlight: "pieces in flight",
     piece: "piece",
     swarmCryptoNetwork: "Swarm Crypto & Network",
+  },
+  developer: {
+    diagnostics: "Runtime & Diagnostics",
   },
   modals: {
     addTorrent: {

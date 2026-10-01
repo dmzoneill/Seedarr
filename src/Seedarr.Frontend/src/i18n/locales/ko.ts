@@ -116,6 +116,7 @@ const ko = {
     system: "시스템",
     terminal: "Terminal",
     automation: "Automation",
+    developer: "Developer",
     gettingStarted: "Getting Started",
   },
   topbar: {
@@ -469,6 +470,8 @@ const ko = {
   },
   system: {
     title: "시스템",
+    databaseExplorer: "Database Explorer",
+    databaseExplorerSubtitle: "Inspect SQLite database tables, schema, storage allocation, and run ad-hoc queries.",
     status: "상태",
     tasks: "작업",
     backup: "백업",
@@ -542,6 +545,9 @@ const ko = {
     piecesInFlight: "pieces in flight",
     piece: "piece",
     swarmCryptoNetwork: "Swarm Crypto & Network",
+  },
+  developer: {
+    diagnostics: "Runtime & Diagnostics",
   },
   modals: {
     addTorrent: {

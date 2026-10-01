@@ -10,15 +10,22 @@
   <strong>BitTorrent Seeding Simulator</strong> &mdash; the *arr-family approach to maintaining your ratio.
 </p>
 
-<p align="center">
-  <a href="https://hub.docker.com/r/feeditout/seedarr"><img src="https://img.shields.io/docker/pulls/feeditout/seedarr?color=blue&logo=docker&style=flat-square" alt="Docker Pulls"></a>
-  <a href="https://hub.docker.com/r/feeditout/seedarr"><img src="https://img.shields.io/docker/image-size/feeditout/seedarr/latest?color=blue&style=flat-square" alt="Docker Image Size"></a>
-  <img src="https://img.shields.io/badge/arch-amd64%20%7C%20arm64-blue?style=flat-square" alt="Architectures">
-  <a href="https://github.com/dmzoneill/Seedarr/releases/latest"><img src="https://img.shields.io/github/v/release/dmzoneill/Seedarr?color=brightgreen&label=release&style=flat-square" alt="Latest Release"></a>
-  <a href="https://github.com/dmzoneill/Seedarr/actions/workflows/main.yml"><img src="https://github.com/dmzoneill/Seedarr/workflows/CICD/badge.svg?style=flat-square" alt="CI/CD Status"></a>
-  <a href="https://github.com/dmzoneill/Seedarr/blob/main/LICENSE"><img src="https://img.shields.io/github/license/dmzoneill/Seedarr?color=blue&style=flat-square" alt="License"></a>
-  <a href="https://www.seedarr.net"><img src="https://img.shields.io/badge/website-seedarr.net-c8a84e?style=flat-square" alt="Website"></a>
-</p>
+<table>
+  <tr>
+    <td><a href="https://www.seedarr.net"><img src="https://img.shields.io/badge/website-seedarr.net-c8a84e" alt="Website"></a></td>
+    <td><a href="https://github.com/dmzoneill/Seedarr/actions/workflows/main.yml"><img src="https://github.com/dmzoneill/Seedarr/workflows/CICD/badge.svg" alt="CI/CD"></a></td>
+    <td><a href="https://github.com/dmzoneill/Seedarr/releases/latest"><img src="https://img.shields.io/github/v/release/dmzoneill/Seedarr?color=brightgreen&label=release" alt="Latest Release"></a></td>
+    <td><a href="https://github.com/dmzoneill/Seedarr/blob/main/LICENSE"><img src="https://img.shields.io/github/license/dmzoneill/Seedarr?color=blue" alt="License"></a></td>
+    <td><a href="https://hub.docker.com/r/feeditout/seedarr"><img src="https://img.shields.io/docker/pulls/feeditout/seedarr?color=blue&logo=docker" alt="Docker Pulls"></a></td>
+  </tr>
+  <tr>
+    <td><a href="https://ghcr.io/dmzoneill/seedarr"><img src="https://img.shields.io/badge/ghcr.io-seedarr-blue?logo=github" alt="GHCR"></a></td>
+    <td><img src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet" alt=".NET 10"></td>
+    <td><img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React 19"></td>
+    <td><img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript" alt="TypeScript"></td>
+    <td></td>
+  </tr>
+</table>
 
 ---
 

@@ -116,6 +116,7 @@ const te = {
     system: "సిస్టమ్",
     terminal: "Terminal",
     automation: "Automation",
+    developer: "Developer",
     gettingStarted: "Getting Started",
   },
   topbar: {
@@ -469,6 +470,8 @@ const te = {
   },
   system: {
     title: "సిస్టమ్",
+    databaseExplorer: "Database Explorer",
+    databaseExplorerSubtitle: "Inspect SQLite database tables, schema, storage allocation, and run ad-hoc queries.",
     status: "స్థితి",
     tasks: "టాస్క్‌లు",
     backup: "బ్యాకప్",
@@ -542,6 +545,9 @@ const te = {
     piecesInFlight: "pieces in flight",
     piece: "piece",
     swarmCryptoNetwork: "Swarm Crypto & Network",
+  },
+  developer: {
+    diagnostics: "Runtime & Diagnostics",
   },
   modals: {
     addTorrent: {

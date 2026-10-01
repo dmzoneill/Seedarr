@@ -1,4 +1,4 @@
-// Copyright (c) PlaceholderCompany. All rights reserved.
+// Copyright (c) FeedItOut. All rights reserved.
 
 using System;
 using System.Collections.Generic;
@@ -40,6 +40,8 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
+        AppDomain.CurrentDomain.SetData("REGEX_DEFAULT_MATCH_TIMEOUT", TimeSpan.FromSeconds(2));
+
         services.AddProblemDetails();
 
         services.AddResponseCompression(options =>
@@ -50,7 +52,10 @@ public class Startup
         var apiAssembly = Assembly.Load("Seedarr.Api.V1");
         var httpAssembly = Assembly.Load("Seedarr.Http");
 
-        services.AddControllers()
+        services.AddControllers(options =>
+            {
+                options.InputFormatters.Insert(0, new Seedarr.Api.V1.Transmission.TransmissionRpcInputFormatter());
+            })
             .AddApplicationPart(apiAssembly)
             .AddApplicationPart(httpAssembly)
             .AddJsonOptions(options =>
@@ -468,6 +473,15 @@ public class Startup
                 c.InjectStylesheet($"{pathBase}/swagger-custom.css");
                 c.ConfigObject.PersistAuthorization = true;
             });
+        });
+
+        app.Use(async (context, next) =>
+        {
+            if (string.Equals(context.Request.Path.Value, "/transmission/rpc/", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Request.Path = "/transmission/rpc";
+            }
+            await next();
         });
 
         app.UseRouting();
