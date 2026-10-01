@@ -116,6 +116,7 @@ const bn = {
     system: "সিস্টেম",
     terminal: "Terminal",
     automation: "Automation",
+    developer: "Developer",
     gettingStarted: "Getting Started",
   },
   topbar: {
@@ -469,6 +470,8 @@ const bn = {
   },
   system: {
     title: "সিস্টেম",
+    databaseExplorer: "Database Explorer",
+    databaseExplorerSubtitle: "Inspect SQLite database tables, schema, storage allocation, and run ad-hoc queries.",
     status: "অবস্থা",
     tasks: "কাজ",
     backup: "ব্যাকআপ",
@@ -542,6 +545,9 @@ const bn = {
     piecesInFlight: "pieces in flight",
     piece: "piece",
     swarmCryptoNetwork: "Swarm Crypto & Network",
+  },
+  developer: {
+    diagnostics: "Runtime & Diagnostics",
   },
   modals: {
     addTorrent: {
