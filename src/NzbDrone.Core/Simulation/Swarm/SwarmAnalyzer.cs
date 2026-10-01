@@ -127,7 +127,7 @@ public class SwarmAnalyzer : ISwarmAnalyzer
         return ratioFactor * availabilityFactor;
     }
 
-    private (SeedingRecommendation Recommendation, string Reason, double Confidence) EvaluateRecommendation(
+    private static (SeedingRecommendation Recommendation, string Reason, double Confidence) EvaluateRecommendation(
         SwarmSnapshot snapshot,
         SwarmMetrics metrics)
     {

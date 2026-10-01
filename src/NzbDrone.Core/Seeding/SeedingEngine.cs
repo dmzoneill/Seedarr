@@ -831,7 +831,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         return (alpha * instantSpeed) + ((1.0 - alpha) * currentEma);
     }
 
-    private long CalculateMovingAverageSpeed(int torrentId, long instantSpeed, Dictionary<int, double> history, double elapsedSeconds)
+    private static long CalculateMovingAverageSpeed(int torrentId, long instantSpeed, Dictionary<int, double> history, double elapsedSeconds)
     {
         const double tau = 3.0;
 

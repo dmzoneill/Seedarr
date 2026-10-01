@@ -10,6 +10,7 @@ public interface IRandomNumberGenerator
     double NextDouble();
 }
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5394:Do not use insecure randomness", Justification = "RandomNumberGenerator is a mockable wrapper for non-cryptographic seeding simulation")]
 public class RandomNumberGenerator : IRandomNumberGenerator
 {
     private readonly Random _random;

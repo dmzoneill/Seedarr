@@ -368,7 +368,7 @@ public class SidecarProcessHost : ISidecarProcessHost
         }
     }
 
-    internal TimeSpan CalculateBackoff(int crashCount)
+    internal static TimeSpan CalculateBackoff(int crashCount)
     {
         if (crashCount <= 0)
         {

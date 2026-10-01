@@ -164,7 +164,7 @@ public class DelugeJsonRpcController : ControllerBase
         return false;
     }
 
-    private IActionResult DelugeResult(object value)
+    private static IActionResult DelugeResult(object value)
     {
         return new JsonResult(value, _delugeJsonOptions);
     }
@@ -457,24 +457,24 @@ public class DelugeJsonRpcController : ControllerBase
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
-    private IActionResult HandleWebConnected(object id)
+    private static IActionResult HandleWebConnected(object id)
     {
         return DelugeResult(new { result = _isWebConnected, error = (object)null, id });
     }
 
-    private IActionResult HandleWebConnect(object id)
+    private static IActionResult HandleWebConnect(object id)
     {
         _isWebConnected = true;
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
-    private IActionResult HandleWebDisconnect(object id)
+    private static IActionResult HandleWebDisconnect(object id)
     {
         _isWebConnected = false;
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
-    private IActionResult HandleSystemListMethods(object id)
+    private static IActionResult HandleSystemListMethods(object id)
     {
         return DelugeResult(new
         {
@@ -555,7 +555,7 @@ public class DelugeJsonRpcController : ControllerBase
         });
     }
 
-    private IActionResult HandleGetVersion(object id)
+    private static IActionResult HandleGetVersion(object id)
     {
         return DelugeResult(new { result = "2.1.1", error = (object)null, id });
     }
@@ -792,22 +792,22 @@ public class DelugeJsonRpcController : ControllerBase
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
-    private IActionResult HandleGetPlugins(object id)
+    private static IActionResult HandleGetPlugins(object id)
     {
         return DelugeResult(new { result = new[] { "Label", "Extractor", "Execute", "AutoAdd", "Blocklist", "Scheduler", "Stats" }, error = (object)null, id });
     }
 
-    private IActionResult HandleTogglePlugin(object id)
+    private static IActionResult HandleTogglePlugin(object id)
     {
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
-    private IActionResult HandleWebGetHosts(object id)
+    private static IActionResult HandleWebGetHosts(object id)
     {
         return DelugeResult(new { result = new object[] { new object[] { "1", "127.0.0.1", 58846, _isWebConnected ? "Connected" : "Offline" } }, error = (object)null, id });
     }
 
-    private IActionResult HandleWebGetHostStatus(object id)
+    private static IActionResult HandleWebGetHostStatus(object id)
     {
         return DelugeResult(new { result = new object[] { "1", _isWebConnected ? "Connected" : "Offline", "2.1.1" }, error = (object)null, id });
     }
@@ -2360,7 +2360,7 @@ public class DelugeJsonRpcController : ControllerBase
         return result.ToList();
     }
 
-    private Dictionary<string, object> BuildFilterTree(List<Torrent> torrents)
+    private static Dictionary<string, object> BuildFilterTree(List<Torrent> torrents)
     {
         var states = new Dictionary<string, int>
         {

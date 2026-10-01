@@ -740,7 +740,7 @@ public class TmdbMetadataProvider : ITmdbMetadataProvider
         return null;
     }
 
-    private TimeSpan GetRetryAfterDelay(HttpResponseMessage response, int attempt)
+    private static TimeSpan GetRetryAfterDelay(HttpResponseMessage response, int attempt)
     {
         if (response.Headers.RetryAfter != null)
         {

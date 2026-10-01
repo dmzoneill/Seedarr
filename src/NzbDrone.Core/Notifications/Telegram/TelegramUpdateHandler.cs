@@ -422,7 +422,7 @@ public class TelegramUpdateHandler : ITelegramUpdateHandler
         };
     }
 
-    private TelegramResponse HandleStart(long chatId)
+    private static TelegramResponse HandleStart(long chatId)
     {
         var text = "<b>Seedarr Telegram Bot</b>\n\n" +
                    "Status: <b>Authorized</b> ✅\n\n" +

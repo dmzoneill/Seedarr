@@ -343,7 +343,7 @@ public class TorrentImportService : ITorrentImportService
         }
     }
 
-    private void ValidateInfoHash(string infoHash)
+    private static void ValidateInfoHash(string infoHash)
     {
         if (string.IsNullOrWhiteSpace(infoHash))
         {

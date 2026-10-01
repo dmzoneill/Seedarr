@@ -859,7 +859,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _piecePicker?.OnBlockRejected(connection, pieceIndex, begin, length);
     }
 
-    public bool CanRequestBlock(PeerConnection connection, int pieceIndex)
+    public static bool CanRequestBlock(PeerConnection connection, int pieceIndex)
     {
         if (connection == null)
         {
