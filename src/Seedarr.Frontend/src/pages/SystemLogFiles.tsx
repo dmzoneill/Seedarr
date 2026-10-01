@@ -96,7 +96,7 @@ function SystemLogFiles() {
     : "{appData}/logs";
 
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["logfiles"] });
+    void queryClient.invalidateQueries({ queryKey: ["logfiles"] });
   };
 
   const handleClear = () => {

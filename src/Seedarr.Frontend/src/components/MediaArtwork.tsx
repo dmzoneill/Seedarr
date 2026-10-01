@@ -144,7 +144,7 @@ export function MediaArtwork({
     typeof width === "number"
       ? width
       : typeof width === "string" && width.endsWith("px")
-        ? parseInt(width, 10)
+        ? Number.parseInt(width, 10)
         : undefined;
 
   const isVerySmall = numericWidth !== undefined && numericWidth <= 30;

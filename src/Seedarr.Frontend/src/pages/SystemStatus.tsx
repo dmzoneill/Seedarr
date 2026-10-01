@@ -89,7 +89,7 @@ function SystemStatus() {
             ),
             "success",
           );
-          queryClient.invalidateQueries({ queryKey: ["systemStatus"] });
+          void queryClient.invalidateQueries({ queryKey: ["systemStatus"] });
         }
       } catch {
         // Service is restarting, continue waiting
@@ -788,7 +788,7 @@ function SystemStatus() {
                     d.totalSpace > 0
                       ? ((d.totalSpace - d.freeSpace) / d.totalSpace) * 100
                       : 0;
-                  const safePercent = isNaN(rawPercent) ? 0 : rawPercent;
+                  const safePercent = Number.isNaN(rawPercent) ? 0 : rawPercent;
                   const usedPercent = Math.min(100, Math.max(0, safePercent));
                   let barClass = "disk-progress-bar";
                   if (usedPercent >= 90)

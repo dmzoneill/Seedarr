@@ -28,8 +28,8 @@ export default function DeveloperNetwork() {
   }, [search]);
 
   useEffect(() => {
-    fetchTraffic();
-    const interval = setInterval(fetchTraffic, 2500);
+    void fetchTraffic();
+    const interval = setInterval(() => { void fetchTraffic(); }, 2500);
     return () => clearInterval(interval);
   }, [fetchTraffic]);
 
@@ -51,7 +51,7 @@ export default function DeveloperNetwork() {
         curl += ` \\\n  -H "${k}: ${v}"`;
       });
     }
-    navigator.clipboard.writeText(curl);
+    void navigator.clipboard.writeText(curl);
     setActionMessage({ text: "cURL command copied to clipboard!", type: "success" });
   };
 

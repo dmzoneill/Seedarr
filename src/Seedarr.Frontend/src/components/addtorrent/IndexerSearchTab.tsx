@@ -346,7 +346,7 @@ export function IndexerSearchTab({
             className="btn btn-primary"
             onClick={() => {
               if (onClose) onClose();
-              navigate("/settings/indexers");
+              void navigate("/settings/indexers");
             }}
           >
             {t("addTorrent.configureIndexers", "⚙️ Configure Indexers")}

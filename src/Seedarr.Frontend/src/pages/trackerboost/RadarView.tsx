@@ -30,7 +30,7 @@ export function RadarView({ onOpenBulkImport }: RadarViewProps) {
     const uniqueUrls = Array.from(new Set(trackers.map((t) => t.url))).join(
       "\n",
     );
-    navigator.clipboard.writeText(uniqueUrls);
+    void navigator.clipboard.writeText(uniqueUrls);
     showToast(
       t(
         "trackerBoost.radar.copiedUrlsToast",

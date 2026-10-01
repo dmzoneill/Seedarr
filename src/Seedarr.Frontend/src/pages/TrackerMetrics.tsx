@@ -54,8 +54,8 @@ export function TrackerMetrics() {
   const { showToast } = useToast();
 
   const handleRefresh = () => {
-    refetchMetrics();
-    refetchSummary();
+    void refetchMetrics();
+    void refetchSummary();
     showToast("Tracker metrics refreshed", "info");
   };
 

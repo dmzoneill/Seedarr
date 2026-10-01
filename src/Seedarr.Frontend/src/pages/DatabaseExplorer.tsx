@@ -17,7 +17,7 @@ function formatBytes(bytes: number): string {
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
 interface PlanTreeNode extends QueryPlanNode {
@@ -143,7 +143,7 @@ export default function DatabaseExplorer() {
       if (tablesData && tablesData.length > 0 && !selectedTable) {
         setSelectedTable(tablesData[0].name);
       }
-      fetchStorage();
+      await fetchStorage();
     } catch (err: any) {
       setSchemaError(err?.message || "Failed to load database schema.");
     } finally {
@@ -152,7 +152,7 @@ export default function DatabaseExplorer() {
   }, [selectedTable, fetchStorage]);
 
   useEffect(() => {
-    fetchSchema();
+    void fetchSchema();
   }, [fetchSchema]);
 
   // Treemap ResizeObserver
@@ -331,7 +331,7 @@ export default function DatabaseExplorer() {
       setQueryResult(res);
       // Refresh schema if DDL was run
       if (isWrite) {
-        fetchSchema();
+        await fetchSchema();
       }
     } catch (err: any) {
       setQueryResult({
@@ -348,7 +348,7 @@ export default function DatabaseExplorer() {
   // Copy Mermaid ERD
   const copyMermaid = () => {
     if (!schema?.mermaidErd) return;
-    navigator.clipboard.writeText(schema.mermaidErd);
+    void navigator.clipboard.writeText(schema.mermaidErd);
     setCopyFeedback("Copied Mermaid ERD to clipboard!");
     setTimeout(() => setCopyFeedback(null), 3000);
   };
@@ -359,7 +359,7 @@ export default function DatabaseExplorer() {
     setQuery(newQuery);
     setSelectedTable(name);
     setActiveTab("console");
-    runQuery(newQuery, false);
+    void runQuery(newQuery, false);
   };
 
   // Filtered tables for canvas/inspector
@@ -550,7 +550,7 @@ export default function DatabaseExplorer() {
           style={{ borderRadius: "6px 6px 0 0", borderBottom: "none" }}
           onClick={() => {
             setActiveTab("treemap");
-            if (!storageData) fetchStorage();
+            if (!storageData) void fetchStorage();
           }}
         >
           <span>🗺️</span> Storage Treemap
@@ -1393,7 +1393,7 @@ export default function DatabaseExplorer() {
                 onKeyDown={(e) => {
                   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
                     e.preventDefault();
-                    runQuery();
+                    void runQuery();
                   }
                 }}
                 rows={4}

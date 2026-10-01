@@ -219,7 +219,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
       `Added ${addedCount} tracker(s) to torrent and triggered announce`,
       "success",
     );
-    refetch();
+    void refetch();
   };
 
   const handleDeleteTracker = (trackerId: number) => {
@@ -229,7 +229,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
       {
         onSuccess: () => {
           showToast("Tracker removed and reannounced", "success");
-          refetch();
+          void refetch();
         },
         onError: (err) => {
           showToast(`Failed to remove tracker: ${err.message}`, "error");

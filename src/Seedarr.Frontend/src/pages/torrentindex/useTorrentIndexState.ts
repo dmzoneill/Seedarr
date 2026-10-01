@@ -46,7 +46,7 @@ export function useTorrentIndexState() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => {
     const select = searchParams.get("select");
     if (select) {
-      const id = parseInt(select.trim(), 10);
+      const id = Number.parseInt(select.trim(), 10);
       if (!Number.isNaN(id) && id > 0) return new Set([id]);
     }
     return new Set();
@@ -135,7 +135,7 @@ export function useTorrentIndexState() {
     () => {
       const select = searchParams.get("select");
       if (select) {
-        const id = parseInt(select.trim(), 10);
+        const id = Number.parseInt(select.trim(), 10);
         if (!Number.isNaN(id) && id > 0) return id;
       }
       return null;
@@ -157,7 +157,7 @@ export function useTorrentIndexState() {
     (() => {
       const select = searchParams.get("select");
       if (select) {
-        const id = parseInt(select.trim(), 10);
+        const id = Number.parseInt(select.trim(), 10);
         if (!Number.isNaN(id) && id > 0) return id;
       }
       return null;
@@ -257,7 +257,7 @@ export function useTorrentIndexState() {
     }
 
     if (selectParam !== null) {
-      const numericId = parseInt(selectParam.trim(), 10);
+      const numericId = Number.parseInt(selectParam.trim(), 10);
       if (!Number.isNaN(numericId) && numericId > 0) {
         setSelectedTorrentId(numericId);
         setSelectedIds((prev) => new Set(prev).add(numericId));

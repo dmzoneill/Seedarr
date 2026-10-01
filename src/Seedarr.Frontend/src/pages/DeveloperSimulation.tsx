@@ -8,7 +8,7 @@ function formatBytes(bytes: number, decimals = 2): string {
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+  return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
 }
 
 export default function DeveloperSimulation() {
@@ -28,8 +28,8 @@ export default function DeveloperSimulation() {
   }, []);
 
   useEffect(() => {
-    fetchSimulation();
-    const interval = setInterval(fetchSimulation, 3000);
+    void fetchSimulation();
+    const interval = setInterval(() => { void fetchSimulation(); }, 3000);
     return () => clearInterval(interval);
   }, [fetchSimulation]);
 
@@ -58,7 +58,7 @@ export default function DeveloperSimulation() {
         <div>
           <button
             onClick={() => {
-              fetchSimulation();
+              void fetchSimulation();
               setActionMessage({ text: "Simulation metrics refreshed.", type: "success" });
             }}
             style={{

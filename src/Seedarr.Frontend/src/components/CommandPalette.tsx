@@ -197,7 +197,7 @@ export function CommandPalette({
         subtitle: n.subtitle,
         icon: n.icon,
         onSelect: () => {
-          navigate(n.path);
+          void navigate(n.path);
           onClose();
         },
       });
@@ -275,7 +275,7 @@ export function CommandPalette({
         subtitle: s.subtitle,
         icon: "⚙️",
         onSelect: () => {
-          navigate(s.path);
+          void navigate(s.path);
           onClose();
         },
       });
@@ -552,7 +552,7 @@ export function CommandPalette({
               ? "badge-danger"
               : "badge-primary",
         onSelect: () => {
-          navigate(`/torrents?select=${t.id}`);
+          void navigate(`/torrents?select=${t.id}`);
           onClose();
         },
       });

@@ -73,7 +73,7 @@ export function PromptModal({
 
     if (inputType === "number") {
       const num = Number(value);
-      if (isNaN(num)) {
+      if (Number.isNaN(num)) {
         setError(
           t("common.invalidNumber", undefined, "Please enter a valid number"),
         );

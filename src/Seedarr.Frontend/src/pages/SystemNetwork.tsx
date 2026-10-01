@@ -17,7 +17,7 @@ function EncryptionDonut({
   const radius = 35;
   const circumference = 2 * Math.PI * radius;
 
-  if (total === 0 || isNaN(total)) {
+  if (total === 0 || Number.isNaN(total)) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
         <svg width={84} height={84} viewBox="0 0 80 80">
@@ -82,7 +82,7 @@ function EncryptionDonut({
   }
 
   const rawPct = enc / total;
-  const encPct = Math.max(0, Math.min(1, isNaN(rawPct) ? 0 : rawPct));
+  const encPct = Math.max(0, Math.min(1, Number.isNaN(rawPct) ? 0 : rawPct));
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 20 }}>

@@ -174,7 +174,7 @@ export function MediaPlayerModal({
           );
         }
       } else {
-        const id = parseInt(val, 10);
+        const id = Number.parseInt(val, 10);
         setActiveSubtitleTrackId(id);
         if (videoRef.current) {
           setSubtitleTrackActive(
@@ -191,10 +191,13 @@ export function MediaPlayerModal({
   const handleCopyStreamUrl = useCallback(() => {
     const fullUrl = getAbsoluteUrl(streamUrl);
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(fullUrl).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
-      });
+      void navigator.clipboard
+        .writeText(fullUrl)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2500);
+        })
+        .catch(() => {});
     }
   }, [streamUrl]);
 

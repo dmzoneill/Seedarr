@@ -261,7 +261,7 @@ export function SecurityTab() {
   }, [config]);
 
   useEffect(() => {
-    loadProviders();
+    void loadProviders();
   }, []);
 
   const editingProviderTrapRef = useFocusTrap<HTMLDivElement>({

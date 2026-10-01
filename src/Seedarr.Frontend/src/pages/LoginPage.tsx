@@ -38,7 +38,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [providers, setProviders] = useState<AuthProvider[]>([]);
 
   useEffect(() => {
-    loadProviders(returnUrl);
+    void loadProviders(returnUrl);
   }, [returnUrl]);
 
   const loadProviders = async (redirectUrl?: string) => {

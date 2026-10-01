@@ -252,7 +252,7 @@ export function getSignalRConnection(): HubConnection {
     connection.onreconnecting(() => notifyStatus("reconnecting"));
     connection.onreconnected(async () => {
       notifyStatus("connected");
-      resubscribeActiveGroups();
+      await resubscribeActiveGroups();
       try {
         const snapshot = await connection?.invoke<StateSnapshot>(
           "RequestStateSnapshot",
@@ -282,7 +282,7 @@ export function getSignalRConnection(): HubConnection {
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         if (connection?.state === HubConnectionState.Disconnected) {
-          startSignalR();
+          void startSignalR();
         }
       }, 2000);
     });
@@ -312,7 +312,7 @@ export async function startSignalR(): Promise<void> {
         .start()
         .then(() => {
           notifyStatus("connected");
-          resubscribeActiveGroups();
+          void resubscribeActiveGroups();
         })
         .catch((err) => {
           console.error("SignalR connection failed:", err);
@@ -485,7 +485,7 @@ export function useSignalR(queryClient?: QueryClient) {
     setStatus(mapHubState(conn.state));
 
     if (conn.state === HubConnectionState.Disconnected) {
-      startSignalR();
+      void startSignalR();
     }
 
     const handleReconnected = async () => {
@@ -530,9 +530,9 @@ export function useSignalR(queryClient?: QueryClient) {
       } catch (err) {
         console.warn("Failed to reconcile state snapshot on reconnect:", err);
         if (qc) {
-          qc.invalidateQueries({ queryKey: ["torrents"] });
-          qc.invalidateQueries({ queryKey: ["seeding", "stats"] });
-          qc.invalidateQueries({ queryKey: ["health"] });
+          void qc.invalidateQueries({ queryKey: ["torrents"] });
+          void qc.invalidateQueries({ queryKey: ["seeding", "stats"] });
+          void qc.invalidateQueries({ queryKey: ["health"] });
         }
       }
     };

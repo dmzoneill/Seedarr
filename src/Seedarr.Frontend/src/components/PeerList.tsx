@@ -34,7 +34,7 @@ function PeerList({ torrentId }: PeerListProps) {
   const [maskIps, setMaskIps] = useState<boolean>(false);
 
   const handleCopyIp = (ipPort: string) => {
-    navigator.clipboard.writeText(ipPort);
+    void navigator.clipboard.writeText(ipPort);
     showToast(`Copied ${ipPort} to clipboard`, "success");
   };
 

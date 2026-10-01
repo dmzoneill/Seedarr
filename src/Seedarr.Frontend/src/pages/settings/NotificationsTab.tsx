@@ -60,7 +60,7 @@ function sanitizeNotificationSettings(
   let autoDismissSeconds = fallback.autoDismissSeconds;
   if (
     typeof raw.autoDismissSeconds === "number" &&
-    !isNaN(raw.autoDismissSeconds)
+    !Number.isNaN(raw.autoDismissSeconds)
   ) {
     autoDismissSeconds = Math.min(
       60,

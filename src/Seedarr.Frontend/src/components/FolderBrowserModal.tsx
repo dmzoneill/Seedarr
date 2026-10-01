@@ -87,7 +87,7 @@ export function FolderBrowserModal({
       showToast(`Created folder "${folderName}"`, "success");
       setNewFolderName("");
       setShowNewFolderInput(false);
-      refetch();
+      await refetch();
     } catch (err: any) {
       showToast(err?.message || "Failed to create folder", "error");
     }
@@ -323,7 +323,7 @@ export function FolderBrowserModal({
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreateFolder();
+                  if (e.key === "Enter") void handleCreateFolder();
                 }}
                 placeholder={t(
                   "folderBrowser.folderNamePlaceholder",

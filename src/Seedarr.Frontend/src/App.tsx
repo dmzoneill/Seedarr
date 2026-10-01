@@ -247,8 +247,8 @@ function App() {
   const handleUnlockSession = useCallback(() => {
     setIsManuallyLocked(false);
     unlockSession();
-    loadUser();
-    reconnect();
+    void loadUser();
+    void reconnect();
     showToast(
       t("auth.sessionUnlocked", undefined, "Session unlocked successfully"),
       "success",
@@ -275,7 +275,7 @@ function App() {
   };
 
   useEffect(() => {
-    loadUser();
+    void loadUser();
     apiClient
       .getSetupStatus()
       .then((status) => {
@@ -299,8 +299,8 @@ function App() {
     const unsubscribe = subscribeAuthChannel((event) => {
       if (event.type === "AUTH_LOGOUT") {
         updateCurrentUser(null);
-        stopSignalR();
-        navigate("/login");
+        void stopSignalR();
+        void navigate("/login");
         showToast(
           t(
             "auth.loggedOutOtherTab",
@@ -323,18 +323,18 @@ function App() {
           );
         } else {
           updateCurrentUser(null);
-          stopSignalR();
-          navigate("/login");
+          void stopSignalR();
+          void navigate("/login");
         }
       } else if (event.type === "AUTH_LOGIN") {
         if (event.user) {
           updateCurrentUser(event.user);
         } else {
-          loadUser();
+          void loadUser();
         }
-        reconnect();
+        void reconnect();
         if (location.pathname === "/login") {
-          navigate("/");
+          void navigate("/");
         }
         showToast(
           t("auth.loggedInOtherTab", undefined, "Signed in from another tab."),
@@ -356,8 +356,8 @@ function App() {
     } finally {
       broadcastLogout();
       updateCurrentUser(null);
-      stopSignalR();
-      navigate("/login");
+      await stopSignalR();
+      await navigate("/login");
     }
   };
 
@@ -680,35 +680,35 @@ function App() {
         if (keyLower === "d") {
           e.preventDefault();
           e.stopImmediatePropagation?.();
-          navigate("/");
+          void navigate("/");
         } else if (keyLower === "t") {
           e.preventDefault();
           e.stopImmediatePropagation?.();
-          navigate("/torrents");
+          void navigate("/torrents");
         } else if (keyLower === "h") {
           e.preventDefault();
           e.stopImmediatePropagation?.();
-          navigate("/activity/history");
+          void navigate("/activity/history");
         } else if (keyLower === "b") {
           e.preventDefault();
           e.stopImmediatePropagation?.();
-          navigate("/tracker/trackerboost");
+          void navigate("/tracker/trackerboost");
         } else if (keyLower === "m") {
           e.preventDefault();
           e.stopImmediatePropagation?.();
-          navigate("/activity/metrics");
+          void navigate("/activity/metrics");
         } else if (keyLower === "p") {
           e.preventDefault();
           e.stopImmediatePropagation?.();
-          navigate("/peermap");
+          void navigate("/peermap");
         } else if (keyLower === "s") {
           e.preventDefault();
           e.stopImmediatePropagation?.();
-          navigate("/settings/general");
+          void navigate("/settings/general");
         } else if (keyLower === "c") {
           e.preventDefault();
           e.stopImmediatePropagation?.();
-          navigate("/system/terminal");
+          void navigate("/system/terminal");
         }
       }
     };
@@ -725,8 +725,8 @@ function App() {
       <ErrorBoundary>
         <LoginPage
           onLoginSuccess={(returnUrl) => {
-            loadUser();
-            navigate(returnUrl || "/");
+            void loadUser();
+            void navigate(returnUrl || "/");
           }}
         />
       </ErrorBoundary>
@@ -1582,8 +1582,8 @@ function App() {
                 element={
                   <LoginPage
                     onLoginSuccess={(returnUrl) => {
-                      loadUser();
-                      navigate(returnUrl || "/");
+                      void loadUser();
+                      void navigate(returnUrl || "/");
                     }}
                   />
                 }

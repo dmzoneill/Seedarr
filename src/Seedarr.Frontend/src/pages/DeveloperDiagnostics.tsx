@@ -8,7 +8,7 @@ function formatBytes(bytes: number): string {
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
 function formatUptime(seconds: number): string {
@@ -46,7 +46,7 @@ export default function DeveloperDiagnostics() {
   }, []);
 
   useEffect(() => {
-    fetchDiagnostics();
+    void fetchDiagnostics();
   }, [fetchDiagnostics]);
 
   const handlePragmaOptimize = async () => {
@@ -58,7 +58,7 @@ export default function DeveloperDiagnostics() {
         readOnly: false,
       });
       setActionMessage({ text: "PRAGMA optimize completed successfully.", type: "success" });
-      fetchDiagnostics();
+      await fetchDiagnostics();
     } catch (err: any) {
       setActionMessage({ text: err?.message || "PRAGMA optimize failed.", type: "error" });
     } finally {
@@ -76,7 +76,7 @@ export default function DeveloperDiagnostics() {
         readOnly: false,
       });
       setActionMessage({ text: "Database VACUUM completed successfully.", type: "success" });
-      fetchDiagnostics();
+      await fetchDiagnostics();
     } catch (err: any) {
       setActionMessage({ text: err?.message || "VACUUM failed.", type: "error" });
     } finally {

@@ -45,7 +45,7 @@ function getReannounceCountdown(
         );
 
   const lastAnnounceTime = new Date(tracker.lastAnnounce).getTime();
-  if (isNaN(lastAnnounceTime)) return 0;
+  if (Number.isNaN(lastAnnounceTime)) return 0;
   const earliestAllowed = lastAnnounceTime + minInterval * 1000;
   const remainingSeconds = Math.ceil((earliestAllowed - now) / 1000);
   return remainingSeconds > 0 ? remainingSeconds : 0;
@@ -266,14 +266,14 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
       `Added ${addedCount} tracker(s) to torrent and triggered announce`,
       "success",
     );
-    refetch();
+    void refetch();
   };
 
   const handleEnrichTrackers = () => {
     boostTorrent.mutate(torrent.id, {
       onSuccess: (res) => {
         showToast(res.message, res.boosted ? "success" : "info");
-        refetch();
+        void refetch();
       },
       onError: (err) => {
         showToast(`Failed to enrich trackers: ${err.message}`, "error");
@@ -287,7 +287,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
       {
         onSuccess: () => {
           showToast("Tracker removed and reannounced", "success");
-          refetch();
+          void refetch();
         },
         onError: (err) => {
           showToast(`Failed to remove tracker: ${err.message}`, "error");
@@ -389,8 +389,8 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                         max={99}
                         value={tracker.tier}
                         onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
-                          if (!isNaN(val)) {
+                          const val = Number.parseInt(e.target.value, 10);
+                          if (!Number.isNaN(val)) {
                             updateTracker.mutate({
                               torrentId: torrent.id,
                               trackerId: tracker.id,
@@ -483,7 +483,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                                     data.message || "Announce queued",
                                     "success",
                                   );
-                                  refetch();
+                                  void refetch();
                                 },
                                 onError: (err) => {
                                   const isRateLimit =
@@ -503,7 +503,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                                       "error",
                                     );
                                   }
-                                  refetch();
+                                  void refetch();
                                 },
                               },
                             );

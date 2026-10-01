@@ -31,8 +31,8 @@ export default function DeveloperEvents() {
   }, [search]);
 
   useEffect(() => {
-    fetchEvents();
-    const interval = setInterval(fetchEvents, 2500);
+    void fetchEvents();
+    const interval = setInterval(() => { void fetchEvents(); }, 2500);
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
@@ -56,7 +56,7 @@ export default function DeveloperEvents() {
       });
       setShowPublishModal(false);
       setActionMessage({ text: `Synthetic event '${publishEventName}' published.`, type: "success" });
-      fetchEvents();
+      await fetchEvents();
     } catch (err: any) {
       setActionMessage({ text: err?.message || "Failed to publish event.", type: "error" });
     }
@@ -322,7 +322,7 @@ export default function DeveloperEvents() {
               <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>Payload JSON</span>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(selectedEvent.payloadJson);
+                  void navigator.clipboard.writeText(selectedEvent.payloadJson);
                   setActionMessage({ text: "Payload JSON copied to clipboard!", type: "success" });
                 }}
                 style={{

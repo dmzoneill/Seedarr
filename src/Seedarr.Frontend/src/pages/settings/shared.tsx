@@ -397,7 +397,7 @@ export function NumberInput({
 }) {
   const isDecimal = Boolean(step && step < 1);
   const initialText =
-    value !== undefined && value !== null && !isNaN(value) ? String(value) : "";
+    value !== undefined && value !== null && !Number.isNaN(value) ? String(value) : "";
   const [text, setText] = useState<string>(initialText);
   const textRef = useRef<string>(initialText);
   const lastValueRef = useRef<number>(value);
@@ -406,7 +406,7 @@ export function NumberInput({
     if (value !== lastValueRef.current) {
       lastValueRef.current = value;
       const strVal =
-        value !== undefined && value !== null && !isNaN(value)
+        value !== undefined && value !== null && !Number.isNaN(value)
           ? String(value)
           : "";
       textRef.current = strVal;
@@ -424,8 +424,8 @@ export function NumberInput({
       return;
     }
 
-    const parsed = isDecimal ? parseFloat(trimmed) : parseInt(trimmed, 10);
-    if (isNaN(parsed) || isNaN(Number(trimmed))) {
+    const parsed = isDecimal ? Number.parseFloat(trimmed) : Number.parseInt(trimmed, 10);
+    if (Number.isNaN(parsed) || Number.isNaN(Number(trimmed))) {
       return;
     }
 
@@ -448,8 +448,8 @@ export function NumberInput({
       const fallback = defaultValue !== undefined ? defaultValue : (min ?? 0);
       finalVal = clampNumber(fallback, min, max);
     } else {
-      const parsed = isDecimal ? parseFloat(trimmed) : parseInt(trimmed, 10);
-      if (isNaN(parsed) || isNaN(Number(trimmed))) {
+      const parsed = isDecimal ? Number.parseFloat(trimmed) : Number.parseInt(trimmed, 10);
+      if (Number.isNaN(parsed) || Number.isNaN(Number(trimmed))) {
         const fallback = defaultValue !== undefined ? defaultValue : (min ?? 0);
         finalVal = clampNumber(fallback, min, max);
       } else {

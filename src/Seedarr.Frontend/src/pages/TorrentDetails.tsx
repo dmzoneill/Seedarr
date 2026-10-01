@@ -26,7 +26,7 @@ const tabs: { key: Tab; label: string }[] = [
 function TorrentDetails() {
   const { id } = useParams<{ id: string }>();
   const parsed = Number(id);
-  const isValidId = id !== undefined && !isNaN(parsed) && parsed > 0;
+  const isValidId = id !== undefined && !Number.isNaN(parsed) && parsed > 0;
   const torrentId = isValidId ? parsed : 0;
   const { data: torrent, isLoading, error } = useTorrent(torrentId);
   const startSeeding = useStartSeeding();

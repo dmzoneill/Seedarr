@@ -318,9 +318,9 @@ function TorrentIndex() {
         (t) => t.status === "Seeding" || t.active,
       );
       if (anyActive) {
-        handleBulkStop();
+        void handleBulkStop();
       } else {
-        handleBulkStart();
+        void handleBulkStart();
       }
       return;
     }
@@ -477,7 +477,7 @@ function TorrentIndex() {
           : e.key === "ArrowUp"
             ? "up"
             : "down";
-        handleBulkMoveQueue(pos);
+        void handleBulkMoveQueue(pos);
         return;
       }
 

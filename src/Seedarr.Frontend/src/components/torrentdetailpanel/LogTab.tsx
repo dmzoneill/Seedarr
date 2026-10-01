@@ -114,10 +114,13 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           `[${formatDate(l.timeStamp)}] [${l.level.toUpperCase()}] [${l.source}] ${l.message}`,
       )
       .join("\n");
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {});
   }
 
   if (isLoading && logs.length === 0)
