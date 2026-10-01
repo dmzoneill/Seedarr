@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.3](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.3) - 2026-10-01
+
+### ✨ Features
+- feat(parity): port Leecharr enhancements to Seedarr (rebrand, transmission RPC, docker hub table, sonarcloud, i18n)
+- feat(ui): add mobile off-canvas navigation drawer and responsive styling
+
+### 🐛 Bug Fixes
+- fix(security): introduce crypto.getRandomValues in random utility and replace Math.random usage
+- fix(deps): bump serialize-javascript to >=7.1.2 via overrides
+- fix(ui): default filter panel to collapsed on mobile
+- fix(ui): eliminate mobile scroll locks and enable dynamic viewport height
+
+### 🔧 Maintenance & Improvements
+- ci(sonar): configure Roslyn suppressions, multicriteria filters, and code coverage reporting
+- Delete PARITY_TRACKER.md
+- Delete .code-review-tracker.20260924_0753.bak
+- ci: add Codacy, CodeQL, and align permissions and ai-responder with Leecharr
+- chore(deps): bump brace-expansion in /src/Seedarr.Frontend
+- ci(sonar): add sonarcloud.yml workflow adapted from Leecharr
+- ci(sonar): add .sonarcloud.properties adapted from Leecharr
+- chore(deps): bump webpack-dev-middleware in /src/Seedarr.Frontend
+
 ## [v1.20.2](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.2) - 2026-09-25
 
 ### 🐛 Bug Fixes
