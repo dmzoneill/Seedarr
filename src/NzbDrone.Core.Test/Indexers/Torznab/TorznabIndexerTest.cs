@@ -1405,19 +1405,19 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
 
             const string capsXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
 <caps>
-  <server version=""1.0"" title=""TestTracker"" />
-  <searching>
-    <tv-search available=""yes"" supportedParams=""q,season,ep"" />
-    <movie-search available=""yes"" supportedParams=""q,imdbid"" />
-  </searching>
-  <categories>
-    <category id=""2000"" name=""Movies"">
-      <subcat id=""2040"" name=""HD"" />
-    </category>
-    <category id=""100000"" name=""Anime"">
-      <subcat id=""100001"" name=""Anime-Sub"" />
-    </category>
-  </categories>
+    <server version=""1.0"" title=""TestTracker"" />
+    <searching>
+        <tv-search available=""yes"" supportedParams=""q,season,ep"" />
+        <movie-search available=""yes"" supportedParams=""q,imdbid"" />
+    </searching>
+    <categories>
+        <category id=""2000"" name=""Movies"">
+            <subcat id=""2040"" name=""HD"" />
+        </category>
+        <category id=""100000"" name=""Anime"">
+            <subcat id=""100001"" name=""Anime-Sub"" />
+        </category>
+    </categories>
 </caps>";
 
             handler.Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
