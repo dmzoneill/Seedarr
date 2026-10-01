@@ -270,7 +270,7 @@ public class E2ETests : ApiTestBase
         }
     }
 
-    private async Task DeleteWithKeyAsync(string url, string apiKey)
+    private static async Task DeleteWithKeyAsync(string url, string apiKey)
     {
         using var request = new HttpRequestMessage(HttpMethod.Delete, url);
         if (!string.IsNullOrEmpty(apiKey))

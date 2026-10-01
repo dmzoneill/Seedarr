@@ -156,7 +156,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 Limit = 20
             };
 
-            var url = _subject.BuildSearchUrl(definition, query);
+            var url = NewznabIndexer.BuildSearchUrl(definition, query);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=tvsearch"));
             Assert.That(url, Does.Contain("q=Simpsons"));
@@ -185,7 +185,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 TmdbId = "603"
             };
 
-            var url = _subject.BuildSearchUrl(definition, query);
+            var url = NewznabIndexer.BuildSearchUrl(definition, query);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=movie"));
             Assert.That(url, Does.Contain("q=Matrix"));
@@ -208,7 +208,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 Album = "Abbey Road"
             };
 
-            var url = _subject.BuildSearchUrl(definition, query);
+            var url = NewznabIndexer.BuildSearchUrl(definition, query);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=music"));
             Assert.That(url, Does.Contain("artist=Beatles"));
@@ -230,7 +230,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 Title = "Foundation"
             };
 
-            var url = _subject.BuildSearchUrl(definition, query);
+            var url = NewznabIndexer.BuildSearchUrl(definition, query);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=book"));
             Assert.That(url, Does.Contain("author=Asimov"));
@@ -258,7 +258,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 Year = 1991
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = NewznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=tvsearch"));
             Assert.That(url, Does.Contain("q=Simpsons"));
@@ -285,7 +285,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 Episode = 10
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = NewznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=tvsearch"));
             Assert.That(url, Does.Contain("season=3"));
@@ -309,7 +309,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 Year = 1999
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = NewznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=movie"));
             Assert.That(url, Does.Contain("q=Matrix"));
@@ -331,7 +331,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 ImdbId = "tt0133093"
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = NewznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=movie"));
             Assert.That(url, Does.Contain("imdbid=tt0133093"));
@@ -353,7 +353,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 Year = 1969
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = NewznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=music"));
             Assert.That(url, Does.Contain("artist=Beatles"));
@@ -377,7 +377,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 Year = 1951
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = NewznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=book"));
             Assert.That(url, Does.Contain("author=Asimov"));
@@ -399,7 +399,7 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
                 Query = "Linux ISO"
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = NewznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://newznab.local/api?t=search"));
             Assert.That(url, Does.Contain("q=Linux%20ISO"));
