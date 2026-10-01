@@ -82,7 +82,7 @@ export function validateClientConfig(
     };
   }
   const port = Number(client.port);
-  if (isNaN(port) || port < 1 || port > 65535 || !Number.isInteger(port)) {
+  if (Number.isNaN(port) || port < 1 || port > 65535 || !Number.isInteger(port)) {
     return {
       valid: false,
       error: "Port must be an integer between 1 and 65535.",
@@ -514,7 +514,7 @@ export function GettingStartedModal({
     }
     handleClose(true);
     if (targetPath) {
-      navigate(targetPath);
+      await navigate(targetPath);
     }
   };
 
@@ -557,7 +557,7 @@ export function GettingStartedModal({
     } else {
       localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
       setDontShowAgain(true);
-      handleFinish();
+      void handleFinish();
     }
   };
 
@@ -2654,7 +2654,7 @@ export function GettingStartedModal({
                 type="button"
                 className="btn btn-primary btn-small"
                 onClick={() => {
-                  handleFinish("/");
+                  void handleFinish("/");
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
@@ -2669,7 +2669,7 @@ export function GettingStartedModal({
                 type="button"
                 className="btn btn-outline btn-small"
                 onClick={() => {
-                  handleFinish("/torrents");
+                  void handleFinish("/torrents");
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
@@ -2684,7 +2684,7 @@ export function GettingStartedModal({
                 type="button"
                 className="btn btn-outline btn-small"
                 onClick={() => {
-                  handleFinish("/settings/general");
+                  void handleFinish("/settings/general");
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >

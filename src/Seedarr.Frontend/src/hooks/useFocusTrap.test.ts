@@ -28,7 +28,7 @@ class MockElement {
   setAttribute(name: string, value: string): void {
     this.attributes.set(name, value);
     if (name === "tabindex") {
-      this.tabIndex = parseInt(value, 10);
+      this.tabIndex = Number.parseInt(value, 10);
     }
   }
 

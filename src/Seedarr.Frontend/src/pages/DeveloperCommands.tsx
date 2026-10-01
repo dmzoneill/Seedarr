@@ -29,8 +29,8 @@ export default function DeveloperCommands() {
   }, []);
 
   useEffect(() => {
-    fetchCommands();
-    const interval = setInterval(fetchCommands, 3500);
+    void fetchCommands();
+    const interval = setInterval(() => { void fetchCommands(); }, 3500);
     return () => clearInterval(interval);
   }, [fetchCommands]);
 
@@ -55,7 +55,7 @@ export default function DeveloperCommands() {
       });
       setActionMessage({ text: `Command '${selectedCommand.name}' dispatched successfully to queue.`, type: "success" });
       setSelectedCommand(null);
-      fetchCommands();
+      await fetchCommands();
     } catch (err: any) {
       setActionMessage({ text: err?.message || "Failed to execute command.", type: "error" });
     } finally {
@@ -389,7 +389,7 @@ export default function DeveloperCommands() {
                         <input
                           type={p.type === "Int32" || p.type === "Int64" ? "number" : "text"}
                           value={formParams[p.name] ?? ""}
-                          onChange={(e) => setFormParams({ ...formParams, [p.name]: p.type.startsWith("Int") ? parseInt(e.target.value, 10) || 0 : e.target.value })}
+                          onChange={(e) => setFormParams({ ...formParams, [p.name]: p.type.startsWith("Int") ? Number.parseInt(e.target.value, 10) || 0 : e.target.value })}
                           style={{
                             width: "100%",
                             padding: "8px 10px",

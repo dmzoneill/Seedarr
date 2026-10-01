@@ -953,7 +953,7 @@ function yamlToVisualSteps(code: string): VisualStep[] {
       currentStep.continueOnError = trimmed.includes("true");
     } else if (currentStep && trimmed.startsWith("retries:")) {
       const rm = trimmed.match(/retries:\s*(\d+)/);
-      if (rm) currentStep.retries = parseInt(rm[1], 10);
+      if (rm) currentStep.retries = Number.parseInt(rm[1], 10);
     } else if (currentStep && trimmed.startsWith("http:")) {
       currentStep.hasHttp = true;
       inHttp = true;
@@ -1839,7 +1839,7 @@ if (torrent && torrent.size > 5000000000) {
         alert(`Field "${field.label}" is required.`);
         return;
       }
-      if (val && field.type === "number" && isNaN(Number(val))) {
+      if (val && field.type === "number" && Number.isNaN(Number(val))) {
         alert(`Field "${field.label}" must be a valid number.`);
         return;
       }
@@ -3467,7 +3467,7 @@ if (torrent && torrent.size > 5000000000) {
                               )
                                 return null;
                               const num = Number(step.conditionRight);
-                              if (isNaN(num)) return null;
+                              if (Number.isNaN(num)) return null;
                               if (propDef.unit === "bytes") {
                                 return formatBytes(num);
                               }
@@ -3928,7 +3928,7 @@ if (torrent && torrent.size > 5000000000) {
                               const copy = [...visualSteps];
                               copy[stepIdx].retries = Math.max(
                                 0,
-                                parseInt(e.target.value, 10) || 0,
+                                Number.parseInt(e.target.value, 10) || 0,
                               );
                               updateVisualSteps(copy);
                             }}
@@ -4695,7 +4695,7 @@ if (torrent && torrent.size > 5000000000) {
                                             ].extra = {};
                                           copy[stepIdx].actions[
                                             actIdx
-                                          ].extra!.timeoutSeconds = parseInt(
+                                          ].extra!.timeoutSeconds = Number.parseInt(
                                             e.target.value,
                                             10,
                                           );

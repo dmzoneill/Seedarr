@@ -916,7 +916,7 @@ export function FilesTab({
               flexShrink: 0,
             }}
             onClick={() => {
-              navigator.clipboard.writeText(savePath);
+              void navigator.clipboard.writeText(savePath);
               setCopiedPath(true);
               setTimeout(() => setCopiedPath(false), 2000);
             }}
@@ -1391,8 +1391,8 @@ export function FilesTab({
                     <select
                       value={currentPriority === -1 ? "" : currentPriority}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        if (isNaN(val)) return;
+                        const val = Number.parseInt(e.target.value, 10);
+                        if (Number.isNaN(val)) return;
                         if (isFolder) {
                           handleBatchSetPriority(descendantFiles, val);
                         } else if (node.file) {
@@ -1518,7 +1518,7 @@ export function FilesTab({
               }}
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleConfirmRename();
+                if (e.key === "Enter") void handleConfirmRename();
                 if (e.key === "Escape") setRenamingNode(null);
               }}
             />

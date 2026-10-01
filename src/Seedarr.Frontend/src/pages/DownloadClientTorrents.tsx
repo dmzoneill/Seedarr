@@ -20,7 +20,7 @@ import type { BatchImportItemResult } from "../api/types";
 export default function DownloadClientTorrents() {
   const { id } = useParams<{ id: string }>();
   const isAll = id === "all";
-  const clientId = isAll ? 0 : parseInt(id || "0", 10);
+  const clientId = isAll ? 0 : Number.parseInt(id || "0", 10);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
@@ -1120,9 +1120,9 @@ export default function DownloadClientTorrents() {
                             }}
                             onClick={() => {
                               if (item.libraryTorrentId) {
-                                navigate(`/torrents/${item.libraryTorrentId}`);
+                                void navigate(`/torrents/${item.libraryTorrentId}`);
                               } else {
-                                navigate("/torrents");
+                                void navigate("/torrents");
                               }
                             }}
                           >
@@ -1689,11 +1689,11 @@ export default function DownloadClientTorrents() {
                                 }}
                                 onClick={() => {
                                   if (item.libraryTorrentId) {
-                                    navigate(
+                                    void navigate(
                                       `/torrents/${item.libraryTorrentId}`,
                                     );
                                   } else {
-                                    navigate("/torrents");
+                                    void navigate("/torrents");
                                   }
                                 }}
                               >

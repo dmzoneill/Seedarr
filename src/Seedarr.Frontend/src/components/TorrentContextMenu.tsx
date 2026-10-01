@@ -494,7 +494,7 @@ function TorrentContextMenu({
                 <button
                   className="context-menu-item"
                   onClick={() => {
-                    navigate("/peermap");
+                    void navigate("/peermap");
                     onClose();
                   }}
                 >
@@ -637,8 +637,8 @@ function TorrentContextMenu({
                             min: 0,
                             suffix: "KB/s",
                             onConfirm: (limit) => {
-                              const val = parseInt(limit, 10);
-                              if (!isNaN(val) && val >= 0) {
+                              const val = Number.parseInt(limit, 10);
+                              if (!Number.isNaN(val) && val >= 0) {
                                 handleUpdateAll((t) => ({
                                   ...t,
                                   uploadLimit: val,
@@ -662,8 +662,8 @@ function TorrentContextMenu({
                             min: 0,
                             suffix: "KB/s",
                             onConfirm: (limit) => {
-                              const val = parseInt(limit, 10);
-                              if (!isNaN(val) && val >= 0) {
+                              const val = Number.parseInt(limit, 10);
+                              if (!Number.isNaN(val) && val >= 0) {
                                 handleUpdateAll((t) => ({
                                   ...t,
                                   downloadLimit: val,

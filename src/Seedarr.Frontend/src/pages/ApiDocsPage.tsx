@@ -82,11 +82,13 @@ function ApiDocsPage() {
 
   useEffect(() => {
     let isMounted = true;
-    getResolvedApiKey().then((key) => {
-      if (isMounted && key) {
-        injectApiKeyToSwagger(key);
-      }
-    });
+    void getResolvedApiKey()
+      .then((key) => {
+        if (isMounted && key) {
+          injectApiKeyToSwagger(key);
+        }
+      })
+      .catch(() => {});
     return () => {
       isMounted = false;
     };

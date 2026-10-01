@@ -68,7 +68,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
   }, [torrent, dirty]);
 
   const handleSave = () => {
-    const prioVal = parseInt(priority, 10);
+    const prioVal = Number.parseInt(priority, 10);
     trackTorrentOptionsSave({
       super_seeding: superSeeding,
       force_start: forceStart,
@@ -111,7 +111,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
     };
   const numChange =
     (setter: (v: number) => void) => (e: React.ChangeEvent<HTMLInputElement>) =>
-      mark(setter)(parseInt(e.target.value, 10) || 0);
+      mark(setter)(Number.parseInt(e.target.value, 10) || 0);
 
   return (
     <div className="detail-panel-options">

@@ -1664,7 +1664,7 @@ export function IndexersTab() {
                 const ids = v
                   .split(",")
                   .map((s) => Number(s.trim()))
-                  .filter((n) => !isNaN(n) && n > 0);
+                  .filter((n) => !Number.isNaN(n) && n > 0);
                 setEditingRule({ ...editingRule, indexerIds: ids });
               }}
               placeholder="e.g. 1, 2 (leave blank for all indexers)"

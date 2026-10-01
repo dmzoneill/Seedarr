@@ -1,5 +1,5 @@
 export function formatBytes(bytes: number): string {
-  if (bytes === 0 || !Number.isFinite(bytes) || isNaN(bytes)) return "0 B";
+  if (bytes === 0 || !Number.isFinite(bytes) || Number.isNaN(bytes)) return "0 B";
   const isNegative = bytes < 0;
   const absBytes = Math.abs(bytes);
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
@@ -16,7 +16,7 @@ export function formatSpeed(bytesPerSecond: number): string {
 }
 
 export function formatRatio(ratio: number): string {
-  if (!Number.isFinite(ratio) || isNaN(ratio)) return "-";
+  if (!Number.isFinite(ratio) || Number.isNaN(ratio)) return "-";
   return ratio.toFixed(2);
 }
 

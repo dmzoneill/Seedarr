@@ -68,7 +68,7 @@ function useEventEntries() {
 function formatEventTime(iso: string): string {
   if (!iso) return "-";
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
+  if (Number.isNaN(d.getTime())) return iso;
 
   const now = new Date();
   const isToday =
@@ -653,7 +653,7 @@ function SystemEvents() {
 
   const handleRefresh = useCallback(() => {
     setClearedAt(null);
-    queryClient.invalidateQueries({ queryKey: ["system", "events"] });
+    void queryClient.invalidateQueries({ queryKey: ["system", "events"] });
   }, [queryClient]);
 
   const handleClear = useCallback(() => {

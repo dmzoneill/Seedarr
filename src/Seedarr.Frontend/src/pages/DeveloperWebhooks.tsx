@@ -33,7 +33,7 @@ export default function DeveloperWebhooks() {
   }, [selectedTemplate]);
 
   useEffect(() => {
-    fetchTemplatesAndHistory();
+    void fetchTemplatesAndHistory();
   }, [fetchTemplatesAndHistory]);
 
   const selectTemplate = (t: DeveloperWebhookTemplate) => {

@@ -80,7 +80,7 @@ function formatRelativeTime(
 ): string {
   if (!dateStr) return "-";
   const date = new Date(dateStr);
-  if (isNaN(date.getTime()) || date.getFullYear() <= 1970) return "-";
+  if (Number.isNaN(date.getTime()) || date.getFullYear() <= 1970) return "-";
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const absDiff = Math.abs(diffMs);
@@ -114,9 +114,9 @@ function formatDuration(durationStr: string | null): string {
   const match = durationStr.match(/^(\d+):(\d+):(\d+)/);
   if (!match) return durationStr;
   const [, h, m, s] = match;
-  const hours = parseInt(h, 10);
-  const minutes = parseInt(m, 10);
-  const seconds = parseInt(s, 10);
+  const hours = Number.parseInt(h, 10);
+  const minutes = Number.parseInt(m, 10);
+  const seconds = Number.parseInt(s, 10);
   if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
@@ -125,7 +125,7 @@ function formatDuration(durationStr: string | null): string {
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return "-";
   const date = new Date(dateStr);
-  if (isNaN(date.getTime()) || date.getFullYear() <= 1970) return "-";
+  if (Number.isNaN(date.getTime()) || date.getFullYear() <= 1970) return "-";
   return date.toLocaleString();
 }
 
@@ -692,8 +692,8 @@ function EditTaskModal({
               step="1"
               value={interval}
               onChange={(e) => {
-                const val = parseInt(e.target.value, 10);
-                setInterval(isNaN(val) ? 1 : Math.max(1, val));
+                const val = Number.parseInt(e.target.value, 10);
+                setInterval(Number.isNaN(val) ? 1 : Math.max(1, val));
               }}
               className="form-control"
               style={{
@@ -852,8 +852,8 @@ function SystemTasks() {
         `Started execution of ${formatTaskName(task.typeName)}`,
         "success",
       );
-      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
+      void queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
+      void queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
       const timer = window.setTimeout(() => {
         setExecutingTasks((prev) => {
           const next = new Set(prev);
@@ -885,8 +885,8 @@ function SystemTasks() {
     onSuccess: () => {
       trackSystemMaintenanceAction("command_cancel");
       showToast("Command cancelled", "success");
-      queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
-      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
+      void queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
+      void queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
     },
     onError: (err: Error) => {
       showToast(`Failed to cancel command: ${err.message}`, "error");
@@ -914,8 +914,8 @@ function SystemTasks() {
         }
         return next;
       });
-      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
+      void queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
+      void queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
     },
     onError: (err: Error) => {
       showToast(`Failed to abort task: ${err.message}`, "error");
@@ -929,7 +929,7 @@ function SystemTasks() {
         isEnabled: vars.isEnabled,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
+      void queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
       showToast("Task schedule updated successfully", "success");
       setSelectedEditTask(null);
     },
@@ -959,7 +959,7 @@ function SystemTasks() {
       if (!task.lastExecution) return true;
       const start = new Date(task.lastStartTime).getTime();
       const end = new Date(task.lastExecution).getTime();
-      if (!isNaN(start) && !isNaN(end) && start > end) {
+      if (!Number.isNaN(start) && !Number.isNaN(end) && start > end) {
         return true;
       }
     }

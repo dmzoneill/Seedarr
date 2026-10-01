@@ -25,11 +25,11 @@ export default function DeveloperConfig() {
   }, [unmask]);
 
   useEffect(() => {
-    fetchConfig();
+    void fetchConfig();
   }, [fetchConfig]);
 
   const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
+    void navigator.clipboard.writeText(text);
     setActionMessage({ text: `${label} copied to clipboard!`, type: "success" });
   };
 

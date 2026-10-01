@@ -30,7 +30,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
   }, [torrent, dirty]);
 
   const handleSave = () => {
-    const prioVal = parseInt(priority, 10);
+    const prioVal = Number.parseInt(priority, 10);
     trackTorrentOptionsSave({
       super_seeding: superSeeding,
       force_start: forceStart,
@@ -89,7 +89,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           className="form-input"
           value={uploadLimit}
           onChange={(e) =>
-            mark(setUploadLimit)(parseInt(e.target.value, 10) || 0)
+            mark(setUploadLimit)(Number.parseInt(e.target.value, 10) || 0)
           }
           min={0}
         />
@@ -104,7 +104,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           className="form-input"
           value={downloadLimit}
           onChange={(e) =>
-            mark(setDownloadLimit)(parseInt(e.target.value, 10) || 0)
+            mark(setDownloadLimit)(Number.parseInt(e.target.value, 10) || 0)
           }
           min={0}
         />

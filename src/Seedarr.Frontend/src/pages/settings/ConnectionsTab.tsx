@@ -371,10 +371,10 @@ export function ConnectionsTab() {
               label="Sync Interval (Minutes)"
               value={String(editing.syncIntervalMinutes ?? 60)}
               onChange={(v) => {
-                const num = parseInt(v, 10);
+                const num = Number.parseInt(v, 10);
                 setEditing({
                   ...editing,
-                  syncIntervalMinutes: isNaN(num) ? 60 : Math.max(1, num),
+                  syncIntervalMinutes: Number.isNaN(num) ? 60 : Math.max(1, num),
                 });
               }}
               type="number"

@@ -330,7 +330,7 @@ export function TerminalView({
 
   const handleCopyPath = () => {
     if (!cwd) return;
-    navigator.clipboard.writeText(cwd);
+    void navigator.clipboard.writeText(cwd);
     setCopied(true);
     if (copyTimeoutRef.current) {
       window.clearTimeout(copyTimeoutRef.current);

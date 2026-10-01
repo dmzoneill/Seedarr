@@ -47,7 +47,7 @@ export function useRefreshPortMapping() {
     mutationFn: refreshPortMapping,
     onSuccess: (data) => {
       queryClient.setQueryData(["portmapping", "status"], data);
-      queryClient.invalidateQueries({ queryKey: ["network"] });
+      void queryClient.invalidateQueries({ queryKey: ["network"] });
     },
   });
 }
