@@ -395,7 +395,7 @@ public class TrackerBoostServiceTest
         });
         using var client = new HttpClient(handler);
 
-        var isHealthy = await _service.ProbeHttpTrackerAsync("http://tracker.example.com:6969/announce", client);
+        var isHealthy = await TrackerBoostService.ProbeHttpTrackerAsync("http://tracker.example.com:6969/announce", client);
 
         Assert.That(isHealthy, Is.True);
     }
@@ -425,7 +425,7 @@ public class TrackerBoostServiceTest
         });
         using var client = new HttpClient(handler);
 
-        var isHealthy = await _service.ProbeHttpTrackerAsync("http://tracker.example.com:6969/announce", client);
+        var isHealthy = await TrackerBoostService.ProbeHttpTrackerAsync("http://tracker.example.com:6969/announce", client);
 
         Assert.That(isHealthy, Is.True);
         Assert.That(headCalled, Is.True);

@@ -723,14 +723,14 @@ public class PluginManagerAndLoaderTests
         var manifest = new PluginManifest { Id = "backoff-test", Name = "Backoff", Version = "1.0", Entrypoint = "p.sh" };
         using var host = new SidecarProcessHost(manifest, _tempAppData);
 
-        Assert.That(host.CalculateBackoff(0), Is.EqualTo(TimeSpan.Zero));
-        Assert.That(host.CalculateBackoff(1), Is.EqualTo(TimeSpan.FromSeconds(1)));
-        Assert.That(host.CalculateBackoff(2), Is.EqualTo(TimeSpan.FromSeconds(2)));
-        Assert.That(host.CalculateBackoff(3), Is.EqualTo(TimeSpan.FromSeconds(4)));
-        Assert.That(host.CalculateBackoff(4), Is.EqualTo(TimeSpan.FromSeconds(8)));
-        Assert.That(host.CalculateBackoff(5), Is.EqualTo(TimeSpan.FromSeconds(16)));
-        Assert.That(host.CalculateBackoff(6), Is.EqualTo(TimeSpan.FromSeconds(30)));
-        Assert.That(host.CalculateBackoff(10), Is.EqualTo(TimeSpan.FromSeconds(30)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(0), Is.EqualTo(TimeSpan.Zero));
+        Assert.That(SidecarProcessHost.CalculateBackoff(1), Is.EqualTo(TimeSpan.FromSeconds(1)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(2), Is.EqualTo(TimeSpan.FromSeconds(2)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(3), Is.EqualTo(TimeSpan.FromSeconds(4)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(4), Is.EqualTo(TimeSpan.FromSeconds(8)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(5), Is.EqualTo(TimeSpan.FromSeconds(16)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(6), Is.EqualTo(TimeSpan.FromSeconds(30)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(10), Is.EqualTo(TimeSpan.FromSeconds(30)));
     }
 
     [Test]

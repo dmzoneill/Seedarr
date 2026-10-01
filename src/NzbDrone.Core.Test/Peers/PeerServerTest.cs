@@ -2320,7 +2320,7 @@ public class PeerServerTest
         var picker = _server.PiecePicker;
         picker.AddActivePiece(2, 32768, 16384);
 
-        Assert.That(_server.CanRequestBlock(conn, 2), Is.True);
+        Assert.That(PeerServer.CanRequestBlock(conn, 2), Is.True);
 
         var block = _server.RequestBlock(conn, 2);
         Assert.That(block, Is.Not.Null);
@@ -2342,7 +2342,7 @@ public class PeerServerTest
         var picker = _server.PiecePicker;
         picker.AddActivePiece(1, 32768, 16384);
 
-        Assert.That(_server.CanRequestBlock(conn, 1), Is.False);
+        Assert.That(PeerServer.CanRequestBlock(conn, 1), Is.False);
 
         var block = _server.RequestBlock(conn, 1);
         Assert.That(block, Is.Null);

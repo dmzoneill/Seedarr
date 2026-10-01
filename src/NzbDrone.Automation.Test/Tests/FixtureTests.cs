@@ -67,7 +67,7 @@ public class FixtureTests : ApiTestBase
         Assert.That(count, Is.GreaterThanOrEqualTo(1));
     }
 
-    private async Task<int> CountTransmissionClientsAsync(string url, string apiKey)
+    private static async Task<int> CountTransmissionClientsAsync(string url, string apiKey)
     {
         var json = await GetJsonAsync(url, apiKey);
         using var doc = JsonDocument.Parse(json);

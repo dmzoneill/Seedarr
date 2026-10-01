@@ -832,7 +832,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 Limit = 25
             };
 
-            var url = _subject.BuildSearchUrl(definition, query);
+            var url = TorznabIndexer.BuildSearchUrl(definition, query);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=tvsearch"));
             Assert.That(url, Does.Contain("q=Simpsons"));
@@ -862,7 +862,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 TmdbId = "27205"
             };
 
-            var url = _subject.BuildSearchUrl(definition, query);
+            var url = TorznabIndexer.BuildSearchUrl(definition, query);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=movie"));
             Assert.That(url, Does.Contain("q=Inception"));
@@ -885,7 +885,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 Album = "The Wall"
             };
 
-            var url = _subject.BuildSearchUrl(definition, query);
+            var url = TorznabIndexer.BuildSearchUrl(definition, query);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=music"));
             Assert.That(url, Does.Contain("artist=Pink%20Floyd"));
@@ -907,7 +907,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 Title = "The Hobbit"
             };
 
-            var url = _subject.BuildSearchUrl(definition, query);
+            var url = TorznabIndexer.BuildSearchUrl(definition, query);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=book"));
             Assert.That(url, Does.Contain("author=Tolkien"));
@@ -935,7 +935,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 Year = 2008
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = TorznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=tvsearch"));
             Assert.That(url, Does.Contain("q=Breaking%20Bad"));
@@ -962,7 +962,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 Episode = 2
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = TorznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=tvsearch"));
             Assert.That(url, Does.Contain("season=5"));
@@ -986,7 +986,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 Year = 2008
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = TorznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=movie"));
             Assert.That(url, Does.Contain("q=The%20Dark%20Knight"));
@@ -1008,7 +1008,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 ImdbId = "tt0468569"
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = TorznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=movie"));
             Assert.That(url, Does.Contain("imdbid=tt0468569"));
@@ -1030,7 +1030,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 Year = 2001
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = TorznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=music"));
             Assert.That(url, Does.Contain("artist=Daft%20Punk"));
@@ -1054,7 +1054,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 Year = 1965
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = TorznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=book"));
             Assert.That(url, Does.Contain("author=Frank%20Herbert"));
@@ -1076,7 +1076,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
                 Query = "Ubuntu 22.04"
             };
 
-            var url = _subject.BuildSearchUrl(definition, criteria);
+            var url = TorznabIndexer.BuildSearchUrl(definition, criteria);
 
             Assert.That(url, Does.StartWith("http://torznab.local/api?t=search"));
             Assert.That(url, Does.Contain("q=Ubuntu%2022.04"));

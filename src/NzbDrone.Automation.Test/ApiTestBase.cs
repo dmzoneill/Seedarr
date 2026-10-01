@@ -37,7 +37,7 @@ public abstract class ApiTestBase
         TransmissionUrl = Environment.GetEnvironmentVariable("TRANSMISSION_URL") ?? "http://localhost:9091";
     }
 
-    protected async Task<string> GetJsonAsync(string url, string apiKey = null)
+    protected static async Task<string> GetJsonAsync(string url, string apiKey = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (!string.IsNullOrEmpty(apiKey))
@@ -47,20 +47,20 @@ public abstract class ApiTestBase
         return await response.Content.ReadAsStringAsync();
     }
 
-    protected async Task<string> PostJsonAsync(string url, object body, string apiKey = null)
+    protected static async Task<string> PostJsonAsync(string url, object body, string apiKey = null)
     {
         var response = await SendWithJsonBodyAsync(HttpMethod.Post, url, JsonSerializer.Serialize(body), apiKey);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync();
     }
 
-    protected async Task<(int StatusCode, string Body)> PutJsonAsync(string url, object body, string apiKey = null)
+    protected static async Task<(int StatusCode, string Body)> PutJsonAsync(string url, object body, string apiKey = null)
     {
         var response = await SendWithJsonBodyAsync(HttpMethod.Put, url, JsonSerializer.Serialize(body), apiKey);
         return ((int)response.StatusCode, await response.Content.ReadAsStringAsync());
     }
 
-    private async Task<HttpResponseMessage> SendWithJsonBodyAsync(HttpMethod method, string url, string json, string apiKey)
+    private static async Task<HttpResponseMessage> SendWithJsonBodyAsync(HttpMethod method, string url, string json, string apiKey)
     {
         using var request = new HttpRequestMessage(method, url)
         {
@@ -71,7 +71,7 @@ public abstract class ApiTestBase
         return await Client.SendAsync(request);
     }
 
-    protected async Task<bool> DeleteAsync(string url)
+    protected static async Task<bool> DeleteAsync(string url)
     {
         using var request = new HttpRequestMessage(HttpMethod.Delete, url);
         var response = await Client.SendAsync(request);
@@ -197,7 +197,7 @@ public abstract class ApiTestBase
         return JsonDocument.Parse(added[0].GetRawText());
     }
 
-    protected async Task<string> RunCommandAsync(string command, string args)
+    protected static async Task<string> RunCommandAsync(string command, string args)
     {
         var psi = new ProcessStartInfo(command, args)
         {

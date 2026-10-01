@@ -13,7 +13,7 @@ namespace NzbDrone.Automation.Test;
 public abstract class AutomationTestBase
 {
     protected IWebDriver Driver { get; private set; }
-    protected string BaseUrl => GlobalSetup.BaseUrl;
+    protected static string BaseUrl => GlobalSetup.BaseUrl;
 
     [SetUp]
     public void SetUpDriver()

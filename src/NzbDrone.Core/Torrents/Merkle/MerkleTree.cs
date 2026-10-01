@@ -23,7 +23,7 @@ public class PieceFileBoundary
     public int PieceIndex { get; set; }
     public long StartByteInFile { get; set; }
     public int BytesInPiece { get; set; }
-    public static bool SpansFileBoundary => false;
+    public bool SpansFileBoundary { get; set; }
 }
 
 public class MerkleTree : IMerkleTreeService
