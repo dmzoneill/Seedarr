@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.4](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.4) - 2026-10-01
+
+### 🐛 Bug Fixes
+- fix(core): resolve single-iteration loops and security padding rules (S1751, S5542, S4830, S3427)
+- fix(frontend): add button roles and keyboard handlers to interactive elements (S6848)
+- fix(quality): add GlobalSuppressions to Http, Host, and SignalR, and exclude docs in sonar scan
+- fix(quality): address Sonar CI diagnostics for CTS disposal, constructor disambiguation, and certificates
+- fix(test): support static methods in reflection-invoked test helpers
+- fix(frontend): resolve TypeScript compilation errors in DatabaseExplorer and DeveloperConfig
+- fix(quality): re-enable CA quality, performance, and security rules and make helpers static
+
+### 🔧 Maintenance & Improvements
+- style: fix indentation in AutomationMarketplaceService for editorconfig
+- style: fix indentation in QBitTorrentClient for editorconfig
+- refactor(quality): modernize Number methods, handle floating promises, and expand architectural suppressions
+- style: fix indentation in TorznabIndexerTest for editorconfig
+- quality: add GlobalSuppressions, expand SonarCloud exclusions, and fix test callers
+
 ## [v1.20.3](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.3) - 2026-10-01
 
 ### ✨ Features
