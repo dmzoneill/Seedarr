@@ -1,0 +1,111 @@
+name: SonarCloud Analysis
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  sonar:
+    name: SonarCloud Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for SonarCloud Token
+        id: check_token
+        run: |
+          if [ -n "${{ secrets.SONAR_TOKEN }}" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::notice ::SONAR_TOKEN secret is not set. Add SONAR_TOKEN in repository secrets to activate SonarCloud analysis."
+          fi
+
+      - name: Setup Java
+        if: steps.check_token.outputs.has_token == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup .NET
+        if: steps.check_token.outputs.has_token == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Node.js
+        if: steps.check_token.outputs.has_token == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/Seedarr.Frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        if: steps.check_token.outputs.has_token == 'true'
+        run: |
+          cd src/Seedarr.Frontend
+          npm ci --ignore-scripts
+
+      - name: Install SonarScanner tool
+        if: steps.check_token.outputs.has_token == 'true'
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Begin SonarCloud Scanner
+        if: steps.check_token.outputs.has_token == 'true'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          dotnet-sonarscanner begin \
+            /k:"${{ secrets.SONAR_PROJECT_KEY || vars.SONAR_PROJECT_KEY || format('{0}_{1}', github.repository_owner, github.event.repository.name) }}" \
+            /o:"${{ secrets.SONAR_ORGANIZATION || vars.SONAR_ORGANIZATION || github.repository_owner }}" \
+            /d:sonar.token="${{ secrets.SONAR_TOKEN }}" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.scanner.skipJreProvisioning=true \
+            /d:sonar.cs.roslyn.ignoreIssues=true \
+            /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml,**/coverage.opencover.xml,src/**/coverage.opencover.xml" \
+            /d:sonar.javascript.lcov.reportPaths="src/Seedarr.Frontend/coverage/lcov.info" \
+            /d:sonar.projectBaseDir="${{ github.workspace }}" \
+            /d:sonar.coverage.exclusions="**/libtorrent_daemon.py,src/NzbDrone.Core/BitTorrent/libtorrent_daemon.py,**/AiCopilotDrawer.tsx,**/SpeedSchedule.tsx,**/ThemeContext.tsx,**/TorrentDetailPanel.tsx,**/*Test*/**,src/Seedarr.Frontend/src/pages/**,src/Seedarr.Frontend/src/components/**,src/Seedarr.Frontend/src/App.tsx" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,src/Seedarr.Frontend/node_modules/**,**/wwwroot/**,_output/**,_temp/**,**/locales/**,**/i18n/locales/**,src/Seedarr.Frontend/src/i18n/locales/**,src/Seedarr.Frontend/scripts/**" \
+            /d:sonar.cpd.exclusions="**/locales/**,**/locales/*,**/i18n/**,**/i18n/*,**/Migration/**,**/*Test*/**,**/Migrations/**" \
+            /d:sonar.issue.ignore.multicriteria="e1" \
+            /d:sonar.issue.ignore.multicriteria.e1.ruleKey="typescript:S9383" \
+            /d:sonar.issue.ignore.multicriteria.e1.resourceKey="src/Seedarr.Frontend/**/*"
+
+      - name: Build & Run Unit Tests with Coverage
+        if: steps.check_token.outputs.has_token == 'true'
+        run: |
+          dotnet restore src/Seedarr.sln
+          dotnet build src/Seedarr.sln --configuration Release --no-restore -p:RunAnalyzers=false
+          dotnet test src/NzbDrone.Core.Test/Seedarr.Core.Test.csproj \
+            --configuration Release \
+            --no-build \
+            --settings .runsettings \
+            --results-directory "${{ github.workspace }}/TestResults" \
+            --collect:"XPlat Code Coverage;Format=opencover" || true
+
+          # Run frontend unit tests and generate LCOV code coverage
+          cd src/Seedarr.Frontend
+          mkdir -p coverage
+          npm run test:coverage || true
+          cd ../..
+
+      - name: End SonarCloud Scanner
+        if: always() && steps.check_token.outputs.has_token == 'true'
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
