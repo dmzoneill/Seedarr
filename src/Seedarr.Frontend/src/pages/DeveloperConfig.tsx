@@ -130,7 +130,7 @@ export default function DeveloperConfig() {
       )}
 
       {/* Tabs & Search */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "gap", gap: "8px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
         <div style={{ display: "flex", gap: "6px" }}>
           <button
             onClick={() => setActiveTab("config")}
