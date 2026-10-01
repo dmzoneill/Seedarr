@@ -310,73 +310,69 @@ public class LidarrConnection : IArrConnection
     private MediaMetadata ParseLookupMedia(string json, string title)
     {
         using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+        if (doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0)
         {
             return null;
         }
 
-        foreach (var item in doc.RootElement.EnumerateArray())
+        var item = doc.RootElement[0];
+        var foreignElem = item.TryGetProperty("foreignAlbumId", out _) || item.TryGetProperty("album", out _)
+            ? (item.TryGetProperty("album", out var alb) ? alb : item)
+            : item;
+
+        var id = foreignElem.TryGetProperty("id", out var idProp) && idProp.TryGetInt32(out var idVal) ? idVal : 0;
+        var metadata = new MediaMetadata
         {
-            var foreignElem = item.TryGetProperty("foreignAlbumId", out _) || item.TryGetProperty("album", out _)
-                ? (item.TryGetProperty("album", out var alb) ? alb : item)
-                : item;
+            MediaType = "album",
+            MediaId = id,
+            Title = foreignElem.TryGetProperty("title", out var tProp) ? tProp.GetString() : title,
+            Overview = foreignElem.TryGetProperty("overview", out var ov) ? ov.GetString() : null,
+            StudioOrNetwork = foreignElem.TryGetProperty("artist", out var art) && art.TryGetProperty("artistName", out var an) ? an.GetString() : null
+        };
 
-            var id = foreignElem.TryGetProperty("id", out var idProp) && idProp.TryGetInt32(out var idVal) ? idVal : 0;
-            var metadata = new MediaMetadata
-            {
-                MediaType = "album",
-                MediaId = id,
-                Title = foreignElem.TryGetProperty("title", out var tProp) ? tProp.GetString() : title,
-                Overview = foreignElem.TryGetProperty("overview", out var ov) ? ov.GetString() : null,
-                StudioOrNetwork = foreignElem.TryGetProperty("artist", out var art) && art.TryGetProperty("artistName", out var an) ? an.GetString() : null
-            };
-
-            if (foreignElem.TryGetProperty("foreignAlbumId", out var mbProp))
-            {
-                metadata.MusicBrainzId = mbProp.GetString();
-            }
-            else if (foreignElem.TryGetProperty("musicBrainzId", out var mbIdProp))
-            {
-                metadata.MusicBrainzId = mbIdProp.GetString();
-            }
-            else if (item.TryGetProperty("foreignAlbumId", out var itemMbProp))
-            {
-                metadata.MusicBrainzId = itemMbProp.GetString();
-            }
-
-            if (foreignElem.TryGetProperty("images", out var imagesArray))
-            {
-                foreach (var imgElem in imagesArray.EnumerateArray())
-                {
-                    var coverType = imgElem.TryGetProperty("coverType", out var ctProp) ? ctProp.GetString() ?? "" : "";
-                    var imgUrl = imgElem.TryGetProperty("remoteUrl", out var ruProp) ? ruProp.GetString() : (imgElem.TryGetProperty("url", out var luProp) ? luProp.GetString() : null);
-
-                    if (string.IsNullOrEmpty(imgUrl))
-                    {
-                        continue;
-                    }
-
-                    var normalizedUrl = ArrConnectionResources.NormalizeCoverUrl(imgUrl, ConnectionId);
-
-                    if (coverType.Equals("cover", StringComparison.OrdinalIgnoreCase) || coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
-                    {
-                        metadata.PosterUrl = normalizedUrl;
-                    }
-                    else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
-                    {
-                        metadata.FanartUrl = normalizedUrl;
-                    }
-                    else if (coverType.Equals("banner", StringComparison.OrdinalIgnoreCase))
-                    {
-                        metadata.BannerUrl = normalizedUrl;
-                    }
-                }
-            }
-
-            return metadata;
+        if (foreignElem.TryGetProperty("foreignAlbumId", out var mbProp))
+        {
+            metadata.MusicBrainzId = mbProp.GetString();
+        }
+        else if (foreignElem.TryGetProperty("musicBrainzId", out var mbIdProp))
+        {
+            metadata.MusicBrainzId = mbIdProp.GetString();
+        }
+        else if (item.TryGetProperty("foreignAlbumId", out var itemMbProp))
+        {
+            metadata.MusicBrainzId = itemMbProp.GetString();
         }
 
-        return null;
+        if (foreignElem.TryGetProperty("images", out var imagesArray))
+        {
+            foreach (var imgElem in imagesArray.EnumerateArray())
+            {
+                var coverType = imgElem.TryGetProperty("coverType", out var ctProp) ? ctProp.GetString() ?? "" : "";
+                var imgUrl = imgElem.TryGetProperty("remoteUrl", out var ruProp) ? ruProp.GetString() : (imgElem.TryGetProperty("url", out var luProp) ? luProp.GetString() : null);
+
+                if (string.IsNullOrEmpty(imgUrl))
+                {
+                    continue;
+                }
+
+                var normalizedUrl = ArrConnectionResources.NormalizeCoverUrl(imgUrl, ConnectionId);
+
+                if (coverType.Equals("cover", StringComparison.OrdinalIgnoreCase) || coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
+                {
+                    metadata.PosterUrl = normalizedUrl;
+                }
+                else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
+                {
+                    metadata.FanartUrl = normalizedUrl;
+                }
+                else if (coverType.Equals("banner", StringComparison.OrdinalIgnoreCase))
+                {
+                    metadata.BannerUrl = normalizedUrl;
+                }
+            }
+        }
+
+        return metadata;
     }
 
     public bool TestConnection() => TestConnectionDetailed().Success;

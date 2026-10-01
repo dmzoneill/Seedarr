@@ -331,84 +331,80 @@ public class SonarrConnection : IArrConnection
     private MediaMetadata ParseLookupMedia(string json, string title)
     {
         using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+        if (doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0)
         {
             return null;
         }
 
-        foreach (var root in doc.RootElement.EnumerateArray())
+        var root = doc.RootElement[0];
+        var id = root.TryGetProperty("id", out var idProp) && idProp.TryGetInt32(out var idVal) ? idVal : 0;
+        var metadata = new MediaMetadata
         {
-            var id = root.TryGetProperty("id", out var idProp) && idProp.TryGetInt32(out var idVal) ? idVal : 0;
-            var metadata = new MediaMetadata
-            {
-                MediaType = "series",
-                MediaId = id,
-                Title = root.TryGetProperty("title", out var tProp) ? tProp.GetString() : title,
-                Year = root.TryGetProperty("year", out var yr) && yr.TryGetInt32(out var yVal) ? yVal : null,
-                Overview = root.TryGetProperty("overview", out var ov) ? ov.GetString() : null,
-                StudioOrNetwork = root.TryGetProperty("network", out var net) ? net.GetString() : null
-            };
+            MediaType = "series",
+            MediaId = id,
+            Title = root.TryGetProperty("title", out var tProp) ? tProp.GetString() : title,
+            Year = root.TryGetProperty("year", out var yr) && yr.TryGetInt32(out var yVal) ? yVal : null,
+            Overview = root.TryGetProperty("overview", out var ov) ? ov.GetString() : null,
+            StudioOrNetwork = root.TryGetProperty("network", out var net) ? net.GetString() : null
+        };
 
-            if (root.TryGetProperty("tvdbId", out var tvdbProp) && tvdbProp.TryGetInt32(out var tvdbVal))
-            {
-                metadata.TvdbId = tvdbVal;
-            }
-
-            if (root.TryGetProperty("imdbId", out var imdbProp))
-            {
-                metadata.ImdbId = imdbProp.GetString();
-            }
-
-            if (root.TryGetProperty("genres", out var genresArray))
-            {
-                foreach (var g in genresArray.EnumerateArray())
-                {
-                    var gStr = g.GetString();
-                    if (!string.IsNullOrEmpty(gStr))
-                    {
-                        metadata.Genres.Add(gStr);
-                    }
-                }
-            }
-
-            if (root.TryGetProperty("ratings", out var ratingsElem) && ratingsElem.TryGetProperty("value", out var rVal) && rVal.TryGetDouble(out var dblVal))
-            {
-                metadata.Rating = Math.Round(dblVal, 1);
-            }
-
-            if (root.TryGetProperty("images", out var imagesArray))
-            {
-                foreach (var imgElem in imagesArray.EnumerateArray())
-                {
-                    var coverType = imgElem.TryGetProperty("coverType", out var ctProp) ? ctProp.GetString() ?? "" : "";
-                    var imgUrl = imgElem.TryGetProperty("remoteUrl", out var ruProp) ? ruProp.GetString() : (imgElem.TryGetProperty("url", out var luProp) ? luProp.GetString() : null);
-
-                    if (string.IsNullOrEmpty(imgUrl))
-                    {
-                        continue;
-                    }
-
-                    var normalizedUrl = ArrConnectionResources.NormalizeCoverUrl(imgUrl, ConnectionId);
-
-                    if (coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
-                    {
-                        metadata.PosterUrl = normalizedUrl;
-                    }
-                    else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
-                    {
-                        metadata.FanartUrl = normalizedUrl;
-                    }
-                    else if (coverType.Equals("banner", StringComparison.OrdinalIgnoreCase))
-                    {
-                        metadata.BannerUrl = normalizedUrl;
-                    }
-                }
-            }
-
-            return metadata;
+        if (root.TryGetProperty("tvdbId", out var tvdbProp) && tvdbProp.TryGetInt32(out var tvdbVal))
+        {
+            metadata.TvdbId = tvdbVal;
         }
 
-        return null;
+        if (root.TryGetProperty("imdbId", out var imdbProp))
+        {
+            metadata.ImdbId = imdbProp.GetString();
+        }
+
+        if (root.TryGetProperty("genres", out var genresArray))
+        {
+            foreach (var g in genresArray.EnumerateArray())
+            {
+                var gStr = g.GetString();
+                if (!string.IsNullOrEmpty(gStr))
+                {
+                    metadata.Genres.Add(gStr);
+                }
+            }
+        }
+
+        if (root.TryGetProperty("ratings", out var ratingsElem) && ratingsElem.TryGetProperty("value", out var rVal) && rVal.TryGetDouble(out var dblVal))
+        {
+            metadata.Rating = Math.Round(dblVal, 1);
+        }
+
+        if (root.TryGetProperty("images", out var imagesArray))
+        {
+            foreach (var imgElem in imagesArray.EnumerateArray())
+            {
+                var coverType = imgElem.TryGetProperty("coverType", out var ctProp) ? ctProp.GetString() ?? "" : "";
+                var imgUrl = imgElem.TryGetProperty("remoteUrl", out var ruProp) ? ruProp.GetString() : (imgElem.TryGetProperty("url", out var luProp) ? luProp.GetString() : null);
+
+                if (string.IsNullOrEmpty(imgUrl))
+                {
+                    continue;
+                }
+
+                var normalizedUrl = ArrConnectionResources.NormalizeCoverUrl(imgUrl, ConnectionId);
+
+                if (coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
+                {
+                    metadata.PosterUrl = normalizedUrl;
+                }
+                else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
+                {
+                    metadata.FanartUrl = normalizedUrl;
+                }
+                else if (coverType.Equals("banner", StringComparison.OrdinalIgnoreCase))
+                {
+                    metadata.BannerUrl = normalizedUrl;
+                }
+            }
+        }
+
+        return metadata;
     }
 
     public bool TestConnection() => TestConnectionDetailed().Success;
