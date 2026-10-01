@@ -16,6 +16,7 @@ node_modules/
 dist/
 .cache/
 wwwroot/
+coverage/
 
 # IDE & Local Tools
 .idea/

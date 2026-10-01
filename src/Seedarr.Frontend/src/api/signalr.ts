@@ -10,6 +10,7 @@ import {
 import type { QueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
 import { useAppStore } from "../store/app";
+import { secureRandom } from "../utils/random";
 
 export type ConnectionStatus = "connected" | "disconnected" | "reconnecting";
 
@@ -113,7 +114,7 @@ export class ExponentialBackoffRetryPolicy implements IRetryPolicy {
     );
 
     // Random jitter (+/- 20%)
-    const jitter = Math.random() * 0.4 + 0.8;
+    const jitter = secureRandom() * 0.4 + 0.8;
     return Math.min(this.maxDelayMs, Math.round(baseDelay * jitter));
   }
 }

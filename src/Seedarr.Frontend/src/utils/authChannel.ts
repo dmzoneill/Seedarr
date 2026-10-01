@@ -1,4 +1,5 @@
 import type { CurrentUser } from "../api/types";
+import { secureRandom } from "./random";
 
 export type AuthEventType =
   "AUTH_LOGIN" | "AUTH_LOGOUT" | "AUTH_SESSION_EXPIRED";
@@ -136,7 +137,7 @@ export function broadcastAuthEvent(event: AuthEvent): void {
     try {
       storage.setItem(
         AUTH_STORAGE_KEY,
-        JSON.stringify({ ...event, _nonce: Math.random() }),
+        JSON.stringify({ ...event, _nonce: secureRandom() }),
       );
     } catch {
       // localStorage may fail in private mode or quota exceeded

@@ -4,6 +4,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { apiClient, getUrlBase } from "../../api/client";
+import { secureRandom } from "../../utils/random";
 
 export interface TerminalViewProps {
   cwd?: string;
@@ -224,7 +225,7 @@ export function TerminalView({
       setConnecting(true);
       const attempt = reconnectAttemptRef.current;
       const baseDelay = Math.min(30000, 1000 * Math.pow(2, attempt));
-      const jitterFactor = 0.8 + Math.random() * 0.4; // ±20% jitter
+      const jitterFactor = 0.8 + secureRandom() * 0.4; // ±20% jitter
       const delay = Math.round(baseDelay * jitterFactor);
       reconnectAttemptRef.current = attempt + 1;
 
