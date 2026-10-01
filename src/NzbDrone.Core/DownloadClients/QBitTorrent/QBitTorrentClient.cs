@@ -391,8 +391,8 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
                 var isPrivate = t.TryGetProperty("is_private", out var ip) &&
                     (ip.ValueKind == JsonValueKind.True ||
-                     (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
-                     (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
+                        (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
+                        (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
 
                 items.Add(new DownloadClientItem
                 {
