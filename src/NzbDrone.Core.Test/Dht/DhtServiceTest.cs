@@ -567,7 +567,7 @@ public class DhtServiceTest
     [Test]
     public void ValidateToken_should_accept_previous_secret_token()
     {
-        var generateWithSecretMethod = typeof(DhtService).GetMethod("GenerateTokenWithSecret", BindingFlags.NonPublic | BindingFlags.Instance);
+        var generateWithSecretMethod = typeof(DhtService).GetMethod("GenerateTokenWithSecret", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
         var validateMethod = typeof(DhtService).GetMethod("ValidateToken", BindingFlags.NonPublic | BindingFlags.Instance);
         var previousSecretField = typeof(DhtService).GetField("_previousTokenSecret", BindingFlags.NonPublic | BindingFlags.Instance);
         var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
@@ -596,7 +596,7 @@ public class DhtServiceTest
     [Test]
     public void GenerateTokenWithSecret_should_produce_deterministic_output()
     {
-        var method = typeof(DhtService).GetMethod("GenerateTokenWithSecret", BindingFlags.NonPublic | BindingFlags.Instance);
+        var method = typeof(DhtService).GetMethod("GenerateTokenWithSecret", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
         var secret = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
         var ep = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881);
         var infoHash = RandomNumberGenerator.GetBytes(20);
@@ -3388,13 +3388,13 @@ public class DhtServiceTest
 
     private byte[] InvokeEncodeCompactNodes(List<DhtNode> nodes)
     {
-        var method = typeof(DhtService).GetMethod("EncodeCompactNodes", BindingFlags.NonPublic | BindingFlags.Instance);
+        var method = typeof(DhtService).GetMethod("EncodeCompactNodes", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
         return (byte[])method.Invoke(_service, new object[] { nodes });
     }
 
     private byte[] InvokeEncodeCompactNodes6(List<DhtNode> nodes)
     {
-        var method = typeof(DhtService).GetMethod("EncodeCompactNodes6", BindingFlags.NonPublic | BindingFlags.Instance);
+        var method = typeof(DhtService).GetMethod("EncodeCompactNodes6", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
         return (byte[])method.Invoke(_service, new object[] { nodes });
     }
 
