@@ -210,10 +210,58 @@ export function BandwidthCard() {
             aria-label={t("quickSettings.maxDownload")}
           />
           <div className="quick-settings-slider-ticks">
-            <span onClick={() => commitDownload(0)}>0 (∞)</span>
-            <span onClick={() => commitDownload(1250)}>1.2M</span>
-            <span onClick={() => commitDownload(10240)}>10M</span>
-            <span onClick={() => commitDownload(50000)}>50M</span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => commitDownload(0)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  commitDownload(0);
+                }
+              }}
+            >
+              0 (∞)
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => commitDownload(1250)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  commitDownload(1250);
+                }
+              }}
+            >
+              1.2M
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => commitDownload(10240)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  commitDownload(10240);
+                }
+              }}
+            >
+              10M
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => commitDownload(50000)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  commitDownload(50000);
+                }
+              }}
+            >
+              50M
+            </span>
           </div>
         </div>
 
@@ -242,10 +290,58 @@ export function BandwidthCard() {
             aria-label={t("quickSettings.maxUpload")}
           />
           <div className="quick-settings-slider-ticks">
-            <span onClick={() => commitUpload(0)}>0 (∞)</span>
-            <span onClick={() => commitUpload(625)}>625K</span>
-            <span onClick={() => commitUpload(5120)}>5M</span>
-            <span onClick={() => commitUpload(50000)}>50M</span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => commitUpload(0)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  commitUpload(0);
+                }
+              }}
+            >
+              0 (∞)
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => commitUpload(625)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  commitUpload(625);
+                }
+              }}
+            >
+              625K
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => commitUpload(5120)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  commitUpload(5120);
+                }
+              }}
+            >
+              5M
+            </span>
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => commitUpload(50000)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  commitUpload(50000);
+                }
+              }}
+            >
+              50M
+            </span>
           </div>
         </div>
 

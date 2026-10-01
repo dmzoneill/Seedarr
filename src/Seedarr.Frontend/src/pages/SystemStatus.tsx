@@ -1347,11 +1347,28 @@ function SystemStatus() {
       {showRestartModal && (
         <div
           className="modal-overlay"
+          role="button"
+          tabIndex={0}
           onClick={() => !isRestarting && setShowRestartModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              if (!isRestarting) {
+                e.preventDefault();
+                setShowRestartModal(false);
+              }
+            }
+          }}
         >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 460,
               borderRadius: "8px",
@@ -1408,11 +1425,28 @@ function SystemStatus() {
       {showShutdownModal && (
         <div
           className="modal-overlay"
+          role="button"
+          tabIndex={0}
           onClick={() => !isShuttingDown && setShowShutdownModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              if (!isShuttingDown) {
+                e.preventDefault();
+                setShowShutdownModal(false);
+              }
+            }
+          }}
         >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 460,
               borderRadius: "8px",

@@ -1003,10 +1003,10 @@ export function GettingStartedModal({
     <div
       ref={modalRef}
       className="modal-overlay"
-      role="dialog"
+      role="button"
+      tabIndex={0}
       aria-modal="true"
       aria-labelledby="getting-started-modal-title"
-      tabIndex={-1}
       style={{
         position: "fixed",
         top: 0,
@@ -1025,10 +1025,25 @@ export function GettingStartedModal({
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose(true);
       }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+            handleClose(true);
+          }
+        }
+      }}
     >
       <div
         className="modal"
+        role="button"
+        tabIndex={0}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
         style={{
           maxWidth: 540,
           width: "92vw",

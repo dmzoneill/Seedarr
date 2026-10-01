@@ -272,7 +272,15 @@ export function DownloadClientsTab() {
             <div
               key={client.id}
               className="provider-card"
+              role="button"
+              tabIndex={0}
               onClick={() => handleOpenModal(client)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleOpenModal(client);
+                }
+              }}
             >
               <div className="provider-card-actions">
                 {client.host && (
@@ -449,7 +457,15 @@ export function DownloadClientsTab() {
           ))}
           <div
             className="provider-card-add"
+            role="button"
+            tabIndex={0}
             onClick={() => handleOpenModal(defaultClient)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleOpenModal(defaultClient);
+              }
+            }}
             title="Add Download Client"
           >
             <span className="provider-card-add-icon">+</span>
@@ -638,10 +654,28 @@ export function DownloadClientsTab() {
       </SectionCard>
 
       {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setEditing(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditing(null);
+            }
+          }}
+        >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 520,
               borderRadius: "8px",
@@ -947,10 +981,28 @@ export function DownloadClientsTab() {
       )}
 
       {editingMapping && (
-        <div className="modal-overlay" onClick={() => setEditingMapping(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setEditingMapping(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditingMapping(null);
+            }
+          }}
+        >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 520,
               borderRadius: "8px",
@@ -1041,10 +1093,28 @@ export function DownloadClientsTab() {
       )}
 
       {testModalOpen && (
-        <div className="modal-overlay" onClick={() => setTestModalOpen(false)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setTestModalOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setTestModalOpen(false);
+            }
+          }}
+        >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 580,
               borderRadius: "8px",

@@ -2133,7 +2133,19 @@ export function TorrentTable({
                   onDragOver={(e) => handleColDragOver(e, col.key)}
                   onDrop={(e) => handleColDrop(e, col.key)}
                   onDragEnd={handleColDragEnd}
+                  role={col.sortable ? "button" : undefined}
+                  tabIndex={col.sortable ? 0 : undefined}
                   onClick={() => col.sortable && handleSort(col.key)}
+                  onKeyDown={
+                    col.sortable
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleSort(col.key);
+                          }
+                        }
+                      : undefined
+                  }
                   className={`torrent-table-th${col.key === "#" ? " torrent-table-index" : ""}`}
                   style={{
                     cursor: col.sortable ? "pointer" : "default",
@@ -2202,11 +2214,23 @@ export function TorrentTable({
                   </div>
 
                   <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t(
+                      "torrents.table.dragToResize",
+                      undefined,
+                      "Drag to resize",
+                    )}
                     onMouseDown={(e) => {
                       const th = e.currentTarget.parentElement as HTMLElement;
                       handleResizeMouseDown(e, col.key, th);
                     }}
                     onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                      }
+                    }}
                     title={t(
                       "torrents.table.dragToResize",
                       undefined,

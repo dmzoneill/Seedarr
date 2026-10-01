@@ -57,10 +57,30 @@ export function PendingChangesModal({
   isPending?: boolean;
 }) {
   return (
-    <div className="modal-overlay" onClick={isPending ? undefined : onCancel}>
+    <div
+      className="modal-overlay"
+      role="button"
+      tabIndex={0}
+      onClick={isPending ? undefined : onCancel}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          if (!isPending) {
+            e.preventDefault();
+            onCancel();
+          }
+        }
+      }}
+    >
       <div
         className="modal"
+        role="button"
+        tabIndex={0}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
         style={{
           maxWidth: 420,
           borderRadius: "8px",

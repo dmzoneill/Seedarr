@@ -397,10 +397,28 @@ function Tags() {
 
       {/* Add / Edit Tag Modal */}
       {modalTag && (
-        <div className="modal-overlay" onClick={() => setModalTag(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setModalTag(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setModalTag(null);
+            }
+          }}
+        >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 520,
               borderRadius: "8px",
@@ -710,10 +728,28 @@ function Tags() {
 
       {/* Delete Confirmation Modal */}
       {deletingTag && (
-        <div className="modal-overlay" onClick={() => setDeletingTag(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setDeletingTag(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setDeletingTag(null);
+            }
+          }}
+        >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 480,
               borderRadius: "8px",

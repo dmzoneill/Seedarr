@@ -86,12 +86,20 @@ export function NetworkSwarmCard() {
           className={`quick-settings-vpn-badge ${
             isKillSwitchActive ? "vpn-active" : "vpn-inactive"
           }`}
+          role="button"
+          tabIndex={0}
           title={
             isKillSwitchActive
               ? `Kill Switch Active: Swarm bound to ${networkStatus?.boundInterface || "VPN"} (${networkStatus?.boundIp || "Protected"})`
               : "Kill Switch Disabled: Direct connections permitted"
           }
           onClick={handleToggleKillSwitch}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleToggleKillSwitch();
+            }
+          }}
           style={{ cursor: "pointer" }}
         >
           {isKillSwitchActive ? "🛡️ Kill Switch ON" : "⚠️ Direct Route"}

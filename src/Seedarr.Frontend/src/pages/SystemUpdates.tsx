@@ -402,15 +402,32 @@ function SystemUpdates() {
           {showInstallModal && (
             <div
               className="modal-backdrop"
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 if (isRestartRequired || isFailed) {
                   setShowInstallModal(false);
                 }
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  if (isRestartRequired || isFailed) {
+                    e.preventDefault();
+                    setShowInstallModal(false);
+                  }
+                }
+              }}
             >
               <div
                 className="modal"
+                role="button"
+                tabIndex={0}
                 onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                  }
+                }}
                 style={{
                   maxWidth: 520,
                   width: "90%",
