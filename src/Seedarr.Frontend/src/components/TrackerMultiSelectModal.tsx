@@ -137,10 +137,10 @@ export default function TrackerMultiSelectModal({
   return (
     <div
       ref={modalRef}
-      role="dialog"
+      role="button"
+      tabIndex={0}
       aria-modal="true"
       aria-labelledby="tracker-picker-title"
-      tabIndex={-1}
       style={{
         position: "fixed",
         top: 0,
@@ -156,9 +156,17 @@ export default function TrackerMultiSelectModal({
         padding: "1rem",
       }}
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClose();
+        }
+      }}
     >
       <div
         className="card"
+        role="button"
+        tabIndex={0}
         style={{
           width: "720px",
           maxWidth: "94vw",
@@ -172,6 +180,11 @@ export default function TrackerMultiSelectModal({
           boxShadow: "0 20px 45px rgba(0, 0, 0, 0.6)",
         }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
       >
         {/* Header */}
         <div
@@ -355,8 +368,18 @@ export default function TrackerMultiSelectModal({
             return (
               <div
                 key={item.url}
+                role="button"
+                tabIndex={isAttached ? -1 : 0}
                 onClick={() => {
                   if (!isAttached) onToggleUrl(item.url);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    if (!isAttached) {
+                      e.preventDefault();
+                      onToggleUrl(item.url);
+                    }
+                  }
                 }}
                 style={{
                   display: "flex",

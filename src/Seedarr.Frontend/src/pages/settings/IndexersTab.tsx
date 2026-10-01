@@ -387,9 +387,18 @@ export function IndexersTab() {
             <div
               key={idx.id}
               className="provider-card"
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 setEditing({ ...idx });
                 setModalTestResult(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setEditing({ ...idx });
+                  setModalTestResult(null);
+                }
               }}
             >
               <div className="provider-card-actions">
@@ -517,9 +526,18 @@ export function IndexersTab() {
           ))}
           <div
             className="provider-card-add"
+            role="button"
+            tabIndex={0}
             onClick={() => {
               setEditing({ ...defaultIndexer });
               setModalTestResult(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setEditing({ ...defaultIndexer });
+                setModalTestResult(null);
+              }
             }}
             title="Add Indexer"
           >
@@ -562,7 +580,15 @@ export function IndexersTab() {
               <div
                 key={rule.id}
                 className="provider-card"
+                role="button"
+                tabIndex={0}
                 onClick={() => setEditingRule({ ...rule })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setEditingRule({ ...rule });
+                  }
+                }}
               >
                 <div className="provider-card-actions">
                   <button
@@ -693,7 +719,15 @@ export function IndexersTab() {
             ))}
           <div
             className="provider-card-add"
+            role="button"
+            tabIndex={0}
             onClick={() => setEditingRule({ ...defaultRssRule })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setEditingRule({ ...defaultRssRule });
+              }
+            }}
             title="Add RSS Rule"
           >
             <span className="provider-card-add-icon">+</span>
@@ -905,14 +939,30 @@ export function IndexersTab() {
       {editing && (
         <div
           className="modal-overlay"
+          role="button"
+          tabIndex={0}
           onClick={() => {
             setEditing(null);
             setModalTestResult(null);
           }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditing(null);
+              setModalTestResult(null);
+            }
+          }}
         >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 520,
               borderRadius: "8px",
@@ -1081,6 +1131,8 @@ export function IndexersTab() {
                       <span
                         key={tagId}
                         className="badge badge-primary"
+                        role="button"
+                        tabIndex={0}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -1098,6 +1150,18 @@ export function IndexersTab() {
                             ),
                           });
                           setModalTestResult(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setEditing({
+                              ...editing,
+                              tags: (editing.tags || []).filter(
+                                (id) => id !== tagId,
+                              ),
+                            });
+                            setModalTestResult(null);
+                          }
                         }}
                       >
                         {tag.label} ✕
@@ -1248,7 +1312,15 @@ export function IndexersTab() {
                           }}
                         >
                           <div
+                            role="button"
+                            tabIndex={0}
                             onClick={() => toggleId(cat.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                toggleId(cat.id);
+                              }
+                            }}
                             style={{
                               display: "flex",
                               alignItems: "center",
@@ -1300,7 +1372,15 @@ export function IndexersTab() {
                                     return (
                                       <span
                                         key={sub.id}
+                                        role="button"
+                                        tabIndex={0}
                                         onClick={() => toggleId(sub.id)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            toggleId(sub.id);
+                                          }
+                                        }}
                                         style={{
                                           cursor: "pointer",
                                           fontSize: "0.72rem",
@@ -1494,10 +1574,28 @@ export function IndexersTab() {
       )}
 
       {editingRule && (
-        <div className="modal-overlay" onClick={() => setEditingRule(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setEditingRule(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditingRule(null);
+            }
+          }}
+        >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 520,
               borderRadius: "8px",

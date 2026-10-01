@@ -291,6 +291,8 @@ function TorrentGrid({
 
               {/* Selection Checkbox & Source Badge (Top Left) */}
               <div
+                role="button"
+                tabIndex={0}
                 style={{
                   position: "absolute",
                   top: "8px",
@@ -301,6 +303,11 @@ function TorrentGrid({
                   gap: "6px",
                 }}
                 onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                  }
+                }}
               >
                 <input
                   type="checkbox"
@@ -321,6 +328,8 @@ function TorrentGrid({
                 />
                 {torrent.source && (
                   <div
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => {
                       if (arrLink) {
                         e.stopPropagation();
@@ -329,6 +338,19 @@ function TorrentGrid({
                           "_blank",
                           "noopener,noreferrer",
                         );
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        if (arrLink) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.open(
+                            arrLink.url,
+                            "_blank",
+                            "noopener,noreferrer",
+                          );
+                        }
                       }
                     }}
                   >
@@ -575,6 +597,8 @@ function TorrentGrid({
 
               {/* Quick Card Action Buttons */}
               <div
+                role="button"
+                tabIndex={0}
                 style={{
                   display: "flex",
                   gap: "0.3rem",
@@ -583,6 +607,11 @@ function TorrentGrid({
                   borderTop: "1px solid var(--border-light)",
                 }}
                 onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                  }
+                }}
               >
                 {isSeeding ? (
                   <button

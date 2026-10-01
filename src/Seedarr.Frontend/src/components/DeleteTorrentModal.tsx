@@ -82,8 +82,17 @@ export function DeleteTorrentModal({
   return (
     <div
       className="modal-overlay"
+      role="button"
+      tabIndex={0}
       onClick={handleBackdropClick}
-      role="dialog"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          if (e.target === e.currentTarget && !isPending) {
+            e.preventDefault();
+            onClose();
+          }
+        }
+      }}
       aria-modal="true"
       aria-labelledby="delete-torrent-modal-title"
       aria-describedby="delete-torrent-modal-desc"
@@ -91,11 +100,18 @@ export function DeleteTorrentModal({
       <div
         ref={trapRef}
         className="modal"
+        role="button"
+        tabIndex={0}
         style={{
           maxWidth: "480px",
           width: "90%",
         }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
       >
         <h3
           id="delete-torrent-modal-title"

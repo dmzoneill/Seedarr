@@ -323,10 +323,10 @@ export function KeyboardShortcutsModal({
   return (
     <div
       ref={modalRef}
-      role="dialog"
+      role="button"
+      tabIndex={0}
       aria-modal="true"
       aria-labelledby="keyboard-shortcuts-title"
-      tabIndex={-1}
       style={{
         position: "fixed",
         top: 0,
@@ -342,9 +342,17 @@ export function KeyboardShortcutsModal({
         padding: "1rem",
       }}
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClose();
+        }
+      }}
     >
       <div
         className="card"
+        role="button"
+        tabIndex={0}
         style={{
           width: "580px",
           maxWidth: "92vw",
@@ -358,6 +366,11 @@ export function KeyboardShortcutsModal({
           padding: 0,
         }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
       >
         {/* Modal Header */}
         <div

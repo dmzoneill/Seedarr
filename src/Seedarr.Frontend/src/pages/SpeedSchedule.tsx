@@ -99,10 +99,28 @@ function ScheduleModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div
+      className="modal-overlay"
+      role="button"
+      tabIndex={0}
+      onClick={onCancel}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+    >
       <div
         className="modal"
+        role="button"
+        tabIndex={0}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
         style={{
           maxWidth: 520,
           borderRadius: "8px",
@@ -726,6 +744,8 @@ function WeeklyCalendar({
               return (
                 <div
                   key={`${hour}-${day.value}`}
+                  role="button"
+                  tabIndex={0}
                   data-calendar-cell="true"
                   data-day-idx={dayIdx}
                   data-hour={hour}
@@ -745,6 +765,21 @@ function WeeklyCalendar({
                       startTime: sTime,
                       endTime: eTime,
                     });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      const sTime = `${String(hour).padStart(2, "0")}:00`;
+                      const eTime =
+                        hour === 23
+                          ? "23:59"
+                          : `${String(hour + 1).padStart(2, "0")}:00`;
+                      onSelectRange?.({
+                        days: day.value,
+                        startTime: sTime,
+                        endTime: eTime,
+                      });
+                    }
                   }}
                   style={{
                     height: 22,
@@ -885,7 +920,15 @@ function WeeklyCalendar({
           {schedules.map((s, i) => (
             <div
               key={s.id}
+              role="button"
+              tabIndex={0}
               onClick={() => onToggleSchedule?.(s)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onToggleSchedule?.(s);
+                }
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",

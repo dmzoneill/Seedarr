@@ -90,8 +90,16 @@ export function TorrentFilterPanel({
       {/* State Filter Section */}
       <div
         className="filter-panel-header"
+        role="button"
+        tabIndex={0}
         style={{ cursor: "pointer", userSelect: "none" }}
         onClick={() => setIsStateOpen(!isStateOpen)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsStateOpen(!isStateOpen);
+          }
+        }}
       >
         <div
           className="filter-panel-section"
@@ -141,12 +149,20 @@ export function TorrentFilterPanel({
       {/* Tracker Filter Section */}
       <div
         className="filter-panel-header"
+        role="button"
+        tabIndex={0}
         style={{
           cursor: "pointer",
           userSelect: "none",
           marginTop: "0.5rem",
         }}
         onClick={() => setIsTrackerOpen(!isTrackerOpen)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsTrackerOpen(!isTrackerOpen);
+          }
+        }}
       >
         <div
           className="filter-panel-section"
@@ -206,12 +222,20 @@ export function TorrentFilterPanel({
       {/* Category Filter Section */}
       <div
         className="filter-panel-header"
+        role="button"
+        tabIndex={0}
         style={{
           cursor: "pointer",
           userSelect: "none",
           marginTop: "0.5rem",
         }}
         onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsCategoryOpen(!isCategoryOpen);
+          }
+        }}
       >
         <div
           className="filter-panel-section"
@@ -271,6 +295,8 @@ export function TorrentFilterPanel({
       {/* Tag / Label Filter Section */}
       <div
         className="filter-panel-header"
+        role="button"
+        tabIndex={0}
         style={{
           cursor: "pointer",
           userSelect: "none",
@@ -280,6 +306,12 @@ export function TorrentFilterPanel({
           justifyContent: "space-between",
         }}
         onClick={() => setIsTagOpen(!isTagOpen)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsTagOpen(!isTagOpen);
+          }
+        }}
       >
         <div
           className="filter-panel-section"

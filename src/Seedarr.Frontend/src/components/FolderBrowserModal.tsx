@@ -136,8 +136,15 @@ export function FolderBrowserModal({
   return (
     <div
       className="modal-overlay"
+      role="button"
+      tabIndex={0}
       onClick={onClose}
-      role="dialog"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClose();
+        }
+      }}
       aria-modal="true"
       style={{
         position: "fixed",
@@ -154,7 +161,14 @@ export function FolderBrowserModal({
       <div
         ref={trapRef}
         className="modal-content"
+        role="button"
+        tabIndex={0}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
         style={{
           width: "100%",
           maxWidth: "580px",
@@ -420,7 +434,15 @@ export function FolderBrowserModal({
               {directories.map((dir) => (
                 <div
                   key={dir.path}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleNavigateInto(dir.path)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleNavigateInto(dir.path);
+                    }
+                  }}
                   style={{
                     display: "flex",
                     alignItems: "center",

@@ -781,7 +781,15 @@ export function NotificationsTab() {
                 <div
                   key={notif.id}
                   className="provider-card"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleOpenModal(notif)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleOpenModal(notif);
+                    }
+                  }}
                 >
                   <div className="provider-card-actions">
                     {externalUrl && (
@@ -906,7 +914,15 @@ export function NotificationsTab() {
             })}
             <div
               className="provider-card-add"
+              role="button"
+              tabIndex={0}
               onClick={handleOpenAddModal}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleOpenAddModal();
+                }
+              }}
               title="Add Notification Channel"
             >
               <span className="provider-card-add-icon">+</span>
@@ -918,14 +934,30 @@ export function NotificationsTab() {
       {editing && (
         <div
           className="modal-overlay"
+          role="button"
+          tabIndex={0}
           onClick={() => {
             setEditing(null);
             setModalTestResult(null);
           }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditing(null);
+              setModalTestResult(null);
+            }
+          }}
         >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 580,
               maxHeight: "90vh",
@@ -1375,6 +1407,8 @@ export function NotificationsTab() {
                         <span
                           key={tagId}
                           className="badge badge-primary"
+                          role="button"
+                          tabIndex={0}
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
@@ -1391,6 +1425,17 @@ export function NotificationsTab() {
                                 (id) => id !== tagId,
                               ),
                             });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setEditing({
+                                ...editing,
+                                tags: (editing.tags || []).filter(
+                                  (id) => id !== tagId,
+                                ),
+                              });
+                            }
                           }}
                         >
                           {tag ? tag.label : `Tag #${tagId}`} ✕
@@ -1451,6 +1496,8 @@ export function NotificationsTab() {
                       <span
                         key={catName}
                         className="badge badge-primary"
+                        role="button"
+                        tabIndex={0}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
@@ -1467,6 +1514,17 @@ export function NotificationsTab() {
                               (c) => c !== catName,
                             ),
                           });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setEditing({
+                              ...editing,
+                              categories: (editing.categories || []).filter(
+                                (c) => c !== catName,
+                              ),
+                            });
+                          }
                         }}
                       >
                         {catName} ✕
@@ -1605,10 +1663,28 @@ export function NotificationsTab() {
       )}
 
       {deletingNotif && (
-        <div className="modal-overlay" onClick={() => setDeletingNotif(null)}>
+        <div
+          className="modal-overlay"
+          role="button"
+          tabIndex={0}
+          onClick={() => setDeletingNotif(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setDeletingNotif(null);
+            }
+          }}
+        >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 450,
               borderRadius: "8px",

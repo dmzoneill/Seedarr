@@ -1210,15 +1210,31 @@ export function SecurityTab() {
       {editingProvider && (
         <div
           className="modal-overlay"
+          role="button"
+          tabIndex={0}
           onClick={() => {
             setEditingProvider(null);
             setShowSecret(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditingProvider(null);
+              setShowSecret(false);
+            }
           }}
         >
           <div
             ref={editingProviderTrapRef}
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: "600px",
               maxHeight: "90vh",
@@ -1484,12 +1500,27 @@ export function SecurityTab() {
       {showRegenerateModal && (
         <div
           className="modal-overlay"
+          role="button"
+          tabIndex={0}
           onClick={() => setShowRegenerateModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setShowRegenerateModal(false);
+            }
+          }}
         >
           <div
             ref={regenerateModalTrapRef}
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{ maxWidth: "520px" }}
           >
             <h2
