@@ -23,6 +23,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
     private int _port = 8080;
     private bool _useSsl;
     private string _username = "admin";
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2068:Hardcoded credentials", Justification = "Standard factory default qBittorrent WebUI credential")]
     private string _password = "adminadmin";
     private string _category = "";
 

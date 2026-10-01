@@ -44,6 +44,8 @@ public class CpuUsageService : ICpuUsageService
     {
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3427:Method overloads with default values should not be ambiguous", Justification = "Internal constructor supports optional parameters for testing isolation while public parameterless constructor is for production DI")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S3427", Justification = "Internal constructor supports optional parameters for testing isolation while public parameterless constructor is for production DI")]
     internal CpuUsageService(
         Func<TimeSpan> cpuTimeAccessor = null,
         Func<long> timestampAccessor = null,
