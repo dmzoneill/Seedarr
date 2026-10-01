@@ -25,6 +25,8 @@ public class MultiFilePieceStorage : Torrents.MultiFilePieceStorage, IMultiFileS
     {
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3427:Method overloads with default values should not be ambiguous", Justification = "Constructor supports optional dependencies while parameterless exists for backwards compatibility")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S3427", Justification = "Constructor supports optional dependencies while parameterless exists for backwards compatibility")]
     public MultiFilePieceStorage(
         IPieceBoundaryResolver resolver = null,
         IFileHandlePool handlePool = null)

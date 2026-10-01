@@ -13,6 +13,7 @@ public static class ArrConnectionResources
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
     });
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S4830:Server certificates should be verified", Justification = "Explicitly provided for user-configured self-signed internal Arr certificates when requested")]
     public static readonly HttpClient SharedInsecureClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10),

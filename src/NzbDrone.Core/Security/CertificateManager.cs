@@ -151,6 +151,7 @@ public class CertificateManager : ICertificateManager, IDisposable
         }
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S4830:Server certificates should be verified", Justification = "Loopback probe explicitly verifies self-signed certificate binding")]
     public async Task<SslCertificateValidationResult> ValidateCertificateAsync(
         string certPath,
         string keyPath,

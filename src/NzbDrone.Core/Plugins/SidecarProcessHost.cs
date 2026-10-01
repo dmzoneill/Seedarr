@@ -123,6 +123,8 @@ public class SidecarProcessHost : ISidecarProcessHost
                     _logger.Trace(ex, "Could not attach Exited event to plugin process {0}", _manifest.Id);
                 }
 
+                _ioCts?.Cancel();
+                _ioCts?.Dispose();
                 _ioCts = new CancellationTokenSource();
                 var ioToken = _ioCts.Token;
                 Task.Run(() => ReadStandardOutputAsync(_process.StandardOutput, ioToken), ioToken);
@@ -356,7 +358,9 @@ public class SidecarProcessHost : ISidecarProcessHost
 
         _disposed = true;
         _restartCts?.Cancel();
+        _restartCts?.Dispose();
         _ioCts?.Cancel();
+        _ioCts?.Dispose();
 
         try
         {
@@ -479,6 +483,7 @@ public class SidecarProcessHost : ISidecarProcessHost
             _manifest.Id, PluginInfo.CrashCount, backoff.TotalSeconds);
 
         _restartCts?.Cancel();
+        _restartCts?.Dispose();
         _restartCts = new CancellationTokenSource();
         var token = _restartCts.Token;
 

@@ -20,6 +20,8 @@ public class RandomNumberGenerator : IRandomNumberGenerator
     {
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5394:Do not use insecure randomness", Justification = "Seeded pseudo-random generator is required for deterministic simulation and tests")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S2245", Justification = "Seeded pseudo-random generator is required for deterministic simulation and tests")]
     public RandomNumberGenerator(int seed)
         : this(new Random(seed))
     {
