@@ -132,7 +132,7 @@ public class McpService : IMcpService
         }
     }
 
-    private McpInitializeResult HandleInitialize()
+    private static McpInitializeResult HandleInitialize()
     {
         return new McpInitializeResult
         {
@@ -151,7 +151,7 @@ public class McpService : IMcpService
         };
     }
 
-    private McpToolListResult HandleToolsList()
+    private static McpToolListResult HandleToolsList()
     {
         return new McpToolListResult
         {
@@ -589,7 +589,7 @@ public class McpService : IMcpService
         return McpToolCallResult.Text(JsonSerializer.Serialize(metrics, McpJsonOptions.Default));
     }
 
-    private McpResourceListResult HandleResourcesList()
+    private static McpResourceListResult HandleResourcesList()
     {
         return new McpResourceListResult
         {
@@ -711,7 +711,7 @@ public class McpService : IMcpService
         }
     }
 
-    private McpPromptListResult HandlePromptsList()
+    private static McpPromptListResult HandlePromptsList()
     {
         return new McpPromptListResult
         {
@@ -748,7 +748,7 @@ public class McpService : IMcpService
         };
     }
 
-    private JsonRpcResponse HandlePromptGet(object id, JsonElement? paramsElement)
+    private static JsonRpcResponse HandlePromptGet(object id, JsonElement? paramsElement)
     {
         if (!paramsElement.HasValue || !paramsElement.Value.TryGetProperty("name", out var nameProp))
         {

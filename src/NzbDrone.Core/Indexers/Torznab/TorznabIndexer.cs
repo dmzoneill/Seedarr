@@ -616,12 +616,12 @@ public class TorznabIndexer : IIndexer
         }
     }
 
-    public string BuildSearchUrl(IndexerDefinition definition, TorznabSearchCriteria criteria)
+    public static string BuildSearchUrl(IndexerDefinition definition, TorznabSearchCriteria criteria)
     {
         return BuildSearchUrl(definition, criteria?.ToSearchQuery());
     }
 
-    public string BuildSearchUrl(IndexerDefinition definition, SearchQuery searchQuery)
+    public static string BuildSearchUrl(IndexerDefinition definition, SearchQuery searchQuery)
     {
         if (definition == null || string.IsNullOrWhiteSpace(definition.Url))
         {

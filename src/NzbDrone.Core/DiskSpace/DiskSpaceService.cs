@@ -510,7 +510,7 @@ public class DiskSpaceService : IDiskSpaceService
         }
     }
 
-    private DiskSpaceHealthState ComputeNextHealthState(
+    private static DiskSpaceHealthState ComputeNextHealthState(
         DiskSpaceHealthState currentState,
         long freeSpace,
         long totalSpace,

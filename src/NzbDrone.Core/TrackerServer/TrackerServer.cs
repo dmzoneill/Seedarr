@@ -422,7 +422,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         return null;
     }
 
-    private (Dictionary<string, string> Parameters, string Error) ParseRequest(string path)
+    private static (Dictionary<string, string> Parameters, string Error) ParseRequest(string path)
     {
         var queryIndex = path.IndexOf('?');
         if (queryIndex < 0)

@@ -12,6 +12,7 @@ public static class NzbDroneLogger
 {
     public const string FileTargetName = "file";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "NLog config takes ownership and disposes targets on process exit")]
     public static FileTarget CreateFileTarget(string logFilePath)
     {
         return new FileTarget(FileTargetName)
@@ -25,6 +26,7 @@ public static class NzbDroneLogger
         };
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "NLog config takes ownership and disposes targets on process exit")]
     public static void Register(StartupContext startupContext = null)
     {
         var config = new LoggingConfiguration();

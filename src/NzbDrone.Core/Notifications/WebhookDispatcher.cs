@@ -554,7 +554,7 @@ public class WebhookDispatcher : IWebhookDispatcher
         return payload;
     }
 
-    private HttpRequestMessage BuildHttpRequest(string targetUrl, object payload, string customHeadersJson, HttpMethod httpMethod = null)
+    private static HttpRequestMessage BuildHttpRequest(string targetUrl, object payload, string customHeadersJson, HttpMethod httpMethod = null)
     {
         HttpContent content;
 
@@ -595,7 +595,7 @@ public class WebhookDispatcher : IWebhookDispatcher
         return request;
     }
 
-    private void AttachCustomHeaders(HttpRequestMessage request, string customHeadersJson)
+    private static void AttachCustomHeaders(HttpRequestMessage request, string customHeadersJson)
     {
         if (string.IsNullOrWhiteSpace(customHeadersJson))
         {
@@ -700,7 +700,7 @@ public class WebhookDispatcher : IWebhookDispatcher
         }
     }
 
-    private void AddHeader(HttpRequestMessage request, string key, string value)
+    private static void AddHeader(HttpRequestMessage request, string key, string value)
     {
         var added = request.Headers.TryAddWithoutValidation(key, value ?? string.Empty);
         if (!added && request.Content != null)

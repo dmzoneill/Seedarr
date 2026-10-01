@@ -78,7 +78,7 @@ public class ScriptApiContext
         return false;
     }
 
-    private void ValidateAndAuditRequest(string method, string path)
+    private static void ValidateAndAuditRequest(string method, string path)
     {
         var cleanPath = NormalizeApiPath(path);
 

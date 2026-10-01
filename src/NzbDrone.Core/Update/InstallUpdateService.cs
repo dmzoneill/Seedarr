@@ -324,7 +324,7 @@ public class InstallUpdateService : IInstallUpdateService
         }
     }
 
-    public void ExtractPackage(string packageFilePath, string stagingDir)
+    public static void ExtractPackage(string packageFilePath, string stagingDir)
     {
         var lower = packageFilePath.ToLowerInvariant();
         if (lower.EndsWith(".zip"))

@@ -279,7 +279,7 @@ public class Torrent : ModelBase
     /// <summary>
     /// Determines whether transition to target status is valid.
     /// </summary>
-    public bool CanTransitionTo(TorrentStatus targetStatus)
+    public static bool CanTransitionTo(TorrentStatus targetStatus)
     {
         return true;
     }

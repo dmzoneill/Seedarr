@@ -1059,7 +1059,7 @@ public class ChokeManager : BackgroundService, IChokeManager
         }
     }
 
-    private List<PeerConnection> OrderCandidatesWithHysteresis(
+    private static List<PeerConnection> OrderCandidatesWithHysteresis(
         IEnumerable<PeerConnection> eligible,
         bool isSeeding,
         DateTime now)

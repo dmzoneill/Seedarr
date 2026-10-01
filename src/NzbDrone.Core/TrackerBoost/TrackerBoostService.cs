@@ -998,7 +998,7 @@ public class TrackerBoostService : ITrackerBoostService
         }
     }
 
-    internal async Task<bool> ProbeHttpTrackerAsync(string url, HttpClient httpClient = null, CancellationToken cancellationToken = default)
+    internal static async Task<bool> ProbeHttpTrackerAsync(string url, HttpClient httpClient = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var client = httpClient ?? HttpClient;
@@ -1195,7 +1195,7 @@ public class TrackerBoostService : ITrackerBoostService
         }
     }
 
-    private async Task<(bool Success, int Seeders, int Leechers, int Downloaded)> ScrapeHttpTrackerAsync(string announceUrl, string hexHash, CancellationToken cancellationToken = default)
+    private static async Task<(bool Success, int Seeders, int Leechers, int Downloaded)> ScrapeHttpTrackerAsync(string announceUrl, string hexHash, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         try

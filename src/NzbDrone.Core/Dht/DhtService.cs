@@ -1297,7 +1297,7 @@ public class DhtService : BackgroundService, IDhtService,
         }
     }
 
-    private byte[] EncodeCompactNodes(List<DhtNode> nodes)
+    private static byte[] EncodeCompactNodes(List<DhtNode> nodes)
     {
         if (nodes == null || nodes.Count == 0)
         {
@@ -1336,7 +1336,7 @@ public class DhtService : BackgroundService, IDhtService,
         return compactNodes;
     }
 
-    private byte[] EncodeCompactNodes6(List<DhtNode> nodes)
+    private static byte[] EncodeCompactNodes6(List<DhtNode> nodes)
     {
         if (nodes == null || nodes.Count == 0)
         {
@@ -2100,7 +2100,7 @@ public class DhtService : BackgroundService, IDhtService,
         return CryptographicOperations.FixedTimeEquals(token, previousToken);
     }
 
-    private byte[] GenerateTokenWithSecret(IPEndPoint endpoint, byte[] infoHash, byte[] secret)
+    private static byte[] GenerateTokenWithSecret(IPEndPoint endpoint, byte[] infoHash, byte[] secret)
     {
         var ipBytes = endpoint.Address.GetAddressBytes();
         var portBytes = BitConverter.GetBytes((ushort)endpoint.Port);
