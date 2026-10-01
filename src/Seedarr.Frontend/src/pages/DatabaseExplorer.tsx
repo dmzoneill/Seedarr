@@ -207,7 +207,7 @@ export default function DatabaseExplorer() {
       .size([Math.max(treemapDimensions.width, 300), Math.max(treemapDimensions.height, 300)])
       .padding(3)(root);
 
-    return root.leaves();
+    return root.leaves() as Array<d3.HierarchyRectangularNode<any>>;
   }, [storageData, storageFilter, storageMetric, treemapSearch, treemapDimensions]);
 
   // Initial grid layout for tables on visual canvas
@@ -311,6 +311,10 @@ export default function DatabaseExplorer() {
         errorMessage: "Safe Mode (Read-Only) is enabled. Disable Safe Mode to execute write queries.",
         executionTimeMs: 0,
         isQuery: false,
+        columns: [],
+        rows: [],
+        totalRows: 0,
+        rowsAffected: 0,
       });
       return;
     }
@@ -339,6 +343,10 @@ export default function DatabaseExplorer() {
         errorMessage: err?.message || "Execution failed.",
         executionTimeMs: 0,
         isQuery: false,
+        columns: [],
+        rows: [],
+        totalRows: 0,
+        rowsAffected: 0,
       });
     } finally {
       setIsExecuting(false);
