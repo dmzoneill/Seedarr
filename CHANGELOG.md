@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.3](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.3) - 2026-10-02
+
+### 🔧 Maintenance & Improvements
+- docs: center logo and headers in DOCKER_HUB.md and README.md
+
 ## [v2.0.2](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.2) - 2026-10-02
 
 ### 🔧 Maintenance & Improvements
