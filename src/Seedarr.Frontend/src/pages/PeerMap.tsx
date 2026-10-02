@@ -888,6 +888,8 @@ function PeerMap() {
         {selectedNode && (
           <div
             className="card"
+            role="button"
+            tabIndex={0}
             style={{
               position: "absolute",
               bottom: "1.25rem",
@@ -902,6 +904,11 @@ function PeerMap() {
               zIndex: 10,
             }}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
           >
             <div
               style={{

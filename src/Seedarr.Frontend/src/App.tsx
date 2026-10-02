@@ -985,12 +985,24 @@ function App() {
                   <div key={group.id} className="sidebar-group-container">
                     <div
                       className="sidebar-group-header"
+                      role="button"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();
                         setOpenSettingsGroups((prev) => ({
                           ...prev,
                           [group.id]: !isOpen,
                         }));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setOpenSettingsGroups((prev) => ({
+                            ...prev,
+                            [group.id]: !isOpen,
+                          }));
+                        }
                       }}
                       title={`Toggle ${group.title}`}
                     >
@@ -1244,7 +1256,15 @@ function App() {
             </button>
             <div
               className="topbar-search"
+              role="button"
+              tabIndex={0}
               onClick={openCommandPalette}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openCommandPalette();
+                }
+              }}
               style={{ cursor: "pointer" }}
               title={t(
                 "topbar.searchPlaceholder",

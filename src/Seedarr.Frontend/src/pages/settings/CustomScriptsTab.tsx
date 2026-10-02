@@ -364,8 +364,15 @@ export function CustomScriptsTab() {
         >
           <div
             ref={testModalTrapRef}
+            role="button"
+            tabIndex={0}
             className="modal"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               width: "100%",
               maxWidth: 640,

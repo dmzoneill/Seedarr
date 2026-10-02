@@ -474,6 +474,8 @@ export default function DownloadHistory() {
             return (
               <div
                 key={item.id}
+                role="button"
+                tabIndex={0}
                 className="card"
                 style={{
                   padding: 0,
@@ -493,6 +495,12 @@ export default function DownloadHistory() {
                   cursor: "pointer",
                 }}
                 onClick={() => setSelectedDetailItem(item)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedDetailItem(item);
+                  }
+                }}
               >
                 {/* Poster Artwork Box */}
                 <div
@@ -565,6 +573,8 @@ export default function DownloadHistory() {
                   {/* Top-left Source Badge & Direct Deep Link */}
                   {item.source && (
                     <div
+                      role="button"
+                      tabIndex={0}
                       style={{
                         position: "absolute",
                         top: "8px",
@@ -579,6 +589,19 @@ export default function DownloadHistory() {
                             "_blank",
                             "noopener,noreferrer",
                           );
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          if (arrLink) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.open(
+                              arrLink.url,
+                              "_blank",
+                              "noopener,noreferrer",
+                            );
+                          }
                         }
                       }}
                     >
@@ -714,6 +737,8 @@ export default function DownloadHistory() {
                       {meta.genres.slice(0, 2).map((g, i) => (
                         <span
                           key={i}
+                          role="button"
+                          tabIndex={0}
                           className="badge badge-secondary"
                           style={{
                             fontSize: "0.65rem",
@@ -726,6 +751,13 @@ export default function DownloadHistory() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setSearchTerm(g);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSearchTerm(g);
+                            }
                           }}
                           title={`Filter downloads by genre "${g}"`}
                         >
@@ -790,7 +822,6 @@ export default function DownloadHistory() {
                       paddingTop: "0.4rem",
                       borderTop: "1px solid var(--border-light)",
                     }}
-                    onClick={(e) => e.stopPropagation()}
                   >
                     <button
                       className="btn btn-outline"
@@ -965,6 +996,8 @@ export default function DownloadHistory() {
                             />
                           ) : (
                             <div
+                              role="button"
+                              tabIndex={0}
                               style={{
                                 width: "38px",
                                 height: "54px",
@@ -978,6 +1011,12 @@ export default function DownloadHistory() {
                                 cursor: "pointer",
                               }}
                               onClick={() => setSelectedDetailItem(item)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  setSelectedDetailItem(item);
+                                }
+                              }}
                             >
                               🎬
                             </div>
@@ -985,12 +1024,20 @@ export default function DownloadHistory() {
 
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div
+                              role="button"
+                              tabIndex={0}
                               style={{
                                 fontWeight: 600,
                                 wordBreak: "break-word",
                                 cursor: "pointer",
                               }}
                               onClick={() => setSelectedDetailItem(item)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  setSelectedDetailItem(item);
+                                }
+                              }}
                             >
                               {displayTitle}{" "}
                               {meta?.year ? (
@@ -1048,6 +1095,8 @@ export default function DownloadHistory() {
                                 ))}
                               {item.primaryTracker && (
                                 <span
+                                  role="button"
+                                  tabIndex={0}
                                   style={{
                                     color: "var(--text-dim, #999)",
                                     cursor: "pointer",
@@ -1055,6 +1104,12 @@ export default function DownloadHistory() {
                                   onClick={() =>
                                     setSearchTerm(item.primaryTracker || "")
                                   }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      setSearchTerm(item.primaryTracker || "");
+                                    }
+                                  }}
                                   title="Filter by tracker"
                                 >
                                   • {item.primaryTracker}
@@ -1336,10 +1391,20 @@ export default function DownloadHistory() {
       {/* RICH MEDIA DETAILS MODAL WITH DEEP-LINK INTEGRATIONS */}
       {selectedDetailItem && (
         <div
+          role="dialog"
+          aria-modal="true"
+          tabIndex={-1}
           className="modal-overlay"
           onClick={() => setSelectedDetailItem(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setSelectedDetailItem(null);
+            }
+          }}
         >
           <div
+            role="button"
+            tabIndex={0}
             className="modal"
             style={{
               maxWidth: "860px",
@@ -1350,6 +1415,11 @@ export default function DownloadHistory() {
               backgroundColor: "var(--bg-primary, #1a1a1a)",
             }}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
           >
             {/* Fanart Backdrop Header */}
             <div
@@ -1663,6 +1733,8 @@ export default function DownloadHistory() {
                     {selectedDetailItem.metadata.genres.map((g, i) => (
                       <span
                         key={i}
+                        role="button"
+                        tabIndex={0}
                         className="badge badge-secondary"
                         style={{
                           fontSize: "0.75rem",
@@ -1672,6 +1744,13 @@ export default function DownloadHistory() {
                         onClick={() => {
                           setSearchTerm(g);
                           setSelectedDetailItem(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSearchTerm(g);
+                            setSelectedDetailItem(null);
+                          }
                         }}
                         title={`Filter history by genre "${g}"`}
                       >
@@ -1778,6 +1857,8 @@ export default function DownloadHistory() {
                             )}
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <div
+                                role="button"
+                                tabIndex={0}
                                 style={{
                                   fontSize: "0.8rem",
                                   fontWeight: 600,
@@ -1789,6 +1870,13 @@ export default function DownloadHistory() {
                                 onClick={() => {
                                   setSearchTerm(actor.name);
                                   setSelectedDetailItem(null);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setSearchTerm(actor.name);
+                                    setSelectedDetailItem(null);
+                                  }
                                 }}
                                 title={`Click to filter Seedarr history by "${actor.name}"`}
                               >
@@ -1918,6 +2006,8 @@ export default function DownloadHistory() {
                     Primary Tracker
                   </div>
                   <div
+                    role={selectedDetailItem.primaryTracker ? "button" : undefined}
+                    tabIndex={selectedDetailItem.primaryTracker ? 0 : undefined}
                     style={{
                       fontSize: "0.85rem",
                       wordBreak: "break-all",
@@ -1927,6 +2017,13 @@ export default function DownloadHistory() {
                     }}
                     onClick={() => {
                       if (selectedDetailItem.primaryTracker) {
+                        setSearchTerm(selectedDetailItem.primaryTracker);
+                        setSelectedDetailItem(null);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if ((e.key === "Enter" || e.key === " ") && selectedDetailItem.primaryTracker) {
+                        e.preventDefault();
                         setSearchTerm(selectedDetailItem.primaryTracker);
                         setSelectedDetailItem(null);
                       }

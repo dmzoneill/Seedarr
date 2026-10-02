@@ -2073,18 +2073,8 @@ export function TorrentTable({
   return (
     <div
       className="torrent-table-wrapper"
-      role="region"
-      aria-label="Torrent Table"
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onFocus={(e) => {
-        if (e.target === e.currentTarget && sorted.length > 0) {
-          const idx = Math.min(Math.max(0, focusedIndex), sorted.length - 1);
-          rowRefs.current[idx]?.focus();
-        }
-      }}
       style={{
         display: "flex",
         flexDirection: "column",

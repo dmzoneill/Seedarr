@@ -816,6 +816,8 @@ export function DownloadClientsTab() {
                       return tag ? (
                         <span
                           key={tagId}
+                          role="button"
+                          tabIndex={0}
                           className="badge badge-primary"
                           style={{
                             display: "inline-flex",
@@ -833,6 +835,17 @@ export function DownloadClientsTab() {
                                 (id) => id !== tagId,
                               ),
                             });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setEditing({
+                                ...editing,
+                                tags: (editing.tags || []).filter(
+                                  (id) => id !== tagId,
+                                ),
+                              });
+                            }
                           }}
                         >
                           {tag.label} ✕

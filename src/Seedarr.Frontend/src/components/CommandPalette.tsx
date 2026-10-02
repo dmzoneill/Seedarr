@@ -672,6 +672,8 @@ export function CommandPalette({
     >
       <div
         className="card"
+        role="button"
+        tabIndex={0}
         style={{
           width: "640px",
           maxWidth: "92vw",
@@ -849,7 +851,7 @@ export function CommandPalette({
                           fontWeight: 600,
                           fontSize: "0.88rem",
                           color: isSelected
-                            ? "var(--text-primary)"
+                            ? "var(--accent, #58a6ff)"
                             : "var(--text-primary)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",

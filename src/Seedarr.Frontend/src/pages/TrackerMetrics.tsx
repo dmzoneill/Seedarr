@@ -1606,6 +1606,9 @@ function TrackerMetricDetailModal({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
       style={{
         position: "fixed",
         top: 0,
@@ -1620,9 +1623,22 @@ function TrackerMetricDetailModal({
         padding: "1rem",
       }}
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          onClose();
+        }
+      }}
     >
       <div
         className="card"
+        role="button"
+        tabIndex={0}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
         style={{
           width: "100%",
           maxWidth: "760px",

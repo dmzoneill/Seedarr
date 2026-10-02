@@ -102,7 +102,19 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
 
   return (
     <div className="detail-panel" ref={panelRef} style={{ height }}>
-      <div className="detail-panel-resize-handle" onMouseDown={onMouseDown} />
+      {/* Resizable handle */}
+      <div
+        className="detail-panel-resize-handle"
+        role="button"
+        tabIndex={0}
+        aria-label="Resize details panel"
+        onMouseDown={onMouseDown}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+          }
+        }}
+      />
       <div className="detail-panel-header">
         <div className="detail-panel-title">{torrent.name}</div>
         <div className="detail-panel-actions">

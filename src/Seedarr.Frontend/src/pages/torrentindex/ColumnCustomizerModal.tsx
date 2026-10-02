@@ -154,7 +154,14 @@ export function ColumnCustomizerModal({
     >
       <div
         className="modal column-customizer-modal"
+        role="button"
+        tabIndex={0}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
         style={{ maxWidth: "680px", width: "95%" }}
       >
         <div className="column-customizer-header">

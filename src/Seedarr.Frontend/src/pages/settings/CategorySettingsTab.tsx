@@ -589,11 +589,29 @@ export function CategorySettingsTab({
 
       {/* Add / Edit Category Modal */}
       {editingCategory && (
-        <div className="modal-overlay" onClick={() => setEditingCategory(null)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          tabIndex={-1}
+          className="modal-overlay"
+          onClick={() => setEditingCategory(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setEditingCategory(null);
+            }
+          }}
+        >
           <div
             ref={editingCategoryTrapRef}
+            role="button"
+            tabIndex={0}
             className="modal"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 540,
               borderRadius: "8px",

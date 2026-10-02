@@ -715,6 +715,8 @@ function TrackerServer() {
 
                   {/* Top Left Source Badge */}
                   <div
+                    role="button"
+                    tabIndex={0}
                     style={{
                       position: "absolute",
                       top: "8px",
@@ -729,6 +731,19 @@ function TrackerServer() {
                           "_blank",
                           "noopener,noreferrer",
                         );
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        if (arrLink) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.open(
+                            arrLink.url,
+                            "_blank",
+                            "noopener,noreferrer",
+                          );
+                        }
                       }
                     }}
                   >
