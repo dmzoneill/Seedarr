@@ -32,6 +32,9 @@ import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
 import SystemTerminal from "./pages/SystemTerminal";
 import DatabaseExplorer from "./pages/DatabaseExplorer";
+import DeveloperTesting from "./pages/DeveloperTesting";
+import DeveloperRepl from "./pages/DeveloperRepl";
+import DeveloperDebugger from "./pages/DeveloperDebugger";
 import DeveloperDiagnostics from "./pages/DeveloperDiagnostics";
 import DeveloperEvents from "./pages/DeveloperEvents";
 import DeveloperCommands from "./pages/DeveloperCommands";
@@ -125,6 +128,9 @@ const systemSubItems = [
 
 const developerSubItems = [
   { path: "/developer/database", label: "Database", labelKey: "nav.database" },
+  { path: "/developer/testing", label: "Testing", labelKey: "nav.testing" },
+  { path: "/developer/repl", label: "REPL", labelKey: "nav.repl" },
+  { path: "/developer/debugger", label: "Debugger", labelKey: "nav.debugger" },
   { path: "/developer/events", label: "Event Bus", labelKey: "nav.events" },
   { path: "/developer/commands", label: "Commands", labelKey: "nav.commands" },
   { path: "/developer/network", label: "Network", labelKey: "nav.network" },
@@ -1684,6 +1690,9 @@ function App() {
                 element={<Navigate to="/developer/database" replace />}
               />
               <Route path="/developer/database" element={<DatabaseExplorer />} />
+              <Route path="/developer/testing" element={<DeveloperTesting />} />
+              <Route path="/developer/repl" element={<DeveloperRepl />} />
+              <Route path="/developer/debugger" element={<DeveloperDebugger />} />
               <Route path="/developer/events" element={<DeveloperEvents />} />
               <Route path="/developer/commands" element={<DeveloperCommands />} />
               <Route path="/developer/network" element={<DeveloperNetwork />} />
