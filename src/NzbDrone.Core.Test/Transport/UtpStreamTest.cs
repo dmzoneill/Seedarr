@@ -157,6 +157,7 @@ public class UtpStreamTest
     }
 
     [Test]
+    [CancelAfter(10000)]
     public async Task WriteAsync_MultiChunk_TransmitsAllBytes()
     {
         _connection.IsConnected.Returns(true);
@@ -174,6 +175,7 @@ public class UtpStreamTest
     }
 
     [Test]
+    [CancelAfter(10000)]
     public async Task WriteAsync_Memory_TransmitsAllBytes()
     {
         _connection.IsConnected.Returns(true);

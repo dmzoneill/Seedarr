@@ -526,9 +526,15 @@ public class TrackerMetricServiceTests
 
         _metricRepository.FindByUrl(trackerUrl).Returns(metric);
 
-        IList<TrackerMetricSnapshot> capturedSnapshots = null;
+        var capturedSnapshots = new List<TrackerMetricSnapshot>();
         _snapshotRepository.When(x => x.InsertMany(Arg.Any<IList<TrackerMetricSnapshot>>()))
-            .Do(callInfo => capturedSnapshots = callInfo.Arg<IList<TrackerMetricSnapshot>>().ToList());
+            .Do(callInfo =>
+            {
+                lock (capturedSnapshots)
+                {
+                    capturedSnapshots.AddRange(callInfo.Arg<IList<TrackerMetricSnapshot>>());
+                }
+            });
 
         // Announce 1: initial 1000 up, 500 down
         _service.RecordAnnounce(
