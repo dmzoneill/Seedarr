@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.7](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.7) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(quality): resolve final CA2100 diagnostic in Seedarr
+
 ## [v2.0.6](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.6) - 2026-10-02
 
 ### 🔧 Maintenance & Improvements
