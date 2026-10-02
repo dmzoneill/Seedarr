@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.13](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.13) - 2026-10-02
+
+### 🔧 Maintenance & Improvements
+- test: cover Readarr lookup edge cases for full coverage
+
 ## [v1.20.12](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.12) - 2026-10-02
 
 ### 🐛 Bug Fixes
