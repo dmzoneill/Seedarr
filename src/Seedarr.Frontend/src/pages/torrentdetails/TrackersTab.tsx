@@ -574,7 +574,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
             flexWrap: "wrap",
           }}
         >
-          <label
+          <span
             style={{
               fontSize: "0.85rem",
               fontWeight: 500,
@@ -582,7 +582,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
             }}
           >
             Add Tracker:
-          </label>
+          </span>
           <button
             type="button"
             className="form-control btn-action"

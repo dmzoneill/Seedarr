@@ -628,6 +628,7 @@ export function CategorySettingsTab({
 
             <div style={{ marginBottom: "1rem" }}>
               <label
+                htmlFor="category-save-path"
                 style={{
                   display: "block",
                   fontSize: "0.85rem",
@@ -640,6 +641,7 @@ export function CategorySettingsTab({
               </label>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <input
+                  id="category-save-path"
                   type="text"
                   className="input"
                   value={editingCategory.savePath || ""}

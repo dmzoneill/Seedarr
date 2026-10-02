@@ -781,7 +781,7 @@ export function DownloadClientsTab() {
               hint="Filter by category"
             />
             <div className="form-group">
-              <label className="form-label">Tags</label>
+              <span className="form-label">Tags</span>
               <div className="form-input-wrapper">
                 <select
                   multiple

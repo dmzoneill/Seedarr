@@ -2066,7 +2066,7 @@ export default function DownloadHistory() {
             </p>
 
             <div style={{ marginBottom: "1.25rem" }}>
-              <label
+              <span
                 style={{
                   display: "block",
                   fontSize: "0.85rem",
@@ -2076,9 +2076,10 @@ export default function DownloadHistory() {
                 }}
               >
                 Export Format
-              </label>
+              </span>
               <div style={{ display: "flex", gap: "1rem" }}>
                 <label
+                  htmlFor="export-format-json"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -2088,6 +2089,7 @@ export default function DownloadHistory() {
                   }}
                 >
                   <input
+                    id="export-format-json"
                     type="radio"
                     name="exportFormat"
                     value="json"
@@ -2097,6 +2099,7 @@ export default function DownloadHistory() {
                   <span>JSON (.json)</span>
                 </label>
                 <label
+                  htmlFor="export-format-csv"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -2106,6 +2109,7 @@ export default function DownloadHistory() {
                   }}
                 >
                   <input
+                    id="export-format-csv"
                     type="radio"
                     name="exportFormat"
                     value="csv"

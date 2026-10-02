@@ -712,7 +712,7 @@ function PeerMap() {
       {/* Control Toolbar */}
       <div className="peer-map-controls" style={{ flexShrink: 0 }}>
         <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-          <label className="peer-map-label">Time Range:</label>
+          <span className="peer-map-label">Time Range:</span>
           {[1, 6, 12, 24].map((h) => (
             <button
               key={h}
@@ -726,8 +726,9 @@ function PeerMap() {
 
         {/* Swarm Focus Filter */}
         <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-          <label className="peer-map-label">Filter Swarm:</label>
+          <label htmlFor="peer-map-filter-swarm" className="peer-map-label">Filter Swarm:</label>
           <select
+            id="peer-map-filter-swarm"
             value={selectedTorrentFilter}
             onChange={(e) => setSelectedTorrentFilter(e.target.value)}
             style={{
