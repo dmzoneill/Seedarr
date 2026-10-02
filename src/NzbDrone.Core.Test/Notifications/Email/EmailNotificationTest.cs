@@ -387,4 +387,38 @@ public class EmailNotificationTest
         Assert.That(subject.LastSentMessage.To[0].Address, Is.EqualTo("valid@example.com"));
         Assert.That(subject.LastSentMessage.To[1].Address, Is.EqualTo("valid2@example.com"));
     }
+
+    [Test]
+    public void ValidateServerCertificate_should_return_true_when_no_ssl_errors()
+    {
+        var result = EmailNotification.ValidateServerCertificate(
+            null,
+            null,
+            null,
+            System.Net.Security.SslPolicyErrors.None,
+            false);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void ValidateServerCertificate_should_respect_ignoreSslErrors_flag_when_ssl_errors_exist()
+    {
+        var allowed = EmailNotification.ValidateServerCertificate(
+            null,
+            null,
+            null,
+            System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors,
+            true);
+
+        var denied = EmailNotification.ValidateServerCertificate(
+            null,
+            null,
+            null,
+            System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors,
+            false);
+
+        Assert.That(allowed, Is.True);
+        Assert.That(denied, Is.False);
+    }
 }
