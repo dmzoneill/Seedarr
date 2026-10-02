@@ -26,6 +26,8 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
     public IReadOnlyList<long> PrefixOffsets => _prefixOffsets;
     public int PieceCount => _pieceLength > 0 && _totalSize > 0 ? (int)((_totalSize + _pieceLength - 1) / _pieceLength) : 0;
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3427:Method overloads with default values should not be ambiguous", Justification = "Constructor supports optional dependencies for testing while parameterless is used for DI")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S3427", Justification = "Constructor supports optional dependencies for testing while parameterless is used for DI")]
     public MultiFilePieceStorage(IPieceBoundaryResolver resolver = null, IFileHandlePool handlePool = null)
     {
         _resolver = resolver ?? new PieceBoundaryResolver();

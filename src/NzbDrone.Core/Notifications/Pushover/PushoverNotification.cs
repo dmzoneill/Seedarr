@@ -91,6 +91,8 @@ public class PushoverNotification : INotificationService
         SendMessage(title, message, null, null, null, null, null);
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3427:Method overloads with default values should not be ambiguous", Justification = "Two-argument overload is for simple callers while seven-argument overload is for advanced notifications")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S3427", Justification = "Two-argument overload is for simple callers while seven-argument overload is for advanced notifications")]
     public void SendMessage(
         string title,
         string message,

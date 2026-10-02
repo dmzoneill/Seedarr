@@ -10,6 +10,8 @@ using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Jobs;
 
+[global::System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3427:Method overloads with default values should not be ambiguous", Justification = "Interface methods provide convenient optional parameter overloads for scheduler telemetry")]
+[global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S3427", Justification = "Interface methods provide convenient optional parameter overloads for scheduler telemetry")]
 public interface ITaskManager
 {
     IEnumerable<ScheduledTask> GetAll();
