@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.6](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.6) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(a11y): add role=button and keyboard listeners in ConnectionsTab (S6848)
+- fix(security): resolve CSP, path traversal, SSRF, and ARIA focusable rules (S7039, S2083, S5144, S6852, S6845, S5332)
+
+### 🔧 Maintenance & Improvements
+- style: fix indentation in MediaCoverController for editorconfig
+
 ## [v1.20.5](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.5) - 2026-10-02
 
 ### 🐛 Bug Fixes
