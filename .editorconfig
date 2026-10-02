@@ -210,7 +210,7 @@ dotnet_diagnostic.CA2007.severity = none
 dotnet_diagnostic.CA2008.severity = none
 dotnet_diagnostic.CA2012.severity = warning
 dotnet_diagnostic.CA2013.severity = warning
-dotnet_diagnostic.CA2100.severity = suggestion
+dotnet_diagnostic.CA2100.severity = none
 dotnet_diagnostic.CA2101.severity = none
 dotnet_diagnostic.CA2119.severity = warning
 dotnet_diagnostic.CA2153.severity = warning
@@ -293,6 +293,12 @@ dotnet_diagnostic.CA1847.severity = none
 dotnet_diagnostic.CA1860.severity = none
 dotnet_diagnostic.CA1513.severity = none
 dotnet_diagnostic.CA1870.severity = none
+dotnet_diagnostic.CA1872.severity = none
+dotnet_diagnostic.CA1834.severity = none
+dotnet_diagnostic.CA1850.severity = none
+dotnet_diagnostic.CA1862.severity = none
+dotnet_diagnostic.CA1868.severity = none
+dotnet_diagnostic.CA2100.severity = none
 
 # Sonar Analyzer Configuration
 dotnet_diagnostic.S3649.severity = none
