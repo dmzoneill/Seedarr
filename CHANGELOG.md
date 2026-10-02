@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.4](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.4) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(frontend): resolve exhaustive-deps and ref cleanup in React hooks; fix zizmor template injection
+
+### 🔧 Maintenance & Improvements
+- ci(lint): keep Gitleaks, Bash, and shfmt active while disabling Zizmor
+- ci(security): pin all GitHub Actions to full commit SHAs for Zizmor compliance
+- ci(quality): re-enable Gitleaks, Zizmor, Bash, Sonar security rules, CA1849, and strict ESLint hooks
+
 ## [v2.0.3](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.3) - 2026-10-02
 
 ### 🔧 Maintenance & Improvements
