@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.12](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.12) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(coverage): test certificate validation callback and exclude store from coverage
+
 ## [v1.20.11](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.11) - 2026-10-02
 
 ### 🐛 Bug Fixes
