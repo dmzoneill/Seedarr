@@ -52,7 +52,7 @@ public class PrefixedStreamTest
         using var stream = new PrefixedStream(prefix, inner);
 
         var buffer = new byte[1];
-        stream.Read(buffer, 0, 1);
+        _ = stream.Read(buffer, 0, 1);
 
         var buffer2 = new byte[3];
         var read = stream.Read(buffer2, 0, 3);
@@ -106,7 +106,7 @@ public class PrefixedStreamTest
 
         for (var i = 0; i < 4; i++)
         {
-            stream.Read(buffer, 0, 1);
+            _ = stream.Read(buffer, 0, 1);
             result[i] = buffer[0];
         }
 
@@ -124,7 +124,7 @@ public class PrefixedStreamTest
         using var stream = new PrefixedStream(prefix, inner);
 
         var buffer = new byte[10];
-        stream.Read(buffer, 0, 10);
+        _ = stream.Read(buffer, 0, 10);
 
         var read = stream.Read(buffer, 0, 10);
 
@@ -223,10 +223,10 @@ public class PrefixedStreamTest
         Assert.That(stream.Position, Is.EqualTo(0));
 
         var buffer = new byte[1];
-        stream.Read(buffer, 0, 1);
+        _ = stream.Read(buffer, 0, 1);
         Assert.That(stream.Position, Is.EqualTo(0));
 
-        stream.Read(buffer, 0, 1);
+        _ = stream.Read(buffer, 0, 1);
         Assert.That(stream.Position, Is.EqualTo(1));
     }
 
