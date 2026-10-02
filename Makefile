@@ -66,8 +66,18 @@ test:
 		--logger "trx;LogFileName=test-results.trx" \
 		--collect:"XPlat Code Coverage"
 
-# integration brings up the full stack and runs all test suites.
-integration: stack-clean stack-init stack-build stack-up stack-healthy stack-configure
+# integration runs unit/integration tests without container orchestration
+integration:
+	@if [ -f $(INTEGRATION_TEST) ]; then \
+		dotnet test $(INTEGRATION_TEST) --no-build \
+			--settings .runsettings \
+			--logger "trx;LogFileName=integration-test-results.trx" \
+			--logger "console;verbosity=normal" \
+			--collect:"XPlat Code Coverage"; \
+	fi
+
+# stack-integration brings up the full container stack and runs all test suites.
+stack-integration: stack-clean stack-init stack-build stack-up stack-healthy stack-configure
 	@echo ""
 	@echo "Running .NET integration tests..."
 	dotnet test $(INTEGRATION_TEST) --no-build \
