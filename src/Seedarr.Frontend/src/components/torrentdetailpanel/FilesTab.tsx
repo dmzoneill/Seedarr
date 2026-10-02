@@ -1516,7 +1516,6 @@ export function FilesTab({
                 color: "var(--text-primary)",
                 marginBottom: "1.25rem",
               }}
-              autoFocus
               onKeyDown={(e) => {
                 if (e.key === "Enter") void handleConfirmRename();
                 if (e.key === "Escape") setRenamingNode(null);

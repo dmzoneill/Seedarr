@@ -280,7 +280,10 @@ function buildNotificationPayload(
       let resolvedUrl = form.url.trim();
       const token = form.token.trim();
       if (resolvedUrl) {
-        const cleanUrl = resolvedUrl.replace(/\/+$/, "");
+        let cleanUrl = resolvedUrl;
+        while (cleanUrl.endsWith("/")) {
+          cleanUrl = cleanUrl.slice(0, -1);
+        }
         if (!cleanUrl.endsWith("/message") && !cleanUrl.includes("/message?")) {
           resolvedUrl = `${cleanUrl}/message`;
         }

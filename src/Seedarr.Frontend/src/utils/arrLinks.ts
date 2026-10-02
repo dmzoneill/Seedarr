@@ -31,7 +31,10 @@ export function getArrInstanceUrl(
   );
 
   if (!match?.url) return null;
-  const trimmed = match.url.replace(/\/+$/, "");
+  let trimmed = match.url;
+  while (trimmed.endsWith("/")) {
+    trimmed = trimmed.slice(0, -1);
+  }
   return trimmed.startsWith("http://") || trimmed.startsWith("https://")
     ? trimmed
     : `http://${trimmed}`;
@@ -44,7 +47,13 @@ export function getDownloadClientUrl(client: {
   urlBase?: string | null;
 }): string {
   if (!client.host) return "";
-  const urlBase = (client.urlBase || "").replace(/^\/+|\/+$/g, "");
+  let urlBase = client.urlBase || "";
+  while (urlBase.startsWith("/")) {
+    urlBase = urlBase.slice(1);
+  }
+  while (urlBase.endsWith("/")) {
+    urlBase = urlBase.slice(0, -1);
+  }
   return `${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}${urlBase ? `/${urlBase}` : ""}`;
 }
 
@@ -119,7 +128,10 @@ export function getProwlarrUrl(
   );
   if (!prowlarr?.url) return null;
 
-  const base = prowlarr.url.replace(/\/+$/, "");
+  let base = prowlarr.url;
+  while (base.endsWith("/")) {
+    base = base.slice(0, -1);
+  }
   return query ? `${base}/search?query=${encodeURIComponent(query)}` : base;
 }
 

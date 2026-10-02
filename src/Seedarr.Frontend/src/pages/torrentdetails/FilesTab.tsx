@@ -151,7 +151,6 @@ function FileTreeRow({
                   }
                 }}
                 disabled={isRenaming}
-                autoFocus
                 style={{
                   fontSize: "0.8rem",
                   padding: "0.15rem 0.35rem",
@@ -586,7 +585,13 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
     if (!nonPaddingFiles.length) return;
     const dirs = new Set<string>();
     for (const f of nonPaddingFiles) {
-      const normalized = f.path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+      let normalized = f.path.replace(/\\/g, "/");
+      while (normalized.startsWith("/")) {
+        normalized = normalized.slice(1);
+      }
+      while (normalized.endsWith("/")) {
+        normalized = normalized.slice(0, -1);
+      }
       const parts = normalized.split("/").filter(Boolean);
       for (let i = 1; i < parts.length; i++) {
         dirs.add(parts.slice(0, i).join("/"));
