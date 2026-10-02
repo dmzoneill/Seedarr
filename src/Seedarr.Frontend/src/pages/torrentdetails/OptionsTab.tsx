@@ -63,11 +63,12 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
     <div className="card">
       <h3>Options</h3>
       <div className="form-group">
-        <label className="form-label">
+        <label htmlFor="popt-priority" className="form-label">
           Priority
           <span className="form-hint">Torrent priority level</span>
         </label>
         <select
+          id="popt-priority"
           className="form-select"
           value={priority}
           onChange={(e) => mark(setPriority)(e.target.value)}
@@ -80,11 +81,12 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         </select>
       </div>
       <div className="form-group">
-        <label className="form-label">
+        <label htmlFor="popt-upload-limit" className="form-label">
           Upload Speed Limit
           <span className="form-hint">KB/s, 0 = use global limit</span>
         </label>
         <input
+          id="popt-upload-limit"
           type="number"
           className="form-input"
           value={uploadLimit}
@@ -95,11 +97,12 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         />
       </div>
       <div className="form-group">
-        <label className="form-label">
+        <label htmlFor="popt-download-limit" className="form-label">
           Download Speed Limit
           <span className="form-hint">KB/s, 0 = use global limit</span>
         </label>
         <input
+          id="popt-download-limit"
           type="number"
           className="form-input"
           value={downloadLimit}
@@ -110,12 +113,13 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         />
       </div>
       <div className="form-group">
-        <label className="form-label">
+        <label htmlFor="popt-super-seeding" className="form-label">
           Super Seeding
           <span className="form-hint">Enable super seeding mode</span>
         </label>
-        <label className="toggle-switch">
+        <label htmlFor="popt-super-seeding" className="toggle-switch" aria-label="Super Seeding">
           <input
+            id="popt-super-seeding"
             type="checkbox"
             checked={superSeeding}
             onChange={(e) => mark(setSuperSeeding)(e.target.checked)}
@@ -124,12 +128,13 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         </label>
       </div>
       <div className="form-group">
-        <label className="form-label">
+        <label htmlFor="popt-force-start" className="form-label">
           Force Start
           <span className="form-hint">Bypass queue and start immediately</span>
         </label>
-        <label className="toggle-switch">
+        <label htmlFor="popt-force-start" className="toggle-switch" aria-label="Force Start">
           <input
+            id="popt-force-start"
             type="checkbox"
             checked={forceStart}
             onChange={(e) => mark(setForceStart)(e.target.checked)}
@@ -138,11 +143,12 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         </label>
       </div>
       <div className="form-group">
-        <label className="form-label">
+        <label htmlFor="popt-label" className="form-label">
           Label
           <span className="form-hint">Optional label for organization</span>
         </label>
         <input
+          id="popt-label"
           type="text"
           className="form-input"
           value={label}
