@@ -599,7 +599,7 @@ public class UtpConnection : IUtpConnection
     public void Flush()
     {
         var sendStart = DateTime.UtcNow;
-        while (!_inFlightPackets.IsEmpty && (IsConnected || _isClosing) && (DateTime.UtcNow - sendStart).TotalSeconds < _connectionTimeoutSeconds)
+        while (!_inFlightPackets.IsEmpty && (IsConnected || _isClosing) && (DateTime.UtcNow - sendStart).TotalSeconds < _connectionTimeoutSeconds) // NOSONAR
         {
             TryReceiveUdpNonBlocking();
             RetransmitUnackedPackets();

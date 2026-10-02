@@ -113,7 +113,7 @@ public class ConnectionManagerTest
         return conn;
     }
 
-    private void SetInfoHash(PeerConnection conn, string infoHash)
+    private static void SetInfoHash(PeerConnection conn, string infoHash)
     {
         typeof(PeerConnection).GetProperty("InfoHash").SetValue(conn, infoHash);
     }

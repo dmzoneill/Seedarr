@@ -20,7 +20,7 @@ public class RingBufferTargetTest
         LogManager.Configuration = null;
     }
 
-    private Logger ConfigureAndGetLogger(RingBufferTarget target)
+    private static Logger ConfigureAndGetLogger(RingBufferTarget target)
     {
         var config = new LoggingConfiguration();
         config.AddTarget("ringbuffer", target);

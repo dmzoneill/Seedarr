@@ -336,6 +336,7 @@ public class TerminalServiceTests
     private class MockDuplexStream : Stream
     {
         private readonly MemoryStream _writtenBytes = new();
+        private readonly object _writeLock = new();
         private readonly ConcurrentQueue<byte[]> _pendingOutput = new();
         private readonly SemaphoreSlim _outputSignal = new(0);
         private bool _isClosed;
@@ -367,7 +368,7 @@ public class TerminalServiceTests
 
         public string GetWrittenString()
         {
-            lock (_writtenBytes)
+            lock (_writeLock)
             {
                 return Encoding.UTF8.GetString(_writtenBytes.ToArray());
             }
@@ -382,7 +383,7 @@ public class TerminalServiceTests
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            return ReadAsync(buffer.AsMemory(offset, count)).GetAwaiter().GetResult();
+            return ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
         }
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
@@ -434,7 +435,7 @@ public class TerminalServiceTests
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            lock (_writtenBytes)
+            lock (_writeLock)
             {
                 _writtenBytes.Write(buffer, offset, count);
             }
@@ -444,7 +445,7 @@ public class TerminalServiceTests
         {
             await Task.Run(() =>
             {
-                lock (_writtenBytes)
+                lock (_writeLock)
                 {
                     _writtenBytes.Write(buffer.Span);
                 }

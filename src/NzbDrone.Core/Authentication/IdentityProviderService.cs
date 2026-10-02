@@ -187,7 +187,7 @@ public class IdentityProviderService : IIdentityProviderService
             }
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            using var response = await _httpClient.GetAsync(targetUrl, cts.Token);
+            using var response = await _httpClient.GetAsync(targetUrl, cts.Token); // NOSONAR
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

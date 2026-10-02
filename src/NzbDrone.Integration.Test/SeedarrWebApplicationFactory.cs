@@ -97,7 +97,10 @@ public sealed class SeedarrWebApplicationFactory : IDisposable
 
         try
         {
-            _app?.DisposeAsync().GetAwaiter().GetResult();
+            if (_app != null)
+            {
+                _app.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
         }
         catch
         {
