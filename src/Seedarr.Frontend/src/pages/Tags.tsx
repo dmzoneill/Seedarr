@@ -436,6 +436,7 @@ function Tags() {
             {/* Label Input */}
             <div style={{ marginBottom: "1rem" }}>
               <label
+                htmlFor="modal-tag-label"
                 style={{
                   display: "block",
                   fontSize: "0.85rem",
@@ -446,6 +447,7 @@ function Tags() {
                 Tag Label *
               </label>
               <input
+                id="modal-tag-label"
                 type="text"
                 className="form-input"
                 placeholder="e.g. 4k-hdr, seedbox, ptp"
@@ -458,7 +460,7 @@ function Tags() {
 
             {/* Color Customization */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <label
+              <span
                 style={{
                   display: "block",
                   fontSize: "0.85rem",
@@ -467,7 +469,7 @@ function Tags() {
                 }}
               >
                 Color Customization
-              </label>
+              </span>
               <div
                 style={{
                   display: "flex",
@@ -571,6 +573,7 @@ function Tags() {
             >
               <div>
                 <label
+                  htmlFor="modal-tag-upload-limit"
                   style={{
                     display: "block",
                     fontSize: "0.85rem",
@@ -581,6 +584,7 @@ function Tags() {
                   Upload Limit (KB/s)
                 </label>
                 <input
+                  id="modal-tag-upload-limit"
                   type="number"
                   className="form-input"
                   placeholder="Unlimited"
@@ -598,6 +602,7 @@ function Tags() {
               </div>
               <div>
                 <label
+                  htmlFor="modal-tag-download-limit"
                   style={{
                     display: "block",
                     fontSize: "0.85rem",
@@ -608,6 +613,7 @@ function Tags() {
                   Download Limit (KB/s)
                 </label>
                 <input
+                  id="modal-tag-download-limit"
                   type="number"
                   className="form-input"
                   placeholder="Unlimited"
@@ -636,6 +642,7 @@ function Tags() {
             >
               <div>
                 <label
+                  htmlFor="modal-tag-min-ratio"
                   style={{
                     display: "block",
                     fontSize: "0.85rem",
@@ -646,6 +653,7 @@ function Tags() {
                   Min Seed Ratio
                 </label>
                 <input
+                  id="modal-tag-min-ratio"
                   type="number"
                   className="form-input"
                   placeholder="e.g. 2.0"
@@ -664,6 +672,7 @@ function Tags() {
               </div>
               <div>
                 <label
+                  htmlFor="modal-tag-min-time"
                   style={{
                     display: "block",
                     fontSize: "0.85rem",
@@ -674,6 +683,7 @@ function Tags() {
                   Min Seed Time (Seconds)
                 </label>
                 <input
+                  id="modal-tag-min-time"
                   type="number"
                   className="form-input"
                   placeholder="e.g. 86400"
