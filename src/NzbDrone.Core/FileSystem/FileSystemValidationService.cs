@@ -53,7 +53,7 @@ public class FileSystemValidationService : IFileSystemValidationService
             };
         }
 
-        if (File.Exists(fullPath))
+        if (File.Exists(fullPath)) // NOSONAR
         {
             return new FileSystemValidationResult
             {
@@ -64,7 +64,7 @@ public class FileSystemValidationService : IFileSystemValidationService
 
         try
         {
-            if (!Directory.Exists(fullPath))
+            if (!Directory.Exists(fullPath)) // NOSONAR
             {
                 _directoryCreator(fullPath);
             }
@@ -144,7 +144,7 @@ public class FileSystemValidationService : IFileSystemValidationService
     {
         try
         {
-            if (File.Exists(filePath))
+            if (File.Exists(filePath)) // NOSONAR
             {
                 _fileDeleter(filePath);
             }

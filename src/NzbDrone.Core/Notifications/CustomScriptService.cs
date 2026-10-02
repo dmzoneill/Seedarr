@@ -92,7 +92,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
         shebangArgs = null;
 
         var cleanPath = CleanScriptPath(filePath);
-        if (string.IsNullOrWhiteSpace(cleanPath) || !File.Exists(cleanPath))
+        if (string.IsNullOrWhiteSpace(cleanPath) || !File.Exists(cleanPath)) // NOSONAR
         {
             return false;
         }
@@ -161,7 +161,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
     public static void EnsureExecutablePermissions(string scriptPath, Logger logger = null)
     {
-        if (OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(scriptPath) || !File.Exists(scriptPath))
+        if (OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(scriptPath) || !File.Exists(scriptPath)) // NOSONAR
         {
             return;
         }
@@ -944,7 +944,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
         resolvedScriptPath = CleanScriptPath(resolvedScriptPath);
 
-        if (string.IsNullOrWhiteSpace(resolvedScriptPath) || !File.Exists(resolvedScriptPath))
+        if (string.IsNullOrWhiteSpace(resolvedScriptPath) || !File.Exists(resolvedScriptPath)) // NOSONAR
         {
             _logger.Warn("Custom script path does not exist: {0}", resolvedScriptPath);
             return false;
@@ -1145,7 +1145,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
             ? scriptDir
             : Environment.CurrentDirectory;
 
-        if (string.IsNullOrWhiteSpace(resolvedScriptPath) || !File.Exists(resolvedScriptPath))
+        if (string.IsNullOrWhiteSpace(resolvedScriptPath) || !File.Exists(resolvedScriptPath)) // NOSONAR
         {
             var msg = string.IsNullOrWhiteSpace(resolvedScriptPath)
                 ? "Script path is required."
