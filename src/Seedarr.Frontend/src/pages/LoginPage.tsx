@@ -319,7 +319,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
               placeholder="••••••••••••••••"
-              autoFocus
               style={{
                 width: "100%",
                 padding: "10px 12px",

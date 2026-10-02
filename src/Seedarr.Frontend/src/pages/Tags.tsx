@@ -453,7 +453,6 @@ function Tags() {
                 onChange={(e) =>
                   setModalTag({ ...modalTag, label: e.target.value })
                 }
-                autoFocus
               />
             </div>
 

@@ -48,9 +48,13 @@ export function buildFileTree(
     const file = files[fileIndex];
     if (!file || typeof file.path !== "string") continue;
 
-    const normalizedPath = file.path
-      .replace(/\\/g, "/")
-      .replace(/^\/+|\/+$/g, "");
+    let normalizedPath = file.path.replace(/\\/g, "/");
+    while (normalizedPath.startsWith("/")) {
+      normalizedPath = normalizedPath.slice(1);
+    }
+    while (normalizedPath.endsWith("/")) {
+      normalizedPath = normalizedPath.slice(0, -1);
+    }
     const parts = normalizedPath.split("/").filter(Boolean);
 
     if (parts.length === 0) {
@@ -195,7 +199,13 @@ export function findNodeByPath(
   nodes: FileTreeNode[],
   path: string,
 ): FileTreeNode | undefined {
-  const normalized = path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  let normalized = path.replace(/\\/g, "/");
+  while (normalized.startsWith("/")) {
+    normalized = normalized.slice(1);
+  }
+  while (normalized.endsWith("/")) {
+    normalized = normalized.slice(0, -1);
+  }
   for (const node of nodes) {
     if (node.path === normalized) {
       return node;

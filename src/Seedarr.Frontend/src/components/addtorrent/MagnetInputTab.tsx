@@ -214,7 +214,6 @@ export function MagnetInputTab({
               lineHeight: "1.45",
               resize: isModal ? "vertical" : "none",
             }}
-            autoFocus
           />
         </div>
 

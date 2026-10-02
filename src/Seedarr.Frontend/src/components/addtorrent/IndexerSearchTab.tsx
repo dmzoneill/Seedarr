@@ -392,7 +392,6 @@ export function IndexerSearchTab({
             color: "inherit",
             fontSize: "0.9rem",
           }}
-          autoFocus
         />
 
         <select

@@ -348,7 +348,6 @@ export function FolderBrowserModal({
                   padding: "0.3rem 0.6rem",
                   fontSize: "0.85rem",
                 }}
-                autoFocus
               />
               <button
                 type="button"

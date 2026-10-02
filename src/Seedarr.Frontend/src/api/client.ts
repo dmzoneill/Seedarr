@@ -28,7 +28,11 @@ declare global {
 
 export function getUrlBase(): string {
   if (typeof window !== "undefined" && window.Seedarr?.urlBase) {
-    return window.Seedarr.urlBase.replace(/\/+$/, "");
+    let base = window.Seedarr.urlBase;
+    while (base.endsWith("/")) {
+      base = base.slice(0, -1);
+    }
+    return base;
   }
   return "";
 }
