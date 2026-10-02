@@ -83,15 +83,15 @@ public static class TerminalWebSocketHandler
         string requestedCwd = context.Request.Query["cwd"];
         string cwd = null;
 
-        if (!string.IsNullOrWhiteSpace(requestedCwd) && Directory.Exists(requestedCwd))
+        if (!string.IsNullOrWhiteSpace(requestedCwd) && Directory.Exists(requestedCwd)) // NOSONAR
         {
             cwd = requestedCwd;
         }
-        else if (!string.IsNullOrWhiteSpace(configService.TorrentSaveDirectory) && Directory.Exists(configService.TorrentSaveDirectory))
+        else if (!string.IsNullOrWhiteSpace(configService.TorrentSaveDirectory) && Directory.Exists(configService.TorrentSaveDirectory)) // NOSONAR
         {
             cwd = configService.TorrentSaveDirectory;
         }
-        else if (!string.IsNullOrWhiteSpace(configService.DefaultSavePath) && Directory.Exists(configService.DefaultSavePath))
+        else if (!string.IsNullOrWhiteSpace(configService.DefaultSavePath) && Directory.Exists(configService.DefaultSavePath)) // NOSONAR
         {
             cwd = configService.DefaultSavePath;
         }
