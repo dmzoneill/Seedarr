@@ -1650,7 +1650,6 @@ function TrackerMetricDetailModal({
           flexDirection: "column",
           gap: "1rem",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div
