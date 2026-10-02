@@ -369,8 +369,8 @@ public class RemotePathMappingService : IRemotePathMappingService
 
         var trimmed = host.Trim();
         return string.Equals(trimmed, "*", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(trimmed, "default", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(trimmed, "all", StringComparison.OrdinalIgnoreCase);
+            string.Equals(trimmed, "default", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmed, "all", StringComparison.OrdinalIgnoreCase);
     }
 
     private List<RemotePathMapping> GetMatchingCandidates(string host, bool isLocalToRemote)
