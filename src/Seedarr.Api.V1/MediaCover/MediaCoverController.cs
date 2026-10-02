@@ -428,7 +428,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
                 }
             }
             else if (!string.IsNullOrEmpty(Request.Headers.IfModifiedSince) &&
-                     DateTimeOffset.TryParse(Request.Headers.IfModifiedSince.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var ifModifiedSince))
+                DateTimeOffset.TryParse(Request.Headers.IfModifiedSince.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var ifModifiedSince))
             {
                 if (lastModifiedUtc <= ifModifiedSince.UtcDateTime || (lastModifiedUtc - ifModifiedSince.UtcDateTime).TotalSeconds < 1)
                 {
@@ -573,8 +573,8 @@ public class MediaCoverController : RestController<MediaMetadataResource>
         }
 
         var isWithinAllowedDir = (fullPath.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) ||
-                                  fullPath.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase)) &&
-                                 fullPath.StartsWith(appDataRoot, StringComparison.OrdinalIgnoreCase);
+            fullPath.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase)) &&
+            fullPath.StartsWith(appDataRoot, StringComparison.OrdinalIgnoreCase);
 
         if (!isWithinAllowedDir)
         {
@@ -604,8 +604,8 @@ public class MediaCoverController : RestController<MediaMetadataResource>
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
             return (fullDir.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) ||
-                    fullDir.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase)) &&
-                   fullDir.StartsWith(appDataRoot, StringComparison.OrdinalIgnoreCase);
+                fullDir.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase)) &&
+                fullDir.StartsWith(appDataRoot, StringComparison.OrdinalIgnoreCase);
         }
         catch (Exception ex)
         {
