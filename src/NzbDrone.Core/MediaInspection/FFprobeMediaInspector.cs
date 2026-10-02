@@ -35,6 +35,8 @@ public class FFprobeMediaInspector : IFFprobeMediaInspector
     {
     }
 
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3427:Method overloads with default values should not be ambiguous", Justification = "Constructor supports optional dependencies for testing while parameterless is used for production DI")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S3427", Justification = "Constructor supports optional dependencies for testing while parameterless is used for production DI")]
     public FFprobeMediaInspector(
         string ffprobePath = "ffprobe",
         TimeSpan? timeout = null,
