@@ -117,6 +117,7 @@ const zhCN = {
     terminal: "Terminal",
     automation: "Automation",
     developer: "Developer",
+    debugger: "Debugger",
     gettingStarted: "Getting Started",
   },
   topbar: {

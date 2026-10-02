@@ -2168,3 +2168,107 @@ export interface DeveloperSimulationResponse {
   mcpTools: string[];
 }
 
+export interface DeveloperTestItem {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  targetComponent: string;
+}
+
+export interface DeveloperTestResult {
+  testId: string;
+  name: string;
+  category: string;
+  status: "Passed" | "Failed" | "Skipped";
+  durationMs: number;
+  output: string;
+  errorMessage: string;
+  stackTrace: string;
+  executedAtUtc: string;
+}
+
+export interface TestExecutionRequest {
+  testIds?: string[];
+  category?: string;
+  runAll?: boolean;
+}
+
+export interface TestExecutionResponse {
+  totalTests: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  totalDurationMs: number;
+  results: DeveloperTestResult[];
+}
+
+export interface ReplExecutionRequest {
+  code: string;
+  language?: string;
+  timeoutSeconds?: number;
+}
+
+export interface ReplExecutionResponse {
+  success: boolean;
+  resultJson: string;
+  resultType: string;
+  output: string;
+  errorMessage: string;
+  durationMs: number;
+}
+
+export interface ReplHistoryEntry {
+  id: string;
+  code: string;
+  language: string;
+  success: boolean;
+  executedAtUtc: string;
+  durationMs: number;
+}
+
+export interface TracepointDefinition {
+  id?: string;
+  filePath: string;
+  lineNumber: number;
+  condition?: string;
+  hitCount?: number;
+  isEnabled?: boolean;
+  createdAtUtc?: string;
+}
+
+export interface TracepointSnapshot {
+  snapshotId?: string;
+  tracepointId: string;
+  filePath: string;
+  lineNumber: number;
+  timestampUtc?: string;
+  threadId: number;
+  callStack: string;
+  variablesJson: string;
+}
+
+export interface DebuggerStatusReport {
+  isDapAvailable: boolean;
+  dapPath: string;
+  attachedSessionCount: number;
+  activeTracepointsCount: number;
+  capturedSnapshotsCount: number;
+  serverTimestampUtc: string;
+}
+
+export interface DebuggerSourceFileItem {
+  filePath: string;
+  className: string;
+  namespace: string;
+  subsystem: string;
+  lineCount: number;
+}
+
+export interface DebuggerSourceCodeResponse {
+  filePath: string;
+  content: string;
+  lineCount: number;
+  exists: boolean;
+}
+
