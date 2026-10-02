@@ -12,7 +12,7 @@ namespace Seedarr.Api.V1.DownloadClients;
 [V1ApiController("downloadclients")]
 public class DownloadClientController : Controller
 {
-    private const string PasswordMask = "********";
+    private const string PasswordMask = "********"; // NOSONAR
 
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly NzbDrone.Core.DownloadClients.Sync.IDownloadClientSyncService _syncService;
