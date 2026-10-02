@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.13](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.13) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(quality): use ArgumentOutOfRangeException.ThrowIfNegative and configure CA1512
+
 ## [v2.0.12](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.12) - 2026-10-02
 
 ### 🔧 Maintenance & Improvements
