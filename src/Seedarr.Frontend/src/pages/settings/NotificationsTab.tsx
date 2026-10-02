@@ -1367,7 +1367,7 @@ export function NotificationsTab() {
 
             <SectionTitle>Filters</SectionTitle>
             <div className="form-group">
-              <label className="form-label">Tags</label>
+              <span className="form-label">Tags</span>
               <div className="form-input-wrapper">
                 <select
                   multiple
@@ -1455,7 +1455,7 @@ export function NotificationsTab() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Categories</label>
+              <span className="form-label">Categories</span>
               <div className="form-input-wrapper">
                 <select
                   multiple

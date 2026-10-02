@@ -137,7 +137,7 @@ export function WebUiSettingsTab() {
         description="Select user interface localization and language preferences"
       >
         <div style={{ marginBottom: "1.5rem" }}>
-          <label
+          <span
             style={{
               display: "block",
               marginBottom: "0.5rem",
@@ -146,7 +146,7 @@ export function WebUiSettingsTab() {
             }}
           >
             Interface Language
-          </label>
+          </span>
           <div style={{ maxWidth: "280px" }}>
             <LanguageSelector />
           </div>

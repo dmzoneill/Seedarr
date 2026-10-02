@@ -410,7 +410,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
           flexWrap: "wrap",
         }}
       >
-        <label
+        <span
           style={{
             fontSize: "0.82rem",
             fontWeight: 500,
@@ -419,7 +419,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
           }}
         >
           Add Tracker:
-        </label>
+        </span>
 
         <button
           type="button"

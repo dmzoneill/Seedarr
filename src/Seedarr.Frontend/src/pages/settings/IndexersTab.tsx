@@ -1038,6 +1038,7 @@ export function IndexersTab() {
             )}
             <div className="form-group" style={{ marginBottom: "1rem" }}>
               <label
+                htmlFor="indexer-download-client"
                 className="form-label"
                 style={{
                   display: "block",
@@ -1050,6 +1051,7 @@ export function IndexersTab() {
                 Download Client
               </label>
               <select
+                id="indexer-download-client"
                 className="form-select"
                 value={editing.downloadClientId || 0}
                 onChange={(e) => {
@@ -1078,6 +1080,7 @@ export function IndexersTab() {
             </div>
             <div className="form-group" style={{ marginBottom: "1rem" }}>
               <label
+                htmlFor="indexer-tags-select"
                 className="form-label"
                 style={{
                   display: "block",
@@ -1090,6 +1093,7 @@ export function IndexersTab() {
                 Tags
               </label>
               <select
+                id="indexer-tags-select"
                 multiple
                 className="form-select"
                 value={(editing.tags || []).map(String)}
@@ -1690,7 +1694,7 @@ export function IndexersTab() {
               hint="Category to assign to grabbed torrents"
             />
             <div className="form-group">
-              <label className="form-label">Tags</label>
+              <span className="form-label">Tags</span>
               <div className="form-input-wrapper">
                 {tags && tags.length > 0 ? (
                   <div
@@ -1769,7 +1773,7 @@ export function IndexersTab() {
               hint="Comma-separated IDs of specific indexers this rule applies to"
             />
             <div className="form-group" style={{ marginBottom: "0.85rem" }}>
-              <label className="form-label">Allowed Resolutions</label>
+              <span className="form-label">Allowed Resolutions</span>
               <div
                 style={{
                   display: "flex",
@@ -1822,7 +1826,7 @@ export function IndexersTab() {
             </div>
 
             <div className="form-group" style={{ marginBottom: "0.85rem" }}>
-              <label className="form-label">Allowed Sources</label>
+              <span className="form-label">Allowed Sources</span>
               <div
                 style={{
                   display: "flex",
@@ -1873,7 +1877,7 @@ export function IndexersTab() {
             </div>
 
             <div className="form-group" style={{ marginBottom: "0.85rem" }}>
-              <label className="form-label">Allowed Codecs</label>
+              <span className="form-label">Allowed Codecs</span>
               <div
                 style={{
                   display: "flex",
