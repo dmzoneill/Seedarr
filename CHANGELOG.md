@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.8](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.8) - 2026-10-02
+
+### 🔧 Maintenance & Improvements
+- ci: remove unsupported VALIDATE_PYTHON_RUFF input from dispatch call
+- ci: enforce warnings as errors across tests, narrow sonar multicriteria, and enable linters
+- refactor(frontend): eliminate all explicit any usages and elevate no-explicit-any to error
+
 ## [v2.0.7](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.7) - 2026-10-02
 
 ### 🐛 Bug Fixes
