@@ -6,6 +6,11 @@ import {
   getDownloadClientUrl,
   getMediaDeepLink,
   getMusicBrainzUrl,
+  getProwlarrUrl,
+  getImdbUrl,
+  getTmdbUrl,
+  getTvdbUrl,
+  getActorSearchUrl,
 } from "./arrLinks";
 
 function createMockArrConnection(
@@ -287,5 +292,65 @@ describe("arrLinks: getMusicBrainzUrl", () => {
       getMusicBrainzUrl("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
       "https://musicbrainz.org/release-group/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     );
+  });
+});
+
+describe("arrLinks: extra helpers", () => {
+  it("should build Lidarr deep link", () => {
+    const connections = [
+      createMockArrConnection({
+        arrType: "Lidarr",
+        url: "http://lidarr:8686",
+      }),
+    ];
+    const link = getMediaDeepLink(
+      { source: "Lidarr", metadata: { mediaId: 789, mediaType: "album" } },
+      connections,
+    );
+    assert.ok(link);
+    assert.equal(link.url, "http://lidarr:8686/album/789");
+  });
+
+  it("should build generic Arr fallback deep link", () => {
+    const connections = [
+      createMockArrConnection({
+        name: "CustomArr",
+        arrType: "CustomArr",
+        url: "http://custom:9000",
+      }),
+    ];
+    const link = getMediaDeepLink(
+      { source: "CustomArr", metadata: null },
+      connections,
+    );
+    assert.ok(link);
+    assert.equal(link.url, "http://custom:9000");
+  });
+
+  it("should test getProwlarrUrl", () => {
+    assert.equal(getProwlarrUrl(undefined), null);
+    assert.equal(
+      getProwlarrUrl([{ id: 1, name: "Prowlarr", indexerType: "Prowlarr", url: "http://prowlarr:9696/", enable: true } as any]),
+      "http://prowlarr:9696",
+    );
+    assert.equal(
+      getProwlarrUrl([{ id: 1, name: "Prowlarr", indexerType: "Prowlarr", url: "http://prowlarr:9696/", enable: true } as any], "test query"),
+      "http://prowlarr:9696/search?query=test%20query",
+    );
+  });
+
+  it("should test getImdbUrl, getTmdbUrl, getTvdbUrl, and getActorSearchUrl", () => {
+    assert.equal(getImdbUrl("1234567"), "https://www.imdb.com/title/tt1234567/");
+    assert.equal(getImdbUrl("tt1234567"), "https://www.imdb.com/title/tt1234567/");
+    assert.equal(getImdbUrl(null, "Matrix"), "https://www.imdb.com/find?q=Matrix&s=tt");
+
+    assert.equal(getTmdbUrl(null), null);
+    assert.equal(getTmdbUrl(100, "movie"), "https://www.themoviedb.org/movie/100");
+    assert.equal(getTmdbUrl(200, "series"), "https://www.themoviedb.org/tv/200");
+
+    assert.equal(getTvdbUrl(null), null);
+    assert.equal(getTvdbUrl(500), "https://thetvdb.com/dereferrer/series/500");
+
+    assert.equal(getActorSearchUrl("Keanu Reeves"), "https://www.themoviedb.org/search/person?query=Keanu%20Reeves");
   });
 });
