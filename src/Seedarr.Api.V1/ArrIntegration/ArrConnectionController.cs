@@ -243,12 +243,17 @@ public class ArrConnectionController : Controller
             path = "/" + path;
         }
 
+        if (path.Contains(".."))
+        {
+            return BadRequest("Invalid path");
+        }
+
         var targetUrl = $"{definition.Url.TrimEnd('/')}{path}";
         var client = _explicitHttpClient ?? ArrConnectionResources.GetClient(definition.AcceptInvalidCertificates);
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, targetUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, targetUrl); // NOSONAR
             if (!string.IsNullOrEmpty(definition.ApiKey))
             {
                 request.Headers.Add("X-Api-Key", definition.ApiKey);

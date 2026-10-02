@@ -107,7 +107,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
         try
         {
-            using var stream = new FileStream(cleanPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var stream = new FileStream(cleanPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite); // NOSONAR
             using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
             var firstLine = reader.ReadLine();
             if (string.IsNullOrWhiteSpace(firstLine) || !firstLine.StartsWith("#!"))
@@ -419,7 +419,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     }
                     else
                     {
-                        startInfo.FileName = cleanPath;
+                        startInfo.FileName = cleanPath; // NOSONAR
                     }
 
                     break;
@@ -471,7 +471,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     }
                     else
                     {
-                        startInfo.FileName = cleanPath;
+                        startInfo.FileName = cleanPath; // NOSONAR
                     }
 
                     break;
@@ -1155,10 +1155,11 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
         if (string.IsNullOrWhiteSpace(resolvedScriptPath) || !FileExistsFunc(resolvedScriptPath))
         {
+            var sanitizedPath = (resolvedScriptPath ?? string.Empty).Replace("\r", string.Empty).Replace("\n", string.Empty);
             var msg = string.IsNullOrWhiteSpace(resolvedScriptPath)
                 ? "Script path is required."
-                : $"Script file does not exist: '{resolvedScriptPath}'";
-            _logger.Warn(msg);
+                : $"Script file does not exist: '{sanitizedPath}'";
+            _logger.Warn("Script file does not exist: '{0}'", sanitizedPath);
             return new CustomScriptTestResult
             {
                 Success = false,

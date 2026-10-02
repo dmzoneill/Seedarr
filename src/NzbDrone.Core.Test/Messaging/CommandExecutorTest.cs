@@ -32,6 +32,7 @@ internal class ThrowingCommandExecutor : IExecute<ThrowingCommand>
     }
 }
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Interface implementation stub")]
 internal class StubCommandRepository : IBasicRepository<CommandModel>
 {
     public CommandModel LastUpdated { get; private set; }

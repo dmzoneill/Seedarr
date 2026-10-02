@@ -135,7 +135,7 @@ public class EmailNotificationTest
 
     // --- Tests using TestEmailNotification to cover SendEmail send path ---
 
-    private TestEmailNotification CreateConfiguredSubject(string toAddresses = "to@example.com")
+    private static TestEmailNotification CreateConfiguredSubject(string toAddresses = "to@example.com")
     {
         var subject = new TestEmailNotification();
         subject.Settings.SmtpHost = "93.184.216.34";

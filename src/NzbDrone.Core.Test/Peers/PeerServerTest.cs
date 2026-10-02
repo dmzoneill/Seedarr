@@ -1367,7 +1367,7 @@ public class PeerServerTest
         return (IPAddress)method.Invoke(target, Array.Empty<object>());
     }
 
-    private void InvokeConnectToPeer(PeerServer server, Torrent torrent, DiscoveredPeer candidate)
+    private static void InvokeConnectToPeer(PeerServer server, Torrent torrent, DiscoveredPeer candidate)
     {
         var method = typeof(PeerServer).GetMethod(
             "ConnectToPeer",
@@ -1376,7 +1376,7 @@ public class PeerServerTest
         task.GetAwaiter().GetResult();
     }
 
-    private void InvokeConnectToDiscoveredPeers(PeerServer server, Torrent torrent, CancellationToken stoppingToken)
+    private static void InvokeConnectToDiscoveredPeers(PeerServer server, Torrent torrent, CancellationToken stoppingToken)
     {
         var method = typeof(PeerServer).GetMethod(
             "ConnectToDiscoveredPeers",

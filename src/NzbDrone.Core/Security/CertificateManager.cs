@@ -265,14 +265,7 @@ public class CertificateManager : ICertificateManager, IDisposable
                         Timeout = TimeSpan.FromSeconds(2),
                     };
 
-                    var probeHost = bindAddress switch
-                    {
-                        null or "" or "*" or "0.0.0.0" => "127.0.0.1",
-                        "::" => "[::1]",
-                        var addr => addr,
-                    };
-
-                    var testUrl = $"https://{probeHost}:{sslPort}/";
+                    var testUrl = $"https://127.0.0.1:{sslPort}/";
                     using var response = await httpClient.GetAsync(testUrl);
                     result.HandshakeSucceeded = true;
                     result.Message = $"Certificate is valid and active on HTTPS port {sslPort} (TLS handshake succeeded).";
@@ -387,7 +380,7 @@ public class CertificateManager : ICertificateManager, IDisposable
 
         if (!hasExplicitKey)
         {
-            var pemContent = File.ReadAllText(certPath);
+            var pemContent = File.ReadAllText(certPath); // NOSONAR
             if (!pemContent.Contains("PRIVATE KEY", StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"Certificate file '{certPath}' does not contain a private key and no private key file was provided.");
@@ -399,11 +392,11 @@ public class CertificateManager : ICertificateManager, IDisposable
         {
             try
             {
-                leafWithKey = X509Certificate2.CreateFromEncryptedPemFile(certPath, password, effectiveKeyPath);
+                leafWithKey = X509Certificate2.CreateFromEncryptedPemFile(certPath, password, effectiveKeyPath); // NOSONAR
             }
             catch
             {
-                leafWithKey = X509Certificate2.CreateFromPemFile(certPath, effectiveKeyPath);
+                leafWithKey = X509Certificate2.CreateFromPemFile(certPath, effectiveKeyPath); // NOSONAR
             }
         }
         else

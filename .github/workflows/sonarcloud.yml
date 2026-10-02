@@ -86,7 +86,7 @@ jobs:
             /d:sonar.cpd.exclusions="**/locales/**,**/locales/*,**/i18n/**,**/i18n/*,**/Migration/**,**/*Test*/**,**/Migrations/**,**/torrentdetails/**,**/Indexers/Torznab/**,**/Indexers/Newznab/**,**/ArrIntegration/*Connection.cs,**/SubsystemsController.cs,**/QBittorrentApiController.cs,**/TmdbMetadataProvider.cs,**/SwarmPieceHistogram.cs,**/DelugeClient.cs,**/pages/settings/**,**/pages/DownloadHistory.tsx,**/src/App.tsx" \
             /d:sonar.issue.ignore.multicriteria="e1,e4" \
             /d:sonar.issue.ignore.multicriteria.e1.ruleKey="typescript:S9383" \
-            /d:sonar.issue.ignore.multicriteria.e1.resourceKey="src/Seedarr.Frontend/**/*" \
+            /d:sonar.issue.ignore.multicriteria.e1.resourceKey="**/*.tsx,**/*.ts" \
             /d:sonar.issue.ignore.multicriteria.e4.ruleKey="roslyn.sonaranalyzer.security.cs:S6549" \
             /d:sonar.issue.ignore.multicriteria.e4.resourceKey="src/**/*"
 

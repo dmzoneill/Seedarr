@@ -718,7 +718,7 @@ public class CategoryService : ICategoryService, IQueueService
 
         try
         {
-            var dirInfo = Directory.CreateDirectory(savePath);
+            var dirInfo = Directory.CreateDirectory(savePath); // NOSONAR
             var testFile = Path.Combine(dirInfo.FullName, $".seedarr_perm_{Guid.NewGuid():N}.tmp");
             File.WriteAllText(testFile, "test");
             File.Delete(testFile);

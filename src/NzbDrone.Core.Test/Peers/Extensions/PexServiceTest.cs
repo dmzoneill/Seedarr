@@ -273,7 +273,7 @@ public class PexServiceTest
         return messages;
     }
 
-    private void ClearPeerStream(PeerConnection peer)
+    private static void ClearPeerStream(PeerConnection peer)
     {
         var ms = (MemoryStream)typeof(PeerConnection)
             .GetField("_activeStream", BindingFlags.NonPublic | BindingFlags.Instance)!

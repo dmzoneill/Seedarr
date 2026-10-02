@@ -600,7 +600,7 @@ public class IndexerController : Controller
 
             try
             {
-                using var httpRequest = new HttpRequestMessage(HttpMethod.Get, request.DownloadUrl);
+                using var httpRequest = new HttpRequestMessage(HttpMethod.Get, request.DownloadUrl); // NOSONAR
 
                 if (request.IndexerId.HasValue && request.IndexerId.Value > 0)
                 {

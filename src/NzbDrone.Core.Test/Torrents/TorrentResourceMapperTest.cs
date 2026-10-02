@@ -9,7 +9,7 @@ namespace Seedarr.Api.V1.Test.Torrents;
 [TestFixture]
 public class TorrentResourceMapperTest
 {
-    private PeerConnection CreateMockPeerConnection(string ip = "93.184.216.34", int port = 6881)
+    private static PeerConnection CreateMockPeerConnection(string ip = "93.184.216.34", int port = 6881)
     {
         var ms = new MemoryStream();
         return new PeerConnection(ms, ip, port);
