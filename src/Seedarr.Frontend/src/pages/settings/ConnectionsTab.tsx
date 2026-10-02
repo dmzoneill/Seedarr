@@ -159,8 +159,16 @@ export function ConnectionsTab() {
           {connections?.map((conn) => (
             <div
               key={conn.id}
+              role="button"
+              tabIndex={0}
               className="provider-card"
               onClick={() => handleOpenModal(conn)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleOpenModal(conn);
+                }
+              }}
             >
               <div className="provider-card-actions">
                 {conn.url && (
@@ -245,8 +253,16 @@ export function ConnectionsTab() {
             </div>
           ))}
           <div
+            role="button"
+            tabIndex={0}
             className="provider-card-add"
             onClick={() => handleOpenModal(defaultConnection)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleOpenModal(defaultConnection);
+              }
+            }}
             title="Add Arr Connection"
           >
             <span className="provider-card-add-icon">+</span>
@@ -255,10 +271,28 @@ export function ConnectionsTab() {
       </SectionCard>
 
       {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
+        <div
+          role="button"
+          tabIndex={0}
+          className="modal-overlay"
+          onClick={() => setEditing(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditing(null);
+            }
+          }}
+        >
           <div
+            role="button"
+            tabIndex={0}
             className="modal"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 520,
               borderRadius: "8px",
