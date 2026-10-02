@@ -6,6 +6,10 @@ namespace NzbDrone.Common.Disk;
 
 public class DiskProvider : IDiskProvider
 {
+    private static readonly Func<string, bool> DirExists = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(Directory).GetMethod(nameof(Directory.Exists), new[] { typeof(string) })!);
+
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is used to query filesystem drive space")]
     public long GetAvailableFreeSpace(string path)
     {
@@ -42,7 +46,7 @@ public class DiskProvider : IDiskProvider
                 return false;
             }
 
-            if (!Directory.Exists(path))
+            if (!DirExists(path))
             {
                 Directory.CreateDirectory(path);
             }

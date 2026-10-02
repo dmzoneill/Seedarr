@@ -19,9 +19,9 @@ public interface IMetadataExchange
     MetadataMessage ParseMetadataMessage(byte[] data);
     bool ValidateMetadata(byte[] assembledRawBytes, string expectedInfoHash, string torrentName = null);
     bool VerifyMetadataHash(byte[] assembledRawBytes, string expectedInfoHash, string torrentName = null);
-    byte[] ReassembleMetadata(byte[][] pieces, int totalSize, string expectedInfoHash, string torrentName = null);
+    byte[] ReassembleMetadata(IReadOnlyList<byte[]> pieces, int totalSize, string expectedInfoHash, string torrentName = null);
     byte[] ReassembleMetadata(IEnumerable<MetadataMessage> messages, int totalSize, string expectedInfoHash, string torrentName = null);
-    bool TryReassembleMetadata(byte[][] pieces, int totalSize, string expectedInfoHash, out byte[] assembledMetadata, string torrentName = null);
+    bool TryReassembleMetadata(IReadOnlyList<byte[]> pieces, int totalSize, string expectedInfoHash, out byte[] assembledMetadata, string torrentName = null);
 }
 
 public class MetadataMessage
@@ -229,7 +229,7 @@ public class MetadataExchange : IMetadataExchange
         return ValidateMetadata(assembledRawBytes, expectedInfoHash, torrentName);
     }
 
-    public byte[] ReassembleMetadata(byte[][] pieces, int totalSize, string expectedInfoHash, string torrentName = null)
+    public byte[] ReassembleMetadata(IReadOnlyList<byte[]> pieces, int totalSize, string expectedInfoHash, string torrentName = null)
     {
         if (totalSize <= 0 || totalSize > MaxMetadataSize)
         {
@@ -244,9 +244,9 @@ public class MetadataExchange : IMetadataExchange
         }
 
         var totalPieces = (int)Math.Ceiling((double)totalSize / MetadataBlockSize);
-        if (pieces.Length < totalPieces)
+        if (pieces.Count < totalPieces)
         {
-            _logger.Warn("Cannot reassemble metadata: expected {0} pieces but only have {1}", totalPieces, pieces.Length);
+            _logger.Warn("Cannot reassemble metadata: expected {0} pieces but only have {1}", totalPieces, pieces.Count);
             return null;
         }
 
@@ -309,7 +309,7 @@ public class MetadataExchange : IMetadataExchange
         return ReassembleMetadata(pieceArray, totalSize, expectedInfoHash, torrentName);
     }
 
-    public bool TryReassembleMetadata(byte[][] pieces, int totalSize, string expectedInfoHash, out byte[] assembledMetadata, string torrentName = null)
+    public bool TryReassembleMetadata(IReadOnlyList<byte[]> pieces, int totalSize, string expectedInfoHash, out byte[] assembledMetadata, string torrentName = null)
     {
         assembledMetadata = ReassembleMetadata(pieces, totalSize, expectedInfoHash, torrentName);
         return assembledMetadata != null;

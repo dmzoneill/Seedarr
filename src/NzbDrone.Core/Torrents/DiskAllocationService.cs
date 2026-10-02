@@ -20,7 +20,7 @@ public class DiskAllocationService : IDiskAllocationService
     private readonly Logger _logger;
 
     [DllImport("libc", EntryPoint = "posix_fallocate", SetLastError = true)]
-    private static extern int PosixFallocate(int fd, long offset, long len);
+    private static extern int PosixFallocate(Microsoft.Win32.SafeHandles.SafeFileHandle fd, long offset, long len);
 
     public DiskAllocationService(
         IDiskSpaceService diskSpaceService = null,
@@ -117,8 +117,7 @@ public class DiskAllocationService : IDiskAllocationService
         {
             try
             {
-                var fd = stream.SafeFileHandle.DangerousGetHandle().ToInt32();
-                var ret = PosixFallocate(fd, 0, size);
+                var ret = PosixFallocate(stream.SafeFileHandle, 0, size);
                 if (ret == 0)
                 {
                     allocated = true;

@@ -500,6 +500,20 @@ public class SystemDeveloperController : Controller
             }
         }
 
+        var appData = Environment.GetEnvironmentVariable("SEEDARR__APP_DATA") ?? "/config";
+        var tempDirectory = Path.Combine(appData, "temp");
+        if (!Directory.Exists(tempDirectory))
+        {
+            try
+            {
+                Directory.CreateDirectory(tempDirectory);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Could not pre-create developer temp directory: {0}", tempDirectory);
+            }
+        }
+
         var proc = Process.GetCurrentProcess();
         var hostEnv = new DeveloperHostEnvironment
         {
@@ -512,8 +526,8 @@ public class SystemDeveloperController : Controller
             ProcessStartTimeUtc = proc.StartTime.ToUniversalTime(),
             ProcessUptimeSeconds = Math.Round((DateTime.UtcNow - proc.StartTime.ToUniversalTime()).TotalSeconds, 1),
             WorkingSetBytes = proc.WorkingSet64,
-            AppDataDirectory = Environment.GetEnvironmentVariable("SEEDARR__APP_DATA") ?? "/config",
-            TempDirectory = Path.GetTempPath(),
+            AppDataDirectory = appData,
+            TempDirectory = tempDirectory,
             CurrentDirectory = Directory.GetCurrentDirectory(),
             EnvironmentVariables = envVars,
         };
