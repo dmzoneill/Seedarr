@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.7](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.7) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(a11y): eliminate remaining S6848, S6845, S1534, S2871, and S3923 issues across frontend
+- fix(backend): resolve C#, docker, and shell quality issues (S2068, S6418, S2245, S2368, S2699, S2930, S3869, S4830, S5443, S6505, S7688, S2612)
+
 ## [v1.20.6](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.6) - 2026-10-02
 
 ### 🐛 Bug Fixes
