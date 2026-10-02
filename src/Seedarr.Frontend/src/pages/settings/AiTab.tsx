@@ -96,7 +96,7 @@ export function AiTab() {
           "error",
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       showToast(
         t("settingsTabs.ai.switchError", {
           error: err.message || t("settingsTabs.notifications.unknownError"),
@@ -114,7 +114,7 @@ export function AiTab() {
         providerId,
       });
       setProbeResult(res);
-    } catch (err: any) {
+    } catch (err: unknown) {
       showToast(
         t("settingsTabs.ai.probeFailed", {
           error: err.message || t("settingsTabs.notifications.unknownError"),

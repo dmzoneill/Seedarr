@@ -389,7 +389,7 @@ export function PieceMap({
       gap,
       padding,
       cols,
-      rows,
+      rows: _rows,
       piecesPerCell,
       activeCells,
       width,

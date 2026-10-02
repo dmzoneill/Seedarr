@@ -96,8 +96,8 @@ describe("Tags: calculateTagUsageCounts", () => {
       createMockTorrent({ id: 201, tagIds: undefined }),
       createMockTorrent({ id: 202, tagIds: undefined }),
     ];
-    (torrents[0] as any).tags = [2];
-    (torrents[1] as any).tags = [2, 3];
+    (torrents[0] as unknown as { tags: number[] }).tags = [2];
+    (torrents[1] as unknown as { tags: number[] }).tags = [2, 3];
 
     const counts = calculateTagUsageCounts(torrents, "All", tags);
     assert.equal(counts[2], 2);

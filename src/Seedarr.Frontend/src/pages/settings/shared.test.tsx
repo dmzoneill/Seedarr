@@ -1,29 +1,36 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
-(globalThis as any).React = React;
+(globalThis as unknown as { React: typeof React }).React = React;
 import { renderToStaticMarkup } from "react-dom/server";
 import { NumberInput, clampNumber } from "./shared";
 
-function captureInputProps(props: Parameters<typeof NumberInput>[0]) {
-  let captured: any = null;
+interface CapturedInputProps {
+  type?: string;
+  onChange: (e: { target: { value: string } }) => void;
+  onBlur: (e?: React.FocusEvent<HTMLInputElement>) => void;
+  [key: string]: unknown;
+}
+
+function captureInputProps(props: Parameters<typeof NumberInput>[0]): CapturedInputProps {
+  let captured: CapturedInputProps | null = null;
   const origCreateElement = React.createElement;
   try {
-    (React as any).createElement = function (
-      type: any,
-      elemProps: any,
-      ...children: any[]
+    (React as unknown as Record<string, unknown>).createElement = function (
+      type: unknown,
+      elemProps: CapturedInputProps | null | undefined,
+      ...children: unknown[]
     ) {
       if (type === "input" && elemProps?.type === "number") {
         captured = elemProps;
       }
-      return origCreateElement.apply(this, [type, elemProps, ...children]);
+      return (origCreateElement as (...args: unknown[]) => React.ReactElement).apply(this, [type, elemProps, ...children]);
     };
     renderToStaticMarkup(React.createElement(NumberInput, props));
   } finally {
-    (React as any).createElement = origCreateElement;
+    (React as unknown as Record<string, unknown>).createElement = origCreateElement;
   }
-  return captured;
+  return captured || { onChange: () => {}, onBlur: () => {} };
 }
 
 describe("clampNumber helper", () => {
@@ -141,7 +148,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     assert.equal(calls.length, 0);
 
     // User blurs
-    inputProps.onBlur({} as any);
+    inputProps.onBlur({} as unknown as React.FocusEvent<HTMLInputElement>);
     assert.deepEqual(
       calls,
       [0],
@@ -163,7 +170,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     inputProps.onChange({ target: { value: "" } });
     assert.equal(calls.length, 0);
 
-    inputProps.onBlur({} as any);
+    inputProps.onBlur({} as unknown as React.FocusEvent<HTMLInputElement>);
     assert.deepEqual(
       calls,
       [15],
@@ -190,7 +197,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     );
 
     // Blur clamps 5 to 10
-    inputProps.onBlur({} as any);
+    inputProps.onBlur({} as unknown as React.FocusEvent<HTMLInputElement>);
     assert.deepEqual(calls, [10], "Blur should clamp 5 to min=10");
 
     // Now type above max (200 > 100)
@@ -202,7 +209,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     );
 
     // Blur clamps 200 to 100
-    inputProps.onBlur({} as any);
+    inputProps.onBlur({} as unknown as React.FocusEvent<HTMLInputElement>);
     assert.deepEqual(calls, [10, 100], "Blur should clamp 200 to max=100");
   });
 
@@ -233,7 +240,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     assert.deepEqual(calls, [1, 1.5], "Typing '1.5' should call onChange(1.5)");
 
     // Blur maintains 1.5
-    inputProps.onBlur({} as any);
+    inputProps.onBlur({} as unknown as React.FocusEvent<HTMLInputElement>);
     assert.deepEqual(calls, [1, 1.5, 1.5], "Blur maintains 1.5");
   });
 
@@ -251,7 +258,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     inputProps.onChange({ target: { value: "3." } });
     assert.equal(calls.length, 0);
 
-    inputProps.onBlur({} as any);
+    inputProps.onBlur({} as unknown as React.FocusEvent<HTMLInputElement>);
     assert.deepEqual(calls, [3], "Blur on '3.' should parse and clamp to 3");
   });
 
@@ -272,7 +279,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
       "Typing '-' should not call onChange while typing",
     );
 
-    inputProps.onBlur({} as any);
+    inputProps.onBlur({} as unknown as React.FocusEvent<HTMLInputElement>);
     assert.deepEqual(
       calls,
       [-50],

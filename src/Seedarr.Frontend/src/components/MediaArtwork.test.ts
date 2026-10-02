@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
-(globalThis as any).React = React;
+(globalThis as unknown as { React: typeof React }).React = React;
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   MediaArtwork,

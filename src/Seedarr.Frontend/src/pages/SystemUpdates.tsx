@@ -56,8 +56,9 @@ function SystemUpdates() {
     setShowInstallModal(true);
     setRestartDone(false);
     installUpdate.mutate(ver, {
-      onError: (err: any) => {
-        showToast(err?.message || "Failed to start update install", "error");
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Failed to start update install";
+        showToast(msg, "error");
       },
     });
   };
@@ -69,8 +70,9 @@ function SystemUpdates() {
       await apiClient.post("/system/restart");
       setRestartDone(true);
       showToast("Seedarr is restarting. Please wait a few moments...", "info");
-    } catch (err: any) {
-      showToast(`Restart failed: ${err?.message || "Unknown error"}`, "error");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      showToast(`Restart failed: ${msg}`, "error");
       setIsRestarting(false);
     }
   };
@@ -87,7 +89,10 @@ function SystemUpdates() {
     currentStage?.toLowerCase() === "failed" ||
     installUpdate.isError;
   const errorMessage =
-    progress?.errorMessage || (installUpdate.error as any)?.message || null;
+    progress?.errorMessage ||
+    (installUpdate.error instanceof Error
+      ? installUpdate.error.message
+      : null);
 
   const getStageDescription = () => {
     switch (currentStage?.toLowerCase()) {

@@ -986,8 +986,9 @@ function SpeedSchedule() {
           showToast(t("speedSchedule.updatedToast"), "info");
           setModal(null);
         },
-        onError: (err: any) => {
-          showToast(err?.message || t("speedSchedule.updateError"), "error");
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : t("speedSchedule.updateError");
+          showToast(msg, "error");
         },
       });
     } else {
@@ -996,8 +997,9 @@ function SpeedSchedule() {
           showToast(t("speedSchedule.createdToast"), "info");
           setModal(null);
         },
-        onError: (err: any) => {
-          showToast(err?.message || t("speedSchedule.createError"), "error");
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : t("speedSchedule.createError");
+          showToast(msg, "error");
         },
       });
     }
@@ -1014,8 +1016,10 @@ function SpeedSchedule() {
 
     deleteSchedule.mutate(id, {
       onSuccess: () => showToast(t("speedSchedule.deletedToast"), "info"),
-      onError: (err: any) =>
-        showToast(err?.message || t("speedSchedule.deleteError"), "error"),
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : t("speedSchedule.deleteError");
+        showToast(msg, "error");
+      },
     });
   }
 

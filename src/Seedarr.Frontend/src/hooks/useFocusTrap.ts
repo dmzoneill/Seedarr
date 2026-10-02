@@ -3,12 +3,16 @@ import { useEffect, useRef } from "react";
 export const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function isHtmlElement(el: any): el is HTMLElement {
+export function isHtmlElement(el: unknown): el is HTMLElement {
   if (!el) return false;
   if (typeof HTMLElement !== "undefined") {
     return el instanceof HTMLElement;
   }
-  return typeof el === "object" && typeof el.focus === "function";
+  return (
+    typeof el === "object" &&
+    el !== null &&
+    typeof (el as { focus?: unknown }).focus === "function"
+  );
 }
 
 export function isElementConnected(el: HTMLElement): boolean {

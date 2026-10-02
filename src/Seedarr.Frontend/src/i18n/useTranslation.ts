@@ -14,7 +14,7 @@ export function useTranslation() {
   const rawT = useI18nStore((state) => state.t);
 
   const t: TFunction = useCallback(
-    (key: string, arg1?: any, arg2?: any) => {
+    (key: string, arg1?: unknown, arg2?: unknown) => {
       const { fallbackDefault, interpolationParams } = extractDefaultValue(
         arg1,
         arg2,
@@ -35,7 +35,7 @@ export function useTranslation() {
   };
 }
 
-export function translate(key: string, arg1?: any, arg2?: any): string {
+export function translate(key: string, arg1?: unknown, arg2?: unknown): string {
   const { fallbackDefault, interpolationParams } = extractDefaultValue(
     arg1,
     arg2,

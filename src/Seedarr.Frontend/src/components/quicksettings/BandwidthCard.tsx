@@ -58,9 +58,10 @@ export function BandwidthCard() {
       setTurtleMode(updates.alternativeSpeedEnabled);
     }
     save.mutate(newConfig, {
-      onError: (err: any) => {
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err || "");
         showToast(
-          t("quickSettings.failedToUpdateSpeed", { 0: err?.message || err }),
+          t("quickSettings.failedToUpdateSpeed", { 0: msg }),
           "error",
         );
       },

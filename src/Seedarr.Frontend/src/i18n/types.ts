@@ -30,7 +30,7 @@ export interface Language {
 
 export interface TranslationOptions {
   defaultValue?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export type TranslationParams =

@@ -1747,7 +1747,7 @@ export interface SubsystemTelemetryReport {
   activeProvider: string;
   status: string;
   resourceLoad: string;
-  metrics: Record<string, any>;
+  metrics: Record<string, unknown>;
 }
 
 export interface SystemResourceTelemetrySnapshot {

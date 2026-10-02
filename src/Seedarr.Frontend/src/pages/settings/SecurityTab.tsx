@@ -197,7 +197,7 @@ export function SecurityTab() {
       await updateBlocklistMutation.mutateAsync(blocklistForm);
       setBlocklistDirty(false);
       showToast("Peer blocklist configuration saved", "success");
-    } catch (err: any) {
+    } catch (err: unknown) {
       showToast(
         err?.message || "Failed to save blocklist configuration",
         "error",
@@ -219,7 +219,7 @@ export function SecurityTab() {
           "warning",
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       showToast(err?.message || "Failed to synchronize blocklist", "error");
     }
   };
@@ -231,7 +231,7 @@ export function SecurityTab() {
       setIpTestResult(null);
       const res = await testBlocklistIp(testIpInput.trim());
       setIpTestResult(res);
-    } catch (err: any) {
+    } catch (err: unknown) {
       showToast(
         err?.message || "Failed to verify IP against blocklist",
         "error",
@@ -440,7 +440,7 @@ export function SecurityTab() {
       setShowSecret(false);
       await loadProviders();
       showToast("Identity provider saved successfully", "success");
-    } catch (err: any) {
+    } catch (err: unknown) {
       showToast(err?.message || "Failed to save identity provider", "error");
     }
   };
@@ -455,7 +455,7 @@ export function SecurityTab() {
       await apiClient.deleteIdProvider(p.id);
       await loadProviders();
       showToast("Identity provider removed", "success");
-    } catch (err: any) {
+    } catch (err: unknown) {
       showToast(err?.message || "Failed to delete identity provider", "error");
     }
   };
@@ -467,7 +467,7 @@ export function SecurityTab() {
       setTestResult(null);
       const res = await apiClient.testIdProvider(editingProvider);
       setTestResult(res);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult({
         success: false,
         message: err?.message || "Connection failed",

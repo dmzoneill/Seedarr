@@ -85,12 +85,12 @@ export function TorrentCreationTab({
           "error",
         );
       }
-    } catch (err: any) {
-      showToast(
-        err?.message ||
-          t("addTorrent.failedToCreateTorrent", "Failed to create torrent"),
-        "error",
-      );
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : t("addTorrent.failedToCreateTorrent", "Failed to create torrent");
+      showToast(msg, "error");
     } finally {
       setIsCreating(false);
     }

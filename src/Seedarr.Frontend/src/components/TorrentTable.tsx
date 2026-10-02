@@ -39,7 +39,7 @@ import AddTorrentModal from "./AddTorrentModal";
 import DeleteTorrentModal from "./DeleteTorrentModal";
 import TrackerFavicon from "./TrackerFavicon";
 import MediaArtwork from "./MediaArtwork";
-import type { Torrent, DownloadHistoryEntry } from "../api/types";
+import type { Torrent, DownloadHistoryEntry, ArrConnection } from "../api/types";
 import {
   ALL_COLUMNS,
   COLUMN_I18N_KEYS,
@@ -61,7 +61,7 @@ import {
 
 export const getColumnLabel = (
   key: ColumnKey,
-  t: (k: string, ...args: any[]) => string,
+  t: (k: string, ...args: unknown[]) => string,
 ): string => {
   const i18nKey = COLUMN_I18N_KEYS[key] || `torrents.table.${key}`;
   const def = ALL_COLUMNS.find((c) => c.key === key);
@@ -500,7 +500,7 @@ TorrentSeedsPeersCell.displayName = "TorrentSeedsPeersCell";
 export const TorrentNameCell: React.FC<{
   torrent: Torrent;
   historyMatch?: DownloadHistoryEntry;
-  arrConnections?: any;
+  arrConnections?: ArrConnection[];
 }> = React.memo(({ torrent, historyMatch, arrConnections }) => {
   const meta = historyMatch?.metadata;
   const arrLink = historyMatch
@@ -510,7 +510,7 @@ export const TorrentNameCell: React.FC<{
   const posterSrc =
     meta?.posterUrl ||
     torrent.posterUrl ||
-    (torrent as any).artworkUrl ||
+    (torrent as unknown as Record<string, unknown>).artworkUrl ||
     torrent.bannerUrl;
 
   return (
@@ -589,7 +589,7 @@ export interface TorrentCellProps {
   torrent: Torrent;
   rowIndex: number;
   historyMatch?: DownloadHistoryEntry;
-  arrConnections?: any;
+  arrConnections?: ArrConnection[];
 }
 
 export const TorrentCell: React.FC<TorrentCellProps> = React.memo(
@@ -815,7 +815,7 @@ export const TorrentCell: React.FC<TorrentCellProps> = React.memo(
         return <span>{formatBytes(t.sessionDownloaded)}</span>;
 
       default:
-        return <span>{String((t as any)[columnKey] ?? "-")}</span>;
+        return <span>{String((t as unknown as Record<string, unknown>)[columnKey] ?? "-")}</span>;
     }
   },
 );
@@ -845,7 +845,7 @@ export interface TorrentTableRowProps {
   onContextMenu: (e: React.MouseEvent, torrent: Torrent) => void;
   onFocus: (index: number) => void;
   historyMatch?: DownloadHistoryEntry;
-  arrConnections?: any;
+  arrConnections?: ArrConnection[];
   measureElement?: (node: HTMLElement | null) => void;
   rowRef?: (el: HTMLTableRowElement | null) => void;
 }
@@ -1495,7 +1495,7 @@ export function TorrentTable({
     [deleteModalState, propOnDelete, deleteTorrent, bulkAction],
   );
 
-  const handleKeyDown = useCallback(
+  const _handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||

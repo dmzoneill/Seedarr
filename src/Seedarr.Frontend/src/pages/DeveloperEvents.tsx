@@ -57,7 +57,7 @@ export default function DeveloperEvents() {
       setShowPublishModal(false);
       setActionMessage({ text: `Synthetic event '${publishEventName}' published.`, type: "success" });
       await fetchEvents();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionMessage({ text: err?.message || "Failed to publish event.", type: "error" });
     }
   };

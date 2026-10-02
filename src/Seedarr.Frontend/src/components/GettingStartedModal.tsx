@@ -793,10 +793,11 @@ export function GettingStartedModal({
             "Directory is not writable or cannot be accessed.",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Validation failed or directory not found.";
       setPathValidationResult({
         success: false,
-        message: err?.message || "Validation failed or directory not found.",
+        message: msg,
       });
     } finally {
       setIsValidatingPath(false);
@@ -842,15 +843,16 @@ export function GettingStartedModal({
 
       setStorageSaved(true);
       handleNext();
-    } catch (err: any) {
-      setStorageError(
-        err?.message ||
-          t(
-            "modals.gettingStarted.saveStorageFailed",
-            undefined,
-            "Failed to save storage configuration.",
-          ),
-      );
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : t(
+              "modals.gettingStarted.saveStorageFailed",
+              undefined,
+              "Failed to save storage configuration.",
+            );
+      setStorageError(msg);
     } finally {
       setIsSavingStorage(false);
     }

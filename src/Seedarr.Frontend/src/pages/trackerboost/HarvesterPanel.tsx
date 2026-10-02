@@ -340,7 +340,7 @@ export function HarvesterPanel({
               fontSize: "0.82rem",
             }}
             value={downloadFilter}
-            onChange={(e) => setDownloadFilter(e.target.value as any)}
+            onChange={(e) => setDownloadFilter(e.target.value as "all" | "public" | "private")}
           >
             <option value="all">
               {t("trackerBoost.filterAllSwarms", "All Swarms ({count})", {

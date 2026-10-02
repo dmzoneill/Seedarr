@@ -55,7 +55,7 @@ export default function DeveloperWebhooks() {
       setActionMessage({ text: "Simulation executed successfully.", type: "success" });
       const hList = await apiClient.get<DeveloperWebhookHistoryItem[]>("/system/developer/webhooks/history");
       setHistory(hList || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setActionMessage({ text: err?.message || "Simulation failed.", type: "error" });
     } finally {
       setIsSimulating(false);

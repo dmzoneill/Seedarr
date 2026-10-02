@@ -250,8 +250,9 @@ export function CategorySettingsTab({
             );
             setEditingCategory(null);
           },
-          onError: (err: any) => {
-            setModalError(err?.message || "Failed to update category");
+          onError: (err: unknown) => {
+            const msg = err instanceof Error ? err.message : "Failed to update category";
+            setModalError(msg);
           },
         },
       );
@@ -265,8 +266,9 @@ export function CategorySettingsTab({
           );
           setEditingCategory(null);
         },
-        onError: (err: any) => {
-          setModalError(err?.message || "Failed to create category");
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Failed to create category";
+          setModalError(msg);
         },
       });
     }
@@ -292,8 +294,9 @@ export function CategorySettingsTab({
         trackCategoryAction("delete");
         showToast(`Category "${cat.name}" deleted`, "info");
       },
-      onError: (err: any) => {
-        showToast(err?.message || "Failed to delete category", "error");
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Failed to delete category";
+        showToast(msg, "error");
       },
     });
   };
