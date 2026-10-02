@@ -735,6 +735,7 @@ export function CommandPalette({
         <div
           id="command-palette-results"
           role="listbox"
+          tabIndex={-1}
           ref={listRef}
           onMouseMove={(e) => {
             if (
@@ -771,6 +772,7 @@ export function CommandPalette({
                 <div
                   key={item.id}
                   role="option"
+                  tabIndex={-1}
                   aria-selected={isSelected}
                   onClick={item.onSelect}
                   onMouseMove={(e) => {
