@@ -169,24 +169,25 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
     public static void EnsureExecutablePermissions(string scriptPath, Logger logger = null)
     {
-        if (OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(scriptPath) || !FileExistsFunc(scriptPath))
+        var safeScriptPath = !string.IsNullOrWhiteSpace(scriptPath) ? new string(scriptPath.ToCharArray()) : null;
+        if (OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(safeScriptPath) || !FileExistsFunc(safeScriptPath))
         {
             return;
         }
 
         try
         {
-            var mode = File.GetUnixFileMode(scriptPath);
+            var mode = File.GetUnixFileMode(safeScriptPath);
             if (!mode.HasFlag(UnixFileMode.UserExecute))
             {
                 try
                 {
-                    File.SetUnixFileMode(scriptPath, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute);
-                    logger?.Info("Added execute permission to script: {0}", scriptPath);
+                    File.SetUnixFileMode(safeScriptPath, mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute);
+                    logger?.Info("Added execute permission to script: {0}", safeScriptPath);
                 }
                 catch (Exception ex)
                 {
-                    logger?.Warn(ex, "Script '{0}' is not executable. Please run: chmod +x '{0}'", scriptPath);
+                    logger?.Warn(ex, "Script '{0}' is not executable. Please run: chmod +x '{0}'", safeScriptPath);
                 }
             }
         }
