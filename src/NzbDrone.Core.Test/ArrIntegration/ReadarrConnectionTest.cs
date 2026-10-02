@@ -397,4 +397,23 @@ public class ReadarrConnectionTest
         Assert.That(result.Isbn, Is.EqualTo("9780441172719"));
         Assert.That(result.PosterUrl, Is.EqualTo("/api/v1/arr/image-proxy?connectionId=8&path=%2FMediaCover%2F42%2Fcover.jpg"));
     }
+
+    [Test]
+    public void LookupMedia_should_handle_empty_array_and_flat_book()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "[]");
+        var connection = CreateWithMockClient(handler);
+        Assert.That(connection.LookupMedia("None"), Is.Null);
+
+        var handler2 = new MockHttpMessageHandler();
+        handler2.Enqueue(
+            HttpStatusCode.OK,
+            @"[{""id"":99,""title"":""Direct Book"",""overview"":""Desc""}]");
+        var connection2 = CreateWithMockClient(handler2);
+        var res = connection2.LookupMedia("Direct Book");
+        Assert.That(res, Is.Not.Null);
+        Assert.That(res.MediaId, Is.EqualTo(99));
+        Assert.That(res.Title, Is.EqualTo("Direct Book"));
+    }
 }
