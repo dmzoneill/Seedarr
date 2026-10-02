@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.11](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.11) - 2026-10-02
+
+### 🔧 Maintenance & Improvements
+- ci: enforce unused-vars error, CA2016 token propagation, hadolint, and prune cpd exclusions
+
 ## [v2.0.10](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.10) - 2026-10-02
 
 ### 🐛 Bug Fixes
