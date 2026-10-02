@@ -82,11 +82,19 @@ export function TorrentFileInputTab({
       }}
     >
       <div
+        role="button"
+        tabIndex={0}
         className={`drop-zone ${isDragOver ? "drop-zone-active" : ""} ${files.length > 0 ? "drop-zone-has-file" : ""}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
         style={{
           border: isDragOver
             ? "2px dashed var(--accent, #ffd166)"

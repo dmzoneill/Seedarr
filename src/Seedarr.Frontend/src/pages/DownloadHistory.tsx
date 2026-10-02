@@ -2021,11 +2021,26 @@ export default function DownloadHistory() {
       {showExportModal && (
         <div
           className="modal-overlay"
+          role="button"
+          tabIndex={0}
           onClick={() => setShowExportModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setShowExportModal(false);
+            }
+          }}
         >
           <div
             className="modal"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 500,
               borderRadius: "8px",
