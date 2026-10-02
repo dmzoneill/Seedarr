@@ -130,7 +130,6 @@ function FileTreeRow({
             </span>
           ) : editingPath === node.path ? (
             <div
-              onClick={(e) => e.stopPropagation()}
               style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
             >
               <span style={{ width: 12 }} />
@@ -271,7 +270,6 @@ function FileTreeRow({
         </td>
         <td>
           <div
-            onClick={(e) => e.stopPropagation()}
             style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
           >
             {node.isDir ? (

@@ -123,6 +123,8 @@ export function BulkTagModal({
     >
       <div
         className="modal"
+        role="button"
+        tabIndex={0}
         style={{
           maxWidth: "480px",
           width: "90%",
@@ -131,6 +133,11 @@ export function BulkTagModal({
           flexDirection: "column",
         }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
       >
         <div style={{ padding: "1.25rem 1.5rem 0.75rem" }}>
           <h3

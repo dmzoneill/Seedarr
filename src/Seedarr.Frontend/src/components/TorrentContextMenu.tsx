@@ -277,8 +277,15 @@ function TorrentContextMenu({
     <>
       <div
         className="context-menu"
+        role="menu"
+        tabIndex={-1}
         style={{ left: x, top: y, display: promptConfig ? "none" : undefined }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
       >
         {effectiveTorrents.length > 0 ? (
           <>
@@ -1013,9 +1020,18 @@ function TorrentContextMenu({
         {onResetSort && (
           <div
             className="context-menu-item"
+            role="menuitem"
+            tabIndex={0}
             onClick={() => {
               onResetSort();
               onClose();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onResetSort();
+                onClose();
+              }
             }}
           >
             {t("torrents.resetSort", undefined, "Reset Sort Order")}

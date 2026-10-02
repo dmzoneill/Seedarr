@@ -423,6 +423,13 @@ export function MediaPlayerModal({
 
       <div
         ref={trapRef}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.stopPropagation();
+          }
+        }}
         className="card media-player-dialog"
         style={{
           width: "900px",

@@ -343,10 +343,28 @@ function SystemLogFiles() {
       </div>
 
       {confirmClear && (
-        <div className="modal-overlay" onClick={() => setConfirmClear(false)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          tabIndex={-1}
+          className="modal-overlay"
+          onClick={() => setConfirmClear(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setConfirmClear(false);
+            }
+          }}
+        >
           <div
+            role="button"
+            tabIndex={0}
             className="modal"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               maxWidth: 460,
               borderRadius: "8px",

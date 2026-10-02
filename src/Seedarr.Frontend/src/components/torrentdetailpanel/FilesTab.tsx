@@ -1006,8 +1006,7 @@ export function FilesTab({
       {/* Hierarchical File Tree Table */}
       <div
         ref={tableContainerRef}
-        role="region"
-        aria-label="Hierarchical File Tree Table"
+        role="button"
         tabIndex={0}
         onKeyDown={handleTableKeyDown}
         className="detail-panel-table-wrap"
@@ -1495,7 +1494,6 @@ export function FilesTab({
               maxWidth: "480px",
               boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <h3
               style={{

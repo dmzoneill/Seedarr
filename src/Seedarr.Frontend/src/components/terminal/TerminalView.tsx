@@ -505,8 +505,7 @@ export function TerminalView({
       {/* Terminal Canvas Container */}
       <div
         ref={containerRef}
-        role="region"
-        aria-label="Terminal Canvas"
+        role="button"
         tabIndex={0}
         style={{
           flex: "1 1 auto",

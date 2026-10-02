@@ -454,10 +454,18 @@ export function ImportPackageModal({
           >
             {/* Drag & Drop Area */}
             <div
+              role="button"
+              tabIndex={0}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
               style={{
                 border: isDragOver
                   ? "2px dashed var(--accent, #38bdf8)"
