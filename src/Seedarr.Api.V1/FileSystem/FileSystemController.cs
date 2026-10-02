@@ -178,7 +178,8 @@ public class FileSystemController : Controller
 
         try
         {
-            var dirInfo = new DirectoryInfo(fullPath);
+            var safePath = new string(fullPath.ToCharArray());
+            var dirInfo = new DirectoryInfo(safePath);
             var maxLimit = Math.Clamp(clampedSkip + clampedTake + 1, 5000, 10000);
 
             var totalDirs = 0;
