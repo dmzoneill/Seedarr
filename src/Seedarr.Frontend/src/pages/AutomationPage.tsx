@@ -2968,6 +2968,8 @@ if (torrent && torrent.size > 5000000000) {
                         {editingScript.targetCategories.map((catName) => (
                           <span
                             key={catName}
+                            role="button"
+                            tabIndex={0}
                             className="badge"
                             style={{
                               backgroundColor: "rgba(168, 85, 247, 0.15)",
@@ -2985,6 +2987,17 @@ if (torrent && torrent.size > 5000000000) {
                                   editingScript.targetCategories || []
                                 ).filter((c) => c !== catName),
                               });
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setEditingScript({
+                                  ...editingScript,
+                                  targetCategories: (
+                                    editingScript.targetCategories || []
+                                  ).filter((c) => c !== catName),
+                                });
+                              }
                             }}
                           >
                             {catName} ✕
@@ -3060,6 +3073,8 @@ if (torrent && torrent.size > 5000000000) {
                           return (
                             <span
                               key={tagId}
+                              role="button"
+                              tabIndex={0}
                               className="badge"
                               style={{
                                 backgroundColor: "rgba(234, 179, 8, 0.15)",
@@ -3077,6 +3092,17 @@ if (torrent && torrent.size > 5000000000) {
                                     editingScript.targetTagIds || []
                                   ).filter((id) => id !== tagId),
                                 });
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  setEditingScript({
+                                    ...editingScript,
+                                    targetTagIds: (
+                                      editingScript.targetTagIds || []
+                                    ).filter((id) => id !== tagId),
+                                  });
+                                }
                               }}
                             >
                               🏷️ {tag ? tag.label : `Tag #${tagId}`} ✕

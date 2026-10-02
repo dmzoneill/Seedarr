@@ -1006,6 +1006,8 @@ export function FilesTab({
       {/* Hierarchical File Tree Table */}
       <div
         ref={tableContainerRef}
+        role="region"
+        aria-label="Hierarchical File Tree Table"
         tabIndex={0}
         onKeyDown={handleTableKeyDown}
         className="detail-panel-table-wrap"
@@ -1455,6 +1457,8 @@ export function FilesTab({
 
       {renamingNode && (
         <div
+          role="button"
+          tabIndex={0}
           style={{
             position: "fixed",
             inset: 0,
@@ -1466,8 +1470,22 @@ export function FilesTab({
             backdropFilter: "blur(4px)",
           }}
           onClick={() => !isRenaming && setRenamingNode(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              if (!isRenaming) setRenamingNode(null);
+            }
+          }}
         >
           <div
+            role="button"
+            tabIndex={0}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
             style={{
               backgroundColor: "var(--bg-card, #171b35)",
               border: "1px solid var(--border)",
