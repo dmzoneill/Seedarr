@@ -304,8 +304,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
       <div className="options-section-title">Totals</div>
       <div className="options-grid">
         <div className="form-group form-group-inline">
-          <label className="form-label">Total Uploaded</label>
+          <label htmlFor="opt-total-uploaded" className="form-label">Total Uploaded</label>
           <input
+            id="opt-total-uploaded"
             type="number"
             className="form-input"
             value={uploaded}
@@ -314,8 +315,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           />
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Total Downloaded</label>
+          <label htmlFor="opt-total-downloaded" className="form-label">Total Downloaded</label>
           <input
+            id="opt-total-downloaded"
             type="number"
             className="form-input"
             value={downloaded}
@@ -324,8 +326,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           />
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Session Uploaded</label>
+          <label htmlFor="opt-session-uploaded" className="form-label">Session Uploaded</label>
           <input
+            id="opt-session-uploaded"
             type="number"
             className="form-input"
             value={sessionUploaded}
@@ -334,8 +337,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           />
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Session Downloaded</label>
+          <label htmlFor="opt-session-downloaded" className="form-label">Session Downloaded</label>
           <input
+            id="opt-session-downloaded"
             type="number"
             className="form-input"
             value={sessionDownloaded}
