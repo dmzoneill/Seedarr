@@ -118,11 +118,12 @@ function TorrentContextMenu({
   const { canMutateTorrents, canDeleteTorrent } = usePermissions();
 
   const isMulti = Boolean(selectedTorrents && selectedTorrents.length > 1);
-  const effectiveTorrents: Torrent[] = isMulti
-    ? selectedTorrents!
-    : torrent
-      ? [torrent]
-      : [];
+  const effectiveTorrents: Torrent[] =
+    isMulti && selectedTorrents
+      ? selectedTorrents
+      : torrent
+        ? [torrent]
+        : [];
   const countSuffix = isMulti ? ` (${effectiveTorrents.length})` : "";
   const ct =
     torrent || (effectiveTorrents.length > 0 ? effectiveTorrents[0] : null);

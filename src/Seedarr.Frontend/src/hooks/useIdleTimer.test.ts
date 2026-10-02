@@ -69,10 +69,12 @@ describe("useIdleTimer / IdleTimerTracker", () => {
         if (type === "storage") {
           storageListeners.push(listener as (e: StorageEvent) => void);
         } else {
-          if (!windowListeners.has(type)) {
-            windowListeners.set(type, new Set());
+          let set = windowListeners.get(type);
+          if (!set) {
+            set = new Set();
+            windowListeners.set(type, set);
           }
-          windowListeners.get(type)!.add(listener as EventListener);
+          set.add(listener as EventListener);
         }
       },
       removeEventListener: (type: string, listener: EventListener | ((e: StorageEvent) => void)) => {

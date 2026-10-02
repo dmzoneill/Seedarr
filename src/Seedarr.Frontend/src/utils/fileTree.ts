@@ -181,7 +181,7 @@ export function cascadePriority(
 ): void {
   if (Array.isArray(target)) {
     const dirPath = priorityOrPath as string;
-    const prio = maybePriority!;
+    const prio = maybePriority ?? 0;
     const node = findNodeByPath(target, dirPath);
     if (node) {
       applyPriorityRecursive(node, prio);

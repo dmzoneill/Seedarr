@@ -37,9 +37,10 @@ function parseQueryPlanNodes(nodes: QueryPlanNode[]): PlanTreeNode[] {
 
   const roots: PlanTreeNode[] = [];
   nodes.forEach((n) => {
-    const item = nodeMap.get(n.id)!;
+    const item = nodeMap.get(n.id);
+    if (!item) return;
     if (n.parentId !== 0 && nodeMap.has(n.parentId)) {
-      nodeMap.get(n.parentId)!.children.push(item);
+      nodeMap.get(n.parentId)?.children.push(item);
     } else {
       roots.push(item);
     }

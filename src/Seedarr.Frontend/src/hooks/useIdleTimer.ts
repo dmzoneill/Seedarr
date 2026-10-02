@@ -246,12 +246,13 @@ export class IdleTimerTracker {
       "wheel",
     ];
 
-    this.boundActivityHandler = () => {
+    const activityHandler = () => {
       this.recordActivity();
     };
+    this.boundActivityHandler = activityHandler;
 
     events.forEach((evt) => {
-      window.addEventListener(evt, this.boundActivityHandler!, {
+      window.addEventListener(evt, activityHandler, {
         passive: true,
       });
     });
@@ -291,6 +292,7 @@ export class IdleTimerTracker {
       typeof window.removeEventListener === "function"
     ) {
       if (this.boundActivityHandler) {
+        const handler = this.boundActivityHandler;
         const events = [
           "keydown",
           "pointerdown",
@@ -300,7 +302,7 @@ export class IdleTimerTracker {
           "wheel",
         ];
         events.forEach((evt) => {
-          window.removeEventListener(evt, this.boundActivityHandler!);
+          window.removeEventListener(evt, handler);
         });
         this.boundActivityHandler = null;
       }

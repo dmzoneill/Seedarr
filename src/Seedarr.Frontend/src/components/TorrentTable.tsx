@@ -1857,15 +1857,16 @@ export function TorrentTable({
       resizeStateRef.current = { key, startX, startWidth };
 
       const onMouseMove = (moveEvt: MouseEvent) => {
-        if (!resizeStateRef.current) return;
-        const delta = moveEvt.clientX - resizeStateRef.current.startX;
+        const resizeState = resizeStateRef.current;
+        if (!resizeState) return;
+        const delta = moveEvt.clientX - resizeState.startX;
         const newWidth = Math.max(
           40,
-          Math.round(resizeStateRef.current.startWidth + delta),
+          Math.round(resizeState.startWidth + delta),
         );
         updateColumnWidths((prev) => ({
           ...prev,
-          [resizeStateRef.current!.key]: newWidth,
+          [resizeState.key]: newWidth,
         }));
       };
 
@@ -1942,7 +1943,7 @@ export function TorrentTable({
     (torrent: Torrent, index: number, e: React.MouseEvent) => {
       setFocusedIndex(index);
       if (e.shiftKey && (anchorIndex !== null || lastClickedIndex !== null)) {
-        const base = anchorIndex !== null ? anchorIndex : lastClickedIndex!;
+        const base = anchorIndex ?? lastClickedIndex ?? 0;
         const start = Math.min(base, index);
         const end = Math.max(base, index);
         const rangeIds = sorted.slice(start, end + 1).map((item) => item.id);

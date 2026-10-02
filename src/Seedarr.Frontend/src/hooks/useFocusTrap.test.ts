@@ -149,10 +149,12 @@ describe("FocusTrap / useFocusTrap", () => {
       activeElement: rootBody,
       contains: (el: unknown) => rootBody.contains(el),
       addEventListener: (type: string, listener: (e: unknown) => void) => {
-        if (!documentListeners.has(type)) {
-          documentListeners.set(type, new Set());
+        let set = documentListeners.get(type);
+        if (!set) {
+          set = new Set();
+          documentListeners.set(type, set);
         }
-        documentListeners.get(type)!.add(listener);
+        set.add(listener);
       },
       removeEventListener: (type: string, listener: (e: unknown) => void) => {
         documentListeners.get(type)?.delete(listener);
