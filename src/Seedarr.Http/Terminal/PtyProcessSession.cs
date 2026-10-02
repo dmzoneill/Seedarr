@@ -142,7 +142,9 @@ else:
 
     public static PtyProcessSession Start(string cwd, int cols, int rows)
     {
-        var safeCwd = !string.IsNullOrWhiteSpace(cwd) && Directory.Exists(cwd) ? cwd : "/tmp"; // NOSONAR
+        var safeCwd = !string.IsNullOrWhiteSpace(cwd)
+            ? cwd
+            : (Environment.GetEnvironmentVariable("HOME") ?? TerminalEnvironmentSanitizer.GetSafeTempDirectory());
         string controlPipePath = null;
         FileStream controlPipeStream = null;
         Process proc = null;

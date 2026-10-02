@@ -22,11 +22,11 @@ if [ -n "$PUID" ] || [ -n "$PGID" ]; then
         fi
 
         mkdir -p /config /data
-        chmod -R 777 /config /data 2>/dev/null || true
+        chmod -R 775 /config /data 2>/dev/null || true
         chown -R "$PUID:$PGID" /config /data 2>/dev/null || true
 
         if [ -d /downloads ]; then
-            chmod -R 777 /downloads 2>/dev/null || true
+            chmod -R 775 /downloads 2>/dev/null || true
             chown -R "$PUID:$PGID" /downloads 2>/dev/null || true
         fi
 

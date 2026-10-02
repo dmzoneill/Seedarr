@@ -1238,6 +1238,7 @@ public class PeerServerTest
 
         await _server.StartAsync(cts.Token);
         await Task.Delay(400);
+        Assert.That(cts.IsCancellationRequested, Is.True);
     }
 
     [Test]

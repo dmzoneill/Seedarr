@@ -22,7 +22,7 @@ namespace Seedarr.Api.V1.Notifications;
 public class NotificationController : Controller
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
-    public const string PasswordMask = "********";
+    public const string PasswordMask = "********"; // NOSONAR
 
     private readonly INotificationRepository _notificationRepository;
     private readonly IWebhookDispatcher _webhookDispatcher;

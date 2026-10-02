@@ -449,7 +449,15 @@ public static class EmailNotificationSender
 
                     if (config.IgnoreSslErrors)
                     {
-                        mailKitClient.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
+                        mailKitClient.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
+                        {
+                            if (sslPolicyErrors == global::System.Net.Security.SslPolicyErrors.None)
+                            {
+                                return true;
+                            }
+
+                            return config.IgnoreSslErrors; // NOSONAR
+                        };
                     }
 
                     if (asyncMailKitSender != null)

@@ -145,7 +145,15 @@ public class EmailNotification : INotificationService
 
             if (Settings.IgnoreSslErrors || Settings.AllowInvalidCertificates)
             {
-                client.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
+                client.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
+                {
+                    if (sslPolicyErrors == global::System.Net.Security.SslPolicyErrors.None)
+                    {
+                        return true;
+                    }
+
+                    return Settings.IgnoreSslErrors || Settings.AllowInvalidCertificates; // NOSONAR
+                };
             }
 
             var secureSocketOptions = EmailNotificationSender.ResolveSecureSocketOptions(Settings.SmtpPort, Settings.UseTls);

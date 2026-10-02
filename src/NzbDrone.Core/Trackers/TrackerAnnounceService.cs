@@ -1516,7 +1516,6 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
         var totalWindowMs = Math.Clamp(count * 1000, 15000, 30000);
         var intervalMs = Math.Max(250, totalWindowMs / count);
-        var random = new Random();
 
         while (_staggeredQueue.TryDequeue(out var torrent))
         {
@@ -1542,7 +1541,9 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 break;
             }
 
-            var jitter = random.Next(-intervalMs / 4, Math.Max(1, intervalMs / 4));
+            var minJitter = -intervalMs / 4;
+            var maxJitter = Math.Max(minJitter + 1, intervalMs / 4);
+            var jitter = System.Security.Cryptography.RandomNumberGenerator.GetInt32(minJitter, maxJitter);
             var delayMs = Math.Max(50, intervalMs + jitter);
 
             try

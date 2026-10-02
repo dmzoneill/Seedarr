@@ -57,6 +57,27 @@ public static class TerminalEnvironmentSanitizer
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S5443", Justification = "Private temp directory created with 0700 permissions")]
+#pragma warning disable S5443
+    public static string GetSafeTempDirectory()
+    {
+        var privateDir = Path.Combine(Path.GetTempPath(), "seedarr-" + Environment.ProcessId);
+        if (!Directory.Exists(privateDir))
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                Directory.CreateDirectory(privateDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            else
+            {
+                Directory.CreateDirectory(privateDir);
+            }
+        }
+
+        return privateDir;
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S5443", Justification = "Private temp directory created with 0700 permissions")]
     public static void Sanitize(ProcessStartInfo startInfo)
     {
         ArgumentNullException.ThrowIfNull(startInfo);
@@ -65,7 +86,11 @@ public static class TerminalEnvironmentSanitizer
         var home = Environment.GetEnvironmentVariable("HOME") ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var user = Environment.GetEnvironmentVariable("USER") ?? Environment.GetEnvironmentVariable("USERNAME") ?? "seedarr";
         var shell = Environment.GetEnvironmentVariable("SHELL") ?? (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell.exe" : (File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh"));
-        var tmpdir = Environment.GetEnvironmentVariable("TMPDIR") ?? Path.GetTempPath();
+        var tmpdir = Environment.GetEnvironmentVariable("TMPDIR");
+        if (string.IsNullOrWhiteSpace(tmpdir))
+        {
+            tmpdir = GetSafeTempDirectory();
+        }
         var lang = Environment.GetEnvironmentVariable("LANG") ?? "en_US.UTF-8";
         var pwd = !string.IsNullOrWhiteSpace(startInfo.WorkingDirectory)
             ? startInfo.WorkingDirectory

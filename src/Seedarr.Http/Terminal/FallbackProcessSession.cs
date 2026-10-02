@@ -149,6 +149,7 @@ public sealed class FallbackProcessSession : ITerminalSession
             }
 
             this._process.Dispose();
+            this._sessionCts.Dispose();
         }
         catch
         {
