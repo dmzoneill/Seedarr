@@ -1459,6 +1459,7 @@ function App() {
                 <div
                   className="topbar-dropdown"
                   role="menu"
+                  tabIndex={-1}
                   onClick={() => setShowActionsMenu(false)}
                 >
                   <button

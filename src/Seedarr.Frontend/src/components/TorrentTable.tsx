@@ -2073,6 +2073,8 @@ export function TorrentTable({
   return (
     <div
       className="torrent-table-wrapper"
+      role="region"
+      aria-label="Torrent Table"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onMouseEnter={() => setIsHovered(true)}

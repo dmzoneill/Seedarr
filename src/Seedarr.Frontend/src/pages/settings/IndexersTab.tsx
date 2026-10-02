@@ -91,7 +91,7 @@ export function IndexersTab() {
   const defaultIndexer: Partial<IndexerDefinition> = {
     name: "Prowlarr",
     indexerType: "Prowlarr",
-    url: "http://prowlarr:9696",
+    url: "https://prowlarr:9696",
     apiKey: "",
     apiPath: "/api",
     enableRss: true,

@@ -323,7 +323,7 @@ export function GettingStartedModal({
   const [indexerForm, setIndexerForm] = useState<Partial<IndexerDefinition>>({
     name: "Prowlarr",
     indexerType: "Prowlarr",
-    url: "http://prowlarr:9696",
+    url: "https://prowlarr:9696",
     apiKey: "",
     apiPath: "/api",
     categories: "2000,5000",
@@ -1646,7 +1646,7 @@ export function GettingStartedModal({
                 setIndexerTestResult(null);
                 setIndexerForm({ ...indexerForm, url: v });
               }}
-              placeholder="http://prowlarr:9696"
+              placeholder="https://prowlarr:9696"
               disabled={isReadOnly}
             />
             <TextInput
