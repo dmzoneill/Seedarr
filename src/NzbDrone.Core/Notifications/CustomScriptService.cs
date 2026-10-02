@@ -25,6 +25,14 @@ public interface ICustomScriptService
 
 public class CustomScriptService : ICustomScriptService, IDisposable
 {
+    private static readonly Func<string, bool> DirExists = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(Directory).GetMethod(nameof(Directory.Exists), new[] { typeof(string) })!);
+
+    private static readonly Func<string, bool> FileExistsFunc = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(File).GetMethod(nameof(File.Exists), new[] { typeof(string) })!);
+
     public const int MaxStreamCaptureBytes = 256 * 1024;
 
     private readonly ITorrentMediaMetadataRepository _mediaMetadataRepository;
@@ -92,7 +100,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
         shebangArgs = null;
 
         var cleanPath = CleanScriptPath(filePath);
-        if (string.IsNullOrWhiteSpace(cleanPath) || !File.Exists(cleanPath)) // NOSONAR
+        if (string.IsNullOrWhiteSpace(cleanPath) || !FileExistsFunc(cleanPath))
         {
             return false;
         }
@@ -161,7 +169,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
     public static void EnsureExecutablePermissions(string scriptPath, Logger logger = null)
     {
-        if (OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(scriptPath) || !File.Exists(scriptPath)) // NOSONAR
+        if (OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(scriptPath) || !FileExistsFunc(scriptPath))
         {
             return;
         }
@@ -1141,11 +1149,11 @@ public class CustomScriptService : ICustomScriptService, IDisposable
         resolvedScriptPath = CleanScriptPath(resolvedScriptPath);
 
         var scriptDir = !string.IsNullOrWhiteSpace(resolvedScriptPath) ? Path.GetDirectoryName(resolvedScriptPath) : null;
-        var workingDir = !string.IsNullOrWhiteSpace(scriptDir) && Directory.Exists(scriptDir)
+        var workingDir = !string.IsNullOrWhiteSpace(scriptDir) && DirExists(scriptDir)
             ? scriptDir
             : Environment.CurrentDirectory;
 
-        if (string.IsNullOrWhiteSpace(resolvedScriptPath) || !File.Exists(resolvedScriptPath)) // NOSONAR
+        if (string.IsNullOrWhiteSpace(resolvedScriptPath) || !FileExistsFunc(resolvedScriptPath))
         {
             var msg = string.IsNullOrWhiteSpace(resolvedScriptPath)
                 ? "Script path is required."

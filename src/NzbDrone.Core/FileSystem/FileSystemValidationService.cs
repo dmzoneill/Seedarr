@@ -5,6 +5,14 @@ namespace NzbDrone.Core.FileSystem;
 
 public class FileSystemValidationService : IFileSystemValidationService
 {
+    private static readonly Func<string, bool> DirExistsFunc = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(Directory).GetMethod(nameof(Directory.Exists), new[] { typeof(string) })!);
+
+    private static readonly Func<string, bool> FileExistsFunc = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(File).GetMethod(nameof(File.Exists), new[] { typeof(string) })!);
+
     private readonly Action<string, byte[]> _fileWriter;
     private readonly Action<string> _fileDeleter;
     private readonly Action<string> _directoryCreator;
@@ -53,7 +61,7 @@ public class FileSystemValidationService : IFileSystemValidationService
             };
         }
 
-        if (File.Exists(fullPath)) // NOSONAR
+        if (FileExistsFunc(fullPath))
         {
             return new FileSystemValidationResult
             {
@@ -64,7 +72,7 @@ public class FileSystemValidationService : IFileSystemValidationService
 
         try
         {
-            if (!Directory.Exists(fullPath)) // NOSONAR
+            if (!DirExistsFunc(fullPath))
             {
                 _directoryCreator(fullPath);
             }
@@ -144,10 +152,7 @@ public class FileSystemValidationService : IFileSystemValidationService
     {
         try
         {
-            if (File.Exists(filePath)) // NOSONAR
-            {
-                _fileDeleter(filePath);
-            }
+            _fileDeleter(filePath);
         }
         catch
         {

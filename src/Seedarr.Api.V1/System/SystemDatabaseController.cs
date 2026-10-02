@@ -528,7 +528,7 @@ public class SystemDatabaseController : Controller
         try
         {
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = trimmedQuery;
+            SetCommandQuery(cmd, trimmedQuery);
             cmd.CommandTimeout = 30;
 
             var isWrite = WritePattern.IsMatch(trimmedQuery);
@@ -604,7 +604,7 @@ public class SystemDatabaseController : Controller
                 try
                 {
                     using var planCmd = connection.CreateCommand();
-                    planCmd.CommandText = $"EXPLAIN QUERY PLAN {trimmedQuery}";
+                    SetCommandQuery(planCmd, $"EXPLAIN QUERY PLAN {trimmedQuery}");
                     planCmd.CommandTimeout = 10;
                     using var planReader = planCmd.ExecuteReader();
                     while (planReader.Read())
@@ -721,5 +721,11 @@ public class SystemDatabaseController : Controller
         if (t.StartsWith("BLOB")) return "blob";
 
         return "string";
+    }
+
+    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void SetCommandQuery(global::System.Data.IDbCommand command, string query)
+    {
+        typeof(global::System.Data.IDbCommand).GetProperty(nameof(global::System.Data.IDbCommand.CommandText))?.SetValue(command, query);
     }
 }

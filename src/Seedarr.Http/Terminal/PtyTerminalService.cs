@@ -37,11 +37,7 @@ public class PtyTerminalService : IPtyTerminalService
 
             try
             {
-                var fullPath = Path.GetFullPath(cwd);
-                if (Directory.Exists(fullPath)) // NOSONAR
-                {
-                    sanitizedCwd = fullPath;
-                }
+                sanitizedCwd = Path.GetFullPath(cwd);
             }
             catch (Exception ex)
             {

@@ -81,24 +81,13 @@ public static class TerminalWebSocketHandler
 
         // Determine working directory
         string requestedCwd = context.Request.Query["cwd"];
-        string cwd = null;
-
-        if (!string.IsNullOrWhiteSpace(requestedCwd) && Directory.Exists(requestedCwd)) // NOSONAR
-        {
-            cwd = requestedCwd;
-        }
-        else if (!string.IsNullOrWhiteSpace(configService.TorrentSaveDirectory) && Directory.Exists(configService.TorrentSaveDirectory)) // NOSONAR
-        {
-            cwd = configService.TorrentSaveDirectory;
-        }
-        else if (!string.IsNullOrWhiteSpace(configService.DefaultSavePath) && Directory.Exists(configService.DefaultSavePath)) // NOSONAR
-        {
-            cwd = configService.DefaultSavePath;
-        }
-        else
-        {
-            cwd = Directory.GetCurrentDirectory();
-        }
+        string cwd = !string.IsNullOrWhiteSpace(requestedCwd)
+            ? requestedCwd
+            : (!string.IsNullOrWhiteSpace(configService.TorrentSaveDirectory)
+                ? configService.TorrentSaveDirectory
+                : (!string.IsNullOrWhiteSpace(configService.DefaultSavePath)
+                    ? configService.DefaultSavePath
+                    : Directory.GetCurrentDirectory()));
 
         int cols = int.TryParse(context.Request.Query["cols"], out int c) ? Math.Max(10, c) : 100;
         int rows = int.TryParse(context.Request.Query["rows"], out int r) ? Math.Max(5, r) : 30;

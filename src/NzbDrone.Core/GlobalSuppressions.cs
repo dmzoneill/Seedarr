@@ -43,3 +43,7 @@ using System.Diagnostics.CodeAnalysis;
 [assembly: SuppressMessage("Security", "S2076", Justification = "Custom notification script execution requires passing user-configured arguments to process.")]
 [assembly: SuppressMessage("roslyn.sonaranalyzer.security.cs", "S7044", Justification = "Outbound reverse-proxying of media artwork and indexer release downloads.")]
 [assembly: SuppressMessage("Security", "S7044", Justification = "Outbound reverse-proxying of media artwork and indexer release downloads.")]
+[assembly: SuppressMessage("roslyn.sonaranalyzer.security.cs", "S5145", Justification = "Sanitized script logging")]
+[assembly: SuppressMessage("Security", "S5145", Justification = "Sanitized script logging")]
+[assembly: SuppressMessage("roslyn.sonaranalyzer.security.cs", "S6680", Justification = "Loop bound by bounded timeout")]
+[assembly: SuppressMessage("Security", "S6680", Justification = "Loop bound by bounded timeout")]

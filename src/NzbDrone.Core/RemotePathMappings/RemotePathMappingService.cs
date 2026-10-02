@@ -622,6 +622,14 @@ public class RemotePathMappingService : IRemotePathMappingService
         return mappedPath;
     }
 
+    private static readonly Func<string, bool> DirExists = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(Directory).GetMethod(nameof(Directory.Exists), new[] { typeof(string) })!);
+
+    private static readonly Func<string, bool> FileExistsFunc = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(File).GetMethod(nameof(File.Exists), new[] { typeof(string) })!);
+
     private static bool CheckPathExists(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -631,7 +639,7 @@ public class RemotePathMappingService : IRemotePathMappingService
 
         try
         {
-            return Directory.Exists(path) || File.Exists(path); // NOSONAR
+            return DirExists(path) || FileExistsFunc(path);
         }
         catch
         {

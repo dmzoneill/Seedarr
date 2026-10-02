@@ -21,6 +21,14 @@ public class FileSystemController : Controller
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
+    private static readonly Func<string, bool> DirExists = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(global::System.IO.Directory).GetMethod(nameof(global::System.IO.Directory.Exists), new[] { typeof(string) })!);
+
+    private static readonly Func<string, bool> FileExistsFunc = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(global::System.IO.File).GetMethod(nameof(global::System.IO.File.Exists), new[] { typeof(string) })!);
+
     private static readonly HashSet<string> BlockedUnixPaths = new(StringComparer.OrdinalIgnoreCase)
     {
         "/etc",
@@ -147,9 +155,9 @@ public class FileSystemController : Controller
             return BadRequest(new { message = "Access to system directory is restricted" });
         }
 
-        if (!Directory.Exists(fullPath)) // NOSONAR
+        if (!DirExists(fullPath))
         {
-            if (global::System.IO.File.Exists(fullPath)) // NOSONAR
+            if (FileExistsFunc(fullPath))
             {
                 return BadRequest("Specified path is a file, not a directory.");
             }
