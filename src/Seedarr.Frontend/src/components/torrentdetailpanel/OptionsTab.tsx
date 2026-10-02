@@ -118,8 +118,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
       <div className="options-section-title">Transfer</div>
       <div className="options-grid">
         <div className="form-group form-group-inline">
-          <label className="form-label">Priority</label>
+          <label htmlFor="opt-priority" className="form-label">Priority</label>
           <select
+            id="opt-priority"
             className="form-select"
             value={priority}
             onChange={(e) => mark(setPriority)(e.target.value)}
@@ -132,8 +133,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           </select>
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Upload Limit (KB/s)</label>
+          <label htmlFor="opt-upload-limit" className="form-label">Upload Limit (KB/s)</label>
           <input
+            id="opt-upload-limit"
             type="number"
             className="form-input"
             value={uploadLimit}
@@ -142,8 +144,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           />
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Download Limit (KB/s)</label>
+          <label htmlFor="opt-download-limit" className="form-label">Download Limit (KB/s)</label>
           <input
+            id="opt-download-limit"
             type="number"
             className="form-input"
             value={downloadLimit}
@@ -152,8 +155,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           />
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Upload Speed (B/s)</label>
+          <label htmlFor="opt-upload-speed" className="form-label">Upload Speed (B/s)</label>
           <input
+            id="opt-upload-speed"
             type="number"
             className="form-input"
             value={uploadSpeed}
@@ -162,8 +166,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           />
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Download Speed (B/s)</label>
+          <label htmlFor="opt-download-speed" className="form-label">Download Speed (B/s)</label>
           <input
+            id="opt-download-speed"
             type="number"
             className="form-input"
             value={downloadSpeed}
@@ -176,9 +181,10 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
       <div className="options-section-title">Seeding</div>
       <div className="options-grid">
         <div className="form-group form-group-inline">
-          <label className="form-label">Active</label>
-          <label className="toggle-switch">
+          <label htmlFor="opt-active" className="form-label">Active</label>
+          <label htmlFor="opt-active" className="toggle-switch" aria-label="Active">
             <input
+              id="opt-active"
               type="checkbox"
               checked={active}
               onChange={(e) => mark(setActive)(e.target.checked)}
@@ -187,9 +193,10 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           </label>
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Super Seeding</label>
-          <label className="toggle-switch">
+          <label htmlFor="opt-super-seeding" className="form-label">Super Seeding</label>
+          <label htmlFor="opt-super-seeding" className="toggle-switch" aria-label="Super Seeding">
             <input
+              id="opt-super-seeding"
               type="checkbox"
               checked={superSeeding}
               onChange={(e) => mark(setSuperSeeding)(e.target.checked)}
@@ -198,9 +205,10 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           </label>
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Force Start</label>
-          <label className="toggle-switch">
+          <label htmlFor="opt-force-start" className="form-label">Force Start</label>
+          <label htmlFor="opt-force-start" className="toggle-switch" aria-label="Force Start">
             <input
+              id="opt-force-start"
               type="checkbox"
               checked={forceStart}
               onChange={(e) => mark(setForceStart)(e.target.checked)}
@@ -209,9 +217,10 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           </label>
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Sequential Download</label>
-          <label className="toggle-switch">
+          <label htmlFor="opt-sequential-download" className="form-label">Sequential Download</label>
+          <label htmlFor="opt-sequential-download" className="toggle-switch" aria-label="Sequential Download">
             <input
+              id="opt-sequential-download"
               type="checkbox"
               checked={sequentialDownload}
               onChange={(e) => mark(setSequentialDownload)(e.target.checked)}
@@ -220,9 +229,10 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           </label>
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">First & Last Piece Priority</label>
-          <label className="toggle-switch">
+          <label htmlFor="opt-first-last-prio" className="form-label">First & Last Piece Priority</label>
+          <label htmlFor="opt-first-last-prio" className="toggle-switch" aria-label="First & Last Piece Priority">
             <input
+              id="opt-first-last-prio"
               type="checkbox"
               checked={firstLastPiecePrio}
               onChange={(e) => mark(setFirstLastPiecePrio)(e.target.checked)}
@@ -231,8 +241,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           </label>
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Label</label>
+          <label htmlFor="opt-label" className="form-label">Label</label>
           <input
+            id="opt-label"
             type="text"
             className="form-input"
             value={label}
@@ -245,8 +256,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
       <div className="options-section-title">Simulation</div>
       <div className="options-grid">
         <div className="form-group form-group-inline">
-          <label className="form-label">Announce Interval (s)</label>
+          <label htmlFor="opt-announce-interval" className="form-label">Announce Interval (s)</label>
           <input
+            id="opt-announce-interval"
             type="number"
             className="form-input"
             value={announceInterval}
@@ -255,8 +267,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           />
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Next Update (s)</label>
+          <label htmlFor="opt-next-update" className="form-label">Next Update (s)</label>
           <input
+            id="opt-next-update"
             type="number"
             className="form-input"
             value={nextUpdate}
@@ -265,8 +278,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           />
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Threshold</label>
+          <label htmlFor="opt-threshold" className="form-label">Threshold</label>
           <input
+            id="opt-threshold"
             type="number"
             className="form-input"
             value={threshold}
@@ -275,8 +289,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           />
         </div>
         <div className="form-group form-group-inline">
-          <label className="form-label">Small Torrent Limit</label>
+          <label htmlFor="opt-small-torrent-limit" className="form-label">Small Torrent Limit</label>
           <input
+            id="opt-small-torrent-limit"
             type="number"
             className="form-input"
             value={smallTorrentLimit}

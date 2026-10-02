@@ -486,8 +486,10 @@ export function NumberInput({
     onBlur?.(e);
   };
 
+  const inputId = `input-num-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   const inputEl = (
     <input
+      id={inputId}
       type="number"
       className="form-input"
       value={text}
@@ -504,7 +506,7 @@ export function NumberInput({
 
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label htmlFor={inputId} className="form-label">{label}</label>
       <div className="form-input-wrapper">
         {suffix ? (
           <div className="form-input-with-suffix">
@@ -539,9 +541,10 @@ export function TextInput({
   type?: string;
   rightElement?: React.ReactNode;
 }) {
+  const inputId = `input-text-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label htmlFor={inputId} className="form-label">{label}</label>
       <div className="form-input-wrapper">
         {rightElement ? (
           <div
@@ -553,6 +556,7 @@ export function TextInput({
             }}
           >
             <input
+              id={inputId}
               type={type || "text"}
               className="form-input"
               value={value ?? ""}
@@ -565,6 +569,7 @@ export function TextInput({
           </div>
         ) : (
           <input
+            id={inputId}
             type={type || "text"}
             className="form-input"
             value={value ?? ""}
@@ -593,18 +598,22 @@ export function Toggle({
   hint?: string;
   disabled?: boolean;
 }) {
+  const toggleId = `toggle-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label htmlFor={toggleId} className="form-label">{label}</label>
       <div className="form-input-wrapper">
         <div className="form-toggle-row">
           <label
+            htmlFor={toggleId}
             className="toggle-switch"
+            aria-label={label}
             style={
               disabled ? { opacity: 0.6, cursor: "not-allowed" } : undefined
             }
           >
             <input
+              id={toggleId}
               type="checkbox"
               checked={checked}
               disabled={disabled}
@@ -634,11 +643,13 @@ export function SelectInput({
   hint?: string;
   disabled?: boolean;
 }) {
+  const selectId = `select-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
+      <label htmlFor={selectId} className="form-label">{label}</label>
       <div className="form-input-wrapper">
         <select
+          id={selectId}
           className="form-select"
           value={value}
           onChange={(e) => onChange(e.target.value)}
