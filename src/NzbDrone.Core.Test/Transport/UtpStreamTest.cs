@@ -224,7 +224,7 @@ public class UtpStreamTest
                 return 10;
             });
 
-        Assert.Throws<TimeoutException>(() => _stream.Read(new byte[100], 0, 100));
+        Assert.Throws<TimeoutException>(() => _ = _stream.Read(new byte[100], 0, 100));
     }
 
     [Test]
@@ -279,10 +279,10 @@ public class UtpStreamTest
     [Test]
     public void Arguments_Validation_ThrowsExpectedExceptions()
     {
-        Assert.Throws<ArgumentNullException>(() => _stream.Read(null, 0, 10));
-        Assert.Throws<ArgumentOutOfRangeException>(() => _stream.Read(new byte[10], -1, 5));
-        Assert.Throws<ArgumentOutOfRangeException>(() => _stream.Read(new byte[10], 0, -1));
-        Assert.Throws<ArgumentException>(() => _stream.Read(new byte[10], 5, 10));
+        Assert.Throws<ArgumentNullException>(() => _ = _stream.Read(null, 0, 10));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = _stream.Read(new byte[10], -1, 5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _ = _stream.Read(new byte[10], 0, -1));
+        Assert.Throws<ArgumentException>(() => _ = _stream.Read(new byte[10], 5, 10));
 
         Assert.Throws<ArgumentNullException>(() => _stream.Write(null, 0, 10));
         Assert.Throws<ArgumentOutOfRangeException>(() => _stream.Write(new byte[10], -1, 5));
