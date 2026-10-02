@@ -3912,6 +3912,7 @@ if (torrent && torrent.size > 5000000000) {
                           }}
                         >
                           <label
+                            htmlFor={`step-retries-${stepIdx}`}
                             style={{
                               color: "var(--text-muted, #9c9484)",
                               fontSize: "0.8rem",
@@ -3920,6 +3921,7 @@ if (torrent && torrent.size > 5000000000) {
                             Retries:
                           </label>
                           <input
+                            id={`step-retries-${stepIdx}`}
                             type="number"
                             min={0}
                             max={10}
@@ -5261,7 +5263,7 @@ if (torrent && torrent.size > 5000000000) {
 
             {/* Permissions & Capabilities Summary */}
             <div style={{ marginBottom: "1.25rem" }}>
-              <label
+              <span
                 style={{
                   fontSize: "0.825rem",
                   fontWeight: 600,
@@ -5271,7 +5273,7 @@ if (torrent && torrent.size > 5000000000) {
                 }}
               >
                 Capabilities & Permissions Required:
-              </label>
+              </span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
                 {(selectedTemplate.capabilities &&
                 selectedTemplate.capabilities.length > 0
