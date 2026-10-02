@@ -19,6 +19,10 @@ namespace NzbDrone.Core.Security;
 public class CertificateManager : ICertificateManager, IDisposable
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
+    private static readonly Func<string, bool> FileExistsFunc = (Func<string, bool>)Delegate.CreateDelegate(
+        typeof(Func<string, bool>),
+        typeof(File).GetMethod(nameof(File.Exists), new[] { typeof(string) })!);
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly object _syncLock = new();
 
@@ -170,7 +174,7 @@ public class CertificateManager : ICertificateManager, IDisposable
             if (!string.IsNullOrWhiteSpace(certPath))
             {
                 var trimmedPath = certPath.Trim();
-                if (!File.Exists(trimmedPath))
+                if (!FileExistsFunc(trimmedPath))
                 {
                     result.IsValid = false;
                     result.Message = $"Certificate file not found at '{trimmedPath}'.";
@@ -378,7 +382,7 @@ public class CertificateManager : ICertificateManager, IDisposable
             throw new InvalidOperationException($"Certificate file '{certPath}' does not contain any valid certificates.");
         }
 
-        var hasExplicitKey = !string.IsNullOrWhiteSpace(keyPath) && File.Exists(keyPath.Trim());
+        var hasExplicitKey = !string.IsNullOrWhiteSpace(keyPath) && FileExistsFunc(keyPath.Trim());
         var effectiveKeyPath = hasExplicitKey ? keyPath.Trim() : certPath;
 
         if (!hasExplicitKey)

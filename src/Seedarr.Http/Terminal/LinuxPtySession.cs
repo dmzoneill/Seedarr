@@ -40,7 +40,7 @@ public sealed class LinuxPtySession : ITerminalSession
             WsRow = (ushort)Math.Max(5, Math.Min(rows, 200)),
         };
 
-        string safeCwd = !string.IsNullOrWhiteSpace(cwd) && Directory.Exists(cwd) ? Path.GetFullPath(cwd) : null; // NOSONAR
+        string safeCwd = !string.IsNullOrWhiteSpace(cwd) ? Path.GetFullPath(cwd) : null;
         string shell = File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh";
         string[] argv = [shell, "-i"];
 
