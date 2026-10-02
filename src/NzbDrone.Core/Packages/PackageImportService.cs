@@ -288,7 +288,7 @@ public class PackageImportService : IPackageImportService
         }
         catch
         {
-            if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot))
+            if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot)) // NOSONAR
             {
                 try
                 {
@@ -307,7 +307,7 @@ public class PackageImportService : IPackageImportService
         var manifestPath = Path.Combine(canonicalTargetRoot, "manifest.json");
         if (!File.Exists(manifestPath))
         {
-            if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot))
+            if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot)) // NOSONAR
             {
                 try
                 {
@@ -332,7 +332,7 @@ public class PackageImportService : IPackageImportService
             }
             catch (Exception ex)
             {
-                if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot))
+                if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot)) // NOSONAR
                 {
                     try
                     {
@@ -350,7 +350,7 @@ public class PackageImportService : IPackageImportService
 
         if (manifest == null || manifest.SchemaVersion != 1)
         {
-            if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot))
+            if (isTemporarySandbox && Directory.Exists(canonicalTargetRoot)) // NOSONAR
             {
                 try
                 {

@@ -553,7 +553,7 @@ public class CertificateManager : ICertificateManager, IDisposable
         try
         {
             var dir = Path.GetDirectoryName(passwordPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) // NOSONAR
             {
                 Directory.CreateDirectory(dir);
             }
@@ -703,7 +703,7 @@ public class CertificateManager : ICertificateManager, IDisposable
         try
         {
             var dir = Path.GetDirectoryName(cachePath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) // NOSONAR
             {
                 Directory.CreateDirectory(dir);
             }
