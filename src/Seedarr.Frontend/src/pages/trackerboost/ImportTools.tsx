@@ -364,6 +364,7 @@ export function ImportTools({ showModal, onCloseModal }: ImportToolsProps) {
         >
           <label
             htmlFor="tb-auto-boost-enabled"
+            aria-label="Automatic Background Swarm Boosting"
             style={{
               display: "flex",
               alignItems: "center",
@@ -398,6 +399,7 @@ export function ImportTools({ showModal, onCloseModal }: ImportToolsProps) {
 
           <label
             htmlFor="tb-auto-harvest-enabled"
+            aria-label="Automatic Swarm Harvesting"
             style={{
               display: "flex",
               alignItems: "center",
@@ -432,6 +434,7 @@ export function ImportTools({ showModal, onCloseModal }: ImportToolsProps) {
 
           <label
             htmlFor="tb-only-verified"
+            aria-label="Only Verified Trackers"
             style={{
               display: "flex",
               alignItems: "center",
