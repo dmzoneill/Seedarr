@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.12](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.12) - 2026-10-02
+
+### 🔧 Maintenance & Improvements
+- build(deps): elevate AnalysisLevel to latest, NuGetAuditLevel to high, and resolve CA2022 stream reads
+
 ## [v2.0.11](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.11) - 2026-10-02
 
 ### 🔧 Maintenance & Improvements
