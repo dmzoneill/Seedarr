@@ -389,6 +389,18 @@ public class EmailNotificationTest
     }
 
     [Test]
+    public void CreateCertificateValidationCallback_should_execute_lambda()
+    {
+        var callback = EmailNotification.CreateCertificateValidationCallback(true);
+        var result = callback(null, null, null, System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors);
+        Assert.That(result, Is.True);
+
+        var callback2 = EmailNotification.CreateCertificateValidationCallback(false);
+        var result2 = callback2(null, null, null, System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors);
+        Assert.That(result2, Is.False);
+    }
+
+    [Test]
     public void ValidateServerCertificate_should_return_true_when_no_ssl_errors()
     {
         var result = EmailNotification.ValidateServerCertificate(
