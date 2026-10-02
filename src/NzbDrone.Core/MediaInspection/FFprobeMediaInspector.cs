@@ -515,7 +515,7 @@ public class FFprobeMediaInspector : IFFprobeMediaInspector
         }
 
         var isAtmos = (profile != null && profile.Contains("Atmos", StringComparison.OrdinalIgnoreCase)) ||
-                      (longName != null && longName.Contains("Atmos", StringComparison.OrdinalIgnoreCase));
+            (longName != null && longName.Contains("Atmos", StringComparison.OrdinalIgnoreCase));
 
         if (!isAtmos && tags.HasValue)
         {
@@ -532,10 +532,10 @@ public class FFprobeMediaInspector : IFFprobeMediaInspector
             "eac3" => isAtmos ? "Dolby Atmos" : "EAC3",
             "ac3" => "AC3",
             "dts" => (profile?.Contains("MA", StringComparison.OrdinalIgnoreCase) == true ||
-                      profile?.Contains("Master Audio", StringComparison.OrdinalIgnoreCase) == true ||
-                      longName?.Contains("Master Audio", StringComparison.OrdinalIgnoreCase) == true)
-                     ? "DTS-HD MA"
-                     : (profile?.Contains("HRA", StringComparison.OrdinalIgnoreCase) == true ? "DTS-HD HRA" : "DTS"),
+                profile?.Contains("Master Audio", StringComparison.OrdinalIgnoreCase) == true ||
+                longName?.Contains("Master Audio", StringComparison.OrdinalIgnoreCase) == true)
+                ? "DTS-HD MA"
+                : (profile?.Contains("HRA", StringComparison.OrdinalIgnoreCase) == true ? "DTS-HD HRA" : "DTS"),
             "dts_hd_ma" or "dtshd" or "dts-hd" => "DTS-HD MA",
             "flac" => "FLAC",
             "aac" => "AAC",
