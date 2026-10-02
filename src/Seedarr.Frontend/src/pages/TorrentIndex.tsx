@@ -383,7 +383,7 @@ function TorrentIndex() {
         setBulkPending(false);
       }
     },
-    [selectedIds, torrents, moveTorrentQueue, showToast],
+    [selectedIds, selectedTorrentId, torrents, moveTorrentQueue, showToast],
   );
 
   // Keyboard Shortcuts Listener for Torrent Operations, Navigation & Modals

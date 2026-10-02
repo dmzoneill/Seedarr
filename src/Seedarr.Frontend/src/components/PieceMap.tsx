@@ -226,7 +226,10 @@ export function PieceMap({
   // Fetch authentic piece map data and files
   const { data: pieceMapData } = usePieceMap(torrentId);
   const { data: fetchedFiles } = useTorrentFiles(torrentId ?? 0);
-  const files = propFiles || fetchedFiles || [];
+  const files = useMemo(
+    () => propFiles || fetchedFiles || [],
+    [propFiles, fetchedFiles],
+  );
 
   const totalPieces = Math.max(1, pieceMapData?.totalPieces || pieceCount || 1);
   const effectivePieceLength = Math.max(

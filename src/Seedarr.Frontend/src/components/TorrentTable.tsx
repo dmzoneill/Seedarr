@@ -1077,7 +1077,10 @@ export function TorrentTable({
         ? propSelectedId
         : null;
 
-  const selectedIds = propSelectedIds ?? new Set<number>();
+  const selectedIds = useMemo(
+    () => propSelectedIds ?? new Set<number>(),
+    [propSelectedIds],
+  );
 
   const [internalSortKey, setInternalSortKey] = useState<SortKey | null>(
     () => loadTableSortPreferences().sortKey,

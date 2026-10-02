@@ -117,12 +117,14 @@ export function MediaPlayerModal({
 
   // Stream Lifecycle Cleanup on Unmount / Close:
   useEffect(() => {
+    const videoEl = videoRef.current;
+    const audioEl = audioRef.current;
     return () => {
-      if (videoRef.current) {
-        cleanUpMediaElement(videoRef.current);
+      if (videoEl) {
+        cleanUpMediaElement(videoEl);
       }
-      if (audioRef.current) {
-        cleanUpMediaElement(audioRef.current);
+      if (audioEl) {
+        cleanUpMediaElement(audioEl);
       }
     };
   }, []);

@@ -380,7 +380,7 @@ export function useIdleTimer(
       tracker.destroy();
       trackerRef.current = null;
     };
-  }, [explicitTimeout, warningSeconds]);
+  }, [enabled, explicitTimeout, warningSeconds]);
 
   useEffect(() => {
     if (trackerRef.current) {

@@ -1563,8 +1563,8 @@ export function AutomationPage() {
   const [isTesting, setIsTesting] = useState(false);
   const [isRunningId, setIsRunningId] = useState<number | null>(null);
 
-  const scriptList = scripts || [];
-  const templateList = templates || [];
+  const scriptList = useMemo(() => scripts || [], [scripts]);
+  const templateList = useMemo(() => templates || [], [templates]);
 
   const filteredScripts = useMemo(() => {
     return scriptList.filter((s) => {
@@ -1617,7 +1617,7 @@ export function AutomationPage() {
         setEditorMode("code");
       }
     }
-  }, [editingScript?.id, editingScript?.language]);
+  }, [editingScript]);
 
   // Sync visual steps back to YAML code
   function updateVisualSteps(newSteps: VisualStep[]) {

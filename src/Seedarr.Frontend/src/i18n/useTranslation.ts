@@ -21,7 +21,7 @@ export function useTranslation() {
       );
       return rawT(key, interpolationParams, fallbackDefault);
     },
-    [rawT, locale],
+    [rawT],
   ) as TFunction;
 
   const currentLanguage = getLanguageMetadata(locale);
