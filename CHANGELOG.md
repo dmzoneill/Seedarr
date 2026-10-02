@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.9](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.9) - 2026-10-02
+
+### 🔧 Maintenance & Improvements
+- ci(sonar): ensure S6549 filesystem oracle multicriteria ignore covers full source tree
+
 ## [v2.0.8](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.8) - 2026-10-02
 
 ### 🔧 Maintenance & Improvements
