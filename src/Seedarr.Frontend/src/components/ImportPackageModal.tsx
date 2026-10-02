@@ -57,27 +57,30 @@ export function ImportPackageModal({
     setIsUploading(false);
   }, []);
 
-  const handleFileSelect = (file: File) => {
-    const lowerName = file.name.toLowerCase();
-    const isPackage =
-      lowerName.endsWith(".tar.gz") ||
-      lowerName.endsWith(".seedarr") ||
-      lowerName.endsWith(".leecharr") ||
-      lowerName.endsWith(".tar") ||
-      lowerName.endsWith(".tgz") ||
-      lowerName.endsWith(".gz");
+  const handleFileSelect = useCallback(
+    (file: File) => {
+      const lowerName = file.name.toLowerCase();
+      const isPackage =
+        lowerName.endsWith(".tar.gz") ||
+        lowerName.endsWith(".seedarr") ||
+        lowerName.endsWith(".leecharr") ||
+        lowerName.endsWith(".tar") ||
+        lowerName.endsWith(".tgz") ||
+        lowerName.endsWith(".gz");
 
-    if (!isPackage) {
-      showToast(
-        "Please select a valid package archive (.seedarr, .leecharr, or .tar.gz)",
-        "warning",
-      );
-    }
+      if (!isPackage) {
+        showToast(
+          "Please select a valid package archive (.seedarr, .leecharr, or .tar.gz)",
+          "warning",
+        );
+      }
 
-    setSelectedFile(file);
-    setErrorMessage(null);
-    setImportResult(null);
-  };
+      setSelectedFile(file);
+      setErrorMessage(null);
+      setImportResult(null);
+    },
+    [showToast],
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -89,13 +92,16 @@ export function ImportPackageModal({
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileSelect(e.dataTransfer.files[0]);
-    }
-  }, []);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleFileSelect(e.dataTransfer.files[0]);
+      }
+    },
+    [handleFileSelect],
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

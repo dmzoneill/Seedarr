@@ -29,7 +29,7 @@ export function SystemResources() {
   const host = snapshot?.host;
   const engine = snapshot?.torrentEngine;
   const subsystems = snapshot?.subsystems ?? [];
-  const perTorrent = snapshot?.perTorrent ?? [];
+  const perTorrent = useMemo(() => snapshot?.perTorrent ?? [], [snapshot?.perTorrent]);
 
   const filteredTorrents = useMemo(() => {
     return perTorrent.filter((torrent) => {

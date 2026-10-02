@@ -250,6 +250,15 @@ function App() {
     (isIdle || isManuallyLocked) &&
     Boolean(currentUser && location.pathname !== "/login");
 
+  const loadUser = useCallback(async () => {
+    try {
+      const user = await apiClient.getCurrentUser();
+      updateCurrentUser(user);
+    } catch {
+      // ignore
+    }
+  }, [updateCurrentUser]);
+
   const handleUnlockSession = useCallback(() => {
     setIsManuallyLocked(false);
     unlockSession();
@@ -259,7 +268,7 @@ function App() {
       t("auth.sessionUnlocked", undefined, "Session unlocked successfully"),
       "success",
     );
-  }, [unlockSession, reconnect, showToast, t]);
+  }, [unlockSession, reconnect, showToast, t, loadUser]);
 
   const handleStayLoggedIn = useCallback(async () => {
     resetTimer();
@@ -270,15 +279,6 @@ function App() {
       setIsManuallyLocked(true);
     }
   }, [resetTimer]);
-
-  const loadUser = async () => {
-    try {
-      const user = await apiClient.getCurrentUser();
-      updateCurrentUser(user);
-    } catch {
-      // ignore
-    }
-  };
 
   useEffect(() => {
     void loadUser();
@@ -299,7 +299,7 @@ function App() {
       .catch(() => {
         // Keep existing state
       });
-  }, []);
+  }, [loadUser]);
 
   useEffect(() => {
     const unsubscribe = subscribeAuthChannel((event) => {
@@ -352,7 +352,16 @@ function App() {
     return () => {
       unsubscribe();
     };
-  }, [navigate, reconnect, showToast, t, location.pathname]);
+  }, [
+    currentUser,
+    loadUser,
+    location.pathname,
+    navigate,
+    reconnect,
+    showToast,
+    t,
+    updateCurrentUser,
+  ]);
 
   const handleLogout = async () => {
     try {
@@ -724,7 +733,13 @@ function App() {
       window.removeEventListener("keydown", handleKeyDown);
       if (pendingGTimer) clearTimeout(pendingGTimer);
     };
-  }, [navigate, toggleCommandPalette, openCommandPalette]);
+  }, [
+    isMobileMenuOpen,
+    navigate,
+    openCommandPalette,
+    toggleCommandPalette,
+    toggleSidebar,
+  ]);
 
   if (location.pathname === "/login") {
     return (
