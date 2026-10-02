@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.5](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.5) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(a11y): associate form labels in Totals and add accessible aria-labels in ImportTools (S6853)
+- fix(quality): suppress S3427 constructor/method overload ambiguity across core services
+- fix(a11y): associate form labels across settings, trackers, history, and peer map (S6853)
+- fix(security): suppress S6549 filesystem oracles on path existence checks
+- fix(a11y): add role=button and keyboard listeners to remaining interactive components (S6848)
+- fix(a11y): associate form labels in torrentdetails OptionsTab (S6853)
+- fix(a11y): associate form labels in AutomationPage and Tags (S6853)
+- fix(frontend): eliminate regex backtracking and remove autoFocus props (S8786, S9379)
+- fix(a11y): associate form labels with inputs across shared controls and tabs (S6853)
+- fix(security): resolve S6549 filesystem oracle warnings across terminal and core services
+
+### 🔧 Maintenance & Improvements
+- style: fix indentation in FFprobeMediaInspector for editorconfig
+- style: fix indentation in RemotePathMappingService for editorconfig
+
 ## [v1.20.4](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.4) - 2026-10-01
 
 ### 🐛 Bug Fixes
