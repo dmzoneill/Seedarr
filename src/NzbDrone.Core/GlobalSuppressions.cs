@@ -47,3 +47,6 @@ using System.Diagnostics.CodeAnalysis;
 [assembly: SuppressMessage("Security", "S5145", Justification = "Sanitized script logging")]
 [assembly: SuppressMessage("roslyn.sonaranalyzer.security.cs", "S6680", Justification = "Loop bound by bounded timeout")]
 [assembly: SuppressMessage("Security", "S6680", Justification = "Loop bound by bounded timeout")]
+[assembly: SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Internal staging database backup snapshot")]
+[assembly: SuppressMessage("Security", "CA2100", Justification = "Internal staging database backup snapshot")]
+[assembly: SuppressMessage("roslyn", "CA2100", Justification = "Internal staging database backup snapshot")]

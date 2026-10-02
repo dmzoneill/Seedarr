@@ -172,7 +172,9 @@ public class BackupService : IBackupService
                         }
 
                         using var cmd = conn.CreateCommand();
+#pragma warning disable CA2100 // Internal staging snapshot path
                         cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
+#pragma warning restore CA2100
                         (ExecuteVacuumCommand ?? (c => c.ExecuteNonQuery()))(cmd);
                     });
 
