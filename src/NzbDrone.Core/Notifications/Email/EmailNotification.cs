@@ -146,14 +146,7 @@ public class EmailNotification : INotificationService
             if (Settings.IgnoreSslErrors || Settings.AllowInvalidCertificates)
             {
                 client.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
-                {
-                    if (sslPolicyErrors == global::System.Net.Security.SslPolicyErrors.None)
-                    {
-                        return true;
-                    }
-
-                    return Settings.IgnoreSslErrors || Settings.AllowInvalidCertificates; // NOSONAR
-                };
+                    ValidateServerCertificate(sender, certificate, chain, sslPolicyErrors, Settings.IgnoreSslErrors || Settings.AllowInvalidCertificates);
             }
 
             var secureSocketOptions = EmailNotificationSender.ResolveSecureSocketOptions(Settings.SmtpPort, Settings.UseTls);
@@ -168,5 +161,20 @@ public class EmailNotification : INotificationService
             client.Send(mimeMessage);
             client.Disconnect(true);
         });
+    }
+
+    internal static bool ValidateServerCertificate(
+        object sender,
+        global::System.Security.Cryptography.X509Certificates.X509Certificate certificate,
+        global::System.Security.Cryptography.X509Certificates.X509Chain chain,
+        global::System.Net.Security.SslPolicyErrors sslPolicyErrors,
+        bool ignoreSslErrors)
+    {
+        if (sslPolicyErrors == global::System.Net.Security.SslPolicyErrors.None)
+        {
+            return true;
+        }
+
+        return ignoreSslErrors; // NOSONAR
     }
 }
