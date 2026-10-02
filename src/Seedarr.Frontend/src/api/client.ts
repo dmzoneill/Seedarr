@@ -366,9 +366,9 @@ class ApiClient {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await this.login(request);
-      } catch (err: any) {
+      } catch (err: unknown) {
         lastError = err;
-        const msg = String(err?.message || "");
+        const msg = err instanceof Error ? err.message : String(err || "");
         // Do not retry client/auth errors like invalid password
         if (
           msg.includes("401") ||
@@ -396,8 +396,9 @@ class ApiClient {
       try {
         const user = await this.getCurrentUser();
         return user;
-      } catch (err: any) {
-        if (err?.message?.includes("401")) {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err || "");
+        if (msg.includes("401")) {
           throw err;
         }
         if (attempt === maxRetries) {

@@ -228,6 +228,14 @@ export function getHubUrl(): string {
   return hubUrl;
 }
 
+interface SeedarrHubConnection extends HubConnection {
+  subscribeToTorrent?: typeof subscribeToTorrent;
+  unsubscribeFromTorrent?: typeof unsubscribeFromTorrent;
+  subscribeToChannel?: typeof subscribeToChannel;
+  unsubscribeFromChannel?: typeof unsubscribeFromChannel;
+  requestStateSnapshot?: typeof requestStateSnapshot;
+}
+
 export function getSignalRConnection(): HubConnection {
   if (!connection) {
     connection = new HubConnectionBuilder()
@@ -287,11 +295,12 @@ export function getSignalRConnection(): HubConnection {
       }, 2000);
     });
   }
-  (connection as any).subscribeToTorrent = subscribeToTorrent;
-  (connection as any).unsubscribeFromTorrent = unsubscribeFromTorrent;
-  (connection as any).subscribeToChannel = subscribeToChannel;
-  (connection as any).unsubscribeFromChannel = unsubscribeFromChannel;
-  (connection as any).requestStateSnapshot = requestStateSnapshot;
+  const extendedConn = connection as unknown as SeedarrHubConnection;
+  extendedConn.subscribeToTorrent = subscribeToTorrent;
+  extendedConn.unsubscribeFromTorrent = unsubscribeFromTorrent;
+  extendedConn.subscribeToChannel = subscribeToChannel;
+  extendedConn.unsubscribeFromChannel = unsubscribeFromChannel;
+  extendedConn.requestStateSnapshot = requestStateSnapshot;
   return connection;
 }
 
@@ -498,13 +507,13 @@ export function useSignalR(queryClient?: QueryClient) {
           notifySnapshot(snapshot);
           if (qc) {
             if (snapshot.torrents) {
-              qc.setQueryData(["torrents"], (old: any) => {
+              qc.setQueryData(["torrents"], (old: unknown) => {
                 if (Array.isArray(old)) {
                   const snapMap = new Map(
                     snapshot.torrents.map((t) => [t.id, t]),
                   );
-                  return old.map((item) => {
-                    const snap = snapMap.get(item.id);
+                  return (old as Array<Record<string, unknown>>).map((item) => {
+                    const snap = snapMap.get(item.id as number);
                     return snap ? { ...item, ...snap } : item;
                   });
                 }
@@ -515,13 +524,14 @@ export function useSignalR(queryClient?: QueryClient) {
               snapshot.downloadSpeed !== undefined &&
               snapshot.uploadSpeed !== undefined
             ) {
-              qc.setQueryData(["seeding", "stats"], (old: any) => {
+              qc.setQueryData(["seeding", "stats"], (old: unknown) => {
+                const prev = (old && typeof old === "object" ? old : {}) as Record<string, unknown>;
                 return {
-                  ...(old || {}),
+                  ...prev,
                   downloadSpeed: snapshot.downloadSpeed,
                   uploadSpeed: snapshot.uploadSpeed,
-                  activeTorrents: snapshot.activeCount ?? old?.activeTorrents,
-                  totalTorrents: snapshot.totalCount ?? old?.totalTorrents,
+                  activeTorrents: snapshot.activeCount ?? prev.activeTorrents,
+                  totalTorrents: snapshot.totalCount ?? prev.totalTorrents,
                 };
               });
             }

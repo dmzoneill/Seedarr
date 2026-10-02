@@ -37,9 +37,9 @@ function getBroadcastChannelClass():
   (new (name: string) => BroadcastChannel) | null {
   if (
     typeof window !== "undefined" &&
-    typeof (window as any).BroadcastChannel === "function"
+    typeof (window as unknown as { BroadcastChannel?: new (name: string) => BroadcastChannel }).BroadcastChannel === "function"
   ) {
-    return (window as any).BroadcastChannel;
+    return (window as unknown as { BroadcastChannel: new (name: string) => BroadcastChannel }).BroadcastChannel;
   }
   if (typeof BroadcastChannel === "function") {
     return BroadcastChannel;

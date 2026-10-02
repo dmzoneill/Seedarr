@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ToastContainer from "./Toast";
 import ToastContext, { type ToastType } from "../context/ToastContext";
 
-(globalThis as any).React = React;
+(globalThis as unknown as { React: typeof React }).React = React;
 
 describe("ToastContainer accessibility and rendering", () => {
   it("renders nothing when context is null or toasts array is empty", () => {
@@ -28,7 +28,7 @@ describe("ToastContainer accessibility and rendering", () => {
       React.createElement(
         ToastContext.Provider,
         {
-          value: null as any,
+          value: null as unknown as React.ComponentProps<typeof ToastContext.Provider>["value"],
         },
         React.createElement(ToastContainer),
       ),

@@ -48,7 +48,7 @@ describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
 
   it("cleans up media pipeline on unmount (pause, remove src, load)", () => {
     const calls: string[] = [];
-    const mediaEl: any = {
+    const mediaEl = {
       pause() {
         calls.push("pause");
       },
@@ -60,7 +60,7 @@ describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
       load() {
         calls.push("load");
       },
-    };
+    } as unknown as HTMLMediaElement;
 
     cleanUpMediaElement(mediaEl);
 
@@ -85,10 +85,10 @@ describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
   });
 
   it("dynamically manages multiple subtitle tracks and toggles track modes", () => {
-    const tracks: any = [
+    const tracks = [
       { mode: "disabled", label: "English", language: "en" },
       { mode: "disabled", label: "Spanish", language: "es" },
-    ];
+    ] as unknown as TextTrackList;
 
     const subtitles: SubtitleTrack[] = [
       {

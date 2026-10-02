@@ -88,8 +88,9 @@ export function FolderBrowserModal({
       setNewFolderName("");
       setShowNewFolderInput(false);
       await refetch();
-    } catch (err: any) {
-      showToast(err?.message || "Failed to create folder", "error");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to create folder";
+      showToast(msg, "error");
     }
   };
 

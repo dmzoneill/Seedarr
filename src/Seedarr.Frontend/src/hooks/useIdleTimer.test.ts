@@ -9,6 +9,11 @@ import {
   TIMEOUT_OPTIONS,
 } from "./useIdleTimer";
 
+interface GlobalThisWithWindow {
+  window?: unknown;
+  __storageListeners?: Array<(e: StorageEvent) => void>;
+}
+
 class MockLocalStorage {
   private store = new Map<string, string>();
 
@@ -20,14 +25,15 @@ class MockLocalStorage {
     const oldValue = this.store.get(key) ?? null;
     this.store.set(key, value);
 
-    if (typeof (globalThis as any).window !== "undefined") {
+    const g = globalThis as unknown as GlobalThisWithWindow;
+    if (typeof g.window !== "undefined") {
       const storageEvent = {
         key,
         newValue: value,
         oldValue,
       } as StorageEvent;
 
-      const listeners = (globalThis as any).__storageListeners || [];
+      const listeners = g.__storageListeners || [];
       for (const listener of listeners) {
         listener(storageEvent);
       }
@@ -44,42 +50,43 @@ class MockLocalStorage {
 }
 
 describe("useIdleTimer / IdleTimerTracker", () => {
-  let originalWindow: any;
+  let originalWindow: unknown;
   let mockStorage: MockLocalStorage;
   let storageListeners: Array<(e: StorageEvent) => void>;
   let windowListeners: Map<string, Set<EventListener>>;
 
   beforeEach(() => {
-    originalWindow = (globalThis as any).window;
+    const g = globalThis as unknown as GlobalThisWithWindow;
+    originalWindow = g.window;
     mockStorage = new MockLocalStorage();
     storageListeners = [];
     windowListeners = new Map();
 
-    (globalThis as any).__storageListeners = storageListeners;
-    (globalThis as any).window = {
+    g.__storageListeners = storageListeners;
+    g.window = {
       localStorage: mockStorage,
-      addEventListener: (type: string, listener: any) => {
+      addEventListener: (type: string, listener: EventListener | ((e: StorageEvent) => void)) => {
         if (type === "storage") {
-          storageListeners.push(listener);
+          storageListeners.push(listener as (e: StorageEvent) => void);
         } else {
           if (!windowListeners.has(type)) {
             windowListeners.set(type, new Set());
           }
-          windowListeners.get(type)!.add(listener);
+          windowListeners.get(type)!.add(listener as EventListener);
         }
       },
-      removeEventListener: (type: string, listener: any) => {
+      removeEventListener: (type: string, listener: EventListener | ((e: StorageEvent) => void)) => {
         if (type === "storage") {
-          const idx = storageListeners.indexOf(listener);
+          const idx = storageListeners.indexOf(listener as (e: StorageEvent) => void);
           if (idx !== -1) storageListeners.splice(idx, 1);
         } else {
-          windowListeners.get(type)?.delete(listener);
+          windowListeners.get(type)?.delete(listener as EventListener);
         }
       },
-      dispatchEvent: (e: any) => {
+      dispatchEvent: (e: Event) => {
         if (e.type === "storage") {
           for (const l of storageListeners) {
-            l(e);
+            l(e as StorageEvent);
           }
         }
         return true;
@@ -88,8 +95,9 @@ describe("useIdleTimer / IdleTimerTracker", () => {
   });
 
   afterEach(() => {
-    (globalThis as any).window = originalWindow;
-    delete (globalThis as any).__storageListeners;
+    const g = globalThis as unknown as GlobalThisWithWindow;
+    g.window = originalWindow;
+    delete g.__storageListeners;
   });
 
   it("loads default timeout when localStorage is empty", () => {
@@ -114,7 +122,7 @@ describe("useIdleTimer / IdleTimerTracker", () => {
 
   it("setStoredIdleTimeout saves to localStorage and dispatches storage event", () => {
     let receivedEvent: StorageEvent | null = null;
-    (globalThis as any).window.addEventListener(
+    ((globalThis as unknown as { window: Window }).window).addEventListener(
       "storage",
       (e: StorageEvent) => {
         receivedEvent = e;

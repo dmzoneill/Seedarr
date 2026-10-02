@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import type { ArrConnection } from "../api/types";
+import type { ArrConnection, IndexerDefinition } from "../api/types";
 import {
   getArrInstanceUrl,
   getDownloadClientUrl,
@@ -330,11 +330,11 @@ describe("arrLinks: extra helpers", () => {
   it("should test getProwlarrUrl", () => {
     assert.equal(getProwlarrUrl(undefined), null);
     assert.equal(
-      getProwlarrUrl([{ id: 1, name: "Prowlarr", indexerType: "Prowlarr", url: "http://prowlarr:9696/", enable: true } as any]),
+      getProwlarrUrl([{ id: 1, name: "Prowlarr", indexerType: "Prowlarr", url: "http://prowlarr:9696/", enable: true } as unknown as IndexerDefinition]),
       "http://prowlarr:9696",
     );
     assert.equal(
-      getProwlarrUrl([{ id: 1, name: "Prowlarr", indexerType: "Prowlarr", url: "http://prowlarr:9696/", enable: true } as any], "test query"),
+      getProwlarrUrl([{ id: 1, name: "Prowlarr", indexerType: "Prowlarr", url: "http://prowlarr:9696/", enable: true } as unknown as IndexerDefinition], "test query"),
       "http://prowlarr:9696/search?query=test%20query",
     );
   });

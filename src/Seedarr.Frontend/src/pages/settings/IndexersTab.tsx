@@ -35,12 +35,16 @@ import {
 import { useToast } from "../../context/ToastContext";
 import { trackIndexerAction } from "../../utils/analytics";
 
-export function formatIndexerTestError(error: any): string {
+export function formatIndexerTestError(error: unknown): string {
   if (!error) return "Connection failed";
   if (typeof error === "string") return error;
-  return (
-    error?.response?.data?.message || error?.message || "Connection failed"
-  );
+  if (typeof error === "object") {
+    const errObj = error as { response?: { data?: { message?: string } }; message?: string };
+    return (
+      errObj.response?.data?.message || errObj.message || "Connection failed"
+    );
+  }
+  return "Connection failed";
 }
 
 export function IndexersTab() {
@@ -160,9 +164,10 @@ export function IndexersTab() {
           setModalTestResult(null);
           showToast(`Indexer "${payload.name}" updated`, "success");
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           trackIndexerAction("edit", payload.indexerType || "Prowlarr", false);
-          showToast(err?.message || "Failed to update indexer", "error");
+          const msg = err instanceof Error ? err.message : "Failed to update indexer";
+          showToast(msg, "error");
         },
       });
     } else {
@@ -173,9 +178,10 @@ export function IndexersTab() {
           setModalTestResult(null);
           showToast(`Indexer "${payload.name}" created`, "success");
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           trackIndexerAction("add", payload.indexerType || "Prowlarr", false);
-          showToast(err?.message || "Failed to create indexer", "error");
+          const msg = err instanceof Error ? err.message : "Failed to create indexer";
+          showToast(msg, "error");
         },
       });
     }
@@ -200,7 +206,7 @@ export function IndexersTab() {
           showToast(`Indexer connection failed: ${message}`, "error");
         }
       },
-      onError: (err: any) => {
+      onError: (err: unknown) => {
         trackIndexerAction("test", "indexer", false);
         const message = formatIndexerTestError(err);
         setTestResults((prev) => ({ ...prev, [id]: false }));
@@ -235,7 +241,7 @@ export function IndexersTab() {
           );
         }
       },
-      onError: (err: any) => {
+      onError: (err: unknown) => {
         trackIndexerAction("test", editing.indexerType || "indexer", false);
         const message = formatIndexerTestError(err);
         setModalTestResult({
@@ -302,8 +308,9 @@ export function IndexersTab() {
           setEditingRule(null);
           showToast(`RSS Rule "${name}" updated`, "success");
         },
-        onError: (err: any) => {
-          showToast(err?.message || "Failed to update RSS rule", "error");
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Failed to update RSS rule";
+          showToast(msg, "error");
         },
       });
     } else {
@@ -312,8 +319,9 @@ export function IndexersTab() {
           setEditingRule(null);
           showToast(`RSS Rule "${name}" created`, "success");
         },
-        onError: (err: any) => {
-          showToast(err?.message || "Failed to create RSS rule", "error");
+        onError: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Failed to create RSS rule";
+          showToast(msg, "error");
         },
       });
     }
@@ -330,9 +338,10 @@ export function IndexersTab() {
           res.success ? "success" : "warning",
         );
       },
-      onError: (err: any) => {
+      onError: (err: unknown) => {
         trackIndexerAction("sync", "Prowlarr", false);
-        showToast(err?.message || "Prowlarr sync failed", "error");
+        const msg = err instanceof Error ? err.message : "Prowlarr sync failed";
+        showToast(msg, "error");
       },
     });
   };
@@ -347,9 +356,10 @@ export function IndexersTab() {
           "success",
         );
       },
-      onError: (err: any) => {
+      onError: (err: unknown) => {
         setSyncCooldownRemaining(15);
-        showToast(err?.message || "RSS sync failed", "error");
+        const msg = err instanceof Error ? err.message : "RSS sync failed";
+        showToast(msg, "error");
       },
     });
   };
@@ -607,11 +617,10 @@ export function IndexersTab() {
                               `RSS Rule "${rule.name}" deleted`,
                               "info",
                             ),
-                          onError: (err: any) =>
-                            showToast(
-                              err?.message || "Failed to delete RSS rule",
-                              "error",
-                            ),
+                          onError: (err: unknown) => {
+                            const msg = err instanceof Error ? err.message : "Failed to delete RSS rule";
+                            showToast(msg, "error");
+                          },
                         });
                       }
                     }}
@@ -787,11 +796,10 @@ export function IndexersTab() {
                   clearGrabHistoryMutation.mutate(undefined, {
                     onSuccess: () =>
                       showToast("RSS grab history cleared", "info"),
-                    onError: (err: any) =>
-                      showToast(
-                        err?.message || "Failed to clear history",
-                        "error",
-                      ),
+                    onError: (err: unknown) => {
+                      const msg = err instanceof Error ? err.message : "Failed to clear history";
+                      showToast(msg, "error");
+                    },
                   });
                 }
               }}

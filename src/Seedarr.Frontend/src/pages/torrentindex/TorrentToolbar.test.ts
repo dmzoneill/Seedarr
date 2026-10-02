@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TorrentToolbar } from "./TorrentToolbar";
 import type { SeedingConfig } from "../../api/types";
 
-(globalThis as any).React = React;
+(globalThis as unknown as { React: typeof React }).React = React;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
   },
 });
 
-function renderToolbar(props: any) {
+function renderToolbar(props: React.ComponentProps<typeof TorrentToolbar>) {
   return renderToStaticMarkup(
     React.createElement(
       QueryClientProvider,

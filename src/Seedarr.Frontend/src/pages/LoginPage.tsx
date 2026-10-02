@@ -75,7 +75,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       });
       broadcastLogin(user);
       onLoginSuccess(returnUrl);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(
         err?.message ||
           t(

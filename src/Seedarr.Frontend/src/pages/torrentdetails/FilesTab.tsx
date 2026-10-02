@@ -487,8 +487,9 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
             setEditingValue("");
             setRenameError(null);
           },
-          onError: (err: any) => {
-            setRenameError(err?.message || "Failed to rename file");
+          onError: (err: unknown) => {
+            const msg = err instanceof Error ? err.message : "Failed to rename file";
+            setRenameError(msg);
           },
         },
       );

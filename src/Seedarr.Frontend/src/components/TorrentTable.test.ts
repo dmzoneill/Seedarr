@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
-(globalThis as any).React = React;
+(globalThis as unknown as { React: typeof React }).React = React;
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import TorrentTable from "./TorrentTable";
@@ -175,22 +175,27 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
     });
     const qc = createQueryClient([torrent]);
 
-    let capturedTrProps: any = null;
+    interface CapturedProps {
+      role?: unknown;
+      tabIndex?: unknown;
+      onKeyDown?: (e: { key: string; preventDefault: () => void; stopPropagation: () => void }) => void;
+    }
+    let capturedTrProps: CapturedProps | null = null;
     const origCreateElement = React.createElement;
 
     let toggledId: number | null = null;
     let selectedId: number | null | undefined = undefined;
 
     try {
-      (React as any).createElement = function (
-        type: any,
-        props: any,
-        ...children: any[]
+      (React as unknown as Record<string, unknown>).createElement = function (
+        type: unknown,
+        props: CapturedProps | null | undefined,
+        ...children: unknown[]
       ) {
         if (type === "tr" && props?.role === "row") {
           capturedTrProps = props;
         }
-        return origCreateElement.apply(this, [type, props, ...children]);
+        return (origCreateElement as (...args: unknown[]) => React.ReactElement).apply(this, [type, props, ...children]);
       };
 
       renderToStaticMarkup(
@@ -210,7 +215,7 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
         ),
       );
     } finally {
-      (React as any).createElement = origCreateElement;
+      (React as unknown as Record<string, unknown>).createElement = origCreateElement;
     }
 
     assert.ok(capturedTrProps, "Must capture row props");
@@ -364,22 +369,27 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
     });
     const qc = createQueryClient([torrent]);
 
-    let capturedCardProps: any = null;
+    interface CapturedGridProps {
+      role?: unknown;
+      tabIndex?: unknown;
+      onKeyDown?: (e: { key: string; preventDefault: () => void; stopPropagation: () => void }) => void;
+    }
+    let capturedCardProps: CapturedGridProps | null = null;
     const origCreateElement = React.createElement;
 
     let toggledId: number | null = null;
     let selectedId: number | null | undefined = undefined;
 
     try {
-      (React as any).createElement = function (
-        type: any,
-        props: any,
-        ...children: any[]
+      (React as unknown as Record<string, unknown>).createElement = function (
+        type: unknown,
+        props: CapturedGridProps | null | undefined,
+        ...children: unknown[]
       ) {
         if (type === "div" && props?.role === "button") {
           capturedCardProps = props;
         }
-        return origCreateElement.apply(this, [type, props, ...children]);
+        return (origCreateElement as (...args: unknown[]) => React.ReactElement).apply(this, [type, props, ...children]);
       };
 
       renderToStaticMarkup(
@@ -399,7 +409,7 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
         ),
       );
     } finally {
-      (React as any).createElement = origCreateElement;
+      (React as unknown as Record<string, unknown>).createElement = origCreateElement;
     }
 
     assert.ok(capturedCardProps, "Must capture card props");

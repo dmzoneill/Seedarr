@@ -45,7 +45,7 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
       ? getMediaDeepLink(
           {
             source: torrent.source,
-            metadata: { title: mediaTitle, mediaId: 0 } as any,
+            metadata: { title: mediaTitle, mediaId: 0 },
             title: torrent.name,
           },
           arrConnections,

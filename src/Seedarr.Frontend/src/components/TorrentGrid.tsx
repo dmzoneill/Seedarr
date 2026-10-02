@@ -195,7 +195,7 @@ function TorrentGrid({
         const arrLink = getMediaDeepLink(
           {
             source: torrent.source,
-            metadata: { title: torrent.mediaTitle, mediaId: 0 } as any,
+            metadata: { title: torrent.mediaTitle, mediaId: 0 },
             title: torrent.name,
           },
           arrConnections,

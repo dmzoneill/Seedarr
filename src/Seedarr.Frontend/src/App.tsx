@@ -115,7 +115,13 @@ import {
   trackConfigAdoption,
 } from "./utils/analytics";
 
-const systemSubItems = [
+interface SubNavItem {
+  path: string;
+  label: string;
+  labelKey?: string;
+}
+
+const systemSubItems: SubNavItem[] = [
   { path: "/system/status", label: "Status" },
   { path: "/system/resources", label: "Resources", labelKey: "nav.resources" },
   { path: "/system/tasks", label: "Tasks" },
@@ -126,7 +132,7 @@ const systemSubItems = [
   { path: "/system/network", label: "Network" },
 ];
 
-const developerSubItems = [
+const developerSubItems: SubNavItem[] = [
   { path: "/developer/database", label: "Database", labelKey: "nav.database" },
   { path: "/developer/testing", label: "Testing", labelKey: "nav.testing" },
   { path: "/developer/repl", label: "REPL", labelKey: "nav.repl" },
@@ -1116,8 +1122,8 @@ function App() {
           </NavLink>
           {isSystemRoute &&
             systemSubItems.map((item) => {
-              const labelText = (item as any).labelKey
-                ? t((item as any).labelKey, undefined, item.label)
+              const labelText = item.labelKey
+                ? t(item.labelKey, undefined, item.label)
                 : item.label;
               return (
                 <NavLink
@@ -1140,8 +1146,8 @@ function App() {
           </NavLink>
           {isDeveloperRoute &&
             developerSubItems.map((item) => {
-              const labelText = (item as any).labelKey
-                ? t((item as any).labelKey, undefined, item.label)
+              const labelText = item.labelKey
+                ? t(item.labelKey, undefined, item.label)
                 : item.label;
               return (
                 <NavLink

@@ -46,21 +46,26 @@ const VALID_NOTIFICATION_POSITIONS = [
 ] as const;
 
 function sanitizeNotificationSettings(
-  raw: any,
+  raw: unknown,
   fallback: NotificationSettings,
 ): NotificationSettings {
   if (!raw || typeof raw !== "object") {
     return fallback;
   }
 
-  const position = VALID_NOTIFICATION_POSITIONS.includes(raw.position)
-    ? raw.position
-    : fallback.position;
+  const rawObj = raw as Record<string, unknown>;
+  const position =
+    typeof rawObj.position === "string" &&
+    VALID_NOTIFICATION_POSITIONS.includes(
+      rawObj.position as (typeof VALID_NOTIFICATION_POSITIONS)[number],
+    )
+      ? (rawObj.position as (typeof VALID_NOTIFICATION_POSITIONS)[number])
+      : fallback.position;
 
   let autoDismissSeconds = fallback.autoDismissSeconds;
   if (
-    typeof raw.autoDismissSeconds === "number" &&
-    !Number.isNaN(raw.autoDismissSeconds)
+    typeof rawObj.autoDismissSeconds === "number" &&
+    !Number.isNaN(rawObj.autoDismissSeconds)
   ) {
     autoDismissSeconds = Math.min(
       60,
@@ -185,13 +190,53 @@ function getDefaultFormForImplementation(impl: string): NotificationFormState {
   };
 }
 
+interface ParsedNotificationSettings {
+  serverUrl?: string;
+  url?: string;
+  targetUrl?: string;
+  webhookUrl?: string;
+  token?: string;
+  botToken?: string;
+  apiKey?: string;
+  chat_id?: string | number;
+  chatId?: string | number;
+  user?: string;
+  userKey?: string;
+  username?: string;
+  avatarUrl?: string;
+  avatar_url?: string;
+  method?: string;
+  headers?: unknown;
+  server?: string;
+  host?: string;
+  port?: string | number;
+  useSsl?: boolean;
+  ssl?: boolean;
+  ignoreSslErrors?: boolean;
+  ignoreSsl?: boolean;
+  allowInvalidCertificates?: boolean;
+  allowInvalidCert?: boolean;
+  password?: string;
+  pass?: string;
+  from?: string;
+  recipient?: string;
+  to?: string;
+  priority?: string | number;
+  path?: string;
+  command?: string;
+  filePath?: string;
+  script?: string;
+  arguments?: string;
+  args?: string;
+}
+
 function parseNotificationToForm(
   notif: NotificationResource,
 ): NotificationFormState {
-  let parsed: Record<string, any> = {};
+  let parsed: ParsedNotificationSettings = {};
   if (notif.settings) {
     try {
-      parsed = JSON.parse(notif.settings);
+      parsed = JSON.parse(notif.settings) as ParsedNotificationSettings;
     } catch {
       parsed = { url: notif.settings };
     }
@@ -256,7 +301,7 @@ function parseNotificationToForm(
 function buildNotificationPayload(
   form: NotificationFormState,
 ): NotificationResource {
-  let settingsObj: Record<string, any> = {};
+  let settingsObj: Record<string, unknown> = {};
 
   switch (form.implementation) {
     case "Discord":
@@ -335,7 +380,7 @@ function buildNotificationPayload(
 
     case "Webhook":
     default: {
-      let headers: any = undefined;
+      let headers: unknown = undefined;
       if (form.customHeaders.trim()) {
         try {
           headers = JSON.parse(form.customHeaders);
@@ -519,7 +564,7 @@ export function NotificationsTab() {
       setDirty(false);
       setSaved(true);
       showToast("Toast settings saved successfully", "success");
-    } catch (err: any) {
+    } catch (err: unknown) {
       showToast(err?.message || "Failed to save toast settings", "error");
     }
   };
@@ -579,7 +624,7 @@ export function NotificationsTab() {
           );
         }
       },
-      onError: (err: any) => {
+      onError: (err: unknown) => {
         trackNotificationAction(
           notif?.implementation || "unknown",
           "test",
@@ -622,7 +667,7 @@ export function NotificationsTab() {
           );
         }
       },
-      onError: (err: any) => {
+      onError: (err: unknown) => {
         trackNotificationAction(
           editing.implementation || "unknown",
           "test",
@@ -652,7 +697,7 @@ export function NotificationsTab() {
         showToast(`Notification "${target.name}" deleted`, "info");
         setDeletingNotif(null);
       },
-      onError: (err: any) => {
+      onError: (err: unknown) => {
         showToast(err?.message || "Failed to delete notification", "error");
       },
     });
@@ -675,7 +720,7 @@ export function NotificationsTab() {
           setEditing(null);
           setModalTestResult(null);
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           showToast(err?.message || "Failed to update notification", "error");
         },
       });
@@ -686,7 +731,7 @@ export function NotificationsTab() {
           setEditing(null);
           setModalTestResult(null);
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           showToast(err?.message || "Failed to create notification", "error");
         },
       });

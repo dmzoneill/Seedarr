@@ -49,7 +49,7 @@ class MockElement {
     this.children.push(child);
   }
 
-  contains(other: any): boolean {
+  contains(other: unknown): boolean {
     if (!other) return false;
     if (other === this) return true;
     for (const child of this.children) {
@@ -60,17 +60,17 @@ class MockElement {
 
   focus(): void {
     this.focusCalls++;
-    if (typeof (globalThis as any).document !== "undefined") {
-      (globalThis as any).document.activeElement = this;
+    const g = globalThis as unknown as { document?: { activeElement: unknown; body: unknown } };
+    if (typeof g.document !== "undefined") {
+      g.document.activeElement = this;
     }
   }
 
   blur(): void {
-    if (typeof (globalThis as any).document !== "undefined") {
-      if ((globalThis as any).document.activeElement === this) {
-        (globalThis as any).document.activeElement = (
-          globalThis as any
-        ).document.body;
+    const g = globalThis as unknown as { document?: { activeElement: unknown; body: unknown } };
+    if (typeof g.document !== "undefined") {
+      if (g.document.activeElement === this) {
+        g.document.activeElement = g.document.body;
       }
     }
   }
@@ -133,30 +133,31 @@ class MockKeyboardEvent {
 }
 
 describe("FocusTrap / useFocusTrap", () => {
-  let originalDocument: any;
-  let mockDocument: any;
-  let documentListeners: Map<string, Set<(e: any) => void>>;
+  let originalDocument: unknown;
+  let mockDocument: unknown;
+  let documentListeners: Map<string, Set<(e: unknown) => void>>;
   let rootBody: MockElement;
 
   beforeEach(() => {
-    originalDocument = (globalThis as any).document;
+    const g = globalThis as unknown as { document?: unknown };
+    originalDocument = g.document;
     documentListeners = new Map();
     rootBody = new MockElement("body", "body");
 
     mockDocument = {
       body: rootBody,
       activeElement: rootBody,
-      contains: (el: any) => rootBody.contains(el),
-      addEventListener: (type: string, listener: (e: any) => void) => {
+      contains: (el: unknown) => rootBody.contains(el),
+      addEventListener: (type: string, listener: (e: unknown) => void) => {
         if (!documentListeners.has(type)) {
           documentListeners.set(type, new Set());
         }
         documentListeners.get(type)!.add(listener);
       },
-      removeEventListener: (type: string, listener: (e: any) => void) => {
+      removeEventListener: (type: string, listener: (e: unknown) => void) => {
         documentListeners.get(type)?.delete(listener);
       },
-      dispatchEvent: (event: any) => {
+      dispatchEvent: (event: unknown) => {
         const listeners = documentListeners.get("keydown") || [];
         for (const listener of listeners) {
           listener(event);
@@ -164,11 +165,11 @@ describe("FocusTrap / useFocusTrap", () => {
       },
     };
 
-    (globalThis as any).document = mockDocument;
+    g.document = mockDocument;
   });
 
   afterEach(() => {
-    (globalThis as any).document = originalDocument;
+    (globalThis as unknown as { document?: unknown }).document = originalDocument;
   });
 
   describe("Focusable Element Queries & Visibility", () => {

@@ -15,7 +15,7 @@ function getNestedValue(
 ): string | undefined {
   if (!obj) return undefined;
   const parts = path.split(".");
-  let current: any = obj;
+  let current: unknown = obj;
   for (const part of parts) {
     if (
       current === undefined ||
@@ -24,7 +24,7 @@ function getNestedValue(
     ) {
       return undefined;
     }
-    current = current[part];
+    current = (current as Record<string, unknown>)[part];
   }
   return typeof current === "string" ? current : undefined;
 }
@@ -62,17 +62,17 @@ function syncDomAttributes(locale: LocaleCode) {
 }
 
 export function extractDefaultValue(
-  params?: any,
-  defaultVal?: any,
+  params?: unknown,
+  defaultVal?: unknown,
 ): { fallbackDefault?: string; interpolationParams?: TranslationParams } {
   if (typeof params === "string") {
     if (typeof defaultVal === "object" && defaultVal !== null) {
-      return { fallbackDefault: params, interpolationParams: defaultVal };
+      return { fallbackDefault: params, interpolationParams: defaultVal as TranslationParams };
     }
     return { fallbackDefault: params, interpolationParams: undefined };
   }
   let fallbackDefault = typeof defaultVal === "string" ? defaultVal : undefined;
-  let interpolationParams = params;
+  let interpolationParams = params as TranslationParams | undefined;
   if (
     params &&
     typeof params === "object" &&
@@ -81,8 +81,8 @@ export function extractDefaultValue(
   ) {
     fallbackDefault =
       (params as { defaultValue?: string }).defaultValue ?? fallbackDefault;
-    const { defaultValue: _, ...rest } = params as Record<string, any>;
-    interpolationParams = rest;
+    const { defaultValue: _, ...rest } = params as Record<string, unknown>;
+    interpolationParams = rest as TranslationParams;
   }
   return { fallbackDefault, interpolationParams };
 }

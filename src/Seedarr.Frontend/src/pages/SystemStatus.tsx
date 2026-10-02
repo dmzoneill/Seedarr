@@ -58,7 +58,7 @@ function SystemStatus() {
         "info",
       );
       pollReconnect();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsRestarting(false);
       showToast(
         t(
@@ -124,7 +124,7 @@ function SystemStatus() {
         ),
         "info",
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsShuttingDown(false);
       showToast(
         t(

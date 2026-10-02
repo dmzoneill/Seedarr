@@ -4,13 +4,18 @@ import { apiClient } from "../api/client";
 import { useTranslation } from "../i18n";
 import type {
   DatabaseTable,
-  DatabaseTableSchema,
   DatabaseSchemaResponse,
   DatabaseQueryResult,
   DatabaseStorageResponse,
   DatabaseStorageItem,
   QueryPlanNode,
 } from "../api/types";
+
+interface TreemapNode extends Partial<DatabaseStorageItem> {
+  name: string;
+  value?: number;
+  children?: TreemapNode[];
+}
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -121,7 +126,7 @@ export default function DatabaseExplorer() {
     try {
       const data = await apiClient.get<DatabaseStorageResponse>("/system/database/storage");
       setStorageData(data || null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load storage data", err);
     } finally {
       setIsLoadingStorage(false);
@@ -144,8 +149,9 @@ export default function DatabaseExplorer() {
         setSelectedTable(tablesData[0].name);
       }
       await fetchStorage();
-    } catch (err: any) {
-      setSchemaError(err?.message || "Failed to load database schema.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to load database schema.";
+      setSchemaError(msg);
     } finally {
       setIsLoadingSchema(false);
     }
@@ -185,7 +191,7 @@ export default function DatabaseExplorer() {
 
     if (filtered.length === 0) return [];
 
-    const rootData = {
+    const rootData: TreemapNode = {
       name: "root",
       children: filtered.map((item) => ({
         ...item,
@@ -197,17 +203,17 @@ export default function DatabaseExplorer() {
     };
 
     const root = d3
-      .hierarchy<any>(rootData)
+      .hierarchy<TreemapNode>(rootData)
       .sum((d) => d.value || 0)
       .sort((a, b) => (b.value || 0) - (a.value || 0));
 
     d3
-      .treemap<any>()
+      .treemap<TreemapNode>()
       .tile(d3.treemapSquarify)
       .size([Math.max(treemapDimensions.width, 300), Math.max(treemapDimensions.height, 300)])
       .padding(3)(root);
 
-    return root.leaves() as Array<d3.HierarchyRectangularNode<any>>;
+    return root.leaves() as Array<d3.HierarchyRectangularNode<TreemapNode>>;
   }, [storageData, storageFilter, storageMetric, treemapSearch, treemapDimensions]);
 
   // Initial grid layout for tables on visual canvas
@@ -337,10 +343,11 @@ export default function DatabaseExplorer() {
       if (isWrite) {
         await fetchSchema();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Execution failed.";
       setQueryResult({
         success: false,
-        errorMessage: err?.message || "Execution failed.",
+        errorMessage: msg,
         executionTimeMs: 0,
         isQuery: false,
         columns: [],
@@ -955,7 +962,7 @@ export default function DatabaseExplorer() {
               <select
                 className="select"
                 value={storageMetric}
-                onChange={(e) => setStorageMetric(e.target.value as any)}
+                onChange={(e) => setStorageMetric(e.target.value as "bytes" | "rows" | "pages")}
                 style={{ padding: "0.25rem 0.5rem", fontSize: "0.85rem" }}
               >
                 <option value="bytes">Disk Size (Bytes)</option>

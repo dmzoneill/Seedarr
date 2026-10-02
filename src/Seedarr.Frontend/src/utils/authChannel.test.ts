@@ -45,6 +45,17 @@ class MockBroadcastChannel {
 }
 
 // Mock localStorage implementation
+interface GlobalThisWithAuth {
+  window?: {
+    BroadcastChannel?: unknown;
+    localStorage?: MockLocalStorage;
+    addEventListener?: (type: string, listener: EventListener | ((e: StorageEvent) => void)) => void;
+    removeEventListener?: (type: string, listener: EventListener | ((e: StorageEvent) => void)) => void;
+  };
+  BroadcastChannel?: unknown;
+  __storageListeners?: Array<(e: StorageEvent) => void>;
+}
+
 class MockLocalStorage {
   private store = new Map<string, string>();
 
@@ -57,14 +68,15 @@ class MockLocalStorage {
     this.store.set(key, value);
 
     // Trigger storage event on window if registered
-    if (typeof (globalThis as any).window !== "undefined") {
+    const g = globalThis as unknown as GlobalThisWithAuth;
+    if (typeof g.window !== "undefined") {
       const storageEvent = {
         key,
         newValue: value,
         oldValue,
       } as StorageEvent;
 
-      const listeners = (globalThis as any).__storageListeners || [];
+      const listeners = g.__storageListeners || [];
       for (const listener of listeners) {
         listener(storageEvent);
       }
@@ -81,42 +93,44 @@ class MockLocalStorage {
 }
 
 describe("authChannel: Cross-tab authentication synchronization", () => {
-  let originalWindow: any;
-  let originalBroadcastChannel: any;
+  let originalWindow: unknown;
+  let originalBroadcastChannel: unknown;
   let mockStorage: MockLocalStorage;
   let storageListeners: Array<(e: StorageEvent) => void>;
 
   beforeEach(() => {
-    originalWindow = (globalThis as any).window;
-    originalBroadcastChannel = (globalThis as any).BroadcastChannel;
+    const g = globalThis as unknown as GlobalThisWithAuth;
+    originalWindow = g.window;
+    originalBroadcastChannel = g.BroadcastChannel;
     MockBroadcastChannel.instances = [];
     mockStorage = new MockLocalStorage();
     storageListeners = [];
 
-    (globalThis as any).__storageListeners = storageListeners;
-    (globalThis as any).window = {
+    g.__storageListeners = storageListeners;
+    g.window = {
       BroadcastChannel: MockBroadcastChannel,
       localStorage: mockStorage,
-      addEventListener: (type: string, listener: any) => {
+      addEventListener: (type: string, listener: EventListener | ((e: StorageEvent) => void)) => {
         if (type === "storage") {
-          storageListeners.push(listener);
+          storageListeners.push(listener as (e: StorageEvent) => void);
         }
       },
-      removeEventListener: (type: string, listener: any) => {
+      removeEventListener: (type: string, listener: EventListener | ((e: StorageEvent) => void)) => {
         if (type === "storage") {
-          const idx = storageListeners.indexOf(listener);
+          const idx = storageListeners.indexOf(listener as (e: StorageEvent) => void);
           if (idx !== -1) storageListeners.splice(idx, 1);
         }
       },
     };
-    (globalThis as any).BroadcastChannel = MockBroadcastChannel;
+    g.BroadcastChannel = MockBroadcastChannel;
   });
 
   afterEach(() => {
     closeAuthChannel();
-    (globalThis as any).window = originalWindow;
-    (globalThis as any).BroadcastChannel = originalBroadcastChannel;
-    delete (globalThis as any).__storageListeners;
+    const g = globalThis as unknown as GlobalThisWithAuth;
+    g.window = originalWindow as GlobalThisWithAuth["window"];
+    g.BroadcastChannel = originalBroadcastChannel;
+    delete g.__storageListeners;
   });
 
   it("broadcasts and receives AUTH_LOGOUT via BroadcastChannel", () => {
@@ -216,7 +230,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     broadcastLogin(mockUser);
     assert.equal((lastPosted as AuthEvent).type, "AUTH_LOGIN");
     if ((lastPosted as AuthEvent).type === "AUTH_LOGIN") {
-      assert.deepEqual((lastPosted as any).user, mockUser);
+      assert.deepEqual((lastPosted as Extract<AuthEvent, { type: "AUTH_LOGIN" }>).user, mockUser);
     }
   });
 
@@ -276,8 +290,9 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
 
   it("falls back to localStorage and storage event when BroadcastChannel is unsupported", () => {
     // Disable BroadcastChannel to test fallback
-    (globalThis as any).window.BroadcastChannel = undefined;
-    (globalThis as any).BroadcastChannel = undefined;
+    const g = globalThis as unknown as GlobalThisWithAuth;
+    if (g.window) g.window.BroadcastChannel = undefined;
+    g.BroadcastChannel = undefined;
     closeAuthChannel();
 
     const received: AuthEvent[] = [];
@@ -316,8 +331,9 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
       }
     }
 
-    (globalThis as any).window.BroadcastChannel = FaultyBroadcastChannel;
-    (globalThis as any).BroadcastChannel = FaultyBroadcastChannel;
+    const gFaulty = globalThis as unknown as GlobalThisWithAuth;
+    if (gFaulty.window) gFaulty.window.BroadcastChannel = FaultyBroadcastChannel;
+    gFaulty.BroadcastChannel = FaultyBroadcastChannel;
     closeAuthChannel();
 
     const received: AuthEvent[] = [];
@@ -338,8 +354,9 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
   });
 
   it("ignores storage events for unrelated keys or invalid JSON", () => {
-    (globalThis as any).window.BroadcastChannel = undefined;
-    (globalThis as any).BroadcastChannel = undefined;
+    const gUnrelated = globalThis as unknown as GlobalThisWithAuth;
+    if (gUnrelated.window) gUnrelated.window.BroadcastChannel = undefined;
+    gUnrelated.BroadcastChannel = undefined;
     closeAuthChannel();
 
     const received: AuthEvent[] = [];

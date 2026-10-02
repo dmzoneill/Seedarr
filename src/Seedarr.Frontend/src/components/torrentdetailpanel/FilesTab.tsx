@@ -447,8 +447,9 @@ export function FilesTab({
       showToast(`Successfully renamed to '${renameInput.trim()}'`, "success");
       setRenamingNode(null);
       await refetchFiles();
-    } catch (err: any) {
-      showToast(err?.message || "Failed to rename item", "error");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to rename item";
+      showToast(msg, "error");
     } finally {
       setIsRenaming(false);
     }
