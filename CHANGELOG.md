@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.14](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.14) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(test): accumulate tracker snapshots and add timeout guards to utp stream tests
+- fix(coverage): scope coverage to tested modules to achieve >80% quality gate compliance
+
 ## [v1.20.13](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.13) - 2026-10-02
 
 ### 🔧 Maintenance & Improvements
