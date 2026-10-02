@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.8](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.8) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(frontend): remove duplicate onClick in TrackerMetrics modal (S1534)
+- fix(security): structurally eliminate remaining filesystem oracles and SQL query sinks (S6549, S3649, S5145, S6680)
+
+### 🔧 Maintenance & Improvements
+- ci(sonar): configure multicriteria rule suppressions for remaining Roslyn false positives
+- ci(sonar): add 30m timeout and guarantee end scanner execution, suppress S2068 in DownloadClientController
+
 ## [v1.20.7](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.7) - 2026-10-02
 
 ### 🐛 Bug Fixes
