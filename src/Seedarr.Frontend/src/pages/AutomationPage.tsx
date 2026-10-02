@@ -745,14 +745,15 @@ function visualStepsToYaml(
         yaml += `      json: true\n`;
       }
       if (step.http.body?.trim()) {
+        const httpBody = step.http.body;
         try {
-          const parsed = JSON.parse(step.http.body!);
+          const parsed = JSON.parse(httpBody);
           yaml += `      body:\n`;
           for (const [k, v] of Object.entries(parsed)) {
             yaml += `        ${k}: '${String(v).replace(/'/g, "''")}'\n`;
           }
         } catch {
-          yaml += `      body: '${step.http.body!.replace(/'/g, "''")}'\n`;
+          yaml += `      body: '${httpBody.replace(/'/g, "''")}'\n`;
         }
       }
       if (step.http.register?.trim()) {
@@ -1264,10 +1265,10 @@ function yamlToVisualSteps(code: string): VisualStep[] {
     ) {
       const v = trimmed.match(/url:\s*['"]?([^'"]+)['"]?/);
       if (v) {
-        currentStep.actions[currentStep.actions.length - 1].value = v[1];
-        if (!currentStep.actions[currentStep.actions.length - 1].extra)
-          currentStep.actions[currentStep.actions.length - 1].extra = {};
-        currentStep.actions[currentStep.actions.length - 1].extra!.url = v[1];
+        const lastAction = currentStep.actions[currentStep.actions.length - 1];
+        lastAction.value = v[1];
+        if (!lastAction.extra) lastAction.extra = {};
+        lastAction.extra.url = v[1];
       }
     } else if (
       currentStep &&
@@ -1278,10 +1279,9 @@ function yamlToVisualSteps(code: string): VisualStep[] {
     ) {
       const v = trimmed.match(/method:\s*['"]?([^'"]+)['"]?/);
       if (v) {
-        if (!currentStep.actions[currentStep.actions.length - 1].extra)
-          currentStep.actions[currentStep.actions.length - 1].extra = {};
-        currentStep.actions[currentStep.actions.length - 1].extra!.method =
-          v[1];
+        const lastAction = currentStep.actions[currentStep.actions.length - 1];
+        if (!lastAction.extra) lastAction.extra = {};
+        lastAction.extra.method = v[1];
       }
     } else if (
       currentStep &&
@@ -1292,9 +1292,9 @@ function yamlToVisualSteps(code: string): VisualStep[] {
     ) {
       const v = trimmed.match(/body:\s*['"]?([^'"]+)['"]?/);
       if (v) {
-        if (!currentStep.actions[currentStep.actions.length - 1].extra)
-          currentStep.actions[currentStep.actions.length - 1].extra = {};
-        currentStep.actions[currentStep.actions.length - 1].extra!.body = v[1];
+        const lastAction = currentStep.actions[currentStep.actions.length - 1];
+        if (!lastAction.extra) lastAction.extra = {};
+        lastAction.extra.body = v[1];
       }
     } else if (
       currentStep &&
@@ -1305,10 +1305,9 @@ function yamlToVisualSteps(code: string): VisualStep[] {
     ) {
       const v = trimmed.match(/register:\s*['"]?([^'"]+)['"]?/);
       if (v) {
-        if (!currentStep.actions[currentStep.actions.length - 1].extra)
-          currentStep.actions[currentStep.actions.length - 1].extra = {};
-        currentStep.actions[currentStep.actions.length - 1].extra!.register =
-          v[1];
+        const lastAction = currentStep.actions[currentStep.actions.length - 1];
+        if (!lastAction.extra) lastAction.extra = {};
+        lastAction.extra.register = v[1];
       }
     } else if (currentStep && inActions && trimmed.startsWith("- pause:")) {
       currentStep.actions.push({
@@ -2353,8 +2352,8 @@ if (torrent && torrent.size > 5000000000) {
                     .filter((s) => s.lastExecutedAt)
                     .sort(
                       (a, b) =>
-                        new Date(b.lastExecutedAt!).getTime() -
-                        new Date(a.lastExecutedAt!).getTime(),
+                        new Date(b.lastExecutedAt ?? 0).getTime() -
+                        new Date(a.lastExecutedAt ?? 0).getTime(),
                     )
                     .map((s) => (
                       <tr
@@ -3857,7 +3856,7 @@ if (torrent && torrent.size > 5000000000) {
                                             onClick={() => {
                                               const copy = [...visualSteps];
                                               copy[stepIdx].conditionRight =
-                                                presetOptions![0].value;
+                                                presetOptions?.[0]?.value ?? "";
                                               updateVisualSteps(copy);
                                             }}
                                           >
@@ -4432,16 +4431,14 @@ if (torrent && torrent.size > 5000000000) {
                                         value={act.extra?.method || "POST"}
                                         onChange={(e) => {
                                           const copy = [...visualSteps];
-                                          if (
-                                            !copy[stepIdx].actions[actIdx].extra
-                                          )
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra = {};
-                                          copy[stepIdx].actions[
-                                            actIdx
-                                          ].extra!.method = e.target.value;
-                                          updateVisualSteps(copy);
+                                          const action =
+                                            copy[stepIdx]?.actions[actIdx];
+                                          if (action) {
+                                            const extra = action.extra || {};
+                                            extra.method = e.target.value;
+                                            action.extra = extra;
+                                            updateVisualSteps(copy);
+                                          }
                                         }}
                                       >
                                         <option
@@ -4487,18 +4484,15 @@ if (torrent && torrent.size > 5000000000) {
                                         )}
                                         onChange={(e) => {
                                           const copy = [...visualSteps];
-                                          copy[stepIdx].actions[actIdx].value =
-                                            e.target.value;
-                                          if (
-                                            !copy[stepIdx].actions[actIdx].extra
-                                          )
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra = {};
-                                          copy[stepIdx].actions[
-                                            actIdx
-                                          ].extra!.url = e.target.value;
-                                          updateVisualSteps(copy);
+                                          const action =
+                                            copy[stepIdx]?.actions[actIdx];
+                                          if (action) {
+                                            action.value = e.target.value;
+                                            const extra = action.extra || {};
+                                            extra.url = e.target.value;
+                                            action.extra = extra;
+                                            updateVisualSteps(copy);
+                                          }
                                         }}
                                       />
                                     </div>
@@ -4513,15 +4507,14 @@ if (torrent && torrent.size > 5000000000) {
                                       value={act.extra?.body || ""}
                                       onChange={(e) => {
                                         const copy = [...visualSteps];
-                                        if (
-                                          !copy[stepIdx].actions[actIdx].extra
-                                        )
-                                          copy[stepIdx].actions[actIdx].extra =
-                                            {};
-                                        copy[stepIdx].actions[
-                                          actIdx
-                                        ].extra!.body = e.target.value;
-                                        updateVisualSteps(copy);
+                                        const action =
+                                          copy[stepIdx]?.actions[actIdx];
+                                        if (action) {
+                                          const extra = action.extra || {};
+                                          extra.body = e.target.value;
+                                          action.extra = extra;
+                                          updateVisualSteps(copy);
+                                        }
                                       }}
                                     />
                                     <div
@@ -4542,17 +4535,15 @@ if (torrent && torrent.size > 5000000000) {
                                         onClick={(e) => {
                                           e.preventDefault();
                                           const copy = [...visualSteps];
-                                          if (
-                                            !copy[stepIdx].actions[actIdx].extra
-                                          )
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra = {};
-                                          copy[stepIdx].actions[
-                                            actIdx
-                                          ].extra!.body =
-                                            '{\n  "event": "complete",\n  "torrent": "${torrent.name}",\n  "size": ${torrent.size},\n  "hash": "${torrent.infoHash}"\n}';
-                                          updateVisualSteps(copy);
+                                          const action =
+                                            copy[stepIdx]?.actions[actIdx];
+                                          if (action) {
+                                            const extra = action.extra || {};
+                                            extra.body =
+                                              '{\n  "event": "complete",\n  "torrent": "${torrent.name}",\n  "size": ${torrent.size},\n  "hash": "${torrent.infoHash}"\n}';
+                                            action.extra = extra;
+                                            updateVisualSteps(copy);
+                                          }
                                         }}
                                       >
                                         {t("automation.ui.template")}
@@ -4569,35 +4560,25 @@ if (torrent && torrent.size > 5000000000) {
                                           const v = e.target.value;
                                           if (!v) return;
                                           const copy = [...visualSteps];
-                                          if (
-                                            !copy[stepIdx].actions[actIdx].extra
-                                          )
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra = {};
-                                          if (
-                                            !copy[stepIdx].actions[actIdx]
-                                              .extra!.headers
-                                          )
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra!.headers = {};
-                                          if (v === "bearer")
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra!.headers["Authorization"] =
-                                              "Bearer ${inputs.apiToken}";
-                                          if (v === "apikey")
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra!.headers["X-Api-Key"] =
-                                              "${inputs.apiKey}";
-                                          if (v === "basic")
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra!.headers["Authorization"] =
-                                              "Basic ${inputs.basicAuth}";
-                                          updateVisualSteps(copy);
+                                          const action =
+                                            copy[stepIdx]?.actions[actIdx];
+                                          if (action) {
+                                            const extra = action.extra || {};
+                                            const headers =
+                                              extra.headers || {};
+                                            extra.headers = headers;
+                                            if (v === "bearer")
+                                              headers["Authorization"] =
+                                                "Bearer ${inputs.apiToken}";
+                                            if (v === "apikey")
+                                              headers["X-Api-Key"] =
+                                                "${inputs.apiKey}";
+                                            if (v === "basic")
+                                              headers["Authorization"] =
+                                                "Basic ${inputs.basicAuth}";
+                                            action.extra = extra;
+                                            updateVisualSteps(copy);
+                                          }
                                         }}
                                       >
                                         <option value="">
@@ -4628,18 +4609,15 @@ if (torrent && torrent.size > 5000000000) {
                                           }
                                           onChange={(e) => {
                                             const copy = [...visualSteps];
-                                            if (
-                                              !copy[stepIdx].actions[actIdx]
-                                                .extra
-                                            )
-                                              copy[stepIdx].actions[
-                                                actIdx
-                                              ].extra = {};
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra!.allowInsecure =
-                                              e.target.checked;
-                                            updateVisualSteps(copy);
+                                            const action =
+                                              copy[stepIdx]?.actions[actIdx];
+                                            if (action) {
+                                              const extra = action.extra || {};
+                                              extra.allowInsecure =
+                                                e.target.checked;
+                                              action.extra = extra;
+                                              updateVisualSteps(copy);
+                                            }
                                           }}
                                         />{" "}
                                         {t("automation.ui.allowInsecure")}
@@ -4659,18 +4637,15 @@ if (torrent && torrent.size > 5000000000) {
                                           }
                                           onChange={(e) => {
                                             const copy = [...visualSteps];
-                                            if (
-                                              !copy[stepIdx].actions[actIdx]
-                                                .extra
-                                            )
-                                              copy[stepIdx].actions[
-                                                actIdx
-                                              ].extra = {};
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra!.continueOnError =
-                                              e.target.checked;
-                                            updateVisualSteps(copy);
+                                            const action =
+                                              copy[stepIdx]?.actions[actIdx];
+                                            if (action) {
+                                              const extra = action.extra || {};
+                                              extra.continueOnError =
+                                                e.target.checked;
+                                              action.extra = extra;
+                                              updateVisualSteps(copy);
+                                            }
                                           }}
                                         />{" "}
                                         {t("automation.ui.continueOnError")}
@@ -4689,16 +4664,14 @@ if (torrent && torrent.size > 5000000000) {
                                         value={act.extra?.register || ""}
                                         onChange={(e) => {
                                           const copy = [...visualSteps];
-                                          if (
-                                            !copy[stepIdx].actions[actIdx].extra
-                                          )
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra = {};
-                                          copy[stepIdx].actions[
-                                            actIdx
-                                          ].extra!.register = e.target.value;
-                                          updateVisualSteps(copy);
+                                          const action =
+                                            copy[stepIdx]?.actions[actIdx];
+                                          if (action) {
+                                            const extra = action.extra || {};
+                                            extra.register = e.target.value;
+                                            action.extra = extra;
+                                            updateVisualSteps(copy);
+                                          }
                                         }}
                                       />
                                       <input
@@ -4715,19 +4688,18 @@ if (torrent && torrent.size > 5000000000) {
                                         value={act.extra?.timeoutSeconds || ""}
                                         onChange={(e) => {
                                           const copy = [...visualSteps];
-                                          if (
-                                            !copy[stepIdx].actions[actIdx].extra
-                                          )
-                                            copy[stepIdx].actions[
-                                              actIdx
-                                            ].extra = {};
-                                          copy[stepIdx].actions[
-                                            actIdx
-                                          ].extra!.timeoutSeconds = Number.parseInt(
-                                            e.target.value,
-                                            10,
-                                          );
-                                          updateVisualSteps(copy);
+                                          const action =
+                                            copy[stepIdx]?.actions[actIdx];
+                                          if (action) {
+                                            const extra = action.extra || {};
+                                            extra.timeoutSeconds =
+                                              Number.parseInt(
+                                                e.target.value,
+                                                10,
+                                              );
+                                            action.extra = extra;
+                                            updateVisualSteps(copy);
+                                          }
                                         }}
                                       />
                                     </div>

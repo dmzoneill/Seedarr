@@ -430,7 +430,8 @@ export function NetworkSettingsTab() {
                   {(() => {
                     const selected = interfaces.find(
                       (i) => i.name === form.bindInterface,
-                    )!;
+                    );
+                    if (!selected) return null;
                     return (
                       <>
                         <span>

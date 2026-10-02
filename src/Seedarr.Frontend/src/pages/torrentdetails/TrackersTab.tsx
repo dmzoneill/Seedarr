@@ -36,10 +36,10 @@ function getReannounceCountdown(
   }
   const minInterval =
     (tracker.minAnnounceInterval ?? 0) > 0
-      ? tracker.minAnnounceInterval!
+      ? (tracker.minAnnounceInterval ?? 0)
       : Math.min(
           (tracker.announceInterval ?? 0) > 0
-            ? Math.floor(tracker.announceInterval! / 2)
+            ? Math.floor((tracker.announceInterval ?? 0) / 2)
             : 60,
           60,
         );

@@ -204,7 +204,7 @@ function FileTreeRow({
                   onClick={(e) => {
                     e.stopPropagation();
                     onPlayMedia({
-                      id: node.fileId!,
+                      id: node.fileId ?? 0,
                       path: node.path,
                       name: node.name,
                       size: node.size,
@@ -341,7 +341,7 @@ function FileTreeRow({
                 title={`Stream / Play ${node.name}`}
                 onClick={() =>
                   onPlayMedia({
-                    id: node.fileId!,
+                    id: node.fileId ?? 0,
                     path: node.path,
                     name: node.name,
                     size: node.size,

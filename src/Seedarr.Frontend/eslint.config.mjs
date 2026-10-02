@@ -27,6 +27,7 @@ export default [
       "react-hooks/exhaustive-deps": "error",
       "react/react-in-jsx-scope": "off",
       "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-non-null-assertion": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },

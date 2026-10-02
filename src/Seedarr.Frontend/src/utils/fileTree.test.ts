@@ -134,7 +134,8 @@ describe("fileTree: buildFileTree and cascading priority", () => {
       [10, 20, 30],
     );
 
-    const aNode = findNodeByPath(tree, "Dir/A")!;
+    const aNode = findNodeByPath(tree, "Dir/A");
+    assert.ok(aNode);
     assert.deepEqual(
       getDescendantFileIds(aNode).sort((a, b) => a - b),
       [10, 20],

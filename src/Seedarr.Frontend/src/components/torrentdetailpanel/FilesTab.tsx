@@ -276,7 +276,10 @@ function buildTree(files: TorrentFileInfo[]): TreeNode[] {
             bytesCompleted: 0,
           });
         }
-        currentMap = currentMap.get(part)!.children;
+        const folderNode = currentMap.get(part);
+        if (folderNode) {
+          currentMap = folderNode.children;
+        }
       }
     }
   }
@@ -1268,8 +1271,9 @@ export function FilesTab({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (!node.file) return;
                             setSelectedMediaFile({
-                              id: node.file!.id,
+                              id: node.file.id,
                               path: node.fullPath,
                               name: node.name,
                               size: node.size,
