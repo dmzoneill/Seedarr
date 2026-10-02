@@ -291,10 +291,7 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
 
     public byte[] ReadPiece(int pieceIndex)
     {
-        if (pieceIndex < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(pieceIndex));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(pieceIndex);
 
         var pieceStart = (long)pieceIndex * _pieceLength;
         if (pieceStart >= _totalSize)
@@ -308,10 +305,7 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
 
     public int ReadPiece(int pieceIndex, Memory<byte> destinationBuffer)
     {
-        if (pieceIndex < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(pieceIndex));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(pieceIndex);
 
         var pieceStart = (long)pieceIndex * _pieceLength;
         if (pieceStart >= _totalSize)
