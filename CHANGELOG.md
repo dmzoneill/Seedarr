@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.20.11](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.11) - 2026-10-02
+
+### 🐛 Bug Fixes
+- fix(quality): exclude settings from CPD, terminal from coverage, and cover all arrLinks
+
 ## [v1.20.10](https://github.com/dmzoneill/Seedarr/releases/tag/v1.20.10) - 2026-10-02
 
 ### 🐛 Bug Fixes
