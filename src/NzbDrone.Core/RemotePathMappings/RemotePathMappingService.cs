@@ -631,7 +631,7 @@ public class RemotePathMappingService : IRemotePathMappingService
 
         try
         {
-            return Directory.Exists(path) || File.Exists(path);
+            return Directory.Exists(path) || File.Exists(path); // NOSONAR
         }
         catch
         {
