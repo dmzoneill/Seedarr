@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.22](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.22) - 2026-10-03
+
+### 🔧 Maintenance & Improvements
+- style(favicon): add #1a1815 background squircle matching original logo
+
 ## [v2.0.21](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.21) - 2026-10-03
 
 ### 🔧 Maintenance & Improvements
