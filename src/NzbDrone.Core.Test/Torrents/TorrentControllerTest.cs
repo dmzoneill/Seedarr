@@ -1037,4 +1037,100 @@ public class TorrentControllerTest
 
         Assert.That(result, Is.InstanceOf<NotFoundResult>());
     }
+
+    [Test]
+    public void Get_maps_trackers_and_history_metadata_case_insensitively()
+    {
+        var historyRepo = Substitute.For<IDownloadHistoryRepository>();
+        var torrent = new Torrent
+        {
+            Id = 55,
+            Name = "MetadataMovie",
+            InfoHash = "abcdef1234567890abcdef1234567890abcdef12",
+        };
+        _torrentService.Get(55).Returns(torrent);
+        _trackerEntryService.GetByTorrentId(55).Returns(new List<TrackerEntry>());
+
+        var history = new DownloadHistory
+        {
+            InfoHash = torrent.InfoHash,
+            Source = "Radarr",
+            DataJson = "{\"title\":\"Movie Title\",\"year\":2024,\"overview\":\"A great film\"}",
+        };
+        historyRepo.FindByInfoHash(torrent.InfoHash).Returns(history);
+
+        using var customController = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            _validator,
+            downloadHistoryRepository: historyRepo,
+            categoryService: _categoryService);
+
+        var result = customController.GetById(55);
+
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(result.Value.Source, Is.EqualTo("Radarr"));
+    }
+
+    [Test]
+    public void GetAll_maps_trackers_and_history_metadata_case_insensitively()
+    {
+        var historyRepo = Substitute.For<IDownloadHistoryRepository>();
+        var torrent = new Torrent
+        {
+            Id = 77,
+            Name = "TrackedMovie",
+            InfoHash = "9988776655443322110099887766554433221100",
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var tracker = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 77,
+            Url = "udp://tracker.opentrackr.org:1337/announce",
+            Tier = 0,
+            AnnounceInterval = 1800,
+            NextAnnounce = DateTime.UtcNow.AddMinutes(15),
+        };
+        _trackerEntryService.All().Returns(new List<TrackerEntry> { tracker });
+
+        var history = new DownloadHistory
+        {
+            InfoHash = torrent.InfoHash,
+            Source = "Radarr",
+            DataJson = "{\"title\":\"Tracked Movie Title\",\"year\":2025}",
+        };
+        historyRepo.All().Returns(new List<DownloadHistory> { history });
+
+        using var customController = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            _validator,
+            downloadHistoryRepository: historyRepo,
+            categoryService: _categoryService);
+
+        var result = customController.GetAll();
+
+        Assert.That(result, Is.Not.Null);
+        var list = result.ToList();
+        Assert.That(list, Has.Count.EqualTo(1));
+        var res = list[0];
+        Assert.That(res.TrackerUrl, Is.EqualTo("udp://tracker.opentrackr.org:1337/announce"));
+        Assert.That(res.AnnounceInterval, Is.EqualTo(1800));
+        Assert.That(res.NextUpdate, Is.GreaterThan(0));
+        Assert.That(res.Source, Is.EqualTo("Radarr"));
+    }
 }
