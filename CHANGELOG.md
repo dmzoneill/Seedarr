@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.20](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.20) - 2026-10-03
+
+### 🐛 Bug Fixes
+- fix(ci): quote :all: in pip install in ai-responder workflow
+- fix(quality): un-suppress CA1510, CA1513, CA1865, CA1866, CA1872, CA1869, CA1850, CA1862 and prune NoWarn/multicriteria
+
+### 🔧 Maintenance & Improvements
+- ci(security): lock pip dependencies with only-binary and enforce secure HTTPS in curl
+
 ## [v2.0.19](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.19) - 2026-10-03
 
 ### ✨ Features
