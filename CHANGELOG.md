@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.18](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.18) - 2026-10-03
+
+### 🐛 Bug Fixes
+- fix(quality): un-suppress CA1846, CA1834, CA1868, CA1512, CA2100
+
 ## [v2.0.17](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.17) - 2026-10-03
 
 ### 🐛 Bug Fixes
