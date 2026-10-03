@@ -38,7 +38,6 @@ public class DelugeJsonRpcController : ControllerBase
     };
 
     private static readonly HttpClient _sharedHttpClient = new();
-    private static volatile bool _isWebConnected = true;
     private static readonly char[] LabelSeparators = [',', ';'];
     private static readonly char[] PathSeparators = ['/', '\\'];
     private static readonly string[] DefaultPlugins = ["Label", "Extractor", "Execute", "AutoAdd", "Blocklist", "Scheduler", "Stats"];
@@ -114,6 +113,8 @@ public class DelugeJsonRpcController : ControllerBase
         "label.get_options",
         "label.set_options"
     ];
+
+    private static volatile bool _isWebConnected = true;
 
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileService _torrentFileService;
