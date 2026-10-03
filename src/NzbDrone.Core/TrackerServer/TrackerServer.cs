@@ -845,10 +845,10 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return Array.Empty<byte>();
         }
 
-        IPAddress.TryParse(excludeIp, out var excludeAddr);
-        if (excludeAddr != null && excludeAddr.IsIPv4MappedToIPv6)
+        IPAddress excludeAddr = null;
+        if (!string.IsNullOrEmpty(excludeIp) && IPAddress.TryParse(excludeIp, out var parsedExcludeAddr))
         {
-            excludeAddr = excludeAddr.MapToIPv4();
+            excludeAddr = parsedExcludeAddr.IsIPv4MappedToIPv6 ? parsedExcludeAddr.MapToIPv4() : parsedExcludeAddr;
         }
 
         var chunks = new List<byte>();
@@ -895,7 +895,11 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return Array.Empty<byte>();
         }
 
-        IPAddress.TryParse(excludeIp, out var excludeAddr);
+        IPAddress excludeAddr = null;
+        if (!string.IsNullOrEmpty(excludeIp) && IPAddress.TryParse(excludeIp, out var parsedExcludeAddr))
+        {
+            excludeAddr = parsedExcludeAddr;
+        }
 
         var chunks = new List<byte>();
         foreach (var peer in peers)
@@ -936,10 +940,10 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return new BList();
         }
 
-        IPAddress.TryParse(excludeIp, out var excludeAddr);
-        if (excludeAddr != null && excludeAddr.IsIPv4MappedToIPv6)
+        IPAddress excludeAddr = null;
+        if (!string.IsNullOrEmpty(excludeIp) && IPAddress.TryParse(excludeIp, out var parsedExcludeAddr))
         {
-            excludeAddr = excludeAddr.MapToIPv4();
+            excludeAddr = parsedExcludeAddr.IsIPv4MappedToIPv6 ? parsedExcludeAddr.MapToIPv4() : parsedExcludeAddr;
         }
 
         var filtered = peers.Where(p =>

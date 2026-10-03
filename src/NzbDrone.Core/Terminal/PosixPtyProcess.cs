@@ -102,16 +102,16 @@ public class PosixPtyProcess : IPtyProcess
                 throw new Win32Exception(err, $"openpty failed with errno {err}");
             }
 
-            PosixNative.posix_spawn_file_actions_init(fileActions);
-            PosixNative.posix_spawn_file_actions_adddup2(fileActions, slaveFd, 0);
-            PosixNative.posix_spawn_file_actions_adddup2(fileActions, slaveFd, 1);
-            PosixNative.posix_spawn_file_actions_adddup2(fileActions, slaveFd, 2);
-            PosixNative.posix_spawn_file_actions_addclose(fileActions, slaveFd);
-            PosixNative.posix_spawn_file_actions_addclose(fileActions, masterFd);
+            CheckPosix(PosixNative.posix_spawn_file_actions_init(fileActions), "posix_spawn_file_actions_init");
+            CheckPosix(PosixNative.posix_spawn_file_actions_adddup2(fileActions, slaveFd, 0), "posix_spawn_file_actions_adddup2");
+            CheckPosix(PosixNative.posix_spawn_file_actions_adddup2(fileActions, slaveFd, 1), "posix_spawn_file_actions_adddup2");
+            CheckPosix(PosixNative.posix_spawn_file_actions_adddup2(fileActions, slaveFd, 2), "posix_spawn_file_actions_adddup2");
+            CheckPosix(PosixNative.posix_spawn_file_actions_addclose(fileActions, slaveFd), "posix_spawn_file_actions_addclose");
+            CheckPosix(PosixNative.posix_spawn_file_actions_addclose(fileActions, masterFd), "posix_spawn_file_actions_addclose");
 
-            PosixNative.posix_spawnattr_init(attr);
-            PosixNative.posix_spawnattr_setflags(attr, PosixNative.POSIX_SPAWN_SETPGROUP);
-            PosixNative.posix_spawnattr_setpgroup(attr, 0);
+            CheckPosix(PosixNative.posix_spawnattr_init(attr), "posix_spawnattr_init");
+            CheckPosix(PosixNative.posix_spawnattr_setflags(attr, PosixNative.POSIX_SPAWN_SETPGROUP), "posix_spawnattr_setflags");
+            CheckPosix(PosixNative.posix_spawnattr_setpgroup(attr, 0), "posix_spawnattr_setpgroup");
 
             var spawnRet = PosixNative.posix_spawn(
                 out var pid,
@@ -121,14 +121,28 @@ public class PosixPtyProcess : IPtyProcess
                 argvPtr,
                 envpPtr);
 
-            PosixNative.posix_spawn_file_actions_destroy(fileActions);
-            PosixNative.posix_spawnattr_destroy(attr);
-            PosixNative.close(slaveFd);
+            if (PosixNative.posix_spawn_file_actions_destroy(fileActions) != 0)
+            {
+                _logger.Debug("posix_spawn_file_actions_destroy failed");
+            }
+
+            if (PosixNative.posix_spawnattr_destroy(attr) != 0)
+            {
+                _logger.Debug("posix_spawnattr_destroy failed");
+            }
+
+            if (PosixNative.close(slaveFd) != 0)
+            {
+                _logger.Debug("close slaveFd failed");
+            }
             slaveFd = -1;
 
             if (spawnRet != 0)
             {
-                PosixNative.close(masterFd);
+                if (PosixNative.close(masterFd) != 0)
+                {
+                    _logger.Debug("close masterFd failed");
+                }
                 masterFd = -1;
                 throw new Win32Exception(spawnRet, $"posix_spawn failed with error {spawnRet}");
             }
@@ -139,7 +153,10 @@ public class PosixPtyProcess : IPtyProcess
         {
             if (slaveFd >= 0)
             {
-                PosixNative.close(slaveFd);
+                if (PosixNative.close(slaveFd) != 0)
+                {
+                    _logger.Debug("close slaveFd in finally failed");
+                }
             }
 
             foreach (var ptr in unmanagedToFree)
@@ -168,7 +185,11 @@ public class PosixPtyProcess : IPtyProcess
         };
 
         var request = OperatingSystem.IsMacOS() ? PosixNative.TIOCSWINSZ_OSX : PosixNative.TIOCSWINSZ_LINUX;
-        PosixNative.ioctl(_masterFd, request, ref win);
+        var ioctlRes = PosixNative.ioctl(_masterFd, request, ref win);
+        if (ioctlRes != 0)
+        {
+            _logger.Debug("ioctl TIOCSWINSZ failed with error {0}", ioctlRes);
+        }
     }
 
     public void Kill()
@@ -185,13 +206,25 @@ public class PosixPtyProcess : IPtyProcess
                 // Send SIGHUP and SIGTERM to child process group
                 try
                 {
-                    PosixNative.kill(-_pid, PosixNative.SIGHUP);
-                    PosixNative.kill(-_pid, PosixNative.SIGTERM);
+                    if (PosixNative.kill(-_pid, PosixNative.SIGHUP) != 0)
+                    {
+                        // Process group signal ignored
+                    }
+                    if (PosixNative.kill(-_pid, PosixNative.SIGTERM) != 0)
+                    {
+                        // Process group signal ignored
+                    }
                 }
                 catch
                 {
-                    PosixNative.kill(_pid, PosixNative.SIGHUP);
-                    PosixNative.kill(_pid, PosixNative.SIGTERM);
+                    if (PosixNative.kill(_pid, PosixNative.SIGHUP) != 0)
+                    {
+                        // Direct signal ignored
+                    }
+                    if (PosixNative.kill(_pid, PosixNative.SIGTERM) != 0)
+                    {
+                        // Direct signal ignored
+                    }
                 }
 
                 var sw = Stopwatch.StartNew();
@@ -215,15 +248,23 @@ public class PosixPtyProcess : IPtyProcess
                     // Escalate to SIGKILL if still alive after grace period
                     try
                     {
-                        PosixNative.kill(-_pid, PosixNative.SIGKILL);
+                        if (PosixNative.kill(-_pid, PosixNative.SIGKILL) != 0)
+                        {
+                            // Process group kill ignored
+                        }
                     }
                     catch
                     {
-                        PosixNative.kill(_pid, PosixNative.SIGKILL);
+                        if (PosixNative.kill(_pid, PosixNative.SIGKILL) != 0)
+                        {
+                            // Direct kill ignored
+                        }
                     }
 
-                    PosixNative.waitpid(_pid, out var status, 0);
-                    _exitCode = (status >> 8) & 0xFF;
+                    if (PosixNative.waitpid(_pid, out var status, 0) >= 0)
+                    {
+                        _exitCode = (status >> 8) & 0xFF;
+                    }
                     _hasExited = true;
                 }
             }
@@ -292,5 +333,13 @@ public class PosixPtyProcess : IPtyProcess
 
         Marshal.WriteIntPtr(arrayPtr + (list.Count * IntPtr.Size), IntPtr.Zero);
         return arrayPtr;
+    }
+
+    private static void CheckPosix(int ret, string action)
+    {
+        if (ret != 0)
+        {
+            throw new Win32Exception(ret, $"{action} failed with errno {ret}");
+        }
     }
 }

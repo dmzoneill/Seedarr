@@ -242,7 +242,11 @@ public class WindowsPtyProcess : IPtyProcess
                 Y = (short)Math.Clamp(rows, 1, 1000)
             };
 
-            WindowsNative.ResizePseudoConsole(_hPC, coord);
+            var hr = WindowsNative.ResizePseudoConsole(_hPC, coord);
+            if (hr != 0)
+            {
+                _logger.Debug("ResizePseudoConsole returned HRESULT {0:X}", hr);
+            }
         }
     }
 
@@ -275,7 +279,11 @@ public class WindowsPtyProcess : IPtyProcess
                 if (_hProcess != IntPtr.Zero)
                 {
                     WindowsNative.TerminateProcess(_hProcess, 1);
-                    WindowsNative.WaitForSingleObject(_hProcess, 1000);
+                    var waitResult = WindowsNative.WaitForSingleObject(_hProcess, 1000);
+                    if (waitResult != WindowsNative.WAIT_OBJECT_0)
+                    {
+                        _logger.Debug("WaitForSingleObject returned {0}", waitResult);
+                    }
 
                     if (WindowsNative.GetExitCodeProcess(_hProcess, out var code))
                     {
@@ -321,7 +329,11 @@ public class WindowsPtyProcess : IPtyProcess
         {
             if (_hProcess != IntPtr.Zero)
             {
-                WindowsNative.WaitForSingleObject(_hProcess, WindowsNative.INFINITE);
+                var waitResult = WindowsNative.WaitForSingleObject(_hProcess, WindowsNative.INFINITE);
+                if (waitResult != WindowsNative.WAIT_OBJECT_0)
+                {
+                    _logger.Debug("WaitForSingleObject returned {0}", waitResult);
+                }
                 if (WindowsNative.GetExitCodeProcess(_hProcess, out var code))
                 {
                     _exitCode = (int)code;

@@ -241,7 +241,10 @@ public class PosixPtyStream : Stream
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
-            PosixNative.close(_fd);
+            if (PosixNative.close(_fd) != 0)
+            {
+                // Ignored on dispose
+            }
         }
 
         base.Dispose(disposing);

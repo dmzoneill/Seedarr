@@ -500,10 +500,10 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return Array.Empty<byte>();
         }
 
-        IPAddress.TryParse(excludeIp, out var excludeAddr);
-        if (excludeAddr != null && excludeAddr.IsIPv4MappedToIPv6)
+        IPAddress excludeAddr = null;
+        if (!string.IsNullOrEmpty(excludeIp) && IPAddress.TryParse(excludeIp, out var parsedExcludeAddr))
         {
-            excludeAddr = excludeAddr.MapToIPv4();
+            excludeAddr = parsedExcludeAddr.IsIPv4MappedToIPv6 ? parsedExcludeAddr.MapToIPv4() : parsedExcludeAddr;
         }
 
         var chunks = new List<byte>();
@@ -551,7 +551,11 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return Array.Empty<byte>();
         }
 
-        IPAddress.TryParse(excludeIp, out var excludeAddr);
+        IPAddress excludeAddr = null;
+        if (!string.IsNullOrEmpty(excludeIp) && IPAddress.TryParse(excludeIp, out var parsedExcludeAddr))
+        {
+            excludeAddr = parsedExcludeAddr;
+        }
 
         var chunks = new List<byte>();
 
