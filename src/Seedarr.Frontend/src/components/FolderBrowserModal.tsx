@@ -223,7 +223,7 @@ export function FolderBrowserModal({
         <div
           style={{
             padding: "0.75rem 1.25rem",
-            backgroundColor: "var(--bg-secondary, #171b35)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
             borderBottom: "1px solid var(--border-light)",
             display: "flex",
             flexDirection: "column",

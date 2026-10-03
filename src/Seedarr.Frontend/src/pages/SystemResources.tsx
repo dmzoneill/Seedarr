@@ -205,7 +205,7 @@ export function SystemResources() {
             border: "1px solid var(--border-light)",
             boxShadow:
               "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
-            background: "var(--bg-secondary, #171b35)",
+            background: "var(--bg-secondary, #2a2620)",
           }}
         >
           <div
@@ -334,7 +334,7 @@ export function SystemResources() {
             border: "1px solid var(--border-light)",
             boxShadow:
               "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
-            background: "var(--bg-secondary, #171b35)",
+            background: "var(--bg-secondary, #2a2620)",
           }}
         >
           <div
@@ -453,7 +453,7 @@ export function SystemResources() {
             border: "1px solid var(--border-light)",
             boxShadow:
               "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
-            background: "var(--bg-secondary, #171b35)",
+            background: "var(--bg-secondary, #2a2620)",
           }}
         >
           <div
@@ -574,7 +574,7 @@ export function SystemResources() {
             border: "1px solid var(--border-light)",
             boxShadow:
               "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
-            background: "var(--bg-secondary, #171b35)",
+            background: "var(--bg-secondary, #2a2620)",
           }}
         >
           <div
@@ -1222,7 +1222,7 @@ export function SystemResources() {
               }
             }}
             style={{
-              backgroundColor: "var(--bg-secondary, #171b35)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               borderRadius: "8px",
               border: "1px solid var(--border-light)",
               maxWidth: "600px",
