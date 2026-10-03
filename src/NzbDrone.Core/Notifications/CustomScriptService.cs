@@ -1088,8 +1088,8 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                 }
                 finally
                 {
-                    _ = stdoutTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
-                    _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                    _ = stdoutTask.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                    _ = stderrTask.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
                 }
 
                 if (!string.IsNullOrWhiteSpace(stdout))
@@ -1334,8 +1334,8 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     }
                     finally
                     {
-                        _ = stdoutTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
-                        _ = stderrTask.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                        _ = stdoutTask.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                        _ = stderrTask.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
                     }
 
                     var exitCode = timedOut ? -1 : process.ExitCode;
