@@ -690,6 +690,144 @@ public class NotificationPayloadBuilderTest
     }
 
     [Test]
+    public void ResolveCustomHeaders_multiline_explicit_headers_injects_basic_auth_when_auth_not_present()
+    {
+        var settings = "{\"url\":\"https://example.com/webhook\",\"headers\":\"X-Custom-1: Value1\\r\\nX-Custom-2: Value2\",\"username\":\"admin\",\"password\":\"pass\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", settings);
+
+        Assert.That(headers, Is.Not.Null);
+        Assert.That(headers, Is.EqualTo("X-Custom-1: Value1\r\nX-Custom-2: Value2\nAuthorization: Basic YWRtaW46cGFzcw=="));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_multiline_explicit_headers_preserves_existing_authorization_colon_header()
+    {
+        var settings = "{\"url\":\"https://example.com/webhook\",\"headers\":\"X-Custom-1: Value1\\nAuthorization: Bearer secret-token\\nX-Custom-2: Value2\",\"username\":\"admin\",\"password\":\"pass\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", settings);
+
+        Assert.That(headers, Is.Not.Null);
+        Assert.That(headers, Is.EqualTo("X-Custom-1: Value1\nAuthorization: Bearer secret-token\nX-Custom-2: Value2"));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_multiline_explicit_headers_preserves_existing_authorization_equals_header()
+    {
+        var settings = "{\"url\":\"https://example.com/webhook\",\"headers\":\"X-Custom-1=Value1\\nAuthorization=Bearer secret-token\",\"username\":\"admin\",\"password\":\"pass\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", settings);
+
+        Assert.That(headers, Is.Not.Null);
+        Assert.That(headers, Is.EqualTo("X-Custom-1=Value1\nAuthorization=Bearer secret-token"));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_gotify_with_multiline_explicit_headers_appends_gotify_key()
+    {
+        var settings = "{\"url\":\"https://gotify.net\",\"appToken\":\"gotify-test-token\",\"headers\":\"X-Header-One: Value1\\nX-Header-Two: Value2\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Gotify", settings);
+
+        Assert.That(headers, Is.Not.Null);
+        Assert.That(headers, Is.EqualTo("X-Header-One: Value1\nX-Header-Two: Value2\nX-Gotify-Key: gotify-test-token"));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_gotify_with_empty_explicit_headers_returns_gotify_key_json()
+    {
+        var settings = "{\"url\":\"https://gotify.net\",\"appToken\":\"gotify-test-token\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Gotify", settings);
+
+        Assert.That(headers, Is.EqualTo("{\"X-Gotify-Key\":\"gotify-test-token\"}"));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_gotify_with_json_explicit_headers_merges_gotify_key()
+    {
+        var settings = "{\"url\":\"https://gotify.net\",\"appToken\":\"gotify-token\",\"headers\":{\"X-Custom\":\"Val\"}}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Gotify", settings);
+
+        Assert.That(headers, Is.Not.Null);
+        using var doc = JsonDocument.Parse(headers);
+        var root = doc.RootElement;
+        Assert.That(root.GetProperty("X-Custom").GetString(), Is.EqualTo("Val"));
+        Assert.That(root.GetProperty("X-Gotify-Key").GetString(), Is.EqualTo("gotify-token"));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_gotify_with_json_explicit_headers_preserves_existing_gotify_key()
+    {
+        var settings = "{\"url\":\"https://gotify.net\",\"appToken\":\"new-token\",\"headers\":{\"X-Gotify-Key\":\"existing-token\"}}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Gotify", settings);
+
+        Assert.That(headers, Is.Not.Null);
+        using var doc = JsonDocument.Parse(headers);
+        var root = doc.RootElement;
+        Assert.That(root.GetProperty("X-Gotify-Key").GetString(), Is.EqualTo("existing-token"));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_gotify_with_malformed_json_starting_with_brace_falls_back_to_append()
+    {
+        var settings = "{\"url\":\"https://gotify.net\",\"appToken\":\"gotify-token\",\"headers\":\"{malformed json\\nX-Hdr: 1\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Gotify", settings);
+
+        Assert.That(headers, Is.EqualTo("{malformed json\nX-Hdr: 1\nX-Gotify-Key: gotify-token"));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_webhook_with_malformed_json_starting_with_brace_falls_back_to_append()
+    {
+        var settings = "{\"url\":\"https://example.com\",\"headers\":\"{malformed json\\nX-Hdr: 1\",\"username\":\"user\",\"password\":\"pass\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", settings);
+
+        Assert.That(headers, Is.EqualTo("{malformed json\nX-Hdr: 1\nAuthorization: Basic dXNlcjpwYXNz"));
+    }
+
+    [TestCase("headers=X-Header-One%3A%20Val1%0AX-Header-Two%3A%20Val2&username=user&password=pass")]
+    [TestCase("customHeaders=X-Header-One%3A%20Val1%0AX-Header-Two%3A%20Val2&username=user&password=pass")]
+    [TestCase("custom_headers=X-Header-One%3A%20Val1%0AX-Header-Two%3A%20Val2&username=user&password=pass")]
+    public void ResolveCustomHeaders_query_string_format_extracts_and_appends_basic_auth(string queryString)
+    {
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", queryString);
+
+        Assert.That(headers, Is.Not.Null);
+        Assert.That(headers, Does.StartWith("X-Header-One: Val1\nX-Header-Two: Val2"));
+        Assert.That(headers, Does.EndWith("Authorization: Basic dXNlcjpwYXNz"));
+    }
+
+    [TestCase("Headers")]
+    [TestCase("customHeaders")]
+    [TestCase("CustomHeaders")]
+    [TestCase("custom_headers")]
+    public void ResolveCustomHeaders_supports_alternate_json_property_names(string propName)
+    {
+        var settings = $"{{\"url\":\"https://example.com\",\"{propName}\":\"X-Key: Value\",\"username\":\"user\",\"password\":\"pass\"}}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", settings);
+
+        Assert.That(headers, Is.EqualTo("X-Key: Value\nAuthorization: Basic dXNlcjpwYXNz"));
+    }
+
+    [TestCase("Pushover")]
+    [TestCase("Telegram")]
+    public void ResolveCustomHeaders_pushover_and_telegram_do_not_inject_basic_auth(string implementation)
+    {
+        var settings = $"{{\"url\":\"https://example.com\",\"headers\":\"X-Custom: Value\",\"username\":\"user\",\"password\":\"pass\"}}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders(implementation, settings);
+
+        Assert.That(headers, Is.EqualTo("X-Custom: Value"));
+    }
+
+    [TestCase(null, null)]
+    [TestCase("", null)]
+    [TestCase("   ", null)]
+    [TestCase("{\"headers\":\"{}\"}", null)]
+    [TestCase("{\"headers\":{}}", null)]
+    [TestCase("{\"headers\":[]}", null)]
+    public void ResolveCustomHeaders_handles_empty_cases(string settings, string expected)
+    {
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", settings);
+        Assert.That(headers, Is.EqualTo(expected));
+    }
+
+    [Test]
     public void BuildProviderPayload_webhook_returns_interpolated_template_when_configured()
     {
         var torrent = new Torrent
