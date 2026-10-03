@@ -272,8 +272,8 @@ export function LogViewer() {
               badgeBg = "rgba(245, 158, 11, 0.2)";
               badgeColor = "#f59e0b";
             } else if (log.level === "Info") {
-              badgeBg = "rgba(59, 130, 246, 0.2)";
-              badgeColor = "#3b82f6";
+              badgeBg = "var(--accent-bg-alert, rgba(200, 168, 78, 0.2))";
+              badgeColor = "var(--accent, #c8a84e)";
             }
 
             let catColor = "#888";

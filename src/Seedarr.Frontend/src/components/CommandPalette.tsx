@@ -851,7 +851,7 @@ export function CommandPalette({
                           fontWeight: 600,
                           fontSize: "0.88rem",
                           color: isSelected
-                            ? "var(--accent, #58a6ff)"
+                            ? "var(--accent, #c8a84e)"
                             : "var(--text-primary)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",

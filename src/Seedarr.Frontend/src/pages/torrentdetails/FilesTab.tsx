@@ -214,7 +214,7 @@ function FileTreeRow({
                     background: "none",
                     border: "none",
                     padding: 0,
-                    color: "var(--accent-color, #3498db)",
+                    color: "var(--accent, #c8a84e)",
                     textDecoration: "underline",
                     cursor: "pointer",
                     fontFamily: "inherit",
@@ -252,7 +252,7 @@ function FileTreeRow({
                     width: `${progressValue}%`,
                     height: "100%",
                     backgroundColor:
-                      progressValue >= 100 ? "#2ecc71" : "#3498db",
+                      progressValue >= 100 ? "#2ecc71" : "var(--accent, #c8a84e)",
                   }}
                 />
               </div>

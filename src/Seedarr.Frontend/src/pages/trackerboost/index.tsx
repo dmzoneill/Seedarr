@@ -235,7 +235,7 @@ export function TrackerBoost() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-value" style={{ color: "#38bdf8" }}>
+          <div className="stat-value" style={{ color: "var(--accent, #c8a84e)" }}>
             {status?.torrentsBoostedCount ?? 0}
           </div>
           <div className="stat-label">

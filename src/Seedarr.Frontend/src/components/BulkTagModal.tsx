@@ -274,7 +274,7 @@ export function BulkTagModal({
                           borderRadius: "4px",
                           cursor: isPending ? "not-allowed" : "pointer",
                           backgroundColor: isChecked
-                            ? "var(--bg-selected, rgba(59, 130, 246, 0.15))"
+                            ? "var(--accent-bg, rgb(200 168 78 / 15%))"
                             : "transparent",
                           transition: "background-color 0.15s ease",
                         }}
@@ -297,9 +297,9 @@ export function BulkTagModal({
                             borderRadius: "4px",
                             backgroundColor: tag.color
                               ? `${tag.color}22`
-                              : "rgba(59, 130, 246, 0.15)",
+                              : "var(--accent-bg, rgb(200 168 78 / 15%))",
                             color: tagColor,
-                            border: `1px solid ${tag.color ? `${tag.color}44` : "rgba(59, 130, 246, 0.3)"}`,
+                            border: `1px solid ${tag.color ? `${tag.color}44` : "var(--accent-border-alert, rgb(200 168 78 / 30%))"}`,
                             fontWeight: 500,
                           }}
                         >

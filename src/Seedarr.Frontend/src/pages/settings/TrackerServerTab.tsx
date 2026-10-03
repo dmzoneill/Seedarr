@@ -122,7 +122,7 @@ export function TrackerServerTab() {
                   style={{
                     fontSize: "1.5rem",
                     fontWeight: 700,
-                    color: "var(--color-primary, #3498db)",
+                    color: "var(--accent, #c8a84e)",
                   }}
                 >
                   {stats.totalPeers.toLocaleString()}

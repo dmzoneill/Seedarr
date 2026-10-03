@@ -298,7 +298,7 @@ function TorrentContextMenu({
                   padding: "0.4rem 0.75rem",
                   fontSize: "0.75rem",
                   fontWeight: 600,
-                  color: "var(--accent, #38bdf8)",
+                  color: "var(--accent, #c8a84e)",
                   borderBottom:
                     "1px solid var(--border, rgba(255, 255, 255, 0.1))",
                   marginBottom: "0.25rem",

@@ -361,8 +361,8 @@ export function SystemResources() {
                 fontSize: "0.75rem",
                 padding: "0.15rem 0.4rem",
                 borderRadius: "4px",
-                backgroundColor: "rgba(52, 152, 219, 0.15)",
-                color: "#3498db",
+                backgroundColor: "rgba(200, 168, 78, 0.15)",
+                color: "var(--accent, #c8a84e)",
               }}
             >
               {t("system.residentSet")}
@@ -403,7 +403,7 @@ export function SystemResources() {
               style={{
                 width: `${Math.min(100, Math.max(5, ((host?.managedHeapBytes ?? 0) / Math.max(1, host?.workingSetBytes ?? 1)) * 100))}%`,
                 height: "100%",
-                backgroundColor: "#3498db",
+                backgroundColor: "var(--accent, #c8a84e)",
                 transition: "width 0.4s ease",
               }}
             />

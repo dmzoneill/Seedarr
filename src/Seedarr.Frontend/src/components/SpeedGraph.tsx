@@ -57,7 +57,7 @@ const LERP_FACTOR = 0.15;
 export const CANVAS_HEIGHT = 180;
 export const CANVAS_PADDING = { top: 12, right: 24, bottom: 26, left: 75 };
 export const PADDING = CANVAS_PADDING;
-export const UPLOAD_COLOR = "#3498db";
+export const UPLOAD_COLOR = "#c8a84e";
 export const DOWNLOAD_COLOR = "#2ecc71";
 
 export const MAX_PHYSICAL_SPEED_BYTES_PER_SEC = 10 * 1024 * 1024 * 1024; // 10 GB/s
@@ -853,13 +853,13 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
         "rgba(46, 204, 113, 0.0)",
       );
 
-      // Upload channel: stroke #3498db (width 2), linear gradient fill #3498db (alpha 0.25 fading to 0.0)
+      // Upload channel: stroke #c8a84e (width 2), linear gradient fill #c8a84e (alpha 0.25 fading to 0.0)
       renderChannel(
         displayUpload,
         "uploadSpeed",
         UPLOAD_COLOR,
-        "rgba(52, 152, 219, 0.25)",
-        "rgba(52, 152, 219, 0.0)",
+        "rgba(200, 168, 78, 0.25)",
+        "rgba(200, 168, 78, 0.0)",
       );
 
       ctx.restore(); // restore clip

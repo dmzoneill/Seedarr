@@ -101,7 +101,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.equal(CANVAS_PADDING.bottom, 26);
       assert.equal(CANVAS_PADDING.left, 75);
       assert.equal(CANVAS_PADDING.right, 24);
-      assert.equal(UPLOAD_COLOR, "#3498db");
+      assert.equal(UPLOAD_COLOR, "#c8a84e");
       assert.equal(DOWNLOAD_COLOR, "#2ecc71");
     });
   });
@@ -157,8 +157,8 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
         "Must render Download legend label",
       );
       assert.ok(
-        html.includes("#3498db"),
-        "Must use upload channel color #3498db in legend indicator",
+        html.includes("#c8a84e"),
+        "Must use upload channel color #c8a84e in legend indicator",
       );
       assert.ok(
         html.includes("#2ecc71"),

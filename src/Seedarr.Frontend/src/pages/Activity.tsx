@@ -292,7 +292,7 @@ function Activity() {
           title="Upload/Download Ratio"
           value={formatRatio(currentRatio)}
           data={history.ratio}
-          color="#3498db"
+          color="#c8a84e"
           maxPoints={MAX_POINTS}
         />
         <LineChart
