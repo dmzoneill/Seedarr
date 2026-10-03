@@ -17,7 +17,7 @@ namespace NzbDrone.Core.Terminal;
 
 public class PosixPtyProcess : IPtyProcess
 {
-    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly int _pid;
     private readonly int _masterFd;
     private readonly PosixPtyStream _masterStream;
