@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.23](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.23) - 2026-10-03
+
+### 🔧 Maintenance & Improvements
+- style(theme): purge remaining Leecharr blue elements and align with Seedarr warm gold
+
 ## [v2.0.22](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.22) - 2026-10-03
 
 ### 🔧 Maintenance & Improvements
