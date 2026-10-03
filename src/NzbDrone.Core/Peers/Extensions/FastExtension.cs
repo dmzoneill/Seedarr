@@ -10,6 +10,7 @@ namespace NzbDrone.Core.Peers.Extensions;
 
 public enum FastMessageType : byte
 {
+    None = 0,
     SuggestPiece = 0x0D,
     HaveAll = 0x0E,
     HaveNone = 0x0F,

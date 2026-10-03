@@ -15,7 +15,7 @@ public class NoTorrentsCheck : IHealthCheck
     public HealthCheckResult Check()
     {
         var torrents = _torrentService.GetAll();
-        if (!torrents.Any())
+        if (torrents.Count == 0)
         {
             return HealthCheckResult.Notice("NoTorrents", "No torrents have been added. Add torrents to begin seeding.");
         }

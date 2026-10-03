@@ -260,7 +260,7 @@ public class StreamingPiecePicker : IPiecePicker
         {
             resolvedHead = zh;
         }
-        else if (_playbackPositions.Any())
+        else if (!_playbackPositions.IsEmpty)
         {
             resolvedHead = _playbackPositions.Values.First();
         }

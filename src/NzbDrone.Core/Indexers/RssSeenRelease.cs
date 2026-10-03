@@ -5,6 +5,7 @@ namespace NzbDrone.Core.Indexers;
 
 public enum RssSeenStatus
 {
+    None = 0,
     Grabbed = 1,
     Ignored = 2,
     Rejected = 3

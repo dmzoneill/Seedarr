@@ -457,7 +457,7 @@ public class TorrentService : ITorrentService,
 
         var canonicalBase = fullSavePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
-        if (files != null && files.Any())
+        if (files != null && files.Count > 0)
         {
             var deletedFileDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

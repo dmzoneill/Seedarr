@@ -15,7 +15,7 @@ public class NoActiveSeedingCheck : IHealthCheck
     public HealthCheckResult Check()
     {
         var torrents = _torrentService.GetAll();
-        if (torrents.Any() && !torrents.Any(t => t.Status == TorrentStatus.Seeding))
+        if (torrents.Count > 0 && !torrents.Any(t => t.Status == TorrentStatus.Seeding))
         {
             return HealthCheckResult.Notice("NoActiveSeeding", "No torrents are currently seeding.");
         }
