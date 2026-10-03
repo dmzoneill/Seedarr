@@ -130,7 +130,7 @@ public class SpeedHistoryService : BackgroundService, ISpeedHistoryService
                     _prevTorrentUploaded[torrent.Id] = torrent.Uploaded;
                     _prevTorrentDownloaded[torrent.Id] = torrent.Downloaded;
                 }
-                else if (!_prevTorrentUploaded.ContainsKey(torrent.Id) || isDelayedResume || !wasPrev)
+                else if (!_prevTorrentUploaded.TryGetValue(torrent.Id, out var prevUp) || isDelayedResume || !wasPrev)
                 {
                     // Newly tracked or resumed after delay: re-initialize baseline without byte delta spikes
                     _prevTorrentUploaded[torrent.Id] = torrent.Uploaded;
@@ -139,7 +139,6 @@ public class SpeedHistoryService : BackgroundService, ISpeedHistoryService
                 }
                 else
                 {
-                    var prevUp = _prevTorrentUploaded[torrent.Id];
                     var prevDl = _prevTorrentDownloaded[torrent.Id];
 
                     if (torrent.Uploaded >= prevUp)
