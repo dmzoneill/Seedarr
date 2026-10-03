@@ -7,8 +7,8 @@
   --bg-secondary: #2a2620;
   --bg-hover: #3a352e;
   --bg-hover-elevated: #4a4438;
-  --border: #2a3854;
-  --border-light: #222f46;
+  --border: #3a352e;
+  --border-light: #302c24;
   --text-primary: #f8f6f0;
   --text-secondary: #d4ccbe;
   --text-muted: #9c9484;
@@ -54,8 +54,8 @@
   --bg-secondary: #2a2620;
   --bg-hover: #3a352e;
   --bg-hover-elevated: #4a4438;
-  --border: #2a3854;
-  --border-light: #222f46;
+  --border: #3a352e;
+  --border-light: #302c24;
   --text-primary: #f8f6f0;
   --text-secondary: #d4ccbe;
   --text-muted: #9c9484;
@@ -69,8 +69,8 @@
   --bg-secondary: #fdfaf4;
   --bg-hover: #e8e0d0;
   --bg-hover-elevated: #ddd4c2;
-  --border: #cbd5e1;
-  --border-light: #e2e8f0;
+  --border: #d4cbb8;
+  --border-light: rgb(90 72 40 / 8%);
   --text-primary: #2a2418;
   --text-secondary: #4a4030;
   --text-muted: #7a7060;
@@ -126,16 +126,16 @@
 
 [data-theme="oled"] {
   --sidebar-bg: #000000;
-  --topbar-bg: #08090f;
+  --topbar-bg: #0d0c0a;
   --bg-primary: #000000;
-  --bg-secondary: #0a0b12;
-  --bg-card: #0a0b12;
-  --bg-card-hover: #141724;
-  --bg-hover: #141724;
-  --bg-hover-elevated: #141724;
-  --border: #24283b;
-  --border-light: #1a1e30;
-  --bg-lighter: #141724;
+  --bg-secondary: #12100d;
+  --bg-card: #12100d;
+  --bg-card-hover: #1c1915;
+  --bg-hover: #1c1915;
+  --bg-hover-elevated: #1c1915;
+  --border: #26221c;
+  --border-light: #1c1915;
+  --bg-lighter: #1c1915;
 }
 
 [data-theme="slate"] {
@@ -153,6 +153,20 @@
 }
 
 /* Brand Accent Palettes */
+[data-accent="auto"] {
+  --accent: #c8a84e;
+  --accent-gold: #c8a84e;
+  --accent-primary: #c8a84e;
+  --accent-bg: rgb(200 168 78 / 15%);
+  --accent-bg-subtle: rgb(200 168 78 / 6%);
+  --accent-bg-light: rgb(200 168 78 / 3%);
+  --accent-bg-medium: rgb(200 168 78 / 8%);
+  --accent-bg-toast: rgb(200 168 78 / 20%);
+  --accent-border-toast: rgb(200 168 78 / 50%);
+  --accent-border-alert: rgb(200 168 78 / 40%);
+  --accent-bg-alert: rgb(200 168 78 / 15%);
+}
+
 [data-accent="blue"] {
   --accent: #3b82f6;
   --accent-gold: #3b82f6;
@@ -3456,7 +3470,7 @@ body {
 }
 
 .event-level-info {
-  color: #3b82f6;
+  color: var(--accent);
 }
 
 .event-level-warn {
@@ -5212,7 +5226,7 @@ html[dir="rtl"] .topbar-getting-started {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--accent, #3b82f6);
+  background: var(--accent, #c8a84e);
   color: #fff;
   display: flex;
   align-items: center;

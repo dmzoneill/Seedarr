@@ -2085,7 +2085,7 @@ if (torrent && torrent.size > 5000000000) {
                     display: "flex",
                     flexDirection: "column",
                     justifyContent: "space-between",
-                    borderLeft: `4px solid ${script.isEnabled ? "var(--accent, #3b82f6)" : "var(--border, #444)"}`,
+                    borderLeft: `4px solid ${script.isEnabled ? "var(--accent, #c8a84e)" : "var(--border, #444)"}`,
                     padding: "1.25rem",
                   }}
                 >
@@ -2160,8 +2160,8 @@ if (torrent && torrent.size > 5000000000) {
                       <span
                         className="badge"
                         style={{
-                          backgroundColor: "rgba(59, 130, 246, 0.15)",
-                          color: "#60a5fa",
+                          backgroundColor: "var(--accent-bg, rgb(200 168 78 / 15%))",
+                          color: "var(--accent, #c8a84e)",
                         }}
                       >
                         {tTrigger(
@@ -2534,8 +2534,8 @@ if (torrent && torrent.size > 5000000000) {
                       <span
                         className="badge"
                         style={{
-                          backgroundColor: "rgba(59, 130, 246, 0.15)",
-                          color: "#60a5fa",
+                          backgroundColor: "var(--accent-bg, rgb(200 168 78 / 15%))",
+                          color: "var(--accent, #c8a84e)",
                         }}
                       >
                         v{template.version}
@@ -5251,7 +5251,7 @@ if (torrent && torrent.size > 5000000000) {
                 lineHeight: "1.4",
               }}
             >
-              <strong style={{ color: "#60a5fa" }}>
+              <strong style={{ color: "var(--accent, #c8a84e)" }}>
                 🔒 Disabled by Default:
               </strong>{" "}
               For security, this workflow will be installed in an inactive

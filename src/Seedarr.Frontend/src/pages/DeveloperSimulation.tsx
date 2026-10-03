@@ -64,8 +64,8 @@ export default function DeveloperSimulation() {
             style={{
               padding: "7px 14px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -103,8 +103,8 @@ export default function DeveloperSimulation() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
             <div
               style={{
-                backgroundColor: "var(--bg-surface, #1e293b)",
-                border: "1px solid var(--border, #334155)",
+                backgroundColor: "var(--bg-secondary, #2a2620)",
+                border: "1px solid var(--border, #3a352e)",
                 borderRadius: "8px",
                 padding: "16px",
               }}
@@ -120,14 +120,14 @@ export default function DeveloperSimulation() {
 
             <div
               style={{
-                backgroundColor: "var(--bg-surface, #1e293b)",
-                border: "1px solid var(--border, #334155)",
+                backgroundColor: "var(--bg-secondary, #2a2620)",
+                border: "1px solid var(--border, #3a352e)",
                 borderRadius: "8px",
                 padding: "16px",
               }}
             >
               <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "4px" }}>Distribution Algorithm</div>
-              <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "#60a5fa" }}>
+              <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--accent, #c8a84e)" }}>
                 {data.activeAlgorithm}
               </div>
               <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
@@ -137,8 +137,8 @@ export default function DeveloperSimulation() {
 
             <div
               style={{
-                backgroundColor: "var(--bg-surface, #1e293b)",
-                border: "1px solid var(--border, #334155)",
+                backgroundColor: "var(--bg-secondary, #2a2620)",
+                border: "1px solid var(--border, #3a352e)",
                 borderRadius: "8px",
                 padding: "16px",
               }}
@@ -154,8 +154,8 @@ export default function DeveloperSimulation() {
 
             <div
               style={{
-                backgroundColor: "var(--bg-surface, #1e293b)",
-                border: "1px solid var(--border, #334155)",
+                backgroundColor: "var(--bg-secondary, #2a2620)",
+                border: "1px solid var(--border, #3a352e)",
                 borderRadius: "8px",
                 padding: "16px",
               }}
@@ -174,8 +174,8 @@ export default function DeveloperSimulation() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
             <div
               style={{
-                backgroundColor: "var(--bg-surface, #1e293b)",
-                border: "1px solid var(--border, #334155)",
+                backgroundColor: "var(--bg-secondary, #2a2620)",
+                border: "1px solid var(--border, #3a352e)",
                 borderRadius: "8px",
                 padding: "16px",
               }}
@@ -192,7 +192,7 @@ export default function DeveloperSimulation() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 10px", backgroundColor: "var(--bg-primary)", borderRadius: "4px" }}>
                   <span>Total Downloaded (Simulated):</span>
-                  <span style={{ fontWeight: 700, color: "#60a5fa", fontFamily: "monospace" }}>
+                  <span style={{ fontWeight: 700, color: "var(--accent, #c8a84e)", fontFamily: "monospace" }}>
                     {formatBytes(data.totalDownloadedBytes)}
                   </span>
                 </div>
@@ -209,8 +209,8 @@ export default function DeveloperSimulation() {
 
             <div
               style={{
-                backgroundColor: "var(--bg-surface, #1e293b)",
-                border: "1px solid var(--border, #334155)",
+                backgroundColor: "var(--bg-secondary, #2a2620)",
+                border: "1px solid var(--border, #3a352e)",
                 borderRadius: "8px",
                 padding: "16px",
               }}
@@ -225,8 +225,8 @@ export default function DeveloperSimulation() {
                     style={{
                       padding: "6px 12px",
                       borderRadius: "6px",
-                      border: "1px solid var(--border, #334155)",
-                      backgroundColor: "var(--bg-primary, #0f172a)",
+                      border: "1px solid var(--border, #3a352e)",
+                      backgroundColor: "var(--bg-primary, #222018)",
                       fontSize: "0.8rem",
                       fontWeight: 600,
                       color: "#e2e8f0",
@@ -242,8 +242,8 @@ export default function DeveloperSimulation() {
           {/* MCP Protocol Diagnostics */}
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               padding: "16px",
             }}
@@ -277,8 +277,8 @@ export default function DeveloperSimulation() {
                   style={{
                     padding: "4px 10px",
                     borderRadius: "4px",
-                    backgroundColor: "rgba(59, 130, 246, 0.15)",
-                    color: "#60a5fa",
+                    backgroundColor: "var(--accent-bg, rgb(200 168 78 / 15%))",
+                    color: "var(--accent, #c8a84e)",
                     fontFamily: "monospace",
                     fontSize: "0.78rem",
                   }}

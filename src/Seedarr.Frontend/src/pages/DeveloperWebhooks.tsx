@@ -95,8 +95,8 @@ export default function DeveloperWebhooks() {
         {/* Templates List */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "14px",
             display: "flex",
@@ -123,8 +123,8 @@ export default function DeveloperWebhooks() {
                   style={{
                     padding: "10px",
                     borderRadius: "6px",
-                    border: `1px solid ${isSelected ? "var(--accent, #3b82f6)" : "var(--border, #334155)"}`,
-                    backgroundColor: isSelected ? "rgba(59, 130, 246, 0.15)" : "var(--bg-primary, #0f172a)",
+                    border: `1px solid ${isSelected ? "var(--accent, #c8a84e)" : "var(--border, #3a352e)"}`,
+                    backgroundColor: isSelected ? "var(--accent-bg, rgb(200 168 78 / 15%))" : "var(--bg-primary, #222018)",
                     cursor: "pointer",
                   }}
                 >
@@ -154,8 +154,8 @@ export default function DeveloperWebhooks() {
         {/* JSON Payload Editor */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "14px",
             display: "flex",
@@ -172,7 +172,7 @@ export default function DeveloperWebhooks() {
                 padding: "6px 14px",
                 borderRadius: "6px",
                 border: "none",
-                backgroundColor: "var(--accent, #3b82f6)",
+                backgroundColor: "var(--accent, #c8a84e)",
                 color: "#fff",
                 fontSize: "0.8rem",
                 fontWeight: 600,
@@ -191,8 +191,8 @@ export default function DeveloperWebhooks() {
               width: "100%",
               padding: "10px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-primary, #0f172a)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-primary, #222018)",
               color: "#f8fafc",
               fontFamily: "monospace",
               fontSize: "0.8rem",
@@ -205,8 +205,8 @@ export default function DeveloperWebhooks() {
         {/* Simulation Output Trace */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "14px",
             display: "flex",
@@ -218,8 +218,8 @@ export default function DeveloperWebhooks() {
           <div
             style={{
               flex: 1,
-              backgroundColor: "var(--bg-primary, #0f172a)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-primary, #222018)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "6px",
               padding: "10px",
               overflowY: "auto",
@@ -264,8 +264,8 @@ export default function DeveloperWebhooks() {
       {/* Inbound Webhook Receipts Log */}
       <div
         style={{
-          backgroundColor: "var(--bg-surface, #1e293b)",
-          border: "1px solid var(--border, #334155)",
+          backgroundColor: "var(--bg-secondary, #2a2620)",
+          border: "1px solid var(--border, #3a352e)",
           borderRadius: "8px",
           padding: "14px",
         }}
@@ -275,7 +275,7 @@ export default function DeveloperWebhooks() {
         </h3>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem", textAlign: "left" }}>
           <thead>
-            <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #334155)" }}>
+            <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #3a352e)" }}>
               <th style={{ padding: "8px 10px" }}>Time (UTC)</th>
               <th style={{ padding: "8px 10px" }}>Source</th>
               <th style={{ padding: "8px 10px" }}>Event Type</th>
@@ -293,13 +293,13 @@ export default function DeveloperWebhooks() {
               </tr>
             ) : (
               history.map((h) => (
-                <tr key={h.id} style={{ borderBottom: "1px solid var(--border, #334155)" }}>
+                <tr key={h.id} style={{ borderBottom: "1px solid var(--border, #3a352e)" }}>
                   <td style={{ padding: "8px 10px", fontFamily: "monospace", color: "var(--text-secondary)" }}>
                     {new Date(h.timestampUtc).toLocaleTimeString()}
                   </td>
                   <td style={{ padding: "8px 10px", fontWeight: 600 }}>{h.source}</td>
                   <td style={{ padding: "8px 10px" }}>
-                    <span style={{ padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(59, 130, 246, 0.15)", color: "#60a5fa" }}>
+                    <span style={{ padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--accent-bg, rgb(200 168 78 / 15%))", color: "var(--accent, #c8a84e)" }}>
                       {h.eventType}
                     </span>
                   </td>

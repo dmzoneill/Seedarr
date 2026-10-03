@@ -93,8 +93,8 @@ export default function DeveloperEvents() {
               gap: "6px",
               padding: "7px 14px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: isPaused ? "#f59e0b" : "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: isPaused ? "#f59e0b" : "var(--bg-secondary, #2a2620)",
               color: isPaused ? "#000" : "#fff",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -113,7 +113,7 @@ export default function DeveloperEvents() {
               padding: "7px 14px",
               borderRadius: "6px",
               border: "none",
-              backgroundColor: "var(--accent, #3b82f6)",
+              backgroundColor: "var(--accent, #c8a84e)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -128,8 +128,8 @@ export default function DeveloperEvents() {
             style={{
               padding: "7px 12px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               color: "var(--text-secondary, #94a3b8)",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -167,8 +167,8 @@ export default function DeveloperEvents() {
             flex: 1,
             padding: "8px 12px",
             borderRadius: "6px",
-            border: "1px solid var(--border, #334155)",
-            backgroundColor: "var(--bg-surface, #1e293b)",
+            border: "1px solid var(--border, #3a352e)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
             color: "var(--text-primary, #f8fafc)",
             fontSize: "0.85rem",
           }}
@@ -182,8 +182,8 @@ export default function DeveloperEvents() {
       <div style={{ display: "grid", gridTemplateColumns: selectedEvent ? "1fr 480px" : "1fr", gap: "16px" }}>
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             overflow: "hidden",
           }}
@@ -191,7 +191,7 @@ export default function DeveloperEvents() {
           <div style={{ maxHeight: "calc(100vh - 280px)", overflowY: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
               <thead>
-                <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #334155)" }}>
+                <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #3a352e)" }}>
                   <th style={{ padding: "10px 12px", width: "160px" }}>Time (UTC)</th>
                   <th style={{ padding: "10px 12px" }}>Event Name</th>
                   <th style={{ padding: "10px 12px" }}>Source Namespace</th>
@@ -220,8 +220,8 @@ export default function DeveloperEvents() {
                         key={ev.id}
                         onClick={() => setSelectedEvent(ev)}
                         style={{
-                          borderBottom: "1px solid var(--border, #334155)",
-                          backgroundColor: isSelected ? "rgba(59, 130, 246, 0.15)" : "transparent",
+                          borderBottom: "1px solid var(--border, #3a352e)",
+                          backgroundColor: isSelected ? "var(--accent-bg, rgb(200 168 78 / 15%))" : "transparent",
                           cursor: "pointer",
                         }}
                       >
@@ -233,8 +233,8 @@ export default function DeveloperEvents() {
                             style={{
                               padding: "2px 8px",
                               borderRadius: "4px",
-                              backgroundColor: ev.eventName.includes("Failed") ? "rgba(239, 68, 68, 0.2)" : "rgba(59, 130, 246, 0.2)",
-                              color: ev.eventName.includes("Failed") ? "#f87171" : "#60a5fa",
+                              backgroundColor: ev.eventName.includes("Failed") ? "rgba(239, 68, 68, 0.2)" : "var(--accent-bg, rgb(200 168 78 / 15%))",
+                              color: ev.eventName.includes("Failed") ? "#f87171" : "var(--accent, #c8a84e)",
                               fontSize: "0.78rem",
                             }}
                           >
@@ -267,8 +267,8 @@ export default function DeveloperEvents() {
                             style={{
                               padding: "4px 8px",
                               borderRadius: "4px",
-                              border: "1px solid var(--border, #334155)",
-                              backgroundColor: "var(--bg-primary, #0f172a)",
+                              border: "1px solid var(--border, #3a352e)",
+                              backgroundColor: "var(--bg-primary, #222018)",
                               color: "#fff",
                               fontSize: "0.75rem",
                               cursor: "pointer",
@@ -290,8 +290,8 @@ export default function DeveloperEvents() {
         {selectedEvent && (
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               padding: "16px",
               display: "flex",
@@ -328,8 +328,8 @@ export default function DeveloperEvents() {
                 style={{
                   padding: "3px 8px",
                   borderRadius: "4px",
-                  border: "1px solid var(--border, #334155)",
-                  backgroundColor: "var(--bg-primary, #0f172a)",
+                  border: "1px solid var(--border, #3a352e)",
+                  backgroundColor: "var(--bg-primary, #222018)",
                   color: "#fff",
                   fontSize: "0.72rem",
                   cursor: "pointer",
@@ -344,8 +344,8 @@ export default function DeveloperEvents() {
                 flex: 1,
                 margin: 0,
                 padding: "12px",
-                backgroundColor: "var(--bg-primary, #0f172a)",
-                border: "1px solid var(--border, #334155)",
+                backgroundColor: "var(--bg-primary, #222018)",
+                border: "1px solid var(--border, #3a352e)",
                 borderRadius: "6px",
                 overflow: "auto",
                 fontSize: "0.78rem",
@@ -384,8 +384,8 @@ export default function DeveloperEvents() {
         >
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               padding: "20px",
               width: "560px",
@@ -417,8 +417,8 @@ export default function DeveloperEvents() {
                     width: "100%",
                     padding: "8px 12px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border, #334155)",
-                    backgroundColor: "var(--bg-primary, #0f172a)",
+                    border: "1px solid var(--border, #3a352e)",
+                    backgroundColor: "var(--bg-primary, #222018)",
                     color: "#fff",
                     fontSize: "0.85rem",
                   }}
@@ -438,8 +438,8 @@ export default function DeveloperEvents() {
                     width: "100%",
                     padding: "8px 12px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border, #334155)",
-                    backgroundColor: "var(--bg-primary, #0f172a)",
+                    border: "1px solid var(--border, #3a352e)",
+                    backgroundColor: "var(--bg-primary, #222018)",
                     color: "#fff",
                     fontFamily: "monospace",
                     fontSize: "0.82rem",
@@ -454,7 +454,7 @@ export default function DeveloperEvents() {
                   style={{
                     padding: "8px 14px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border, #334155)",
+                    border: "1px solid var(--border, #3a352e)",
                     backgroundColor: "transparent",
                     color: "var(--text-secondary)",
                     cursor: "pointer",
@@ -469,7 +469,7 @@ export default function DeveloperEvents() {
                     padding: "8px 16px",
                     borderRadius: "6px",
                     border: "none",
-                    backgroundColor: "var(--accent, #3b82f6)",
+                    backgroundColor: "var(--accent, #c8a84e)",
                     color: "#fff",
                     cursor: "pointer",
                     fontSize: "0.85rem",

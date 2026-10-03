@@ -155,8 +155,8 @@ export default function DeveloperRepl() {
             style={{
               padding: "7px 14px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               color: "#f87171",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -199,8 +199,8 @@ export default function DeveloperRepl() {
             style={{
               padding: "5px 12px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.78rem",
@@ -216,8 +216,8 @@ export default function DeveloperRepl() {
         {/* Left: Code Editor */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "16px",
             display: "flex",
@@ -247,8 +247,8 @@ export default function DeveloperRepl() {
               width: "100%",
               padding: "12px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-primary, #0f172a)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-primary, #222018)",
               color: "#34d399",
               fontFamily: "monospace",
               fontSize: "0.83rem",
@@ -273,7 +273,7 @@ export default function DeveloperRepl() {
                 padding: "8px 18px",
                 borderRadius: "6px",
                 border: "none",
-                backgroundColor: "var(--accent, #3b82f6)",
+                backgroundColor: "var(--accent, #c8a84e)",
                 color: "#fff",
                 cursor: isExecuting || !code.trim() ? "not-allowed" : "pointer",
                 fontSize: "0.83rem",
@@ -289,8 +289,8 @@ export default function DeveloperRepl() {
         {/* Right: Output Pane */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "16px",
             display: "flex",
@@ -310,7 +310,7 @@ export default function DeveloperRepl() {
                   padding: "4px 10px",
                   borderRadius: "4px",
                   border: "none",
-                  backgroundColor: activeTab === "result" ? "var(--accent, #3b82f6)" : "transparent",
+                  backgroundColor: activeTab === "result" ? "var(--accent, #c8a84e)" : "transparent",
                   color: activeTab === "result" ? "#fff" : "var(--text-secondary, #94a3b8)",
                   cursor: "pointer",
                   fontSize: "0.78rem",
@@ -328,7 +328,7 @@ export default function DeveloperRepl() {
                   padding: "4px 10px",
                   borderRadius: "4px",
                   border: "none",
-                  backgroundColor: activeTab === "logs" ? "var(--accent, #3b82f6)" : "transparent",
+                  backgroundColor: activeTab === "logs" ? "var(--accent, #c8a84e)" : "transparent",
                   color: activeTab === "logs" ? "#fff" : "var(--text-secondary, #94a3b8)",
                   cursor: "pointer",
                   fontSize: "0.78rem",
@@ -353,8 +353,8 @@ export default function DeveloperRepl() {
               flex: 1,
               padding: "12px",
               borderRadius: "6px",
-              backgroundColor: "var(--bg-primary, #0f172a)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-primary, #222018)",
+              border: "1px solid var(--border, #3a352e)",
               overflowY: "auto",
               boxSizing: "border-box",
             }}
@@ -382,7 +382,7 @@ export default function DeveloperRepl() {
 
       {/* Execution History */}
       {history.length > 0 && (
-        <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border, #334155)" }}>
+        <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border, #3a352e)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
             <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
               <span>📜</span> Command History
@@ -404,8 +404,8 @@ export default function DeveloperRepl() {
 
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               overflow: "hidden",
             }}
@@ -430,7 +430,7 @@ export default function DeveloperRepl() {
                   alignItems: "center",
                   fontSize: "0.78rem",
                   cursor: "pointer",
-                  borderBottom: "1px solid var(--border, #334155)",
+                  borderBottom: "1px solid var(--border, #3a352e)",
                 }}
                 title="Click to reload this code into the editor"
               >

@@ -261,7 +261,7 @@ export function BulkTagModal({
                 ) : (
                   filteredTags.map((tag) => {
                     const isChecked = selectedTagIds.has(tag.id);
-                    const tagColor = tag.color || "var(--primary, #3b82f6)";
+                    const tagColor = tag.color || "var(--accent, #c8a84e)";
                     return (
                       <label
                         key={tag.id}

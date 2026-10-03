@@ -84,8 +84,8 @@ export default function DeveloperConfig() {
             style={{
               padding: "7px 14px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: unmask ? "#ef4444" : "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: unmask ? "#ef4444" : "var(--bg-secondary, #2a2620)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -101,7 +101,7 @@ export default function DeveloperConfig() {
               padding: "7px 14px",
               borderRadius: "6px",
               border: "none",
-              backgroundColor: "var(--accent, #3b82f6)",
+              backgroundColor: "var(--accent, #c8a84e)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -137,8 +137,8 @@ export default function DeveloperConfig() {
             style={{
               padding: "6px 14px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: activeTab === "config" ? "var(--accent, #3b82f6)" : "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: activeTab === "config" ? "var(--accent, #c8a84e)" : "var(--bg-secondary, #2a2620)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.82rem",
@@ -152,8 +152,8 @@ export default function DeveloperConfig() {
             style={{
               padding: "6px 14px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: activeTab === "env" ? "var(--accent, #3b82f6)" : "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: activeTab === "env" ? "var(--accent, #c8a84e)" : "var(--bg-secondary, #2a2620)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.82rem",
@@ -167,8 +167,8 @@ export default function DeveloperConfig() {
             style={{
               padding: "6px 14px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: activeTab === "host" ? "var(--accent, #3b82f6)" : "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: activeTab === "host" ? "var(--accent, #c8a84e)" : "var(--bg-secondary, #2a2620)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.82rem",
@@ -188,8 +188,8 @@ export default function DeveloperConfig() {
             style={{
               padding: "6px 12px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               color: "#fff",
               fontSize: "0.8rem",
               width: "240px",
@@ -202,15 +202,15 @@ export default function DeveloperConfig() {
       {activeTab === "config" && (
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             overflow: "hidden",
           }}
         >
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
             <thead>
-              <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #334155)" }}>
+              <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #3a352e)" }}>
                 <th style={{ padding: "10px 14px", width: "280px" }}>Configuration Key</th>
                 <th style={{ padding: "10px 14px" }}>Resolved Value</th>
                 <th style={{ padding: "10px 14px", width: "120px" }}>Source</th>
@@ -224,7 +224,7 @@ export default function DeveloperConfig() {
                 <tr><td colSpan={4} style={{ padding: "30px", textAlign: "center", color: "var(--text-secondary)" }}>No keys matching search.</td></tr>
               ) : (
                 filteredEntries.map((e) => (
-                  <tr key={e.key} style={{ borderBottom: "1px solid var(--border, #334155)" }}>
+                  <tr key={e.key} style={{ borderBottom: "1px solid var(--border, #3a352e)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600, fontFamily: "monospace" }}>
                       {e.key}
                       {e.isSecret && (
@@ -240,8 +240,8 @@ export default function DeveloperConfig() {
                           padding: "2px 6px",
                           borderRadius: "4px",
                           fontSize: "0.72rem",
-                          backgroundColor: e.source === "Database" ? "rgba(59, 130, 246, 0.15)" : "rgba(16, 185, 129, 0.15)",
-                          color: e.source === "Database" ? "#60a5fa" : "#34d399",
+                          backgroundColor: e.source === "Database" ? "var(--accent-bg, rgb(200 168 78 / 15%))" : "rgba(16, 185, 129, 0.15)",
+                          color: e.source === "Database" ? "var(--accent, #c8a84e)" : "#34d399",
                         }}
                       >
                         {e.source}
@@ -253,8 +253,8 @@ export default function DeveloperConfig() {
                         style={{
                           padding: "3px 8px",
                           borderRadius: "4px",
-                          border: "1px solid var(--border, #334155)",
-                          backgroundColor: "var(--bg-primary, #0f172a)",
+                          border: "1px solid var(--border, #3a352e)",
+                          backgroundColor: "var(--bg-primary, #222018)",
                           color: "#fff",
                           fontSize: "0.72rem",
                           cursor: "pointer",
@@ -275,15 +275,15 @@ export default function DeveloperConfig() {
       {activeTab === "env" && (
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             overflow: "hidden",
           }}
         >
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
             <thead>
-              <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #334155)" }}>
+              <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #3a352e)" }}>
                 <th style={{ padding: "10px 14px", width: "320px" }}>Environment Variable</th>
                 <th style={{ padding: "10px 14px" }}>Value</th>
                 <th style={{ padding: "10px 14px", textAlign: "right", width: "80px" }}>Action</th>
@@ -294,7 +294,7 @@ export default function DeveloperConfig() {
                 <tr><td colSpan={3} style={{ padding: "30px", textAlign: "center", color: "var(--text-secondary)" }}>No environment variables matching search.</td></tr>
               ) : (
                 envEntries.map(([k, v]) => (
-                  <tr key={k} style={{ borderBottom: "1px solid var(--border, #334155)" }}>
+                  <tr key={k} style={{ borderBottom: "1px solid var(--border, #3a352e)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600, fontFamily: "monospace", color: "#38bdf8" }}>{k}</td>
                     <td style={{ padding: "8px 14px", fontFamily: "monospace", color: "#fff", wordBreak: "break-all" }}>{v}</td>
                     <td style={{ padding: "8px 14px", textAlign: "right" }}>
@@ -303,8 +303,8 @@ export default function DeveloperConfig() {
                         style={{
                           padding: "3px 8px",
                           borderRadius: "4px",
-                          border: "1px solid var(--border, #334155)",
-                          backgroundColor: "var(--bg-primary, #0f172a)",
+                          border: "1px solid var(--border, #3a352e)",
+                          backgroundColor: "var(--bg-primary, #222018)",
                           color: "#fff",
                           fontSize: "0.72rem",
                           cursor: "pointer",
@@ -326,8 +326,8 @@ export default function DeveloperConfig() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               padding: "16px",
             }}
@@ -347,8 +347,8 @@ export default function DeveloperConfig() {
 
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               padding: "16px",
             }}
