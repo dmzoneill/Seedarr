@@ -119,33 +119,34 @@ interface SubNavItem {
   path: string;
   label: string;
   labelKey?: string;
+  icon?: string;
 }
 
 const systemSubItems: SubNavItem[] = [
-  { path: "/system/status", label: "Status" },
-  { path: "/system/resources", label: "Resources", labelKey: "nav.resources" },
-  { path: "/system/tasks", label: "Tasks" },
-  { path: "/system/backup", label: "Backup" },
-  { path: "/system/updates", label: "Updates" },
-  { path: "/system/events", label: "Events" },
-  { path: "/system/logfiles", label: "Log Files" },
-  { path: "/system/network", label: "Network" },
+  { path: "/system/status", label: "Status", icon: "🟢" },
+  { path: "/system/resources", label: "Resources", labelKey: "nav.resources", icon: "📊" },
+  { path: "/system/tasks", label: "Tasks", icon: "⏱️" },
+  { path: "/system/backup", label: "Backup", icon: "💾" },
+  { path: "/system/updates", label: "Updates", icon: "🔄" },
+  { path: "/system/events", label: "Events", icon: "📜" },
+  { path: "/system/logfiles", label: "Log Files", icon: "📋" },
+  { path: "/system/network", label: "Network", icon: "🌐" },
 ];
 
 const developerSubItems: SubNavItem[] = [
-  { path: "/developer/database", label: "Database", labelKey: "nav.database" },
-  { path: "/developer/testing", label: "Testing", labelKey: "nav.testing" },
-  { path: "/developer/repl", label: "REPL", labelKey: "nav.repl" },
-  { path: "/developer/debugger", label: "Debugger", labelKey: "nav.debugger" },
-  { path: "/developer/events", label: "Event Bus", labelKey: "nav.events" },
-  { path: "/developer/commands", label: "Commands", labelKey: "nav.commands" },
-  { path: "/developer/network", label: "Network", labelKey: "nav.network" },
-  { path: "/developer/webhooks", label: "Webhooks", labelKey: "nav.webhooks" },
-  { path: "/developer/config", label: "Config & Env", labelKey: "nav.config" },
-  { path: "/developer/simulation", label: "Simulation Lab", labelKey: "nav.simulation" },
-  { path: "/developer/terminal", label: "Terminal", labelKey: "nav.terminal" },
-  { path: "/developer/api", label: "API Reference", labelKey: "nav.apiReference" },
-  { path: "/developer/diagnostics", label: "Diagnostics", labelKey: "nav.diagnostics" },
+  { path: "/developer/database", label: "Database", labelKey: "nav.database", icon: "🗄️" },
+  { path: "/developer/testing", label: "Testing", labelKey: "nav.testing", icon: "🧪" },
+  { path: "/developer/repl", label: "REPL", labelKey: "nav.repl", icon: "⚡" },
+  { path: "/developer/debugger", label: "Debugger", labelKey: "nav.debugger", icon: "🐞" },
+  { path: "/developer/events", label: "Event Bus", labelKey: "nav.events", icon: "📡" },
+  { path: "/developer/commands", label: "Commands", labelKey: "nav.commands", icon: "⌨️" },
+  { path: "/developer/network", label: "Network", labelKey: "nav.network", icon: "🌐" },
+  { path: "/developer/webhooks", label: "Webhooks", labelKey: "nav.webhooks", icon: "🪝" },
+  { path: "/developer/config", label: "Config & Env", labelKey: "nav.config", icon: "⚙️" },
+  { path: "/developer/simulation", label: "Simulation Lab", labelKey: "nav.simulation", icon: "🎲" },
+  { path: "/developer/terminal", label: "Terminal", labelKey: "nav.terminal", icon: "💻" },
+  { path: "/developer/api", label: "API Reference", labelKey: "nav.apiReference", icon: "📖" },
+  { path: "/developer/diagnostics", label: "Diagnostics", labelKey: "nav.diagnostics", icon: "🛠️" },
 ];
 
 function LegacyTorrentRedirect() {
@@ -924,6 +925,7 @@ function App() {
                 }`}
                 title={t("nav.trackerInbuilt", undefined, "Inbuilt")}
               >
+                <span>📡</span>
                 <span>{t("nav.trackerInbuilt", undefined, "Inbuilt")}</span>
               </NavLink>
               <NavLink
@@ -939,6 +941,7 @@ function App() {
                 }`}
                 title={t("nav.trackerBoost", undefined, "Tracker Boost")}
               >
+                <span>⚡</span>
                 <span>{t("nav.trackerBoost", undefined, "Tracker Boost")}</span>
               </NavLink>
               <NavLink
@@ -951,6 +954,7 @@ function App() {
                 }`}
                 title={t("nav.trackerMetrics", undefined, "Tracker Metrics")}
               >
+                <span>📈</span>
                 <span>
                   {t("nav.trackerMetrics", undefined, "Tracker Metrics")}
                 </span>
@@ -1132,6 +1136,7 @@ function App() {
                   className="sidebar-nav-item sidebar-nav-sub"
                   title={labelText}
                 >
+                  {item.icon && <span>{item.icon}</span>}
                   <span>{labelText}</span>
                 </NavLink>
               );
@@ -1156,6 +1161,7 @@ function App() {
                   className="sidebar-nav-item sidebar-nav-sub"
                   title={labelText}
                 >
+                  {item.icon && <span>{item.icon}</span>}
                   <span>{labelText}</span>
                 </NavLink>
               );
