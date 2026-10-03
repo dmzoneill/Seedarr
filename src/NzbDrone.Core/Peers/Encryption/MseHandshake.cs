@@ -127,10 +127,7 @@ public class MseHandshake
         Stream stream,
         Func<byte[], Torrent> infoHashValidator)
     {
-        if (infoHashValidator == null)
-        {
-            throw new ArgumentNullException(nameof(infoHashValidator));
-        }
+        ArgumentNullException.ThrowIfNull(infoHashValidator);
 
         return NegotiateIncoming(stream, skeyHash => infoHashValidator(skeyHash) != null);
     }
@@ -326,10 +323,7 @@ public class MseHandshake
         Func<byte[], Torrent> infoHashValidator,
         CancellationToken cancellationToken = default)
     {
-        if (infoHashValidator == null)
-        {
-            throw new ArgumentNullException(nameof(infoHashValidator));
-        }
+        ArgumentNullException.ThrowIfNull(infoHashValidator);
 
         return NegotiateIncomingAsync(stream, skeyHash => infoHashValidator(skeyHash) != null, cancellationToken);
     }
@@ -339,10 +333,7 @@ public class MseHandshake
         Func<byte[], bool> infoHashValidator,
         CancellationToken cancellationToken = default)
     {
-        if (infoHashValidator == null)
-        {
-            throw new ArgumentNullException(nameof(infoHashValidator));
-        }
+        ArgumentNullException.ThrowIfNull(infoHashValidator);
 
         _keyDerivation = KeyPool?.Rent() ?? new MseKeyDerivation();
 

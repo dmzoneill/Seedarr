@@ -53,10 +53,7 @@ public class FileHandlePool : IFileHandlePool
 
         lock (_lock)
         {
-            if (_disposed)
-            {
-                throw new ObjectDisposedException(nameof(FileHandlePool));
-            }
+            ObjectDisposedException.ThrowIf(_disposed, this);
 
             if (_cache.TryGetValue(normalizedPath, out var node))
             {

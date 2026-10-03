@@ -161,7 +161,7 @@ public class IdentityProviderService : IIdentityProviderService
                 IdentityProviderType.Oidc => !string.IsNullOrWhiteSpace(provider.IssuerUrl)
                     ? (provider.IssuerUrl.Trim().TrimEnd('/').EndsWith(".well-known/openid-configuration", StringComparison.OrdinalIgnoreCase)
                         ? provider.IssuerUrl.Trim()
-                        : (provider.IssuerUrl.Trim().EndsWith("/") ? provider.IssuerUrl.Trim() + ".well-known/openid-configuration" : provider.IssuerUrl.Trim() + "/.well-known/openid-configuration"))
+                        : (provider.IssuerUrl.Trim().EndsWith('/') ? provider.IssuerUrl.Trim() + ".well-known/openid-configuration" : provider.IssuerUrl.Trim() + "/.well-known/openid-configuration"))
                     : provider.MetadataUrl,
                 IdentityProviderType.Saml => provider.MetadataUrl,
                 _ => provider.IssuerUrl,

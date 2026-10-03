@@ -581,7 +581,7 @@ public class NotificationController : Controller
         }
 
         var trimmed = settings.Trim();
-        if (trimmed.StartsWith("{"))
+        if (trimmed.StartsWith('{'))
         {
             try
             {
@@ -636,8 +636,8 @@ public class NotificationController : Controller
             return existingSettings;
         }
 
-        var isIncomingJson = trimmedIncoming.StartsWith("{");
-        var isExistingJson = trimmedExisting.StartsWith("{");
+        var isIncomingJson = trimmedIncoming.StartsWith('{');
+        var isExistingJson = trimmedExisting.StartsWith('{');
 
         if (isIncomingJson && isExistingJson)
         {
@@ -925,7 +925,7 @@ public class NotificationController : Controller
             return string.Empty;
         }
 
-        if (settings.TrimStart().StartsWith("{"))
+        if (settings.TrimStart().StartsWith('{'))
         {
             try
             {

@@ -23,6 +23,8 @@ namespace Seedarr.Api.V1.System;
 [V1ApiController("system/developer")]
 public class SystemDeveloperController : Controller
 {
+    private static readonly JsonSerializerOptions IndentedJsonOptions = new() { WriteIndented = true };
+
     private static readonly HashSet<string> BaseCommandProperties = new(StringComparer.OrdinalIgnoreCase)
     {
         "Id", "Name", "Message", "Body", "Priority", "Status", "QueuedAt", "StartedAt", "EndedAt",
@@ -338,7 +340,7 @@ public class SystemDeveloperController : Controller
                     release = new { releaseTitle = "Breaking.Bad.S01E01.1080p.BluRay.x264-ROVERS", indexer = "Prowlarr", size = 1532918272 },
                     downloadClient = "Seedarr",
                     downloadId = "7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b",
-                }, new JsonSerializerOptions { WriteIndented = true }),
+                }, IndentedJsonOptions),
             },
             new()
             {
@@ -354,7 +356,7 @@ public class SystemDeveloperController : Controller
                     release = new { releaseTitle = "Inception.2010.1080p.BluRay.x264.DTS-WiKi", indexer = "Prowlarr", size = 12884901888L },
                     downloadClient = "Seedarr",
                     downloadId = "8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c",
-                }, new JsonSerializerOptions { WriteIndented = true }),
+                }, IndentedJsonOptions),
             },
         };
     }

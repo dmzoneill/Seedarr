@@ -14,10 +14,7 @@ public static class InfoHashCalculator
 
     public static string Calculate(BDictionary infoDictionary)
     {
-        if (infoDictionary == null)
-        {
-            throw new ArgumentNullException(nameof(infoDictionary));
-        }
+        ArgumentNullException.ThrowIfNull(infoDictionary);
 
         var encoded = infoDictionary.EncodeAsBytes();
         return Calculate(encoded);
@@ -31,10 +28,7 @@ public static class InfoHashCalculator
 
     public static string CalculateV2(BDictionary infoDictionary)
     {
-        if (infoDictionary == null)
-        {
-            throw new ArgumentNullException(nameof(infoDictionary));
-        }
+        ArgumentNullException.ThrowIfNull(infoDictionary);
 
         var encoded = infoDictionary.EncodeAsBytes();
         return CalculateV2(encoded);
@@ -48,10 +42,7 @@ public static class InfoHashCalculator
 
     public static void Calculate(BDictionary infoDictionary, out string v1Hash, out string v2Hash)
     {
-        if (infoDictionary == null)
-        {
-            throw new ArgumentNullException(nameof(infoDictionary));
-        }
+        ArgumentNullException.ThrowIfNull(infoDictionary);
 
         var encoded = infoDictionary.EncodeAsBytes();
         Calculate(encoded, out v1Hash, out v2Hash);

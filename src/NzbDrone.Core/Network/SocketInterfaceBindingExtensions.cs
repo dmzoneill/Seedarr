@@ -18,10 +18,7 @@ public static class SocketInterfaceBindingExtensions
 
     public static void BindToNetworkInterface(this Socket socket, string interfaceName, IPAddress localIp = null, int port = 0)
     {
-        if (socket == null)
-        {
-            throw new ArgumentNullException(nameof(socket));
-        }
+        ArgumentNullException.ThrowIfNull(socket);
 
         if (string.IsNullOrWhiteSpace(interfaceName))
         {

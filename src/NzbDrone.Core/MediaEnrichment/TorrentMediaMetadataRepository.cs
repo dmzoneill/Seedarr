@@ -85,10 +85,7 @@ RETURNING ""Id"";";
 
     public TorrentMediaMetadata Upsert(TorrentMediaMetadata metadata)
     {
-        if (metadata == null)
-        {
-            throw new ArgumentNullException(nameof(metadata));
-        }
+        ArgumentNullException.ThrowIfNull(metadata);
 
         if (string.IsNullOrEmpty(metadata.ArrType))
         {

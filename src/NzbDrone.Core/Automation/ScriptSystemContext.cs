@@ -275,7 +275,7 @@ public class ScriptSystemContext
                 bytes = sha.ComputeHash(stream);
             }
 
-            return System.BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
+            return Convert.ToHexStringLower(bytes);
         }
         catch (Exception ex)
         {

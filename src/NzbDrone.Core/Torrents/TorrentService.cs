@@ -1076,12 +1076,12 @@ public class TorrentService : ITorrentService,
             normVol = volumePath.Replace('\\', '/');
         }
 
-        if (!normPath.EndsWith("/"))
+        if (!normPath.EndsWith('/'))
         {
             normPath += "/";
         }
 
-        if (!normVol.EndsWith("/"))
+        if (!normVol.EndsWith('/'))
         {
             normVol += "/";
         }

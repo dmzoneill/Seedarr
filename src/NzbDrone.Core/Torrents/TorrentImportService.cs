@@ -32,10 +32,7 @@ public class TorrentImportService : ITorrentImportService
 
     public Torrent ImportFromFile(Stream stream, string fileName)
     {
-        if (stream == null)
-        {
-            throw new ArgumentNullException(nameof(stream));
-        }
+        ArgumentNullException.ThrowIfNull(stream);
 
         var parsed = _torrentFileParser.Parse(stream);
         if (parsed == null)

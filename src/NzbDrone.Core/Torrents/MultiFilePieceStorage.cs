@@ -210,10 +210,7 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
 
     public void WriteBlock(int pieceIndex, int begin, byte[] data)
     {
-        if (data == null)
-        {
-            throw new ArgumentNullException(nameof(data));
-        }
+        ArgumentNullException.ThrowIfNull(data);
 
         WriteBlock(pieceIndex, begin, (ReadOnlyMemory<byte>)data);
     }
@@ -325,10 +322,7 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
 
     public void WritePiece(int pieceIndex, byte[] data)
     {
-        if (data == null)
-        {
-            throw new ArgumentNullException(nameof(data));
-        }
+        ArgumentNullException.ThrowIfNull(data);
 
         WriteBlock(pieceIndex, 0, (ReadOnlyMemory<byte>)data);
     }

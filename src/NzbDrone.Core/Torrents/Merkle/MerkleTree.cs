@@ -117,10 +117,7 @@ public class MerkleTree : IMerkleTreeService
 
     public static List<byte[]> ComputeLeafHashes(Stream stream, long length, bool padLastBlockWithZeros = false)
     {
-        if (stream == null)
-        {
-            throw new ArgumentNullException(nameof(stream));
-        }
+        ArgumentNullException.ThrowIfNull(stream);
 
         if (length < 0)
         {

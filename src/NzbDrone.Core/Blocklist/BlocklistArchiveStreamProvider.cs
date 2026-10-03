@@ -94,7 +94,7 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
         {
             var trimmed = line.Trim();
             if (string.IsNullOrEmpty(trimmed) ||
-                trimmed.StartsWith("#", StringComparison.Ordinal) ||
+                trimmed.StartsWith('#') ||
                 trimmed.StartsWith("//", StringComparison.Ordinal))
             {
                 continue;
@@ -251,8 +251,8 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
 
         if (bytesRead >= 4 && header[0] == 0x50 && header[1] == 0x4B &&
             ((header[2] == 0x03 && header[3] == 0x04) ||
-             (header[2] == 0x05 && header[3] == 0x06) ||
-             (header[2] == 0x07 && header[3] == 0x08)))
+                (header[2] == 0x05 && header[3] == 0x06) ||
+                (header[2] == 0x07 && header[3] == 0x08)))
         {
             return BlocklistArchiveFormat.Zip;
         }
@@ -319,7 +319,7 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
         }
 
         var normalized = entryFullName.Replace('\\', '/');
-        if (normalized.StartsWith("/", StringComparison.Ordinal) ||
+        if (normalized.StartsWith('/') ||
             (normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':'))
         {
             return true;

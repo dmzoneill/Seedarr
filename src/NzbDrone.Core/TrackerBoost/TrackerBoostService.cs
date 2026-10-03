@@ -829,7 +829,7 @@ public class TrackerBoostService : ITrackerBoostService
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var clean = line.Trim();
-                    if (string.IsNullOrWhiteSpace(clean) || clean.StartsWith("#"))
+                    if (string.IsNullOrWhiteSpace(clean) || clean.StartsWith('#'))
                     {
                         continue;
                     }
@@ -1034,8 +1034,8 @@ public class TrackerBoostService : ITrackerBoostService
             getCts.CancelAfter(TimeSpan.FromSeconds(3));
             var getResp = await client.SendAsync(getReq, getCts.Token);
             return getResp.IsSuccessStatusCode ||
-                   getResp.StatusCode == HttpStatusCode.BadRequest ||
-                   getResp.StatusCode == HttpStatusCode.MethodNotAllowed;
+                getResp.StatusCode == HttpStatusCode.BadRequest ||
+                getResp.StatusCode == HttpStatusCode.MethodNotAllowed;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -1384,8 +1384,8 @@ public class TrackerBoostService : ITrackerBoostService
 
         foreach (var entry in attachedMap.Values)
         {
-            var cleanUrl = (entry.Url ?? string.Empty).Trim().ToLowerInvariant();
-            if (!detections.Any(d => (d.TrackerUrl ?? string.Empty).Trim().ToLowerInvariant() == cleanUrl))
+            var cleanUrl = (entry.Url ?? string.Empty).Trim();
+            if (!detections.Any(d => string.Equals((d.TrackerUrl ?? string.Empty).Trim(), cleanUrl, StringComparison.OrdinalIgnoreCase)))
             {
                 var host = !string.IsNullOrEmpty(entry.Url) && Uri.TryCreate(entry.Url, UriKind.Absolute, out var u) ? u.Host : entry.Url;
                 detections.Add(new TorrentTrackerDetection
@@ -1656,9 +1656,9 @@ public class TrackerBoostService : ITrackerBoostService
             };
         }
 
-        var clean = trackerUrl.Trim().ToLowerInvariant();
+        var clean = trackerUrl.Trim();
         var existing = _trackerEntryService.GetByTorrentId(torrentId)
-            .Any(t => (t.Url ?? string.Empty).Trim().ToLowerInvariant() == clean);
+            .Any(t => string.Equals((t.Url ?? string.Empty).Trim(), clean, StringComparison.OrdinalIgnoreCase));
 
         if (!existing)
         {

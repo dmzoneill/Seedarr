@@ -100,16 +100,14 @@ public class MseKeyDerivation
 
     public static byte[] DeriveKey(byte[] sharedSecret, byte[] prefix)
     {
-        using var sha1 = SHA1.Create();
         var combined = new byte[prefix.Length + sharedSecret.Length];
         Array.Copy(prefix, 0, combined, 0, prefix.Length);
         Array.Copy(sharedSecret, 0, combined, prefix.Length, sharedSecret.Length);
-        return sha1.ComputeHash(combined);
+        return SHA1.HashData(combined);
     }
 
     public static byte[] HashInfoHash(byte[] infoHash)
     {
-        using var sha1 = SHA1.Create();
-        return sha1.ComputeHash(infoHash);
+        return SHA1.HashData(infoHash);
     }
 }

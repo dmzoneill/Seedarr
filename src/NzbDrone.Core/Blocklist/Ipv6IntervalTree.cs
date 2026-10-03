@@ -151,9 +151,9 @@ public class Ipv6IntervalTree
         }
 
         var trimmed = rule.Trim();
-        if (trimmed.StartsWith("#", StringComparison.Ordinal) ||
+        if (trimmed.StartsWith('#') ||
             trimmed.StartsWith("//", StringComparison.Ordinal) ||
-            trimmed.StartsWith(";", StringComparison.Ordinal))
+            trimmed.StartsWith(';'))
         {
             return false;
         }
@@ -284,9 +284,9 @@ public class Ipv6IntervalTree
             }
 
             var trimmed = rule.Trim();
-            if (trimmed.StartsWith("#", StringComparison.Ordinal) ||
+            if (trimmed.StartsWith('#') ||
                 trimmed.StartsWith("//", StringComparison.Ordinal) ||
-                trimmed.StartsWith(";", StringComparison.Ordinal))
+                trimmed.StartsWith(';'))
             {
                 continue;
             }

@@ -410,7 +410,7 @@ public class AuthController : ControllerBase
 
         var candidate = input.Trim();
 
-        if (candidate.StartsWith("[", StringComparison.Ordinal) && candidate.Contains(']'))
+        if (candidate.StartsWith('[') && candidate.Contains(']'))
         {
             var closeIdx = candidate.IndexOf(']');
             var inner = candidate.Substring(1, closeIdx - 1);

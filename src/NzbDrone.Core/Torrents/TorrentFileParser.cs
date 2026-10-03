@@ -99,10 +99,7 @@ public class TorrentFileParser : ITorrentFileParser
 
     public ParsedTorrent Parse(Stream stream)
     {
-        if (stream == null)
-        {
-            throw new ArgumentNullException(nameof(stream));
-        }
+        ArgumentNullException.ThrowIfNull(stream);
 
         if (stream.CanSeek && stream.Length > MaxTorrentStreamBytes)
         {
@@ -130,10 +127,7 @@ public class TorrentFileParser : ITorrentFileParser
 
     public ParsedTorrent Parse(byte[] bytes)
     {
-        if (bytes == null)
-        {
-            throw new ArgumentNullException(nameof(bytes));
-        }
+        ArgumentNullException.ThrowIfNull(bytes);
 
         if (bytes.Length > MaxTorrentStreamBytes)
         {

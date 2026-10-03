@@ -176,7 +176,7 @@ public class BlocklistController : Controller
             }
 
             var trimmed = rule.Trim();
-            if (trimmed.StartsWith("#", StringComparison.Ordinal) || trimmed.StartsWith("//", StringComparison.Ordinal))
+            if (trimmed.StartsWith('#') || trimmed.StartsWith("//", StringComparison.Ordinal))
             {
                 continue;
             }
@@ -208,7 +208,7 @@ public class BlocklistController : Controller
             }
 
             var trimmed = rule.Trim();
-            if (trimmed.StartsWith("#", StringComparison.Ordinal) || trimmed.StartsWith("//", StringComparison.Ordinal))
+            if (trimmed.StartsWith('#') || trimmed.StartsWith("//", StringComparison.Ordinal))
             {
                 continue;
             }

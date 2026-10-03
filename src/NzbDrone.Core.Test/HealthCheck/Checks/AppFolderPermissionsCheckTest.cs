@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using NSubstitute;
 using NUnit.Framework;
@@ -74,7 +75,7 @@ public class AppFolderPermissionsCheckTest
     [Test]
     public void Check_should_return_warning_when_backups_folder_is_not_writable()
     {
-        var subject = new AppFolderPermissionsCheck(_appFolderInfo, path => !path.ToLowerInvariant().Contains("backup"));
+        var subject = new AppFolderPermissionsCheck(_appFolderInfo, path => !path.Contains("backup", StringComparison.OrdinalIgnoreCase));
         var result = subject.Check();
 
         Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Warning));

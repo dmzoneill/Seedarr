@@ -91,7 +91,7 @@ public static class EmailNotificationSender
 
         var result = new ParsedEmailSettings();
 
-        if (settings.TrimStart().StartsWith("{"))
+        if (settings.TrimStart().StartsWith('{'))
         {
             using var doc = JsonDocument.Parse(settings);
             var root = doc.RootElement;

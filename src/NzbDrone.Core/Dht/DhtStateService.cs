@@ -122,6 +122,9 @@ public class Node
 
 public class DhtStateService : IDhtStateService
 {
+    private static readonly JsonSerializerOptions IndentedJsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions CaseInsensitiveJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly Logger _logger;
     private readonly string _customFilePath;
@@ -166,7 +169,7 @@ public class DhtStateService : IDhtStateService
             }
 
             var list = nodes.Where(n => n != null && !string.IsNullOrWhiteSpace(n.Ip) && n.Port > 0).ToList();
-            var json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(list, IndentedJsonOptions);
             File.WriteAllText(filePath, json);
             _logger.Debug("Saved {0} DHT nodes to {1}", list.Count, filePath);
         }
@@ -199,10 +202,7 @@ public class DhtStateService : IDhtStateService
                 try
                 {
                     var json = System.Text.Encoding.UTF8.GetString(content);
-                    var nodes = JsonSerializer.Deserialize<List<Node>>(json, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
+                    var nodes = JsonSerializer.Deserialize<List<Node>>(json, CaseInsensitiveJsonOptions);
 
                     if (nodes != null)
                     {

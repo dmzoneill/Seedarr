@@ -146,13 +146,13 @@ public class DbFactory : IDbFactory
 
         if (!Regex.IsMatch(cleaned, @"(?i)Default\s+Timeout\s*="))
         {
-            var separator = cleaned.EndsWith(";") || string.IsNullOrEmpty(cleaned) ? "" : ";";
+            var separator = cleaned.EndsWith(';') || string.IsNullOrEmpty(cleaned) ? "" : ";";
             cleaned = $"{cleaned}{separator}Default Timeout={timeoutSeconds};";
         }
 
         if (!Regex.IsMatch(cleaned, @"(?i)Foreign\s+Keys\s*="))
         {
-            var separator = cleaned.EndsWith(";") || string.IsNullOrEmpty(cleaned) ? "" : ";";
+            var separator = cleaned.EndsWith(';') || string.IsNullOrEmpty(cleaned) ? "" : ";";
             cleaned = $"{cleaned}{separator}Foreign Keys=True;";
         }
 

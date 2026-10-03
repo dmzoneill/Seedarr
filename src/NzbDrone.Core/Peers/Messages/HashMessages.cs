@@ -111,10 +111,7 @@ public class HashRequestMessage
 
     public static HashRequestMessage FromPeerMessage(PeerMessage message)
     {
-        if (message == null)
-        {
-            throw new ArgumentNullException(nameof(message));
-        }
+        ArgumentNullException.ThrowIfNull(message);
 
         if (message.Type != PeerMessageType.HashRequest)
         {
@@ -303,10 +300,7 @@ public class HashesMessage
 
     public static HashesMessage FromPeerMessage(PeerMessage message)
     {
-        if (message == null)
-        {
-            throw new ArgumentNullException(nameof(message));
-        }
+        ArgumentNullException.ThrowIfNull(message);
 
         if (message.Type != PeerMessageType.Hashes)
         {
@@ -485,10 +479,7 @@ public class HashRejectMessage
 
     public static HashRejectMessage FromPeerMessage(PeerMessage message)
     {
-        if (message == null)
-        {
-            throw new ArgumentNullException(nameof(message));
-        }
+        ArgumentNullException.ThrowIfNull(message);
 
         if (message.Type != PeerMessageType.HashReject)
         {
