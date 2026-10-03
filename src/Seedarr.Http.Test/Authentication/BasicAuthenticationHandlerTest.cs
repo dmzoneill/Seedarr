@@ -57,6 +57,17 @@ public class BasicAuthenticationHandlerTest
     }
 
     [Test]
+    public async Task HandleAuthenticateAsync_WhenAuthorizationHeaderIsEmpty_ReturnsNoResult()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Headers["Authorization"] = Microsoft.Extensions.Primitives.StringValues.Empty;
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.None, Is.True);
+    }
+
+    [Test]
     public async Task HandleAuthenticateAsync_WhenSchemeIsNotBasic_ReturnsNoResult()
     {
         var context = new DefaultHttpContext();

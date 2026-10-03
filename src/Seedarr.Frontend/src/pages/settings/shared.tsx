@@ -686,3 +686,74 @@ export function SectionTitle({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+export interface TestResultData {
+  success: boolean;
+  message?: string;
+}
+
+export function ConnectionTestAlert({
+  result,
+  isTesting,
+  successTitle = "Connection Successful",
+  failureTitle = "Connection Failed",
+}: {
+  result?: TestResultData | null;
+  isTesting?: boolean;
+  successTitle?: string;
+  failureTitle?: string;
+}) {
+  if (!result || isTesting) return null;
+
+  return (
+    <div
+      style={{
+        marginTop: "1rem",
+        padding: "0.75rem 1rem",
+        borderRadius: "6px",
+        fontSize: "0.875rem",
+        lineHeight: "1.4",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "0.65rem",
+        backgroundColor: result.success
+          ? "rgba(40, 167, 69, 0.15)"
+          : "rgba(220, 53, 69, 0.15)",
+        color: result.success
+          ? "var(--success, #28a745)"
+          : "var(--danger, #dc3545)",
+        border: `1px solid ${
+          result.success
+            ? "rgba(40, 167, 69, 0.35)"
+            : "rgba(220, 53, 69, 0.35)"
+        }`,
+      }}
+    >
+      <span
+        style={{
+          fontWeight: "bold",
+          fontSize: "1.1rem",
+          lineHeight: "1",
+        }}
+      >
+        {result.success ? "✓" : "✕"}
+      </span>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600 }}>
+          {result.success ? successTitle : failureTitle}
+        </div>
+        {result.message && (
+          <div
+            style={{
+              marginTop: "0.25rem",
+              opacity: 0.95,
+              wordBreak: "break-word",
+            }}
+          >
+            {result.message}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

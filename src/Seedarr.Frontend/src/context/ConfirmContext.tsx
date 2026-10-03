@@ -31,6 +31,10 @@ interface QueueItem {
 
 const ConfirmContext = createContext<ConfirmContextType | undefined>(undefined);
 
+export function parseConfirmOptions(options: ConfirmOptions | string): ConfirmOptions {
+  return typeof options === "string" ? { message: options } : options;
+}
+
 export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -46,8 +50,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({
   const activeItemRef = useRef<QueueItem | null>(null);
 
   const confirm: ConfirmDialogFn = useCallback((options) => {
-    const parsedOptions: ConfirmOptions =
-      typeof options === "string" ? { message: options } : options;
+    const parsedOptions: ConfirmOptions = parseConfirmOptions(options);
 
     return new Promise<boolean>((resolve) => {
       const item: QueueItem = { options: parsedOptions, resolve };

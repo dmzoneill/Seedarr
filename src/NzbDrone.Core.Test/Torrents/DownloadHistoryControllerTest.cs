@@ -71,8 +71,8 @@ public class DownloadHistoryControllerTest
     {
         var entries = new List<DownloadHistory>
         {
-            new() { Id = 1, Title = "Movie 1", DateAdded = DateTime.UtcNow, Status = "Completed" },
-            new() { Id = 2, Title = "Movie 2", DateAdded = DateTime.UtcNow, Status = "Seeding" }
+            new() { Id = 1, Title = "Movie 1", DateAdded = DateTime.UtcNow, Status = "Completed", DataJson = "{\"title\":\"Movie 1\"}" },
+            new() { Id = 2, Title = "Movie 2", DateAdded = DateTime.UtcNow, Status = "Seeding", DataJson = "{invalid-json}" }
         };
 
         _historyService.GetAll(null, null, -1, 0).Returns(entries);
@@ -85,7 +85,9 @@ public class DownloadHistoryControllerTest
         Assert.That(resources, Is.Not.Null);
         Assert.That(resources.Count, Is.EqualTo(2));
         Assert.That(resources[0].Title, Is.EqualTo("Movie 1"));
+        Assert.That(resources[0].Metadata?.Title, Is.EqualTo("Movie 1"));
         Assert.That(resources[1].Title, Is.EqualTo("Movie 2"));
+        Assert.That(resources[1].Metadata, Is.Null);
     }
 
     [Test]

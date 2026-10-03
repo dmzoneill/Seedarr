@@ -251,4 +251,32 @@ public class ForwardAuthHandlerTest
         Assert.That(groupClaims, Does.Contain("family"));
         Assert.That(groupClaims, Does.Contain("streamers"));
     }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenPipeAndSemicolonDelimitedGroups_ParsesAllGroups()
+    {
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
+        context.Request.Headers["X-Forwarded-User"] = "pipeuser";
+        context.Request.Headers["X-Forwarded-Groups"] = "group1|group2;admin";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Principal?.FindFirst(ClaimTypes.Role)?.Value, Is.EqualTo("Admin"));
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenCustomDefaultRoleConfigured_AssignsDefaultRole()
+    {
+        _options.DefaultRole = "Auditor";
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
+        context.Request.Headers["X-Forwarded-User"] = "auditoruser";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Principal?.FindFirst(ClaimTypes.Role)?.Value, Is.EqualTo("Auditor"));
+    }
 }

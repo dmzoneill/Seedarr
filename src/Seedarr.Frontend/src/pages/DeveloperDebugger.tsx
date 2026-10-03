@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import DeveloperActionBanner from "../components/DeveloperActionBanner";
 import { apiClient } from "../api/client";
 import type {
   TracepointDefinition,
@@ -361,23 +362,7 @@ export default function DeveloperDebugger() {
         </div>
       </div>
 
-      {actionMessage && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            padding: "10px 14px",
-            borderRadius: "6px",
-            marginBottom: "16px",
-            fontSize: "0.85rem",
-            backgroundColor: actionMessage.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
-            border: `1px solid ${actionMessage.type === "success" ? "#10b981" : "#ef4444"}`,
-            color: actionMessage.type === "success" ? "#34d399" : "#f87171",
-          }}
-        >
-          {actionMessage.text}
-        </div>
-      )}
+      <DeveloperActionBanner message={actionMessage} />
 
       {/* Dynamic Source File Selector Toolbar */}
       <div
