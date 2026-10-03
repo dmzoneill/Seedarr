@@ -12,8 +12,8 @@ using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Peers.SuperSeeding;
 using NzbDrone.Core.Seeding;
-using SuperSeedingTracker = NzbDrone.Core.Peers.SuperSeeding.SuperSeedingTracker;
 using NzbDrone.Core.Torrents;
+using SuperSeedingTracker = NzbDrone.Core.Peers.SuperSeeding.SuperSeedingTracker;
 
 namespace NzbDrone.Core.Test.SuperSeedingTests;
 

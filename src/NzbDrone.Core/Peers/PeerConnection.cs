@@ -519,7 +519,6 @@ public class PeerConnection : IDisposable
         return false;
     }
 
-
     public IDhKeyPool DhKeyPool { get; set; }
     public byte[] InitialApplicationData { get; private set; }
     public bool HandshakeSent { get; private set; }
