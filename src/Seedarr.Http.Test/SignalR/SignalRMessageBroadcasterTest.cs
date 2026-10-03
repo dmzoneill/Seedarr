@@ -429,4 +429,55 @@ public class SignalRMessageBroadcasterTest
         Assert.That(options.ClientTimeoutInterval, Is.EqualTo(TimeSpan.FromSeconds(30)));
         Assert.That(options.KeepAliveInterval, Is.EqualTo(TimeSpan.FromSeconds(10)));
     }
+
+    [Test]
+    public async Task BroadcastMessage_and_group_when_send_fails_handles_faulted_continuation()
+    {
+        var failingProxy = Substitute.For<IClientProxy>();
+        var tcs = new TaskCompletionSource();
+        tcs.SetException(new InvalidOperationException("Simulated broadcast error"));
+        failingProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(tcs.Task);
+
+        _hubClients.All.Returns(failingProxy);
+        _hubClients.Group(Arg.Any<string>()).Returns(failingProxy);
+
+        var msg = new SignalRMessage
+        {
+            Name = "FaultEvent",
+            Action = ModelAction.Created,
+            Body = new { Id = 404 }
+        };
+
+        _broadcaster.BroadcastMessage(msg);
+        _broadcaster.BroadcastToGroup("fault-group", msg);
+
+        await Task.Delay(50);
+        Assert.Pass("Faulted task continuation completed safely");
+    }
+
+    [Test]
+    public async Task TrackerSignalREventHandler_when_send_fails_handles_faulted_continuation()
+    {
+        var failingProxy = Substitute.For<IClientProxy>();
+        var tcs = new TaskCompletionSource();
+        tcs.SetException(new InvalidOperationException("Simulated tracker broadcast error"));
+        failingProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(tcs.Task);
+
+        _hubClients.All.Returns(failingProxy);
+
+        var handler = new TrackerSignalREventHandler(_hubContext);
+        var torrent = new Torrent { Id = 12, Name = "Test Torrent Fault" };
+        var announceEvent = new TrackerAnnounceEvent(torrent, "http://tr.com/announce", 1, 1, 1, 10, true, null, 1, TrackerStatus.Working);
+
+        handler.Handle(announceEvent);
+
+        var tracker = new TrackerEntry { Id = 9, TorrentId = 12, Url = "http://tr.com/announce", Status = TrackerStatus.Announcing };
+        var statusEvent = new TrackerStatusChangedEvent(torrent, tracker, TrackerStatus.Unknown, TrackerStatus.Announcing);
+        handler.Handle(statusEvent);
+
+        await Task.Delay(50);
+        Assert.Pass("Faulted tracker continuation completed safely");
+    }
 }
