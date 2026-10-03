@@ -29,6 +29,84 @@ interface QueueItem {
   resolve: (value: boolean) => void;
 }
 
+export interface ConfirmModalState {
+  isOpen: boolean;
+  options: ConfirmOptions;
+}
+
+export interface ConfirmQueueHandler {
+  confirm: (options: ConfirmOptions | string) => Promise<boolean>;
+  handleConfirm: () => void;
+  handleCancel: () => void;
+  processNext: (confirmed: boolean) => void;
+  getState: () => ConfirmModalState;
+  getQueueLength: () => number;
+}
+
+export function createConfirmQueue(
+  onStateChange: (state: ConfirmModalState) => void = () => {},
+): ConfirmQueueHandler {
+  let modalState: ConfirmModalState = {
+    isOpen: false,
+    options: { message: "" },
+  };
+  const queue: QueueItem[] = [];
+  let activeItem: QueueItem | null = null;
+
+  const setState = (nextState: ConfirmModalState) => {
+    modalState = nextState;
+    onStateChange(nextState);
+  };
+
+  const confirm = (options: ConfirmOptions | string): Promise<boolean> => {
+    const parsedOptions: ConfirmOptions = parseConfirmOptions(options);
+
+    return new Promise<boolean>((resolve) => {
+      const item: QueueItem = { options: parsedOptions, resolve };
+      if (!activeItem) {
+        activeItem = item;
+        setState({
+          isOpen: true,
+          options: parsedOptions,
+        });
+      } else {
+        queue.push(item);
+      }
+    });
+  };
+
+  const processNext = (confirmed: boolean) => {
+    const current = activeItem;
+    if (current) {
+      current.resolve(confirmed);
+      activeItem = null;
+    }
+
+    const nextItem = queue.shift();
+    if (nextItem) {
+      activeItem = nextItem;
+      setState({
+        isOpen: true,
+        options: nextItem.options,
+      });
+    } else {
+      setState({
+        isOpen: false,
+        options: { message: "" },
+      });
+    }
+  };
+
+  return {
+    confirm,
+    handleConfirm: () => processNext(true),
+    handleCancel: () => processNext(false),
+    processNext,
+    getState: () => modalState,
+    getQueueLength: () => queue.length,
+  };
+}
+
 const ConfirmContext = createContext<ConfirmContextType | undefined>(undefined);
 
 export function parseConfirmOptions(options: ConfirmOptions | string): ConfirmOptions {
@@ -38,60 +116,28 @@ export function parseConfirmOptions(options: ConfirmOptions | string): ConfirmOp
 export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [modalState, setModalState] = useState<{
-    isOpen: boolean;
-    options: ConfirmOptions;
-  }>({
+  const [modalState, setModalState] = useState<ConfirmModalState>({
     isOpen: false,
     options: { message: "" },
   });
 
-  const queueRef = useRef<QueueItem[]>([]);
-  const activeItemRef = useRef<QueueItem | null>(null);
+  const handlerRef = useRef<ConfirmQueueHandler | null>(null);
+  if (!handlerRef.current) {
+    handlerRef.current = createConfirmQueue(setModalState);
+  }
+  const handler = handlerRef.current;
 
   const confirm: ConfirmDialogFn = useCallback((options) => {
-    const parsedOptions: ConfirmOptions = parseConfirmOptions(options);
-
-    return new Promise<boolean>((resolve) => {
-      const item: QueueItem = { options: parsedOptions, resolve };
-      if (!activeItemRef.current) {
-        activeItemRef.current = item;
-        setModalState({
-          isOpen: true,
-          options: parsedOptions,
-        });
-      } else {
-        queueRef.current.push(item);
-      }
-    });
-  }, []);
-
-  const processNext = useCallback((confirmed: boolean) => {
-    const current = activeItemRef.current;
-    if (current) {
-      current.resolve(confirmed);
-      activeItemRef.current = null;
-    }
-
-    const nextItem = queueRef.current.shift();
-    if (nextItem) {
-      activeItemRef.current = nextItem;
-      setModalState({
-        isOpen: true,
-        options: nextItem.options,
-      });
-    } else {
-      setModalState((prev) => ({ ...prev, isOpen: false }));
-    }
-  }, []);
+    return handler ? handler.confirm(options) : Promise.resolve(false);
+  }, [handler]);
 
   const handleConfirm = useCallback(() => {
-    processNext(true);
-  }, [processNext]);
+    handler?.handleConfirm();
+  }, [handler]);
 
   const handleCancel = useCallback(() => {
-    processNext(false);
-  }, [processNext]);
+    handler?.handleCancel();
+  }, [handler]);
 
   return (
     <ConfirmContext.Provider value={{ confirm }}>
