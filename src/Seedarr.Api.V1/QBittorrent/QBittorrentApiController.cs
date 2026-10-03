@@ -33,11 +33,11 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     private static readonly ConcurrentDictionary<string, QBitSessionSyncState> _sessionSyncStates = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, string> _categorySavePaths = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HttpClient DefaultHttpClient = new();
-    private static DateTime _lastSyncCleanupTime = DateTime.UtcNow;
     private static readonly char[] LineSeparators = ['\r', '\n'];
     private static readonly char[] CategoryDelimiters = ['\n', '\r', ',', ';'];
     private static readonly char[] LabelSeparators = [',', ';'];
     private static readonly char[] IdSeparators = ['|', ','];
+    private static DateTime _lastSyncCleanupTime = DateTime.UtcNow;
 
     private readonly IRpcSessionStore _sessionStore;
 
