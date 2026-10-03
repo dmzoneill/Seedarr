@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.1.0](https://github.com/dmzoneill/Seedarr/releases/tag/v2.1.0) - 2026-10-03
+
+### ✨ Features
+- feat(nav): add matching icons to sub-menu navigation items
+
+### 🔧 Maintenance & Improvements
+- style(theme): replace remaining #171b35 fallbacks with #2a2620
+- style(theme): purge blue tinted backgrounds and align palettes with warm charcoal and gold
+
 ## [v2.0.23](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.23) - 2026-10-03
 
 ### 🔧 Maintenance & Improvements
