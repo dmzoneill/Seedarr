@@ -688,7 +688,7 @@ public class WatchFolderServiceTest
 
         var lockStream = new FileStream(torrentPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
 
-        Task.Delay(30).ContinueWith(_ => lockStream.Dispose());
+        Task.Delay(30).ContinueWith(_ => lockStream.Dispose(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
 
         var result = _subject.WaitForFileReady(torrentPath, maxAttempts: 5, initialDelayMs: 25, stabilityDelayMs: 5);
 
