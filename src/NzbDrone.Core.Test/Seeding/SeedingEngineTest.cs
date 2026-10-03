@@ -2242,7 +2242,7 @@ public class SeedingEngineTest
         Assert.That(SeedingEngine.CalculateCumulativeAvailability(new[] { p1, p2 }, 4), Is.EqualTo(0.5));
         Assert.That(SeedingEngine.CalculateCumulativeAvailability(new[] { p1, p2, p3 }, 4), Is.EqualTo(1.0));
         Assert.That(SeedingEngine.CalculateCumulativeAvailability(null, 4), Is.EqualTo(0.0));
-        Assert.That(SeedingEngine.CalculateCumulativeAvailability(new PeerConnection[0], 4), Is.EqualTo(0.0));
+        Assert.That(SeedingEngine.CalculateCumulativeAvailability(Array.Empty<PeerConnection>(), 4), Is.EqualTo(0.0));
     }
 
     [Test]

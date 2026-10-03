@@ -703,15 +703,15 @@ public class ArrWebhookService : IArrWebhookService
     private static bool IsUsenetGrab(ArrWebhookPayload payload)
     {
         if (!string.IsNullOrEmpty(payload.DownloadClientType) &&
-            (payload.DownloadClientType.IndexOf("usenet", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                payload.DownloadClientType.IndexOf("nzb", StringComparison.OrdinalIgnoreCase) >= 0))
+            (payload.DownloadClientType.Contains("usenet", StringComparison.OrdinalIgnoreCase) ||
+                payload.DownloadClientType.Contains("nzb", StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
 
         if (!string.IsNullOrEmpty(payload.DownloadClient) &&
-            (payload.DownloadClient.IndexOf("sabnzbd", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                payload.DownloadClient.IndexOf("nzbget", StringComparison.OrdinalIgnoreCase) >= 0))
+            (payload.DownloadClient.Contains("sabnzbd", StringComparison.OrdinalIgnoreCase) ||
+                payload.DownloadClient.Contains("nzbget", StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }

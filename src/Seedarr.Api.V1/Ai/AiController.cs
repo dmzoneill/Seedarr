@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Mvc;
 using Seedarr.Http;
 
@@ -35,6 +36,6 @@ public class AiController : Controller
     [HttpGet("providers")]
     public ActionResult<object> GetProviders()
     {
-        return Ok(new object[0]);
+        return Ok(Array.Empty<object>());
     }
 }

@@ -1280,10 +1280,10 @@ public class TorznabIndexer : IIndexer
             return false;
         }
 
-        return title.IndexOf("[Freeleech]", StringComparison.OrdinalIgnoreCase) >= 0
-            || title.IndexOf("[FL]", StringComparison.OrdinalIgnoreCase) >= 0
-            || title.IndexOf("(Freeleech)", StringComparison.OrdinalIgnoreCase) >= 0
-            || title.IndexOf("(FL)", StringComparison.OrdinalIgnoreCase) >= 0;
+        return title.Contains("[Freeleech]", StringComparison.OrdinalIgnoreCase)
+            || title.Contains("[FL]", StringComparison.OrdinalIgnoreCase)
+            || title.Contains("(Freeleech)", StringComparison.OrdinalIgnoreCase)
+            || title.Contains("(FL)", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string DecodeAndNormalize(string input)

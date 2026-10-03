@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -47,7 +48,7 @@ public class DownloadClientRpcCompatibilityTests : IntegrationTestBase
         var payload = new
         {
             method = "core.get_version",
-            @params = new object[] { },
+            @params = Array.Empty<object>(),
             id = 1
         };
 
@@ -68,8 +69,8 @@ public class DownloadClientRpcCompatibilityTests : IntegrationTestBase
     {
         var batch = new object[]
         {
-            new { method = "core.get_version", @params = new object[] { }, id = 1 },
-            new { method = "system.listMethods", @params = new object[] { }, id = 2 }
+            new { method = "core.get_version", @params = Array.Empty<object>(), id = 1 },
+            new { method = "system.listMethods", @params = Array.Empty<object>(), id = 2 }
         };
 
         var json = JsonSerializer.Serialize(batch);
