@@ -12,6 +12,7 @@ namespace NzbDrone.Core.Network;
 
 public class GatewayDiscoveryService : IGatewayDiscoveryService
 {
+    private static readonly char[] LineSeparators = ['\r', '\n'];
     private readonly string _routeFilePath;
     private readonly Func<IPAddress> _networkInterfaceFallback;
     private readonly Logger _logger;
@@ -65,7 +66,7 @@ public class GatewayDiscoveryService : IGatewayDiscoveryService
             return null;
         }
 
-        var lines = routeTableContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var lines = routeTableContent.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
         IPAddress bestGateway = null;
         var bestMetric = int.MaxValue;
 

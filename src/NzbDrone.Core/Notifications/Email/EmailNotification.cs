@@ -10,6 +10,7 @@ public class EmailNotification : INotificationService
 {
     private const string SubjectPrefix = "[Seedarr]";
     private static readonly int[] AllowedSmtpPorts = { 25, 465, 587, 2525 };
+    private static readonly char[] AddressSeparators = [',', ';'];
 
     private readonly Logger _logger;
 
@@ -95,7 +96,7 @@ public class EmailNotification : INotificationService
             message.AlternateViews.Add(htmlView);
 
             var recipients = Settings.ToAddresses
-                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Split(AddressSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Where(a => !string.IsNullOrWhiteSpace(a));
 
             foreach (var recipient in recipients)

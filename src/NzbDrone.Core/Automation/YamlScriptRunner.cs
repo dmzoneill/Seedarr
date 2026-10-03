@@ -19,6 +19,12 @@ namespace NzbDrone.Core.Automation;
 public class YamlScriptRunner : IScriptRunner
 {
     private static readonly Regex VariableRegex = new(@"\$\{([^}]+)\}", RegexOptions.Compiled);
+    private static readonly string[] EqualsOperator = ["=="];
+    private static readonly string[] NotEqualsOperator = ["!="];
+    private static readonly string[] GreaterThanOrEqualOperator = [">="];
+    private static readonly string[] LessThanOrEqualOperator = ["<="];
+    private static readonly char[] GreaterThanOperator = ['>'];
+    private static readonly char[] LessThanOperator = ['<'];
     private readonly IManageCommandQueue? _commandQueue;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -1060,7 +1066,7 @@ public class YamlScriptRunner : IScriptRunner
 
         if (substituted.Contains("=="))
         {
-            var parts = substituted.Split(new[] { "==" }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(EqualsOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2)
             {
                 return AreEqual(parts[0], parts[1], isProgressCheck);
@@ -1068,7 +1074,7 @@ public class YamlScriptRunner : IScriptRunner
         }
         else if (substituted.Contains("!="))
         {
-            var parts = substituted.Split(new[] { "!=" }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(NotEqualsOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2)
             {
                 return !AreEqual(parts[0], parts[1], isProgressCheck);
@@ -1076,7 +1082,7 @@ public class YamlScriptRunner : IScriptRunner
         }
         else if (substituted.Contains(">="))
         {
-            var parts = substituted.Split(new[] { ">=" }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(GreaterThanOrEqualOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
                 NormalizeProgress(ref l, ref r, isProgressCheck);
@@ -1085,7 +1091,7 @@ public class YamlScriptRunner : IScriptRunner
         }
         else if (substituted.Contains("<="))
         {
-            var parts = substituted.Split(new[] { "<=" }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(LessThanOrEqualOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
                 NormalizeProgress(ref l, ref r, isProgressCheck);
@@ -1094,7 +1100,7 @@ public class YamlScriptRunner : IScriptRunner
         }
         else if (substituted.Contains('>'))
         {
-            var parts = substituted.Split(new[] { '>' }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(GreaterThanOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
                 NormalizeProgress(ref l, ref r, isProgressCheck);
@@ -1103,7 +1109,7 @@ public class YamlScriptRunner : IScriptRunner
         }
         else if (substituted.Contains('<'))
         {
-            var parts = substituted.Split(new[] { '<' }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(LessThanOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
                 NormalizeProgress(ref l, ref r, isProgressCheck);

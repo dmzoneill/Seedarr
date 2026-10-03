@@ -57,6 +57,7 @@ public class CategoryService : ICategoryService, IQueueService
 {
     private const long SlowTorrentThresholdBytesPerSec = 10 * 1024; // 10 KB/s
     private static readonly Category NotFoundCategory = new();
+    private static readonly char[] CategorySeparators = [',', ';'];
 
     private readonly ICategoryRepository _repository;
     private readonly IEventAggregator _eventAggregator;
@@ -545,7 +546,7 @@ public class CategoryService : ICategoryService, IQueueService
         }
 
         var delimiter = label.Contains(';') && !label.Contains(',') ? ';' : ',';
-        var tokens = label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+        var tokens = label.Split(CategorySeparators, StringSplitOptions.RemoveEmptyEntries)
             .Select(t => t.Trim())
             .Where(t => !string.IsNullOrEmpty(t))
             .ToList();
@@ -590,7 +591,7 @@ public class CategoryService : ICategoryService, IQueueService
         }
 
         var delimiter = label.Contains(';') && !label.Contains(',') ? ';' : ',';
-        var tokens = label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+        var tokens = label.Split(CategorySeparators, StringSplitOptions.RemoveEmptyEntries)
             .Select(t => t.Trim())
             .Where(t => !string.IsNullOrEmpty(t))
             .ToList();

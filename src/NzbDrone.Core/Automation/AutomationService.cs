@@ -26,6 +26,7 @@ public class AutomationService : IAutomationService
 {
     public const int MaxPersistedLogCharacters = 32768;
     public const int MaxExecutionDepth = 3;
+    private static readonly char[] TagSeparators = [',', ';'];
 
     private static readonly AsyncLocal<int> _executionDepth = new();
     private static readonly AsyncLocal<HashSet<string>?> _activeCallChain = new();
@@ -581,7 +582,7 @@ public class AutomationService : IAutomationService
 
                         if (!string.IsNullOrWhiteSpace(nf.Tags))
                         {
-                            payload["tags"] = nf.Tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                            payload["tags"] = nf.Tags.Split(TagSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                         }
 
                         if (!string.IsNullOrWhiteSpace(nf.Click))

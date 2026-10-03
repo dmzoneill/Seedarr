@@ -16,6 +16,7 @@ namespace NzbDrone.Core.Notifications;
 public static class NotificationPayloadBuilder
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private static readonly char[] LineSeparators = ['\r', '\n'];
     public static (string ChatId, string Token, string User) ExtractProviderSettings(string settings)
     {
         var chatId = string.Empty;
@@ -549,7 +550,7 @@ public static class NotificationPayloadBuilder
                 }
             }
 
-            var lines = explicitHeaders.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var lines = explicitHeaders.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
             var hasAuth = lines.Any(l =>
             {
                 var clean = l.Trim();

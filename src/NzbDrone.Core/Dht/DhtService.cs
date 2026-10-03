@@ -37,6 +37,8 @@ public class DhtService : BackgroundService, IDhtService,
         "dht.libtorrent.org:25401"
     };
 
+    private static readonly char[] NodeSeparators = [',', ';', '\r', '\n'];
+
     private readonly IConfigService _configService;
     private readonly IPeerDiscoveryService _peerDiscovery;
     private readonly ITorrentService _torrentService;
@@ -638,7 +640,7 @@ public class DhtService : BackgroundService, IDhtService,
         if (!string.IsNullOrWhiteSpace(_configService?.DhtBootstrapNodes))
         {
             var userNodes = _configService.DhtBootstrapNodes
-                .Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Split(NodeSeparators, StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => s.Trim())
                 .Where(s => !string.IsNullOrEmpty(s) && s.Contains(':'));
 

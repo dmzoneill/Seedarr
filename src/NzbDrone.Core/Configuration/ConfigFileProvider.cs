@@ -16,6 +16,7 @@ public class ConfigFileProvider : IConfigFileProvider
     private const string ConfigFileName = "config.xml";
     private const string ConfigElementName = "Config";
 
+    private static readonly char[] OriginSeparators = [',', ';'];
     private static readonly object Mutex = new();
 
     private readonly Logger _logger;
@@ -142,7 +143,7 @@ public class ConfigFileProvider : IConfigFileProvider
             }
 
             return allowedOrigins
-                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Split(OriginSeparators, StringSplitOptions.RemoveEmptyEntries)
                 .Select(o => o.Trim())
                 .Where(o => !string.IsNullOrEmpty(o))
                 .ToList();

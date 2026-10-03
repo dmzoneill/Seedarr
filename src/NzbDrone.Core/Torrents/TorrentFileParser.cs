@@ -77,6 +77,7 @@ public class TorrentFileParser : ITorrentFileParser
     private const long MaxPieceLength = 67108864; // 64 MiB
 
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+    private static readonly char[] PathSeparators = ['/', '\\'];
 
     private readonly Logger _logger;
 
@@ -522,7 +523,7 @@ public class TorrentFileParser : ITorrentFileParser
                 continue;
             }
 
-            var parts = rawSegment.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = rawSegment.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
             foreach (var part in parts)
             {
                 var trimmed = part.Trim();
@@ -787,7 +788,7 @@ public class TorrentFileParser : ITorrentFileParser
                     continue;
                 }
 
-                var parts = decoded.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                var parts = decoded.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
                 foreach (var part in parts)
                 {
                     if (TrySanitizeSegment(part, decoded, out var sanitized))
@@ -813,7 +814,7 @@ public class TorrentFileParser : ITorrentFileParser
             return null;
         }
 
-        var parts = dirName.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+        var parts = dirName.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
         var cleanParts = new List<string>();
 
         foreach (var part in parts)
@@ -834,7 +835,7 @@ public class TorrentFileParser : ITorrentFileParser
             return $"file_{fileIndex}";
         }
 
-        var parts = fileName.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+        var parts = fileName.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
         var cleanParts = new List<string>();
 
         foreach (var part in parts)

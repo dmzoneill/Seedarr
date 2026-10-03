@@ -26,6 +26,7 @@ public class PeerConnection : IDisposable
 {
     private const string ProtocolString = "BitTorrent protocol";
     private const int MaxMessageLength = 16 * 1024 * 1024;
+    private static readonly string[] CrlfSeparators = ["\r\n"];
 
     private readonly TcpClient _client;
     private readonly Stream _networkStream;
@@ -2191,7 +2192,7 @@ public class PeerConnection : IDisposable
         if (!responseText.StartsWith("HTTP/1.1 200", StringComparison.OrdinalIgnoreCase) &&
             !responseText.StartsWith("HTTP/1.0 200", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException($"HTTP CONNECT proxy returned non-200 status: {responseText.Split(new[] { "\r\n" }, StringSplitOptions.None)[0]}");
+            throw new InvalidOperationException($"HTTP CONNECT proxy returned non-200 status: {responseText.Split(CrlfSeparators, StringSplitOptions.None)[0]}");
         }
     }
 

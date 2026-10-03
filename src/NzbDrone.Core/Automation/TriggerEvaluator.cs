@@ -12,6 +12,12 @@ namespace NzbDrone.Core.Automation;
 public static class TriggerEvaluator
 {
     private static readonly Regex VariableRegex = new(@"\$\{([^}]+)\}", RegexOptions.Compiled);
+    private static readonly string[] EqualsOperator = ["=="];
+    private static readonly string[] NotEqualsOperator = ["!="];
+    private static readonly string[] GreaterThanOrEqualOperator = [">="];
+    private static readonly string[] LessThanOrEqualOperator = ["<="];
+    private static readonly char[] GreaterThanOperator = ['>'];
+    private static readonly char[] LessThanOperator = ['<'];
 
     public static Dictionary<string, object?> BuildEvaluationContext(
         Torrent? torrent,
@@ -174,7 +180,7 @@ public static class TriggerEvaluator
 
         if (substituted.Contains("=="))
         {
-            var parts = substituted.Split(new[] { "==" }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(EqualsOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2)
             {
                 return AreEqual(parts[0], parts[1], isProgressCheck);
@@ -182,7 +188,7 @@ public static class TriggerEvaluator
         }
         else if (substituted.Contains("!="))
         {
-            var parts = substituted.Split(new[] { "!=" }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(NotEqualsOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2)
             {
                 return !AreEqual(parts[0], parts[1], isProgressCheck);
@@ -190,7 +196,7 @@ public static class TriggerEvaluator
         }
         else if (substituted.Contains(">="))
         {
-            var parts = substituted.Split(new[] { ">=" }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(GreaterThanOrEqualOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
                 NormalizeProgress(ref l, ref r, isProgressCheck);
@@ -199,7 +205,7 @@ public static class TriggerEvaluator
         }
         else if (substituted.Contains("<="))
         {
-            var parts = substituted.Split(new[] { "<=" }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(LessThanOrEqualOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
                 NormalizeProgress(ref l, ref r, isProgressCheck);
@@ -208,7 +214,7 @@ public static class TriggerEvaluator
         }
         else if (substituted.Contains('>'))
         {
-            var parts = substituted.Split(new[] { '>' }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(GreaterThanOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
                 NormalizeProgress(ref l, ref r, isProgressCheck);
@@ -217,7 +223,7 @@ public static class TriggerEvaluator
         }
         else if (substituted.Contains('<'))
         {
-            var parts = substituted.Split(new[] { '<' }, StringSplitOptions.TrimEntries);
+            var parts = substituted.Split(LessThanOperator, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
                 NormalizeProgress(ref l, ref r, isProgressCheck);

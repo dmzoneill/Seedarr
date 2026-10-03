@@ -14,6 +14,7 @@ public interface IWebSeedUrlResolver
 
 public class WebSeedUrlResolver : IWebSeedUrlResolver
 {
+    private static readonly char[] PathSeparators = ['/', '\\'];
     public static string EncodePathSegment(string segment)
     {
         if (string.IsNullOrEmpty(segment))
@@ -50,7 +51,7 @@ public class WebSeedUrlResolver : IWebSeedUrlResolver
                 continue;
             }
 
-            var parts = segment.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = segment.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
             foreach (var part in parts)
             {
                 var trimmed = part.Trim();
@@ -103,7 +104,7 @@ public class WebSeedUrlResolver : IWebSeedUrlResolver
             }
 
             var cleanName = torrentName.Trim().TrimStart('/', '\\');
-            var parts = cleanName.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = cleanName.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
 
             foreach (var part in parts)
             {
@@ -169,7 +170,7 @@ public class WebSeedUrlResolver : IWebSeedUrlResolver
                 }
 
                 var cleanName = torrentName.Trim().TrimStart('/', '\\');
-                var parts = cleanName.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                var parts = cleanName.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
 
                 foreach (var part in parts)
                 {
@@ -188,7 +189,7 @@ public class WebSeedUrlResolver : IWebSeedUrlResolver
         {
             if (trimmedBaseUrl.EndsWith('/'))
             {
-                var parts = relativeFilePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+                var parts = relativeFilePath.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
                 var encodedParts = new List<string>();
 
                 foreach (var part in parts)
