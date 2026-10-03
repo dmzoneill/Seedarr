@@ -324,9 +324,9 @@ public class SubtitleDiscoveryService : ISubtitleDiscoveryService
         }
 
         return rel.StartsWith("Subs/", StringComparison.OrdinalIgnoreCase) ||
-               rel.StartsWith("Subtitles/", StringComparison.OrdinalIgnoreCase) ||
-               rel.Contains("/Subs/", StringComparison.OrdinalIgnoreCase) ||
-               rel.Contains("/Subtitles/", StringComparison.OrdinalIgnoreCase);
+            rel.StartsWith("Subtitles/", StringComparison.OrdinalIgnoreCase) ||
+            rel.Contains("/Subs/", StringComparison.OrdinalIgnoreCase) ||
+            rel.Contains("/Subtitles/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ExtractEpisodeCode(string text)
