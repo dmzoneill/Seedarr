@@ -176,9 +176,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: "#0d0f17",
+        backgroundColor: "#1a1815",
         backgroundImage:
-          "radial-gradient(ellipse at 50% 20%, #1e1b13 0%, #0d0f17 70%)",
+          "radial-gradient(ellipse at 50% 20%, #2a2620 0%, #1a1815 70%)",
         padding: "24px",
         fontFamily: "inherit",
       }}
@@ -187,11 +187,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         style={{
           width: "100%",
           maxWidth: "420px",
-          backgroundColor: "#161826",
-          border: "1px solid rgba(200, 168, 78, 0.2)",
+          backgroundColor: "#222018",
+          border: "1px solid rgba(200, 168, 78, 0.25)",
           borderRadius: "12px",
           padding: "36px 32px",
-          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.55)",
+          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.65)",
         }}
       >
         {/* Brand Header */}
@@ -213,7 +213,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           </div>
           <h1
             style={{
-              color: "#F1F5F9",
+              color: "#f8f6f0",
               fontSize: "24px",
               fontWeight: 700,
               margin: 0,
@@ -223,7 +223,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           </h1>
           <p
             style={{
-              color: "#94A3B8",
+              color: "#9c9484",
               fontSize: "14px",
               marginTop: "6px",
               marginBottom: 0,
@@ -271,7 +271,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             <label
               style={{
                 display: "block",
-                color: "#F1F5F9",
+                color: "#f8f6f0",
                 fontSize: "13px",
                 fontWeight: 500,
                 marginBottom: "6px",
@@ -288,10 +288,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               style={{
                 width: "100%",
                 padding: "10px 12px",
-                backgroundColor: "#0d0f17",
-                border: "1px solid #232738",
+                backgroundColor: "#1a1815",
+                border: "1px solid #3a352e",
                 borderRadius: "6px",
-                color: "#F1F5F9",
+                color: "#f8f6f0",
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
@@ -305,7 +305,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             <label
               style={{
                 display: "block",
-                color: "#F1F5F9",
+                color: "#f8f6f0",
                 fontSize: "13px",
                 fontWeight: 500,
                 marginBottom: "6px",
@@ -322,10 +322,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               style={{
                 width: "100%",
                 padding: "10px 12px",
-                backgroundColor: "#0d0f17",
-                border: "1px solid #232738",
+                backgroundColor: "#1a1815",
+                border: "1px solid #3a352e",
                 borderRadius: "6px",
-                color: "#F1F5F9",
+                color: "#f8f6f0",
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
@@ -408,13 +408,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               }}
             >
               <div
-                style={{ flex: 1, height: "1px", backgroundColor: "#232738" }}
+                style={{ flex: 1, height: "1px", backgroundColor: "#3a352e" }}
               />
-              <span style={{ padding: "0 12px", color: "#94A3B8" }}>
+              <span style={{ padding: "0 12px", color: "#9c9484" }}>
                 {t("auth.orSignInWith", undefined, "Or continue with")}
               </span>
               <div
-                style={{ flex: 1, height: "1px", backgroundColor: "#232738" }}
+                style={{ flex: 1, height: "1px", backgroundColor: "#3a352e" }}
               />
             </div>
 
@@ -432,10 +432,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     gap: "10px",
                     width: "100%",
                     padding: "10px 14px",
-                    backgroundColor: "#0d0f17",
-                    border: "1px solid #232738",
+                    backgroundColor: "#1a1815",
+                    border: "1px solid #3a352e",
                     borderRadius: "6px",
-                    color: "#F1F5F9",
+                    color: "#f8f6f0",
                     fontSize: "13px",
                     fontWeight: 500,
                     textDecoration: "none",

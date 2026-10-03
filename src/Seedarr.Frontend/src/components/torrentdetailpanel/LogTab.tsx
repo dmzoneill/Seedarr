@@ -265,7 +265,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
         style={{
           maxHeight: "360px",
           overflowY: "auto",
-          backgroundColor: "#0d1117",
+          backgroundColor: "var(--sidebar-bg, #1a1815)",
           borderRadius: "4px",
         }}
       >
@@ -278,7 +278,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           }}
         >
           <thead>
-            <tr style={{ backgroundColor: "#161b22" }}>
+            <tr style={{ backgroundColor: "var(--bg-secondary, #2a2620)" }}>
               <th
                 className="torrent-table-th"
                 style={{ width: "130px", padding: "0.3rem 0.4rem" }}

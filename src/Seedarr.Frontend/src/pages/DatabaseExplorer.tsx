@@ -58,7 +58,7 @@ function getPlanBadge(detail: string): { label: string; bg: string; color: strin
     return { label: "INDEX SEARCH", bg: "rgba(16, 185, 129, 0.15)", color: "#10b981", icon: "⚡" };
   }
   if (d.includes("INTEGER PRIMARY KEY") || d.includes("ROWID")) {
-    return { label: "PRIMARY KEY", bg: "rgba(59, 130, 246, 0.15)", color: "#3b82f6", icon: "🎯" };
+    return { label: "PRIMARY KEY", bg: "rgba(200, 168, 78, 0.15)", color: "#c8a84e", icon: "🎯" };
   }
   if (d.includes("TEMP B-TREE") || d.includes("TEMP TABLE")) {
     return { label: "TEMP B-TREE", bg: "rgba(139, 92, 246, 0.15)", color: "#8b5cf6", icon: "🔄" };
@@ -766,7 +766,7 @@ export default function DatabaseExplorer() {
                         width={cardWidth}
                         height={40 + visibleCols.length * 24 + (table.columns.length > 10 ? 25 : 8)}
                         rx="8"
-                        fill="var(--bg-card, #1a1e29)"
+                        fill="var(--bg-card, #2a2620)"
                         stroke={
                           isHovered
                             ? "var(--accent, #ffd166)"
@@ -1157,7 +1157,7 @@ export default function DatabaseExplorer() {
                   position: "absolute",
                   bottom: "1rem",
                   right: "1rem",
-                  backgroundColor: "rgba(16, 17, 26, 0.95)",
+                  backgroundColor: "rgba(26, 24, 21, 0.95)",
                   border: "1px solid var(--border-light)",
                   borderRadius: "6px",
                   padding: "0.75rem 1rem",
@@ -1227,8 +1227,8 @@ export default function DatabaseExplorer() {
                     fontSize: "0.75rem",
                     padding: "0.15rem 0.45rem",
                     borderRadius: "4px",
-                    backgroundColor: selectedStorageItem.type === "table" ? "rgba(14, 165, 233, 0.2)" : "rgba(139, 92, 246, 0.2)",
-                    color: selectedStorageItem.type === "table" ? "#0ea5e9" : "#8b5cf6",
+                    backgroundColor: selectedStorageItem.type === "table" ? "rgba(200, 168, 78, 0.2)" : "rgba(139, 92, 246, 0.2)",
+                    color: selectedStorageItem.type === "table" ? "#c8a84e" : "#8b5cf6",
                     textTransform: "uppercase",
                     fontWeight: 600,
                   }}

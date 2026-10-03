@@ -376,7 +376,7 @@ export function CustomScriptsTab() {
             style={{
               width: "100%",
               maxWidth: 640,
-              backgroundColor: "var(--bg-card, #161826)",
+              backgroundColor: "var(--bg-card, #2a2620)",
               borderRadius: "8px",
               padding: "1.5rem",
               boxShadow: "0 16px 40px rgba(0,0,0,0.7)",

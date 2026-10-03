@@ -158,7 +158,7 @@ export function PeersTab({
               style={{
                 position: "sticky",
                 top: 0,
-                backgroundColor: "var(--bg-primary, #10111A)",
+                backgroundColor: "var(--bg-primary, #222018)",
                 zIndex: 2,
               }}
             >

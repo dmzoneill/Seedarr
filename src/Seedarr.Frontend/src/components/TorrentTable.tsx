@@ -236,10 +236,10 @@ export const TorrentProgressCell: React.FC<{
               width: `${rawPct}%`,
               height: "100%",
               backgroundColor: isChecking
-                ? "var(--info, #38bdf8)"
+                ? "var(--accent, #c8a84e)"
                 : rawPct >= 100
                   ? "var(--success, #22c55e)"
-                  : "var(--accent, #ffd166)",
+                  : "var(--accent, #c8a84e)",
               transition: "width 0.3s",
             }}
           />
@@ -251,7 +251,7 @@ export const TorrentProgressCell: React.FC<{
             fontWeight: 600,
             minWidth: 44,
             textAlign: "right",
-            color: isChecking ? "var(--info, #38bdf8)" : undefined,
+            color: isChecking ? "var(--accent, #c8a84e)" : undefined,
           }}
         >
           {rawPct.toFixed(1)}%
@@ -934,7 +934,7 @@ export const TorrentTableRow = React.memo<TorrentTableRowProps>(
         style={{
           cursor: "pointer",
           backgroundColor: isSelected
-            ? "var(--bg-card-hover, #23284b)"
+            ? "var(--bg-card-hover, #3a352e)"
             : isChecked
               ? "rgba(255, 209, 102, 0.05)"
               : "transparent",

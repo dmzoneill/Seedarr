@@ -465,7 +465,7 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
             </div>
             <div
               style={{
-                backgroundColor: "var(--sidebar-bg, #14151b)",
+                backgroundColor: "var(--sidebar-bg, #1a1815)",
                 border: "1px solid var(--border-light)",
                 borderRadius: "6px",
                 padding: "0.85rem",
@@ -517,7 +517,7 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
                 <pre
                   style={{
                     margin: 0,
-                    backgroundColor: "var(--sidebar-bg, #14151b)",
+                    backgroundColor: "var(--sidebar-bg, #1a1815)",
                     border: "1px solid var(--border-light)",
                     borderRadius: "6px",
                     padding: "0.85rem",

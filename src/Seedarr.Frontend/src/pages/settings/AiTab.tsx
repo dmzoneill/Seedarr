@@ -242,7 +242,7 @@ export function AiTab() {
                             fontFamily: "monospace",
                             padding: "0.1rem 0.35rem",
                             borderRadius: "4px",
-                            backgroundColor: "#23284B",
+                            backgroundColor: "var(--bg-card, #2a2620)",
                             color: "#C7C5D3",
                           }}
                         >

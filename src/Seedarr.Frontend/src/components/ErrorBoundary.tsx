@@ -93,7 +93,7 @@ class ErrorBoundary extends Component<Props, State> {
             style={{
               maxWidth: "680px",
               width: "100%",
-              backgroundColor: "var(--bg-card, #161826)",
+              backgroundColor: "var(--bg-card, #2a2620)",
               borderRadius: "8px",
               padding: "2rem",
               border: "1px solid rgba(239, 68, 68, 0.3)",

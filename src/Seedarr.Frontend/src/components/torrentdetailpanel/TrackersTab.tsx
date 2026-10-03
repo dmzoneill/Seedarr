@@ -318,8 +318,8 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
                               display: "inline-block",
                               width: "0.75rem",
                               height: "0.75rem",
-                              border: "2px solid rgba(56, 189, 248, 0.3)",
-                              borderTopColor: "#38bdf8",
+                              border: "2px solid rgba(200, 168, 78, 0.3)",
+                              borderTopColor: "#c8a84e",
                               borderRadius: "50%",
                               animation: "spin 0.6s linear infinite",
                             }}

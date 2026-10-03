@@ -73,7 +73,7 @@ export function ConfirmModal({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: "rgba(10, 11, 18, 0.85)",
+        backgroundColor: "var(--overlay, rgba(0, 0, 0, 0.75))",
         backdropFilter: "blur(6px)",
         display: "flex",
         alignItems: "center",

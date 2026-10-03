@@ -230,7 +230,7 @@ export default function DeveloperWebhooks() {
           >
             {simulationResult ? (
               <div>
-                <div style={{ marginBottom: "8px", paddingBottom: "6px", borderBottom: "1px solid #334155" }}>
+                <div style={{ marginBottom: "8px", paddingBottom: "6px", borderBottom: "1px solid var(--border-light, #302c24)" }}>
                   <span
                     style={{
                       padding: "2px 6px",
@@ -247,7 +247,7 @@ export default function DeveloperWebhooks() {
                     {simulationResult.executionTimeMs}ms
                   </span>
                 </div>
-                <div style={{ color: "#38bdf8", marginBottom: "8px" }}>{simulationResult.message}</div>
+                <div style={{ color: "var(--accent, #c8a84e)", marginBottom: "8px" }}>{simulationResult.message}</div>
                 {simulationResult.traceLogs.map((log, i) => (
                   <div key={i} style={{ marginBottom: "3px", color: "#94a3b8" }}>{log}</div>
                 ))}

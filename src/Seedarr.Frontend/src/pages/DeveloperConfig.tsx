@@ -295,7 +295,7 @@ export default function DeveloperConfig() {
               ) : (
                 envEntries.map(([k, v]) => (
                   <tr key={k} style={{ borderBottom: "1px solid var(--border, #3a352e)" }}>
-                    <td style={{ padding: "8px 14px", fontWeight: 600, fontFamily: "monospace", color: "#38bdf8" }}>{k}</td>
+                    <td style={{ padding: "8px 14px", fontWeight: 600, fontFamily: "monospace", color: "var(--accent, #c8a84e)" }}>{k}</td>
                     <td style={{ padding: "8px 14px", fontFamily: "monospace", color: "#fff", wordBreak: "break-all" }}>{v}</td>
                     <td style={{ padding: "8px 14px", textAlign: "right" }}>
                       <button

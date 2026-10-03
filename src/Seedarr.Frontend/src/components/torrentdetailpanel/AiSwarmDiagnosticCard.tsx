@@ -149,7 +149,7 @@ export const AiSwarmDiagnosticCard: React.FC<AiSwarmDiagnosticCardProps> = ({
           style={{
             padding: "0.75rem",
             borderTop: "1px solid var(--border-light)",
-            backgroundColor: "var(--bg-primary, #10111A)",
+            backgroundColor: "var(--bg-primary, #222018)",
             display: "flex",
             flexDirection: "column",
             gap: "0.75rem",
@@ -179,7 +179,7 @@ export const AiSwarmDiagnosticCard: React.FC<AiSwarmDiagnosticCardProps> = ({
                 style={{
                   padding: "0.35rem 0.75rem",
                   backgroundColor: "var(--accent-gold, #FFD166)",
-                  color: "#10111A",
+                  color: "#1a1815",
                   border: "none",
                   borderRadius: "5px",
                   fontSize: "0.75rem",

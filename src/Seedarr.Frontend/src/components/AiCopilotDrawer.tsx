@@ -322,7 +322,7 @@ export const AiCopilotDrawer: React.FC = () => {
               fontSize: "0.65rem",
               padding: "0.1rem 0.35rem",
               borderRadius: "4px",
-              backgroundColor: "#23284B",
+              backgroundColor: "#2a2620",
               color: "#C7C5D3",
               fontFamily: "monospace",
             }}
@@ -342,7 +342,7 @@ export const AiCopilotDrawer: React.FC = () => {
             zIndex: 50,
             display: "flex",
             flexDirection: "column",
-            backgroundColor: "var(--bg-primary, #10111A)",
+            backgroundColor: "var(--bg-primary, #1a1815)",
             borderLeft: "1px solid var(--border-light)",
             borderTop: "1px solid var(--border-light)",
             boxShadow: "-8px 0 32px rgba(0,0,0,0.6)",
@@ -372,7 +372,7 @@ export const AiCopilotDrawer: React.FC = () => {
                   width: "28px",
                   height: "28px",
                   borderRadius: "6px",
-                  backgroundColor: "#23284B",
+                  backgroundColor: "#2a2620",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -466,7 +466,7 @@ export const AiCopilotDrawer: React.FC = () => {
               alignItems: "center",
               gap: "0.4rem",
               padding: "0.4rem 0.75rem",
-              backgroundColor: "rgba(23, 27, 53, 0.6)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               borderBottom: "1px solid var(--border-light)",
               fontSize: "0.75rem",
             }}
@@ -478,7 +478,7 @@ export const AiCopilotDrawer: React.FC = () => {
                 borderRadius: "5px",
                 border: "none",
                 backgroundColor:
-                  activeTab === "chat" ? "#23284B" : "transparent",
+                  activeTab === "chat" ? "#2a2620" : "transparent",
                 color: activeTab === "chat" ? "#FFD166" : "#C7C5D3",
                 fontWeight: activeTab === "chat" ? 700 : 500,
                 cursor: "pointer",
@@ -493,7 +493,7 @@ export const AiCopilotDrawer: React.FC = () => {
                 borderRadius: "5px",
                 border: "none",
                 backgroundColor:
-                  activeTab === "parse" ? "#23284B" : "transparent",
+                  activeTab === "parse" ? "#2a2620" : "transparent",
                 color: activeTab === "parse" ? "#FFD166" : "#C7C5D3",
                 fontWeight: activeTab === "parse" ? 700 : 500,
                 cursor: "pointer",
@@ -508,7 +508,7 @@ export const AiCopilotDrawer: React.FC = () => {
                 borderRadius: "5px",
                 border: "none",
                 backgroundColor:
-                  activeTab === "security" ? "#23284B" : "transparent",
+                  activeTab === "security" ? "#2a2620" : "transparent",
                 color: activeTab === "security" ? "#FFD166" : "#C7C5D3",
                 fontWeight: activeTab === "security" ? 700 : 500,
                 cursor: "pointer",
@@ -526,7 +526,7 @@ export const AiCopilotDrawer: React.FC = () => {
                 display: "flex",
                 flexDirection: "column",
                 minHeight: 0,
-                backgroundColor: "#10111A",
+                backgroundColor: "#1a1815",
               }}
             >
               {/* Quick Actions Bar */}
@@ -536,8 +536,8 @@ export const AiCopilotDrawer: React.FC = () => {
                   alignItems: "center",
                   gap: "0.4rem",
                   padding: "0.4rem 0.75rem",
-                  backgroundColor: "rgba(23, 27, 53, 0.3)",
-                  borderBottom: "1px solid rgba(35, 40, 75, 0.5)",
+                  backgroundColor: "rgba(0, 0, 0, 0.25)",
+                  borderBottom: "1px solid var(--border-light, #302c24)",
                   overflowX: "auto",
                 }}
               >
@@ -561,7 +561,7 @@ export const AiCopilotDrawer: React.FC = () => {
                     fontSize: "0.7rem",
                     padding: "0.15rem 0.5rem",
                     borderRadius: "9999px",
-                    backgroundColor: "rgba(35, 40, 75, 0.8)",
+                    backgroundColor: "var(--bg-hover, #3a352e)",
                     color: "#C7C5D3",
                     border: "none",
                     cursor: "pointer",
@@ -580,7 +580,7 @@ export const AiCopilotDrawer: React.FC = () => {
                     fontSize: "0.7rem",
                     padding: "0.15rem 0.5rem",
                     borderRadius: "9999px",
-                    backgroundColor: "rgba(35, 40, 75, 0.8)",
+                    backgroundColor: "var(--bg-hover, #3a352e)",
                     color: "#C7C5D3",
                     border: "none",
                     cursor: "pointer",
@@ -599,7 +599,7 @@ export const AiCopilotDrawer: React.FC = () => {
                     fontSize: "0.7rem",
                     padding: "0.15rem 0.5rem",
                     borderRadius: "9999px",
-                    backgroundColor: "rgba(35, 40, 75, 0.8)",
+                    backgroundColor: "var(--bg-hover, #3a352e)",
                     color: "#C7C5D3",
                     border: "none",
                     cursor: "pointer",
@@ -641,8 +641,8 @@ export const AiCopilotDrawer: React.FC = () => {
                         alignItems: "center",
                         justifyContent: "center",
                         backgroundColor:
-                          msg.sender === "user" ? "#FFD166" : "#23284B",
-                        color: msg.sender === "user" ? "#10111A" : "#FFD166",
+                          msg.sender === "user" ? "#FFD166" : "#2a2620",
+                        color: msg.sender === "user" ? "#1a1815" : "#FFD166",
                         flexShrink: 0,
                       }}
                     >
@@ -666,7 +666,7 @@ export const AiCopilotDrawer: React.FC = () => {
                             : "var(--bg-secondary, #171B35)",
                         color:
                           msg.sender === "user"
-                            ? "#10111A"
+                            ? "#1a1815"
                             : "var(--text-primary, #F8F4ED)",
                         border:
                           msg.sender === "user"
@@ -695,7 +695,7 @@ export const AiCopilotDrawer: React.FC = () => {
                               fontFamily: "monospace",
                               padding: "0 0.2rem",
                               borderRadius: "3px",
-                              backgroundColor: "#23284B",
+                              backgroundColor: "#2a2620",
                               color: "#C7C5D3",
                             }}
                           >
@@ -753,7 +753,7 @@ export const AiCopilotDrawer: React.FC = () => {
                   placeholder={t("copilot.inputPlaceholder")}
                   style={{
                     flex: 1,
-                    backgroundColor: "#10111A",
+                    backgroundColor: "#1a1815",
                     border: "1px solid var(--border-light)",
                     borderRadius: "6px",
                     padding: "0.4rem 0.6rem",
@@ -768,7 +768,7 @@ export const AiCopilotDrawer: React.FC = () => {
                   style={{
                     padding: "0.4rem 0.6rem",
                     backgroundColor: "var(--accent-gold, #FFD166)",
-                    color: "#10111A",
+                    color: "#1a1815",
                     border: "none",
                     borderRadius: "6px",
                     cursor: "pointer",
@@ -795,7 +795,7 @@ export const AiCopilotDrawer: React.FC = () => {
                 display: "flex",
                 flexDirection: "column",
                 gap: "0.75rem",
-                backgroundColor: "#10111A",
+                backgroundColor: "#1a1815",
               }}
             >
               <div>
@@ -839,7 +839,7 @@ export const AiCopilotDrawer: React.FC = () => {
                     style={{
                       padding: "0.4rem 0.75rem",
                       backgroundColor: "var(--accent-gold, #FFD166)",
-                      color: "#10111A",
+                      color: "#1a1815",
                       border: "none",
                       borderRadius: "6px",
                       fontSize: "0.75rem",
@@ -929,7 +929,7 @@ export const AiCopilotDrawer: React.FC = () => {
                         style={{
                           padding: "0.3rem 0.5rem",
                           borderRadius: "4px",
-                          backgroundColor: "#23284B",
+                          backgroundColor: "#2a2620",
                         }}
                       >
                         <span
@@ -949,7 +949,7 @@ export const AiCopilotDrawer: React.FC = () => {
                         style={{
                           padding: "0.3rem 0.5rem",
                           borderRadius: "4px",
-                          backgroundColor: "#23284B",
+                          backgroundColor: "#2a2620",
                         }}
                       >
                         <span
@@ -969,7 +969,7 @@ export const AiCopilotDrawer: React.FC = () => {
                         style={{
                           padding: "0.3rem 0.5rem",
                           borderRadius: "4px",
-                          backgroundColor: "#23284B",
+                          backgroundColor: "#2a2620",
                         }}
                       >
                         <span
@@ -989,7 +989,7 @@ export const AiCopilotDrawer: React.FC = () => {
                         style={{
                           padding: "0.3rem 0.5rem",
                           borderRadius: "4px",
-                          backgroundColor: "#23284B",
+                          backgroundColor: "#2a2620",
                         }}
                       >
                         <span
@@ -1011,7 +1011,7 @@ export const AiCopilotDrawer: React.FC = () => {
                         style={{
                           padding: "0.3rem 0.5rem",
                           borderRadius: "4px",
-                          backgroundColor: "#23284B",
+                          backgroundColor: "#2a2620",
                         }}
                       >
                         <span
@@ -1033,7 +1033,7 @@ export const AiCopilotDrawer: React.FC = () => {
                         style={{
                           padding: "0.3rem 0.5rem",
                           borderRadius: "4px",
-                          backgroundColor: "#23284B",
+                          backgroundColor: "#2a2620",
                         }}
                       >
                         <span
@@ -1064,7 +1064,7 @@ export const AiCopilotDrawer: React.FC = () => {
                 display: "flex",
                 flexDirection: "column",
                 gap: "0.75rem",
-                backgroundColor: "#10111A",
+                backgroundColor: "#1a1815",
               }}
             >
               <div>
@@ -1105,7 +1105,7 @@ export const AiCopilotDrawer: React.FC = () => {
                     width: "100%",
                     padding: "0.4rem 0.75rem",
                     backgroundColor: "var(--accent-gold, #FFD166)",
-                    color: "#10111A",
+                    color: "#1a1815",
                     border: "none",
                     borderRadius: "6px",
                     fontSize: "0.75rem",
