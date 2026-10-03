@@ -118,12 +118,12 @@ public static class TerminalEnvironmentSanitizer
             }
         }
 
-        if (!result.ContainsKey("TERM") || string.IsNullOrWhiteSpace(result["TERM"]))
+        if (!result.TryGetValue("TERM", out var term) || string.IsNullOrWhiteSpace(term))
         {
             result["TERM"] = DefaultTerm;
         }
 
-        if (!result.ContainsKey("LANG") || string.IsNullOrWhiteSpace(result["LANG"]))
+        if (!result.TryGetValue("LANG", out var lang) || string.IsNullOrWhiteSpace(lang))
         {
             result["LANG"] = DefaultLang;
         }
@@ -161,7 +161,7 @@ public static class TerminalEnvironmentSanitizer
     {
         var env = Sanitize(Environment.GetEnvironmentVariables());
 
-        if (!env.ContainsKey("PATH") || string.IsNullOrWhiteSpace(env["PATH"]))
+        if (!env.TryGetValue("PATH", out var path) || string.IsNullOrWhiteSpace(path))
         {
             env["PATH"] = DefaultPath;
         }

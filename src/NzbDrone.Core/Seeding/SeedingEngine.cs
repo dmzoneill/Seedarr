@@ -859,9 +859,10 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
 
         foreach (var torrent in activeTorrents)
         {
-            if (!_sessionStartUploaded.ContainsKey(torrent.Id))
+            if (!_sessionStartUploaded.TryGetValue(torrent.Id, out var sessionStartUp))
             {
-                _sessionStartUploaded[torrent.Id] = torrent.Uploaded;
+                sessionStartUp = torrent.Uploaded;
+                _sessionStartUploaded[torrent.Id] = sessionStartUp;
                 _sessionStartDownloaded[torrent.Id] = torrent.Downloaded;
             }
 
@@ -899,7 +900,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             _prevUploaded[torrent.Id] = torrent.Uploaded;
             _prevDownloaded[torrent.Id] = torrent.Downloaded;
 
-            torrent.SessionUploaded = torrent.Uploaded - _sessionStartUploaded[torrent.Id];
+            torrent.SessionUploaded = torrent.Uploaded - sessionStartUp;
             torrent.SessionDownloaded = torrent.Downloaded - _sessionStartDownloaded[torrent.Id];
 
             if (!string.IsNullOrEmpty(torrent.InfoHash))
