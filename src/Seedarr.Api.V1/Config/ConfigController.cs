@@ -529,7 +529,7 @@ public class BitTorrentConfigController : ConfigController<BitTorrentConfigResou
         }
 
         var (path, _) = CustomScriptService.ParseSettings(scriptPath);
-        if (string.IsNullOrWhiteSpace(path) || path.IndexOf('\0') >= 0)
+        if (string.IsNullOrWhiteSpace(path) || path.Contains('\0'))
         {
             return false;
         }

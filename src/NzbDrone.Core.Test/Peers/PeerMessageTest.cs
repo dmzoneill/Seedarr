@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
 
@@ -95,7 +96,7 @@ public class PeerMessageTest
         var message = new PeerMessage
         {
             Type = PeerMessageType.Bitfield,
-            Payload = new byte[0]
+            Payload = Array.Empty<byte>()
         };
 
         Assert.That(message.Length, Is.EqualTo(1));

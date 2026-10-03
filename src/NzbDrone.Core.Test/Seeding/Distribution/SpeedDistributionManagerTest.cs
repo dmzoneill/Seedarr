@@ -46,7 +46,7 @@ public class SpeedDistributionManagerTest
                 var count = callInfo.ArgAt<int>(1);
                 if (count == 0)
                 {
-                    return new long[0];
+                    return Array.Empty<long>();
                 }
 
                 var share = total / count;
@@ -60,7 +60,7 @@ public class SpeedDistributionManagerTest
                 var count = callInfo.ArgAt<int>(1);
                 if (count == 0)
                 {
-                    return new long[0];
+                    return Array.Empty<long>();
                 }
 
                 var result = new long[count];
