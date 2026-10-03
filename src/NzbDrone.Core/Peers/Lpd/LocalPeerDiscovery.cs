@@ -638,7 +638,10 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
             }
             else if (trimmedLine.StartsWith("Port:", StringComparison.OrdinalIgnoreCase))
             {
-                int.TryParse(trimmedLine[5..].Trim(), out port);
+                if (int.TryParse(trimmedLine[5..].Trim(), out var parsedPort))
+                {
+                    port = parsedPort;
+                }
             }
             else if (trimmedLine.StartsWith("cookie:", StringComparison.OrdinalIgnoreCase))
             {

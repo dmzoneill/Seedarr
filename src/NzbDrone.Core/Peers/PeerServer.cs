@@ -3466,7 +3466,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             return;
         }
 
-        IPAddress.TryParse(connection.RemoteIp, out var remoteIp);
+        IPAddress remoteIp = null;
+        if (!string.IsNullOrEmpty(connection.RemoteIp) && IPAddress.TryParse(connection.RemoteIp, out var parsedIp))
+        {
+            remoteIp = parsedIp;
+        }
         var listeningPort = _configService?.ListeningPort ?? 0;
         var metadata = GetTorrentMetadata(torrent?.InfoHash);
         var metadataSize = metadata?.Length ?? 0;
