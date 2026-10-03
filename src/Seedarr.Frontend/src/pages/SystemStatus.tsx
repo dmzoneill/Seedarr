@@ -60,11 +60,12 @@ function SystemStatus() {
       pollReconnect();
     } catch (err: unknown) {
       setIsRestarting(false);
+      const errMsg = (err as { message?: string })?.message || "Unknown error";
       showToast(
         t(
           "systemStatus.restartFailedToast",
-          { error: err?.message || "Unknown error" },
-          `Failed to trigger restart: ${err?.message || "Unknown error"}`,
+          { error: errMsg },
+          `Failed to trigger restart: ${errMsg}`,
         ),
         "error",
       );
@@ -126,11 +127,12 @@ function SystemStatus() {
       );
     } catch (err: unknown) {
       setIsShuttingDown(false);
+      const errMsg = (err as { message?: string })?.message || "Unknown error";
       showToast(
         t(
           "systemStatus.shutdownFailedToast",
-          { error: err?.message || "Unknown error" },
-          `Failed to trigger shutdown: ${err?.message || "Unknown error"}`,
+          { error: errMsg },
+          `Failed to trigger shutdown: ${errMsg}`,
         ),
         "error",
       );

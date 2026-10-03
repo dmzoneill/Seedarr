@@ -69,7 +69,7 @@ function sanitizeNotificationSettings(
   ) {
     autoDismissSeconds = Math.min(
       60,
-      Math.max(1, Math.round(raw.autoDismissSeconds)),
+      Math.max(1, Math.round(rawObj.autoDismissSeconds)),
     );
   }
 
@@ -270,15 +270,17 @@ function parseNotificationToForm(
       parsed.webhookUrl ||
       "",
     token: parsed.token || parsed.botToken || parsed.apiKey || "",
-    chatId: parsed.chat_id || parsed.chatId || "",
+    chatId: parsed.chat_id ? String(parsed.chat_id) : parsed.chatId ? String(parsed.chatId) : "",
     userKey: parsed.user || parsed.userKey || "",
     username: parsed.username || parsed.user || "",
     avatarUrl: parsed.avatarUrl || parsed.avatar_url || "",
     method: parsed.method || "POST",
     customHeaders:
-      typeof parsed.headers === "object"
+      typeof parsed.headers === "object" && parsed.headers !== null
         ? JSON.stringify(parsed.headers, null, 2)
-        : parsed.headers || "",
+        : typeof parsed.headers === "string"
+          ? parsed.headers
+          : "",
     server: parsed.server || parsed.host || "",
     port: parsed.port ? Number(parsed.port) : 587,
     useSsl: parsed.useSsl ?? parsed.ssl ?? true,
@@ -565,7 +567,7 @@ export function NotificationsTab() {
       setSaved(true);
       showToast("Toast settings saved successfully", "success");
     } catch (err: unknown) {
-      showToast(err?.message || "Failed to save toast settings", "error");
+      showToast((err as { message?: string })?.message || "Failed to save toast settings", "error");
     }
   };
 
@@ -630,7 +632,7 @@ export function NotificationsTab() {
           "test",
           false,
         );
-        const msg = err?.message || "Test failed";
+        const msg = (err as { message?: string })?.message || "Test failed";
         setTestResults((prev) => ({
           ...prev,
           [id]: { success: false, message: msg },
@@ -673,7 +675,7 @@ export function NotificationsTab() {
           "test",
           false,
         );
-        const msg = err?.message || "Test failed";
+        const msg = (err as { message?: string })?.message || "Test failed";
         setModalTestResult({ success: false, message: msg });
         showToast(`Test notification failed: ${msg}`, "error");
       },
@@ -698,7 +700,7 @@ export function NotificationsTab() {
         setDeletingNotif(null);
       },
       onError: (err: unknown) => {
-        showToast(err?.message || "Failed to delete notification", "error");
+        showToast((err as { message?: string })?.message || "Failed to delete notification", "error");
       },
     });
   };
@@ -721,7 +723,7 @@ export function NotificationsTab() {
           setModalTestResult(null);
         },
         onError: (err: unknown) => {
-          showToast(err?.message || "Failed to update notification", "error");
+          showToast((err as { message?: string })?.message || "Failed to update notification", "error");
         },
       });
     } else {
@@ -732,7 +734,7 @@ export function NotificationsTab() {
           setModalTestResult(null);
         },
         onError: (err: unknown) => {
-          showToast(err?.message || "Failed to create notification", "error");
+          showToast((err as { message?: string })?.message || "Failed to create notification", "error");
         },
       });
     }
