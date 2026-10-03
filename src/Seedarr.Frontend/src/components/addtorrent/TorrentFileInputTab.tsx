@@ -218,7 +218,7 @@ export function TorrentFileInputTab({
                   justifyContent: "space-between",
                   alignItems: "center",
                   padding: "0.4rem 0.75rem",
-                  backgroundColor: "var(--bg-secondary, #171b35)",
+                  backgroundColor: "var(--bg-secondary, #2a2620)",
                   borderRadius: "6px",
                   border: "1px solid var(--border-light)",
                   fontSize: "0.85rem",

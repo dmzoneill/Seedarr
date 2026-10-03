@@ -97,7 +97,7 @@ export function ConfirmModal({
         style={{
           width: "100%",
           maxWidth: "480px",
-          backgroundColor: "var(--bg-secondary, #171b35)",
+          backgroundColor: "var(--bg-secondary, #2a2620)",
           borderRadius: "12px",
           border: danger
             ? "1px solid rgba(230, 57, 70, 0.45)"
