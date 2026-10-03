@@ -17,6 +17,7 @@ namespace NzbDrone.Core.Update;
 
 public class InstallUpdateService : IInstallUpdateService
 {
+    private static readonly char[] LineSeparators = ['\r', '\n'];
     private readonly IUpdateService _updateService;
     private readonly IUpdatePackageProvider _updatePackageProvider;
     private readonly IPostUpdateVerificationService _postUpdateVerificationService;
@@ -456,7 +457,7 @@ public class InstallUpdateService : IInstallUpdateService
             return null;
         }
 
-        var lines = checksumContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var lines = checksumContent.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
 
         if (!string.IsNullOrWhiteSpace(packageFileName))
         {

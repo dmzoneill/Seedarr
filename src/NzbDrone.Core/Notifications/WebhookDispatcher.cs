@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -49,6 +50,9 @@ public class WebhookDispatcher : IWebhookDispatcher
     };
 
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private static readonly char[] LineSeparators = ['\r', '\n'];
+    private static readonly char[] RedactLineSeparators = ['\r', '\n', ','];
+    private static readonly SearchValues<char> HeaderKeyValueSeparators = SearchValues.Create([':', '=']);
     private readonly HttpClient _httpClient;
     private readonly AsyncRetryPolicy<HttpResponseMessage> _retryPolicy;
     private readonly TimeSpan _timeout;
@@ -637,7 +641,7 @@ public class WebhookDispatcher : IWebhookDispatcher
 
         try
         {
-            var lines = trimmed.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var lines = trimmed.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
             var addedAny = false;
             foreach (var line in lines)
             {
@@ -647,7 +651,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                     continue;
                 }
 
-                var separatorIndex = cleanLine.IndexOfAny(new[] { ':', '=' });
+                var separatorIndex = cleanLine.AsSpan().IndexOfAny(HeaderKeyValueSeparators);
                 if (separatorIndex > 0)
                 {
                     var key = cleanLine.Substring(0, separatorIndex).Trim();
@@ -680,12 +684,12 @@ public class WebhookDispatcher : IWebhookDispatcher
 
         try
         {
-            var lines = input.Split(new[] { '\r', '\n', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            var lines = input.Split(RedactLineSeparators, StringSplitOptions.RemoveEmptyEntries);
             var keys = new List<string>();
             foreach (var line in lines)
             {
                 var clean = line.Trim().Trim('{', '}', '"');
-                var sep = clean.IndexOfAny(new[] { ':', '=' });
+                var sep = clean.AsSpan().IndexOfAny(HeaderKeyValueSeparators);
                 if (sep > 0)
                 {
                     keys.Add(clean.Substring(0, sep).Trim().Trim('"'));

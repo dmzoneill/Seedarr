@@ -19,6 +19,7 @@ public class PackageImportService : IPackageImportService
 {
     private const int BufferSize = 65536; // 64 KiB
     private const long DefaultMaxUncompressedBytes = 50L * 1024 * 1024 * 1024; // 50 GB
+    private static readonly char[] PathSeparators = ['/', '\\'];
 
     private readonly ITorrentService _torrentService;
     private readonly ITorrentImportService _torrentImportService;
@@ -175,7 +176,7 @@ public class PackageImportService : IPackageImportService
                     else if (entry.Name.StartsWith("content/", StringComparison.OrdinalIgnoreCase))
                     {
                         var rel = entry.Name.Substring("content/".Length).TrimStart('/', '\\');
-                        var rootTorrentName = rel.Split(new[] { '/', '\\' }, 2)[0];
+                        var rootTorrentName = rel.Split(PathSeparators, 2)[0];
                         if (duplicateTorrentNames.Contains(rootTorrentName))
                         {
                             isDuplicateEntry = true;

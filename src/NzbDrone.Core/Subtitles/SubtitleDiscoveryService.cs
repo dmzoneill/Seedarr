@@ -30,6 +30,8 @@ public class SubtitleDiscoveryService : ISubtitleDiscoveryService
         ".m2ts"
     };
 
+    private static readonly char[] TokenSeparators = ['.', '_', '-', ' '];
+
     private static readonly Regex EpisodeRegex = new(
         @"(?i)\b(?:S(?<spad>\d{1,2})E(?<epad>\d{1,3})|(?<sno>\d{1,2})x(?<eno>\d{1,3}))\b",
         RegexOptions.Compiled);
@@ -247,7 +249,7 @@ public class SubtitleDiscoveryService : ISubtitleDiscoveryService
         // Strip leading track numbers like "2_" or "01 - "
         rawTokens = TrackIndexPrefixRegex.Replace(rawTokens, string.Empty).Trim();
 
-        var tokens = rawTokens.Split(new[] { '.', '_', '-', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        var tokens = rawTokens.Split(TokenSeparators, StringSplitOptions.RemoveEmptyEntries);
 
         string languageCode = null;
         string twoLetter = null;

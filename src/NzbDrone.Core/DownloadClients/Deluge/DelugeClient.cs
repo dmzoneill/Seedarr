@@ -14,6 +14,9 @@ namespace NzbDrone.Core.DownloadClients.Deluge;
 
 public class DelugeClient : IDownloadClient, IDisposable
 {
+    private static readonly string[] TorrentFileField = ["torrent_file"];
+    private static readonly string[] TrackersField = ["trackers"];
+    private static readonly string[] RatesFields = ["upload_rate", "download_rate"];
     private readonly Logger _logger;
     private readonly CookieContainer _cookies = new();
     private HttpClient _client;
@@ -389,7 +392,7 @@ public class DelugeClient : IDownloadClient, IDisposable
             {
                 try
                 {
-                    using var doc = SendRequest("core.get_torrent_status", new object[] { infoHash, new[] { "torrent_file" } });
+                    using var doc = SendRequest("core.get_torrent_status", new object[] { infoHash, TorrentFileField });
                     if (doc.RootElement.TryGetProperty("result", out var result) &&
                         result.TryGetProperty("torrent_file", out var tfProp))
                     {
@@ -448,7 +451,7 @@ public class DelugeClient : IDownloadClient, IDisposable
 
         try
         {
-            using var doc = SendRequest("core.get_torrent_status", new object[] { infoHash, new[] { "trackers" } });
+            using var doc = SendRequest("core.get_torrent_status", new object[] { infoHash, TrackersField });
             if (doc.RootElement.TryGetProperty("result", out var result) && result.TryGetProperty("trackers", out var trList))
             {
                 foreach (var tr in trList.EnumerateArray())
@@ -717,7 +720,7 @@ public class DelugeClient : IDownloadClient, IDisposable
                 }
             }
 
-            using var statsDoc = await SendRequestAsync("core.get_session_status", new object[] { new[] { "upload_rate", "download_rate" } }, cancellationToken);
+            using var statsDoc = await SendRequestAsync("core.get_session_status", new object[] { RatesFields }, cancellationToken);
             if (statsDoc.RootElement.TryGetProperty("result", out var statsResult))
             {
                 if (statsResult.TryGetProperty("upload_rate", out var curUp) && curUp.TryGetDouble(out var curUpVal))

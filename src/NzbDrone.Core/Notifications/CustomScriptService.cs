@@ -33,6 +33,8 @@ public class CustomScriptService : ICustomScriptService, IDisposable
         typeof(Func<string, bool>),
         typeof(File).GetMethod(nameof(File.Exists), new[] { typeof(string) })!);
 
+    private static readonly char[] WhitespaceSeparators = [' ', '\t'];
+
     public const int MaxStreamCaptureBytes = 256 * 1024;
 
     private readonly ITorrentMediaMetadataRepository _mediaMetadataRepository;
@@ -140,7 +142,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
                     remainder = remainder.Substring(3).Trim();
                 }
 
-                var parts = remainder.Split(new[] { ' ', '\t' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                var parts = remainder.Split(WhitespaceSeparators, 2, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {
                     interpreter = parts[0];
@@ -150,7 +152,7 @@ public class CustomScriptService : ICustomScriptService, IDisposable
             }
             else
             {
-                var parts = line.Split(new[] { ' ', '\t' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                var parts = line.Split(WhitespaceSeparators, 2, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {
                     interpreter = parts[0];

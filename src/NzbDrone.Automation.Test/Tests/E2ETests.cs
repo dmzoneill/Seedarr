@@ -12,6 +12,7 @@ namespace NzbDrone.Automation.Test.Tests;
 public class E2ETests : ApiTestBase
 {
     private const string TestTorrentHash = "e63e5567d9352b7b0d7d6d9271c0c5b2a303a059";
+    private static readonly string[] TorrentGetFields = ["hashString", "name", "totalSize"];
 
     private string _radarrKey = string.Empty;
 
@@ -118,7 +119,7 @@ public class E2ETests : ApiTestBase
         var transJson = await TransmissionRpcAsync("torrent-get", new
         {
             ids = new[] { TestTorrentHash },
-            fields = new[] { "hashString", "name", "totalSize" }
+            fields = TorrentGetFields
         });
 
         using var transDoc = JsonDocument.Parse(transJson);

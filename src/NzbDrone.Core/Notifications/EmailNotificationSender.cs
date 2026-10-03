@@ -36,6 +36,7 @@ public class ParsedEmailSettings
 
 public static class EmailNotificationSender
 {
+    private static readonly char[] AddressSeparators = [',', ';'];
     private static readonly int[] AllowedSmtpPorts = { 25, 465, 587, 2525 };
     private static readonly TimeSpan[] DefaultRetryDelays =
     {
@@ -348,7 +349,7 @@ public static class EmailNotificationSender
 
         var htmlBody = EmailTemplateRenderer.Render(eventType, body, torrent, meta, genericPayload, err);
 
-        var recipients = config.To.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var recipients = config.To.Split(AddressSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var validRecipients = new List<string>();
         foreach (var recipient in recipients)
         {

@@ -23,6 +23,7 @@ public class ProcessExecutionResult
 
 public class FFprobeMediaInspector : IFFprobeMediaInspector
 {
+    private static readonly string[] VersionArgs = ["-version"];
     private readonly string _ffprobePath;
     private readonly TimeSpan _timeout;
     private readonly Func<string, IReadOnlyList<string>, TimeSpan, CancellationToken, Task<ProcessExecutionResult>> _processExecutor;
@@ -67,7 +68,7 @@ public class FFprobeMediaInspector : IFFprobeMediaInspector
             {
                 var result = _processExecutor(
                     _ffprobePath,
-                    new[] { "-version" },
+                    VersionArgs,
                     TimeSpan.FromSeconds(2),
                     CancellationToken.None).GetAwaiter().GetResult();
 

@@ -54,6 +54,7 @@ public class UpdateService : IUpdateService
     private const string GitHubReleasesUrl = "https://api.github.com/repos/dmzoneill/Seedarr/releases?per_page=100";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
+    private static readonly string[] NewLineSeparators = ["\r\n", "\r", "\n"];
 
     private readonly HttpClient _client;
     private readonly ISystemClock _clock;
@@ -561,7 +562,7 @@ public class UpdateService : IUpdateService
             return releaseList;
         }
 
-        var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var lines = content.Split(NewLineSeparators, StringSplitOptions.None);
         ReleaseInfo currentRelease = null;
         var currentBody = new List<string>();
 

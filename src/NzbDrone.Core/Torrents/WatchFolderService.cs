@@ -15,6 +15,7 @@ namespace NzbDrone.Core.Torrents;
 
 public class WatchFolderService : BackgroundService
 {
+    private static readonly char[] LineSeparators = ['\r', '\n'];
     private readonly ITorrentFileParser _parser;
     private readonly ITorrentService _torrentService;
     private readonly ITrackerEntryService _trackerEntryService;
@@ -521,7 +522,7 @@ public class WatchFolderService : BackgroundService
             try
             {
                 var text = File.ReadAllText(filePath);
-                magnetUri = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                magnetUri = text.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries)
                     .Select(l => l.Trim())
                     .FirstOrDefault(l => l.StartsWith("magnet:?", StringComparison.OrdinalIgnoreCase));
 

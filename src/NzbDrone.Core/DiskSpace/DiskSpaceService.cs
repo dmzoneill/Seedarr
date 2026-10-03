@@ -131,6 +131,7 @@ public class DiskSpaceService : IDiskSpaceService
     public const double NormalRecoveryPercentThreshold = 0.06; // 6%
 
     private static readonly Logger _staticLogger = LogManager.GetCurrentClassLogger();
+    private static readonly char[] WhitespaceSeparators = [' ', '\t'];
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly ICategoryRepository _categoryRepository;
     private readonly ICategoryService _categoryService;
@@ -927,7 +928,7 @@ public class DiskSpaceService : IDiskSpaceService
                 continue;
             }
 
-            var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = line.Split(WhitespaceSeparators, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 4)
             {
                 continue;

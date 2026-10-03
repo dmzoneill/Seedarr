@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,6 +9,7 @@ namespace NzbDrone.Core.RemotePathMappings;
 
 public class RemotePathMappingService : IRemotePathMappingService
 {
+    private static readonly SearchValues<char> SlashSeparators = SearchValues.Create(['/', '\\']);
     private readonly IRemotePathMappingRepository _repository;
     private readonly List<RemotePathMapping> _mappings = new();
     private readonly object _lock = new();
@@ -226,7 +228,7 @@ public class RemotePathMappingService : IRemotePathMappingService
             trimmed = trimmed.Substring(8);
         }
 
-        var slashIdx = trimmed.IndexOfAny(new[] { '/', '\\' });
+        var slashIdx = trimmed.AsSpan().IndexOfAny(SlashSeparators);
         if (slashIdx >= 0)
         {
             if (!(int.TryParse(trimmed.AsSpan(slashIdx + 1), out _) && IPAddress.TryParse(trimmed.AsSpan(0, slashIdx), out _)))
