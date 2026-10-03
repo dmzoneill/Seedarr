@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.SignalR;
@@ -465,16 +466,16 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
         try
         {
             _hubContext.Clients?.All?.SendAsync("trackerUpdated", payload)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast trackerUpdated"), TaskContinuationOptions.OnlyOnFaulted);
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast trackerUpdated"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
             _hubContext.Clients?.All?.SendAsync("trackerAnnounced", payload)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast trackerAnnounced"), TaskContinuationOptions.OnlyOnFaulted);
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast trackerAnnounced"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
             _hubContext.Clients?.All?.SendAsync("TrackerUpdated", payload)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast TrackerUpdated"), TaskContinuationOptions.OnlyOnFaulted);
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast TrackerUpdated"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
             _hubContext.Clients?.All?.SendAsync("TrackerAnnounced", payload)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast TrackerAnnounced"), TaskContinuationOptions.OnlyOnFaulted);
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast TrackerAnnounced"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
             var message = new SignalRMessage
             {
@@ -483,7 +484,7 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
                 Body = payload
             };
             _hubContext.Clients?.All?.SendAsync("receiveMessage", message)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast tracker receiveMessage"), TaskContinuationOptions.OnlyOnFaulted);
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast tracker receiveMessage"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
         catch (Exception ex)
         {
