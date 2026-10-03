@@ -83,8 +83,8 @@ public class SystemResourceService : ISystemResourceService
             uptimeSeconds = 0;
         }
 
-        ThreadPool.GetAvailableThreads(out int availWorker, out int availPort);
-        ThreadPool.GetMaxThreads(out int maxWorker, out int maxPort);
+        ThreadPool.GetAvailableThreads(out var availWorker, out var availPort);
+        ThreadPool.GetMaxThreads(out var maxWorker, out var maxPort);
 
         return new HostProcessResourceMetrics
         {

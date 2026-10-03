@@ -990,7 +990,7 @@ public class ChokeManagerTest
             {
                 for (var j = 0; j < 50; j++)
                 {
-                    peer.PeerInterested = (j % 2 == 0);
+                    peer.PeerInterested = j % 2 == 0;
                     _subject.PeerInterestedChanged(peer);
                     _subject.CanUnchoke(peer);
                 }

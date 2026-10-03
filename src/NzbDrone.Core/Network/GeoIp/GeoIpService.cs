@@ -158,7 +158,7 @@ public class GeoIpService : IGeoIpService, IDisposable
         }
 
         var lookupResult = new GeoLocationInfo { IpAddress = ipAddress };
-        bool lockAcquired = false;
+        var lockAcquired = false;
 
         try
         {
@@ -422,7 +422,7 @@ public class GeoIpService : IGeoIpService, IDisposable
             return _reader;
         }
 
-        bool lockAcquired = false;
+        var lockAcquired = false;
         try
         {
             _readerLock.EnterWriteLock();
@@ -477,7 +477,7 @@ public class GeoIpService : IGeoIpService, IDisposable
             return;
         }
 
-        bool lockAcquired = false;
+        var lockAcquired = false;
         try
         {
             _readerLock.EnterWriteLock();

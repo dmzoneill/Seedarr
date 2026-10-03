@@ -268,7 +268,6 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
         return list;
     }
 
-
     private bool IsDuplicate(SignalRMessage message, string groupName = null)
     {
         var key = GetDeduplicationKey(message, groupName);

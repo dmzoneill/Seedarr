@@ -112,7 +112,7 @@ public class ProxyTestService : IProxyTestService
             stream.ReadTimeout = timeoutMs;
             stream.WriteTimeout = timeoutMs;
 
-            bool isHostname = !IPAddress.TryParse(targetHost, out _);
+            var isHostname = !IPAddress.TryParse(targetHost, out _);
 
             if (proxyType == ProxyType.Socks5 || proxyType == ProxyType.Socks5h)
             {
