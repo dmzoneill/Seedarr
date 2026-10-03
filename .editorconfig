@@ -340,3 +340,7 @@ indent_size = 2
 # but the analyzer incorrectly flags it after the LidarrConnection refactor.
 [src/NzbDrone.Core.Test/ArrIntegration/LidarrConnectionTest.cs]
 dotnet_diagnostic.IDE0005.severity = none
+
+[src/**/*.Test/**/*.cs]
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA1806.severity = none
