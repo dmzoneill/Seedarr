@@ -282,6 +282,28 @@ public class ConfigControllerTests
     }
 
     [Test]
+    public void SaveConfig_synchronizes_ui_theme_and_accent_fallbacks()
+    {
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            UiTheme = "slate",
+            ThemeStyle = null,
+            UiAccent = "amber",
+            ColorScheme = null
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.ThemeStyle, Is.EqualTo("slate"));
+        Assert.That(resource.ColorScheme, Is.EqualTo("amber"));
+    }
+
+    [Test]
     public void SaveConfig_with_new_api_key_containing_asterisks_saves_new_key()
     {
         _configFileProvider.ApiKey.Returns("1234567890abcdef");

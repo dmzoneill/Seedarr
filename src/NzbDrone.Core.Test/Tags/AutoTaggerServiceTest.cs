@@ -124,6 +124,48 @@ public class AutoTaggerServiceTest
         _torrentService.Received(1).Update(torrentLarge);
     }
 
+    [TestCase("< 10GB", 5L * 1024 * 1024 * 1024, true)]
+    [TestCase("< 10GB", 15L * 1024 * 1024 * 1024, false)]
+    [TestCase("<= 10GB", 10L * 1024 * 1024 * 1024, true)]
+    [TestCase(">= 10GB", 10L * 1024 * 1024 * 1024, true)]
+    [TestCase("== 10GB", 10L * 1024 * 1024 * 1024, true)]
+    [TestCase("= 10GB", 10L * 1024 * 1024 * 1024, true)]
+    [TestCase("invalid size", 10L * 1024 * 1024 * 1024, false)]
+    public void EvaluateTorrent_size_filter_operators_match_correctly(string pattern, long sizeBytes, bool shouldMatch)
+    {
+        var rule = new AutoTaggerRule
+        {
+            Id = 99,
+            Name = "Size Test",
+            TagId = 99,
+            RuleType = AutoTaggerRuleType.Size,
+            Pattern = pattern,
+            IsEnabled = true,
+            Priority = 1
+        };
+
+        _ruleRepository.All().Returns(new List<AutoTaggerRule> { rule });
+
+        var torrent = new Torrent
+        {
+            Id = 99,
+            Name = "Test.Release",
+            TotalSize = sizeBytes,
+            TagIds = new List<int>()
+        };
+
+        _subject.EvaluateTorrent(torrent);
+
+        if (shouldMatch)
+        {
+            Assert.That(torrent.TagIds, Contains.Item(99));
+        }
+        else
+        {
+            Assert.That(torrent.TagIds, Does.Not.Contain(99));
+        }
+    }
+
     [Test]
     public void Handle_TorrentAddedEvent_evaluates_torrent()
     {

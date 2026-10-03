@@ -895,6 +895,45 @@ public class CustomScriptServiceTest
     }
 
     [Test]
+    public void EnsureExecutablePermissions_when_path_is_null_or_empty_returns_safely()
+    {
+        Assert.DoesNotThrow(() => CustomScriptService.EnsureExecutablePermissions(null));
+        Assert.DoesNotThrow(() => CustomScriptService.EnsureExecutablePermissions(string.Empty));
+        Assert.DoesNotThrow(() => CustomScriptService.EnsureExecutablePermissions("   "));
+    }
+
+    [Test]
+    public void EnsureExecutablePermissions_when_file_does_not_exist_returns_safely()
+    {
+        Assert.DoesNotThrow(() => CustomScriptService.EnsureExecutablePermissions("/nonexistent/file.sh"));
+    }
+
+    [Test]
+    public async Task EnsureExecutablePermissions_when_file_already_executable_does_not_reapply()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Pass("POSIX permissions not applicable on Windows");
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var scriptPath = Path.Combine(tempDir, "already_exec.sh");
+            await File.WriteAllTextAsync(scriptPath, "#!/bin/sh\necho ok");
+            File.SetUnixFileMode(scriptPath, UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+            var logger = NLog.LogManager.GetCurrentClassLogger();
+            Assert.DoesNotThrow(() => CustomScriptService.EnsureExecutablePermissions(scriptPath, logger));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
     public async Task TestScriptAsync_should_auto_grant_execute_permission_and_run_successfully()
     {
         if (OperatingSystem.IsWindows())

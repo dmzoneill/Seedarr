@@ -914,4 +914,71 @@ public class DelugeJsonRpcControllerTest
         Assert.That(root.GetProperty("result").GetBoolean(), Is.False);
         Assert.That(root.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
+
+    [Test]
+    public async Task HandleRpc_WebGetTorrentInfo_WithValidBase64_ParsesAndReturnsTree()
+    {
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        var b64 = Convert.ToBase64String(bytes);
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "B64Torrent",
+            TotalSize = 999L,
+            Files = new List<ParsedTorrentFile>
+            {
+                new ParsedTorrentFile { Path = "test.txt", Size = 999L },
+            },
+        });
+
+        var json = $"{{\"method\": \"web.get_torrent_info\", \"params\": [\"{b64}\"], \"id\": 835}}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var result = resDoc.RootElement.GetProperty("result");
+
+        Assert.That(result.GetProperty("name").GetString(), Is.EqualTo("B64Torrent"));
+        Assert.That(result.GetProperty("size").GetInt64(), Is.EqualTo(999L));
+    }
+
+    [Test]
+    public async Task HandleRpc_WebGetTorrentInfo_WithInvalidBase64_CatchesFormatExceptionAndReturnsDefault()
+    {
+        var invalidB64 = "not-valid-base64-payload!!!";
+        var json = $"{{\"method\": \"web.get_torrent_info\", \"params\": [\"{invalidB64}\"], \"id\": 836}}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var result = resDoc.RootElement.GetProperty("result");
+
+        Assert.That(result.GetProperty("name").GetString(), Is.EqualTo("torrent"));
+        Assert.That(result.GetProperty("size").GetInt64(), Is.EqualTo(0L));
+    }
+
+    [Test]
+    public async Task HandleRpc_WebGetTorrentInfo_WhenParserThrows_CatchesAndReturnsDefault()
+    {
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        var b64 = Convert.ToBase64String(bytes);
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(_ => throw new InvalidOperationException("Corrupt torrent stream"));
+
+        var json = $"{{\"method\": \"web.get_torrent_info\", \"params\": [\"{b64}\"], \"id\": 837}}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var result = resDoc.RootElement.GetProperty("result");
+
+        Assert.That(result.GetProperty("name").GetString(), Is.EqualTo("torrent"));
+        Assert.That(result.GetProperty("size").GetInt64(), Is.EqualTo(0L));
+    }
 }
