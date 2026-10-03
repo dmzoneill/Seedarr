@@ -239,4 +239,176 @@ public class YamlScriptRunnerTest
         Assert.That(result.Success, Is.True);
         Assert.That(result.TagsToAdd, Contains.Item("Halfway"));
     }
+
+    [TestCase("${torrent.category} == 'Movies'", true)]
+    [TestCase("${torrent.category} == 'Series'", false)]
+    [TestCase("${torrent.ratio} == 1.5", true)]
+    [TestCase("${torrent.ratio} == 2.0", false)]
+    [TestCase("${torrent.isPrivate} == false", true)]
+    [TestCase("${torrent.isPrivate} == true", false)]
+    public void ShouldEvaluateEqualityCondition(string condition, bool expectedApplied)
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Equality.Test",
+            Category = "Movies",
+            Ratio = 1.5,
+            IsPrivate = false,
+        };
+
+        var yaml = "name: 'Equality Check'\n" +
+            "steps:\n" +
+            $"  - name: 'Check Condition'\n" +
+            $"    condition: \"{condition}\"\n" +
+            "    actions:\n" +
+            "      - addTag: 'EqualityMet'\n";
+
+        var script = new AutomationScript
+        {
+            Name = "Equality Script",
+            Code = yaml,
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        if (expectedApplied)
+        {
+            Assert.That(result.TagsToAdd, Contains.Item("EqualityMet"));
+        }
+        else
+        {
+            Assert.That(result.TagsToAdd, Does.Not.Contain("EqualityMet"));
+        }
+    }
+
+    [TestCase("${torrent.category} != 'Series'", true)]
+    [TestCase("${torrent.category} != 'Movies'", false)]
+    [TestCase("${torrent.ratio} != 2.0", true)]
+    [TestCase("${torrent.ratio} != 1.5", false)]
+    [TestCase("${torrent.isPrivate} != true", true)]
+    [TestCase("${torrent.isPrivate} != false", false)]
+    public void ShouldEvaluateInequalityCondition(string condition, bool expectedApplied)
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Inequality.Test",
+            Category = "Movies",
+            Ratio = 1.5,
+            IsPrivate = false,
+        };
+
+        var yaml = "name: 'Inequality Check'\n" +
+            "steps:\n" +
+            $"  - name: 'Check Condition'\n" +
+            $"    condition: \"{condition}\"\n" +
+            "    actions:\n" +
+            "      - addTag: 'InequalityMet'\n";
+
+        var script = new AutomationScript
+        {
+            Name = "Inequality Script",
+            Code = yaml,
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        if (expectedApplied)
+        {
+            Assert.That(result.TagsToAdd, Contains.Item("InequalityMet"));
+        }
+        else
+        {
+            Assert.That(result.TagsToAdd, Does.Not.Contain("InequalityMet"));
+        }
+    }
+
+    [TestCase("${torrent.ratio} <= 2.0", true)]
+    [TestCase("${torrent.ratio} <= 1.5", true)]
+    [TestCase("${torrent.ratio} <= 1.0", false)]
+    [TestCase("${torrent.size} <= 15000000000", true)]
+    [TestCase("${torrent.size} <= 10000000000", false)]
+    public void ShouldEvaluateLessThanOrEqualCondition(string condition, bool expectedApplied)
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "LTE.Test",
+            Ratio = 1.5,
+            TotalSize = 15_000_000_000,
+        };
+
+        var yaml = "name: 'LTE Check'\n" +
+            "steps:\n" +
+            $"  - name: 'Check Condition'\n" +
+            $"    condition: \"{condition}\"\n" +
+            "    actions:\n" +
+            "      - addTag: 'LteMet'\n";
+
+        var script = new AutomationScript
+        {
+            Name = "LTE Script",
+            Code = yaml,
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        if (expectedApplied)
+        {
+            Assert.That(result.TagsToAdd, Contains.Item("LteMet"));
+        }
+        else
+        {
+            Assert.That(result.TagsToAdd, Does.Not.Contain("LteMet"));
+        }
+    }
+
+    [TestCase("${torrent.ratio} < 2.0", true)]
+    [TestCase("${torrent.ratio} < 1.5", false)]
+    [TestCase("${torrent.ratio} < 1.0", false)]
+    [TestCase("${torrent.size} < 20000000000", true)]
+    [TestCase("${torrent.size} < 15000000000", false)]
+    public void ShouldEvaluateLessThanCondition(string condition, bool expectedApplied)
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "LT.Test",
+            Ratio = 1.5,
+            TotalSize = 15_000_000_000,
+        };
+
+        var yaml = "name: 'LT Check'\n" +
+            "steps:\n" +
+            $"  - name: 'Check Condition'\n" +
+            $"    condition: \"{condition}\"\n" +
+            "    actions:\n" +
+            "      - addTag: 'LtMet'\n";
+
+        var script = new AutomationScript
+        {
+            Name = "LT Script",
+            Code = yaml,
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        if (expectedApplied)
+        {
+            Assert.That(result.TagsToAdd, Contains.Item("LtMet"));
+        }
+        else
+        {
+            Assert.That(result.TagsToAdd, Does.Not.Contain("LtMet"));
+        }
+    }
 }

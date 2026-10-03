@@ -531,6 +531,58 @@ public class TrackerBoostServiceTest
         Assert.That(resetSummary.LastScanTime, Is.Null);
     }
 
+    [Test]
+    public async Task HarvestFromCuratedListsAsync_ignores_comments_and_blank_lines()
+    {
+        var content = "# Comment at top\n\n  # Indented comment\nudp://tracker.openbittorrent.com:80/announce\n";
+        using var client = new HttpClient(new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(content)
+        }));
+
+        TrackerBoostService.HttpClient = client;
+
+        _trackerRepository.FindByUrl(Arg.Any<string>()).Returns((TrackerBoostTracker)null);
+        _trackerRepository.Insert(Arg.Any<TrackerBoostTracker>()).Returns(callInfo => callInfo.Arg<TrackerBoostTracker>());
+
+        var count = await _service.HarvestFromCuratedListsAsync(CancellationToken.None);
+
+        Assert.That(count, Is.GreaterThan(0));
+        _trackerRepository.Received().Insert(Arg.Is<TrackerBoostTracker>(t => t.Url.Contains("openbittorrent.com")));
+    }
+
+    [Test]
+    public async Task InjectTrackerToTorrentAsync_when_tracker_already_attached_skips_insert()
+    {
+        var torrent = new Torrent { Id = 42, Name = "Public Linux", IsPrivate = false, InfoHash = "abcd1234abcd1234abcd1234abcd1234abcd1234" };
+        _torrentService.Get(42).Returns(torrent);
+
+        var existingTrackers = new List<TrackerEntry>
+        {
+            new TrackerEntry { Id = 1, TorrentId = 42, Url = "udp://tracker.opentrackr.org:1337/announce" }
+        };
+        _trackerEntryService.GetByTorrentId(42).Returns(existingTrackers);
+
+        var result = await _service.InjectTrackerToTorrentAsync(42, "udp://tracker.opentrackr.org:1337/announce");
+
+        Assert.That(result, Is.Not.Null);
+        _trackerEntryService.DidNotReceive().Add(Arg.Any<TrackerEntry>());
+    }
+
+    [Test]
+    public async Task InjectTrackerToTorrentAsync_when_tracker_not_attached_inserts_entry()
+    {
+        var torrent = new Torrent { Id = 43, Name = "Public Ubuntu", IsPrivate = false, InfoHash = "1111222233334444555566667777888899990000" };
+        _torrentService.Get(43).Returns(torrent);
+
+        _trackerEntryService.GetByTorrentId(43).Returns(new List<TrackerEntry>());
+
+        var result = await _service.InjectTrackerToTorrentAsync(43, "udp://tracker.newtrackr.org:1337/announce");
+
+        Assert.That(result, Is.Not.Null);
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 43 && t.Url == "udp://tracker.newtrackr.org:1337/announce"));
+    }
+
     private sealed class FakeHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
