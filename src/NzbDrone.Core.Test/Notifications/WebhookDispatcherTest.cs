@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -483,6 +484,226 @@ public class WebhookDispatcherTest
         Assert.That(handler.LastRequest.Headers.Authorization, Is.Not.Null);
         Assert.That(handler.LastRequest.Headers.Authorization.Scheme, Is.EqualTo("Basic"));
         Assert.That(handler.LastRequest.Headers.Authorization.Parameter, Is.EqualTo("YWRtaW46cGFzc3dvcmQxMjM="));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_multiline_custom_headers_attaches_all_valid_headers()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var headersText = "X-Header-One: ValueOne\r\nX-Header-Two: ValueTwo\nX-Header-Three: ValueThree";
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: headersText);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest.Headers.Contains("X-Header-One"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Header-One"), Does.Contain("ValueOne"));
+        Assert.That(handler.LastRequest.Headers.Contains("X-Header-Two"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Header-Two"), Does.Contain("ValueTwo"));
+        Assert.That(handler.LastRequest.Headers.Contains("X-Header-Three"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Header-Three"), Does.Contain("ValueThree"));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_comments_in_custom_headers_skips_comments()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var headersText = "# Top comment\r\n" +
+                          "X-Active-Header: ActiveValue\r\n" +
+                          "// Slash comment\r\n" +
+                          "  # Indented hash comment\r\n" +
+                          "  // Indented slash comment\r\n" +
+                          "X-Second-Header=SecondValue";
+
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: headersText);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest.Headers.Contains("X-Active-Header"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Active-Header"), Does.Contain("ActiveValue"));
+        Assert.That(handler.LastRequest.Headers.Contains("X-Second-Header"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Second-Header"), Does.Contain("SecondValue"));
+        var headerKeys = handler.LastRequest.Headers.Select(h => h.Key).ToList();
+        Assert.That(headerKeys.Any(k => k.Contains('#')), Is.False);
+        Assert.That(headerKeys.Any(k => k.Contains('/')), Is.False);
+    }
+
+    [TestCase("X-Custom-Colon: colon-value", "X-Custom-Colon", "colon-value")]
+    [TestCase("X-Custom-Equal=equal-value", "X-Custom-Equal", "equal-value")]
+    [TestCase("  X-Spaced-Colon  :   spaced-val  ", "X-Spaced-Colon", "spaced-val")]
+    [TestCase("  X-Spaced-Equal  =   spaced-val  ", "X-Spaced-Equal", "spaced-val")]
+    public async Task DispatchDetailedAsync_with_key_value_separators_parses_correctly(string headerLine, string expectedKey, string expectedValue)
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: headerLine);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest.Headers.Contains(expectedKey), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues(expectedKey), Does.Contain(expectedValue));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_invalid_lines_ignores_invalid_and_parses_valid_headers()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var headersText = "NoSeparatorInThisLine\r\n" +
+                          ": MissingKeyBeforeColon\r\n" +
+                          "= MissingKeyBeforeEqual\r\n" +
+                          "   \r\n" +
+                          "X-Valid-One: ValueOne\r\n" +
+                          "AnotherInvalidLine\r\n" +
+                          "X-Valid-Two=ValueTwo";
+
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: headersText);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest.Headers.Contains("X-Valid-One"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Valid-One"), Does.Contain("ValueOne"));
+        Assert.That(handler.LastRequest.Headers.Contains("X-Valid-Two"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Valid-Two"), Does.Contain("ValueTwo"));
+        Assert.That(handler.LastRequest.Headers.Contains("NoSeparatorInThisLine"), Is.False);
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_malformed_json_falls_back_to_line_parsing()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        // Starts with '{' but is not valid JSON
+        var headersText = "{\r\n" +
+                          "# comment\r\n" +
+                          "X-Fallback-Key: FallbackValue\r\n" +
+                          "X-Second-Fallback=SecondValue";
+
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: headersText);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest.Headers.Contains("X-Fallback-Key"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Fallback-Key"), Does.Contain("FallbackValue"));
+        Assert.That(handler.LastRequest.Headers.Contains("X-Second-Fallback"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Second-Fallback"), Does.Contain("SecondValue"));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public async Task DispatchDetailedAsync_with_empty_or_whitespace_headers_does_not_attach_headers(string headers)
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: headers);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest.Headers.Contains("X-Custom"), Is.False);
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_unparseable_headers_completes_gracefully()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var headersText = "NotAHeader\r\n# JustAComment\r\n// AnotherComment";
+
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: headersText);
+
+        Assert.That(result.Success, Is.True);
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_json_having_non_string_values_and_empty_keys()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var headersJson = "{\"   \": \"emptyKeyVal\", \"X-Int\": 42, \"X-Bool\": true, \"X-String\": \"text\"}";
+
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: headersJson);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest.Headers.Contains("X-Int"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Int"), Does.Contain("42"));
+        Assert.That(handler.LastRequest.Headers.Contains("X-Bool"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-Bool"), Does.Contain("true"));
+        Assert.That(handler.LastRequest.Headers.Contains("X-String"), Is.True);
+        Assert.That(handler.LastRequest.Headers.GetValues("X-String"), Does.Contain("text"));
+    }
+
+    [Test]
+    public void RedactHeadersForLogging_redacts_header_values_and_returns_keys()
+    {
+        Assert.That(WebhookDispatcher.RedactHeadersForLogging(null), Is.Empty);
+        Assert.That(WebhookDispatcher.RedactHeadersForLogging("   "), Is.Empty);
+
+        var jsonRedacted = WebhookDispatcher.RedactHeadersForLogging("{\"Authorization\": \"Bearer secret\", \"X-Api-Key\": \"12345\"}");
+        Assert.That(jsonRedacted, Does.Contain("Authorization"));
+        Assert.That(jsonRedacted, Does.Contain("X-Api-Key"));
+        Assert.That(jsonRedacted, Does.Not.Contain("secret"));
+        Assert.That(jsonRedacted, Does.Not.Contain("12345"));
+
+        var multilineRedacted = WebhookDispatcher.RedactHeadersForLogging("X-Auth: supersecret\r\nX-Token=mytoken");
+        Assert.That(multilineRedacted, Does.Contain("X-Auth"));
+        Assert.That(multilineRedacted, Does.Contain("X-Token"));
+        Assert.That(multilineRedacted, Does.Not.Contain("supersecret"));
+        Assert.That(multilineRedacted, Does.Not.Contain("mytoken"));
+
+        var unparseable = WebhookDispatcher.RedactHeadersForLogging("invalid-input-without-separator");
+        Assert.That(unparseable, Is.EqualTo("[unparseable headers]"));
     }
 
     [Test]
