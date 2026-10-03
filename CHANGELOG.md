@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.15](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.15) - 2026-10-03
+
+### 🐛 Bug Fixes
+- fix(frontend): resolve all TypeScript type errors across components, pages, stores, and tests
+
+### 🔧 Maintenance & Improvements
+- ci: prune backend coverage exclusions and enforce typecheck in npm run lint
+
 ## [v2.0.14](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.14) - 2026-10-03
 
 ### 🔧 Maintenance & Improvements
