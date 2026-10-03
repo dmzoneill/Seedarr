@@ -416,4 +416,107 @@ public class ReadarrConnectionTest
         Assert.That(res.MediaId, Is.EqualTo(99));
         Assert.That(res.Title, Is.EqualTo("Direct Book"));
     }
+
+    [Test]
+    public void GetMediaDetails_when_editions_has_elements_parses_edition_fields_with_isbn13()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""id"":100,""title"":""Neuromancer"",""editions"":[{""isbn13"":""9780441569595"",""publisher"":""Ace Books"",""pageCount"":271,""format"":""Mass Market Paperback"",""asin"":""B000EDITION1""}]}");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8787";
+        connection.ApiKey = "test-key";
+
+        var result = connection.GetMediaDetails(100);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Isbn, Is.EqualTo("9780441569595"));
+        Assert.That(result.Publisher, Is.EqualTo("Ace Books"));
+        Assert.That(result.PageCount, Is.EqualTo(271));
+        Assert.That(result.PackagingFormat, Is.EqualTo("Mass Market Paperback"));
+        Assert.That(result.Asin, Is.EqualTo("B000EDITION1"));
+    }
+
+    [Test]
+    public void GetMediaDetails_when_editions_has_isbn_fallback_and_isbn10()
+    {
+        var handler1 = new MockHttpMessageHandler();
+        handler1.Enqueue(
+            HttpStatusCode.OK,
+            @"{""id"":101,""title"":""Book Standard ISBN"",""editions"":[{""isbn"":""0441569595""}]}");
+        var connection1 = CreateWithMockClient(handler1);
+        connection1.Url = "http://localhost:8787";
+        var result1 = connection1.GetMediaDetails(101);
+
+        Assert.That(result1, Is.Not.Null);
+        Assert.That(result1.Isbn, Is.EqualTo("0441569595"));
+
+        var handler2 = new MockHttpMessageHandler();
+        handler2.Enqueue(
+            HttpStatusCode.OK,
+            @"{""id"":102,""title"":""Book ISBN10"",""editions"":[{""isbn10"":""0123456789""}]}");
+        var connection2 = CreateWithMockClient(handler2);
+        connection2.Url = "http://localhost:8787";
+        var result2 = connection2.GetMediaDetails(102);
+
+        Assert.That(result2, Is.Not.Null);
+        Assert.That(result2.Isbn, Is.EqualTo("0123456789"));
+    }
+
+    [Test]
+    public void GetMediaDetails_when_series_array_present_with_nested_series_title_and_position()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""id"":103,""title"":""Leviathan Wakes"",""series"":[{""series"":{""title"":""The Expanse""},""position"":""1""}]}");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8787";
+
+        var result = connection.GetMediaDetails(103);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.SeriesName, Is.EqualTo("The Expanse"));
+        Assert.That(result.SeriesPosition, Is.EqualTo("1"));
+    }
+
+    [Test]
+    public void GetMediaDetails_when_series_array_present_with_flat_title_and_position()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""id"":104,""title"":""Foundation and Empire"",""series"":[{""title"":""Foundation Series"",""position"":""2""}]}");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8787";
+
+        var result = connection.GetMediaDetails(104);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.SeriesName, Is.EqualTo("Foundation Series"));
+        Assert.That(result.SeriesPosition, Is.EqualTo("2"));
+    }
+
+    [Test]
+    public void LookupMedia_when_editions_and_series_array_present_parses_correctly()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"[{""book"":{""id"":105,""title"":""Hyperion"",""editions"":[{""isbn13"":""9780553283686"",""publisher"":""Spectra"",""pageCount"":482,""format"":""Paperback"",""asin"":""B001HYPERION""}],""series"":[{""series"":{""title"":""Hyperion Cantos""},""position"":""1""}]}}]");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8787";
+
+        var result = connection.LookupMedia("Hyperion");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Isbn, Is.EqualTo("9780553283686"));
+        Assert.That(result.Publisher, Is.EqualTo("Spectra"));
+        Assert.That(result.PageCount, Is.EqualTo(482));
+        Assert.That(result.PackagingFormat, Is.EqualTo("Paperback"));
+        Assert.That(result.Asin, Is.EqualTo("B001HYPERION"));
+        Assert.That(result.SeriesName, Is.EqualTo("Hyperion Cantos"));
+        Assert.That(result.SeriesPosition, Is.EqualTo("1"));
+    }
 }

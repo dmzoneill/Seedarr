@@ -319,4 +319,134 @@ public class MediaCoverControllerTest
         Assert.That(json, Does.Contain("posterUrl"));
         Assert.That(json, Does.Contain("backdropUrl"));
     }
+
+    [Test]
+    public void ServeArtwork_fanart_falls_back_to_backdrop_when_fanart_not_found()
+    {
+        var backdropFile = CreateTestArtwork(30, "backdrop.jpg");
+        _enrichmentService.GetMetadata(30).Returns(new TorrentMediaMetadata { TorrentId = 30 });
+
+        var result = _controller.GetCover(30, "fanart.jpg");
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(backdropFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_fanart_falls_back_to_background_when_backdrop_not_found()
+    {
+        var backgroundFile = CreateTestArtwork(31, "background.png");
+        _enrichmentService.GetMetadata(31).Returns(new TorrentMediaMetadata { TorrentId = 31 });
+
+        var result = _controller.GetCover(31, "fanart.png");
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(backgroundFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_backdrop_falls_back_to_fanart_when_backdrop_not_found()
+    {
+        var fanartFile = CreateTestArtwork(32, "fanart.jpg");
+        _enrichmentService.GetMetadata(32).Returns(new TorrentMediaMetadata { TorrentId = 32 });
+
+        var result = _controller.GetBackdrop(32);
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(fanartFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_backdrop_falls_back_to_background_when_fanart_not_found()
+    {
+        var backgroundFile = CreateTestArtwork(33, "background.jpg");
+        _enrichmentService.GetMetadata(33).Returns(new TorrentMediaMetadata { TorrentId = 33 });
+
+        var result = _controller.GetCover(33, "backdrop.jpg");
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(backgroundFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_thumb_falls_back_to_poster_when_thumb_not_found()
+    {
+        var posterFile = CreateTestArtwork(34, "poster.jpg");
+        _enrichmentService.GetMetadata(34).Returns(new TorrentMediaMetadata { TorrentId = 34 });
+
+        var result = _controller.GetCover(34, "thumb.jpg");
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(posterFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_thumb_falls_back_to_cover_when_poster_not_found()
+    {
+        var coverFile = CreateTestArtwork(35, "cover.jpg");
+        _enrichmentService.GetMetadata(35).Returns(new TorrentMediaMetadata { TorrentId = 35 });
+
+        var result = _controller.GetCover(35, "thumb.jpg");
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(coverFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_thumb_falls_back_to_folder_when_cover_not_found()
+    {
+        var folderFile = CreateTestArtwork(36, "folder.png");
+        _enrichmentService.GetMetadata(36).Returns(new TorrentMediaMetadata { TorrentId = 36 });
+
+        var result = _controller.GetCover(36, "thumb.png");
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(folderFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_banner_falls_back_to_season_banner_when_banner_not_found()
+    {
+        var seasonBannerFile = CreateTestArtwork(37, "season-banner.jpg");
+        _enrichmentService.GetMetadata(37).Returns(new TorrentMediaMetadata { TorrentId = 37 });
+
+        var result = _controller.GetBanner(37);
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(seasonBannerFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_banner_falls_back_to_fanart_when_season_banner_not_found()
+    {
+        var fanartFile = CreateTestArtwork(38, "fanart.jpg");
+        _enrichmentService.GetMetadata(38).Returns(new TorrentMediaMetadata { TorrentId = 38 });
+
+        var result = _controller.GetCover(38, "banner.jpg");
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(fanartFile)));
+    }
+
+    [Test]
+    public void ServeArtwork_banner_falls_back_to_backdrop_when_fanart_not_found()
+    {
+        var backdropFile = CreateTestArtwork(39, "backdrop.jpg");
+        _enrichmentService.GetMetadata(39).Returns(new TorrentMediaMetadata { TorrentId = 39 });
+
+        var result = _controller.GetBanner(39);
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(backdropFile)));
+    }
 }
