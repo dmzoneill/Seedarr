@@ -101,13 +101,20 @@ public sealed class LinuxPtySession : ITerminalSession
                 // Zero managed memory allocations, zero runtime locks, zero setenv/malloc calls.
                 if (cwdPtr != IntPtr.Zero)
                 {
-                    NativePty.Chdir(cwdPtr);
+                    if (NativePty.Chdir(cwdPtr) != 0)
+                    {
+                        // Ignored in child process
+                    }
                 }
 
-                NativePty.ExecveRaw(shellPtr, argvArrayPtr, envArrayPtr);
-
-                // Fallback if execve fails
-                NativePty.ExecvpRaw(shellPtr, argvArrayPtr);
+                if (NativePty.ExecveRaw(shellPtr, argvArrayPtr, envArrayPtr) != 0)
+                {
+                    // Fallback if execve fails
+                    if (NativePty.ExecvpRaw(shellPtr, argvArrayPtr) != 0)
+                    {
+                        // Ignored
+                    }
+                }
 
                 NativePty.Exit(1);
             }
@@ -183,7 +190,10 @@ public sealed class LinuxPtySession : ITerminalSession
             WsRow = (ushort)Math.Max(5, Math.Min(rows, 200)),
         };
 
-        NativePty.Ioctl(this._masterFd, NativePty.TIOCSWINSZ, ref ws);
+        if (NativePty.Ioctl(this._masterFd, NativePty.TIOCSWINSZ, ref ws) != 0)
+        {
+            _logger.Debug("ioctl TIOCSWINSZ failed");
+        }
     }
 
     public void Kill()
@@ -195,7 +205,10 @@ public sealed class LinuxPtySession : ITerminalSession
 
         try
         {
-            NativePty.Close(this._masterFd);
+            if (NativePty.Close(this._masterFd) != 0)
+            {
+                // Ignored on teardown
+            }
         }
         catch
         {
@@ -211,7 +224,10 @@ public sealed class LinuxPtySession : ITerminalSession
         {
             try
             {
-                NativePty.Kill(this._pid, 15); // SIGTERM
+                if (NativePty.Kill(this._pid, 15) != 0) // SIGTERM
+                {
+                    // Ignored
+                }
             }
             catch (Exception ex)
             {
@@ -237,7 +253,10 @@ public sealed class LinuxPtySession : ITerminalSession
             {
                 try
                 {
-                    NativePty.Kill(this._pid, 9); // SIGKILL
+                    if (NativePty.Kill(this._pid, 9) != 0) // SIGKILL
+                    {
+                        // Ignored
+                    }
                 }
                 catch (Exception ex)
                 {

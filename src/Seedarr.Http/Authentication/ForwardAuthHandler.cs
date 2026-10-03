@@ -46,6 +46,7 @@ public class ForwardAuthOptions : AuthenticationSchemeOptions
 
 public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
 {
+    private static readonly char[] GroupDelimiters = [',', '|', ';'];
     private static readonly Logger NLogLogger = LogManager.GetCurrentClassLogger();
     private readonly IConfigFileProvider _configFileProvider;
 
@@ -85,11 +86,11 @@ public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
         var displayName = GetHeaderValue(Options.DisplayNameHeaders) ?? username;
         var rawGroupsStr = GetHeaderValue(Options.GroupsHeaders);
         var groups = !string.IsNullOrWhiteSpace(rawGroupsStr)
-            ? rawGroupsStr.Split(new[] { ',', '|', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            ? rawGroupsStr.Split(GroupDelimiters, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             : Array.Empty<string>();
 
         var adminGroups = (Options.AdminGroups ?? "admin;admins;administrator;administrators")
-            .Split(new[] { ',', '|', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            .Split(GroupDelimiters, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         var isAdmin = groups.Any(g => adminGroups.Contains(g, StringComparer.OrdinalIgnoreCase));
         var role = isAdmin ? "Admin" : (!string.IsNullOrWhiteSpace(Options.DefaultRole) ? Options.DefaultRole : "User");

@@ -11,6 +11,7 @@ public class HostHeaderValidationMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private static readonly char[] HostSeparators = [',', ';', ' '];
 
     public HostHeaderValidationMiddleware(RequestDelegate next)
     {
@@ -84,7 +85,7 @@ public class HostHeaderValidationMiddleware
         // Check configured allowed hosts
         if (!string.IsNullOrWhiteSpace(allowedHostsConfig))
         {
-            var allowed = allowedHostsConfig.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var allowed = allowedHostsConfig.Split(HostSeparators, StringSplitOptions.RemoveEmptyEntries);
             foreach (var pattern in allowed)
             {
                 var trimmedPattern = pattern.Trim();

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using NLog;
@@ -52,14 +53,14 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
 
         _logger.Trace("Broadcasting SignalR message: {0}", message.Name);
         _hubContext?.Clients?.All?.SendAsync("receiveMessage", message)
-            ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR broadcast failed"), TaskContinuationOptions.OnlyOnFaulted);
+            ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR broadcast failed"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
         var eventNames = GetNamedEvents(message);
         foreach (var eventName in eventNames)
         {
             _logger.Trace("Broadcasting direct SignalR event: {0}", eventName);
             _hubContext?.Clients?.All?.SendAsync(eventName, message.Body)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR named event broadcast failed"), TaskContinuationOptions.OnlyOnFaulted);
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR named event broadcast failed"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
     }
 
@@ -84,14 +85,14 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
 
         _logger.Trace("Broadcasting SignalR message to group {0}: {1}", groupName, message.Name);
         group.SendAsync("receiveMessage", message)
-            ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR group broadcast failed"), TaskContinuationOptions.OnlyOnFaulted);
+            ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR group broadcast failed"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
         var eventNames = GetNamedEvents(message);
         foreach (var eventName in eventNames)
         {
             _logger.Trace("Broadcasting direct SignalR event to group {0}: {1}", groupName, eventName);
             group.SendAsync(eventName, message.Body)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR group named event broadcast failed"), TaskContinuationOptions.OnlyOnFaulted);
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR group named event broadcast failed"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
     }
 
