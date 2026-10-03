@@ -24,9 +24,9 @@ function sourceBadgeStyle(source: string): React.CSSProperties {
   switch (source.toLowerCase()) {
     case "tracker":
       return {
-        backgroundColor: "rgba(59, 130, 246, 0.2)",
-        color: "#60a5fa",
-        borderColor: "rgba(59, 130, 246, 0.4)",
+        backgroundColor: "var(--accent-bg-alert, rgba(200, 168, 78, 0.2))",
+        color: "var(--accent, #c8a84e)",
+        borderColor: "var(--accent-border-alert, rgba(200, 168, 78, 0.4))",
       };
     case "peers":
     case "peer":

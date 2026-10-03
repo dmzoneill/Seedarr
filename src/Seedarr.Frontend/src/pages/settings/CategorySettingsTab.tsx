@@ -438,9 +438,9 @@ export function CategorySettingsTab({
                                 fontSize: "0.7rem",
                                 padding: "0.15rem 0.45rem",
                                 borderRadius: "3px",
-                                backgroundColor: "rgba(59, 130, 246, 0.2)",
-                                color: "var(--primary, #3b82f6)",
-                                border: "1px solid rgba(59, 130, 246, 0.3)",
+                                backgroundColor: "var(--accent-bg, rgb(200 168 78 / 15%))",
+                                color: "var(--accent, #c8a84e)",
+                                border: "1px solid var(--accent-border-alert, rgb(200 168 78 / 30%))",
                               }}
                             >
                               Default

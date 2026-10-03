@@ -157,7 +157,7 @@ export default function DeveloperTesting() {
               padding: "7px 14px",
               borderRadius: "6px",
               border: "none",
-              backgroundColor: "var(--accent, #3b82f6)",
+              backgroundColor: "var(--accent, #c8a84e)",
               color: "#fff",
               cursor: isRunningAll ? "not-allowed" : "pointer",
               fontSize: "0.83rem",
@@ -176,8 +176,8 @@ export default function DeveloperTesting() {
             style={{
               padding: "7px 12px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -217,8 +217,8 @@ export default function DeveloperTesting() {
       >
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "14px",
           }}
@@ -233,8 +233,8 @@ export default function DeveloperTesting() {
 
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "14px",
           }}
@@ -249,8 +249,8 @@ export default function DeveloperTesting() {
 
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "14px",
           }}
@@ -265,8 +265,8 @@ export default function DeveloperTesting() {
 
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "14px",
           }}
@@ -294,8 +294,8 @@ export default function DeveloperTesting() {
               fontSize: "0.78rem",
               fontWeight: 600,
               cursor: "pointer",
-              border: selectedCategory === cat ? "none" : "1px solid var(--border, #334155)",
-              backgroundColor: selectedCategory === cat ? "var(--accent, #3b82f6)" : "var(--bg-surface, #1e293b)",
+              border: selectedCategory === cat ? "none" : "1px solid var(--border, #3a352e)",
+              backgroundColor: selectedCategory === cat ? "var(--accent, #c8a84e)" : "var(--bg-secondary, #2a2620)",
               color: selectedCategory === cat ? "#fff" : "var(--text-secondary, #94a3b8)",
             }}
           >
@@ -309,8 +309,8 @@ export default function DeveloperTesting() {
         {/* Left: Test List */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             overflow: "hidden",
             display: "flex",
@@ -322,7 +322,7 @@ export default function DeveloperTesting() {
           <div style={{ overflowY: "auto", flex: 1 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.83rem", textAlign: "left" }}>
               <thead>
-                <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #334155)", color: "var(--text-secondary, #94a3b8)" }}>
+                <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #3a352e)", color: "var(--text-secondary, #94a3b8)" }}>
                   <th style={{ padding: "10px 14px" }}>Test Name</th>
                   <th style={{ padding: "10px 14px", width: "110px" }}>Category</th>
                   <th style={{ padding: "10px 14px", width: "100px" }}>Status</th>
@@ -362,8 +362,8 @@ export default function DeveloperTesting() {
                           }
                         }}
                         style={{
-                          borderBottom: "1px solid var(--border, #334155)",
-                          backgroundColor: isSelected ? "rgba(59, 130, 246, 0.15)" : "transparent",
+                          borderBottom: "1px solid var(--border, #3a352e)",
+                          backgroundColor: isSelected ? "var(--accent-bg, rgb(200 168 78 / 15%))" : "transparent",
                           cursor: "pointer",
                         }}
                       >
@@ -380,8 +380,8 @@ export default function DeveloperTesting() {
                               borderRadius: "4px",
                               fontSize: "0.72rem",
                               fontFamily: "monospace",
-                              backgroundColor: "var(--bg-primary, #0f172a)",
-                              border: "1px solid var(--border, #334155)",
+                              backgroundColor: "var(--bg-primary, #222018)",
+                              border: "1px solid var(--border, #3a352e)",
                               color: "var(--text-secondary, #94a3b8)",
                             }}
                           >
@@ -420,9 +420,9 @@ export default function DeveloperTesting() {
                             style={{
                               padding: "4px 10px",
                               borderRadius: "4px",
-                              border: "1px solid var(--border, #334155)",
-                              backgroundColor: "var(--bg-primary, #0f172a)",
-                              color: "var(--accent, #3b82f6)",
+                              border: "1px solid var(--border, #3a352e)",
+                              backgroundColor: "var(--bg-primary, #222018)",
+                              color: "var(--accent, #c8a84e)",
                               cursor: isRunning ? "not-allowed" : "pointer",
                               fontSize: "0.75rem",
                               fontWeight: 600,
@@ -443,8 +443,8 @@ export default function DeveloperTesting() {
         {/* Right: Selected Test Output Inspector */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "16px",
             display: "flex",
@@ -456,7 +456,7 @@ export default function DeveloperTesting() {
         >
           {selectedTest ? (
             <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", borderBottom: "1px solid var(--border, #334155)", paddingBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", borderBottom: "1px solid var(--border, #3a352e)", paddingBottom: "10px" }}>
                 <div>
                   <h3 style={{ margin: "0 0 4px 0", fontSize: "1.05rem", fontWeight: 700 }}>
                     {selectedTest.name}
@@ -475,7 +475,7 @@ export default function DeveloperTesting() {
                     padding: "6px 14px",
                     borderRadius: "6px",
                     border: "none",
-                    backgroundColor: "var(--accent, #3b82f6)",
+                    backgroundColor: "var(--accent, #c8a84e)",
                     color: "#fff",
                     cursor: "pointer",
                     fontSize: "0.8rem",
@@ -529,8 +529,8 @@ export default function DeveloperTesting() {
                             margin: 0,
                             padding: "12px",
                             borderRadius: "6px",
-                            backgroundColor: "var(--bg-primary, #0f172a)",
-                            border: "1px solid var(--border, #334155)",
+                            backgroundColor: "var(--bg-primary, #222018)",
+                            border: "1px solid var(--border, #3a352e)",
                             fontFamily: "monospace",
                             fontSize: "0.78rem",
                             color: "#34d399",
@@ -564,7 +564,7 @@ export default function DeveloperTesting() {
                       )}
                     </div>
                   ) : (
-                    <div style={{ padding: "16px", backgroundColor: "var(--bg-primary, #0f172a)", border: "1px solid var(--border, #334155)", borderRadius: "6px", color: "var(--text-secondary, #94a3b8)", fontSize: "0.8rem", textAlign: "center" }}>
+                    <div style={{ padding: "16px", backgroundColor: "var(--bg-primary, #222018)", border: "1px solid var(--border, #3a352e)", borderRadius: "6px", color: "var(--text-secondary, #94a3b8)", fontSize: "0.8rem", textAlign: "center" }}>
                       This test has not executed in this session yet. Click &quot;Run Single Test&quot; to run now.
                     </div>
                   )}
@@ -581,7 +581,7 @@ export default function DeveloperTesting() {
 
       {/* Execution History */}
       {history.length > 0 && (
-        <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border, #334155)" }}>
+        <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid var(--border, #3a352e)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
             <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
               <span>📜</span> Execution History
@@ -604,8 +604,8 @@ export default function DeveloperTesting() {
 
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               overflow: "hidden",
             }}
@@ -633,7 +633,7 @@ export default function DeveloperTesting() {
                     justifyContent: "space-between",
                     alignItems: "center",
                     fontSize: "0.78rem",
-                    borderBottom: idx === Math.min(history.length, 8) - 1 ? "none" : "1px solid var(--border, #334155)",
+                    borderBottom: idx === Math.min(history.length, 8) - 1 ? "none" : "1px solid var(--border, #3a352e)",
                     cursor: matchedTest ? "pointer" : "default",
                   }}
                 >

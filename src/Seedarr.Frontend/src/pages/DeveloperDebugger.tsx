@@ -274,8 +274,8 @@ export default function DeveloperDebugger() {
                 style={{
                   padding: "2px 8px",
                   borderRadius: "4px",
-                  backgroundColor: "rgba(59, 130, 246, 0.2)",
-                  color: "#60a5fa",
+                  backgroundColor: "var(--accent-bg, rgb(200 168 78 / 15%))",
+                  color: "var(--accent, #c8a84e)",
                   fontWeight: 600,
                 }}
               >
@@ -308,7 +308,7 @@ export default function DeveloperDebugger() {
               padding: "7px 14px",
               borderRadius: "6px",
               border: "none",
-              backgroundColor: "var(--accent, #3b82f6)",
+              backgroundColor: "var(--accent, #c8a84e)",
               color: "#fff",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -327,8 +327,8 @@ export default function DeveloperDebugger() {
             style={{
               padding: "7px 12px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               color: "var(--text-secondary, #94a3b8)",
               cursor: "pointer",
               fontSize: "0.83rem",
@@ -348,8 +348,8 @@ export default function DeveloperDebugger() {
             style={{
               padding: "7px 12px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-surface, #1e293b)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
               color: "#fff",
               cursor: isLoading ? "not-allowed" : "pointer",
               opacity: isLoading ? 0.7 : 1,
@@ -382,8 +382,8 @@ export default function DeveloperDebugger() {
       {/* Dynamic Source File Selector Toolbar */}
       <div
         style={{
-          backgroundColor: "var(--bg-surface, #1e293b)",
-          border: "1px solid var(--border, #334155)",
+          backgroundColor: "var(--bg-secondary, #2a2620)",
+          border: "1px solid var(--border, #3a352e)",
           borderRadius: "8px",
           padding: "12px 16px",
           marginBottom: "16px",
@@ -406,8 +406,8 @@ export default function DeveloperDebugger() {
               flex: 1,
               padding: "7px 12px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-primary, #0f172a)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-primary, #222018)",
               color: "#38bdf8",
               fontFamily: "monospace",
               fontSize: "0.82rem",
@@ -433,8 +433,8 @@ export default function DeveloperDebugger() {
             style={{
               padding: "6px 12px",
               borderRadius: "6px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-primary, #0f172a)",
+              border: "1px solid var(--border, #3a352e)",
+              backgroundColor: "var(--bg-primary, #222018)",
               color: "#fff",
               fontSize: "0.8rem",
               width: "160px",
@@ -451,8 +451,8 @@ export default function DeveloperDebugger() {
         {/* Left: Code Viewer with Breakpoint Gutter */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             overflow: "hidden",
             display: "flex",
@@ -465,7 +465,7 @@ export default function DeveloperDebugger() {
             style={{
               padding: "10px 14px",
               backgroundColor: "rgba(0,0,0,0.2)",
-              borderBottom: "1px solid var(--border, #334155)",
+              borderBottom: "1px solid var(--border, #3a352e)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -491,7 +491,7 @@ export default function DeveloperDebugger() {
               flex: 1,
               overflowY: "auto",
               overflowX: "auto",
-              backgroundColor: "var(--bg-primary, #0f172a)",
+              backgroundColor: "var(--bg-primary, #222018)",
               fontFamily: "monospace",
               fontSize: "0.8rem",
               lineHeight: "1.6",
@@ -552,7 +552,7 @@ export default function DeveloperDebugger() {
                             userSelect: "none",
                             cursor: "pointer",
                             color: bp ? "#f87171" : "var(--text-secondary, #64748b)",
-                            borderRight: "1px solid var(--border, #334155)",
+                            borderRight: "1px solid var(--border, #3a352e)",
                             backgroundColor: "rgba(0,0,0,0.15)",
                             verticalAlign: "top",
                           }}
@@ -588,8 +588,8 @@ export default function DeveloperDebugger() {
           {/* Active Tracepoints List */}
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               overflow: "hidden",
               display: "flex",
@@ -600,7 +600,7 @@ export default function DeveloperDebugger() {
             <div
               style={{
                 padding: "10px 14px",
-                borderBottom: "1px solid var(--border, #334155)",
+                borderBottom: "1px solid var(--border, #3a352e)",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
@@ -634,7 +634,7 @@ export default function DeveloperDebugger() {
                     }}
                     style={{
                       padding: "8px 12px",
-                      borderBottom: "1px solid var(--border, #334155)",
+                      borderBottom: "1px solid var(--border, #3a352e)",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
@@ -698,8 +698,8 @@ export default function DeveloperDebugger() {
           {/* Captured Flight Snapshots Inspector */}
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               padding: "14px",
               display: "flex",
@@ -715,7 +715,7 @@ export default function DeveloperDebugger() {
                 justifyContent: "space-between",
                 alignItems: "center",
                 marginBottom: "10px",
-                borderBottom: "1px solid var(--border, #334155)",
+                borderBottom: "1px solid var(--border, #3a352e)",
                 paddingBottom: "8px",
               }}
             >
@@ -771,8 +771,8 @@ export default function DeveloperDebugger() {
                       margin: 0,
                       padding: "8px",
                       borderRadius: "6px",
-                      backgroundColor: "var(--bg-primary, #0f172a)",
-                      border: "1px solid var(--border, #334155)",
+                      backgroundColor: "var(--bg-primary, #222018)",
+                      border: "1px solid var(--border, #3a352e)",
                       fontFamily: "monospace",
                       fontSize: "0.75rem",
                       color: "#38bdf8",
@@ -794,8 +794,8 @@ export default function DeveloperDebugger() {
                       margin: 0,
                       padding: "8px",
                       borderRadius: "6px",
-                      backgroundColor: "var(--bg-primary, #0f172a)",
-                      border: "1px solid var(--border, #334155)",
+                      backgroundColor: "var(--bg-primary, #222018)",
+                      border: "1px solid var(--border, #3a352e)",
                       fontFamily: "monospace",
                       fontSize: "0.72rem",
                       color: "#34d399",
@@ -833,8 +833,8 @@ export default function DeveloperDebugger() {
         >
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               padding: "20px",
               maxWidth: "480px",
@@ -863,8 +863,8 @@ export default function DeveloperDebugger() {
                       padding: "3px 8px",
                       borderRadius: "4px",
                       fontSize: "0.72rem",
-                      border: "1px solid var(--border, #334155)",
-                      backgroundColor: newFilePath === p.filePath && newLineNumber === p.lineNumber ? "var(--accent, #3b82f6)" : "var(--bg-primary, #0f172a)",
+                      border: "1px solid var(--border, #3a352e)",
+                      backgroundColor: newFilePath === p.filePath && newLineNumber === p.lineNumber ? "var(--accent, #c8a84e)" : "var(--bg-primary, #222018)",
                       color: "#fff",
                       cursor: "pointer",
                     }}
@@ -894,8 +894,8 @@ export default function DeveloperDebugger() {
                     width: "100%",
                     padding: "8px 10px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border, #334155)",
-                    backgroundColor: "var(--bg-primary, #0f172a)",
+                    border: "1px solid var(--border, #3a352e)",
+                    backgroundColor: "var(--bg-primary, #222018)",
                     color: "#fff",
                     fontFamily: "monospace",
                     fontSize: "0.82rem",
@@ -918,8 +918,8 @@ export default function DeveloperDebugger() {
                     width: "100%",
                     padding: "8px 10px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border, #334155)",
-                    backgroundColor: "var(--bg-primary, #0f172a)",
+                    border: "1px solid var(--border, #3a352e)",
+                    backgroundColor: "var(--bg-primary, #222018)",
                     color: "#fff",
                     fontFamily: "monospace",
                     fontSize: "0.82rem",
@@ -944,8 +944,8 @@ export default function DeveloperDebugger() {
                     width: "100%",
                     padding: "8px 10px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border, #334155)",
-                    backgroundColor: "var(--bg-primary, #0f172a)",
+                    border: "1px solid var(--border, #3a352e)",
+                    backgroundColor: "var(--bg-primary, #222018)",
                     color: "#fff",
                     fontFamily: "monospace",
                     fontSize: "0.82rem",
@@ -962,7 +962,7 @@ export default function DeveloperDebugger() {
                   style={{
                     padding: "7px 14px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border, #334155)",
+                    border: "1px solid var(--border, #3a352e)",
                     backgroundColor: "transparent",
                     color: "var(--text-secondary, #94a3b8)",
                     cursor: "pointer",
@@ -978,7 +978,7 @@ export default function DeveloperDebugger() {
                     padding: "7px 16px",
                     borderRadius: "6px",
                     border: "none",
-                    backgroundColor: "var(--accent, #3b82f6)",
+                    backgroundColor: "var(--accent, #c8a84e)",
                     color: "#fff",
                     cursor: "pointer",
                     fontSize: "0.83rem",

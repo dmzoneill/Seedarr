@@ -96,8 +96,8 @@ export default function DeveloperCommands() {
           style={{
             padding: "7px 14px",
             borderRadius: "6px",
-            border: "1px solid var(--border, #334155)",
-            backgroundColor: "var(--bg-surface, #1e293b)",
+            border: "1px solid var(--border, #3a352e)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
             color: "#fff",
             cursor: "pointer",
             fontSize: "0.83rem",
@@ -128,8 +128,8 @@ export default function DeveloperCommands() {
         {/* Left: Command Catalog */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "16px",
             display: "flex",
@@ -147,8 +147,8 @@ export default function DeveloperCommands() {
               style={{
                 padding: "6px 10px",
                 borderRadius: "6px",
-                border: "1px solid var(--border, #334155)",
-                backgroundColor: "var(--bg-primary, #0f172a)",
+                border: "1px solid var(--border, #3a352e)",
+                backgroundColor: "var(--bg-primary, #222018)",
                 color: "#fff",
                 fontSize: "0.8rem",
                 width: "200px",
@@ -172,8 +172,8 @@ export default function DeveloperCommands() {
                   style={{
                     padding: "12px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border, #334155)",
-                    backgroundColor: "var(--bg-primary, #0f172a)",
+                    border: "1px solid var(--border, #3a352e)",
+                    backgroundColor: "var(--bg-primary, #222018)",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
@@ -214,7 +214,7 @@ export default function DeveloperCommands() {
                       padding: "6px 12px",
                       borderRadius: "6px",
                       border: "none",
-                      backgroundColor: "var(--accent, #3b82f6)",
+                      backgroundColor: "var(--accent, #c8a84e)",
                       color: "#fff",
                       fontSize: "0.78rem",
                       fontWeight: 600,
@@ -233,8 +233,8 @@ export default function DeveloperCommands() {
         {/* Right: Live Command Queue & History */}
         <div
           style={{
-            backgroundColor: "var(--bg-surface, #1e293b)",
-            border: "1px solid var(--border, #334155)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
+            border: "1px solid var(--border, #3a352e)",
             borderRadius: "8px",
             padding: "16px",
             display: "flex",
@@ -249,7 +249,7 @@ export default function DeveloperCommands() {
           <div style={{ flex: 1, overflowY: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem", textAlign: "left" }}>
               <thead>
-                <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #334155)" }}>
+                <tr style={{ backgroundColor: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border, #3a352e)" }}>
                   <th style={{ padding: "8px 10px" }}>Command</th>
                   <th style={{ padding: "8px 10px" }}>Status</th>
                   <th style={{ padding: "8px 10px" }}>Queued (UTC)</th>
@@ -270,7 +270,7 @@ export default function DeveloperCommands() {
                     const isRunning = item.status === "Running";
                     const isFailed = item.status === "Failed";
                     return (
-                      <tr key={item.id} style={{ borderBottom: "1px solid var(--border, #334155)" }}>
+                      <tr key={item.id} style={{ borderBottom: "1px solid var(--border, #3a352e)" }}>
                         <td style={{ padding: "8px 10px", fontWeight: 600 }}>{item.name}</td>
                         <td style={{ padding: "8px 10px" }}>
                           <span
@@ -344,8 +344,8 @@ export default function DeveloperCommands() {
         >
           <div
             style={{
-              backgroundColor: "var(--bg-surface, #1e293b)",
-              border: "1px solid var(--border, #334155)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border, #3a352e)",
               borderRadius: "8px",
               padding: "20px",
               width: "520px",
@@ -370,7 +370,7 @@ export default function DeveloperCommands() {
 
             <form onSubmit={handleExecute}>
               {selectedCommand.properties.length === 0 ? (
-                <div style={{ padding: "14px", backgroundColor: "var(--bg-primary, #0f172a)", borderRadius: "6px", marginBottom: "16px", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                <div style={{ padding: "14px", backgroundColor: "var(--bg-primary, #222018)", borderRadius: "6px", marginBottom: "16px", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
                   This command takes no parameters. It will execute with default system options.
                 </div>
               ) : (
@@ -395,8 +395,8 @@ export default function DeveloperCommands() {
                             width: "100%",
                             padding: "8px 10px",
                             borderRadius: "6px",
-                            border: "1px solid var(--border, #334155)",
-                            backgroundColor: "var(--bg-primary, #0f172a)",
+                            border: "1px solid var(--border, #3a352e)",
+                            backgroundColor: "var(--bg-primary, #222018)",
                             color: "#fff",
                             fontSize: "0.82rem",
                           }}
@@ -414,7 +414,7 @@ export default function DeveloperCommands() {
                   style={{
                     padding: "8px 14px",
                     borderRadius: "6px",
-                    border: "1px solid var(--border, #334155)",
+                    border: "1px solid var(--border, #3a352e)",
                     backgroundColor: "transparent",
                     color: "var(--text-secondary)",
                     cursor: "pointer",
@@ -430,7 +430,7 @@ export default function DeveloperCommands() {
                     padding: "8px 16px",
                     borderRadius: "6px",
                     border: "none",
-                    backgroundColor: "var(--accent, #3b82f6)",
+                    backgroundColor: "var(--accent, #c8a84e)",
                     color: "#fff",
                     cursor: isExecuting ? "not-allowed" : "pointer",
                     fontSize: "0.85rem",

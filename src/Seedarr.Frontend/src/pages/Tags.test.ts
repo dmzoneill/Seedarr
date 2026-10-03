@@ -7,7 +7,7 @@ function createMockTag(overrides: Partial<Tag> = {}): Tag {
   return {
     id: 1,
     label: "Anime",
-    color: "#3b82f6",
+    color: "#c8a84e",
     torrentCount: 0,
     ...overrides,
   };

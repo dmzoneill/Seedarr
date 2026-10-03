@@ -115,20 +115,20 @@ function extractFileMediaBadges(
     ) {
       badges.push({
         label: "4K UHD",
-        bg: "rgba(37, 99, 235, 0.25)",
-        fg: "#60a5fa",
+        bg: "var(--accent-bg, rgba(200, 168, 78, 0.25))",
+        fg: "var(--accent, #c8a84e)",
       });
     } else if (lower.includes("1080p") || torrent?.resolution === "1080p") {
       badges.push({
         label: "1080p",
-        bg: "rgba(37, 99, 235, 0.2)",
-        fg: "#93c5fd",
+        bg: "var(--accent-bg-subtle, rgba(200, 168, 78, 0.18))",
+        fg: "var(--accent, #c8a84e)",
       });
     } else if (lower.includes("720p")) {
       badges.push({
         label: "720p",
-        bg: "rgba(37, 99, 235, 0.15)",
-        fg: "#bfdbfe",
+        bg: "var(--accent-bg-subtle, rgba(200, 168, 78, 0.12))",
+        fg: "var(--accent, #c8a84e)",
       });
     }
 
@@ -802,7 +802,7 @@ export function FilesTab({
               <span
                 className="badge"
                 style={{
-                  backgroundColor: "#2563eb",
+                  backgroundColor: "var(--accent, #c8a84e)",
                   color: "#fff",
                   fontSize: "0.68rem",
                   fontWeight: 700,

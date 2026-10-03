@@ -471,7 +471,7 @@ export function TorrentCreationTab({
               {createResult.infoHash && (
                 <div>
                   <span style={{ color: "var(--text-muted)" }}>Hash: </span>
-                  <code style={{ color: "#60a5fa" }}>
+                  <code style={{ color: "var(--accent, #c8a84e)" }}>
                     {createResult.infoHash}
                   </code>
                 </div>

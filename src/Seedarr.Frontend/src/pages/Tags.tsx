@@ -228,7 +228,7 @@ function Tags() {
           )}
           <button
             className="btn btn-primary"
-            onClick={() => setModalTag({ label: "", color: "#3b82f6" })}
+            onClick={() => setModalTag({ label: "", color: "#c8a84e" })}
           >
             + Add Tag
           </button>
@@ -480,7 +480,7 @@ function Tags() {
               >
                 <input
                   type="color"
-                  value={modalTag.color || "#3b82f6"}
+                  value={modalTag.color || "#c8a84e"}
                   onChange={(e) =>
                     setModalTag({ ...modalTag, color: e.target.value })
                   }
@@ -497,7 +497,7 @@ function Tags() {
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="#3b82f6"
+                  placeholder="#c8a84e"
                   value={modalTag.color || ""}
                   onChange={(e) =>
                     setModalTag({ ...modalTag, color: e.target.value })

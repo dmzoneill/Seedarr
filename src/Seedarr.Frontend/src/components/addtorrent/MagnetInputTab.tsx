@@ -307,7 +307,7 @@ export function MagnetInputTab({
                 <span
                   style={{
                     fontFamily: "monospace",
-                    color: "#60a5fa",
+                    color: "var(--accent, #c8a84e)",
                     wordBreak: "break-all",
                   }}
                 >

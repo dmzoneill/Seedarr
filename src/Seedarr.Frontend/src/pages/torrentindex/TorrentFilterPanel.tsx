@@ -328,7 +328,7 @@ export function TorrentFilterPanel({
               background: "none",
               border: "1px solid var(--border-color, #333)",
               borderRadius: "4px",
-              color: "var(--accent, #60a5fa)",
+              color: "var(--accent, #c8a84e)",
               fontSize: "0.68rem",
               padding: "1px 5px",
               cursor: "pointer",
@@ -382,11 +382,11 @@ export function TorrentFilterPanel({
                     fontWeight: 600,
                     background:
                       tagMatchMode === "OR"
-                        ? "var(--accent-bg-medium, rgba(59, 130, 246, 0.2))"
+                        ? "var(--accent-bg-medium, rgb(200 168 78 / 20%))"
                         : "transparent",
                     color:
                       tagMatchMode === "OR"
-                        ? "var(--accent, #60a5fa)"
+                        ? "var(--accent, #c8a84e)"
                         : "var(--text-muted, #888)",
                     border: "none",
                     cursor: "pointer",
@@ -408,11 +408,11 @@ export function TorrentFilterPanel({
                     fontWeight: 600,
                     background:
                       tagMatchMode === "AND"
-                        ? "var(--accent-bg-medium, rgba(59, 130, 246, 0.2))"
+                        ? "var(--accent-bg-medium, rgb(200 168 78 / 20%))"
                         : "transparent",
                     color:
                       tagMatchMode === "AND"
-                        ? "var(--accent, #60a5fa)"
+                        ? "var(--accent, #c8a84e)"
                         : "var(--text-muted, #888)",
                     border: "none",
                     borderLeft: "1px solid var(--border-color, #333)",
@@ -503,7 +503,7 @@ export function TorrentFilterPanel({
                           onChange={() => {}}
                           style={{
                             cursor: "pointer",
-                            accentColor: tag.color || "var(--accent, #60a5fa)",
+                            accentColor: tag.color || "var(--accent, #c8a84e)",
                             margin: 0,
                           }}
                         />

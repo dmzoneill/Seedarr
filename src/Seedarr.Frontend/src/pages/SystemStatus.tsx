@@ -192,9 +192,9 @@ function SystemStatus() {
               display: "inline-flex",
               alignItems: "center",
               gap: "0.35rem",
-              backgroundColor: "rgba(59, 130, 246, 0.15)",
-              color: "#60a5fa",
-              border: "1px solid rgba(59, 130, 246, 0.3)",
+              backgroundColor: "var(--accent-bg, rgb(200 168 78 / 15%))",
+              color: "var(--accent, #c8a84e)",
+              border: "1px solid var(--accent-border-alert, rgb(200 168 78 / 30%))",
             }}
           >
             <span>🗄️</span> Database Explorer
