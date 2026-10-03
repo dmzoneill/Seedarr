@@ -150,7 +150,7 @@ export function FolderBrowserModal({
       style={{
         position: "fixed",
         inset: 0,
-        backgroundColor: "rgba(10, 11, 20, 0.82)",
+        backgroundColor: "var(--overlay, rgba(0, 0, 0, 0.75))",
         backdropFilter: "blur(6px)",
         display: "flex",
         alignItems: "center",
@@ -173,7 +173,7 @@ export function FolderBrowserModal({
         style={{
           width: "100%",
           maxWidth: "580px",
-          backgroundColor: "var(--bg-card, #171b35)",
+          backgroundColor: "var(--bg-card, #2a2620)",
           borderRadius: "12px",
           border: "1px solid rgba(255, 209, 102, 0.35)",
           boxShadow: "0 24px 60px rgba(0, 0, 0, 0.75)",

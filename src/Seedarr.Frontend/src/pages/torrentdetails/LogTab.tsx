@@ -299,7 +299,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
         style={{
           maxHeight: "520px",
           overflowY: "auto",
-          backgroundColor: "#0d1117",
+          backgroundColor: "var(--sidebar-bg, #1a1815)",
           borderRadius: "6px",
           border: "1px solid var(--border-light)",
         }}
@@ -315,7 +315,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           <thead>
             <tr
               style={{
-                backgroundColor: "#161b22",
+                backgroundColor: "var(--bg-secondary, #2a2620)",
                 borderBottom: "1px solid var(--border-light)",
               }}
             >

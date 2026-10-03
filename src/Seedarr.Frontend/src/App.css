@@ -9,6 +9,9 @@
   --bg-hover-elevated: #4a4438;
   --border: #3a352e;
   --border-light: #302c24;
+  --bg-card: #2a2620;
+  --bg-card-hover: #3a352e;
+  --bg-lighter: #3a352e;
   --text-primary: #f8f6f0;
   --text-secondary: #d4ccbe;
   --text-muted: #9c9484;
@@ -56,6 +59,9 @@
   --bg-hover-elevated: #4a4438;
   --border: #3a352e;
   --border-light: #302c24;
+  --bg-card: #2a2620;
+  --bg-card-hover: #3a352e;
+  --bg-lighter: #3a352e;
   --text-primary: #f8f6f0;
   --text-secondary: #d4ccbe;
   --text-muted: #9c9484;
@@ -71,6 +77,9 @@
   --bg-hover-elevated: #ddd4c2;
   --border: #d4cbb8;
   --border-light: rgb(90 72 40 / 8%);
+  --bg-card: #fdfaf4;
+  --bg-card-hover: #e8e0d0;
+  --bg-lighter: #e8e0d0;
   --text-primary: #2a2418;
   --text-secondary: #4a4030;
   --text-muted: #7a7060;
@@ -111,17 +120,17 @@
 
 /* Surface Themes */
 [data-theme="indigo"] {
-  --sidebar-bg: #0b0e1e;
-  --topbar-bg: #131733;
-  --bg-primary: #0b0e1e;
-  --bg-secondary: #131733;
-  --bg-card: #131733;
-  --bg-card-hover: #1f2552;
-  --bg-hover: #1f2552;
-  --bg-hover-elevated: #1f2552;
-  --border: #283060;
-  --border-light: #202750;
-  --bg-lighter: #1f2552;
+  --sidebar-bg: #141210;
+  --topbar-bg: #1e1a16;
+  --bg-primary: #141210;
+  --bg-secondary: #1e1a16;
+  --bg-card: #1e1a16;
+  --bg-card-hover: #2c2620;
+  --bg-hover: #2c2620;
+  --bg-hover-elevated: #362f28;
+  --border: #383028;
+  --border-light: #2c2620;
+  --bg-lighter: #2c2620;
 }
 
 [data-theme="oled"] {
@@ -139,17 +148,17 @@
 }
 
 [data-theme="slate"] {
-  --sidebar-bg: #0e131d;
-  --topbar-bg: #141c2b;
-  --bg-primary: #0e131d;
-  --bg-secondary: #141c2b;
-  --bg-card: #141c2b;
-  --bg-card-hover: #1e2a3f;
-  --bg-hover: #1e2a3f;
-  --bg-hover-elevated: #23324c;
-  --border: #2a3854;
-  --border-light: #222f46;
-  --bg-lighter: #1e2a3f;
+  --sidebar-bg: #161616;
+  --topbar-bg: #222222;
+  --bg-primary: #161616;
+  --bg-secondary: #222222;
+  --bg-card: #222222;
+  --bg-card-hover: #2e2e2e;
+  --bg-hover: #2e2e2e;
+  --bg-hover-elevated: #383838;
+  --border: #3a3a3a;
+  --border-light: #2c2c2c;
+  --bg-lighter: #2e2e2e;
 }
 
 /* Brand Accent Palettes */
@@ -720,7 +729,7 @@ body {
 .topbar-apikey-btn:hover {
   background: var(--bg-hover-elevated, rgba(200, 168, 78, 0.16));
   border-color: var(--accent, #c8a84e);
-  color: var(--text-primary, #f1f5f9);
+  color: var(--text-primary, #f8f6f0);
 }
 
 .topbar-apikey-btn:active {
@@ -1111,13 +1120,13 @@ body {
 }
 
 .badge-checking {
-  background-color: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
+  background-color: var(--accent-bg, rgba(200, 168, 78, 0.15));
+  color: var(--accent, #c8a84e);
 }
 
 .badge-announcing {
-  background-color: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
+  background-color: var(--accent-bg, rgba(200, 168, 78, 0.15));
+  color: var(--accent, #c8a84e);
 }
 
 .badge-queuedforchecking {
@@ -2069,7 +2078,7 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: var(--overlay, rgba(10, 11, 18, 0.85));
+  background-color: var(--overlay, rgba(0, 0, 0, 0.75));
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -5168,7 +5177,7 @@ html[dir="rtl"] .topbar-getting-started {
   position: fixed;
   inset: 0;
   z-index: 99999;
-  background-color: var(--overlay, rgba(10, 11, 18, 0.9));
+  background-color: var(--overlay, rgba(0, 0, 0, 0.85));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   display: flex;
@@ -5239,7 +5248,7 @@ html[dir="rtl"] .topbar-getting-started {
   position: fixed;
   inset: 0;
   z-index: 99990;
-  background-color: var(--overlay, rgba(10, 11, 18, 0.65));
+  background-color: var(--overlay, rgba(0, 0, 0, 0.65));
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -5301,9 +5310,9 @@ html[dir="rtl"] .topbar-getting-started {
   flex-direction: column;
   height: calc(100vh - 180px);
   min-height: 480px;
-  background-color: #0d1117;
+  background-color: var(--sidebar-bg, #1a1815);
   border-radius: 8px;
-  border: 1px solid var(--border-light, #30363d);
+  border: 1px solid var(--border-light, #302c24);
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   font-family:
@@ -5316,8 +5325,8 @@ html[dir="rtl"] .topbar-getting-started {
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 1rem;
-  background-color: #161b22;
-  border-bottom: 1px solid #30363d;
+  background-color: var(--bg-secondary, #2a2620);
+  border-bottom: 1px solid var(--border-light, #302c24);
   flex-wrap: wrap;
   gap: 0.75rem;
 }
@@ -5328,7 +5337,7 @@ html[dir="rtl"] .topbar-getting-started {
   gap: 0.5rem;
   font-weight: 600;
   font-size: 0.95rem;
-  color: #c9d1d9;
+  color: var(--text-primary, #f8f6f0);
 }
 
 .terminal-header-actions {
@@ -5342,16 +5351,16 @@ html[dir="rtl"] .topbar-getting-started {
   font-size: 0.75rem;
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
-  background-color: #21262d;
-  color: #8b949e;
-  border: 1px solid #30363d;
+  background-color: var(--bg-hover, #3a352e);
+  color: var(--text-muted, #9c9484);
+  border: 1px solid var(--border, #3a352e);
 }
 
 .terminal-body {
   flex: 1;
   overflow-y: auto;
   padding: 0.75rem 1rem;
-  color: #c9d1d9;
+  color: var(--text-secondary, #d4ccbe);
   font-size: 0.875rem;
   line-height: 1.45;
   user-select: text;
@@ -5369,8 +5378,8 @@ html[dir="rtl"] .topbar-getting-started {
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
-  background-color: #161b22;
-  border-top: 1px solid #30363d;
+  background-color: var(--bg-secondary, #2a2620);
+  border-top: 1px solid var(--border-light, #302c24);
 }
 
 .terminal-prompt-prefix {
@@ -5385,7 +5394,7 @@ html[dir="rtl"] .topbar-getting-started {
   background: transparent;
   border: none;
   outline: none;
-  color: #f0f6fc;
+  color: var(--text-primary, #f8f6f0);
   font-family: inherit;
   font-size: 0.875rem;
   caret-color: var(--accent);
@@ -5402,8 +5411,8 @@ html[dir="rtl"] .topbar-getting-started {
   align-items: center;
   justify-content: space-between;
   padding: 0.35rem 1rem;
-  background-color: #0d1117;
-  border-top: 1px solid #21262d;
+  background-color: var(--sidebar-bg, #1a1815);
+  border-top: 1px solid var(--border-light, #302c24);
   font-size: 0.75rem;
-  color: #6e7681;
+  color: var(--text-dim, #7a7264);
 }

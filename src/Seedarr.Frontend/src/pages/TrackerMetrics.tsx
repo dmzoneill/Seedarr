@@ -862,7 +862,7 @@ export function TrackerMetrics() {
             <thead>
               <tr
                 style={{
-                  backgroundColor: "#161b22",
+                  backgroundColor: "var(--bg-secondary, #2a2620)",
                   borderBottom: "1px solid var(--border-light)",
                 }}
               >
@@ -1776,7 +1776,7 @@ function TrackerMetricDetailModal({
             style={{
               maxHeight: "240px",
               overflowY: "auto",
-              backgroundColor: "#0d1117",
+              backgroundColor: "var(--sidebar-bg, #1a1815)",
               borderRadius: "6px",
               border: "1px solid var(--border-light)",
             }}
@@ -1786,7 +1786,7 @@ function TrackerMetricDetailModal({
               style={{ fontSize: "0.75rem", width: "100%" }}
             >
               <thead>
-                <tr style={{ backgroundColor: "#161b22" }}>
+                <tr style={{ backgroundColor: "var(--bg-secondary, #2a2620)" }}>
                   <th className="torrent-table-th">Time</th>
                   <th className="torrent-table-th">Operation</th>
                   <th className="torrent-table-th">Outcome</th>

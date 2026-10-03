@@ -5155,8 +5155,8 @@ if (torrent && torrent.size > 5000000000) {
               style={{
                 flex: 1,
                 overflowY: "auto",
-                backgroundColor: "#0d1117",
-                color: "#c9d1d9",
+                backgroundColor: "var(--sidebar-bg, #1a1815)",
+                color: "var(--text-secondary, #d4ccbe)",
                 padding: "1rem",
                 borderRadius: "6px",
                 fontFamily: "monospace",

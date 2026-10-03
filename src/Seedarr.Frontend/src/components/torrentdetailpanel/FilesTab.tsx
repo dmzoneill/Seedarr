@@ -27,7 +27,7 @@ export const PRIORITY_OPTIONS = [
     label: "Skip (Do not download)",
     color: "var(--danger, #ef4444)",
   },
-  { value: 1, label: "Low", color: "var(--info, #38bdf8)" },
+  { value: 1, label: "Low", color: "var(--text-muted, #9c9484)" },
   { value: 3, label: "Normal", color: "var(--text-primary, #f8f4ed)" },
   { value: 4, label: "High", color: "var(--accent, #ffd166)" },
 ] as const;
@@ -775,7 +775,7 @@ export function FilesTab({
             flexWrap: "wrap",
             gap: "0.5rem",
             padding: "0.4rem 0.75rem",
-            backgroundColor: "rgba(23, 27, 53, 0.7)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
             borderRadius: "6px",
             border: "1px solid rgba(255, 209, 102, 0.25)",
             fontSize: "0.78rem",
@@ -815,7 +815,7 @@ export function FilesTab({
               <span
                 className="badge"
                 style={{
-                  backgroundColor: "#4f46e5",
+                  backgroundColor: "var(--accent, #c8a84e)",
                   color: "#fff",
                   fontSize: "0.68rem",
                   fontWeight: 700,
@@ -869,7 +869,7 @@ export function FilesTab({
             justifyContent: "space-between",
             gap: "0.5rem",
             padding: "0.5rem 0.85rem",
-            backgroundColor: "rgba(23, 27, 53, 0.6)",
+            backgroundColor: "var(--bg-secondary, #2a2620)",
             border: "1px solid var(--border-light)",
             borderRadius: "6px",
             fontSize: "0.82rem",
@@ -978,7 +978,7 @@ export function FilesTab({
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             style={{
-              backgroundColor: "var(--bg-primary, #10111A)",
+              backgroundColor: "var(--bg-primary, #222018)",
               border: "1px solid var(--border)",
               color: "var(--text-primary, #F8F4ED)",
               borderRadius: "4px",
@@ -1025,7 +1025,7 @@ export function FilesTab({
               style={{
                 position: "sticky",
                 top: 0,
-                backgroundColor: "var(--bg-primary, #10111A)",
+                backgroundColor: "var(--bg-primary, #222018)",
                 zIndex: 2,
                 borderBottom: "1px solid var(--border)",
               }}
@@ -1126,9 +1126,9 @@ export function FilesTab({
                     backgroundColor: isKeyboardFocused
                       ? "rgba(255, 209, 102, 0.15)"
                       : isFolder
-                        ? "rgba(23, 27, 53, 0.4)"
+                        ? "var(--bg-secondary, rgba(42, 38, 32, 0.4))"
                         : "transparent",
-                    borderBottom: "1px solid rgba(35, 40, 75, 0.5)",
+                    borderBottom: "1px solid var(--border-light, #302c24)",
                     outline: isKeyboardFocused
                       ? "1px solid var(--accent, #ffd166)"
                       : "none",
@@ -1491,7 +1491,7 @@ export function FilesTab({
               }
             }}
             style={{
-              backgroundColor: "var(--bg-card, #171b35)",
+              backgroundColor: "var(--bg-card, #2a2620)",
               border: "1px solid var(--border)",
               borderRadius: "8px",
               padding: "1.5rem",

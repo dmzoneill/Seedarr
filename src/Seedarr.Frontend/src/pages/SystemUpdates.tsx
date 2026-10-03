@@ -173,9 +173,9 @@ function SystemUpdates() {
                 padding: "1rem 1.25rem",
                 marginBottom: "1.25rem",
                 borderRadius: "8px",
-                backgroundColor: "rgba(0, 123, 255, 0.12)",
-                border: "1px solid rgba(0, 123, 255, 0.35)",
-                color: "var(--info, #17a2b8)",
+                backgroundColor: "var(--accent-bg, rgba(200, 168, 78, 0.15))",
+                border: "1px solid var(--accent-border-alert, rgba(200, 168, 78, 0.4))",
+                color: "var(--accent, #c8a84e)",
               }}
             >
               <span

@@ -159,8 +159,8 @@ export function SubsystemsTab() {
       {/* Overview Banner */}
       <div
         style={{
-          backgroundColor: "var(--bg-card, #171b35)",
-          border: "1px solid var(--border-light, #2a2f4c)",
+          backgroundColor: "var(--bg-card, #2a2620)",
+          border: "1px solid var(--border-light, #302c24)",
           borderRadius: "8px",
           padding: "1.25rem 1.5rem",
           display: "flex",
@@ -188,7 +188,7 @@ export function SubsystemsTab() {
           <p
             style={{
               margin: 0,
-              color: "var(--text-secondary, #c7c5d3)",
+              color: "var(--text-secondary, #d4ccbe)",
               fontSize: "0.9rem",
             }}
           >
@@ -213,7 +213,7 @@ export function SubsystemsTab() {
                 borderColor:
                   activeCategoryFilter === cat
                     ? "var(--accent-gold, #ffd166)"
-                    : "var(--border-light, #2a2f4c)",
+                    : "var(--border-light, #302c24)",
                 backgroundColor:
                   activeCategoryFilter === cat
                     ? "rgba(255, 209, 102, 0.15)"
@@ -221,7 +221,7 @@ export function SubsystemsTab() {
                 color:
                   activeCategoryFilter === cat
                     ? "var(--accent-gold, #ffd166)"
-                    : "var(--text-secondary, #c7c5d3)",
+                    : "var(--text-secondary, #d4ccbe)",
                 fontSize: "0.85rem",
                 fontWeight: activeCategoryFilter === cat ? 600 : 400,
                 cursor: "pointer",
@@ -270,7 +270,7 @@ export function SubsystemsTab() {
                     border: `1.5px solid ${
                       provider.isActive
                         ? "var(--accent-gold, #ffd166)"
-                        : "var(--border-light, #2a2f4c)"
+                        : "var(--border-light, #302c24)"
                     }`,
                     borderRadius: "8px",
                     padding: "1rem",
@@ -321,8 +321,8 @@ export function SubsystemsTab() {
                         ) : provider.isAvailable ? (
                           <span
                             style={{
-                              backgroundColor: "#2980b9",
-                              color: "#ffffff",
+                              backgroundColor: "#c8a84e",
+                              color: "#1a1815",
                               padding: "0.15rem 0.5rem",
                               borderRadius: "4px",
                               fontSize: "0.72rem",
@@ -359,7 +359,7 @@ export function SubsystemsTab() {
                     <div
                       style={{
                         fontSize: "0.8rem",
-                        color: "var(--text-secondary, #c7c5d3)",
+                        color: "var(--text-secondary, #d4ccbe)",
                         marginBottom: "0.5rem",
                       }}
                     >
@@ -370,7 +370,7 @@ export function SubsystemsTab() {
                     <p
                       style={{
                         fontSize: "0.83rem",
-                        color: "var(--text-secondary, #c7c5d3)",
+                        color: "var(--text-secondary, #d4ccbe)",
                         margin: "0 0 0.75rem 0",
                         lineHeight: 1.4,
                       }}
@@ -402,8 +402,8 @@ export function SubsystemsTab() {
                                   key={k}
                                   style={{
                                     backgroundColor:
-                                      "var(--bg-card-hover, #23284b)",
-                                    color: "var(--text-secondary, #c7c5d3)",
+                                      "var(--bg-card-hover, #3a352e)",
+                                    color: "var(--text-secondary, #d4ccbe)",
                                     padding: "0.15rem 0.45rem",
                                     borderRadius: "3px",
                                     fontSize: "0.7rem",
@@ -423,7 +423,7 @@ export function SubsystemsTab() {
                     style={{
                       display: "flex",
                       gap: "0.5rem",
-                      borderTop: "1px solid var(--border-light, #2a2f4c)",
+                      borderTop: "1px solid var(--border-light, #302c24)",
                       paddingTop: "0.75rem",
                     }}
                   >
@@ -437,8 +437,8 @@ export function SubsystemsTab() {
                         flex: 1,
                         padding: "0.4rem 0.6rem",
                         fontSize: "0.8rem",
-                        backgroundColor: "var(--bg-card-hover, #23284b)",
-                        border: "1px solid var(--border-light, #2a2f4c)",
+                        backgroundColor: "var(--bg-card-hover, #3a352e)",
+                        border: "1px solid var(--border-light, #302c24)",
                         color: "var(--text-primary, #f8f4ed)",
                         borderRadius: "4px",
                         cursor: "pointer",
@@ -508,8 +508,8 @@ export function SubsystemsTab() {
         >
           <div
             style={{
-              backgroundColor: "var(--bg-secondary, #171b35)",
-              border: "1px solid var(--border-light, #2a2f4c)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border-light, #302c24)",
               borderRadius: "8px",
               padding: "1.5rem",
               maxWidth: "500px",
@@ -531,7 +531,7 @@ export function SubsystemsTab() {
 
             <p
               style={{
-                color: "var(--text-secondary, #c7c5d3)",
+                color: "var(--text-secondary, #d4ccbe)",
                 fontSize: "0.9rem",
               }}
             >
@@ -553,10 +553,10 @@ export function SubsystemsTab() {
               style={{
                 fontSize: "0.85rem",
                 color: "var(--text-muted, #888)",
-                backgroundColor: "var(--bg-primary, #10111a)",
+                backgroundColor: "var(--bg-primary, #222018)",
                 padding: "0.75rem",
                 borderRadius: "4px",
-                border: "1px solid var(--border-light, #2a2f4c)",
+                border: "1px solid var(--border-light, #302c24)",
               }}
             >
               {t(
@@ -580,7 +580,7 @@ export function SubsystemsTab() {
                 style={{
                   padding: "0.5rem 1rem",
                   backgroundColor: "transparent",
-                  border: "1px solid var(--border-light, #2a2f4c)",
+                  border: "1px solid var(--border-light, #302c24)",
                   color: "var(--text-primary, #f8f4ed)",
                   borderRadius: "4px",
                   cursor: "pointer",
@@ -637,8 +637,8 @@ export function SubsystemsTab() {
         >
           <div
             style={{
-              backgroundColor: "var(--bg-secondary, #171b35)",
-              border: "1px solid var(--border-light, #2a2f4c)",
+              backgroundColor: "var(--bg-secondary, #2a2620)",
+              border: "1px solid var(--border-light, #302c24)",
               borderRadius: "8px",
               padding: "1.5rem",
               maxWidth: "520px",
@@ -688,7 +688,7 @@ export function SubsystemsTab() {
 
             <p
               style={{
-                color: "var(--text-secondary, #c7c5d3)",
+                color: "var(--text-secondary, #d4ccbe)",
                 fontSize: "0.9rem",
               }}
             >
@@ -704,7 +704,7 @@ export function SubsystemsTab() {
                   <span
                     style={{
                       fontSize: "0.8rem",
-                      color: "var(--text-secondary, #c7c5d3)",
+                      color: "var(--text-secondary, #d4ccbe)",
                       fontWeight: 600,
                     }}
                   >
@@ -719,7 +719,7 @@ export function SubsystemsTab() {
                       margin: "0.35rem 0 0 0",
                       paddingLeft: "1.2rem",
                       fontSize: "0.82rem",
-                      color: "var(--text-secondary, #c7c5d3)",
+                      color: "var(--text-secondary, #d4ccbe)",
                     }}
                   >
                     {probeResult.dependencyChecks.map((dep, idx) => (
@@ -773,8 +773,8 @@ export function SubsystemsTab() {
                 onClick={() => setProbeResult(null)}
                 style={{
                   padding: "0.5rem 1.25rem",
-                  backgroundColor: "var(--bg-card-hover, #23284b)",
-                  border: "1px solid var(--border-light, #2a2f4c)",
+                  backgroundColor: "var(--bg-card-hover, #3a352e)",
+                  border: "1px solid var(--border-light, #302c24)",
                   color: "var(--text-primary, #f8f4ed)",
                   borderRadius: "4px",
                   cursor: "pointer",

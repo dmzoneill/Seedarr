@@ -30,7 +30,7 @@ export function CliTab({ torrent }: CliTabProps) {
           flexWrap: "wrap",
           gap: "0.5rem",
           padding: "0.6rem 0.9rem",
-          backgroundColor: "rgba(23, 27, 53, 0.6)",
+          backgroundColor: "var(--bg-secondary, #2a2620)",
           border: "1px solid var(--border, #3a352e)",
           borderRadius: "6px",
           fontSize: "0.82rem",

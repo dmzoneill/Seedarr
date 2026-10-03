@@ -97,9 +97,9 @@ export function WebUiSettingsTab() {
     { bg: string; card: string; border: string }
   > = {
     dark: { bg: "#1a1815", card: "#2a2620", border: "#3a352e" },
-    indigo: { bg: "#0b0e1e", card: "#131733", border: "#1f2552" },
-    oled: { bg: "#000000", card: "#0a0b12", border: "#1a1d2e" },
-    slate: { bg: "#0e131d", card: "#141c2b", border: "#1f2c42" },
+    indigo: { bg: "#141210", card: "#1e1a16", border: "#383028" },
+    oled: { bg: "#000000", card: "#12100d", border: "#26221c" },
+    slate: { bg: "#161616", card: "#222222", border: "#3a3a3a" },
     light: { bg: "#f5f0e5", card: "#fdfaf4", border: "#d4cbb8" },
     system: {
       bg: "var(--bg-primary)",
@@ -180,9 +180,9 @@ export function WebUiSettingsTab() {
             onChange={(v) => update("themeStyle", v)}
             options={[
               { value: "dark", label: "Dark (Warm Espresso)" },
-              { value: "indigo", label: "Indigo (Deep Midnight)" },
+              { value: "indigo", label: "Obsidian (Deep Charcoal)" },
               { value: "oled", label: "OLED (Pure Black)" },
-              { value: "slate", label: "Slate (Cool Steel)" },
+              { value: "slate", label: "Graphite (Neutral Slate)" },
               { value: "light", label: "Light (Cream Parchment)" },
               { value: "system", label: "System (OS Preference)" },
             ]}

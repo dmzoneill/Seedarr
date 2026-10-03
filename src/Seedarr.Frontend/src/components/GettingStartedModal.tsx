@@ -1015,7 +1015,7 @@ export function GettingStartedModal({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: "rgba(10, 11, 18, 0.85)",
+        backgroundColor: "var(--overlay, rgba(0, 0, 0, 0.75))",
         backdropFilter: "blur(6px)",
         WebkitBackdropFilter: "blur(6px)",
         display: "flex",

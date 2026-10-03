@@ -368,7 +368,7 @@ export default function DeveloperRepl() {
                 Error: {response.errorMessage}
               </div>
             ) : activeTab === "result" ? (
-              <pre style={{ margin: 0, color: "#38bdf8", fontFamily: "monospace", fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
+              <pre style={{ margin: 0, color: "var(--accent, #c8a84e)", fontFamily: "monospace", fontSize: "0.8rem", whiteSpace: "pre-wrap" }}>
                 {response.resultJson || "undefined"}
               </pre>
             ) : (
