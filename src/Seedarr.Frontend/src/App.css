@@ -2594,7 +2594,9 @@ body {
     height: 100vh !important;
     z-index: 999 !important;
     transform: translateX(-100%);
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+    transition:
+      transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.25s ease;
     box-shadow: none;
     display: flex !important;
     flex-direction: column;
@@ -2844,7 +2846,6 @@ body {
   .torrent-split-pane {
     height: auto !important;
   }
-
 
   .detail-panel {
     max-height: 55vh !important;
