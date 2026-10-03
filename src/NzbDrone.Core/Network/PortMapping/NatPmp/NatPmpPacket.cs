@@ -6,6 +6,7 @@ namespace NzbDrone.Core.Network.NatPmp;
 
 public enum NatPmpProtocol : byte
 {
+    None = 0,
     Udp = 1,
     Tcp = 2
 }
