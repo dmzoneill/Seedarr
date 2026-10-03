@@ -39,6 +39,14 @@ public class MediaCoverController : RestController<MediaMetadataResource>
         "screenshot",
     };
 
+    private static readonly char[] InitialsDelimiters = [' ', '.', '_', '-'];
+    private static readonly string[] CoverExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"];
+    private static readonly string[] FanartFallbacks = ["backdrop", "background"];
+    private static readonly string[] BackdropFallbacks = ["fanart", "background"];
+    private static readonly string[] PosterFallbacks = ["cover", "folder", "thumb"];
+    private static readonly string[] ThumbFallbacks = ["poster", "cover", "folder"];
+    private static readonly string[] BannerFallbacks = ["season-banner", "fanart", "backdrop"];
+
     public MediaCoverController(
         IMediaEnrichmentService mediaEnrichmentService,
         IAppFolderInfo appFolderInfo = null)
@@ -274,7 +282,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             return string.Empty;
         }
 
-        var parts = title.Split(new[] { ' ', '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+        var parts = title.Split(InitialsDelimiters, StringSplitOptions.RemoveEmptyEntries);
         var initials = new StringBuilder();
         foreach (var p in parts)
         {
@@ -479,28 +487,28 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             }
         }
 
-        var extensions = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg" };
+        var extensions = CoverExtensions;
         var candidateNames = new List<string> { type };
 
         if (string.Equals(type, "fanart", StringComparison.OrdinalIgnoreCase))
         {
-            candidateNames.AddRange(new[] { "backdrop", "background" });
+            candidateNames.AddRange(FanartFallbacks);
         }
         else if (string.Equals(type, "backdrop", StringComparison.OrdinalIgnoreCase))
         {
-            candidateNames.AddRange(new[] { "fanart", "background" });
+            candidateNames.AddRange(BackdropFallbacks);
         }
         else if (string.Equals(type, "poster", StringComparison.OrdinalIgnoreCase))
         {
-            candidateNames.AddRange(new[] { "cover", "folder", "thumb" });
+            candidateNames.AddRange(PosterFallbacks);
         }
         else if (string.Equals(type, "thumb", StringComparison.OrdinalIgnoreCase))
         {
-            candidateNames.AddRange(new[] { "poster", "cover", "folder" });
+            candidateNames.AddRange(ThumbFallbacks);
         }
         else if (string.Equals(type, "banner", StringComparison.OrdinalIgnoreCase))
         {
-            candidateNames.AddRange(new[] { "season-banner", "fanart", "backdrop" });
+            candidateNames.AddRange(BannerFallbacks);
         }
 
         var matchingFiles = new List<FileInfo>();

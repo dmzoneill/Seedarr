@@ -22,6 +22,7 @@ public class InstallUpdateRequest
 [V1ApiController("update")]
 public class UpdateController : Controller
 {
+    private static readonly char[] LineSeparators = ['\r', '\n'];
     private readonly IUpdateService _updateService;
     private readonly IPostUpdateVerificationService _postUpdateVerificationService;
     private readonly IUpdatePackageProvider _updatePackageProvider;
@@ -273,7 +274,7 @@ public class UpdateController : Controller
 
         var currentSection = newItems;
 
-        foreach (var rawLine in body.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var rawLine in body.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries))
         {
             var line = rawLine.Trim();
 
