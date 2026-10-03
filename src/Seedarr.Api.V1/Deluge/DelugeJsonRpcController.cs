@@ -39,6 +39,81 @@ public class DelugeJsonRpcController : ControllerBase
 
     private static readonly HttpClient _sharedHttpClient = new();
     private static volatile bool _isWebConnected = true;
+    private static readonly char[] LabelSeparators = [',', ';'];
+    private static readonly char[] PathSeparators = ['/', '\\'];
+    private static readonly string[] DefaultPlugins = ["Label", "Extractor", "Execute", "AutoAdd", "Blocklist", "Scheduler", "Stats"];
+    private static readonly string[] SystemMethods =
+    [
+        "auth.login",
+        "auth.check_session",
+        "auth.delete_session",
+        "web.connected",
+        "web.connect",
+        "web.disconnect",
+        "web.get_hosts",
+        "web.get_host_status",
+        "web.update_ui",
+        "web.get_plugins",
+        "web.get_installed_plugins",
+        "web.get_config",
+        "web.set_config",
+        "web.get_torrents_status",
+        "web.upload_torrent",
+        "web.get_torrent_info",
+        "web.add_torrents",
+        "core.get_version",
+        "daemon.get_version",
+        "daemon.info",
+        "system.listMethods",
+        "system.list_methods",
+        "system.get_methods",
+        "core.get_config",
+        "core.get_config_values",
+        "core.get_config_value",
+        "core.set_config",
+        "core.set_config_values",
+        "core.get_session_status",
+        "core.get_free_space",
+        "core.get_path_free_space",
+        "core.get_free_space_bytes",
+        "core.get_torrents_status",
+        "core.get_torrent_status",
+        "core.add_torrent_file",
+        "core.add_torrent_magnet",
+        "core.add_torrent_url",
+        "core.pause_torrent",
+        "core.pause_torrents",
+        "core.pause_all_torrents",
+        "core.resume_torrent",
+        "core.resume_torrents",
+        "core.resume_all_torrents",
+        "core.remove_torrent",
+        "core.remove_torrents",
+        "core.force_recheck",
+        "core.force_reannounce",
+        "core.set_torrent_options",
+        "core.set_torrent_file_priorities",
+        "core.rename_files",
+        "core.move_storage",
+        "core.queue_top",
+        "core.queue_up",
+        "core.queue_down",
+        "core.queue_bottom",
+        "core.get_filter_tree",
+        "web.get_filter_tree",
+        "core.get_enabled_plugins",
+        "core.get_available_plugins",
+        "core.enable_plugin",
+        "core.disable_plugin",
+        "label.get_labels",
+        "label.get_torrents",
+        "label.set_torrent",
+        "label.add",
+        "label.add_label",
+        "label.remove",
+        "label.get_options",
+        "label.set_options"
+    ];
 
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileService _torrentFileService;
@@ -478,78 +553,7 @@ public class DelugeJsonRpcController : ControllerBase
     {
         return DelugeResult(new
         {
-            result = new[]
-            {
-                "auth.login",
-                "auth.check_session",
-                "auth.delete_session",
-                "web.connected",
-                "web.connect",
-                "web.disconnect",
-                "web.get_hosts",
-                "web.get_host_status",
-                "web.update_ui",
-                "web.get_plugins",
-                "web.get_installed_plugins",
-                "web.get_config",
-                "web.set_config",
-                "web.get_torrents_status",
-                "web.upload_torrent",
-                "web.get_torrent_info",
-                "web.add_torrents",
-                "core.get_version",
-                "daemon.get_version",
-                "daemon.info",
-                "system.listMethods",
-                "system.list_methods",
-                "system.get_methods",
-                "core.get_config",
-                "core.get_config_values",
-                "core.get_config_value",
-                "core.set_config",
-                "core.set_config_values",
-                "core.get_session_status",
-                "core.get_free_space",
-                "core.get_path_free_space",
-                "core.get_free_space_bytes",
-                "core.get_torrents_status",
-                "core.get_torrent_status",
-                "core.add_torrent_file",
-                "core.add_torrent_magnet",
-                "core.add_torrent_url",
-                "core.pause_torrent",
-                "core.pause_torrents",
-                "core.pause_all_torrents",
-                "core.resume_torrent",
-                "core.resume_torrents",
-                "core.resume_all_torrents",
-                "core.remove_torrent",
-                "core.remove_torrents",
-                "core.force_recheck",
-                "core.force_reannounce",
-                "core.set_torrent_options",
-                "core.set_torrent_file_priorities",
-                "core.rename_files",
-                "core.move_storage",
-                "core.queue_top",
-                "core.queue_up",
-                "core.queue_down",
-                "core.queue_bottom",
-                "core.get_filter_tree",
-                "web.get_filter_tree",
-                "core.get_enabled_plugins",
-                "core.get_available_plugins",
-                "core.enable_plugin",
-                "core.disable_plugin",
-                "label.get_labels",
-                "label.get_torrents",
-                "label.set_torrent",
-                "label.add",
-                "label.add_label",
-                "label.remove",
-                "label.get_options",
-                "label.set_options",
-            },
+            result = SystemMethods,
             error = (object)null,
             id,
         });
@@ -591,7 +595,7 @@ public class DelugeJsonRpcController : ControllerBase
         {
             if (!string.IsNullOrWhiteSpace(torrent.Label))
             {
-                var tokens = torrent.Label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                var tokens = torrent.Label.Split(LabelSeparators, StringSplitOptions.RemoveEmptyEntries);
                 foreach (var token in tokens)
                 {
                     var trimmed = token.Trim();
@@ -660,7 +664,7 @@ public class DelugeJsonRpcController : ControllerBase
                 if (!string.IsNullOrEmpty(torrent.Label) || (torrent.TagIds != null && torrent.TagIds.Count > 0))
                 {
                     var currentLabels = (torrent.Label ?? string.Empty)
-                        .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Split(LabelSeparators, StringSplitOptions.RemoveEmptyEntries)
                         .Select(l => l.Trim())
                         .ToList();
 
@@ -794,7 +798,7 @@ public class DelugeJsonRpcController : ControllerBase
 
     private static IActionResult HandleGetPlugins(object id)
     {
-        return DelugeResult(new { result = new[] { "Label", "Extractor", "Execute", "AutoAdd", "Blocklist", "Scheduler", "Stats" }, error = (object)null, id });
+        return DelugeResult(new { result = DefaultPlugins, error = (object)null, id });
     }
 
     private static IActionResult HandleTogglePlugin(object id)
@@ -1358,7 +1362,7 @@ public class DelugeJsonRpcController : ControllerBase
         {
             var file = parsed.Files[i];
             var rawPath = file.Path ?? parsed.Name ?? $"file_{i}";
-            var parts = rawPath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = rawPath.Split(PathSeparators, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0)
             {
                 parts = new[] { $"file_{i}" };
@@ -2344,7 +2348,7 @@ public class DelugeJsonRpcController : ControllerBase
 
                         if (!string.IsNullOrEmpty(t.Label) && (t.Label.Contains(',') || t.Label.Contains(';')))
                         {
-                            var parts = t.Label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                            var parts = t.Label.Split(LabelSeparators, StringSplitOptions.RemoveEmptyEntries);
                             if (parts.Any(p => labelSet.Contains(p.Trim())))
                             {
                                 return true;

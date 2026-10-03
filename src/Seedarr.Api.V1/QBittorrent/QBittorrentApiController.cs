@@ -34,6 +34,10 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     private static readonly ConcurrentDictionary<string, string> _categorySavePaths = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HttpClient DefaultHttpClient = new();
     private static DateTime _lastSyncCleanupTime = DateTime.UtcNow;
+    private static readonly char[] LineSeparators = ['\r', '\n'];
+    private static readonly char[] CategoryDelimiters = ['\n', '\r', ',', ';'];
+    private static readonly char[] LabelSeparators = [',', ';'];
+    private static readonly char[] IdSeparators = ['|', ','];
 
     private readonly IRpcSessionStore _sessionStore;
 
@@ -607,7 +611,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             return;
         }
 
-        var lines = request.Urls.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var lines = request.Urls.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
         foreach (var url in lines)
         {
             var trimmed = url.Trim();
@@ -1263,7 +1267,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                     .Select(t => t.Url.Trim())
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                var urlList = urls.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                var urlList = urls.Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries);
                 foreach (var url in urlList)
                 {
                     var trimmed = url.Trim();
@@ -1737,7 +1741,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             return Content("Ok.", "text/plain");
         }
 
-        var names = categories.Split(new[] { '\n', '\r', ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+        var names = categories.Split(CategoryDelimiters, StringSplitOptions.RemoveEmptyEntries)
             .Select(n => n.Trim())
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Distinct(StringComparer.OrdinalIgnoreCase);
@@ -1848,7 +1852,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         {
             if (!string.IsNullOrWhiteSpace(torrent.Label))
             {
-                var tokens = torrent.Label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                var tokens = torrent.Label.Split(LabelSeparators, StringSplitOptions.RemoveEmptyEntries);
                 foreach (var token in tokens)
                 {
                     var trimmed = token.Trim();
@@ -1965,7 +1969,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         if (!string.IsNullOrEmpty(tags))
         {
-            var tagsToDelete = tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+            var tagsToDelete = tags.Split(LabelSeparators, StringSplitOptions.RemoveEmptyEntries)
                 .Select(t => t.Trim())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -1986,7 +1990,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             {
                 if (!string.IsNullOrEmpty(torrent.Label) || (torrent.TagIds != null && torrent.TagIds.Count > 0))
                 {
-                    var remaining = (torrent.Label ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                    var remaining = (torrent.Label ?? string.Empty).Split(LabelSeparators, StringSplitOptions.RemoveEmptyEntries)
                         .Select(t => t.Trim())
                         .Where(t => !tagsToDelete.Contains(t))
                         .ToList();
@@ -2685,7 +2689,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         var files = _torrentFileService.GetByTorrentId(torrent.Id);
         if (files != null && files.Count > 0)
         {
-            var idTokens = rawIds.Split(new[] { '|', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            var idTokens = rawIds.Split(IdSeparators, StringSplitOptions.RemoveEmptyEntries);
             var modifiedFiles = new HashSet<TorrentFile>();
 
             foreach (var token in idTokens)

@@ -137,7 +137,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var torrentTrackers = trackers.Where(t => t.TorrentId == torrent.Id).ToList();
         var resource = TorrentResourceMapper.ToResource(torrent, torrentTrackers.Select(t => t.Url));
 
-        if (torrentTrackers.Any())
+        if (torrentTrackers.Count > 0)
         {
             var mainTracker = torrentTrackers.OrderBy(tr => tr.Tier).First();
             resource.AnnounceInterval = mainTracker.AnnounceInterval;
@@ -247,7 +247,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var torrentTrackers = trackers.Where(t => t.TorrentId == torrent.Id).ToList();
         var resource = TorrentResourceMapper.ToResource(torrent, torrentTrackers.Select(t => t.Url));
 
-        if (torrentTrackers.Any())
+        if (torrentTrackers.Count > 0)
         {
             var mainTracker = torrentTrackers.OrderBy(tr => tr.Tier).First();
             resource.AnnounceInterval = mainTracker.AnnounceInterval;
