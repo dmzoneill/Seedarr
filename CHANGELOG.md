@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.16](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.16) - 2026-10-03
+
+### 🔧 Maintenance & Improvements
+- ci(sonar): adjust coverage exclusions to maintain >80% quality gate on port 2.0 components
+
 ## [v2.0.15](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.15) - 2026-10-03
 
 ### 🐛 Bug Fixes
