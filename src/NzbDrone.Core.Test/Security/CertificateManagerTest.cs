@@ -311,6 +311,29 @@ public class CertificateManagerTest
     }
 
     [Test]
+    public async Task ValidateCertificateAsync_WhenUnencryptedPemKeyWithPassword_FallsBackToUnencryptedPem()
+    {
+        var (fullChainPem, keyPem, _, _) = GenerateTestChain();
+        var certPemPath = Path.Combine(_tempDir, "fallback.pem");
+        var keyPemPath = Path.Combine(_tempDir, "fallback.key");
+
+        await File.WriteAllTextAsync(certPemPath, fullChainPem);
+        await File.WriteAllTextAsync(keyPemPath, keyPem);
+
+        var result = await _certificateManager.ValidateCertificateAsync(
+            certPath: certPemPath,
+            keyPath: keyPemPath,
+            password: "superfluouspassword",
+            bindAddress: "127.0.0.1",
+            sslPort: 9899,
+            testTlsHandshake: false);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsValid, Is.True, result.Message);
+        Assert.That(result.HasPrivateKey, Is.True);
+    }
+
+    [Test]
     public void GetOrCreateCertificate_SelfSignedCert_HasBasicConstraintsAndSubjectKeyIdentifierAndValidLifetime()
     {
         var cert = _certificateManager.GetOrCreateCertificate(_config);
