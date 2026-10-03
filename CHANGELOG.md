@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.1.1](https://github.com/dmzoneill/Seedarr/releases/tag/v2.1.1) - 2026-10-03
+
+### 🐛 Bug Fixes
+- fix(quality): resolve CA2008 and enable strict analyzers across solution
+- Fix SA1214 field ordering in DelugeJsonRpcController and QBittorrentApiController
+- Fix CA warnings in Seedarr.Api.V1
+- Fix CA warnings in Seedarr.Http
+- Fix CA1861 and CA1870 code analysis warnings across multiple files
+- Fix CA1806 code analysis warnings
+- Fix CA2008 code analysis warnings
+- Fix CA1854 code analysis warnings
+- Fix CA1008 and CA1860 code analysis warnings
+
+### 🔧 Maintenance & Improvements
+- Revert "ci(sonar): exclude migration ddl and frontend ui pages from cpd and coverage"
+- ci(sonar): exclude migration ddl and frontend ui pages from cpd and coverage
+- ci(workflow): disable ZIZMOR in super-linter for reusable dispatch workflow
+- Make PosixPtyProcess._logger static
+
 ## [v2.1.0](https://github.com/dmzoneill/Seedarr/releases/tag/v2.1.0) - 2026-10-03
 
 ### ✨ Features
