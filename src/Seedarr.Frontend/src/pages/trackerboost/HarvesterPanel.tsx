@@ -473,10 +473,10 @@ export function HarvesterPanel({
                       borderRadius: "6px",
                       cursor: "pointer",
                       backgroundColor: isSelected
-                        ? "var(--accent-glow, rgba(56, 189, 248, 0.12))"
+                        ? "var(--accent-bg, rgb(200 168 78 / 15%))"
                         : "var(--bg-secondary, rgba(255,255,255,0.02))",
                       border: isSelected
-                        ? "1px solid var(--accent, #38bdf8)"
+                        ? "1px solid var(--accent, #c8a84e)"
                         : "1px solid var(--border-light)",
                       transition: "all 0.15s ease",
                     }}

@@ -3759,10 +3759,10 @@ if (torrent && torrent.size > 5000000000) {
                                                 fontSize: "0.8rem",
                                                 whiteSpace: "nowrap",
                                                 backgroundColor:
-                                                  "rgba(59, 130, 246, 0.15)",
-                                                color: "var(--accent, #38bdf8)",
+                                                  "var(--accent-bg, rgb(200 168 78 / 15%))",
+                                                color: "var(--accent, #c8a84e)",
                                                 border:
-                                                  "1px solid rgba(59, 130, 246, 0.3)",
+                                                  "1px solid var(--accent-border-alert, rgb(200 168 78 / 30%))",
                                                 borderRadius: "4px",
                                                 flexShrink: 0,
                                               }}
@@ -3801,7 +3801,7 @@ if (torrent && torrent.size > 5000000000) {
                                                     backgroundColor:
                                                       step.conditionRight ===
                                                       preset.value
-                                                        ? "var(--accent, #38bdf8)"
+                                                        ? "var(--accent, #c8a84e)"
                                                         : undefined,
                                                     color:
                                                       step.conditionRight ===
@@ -5242,8 +5242,8 @@ if (torrent && torrent.size > 5000000000) {
             <div
               style={{
                 padding: "0.75rem 1rem",
-                backgroundColor: "rgba(59, 130, 246, 0.08)",
-                border: "1px solid rgba(59, 130, 246, 0.25)",
+                backgroundColor: "var(--accent-bg-light, rgb(200 168 78 / 8%))",
+                border: "1px solid var(--accent-border-alert, rgb(200 168 78 / 25%))",
                 borderRadius: "6px",
                 marginBottom: "1.25rem",
                 fontSize: "0.8rem",

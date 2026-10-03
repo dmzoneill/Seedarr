@@ -46,7 +46,7 @@ interface FileBoundary {
 }
 
 const FILE_PALETTE = [
-  "#3498db",
+  "#c8a84e",
   "#9b59b6",
   "#e67e22",
   "#1abc9c",
@@ -351,7 +351,7 @@ export function PieceMap({
       case 2:
         return "#27ae60"; // Completed/Verified green
       case 1:
-        return "#3498db"; // In-flight blue
+        return "#c8a84e"; // In-flight amber/gold
       case 3:
         return "#e74c3c"; // Corrupted red
       case 0:
@@ -443,7 +443,7 @@ export function PieceMap({
           } else if (verified === spanLen) {
             fillColor = "#27ae60";
           } else if (inFlight > 0) {
-            fillColor = "#3498db";
+            fillColor = "#c8a84e";
           } else if (verified > 0) {
             // Partially verified
             const pct = verified / spanLen;
@@ -600,7 +600,7 @@ export function PieceMap({
           } else if (verified === spanLen) {
             fillColor = "#27ae60";
           } else if (inFlight > 0) {
-            fillColor = "#3498db";
+            fillColor = "#c8a84e";
           } else if (verified > 0) {
             const pct = verified / spanLen;
             fillColor = pct >= 0.5 ? "#1e824c" : "#1a5336";
@@ -734,7 +734,7 @@ export function PieceMap({
       statusColor = "#27ae60";
     } else if (state === 1) {
       statusText = "In-flight";
-      statusColor = "#3498db";
+      statusColor = "#c8a84e";
     } else if (state === 3) {
       statusText = "Corrupted";
       statusColor = "#e74c3c";
@@ -785,7 +785,7 @@ export function PieceMap({
       statusColor = "#27ae60";
     } else if (state === 1) {
       statusText = "In-flight";
-      statusColor = "#3498db";
+      statusColor = "#c8a84e";
     } else if (state === 3) {
       statusText = "Corrupted";
       statusColor = "#e74c3c";
@@ -1233,7 +1233,7 @@ export function PieceMap({
                   width: "8px",
                   height: "8px",
                   borderRadius: "2px",
-                  backgroundColor: "#3498db",
+                  backgroundColor: "#c8a84e",
                 }}
               />
               In-flight ({stats.inFlight})

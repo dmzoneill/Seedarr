@@ -412,7 +412,7 @@ export function ImportPackageModal({
                               backgroundColor:
                                 t.status === "Seeding"
                                   ? "rgba(34, 197, 94, 0.2)"
-                                  : "rgba(56, 189, 248, 0.2)",
+                                  : "var(--accent-bg, rgb(200 168 78 / 20%))",
                               color:
                                 t.status === "Seeding" ? "#86efac" : "#7dd3fc",
                             }}
@@ -474,14 +474,14 @@ export function ImportPackageModal({
               }}
               style={{
                 border: isDragOver
-                  ? "2px dashed var(--accent, #38bdf8)"
+                  ? "2px dashed var(--accent, #c8a84e)"
                   : "2px dashed var(--border-light, rgba(255, 255, 255, 0.2))",
                 borderRadius: "8px",
                 padding: "1.5rem",
                 textAlign: "center",
                 cursor: isUploading ? "not-allowed" : "pointer",
                 backgroundColor: isDragOver
-                  ? "rgba(56, 189, 248, 0.08)"
+                  ? "var(--accent-bg, rgb(200 168 78 / 15%))"
                   : "rgba(255, 255, 255, 0.02)",
                 transition: "all 0.2s ease-in-out",
               }}
@@ -575,7 +575,7 @@ export function ImportPackageModal({
                   style={{
                     background: "none",
                     border: "none",
-                    color: "var(--accent, #38bdf8)",
+                    color: "var(--accent, #c8a84e)",
                     fontSize: "0.8rem",
                     padding: 0,
                     cursor: "pointer",
@@ -711,7 +711,7 @@ export function ImportPackageModal({
                     style={{
                       height: "100%",
                       width: `${uploadProgress}%`,
-                      backgroundColor: "var(--accent, #38bdf8)",
+                      backgroundColor: "var(--accent, #c8a84e)",
                       transition: "width 0.2s ease-in-out",
                     }}
                   />
