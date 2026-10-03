@@ -119,10 +119,7 @@ public static class PcpPacket
         byte[] nonce = null,
         IPAddress suggestedExternalIp = null)
     {
-        if (clientIp == null)
-        {
-            throw new ArgumentNullException(nameof(clientIp));
-        }
+        ArgumentNullException.ThrowIfNull(clientIp);
 
         if (internalPort < 0 || internalPort > 65535)
         {

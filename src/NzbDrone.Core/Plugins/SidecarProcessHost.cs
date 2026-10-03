@@ -71,10 +71,7 @@ public class SidecarProcessHost : ISidecarProcessHost
     {
         lock (_stateLock)
         {
-            if (_disposed)
-            {
-                throw new ObjectDisposedException(nameof(SidecarProcessHost));
-            }
+            ObjectDisposedException.ThrowIf(_disposed, this);
 
             if (IsRunning)
             {

@@ -14,6 +14,7 @@ namespace NzbDrone.Core.Test.MediaCover;
 [TestFixture]
 public class MediaCoverSecurityTest
 {
+    private static readonly JsonSerializerOptions CamelCaseOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     private IMediaEnrichmentService _enrichmentService;
     private IAppFolderInfo _appFolderInfo;
     private string _tempAppData;
@@ -68,8 +69,7 @@ public class MediaCoverSecurityTest
             BackdropLocalPath = "/home/daoneill/.config/Seedarr/MediaCover/1/backdrop.jpg"
         };
 
-        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        var json = JsonSerializer.Serialize(resource, options);
+        var json = JsonSerializer.Serialize(resource, CamelCaseOptions);
 
         Assert.That(json, Does.Not.Contain("posterLocalPath"));
         Assert.That(json, Does.Not.Contain("backdropLocalPath"));

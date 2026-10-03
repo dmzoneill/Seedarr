@@ -163,10 +163,7 @@ public class PluginService : IPluginService, IHandle<ApplicationShutdownRequeste
 
     public PluginInfo RegisterPlugin(PluginManifest manifest, string pluginDirectory, ISidecarProcessHost customHost = null)
     {
-        if (manifest == null)
-        {
-            throw new ArgumentNullException(nameof(manifest));
-        }
+        ArgumentNullException.ThrowIfNull(manifest);
 
         manifest.ValidateAndResolveEntrypoint(pluginDirectory);
 

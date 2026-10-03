@@ -24,10 +24,7 @@ public class ConfigFileProvider : IConfigFileProvider
 
     public ConfigFileProvider(IAppFolderInfo appFolderInfo)
     {
-        if (appFolderInfo == null)
-        {
-            throw new ArgumentNullException(nameof(appFolderInfo));
-        }
+        ArgumentNullException.ThrowIfNull(appFolderInfo);
 
         _logger = LogManager.GetCurrentClassLogger();
         _configFile = Path.Combine(appFolderInfo.AppDataFolder, ConfigFileName);

@@ -86,10 +86,7 @@ public class DefaultPcpTransport : IPcpTransport
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(DefaultPcpTransport));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
     public void Dispose()
@@ -197,15 +194,8 @@ public class PcpClient : IPcpClient
         CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        if (gateway == null)
-        {
-            throw new ArgumentNullException(nameof(gateway));
-        }
-
-        if (clientIp == null)
-        {
-            throw new ArgumentNullException(nameof(clientIp));
-        }
+        ArgumentNullException.ThrowIfNull(gateway);
+        ArgumentNullException.ThrowIfNull(clientIp);
 
         var actualNonce = nonce ?? PcpPacket.GenerateNonce();
         var lifetimeSeconds = (uint)Math.Max(0, lifetime.TotalSeconds);
@@ -312,15 +302,8 @@ public class PcpClient : IPcpClient
         CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        if (gateway == null)
-        {
-            throw new ArgumentNullException(nameof(gateway));
-        }
-
-        if (clientIp == null)
-        {
-            throw new ArgumentNullException(nameof(clientIp));
-        }
+        ArgumentNullException.ThrowIfNull(gateway);
+        ArgumentNullException.ThrowIfNull(clientIp);
 
         var actualNonce = nonce;
         if (actualNonce == null)
@@ -488,10 +471,7 @@ public class PcpClient : IPcpClient
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(PcpClient));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
     public void Dispose()

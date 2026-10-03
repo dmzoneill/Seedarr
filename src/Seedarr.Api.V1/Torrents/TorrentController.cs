@@ -37,6 +37,7 @@ namespace Seedarr.Api.V1.Torrents;
 [Authorize(Policy = Policies.Reader)]
 public class TorrentController : RestControllerWithSignalR<TorrentResource, Torrent>
 {
+    private static readonly JsonSerializerOptions CaseInsensitiveJsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly Logger _logger;
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileService _torrentFileService;
@@ -203,7 +204,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     {
                         var metadata = JsonSerializer.Deserialize<MediaMetadata>(
                             history.DataJson,
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            CaseInsensitiveJsonOptions);
 
                         if (metadata != null)
                         {
@@ -344,7 +345,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             {
                 parsed = JsonSerializer.Deserialize<MediaMetadata>(
                     history.DataJson,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    CaseInsensitiveJsonOptions);
             }
             catch (Exception ex)
             {

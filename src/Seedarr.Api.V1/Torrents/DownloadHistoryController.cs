@@ -15,6 +15,7 @@ namespace Seedarr.Api.V1.Torrents;
 [V1ApiController("downloadhistory")]
 public class DownloadHistoryController : Controller
 {
+    private static readonly JsonSerializerOptions CaseInsensitiveJsonOptions = new() { PropertyNameCaseInsensitive = true };
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly IDownloadHistoryService _historyService;
     private readonly IArrMetadataEnricherService _metadataEnricherService;
@@ -188,7 +189,7 @@ public class DownloadHistoryController : Controller
             {
                 metadata = JsonSerializer.Deserialize<MediaMetadata>(
                     model.DataJson,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    CaseInsensitiveJsonOptions);
             }
             catch
             {

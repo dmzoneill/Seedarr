@@ -264,7 +264,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                         ms.Position = originalPosition;
                     }
 
-                    if (!string.IsNullOrWhiteSpace(rawBody) && rawBody.TrimStart().StartsWith("{"))
+                    if (!string.IsNullOrWhiteSpace(rawBody) && rawBody.TrimStart().StartsWith('{'))
                     {
                         using var doc = JsonDocument.Parse(rawBody);
                         var root = doc.RootElement;
@@ -503,7 +503,7 @@ public class WebhookDispatcher : IWebhookDispatcher
             return newDict;
         }
 
-        if (payload is string jsonStr && jsonStr.TrimStart().StartsWith("{"))
+        if (payload is string jsonStr && jsonStr.TrimStart().StartsWith('{'))
         {
             try
             {
@@ -573,7 +573,7 @@ public class WebhookDispatcher : IWebhookDispatcher
         else if (payload is string strPayload)
         {
             var trimmed = strPayload.TrimStart();
-            var mediaType = (trimmed.StartsWith("{") || trimmed.StartsWith("["))
+            var mediaType = (trimmed.StartsWith('{') || trimmed.StartsWith('['))
                 ? "application/json"
                 : "text/plain";
             content = new StringContent(strPayload, Encoding.UTF8, mediaType);
@@ -604,7 +604,7 @@ public class WebhookDispatcher : IWebhookDispatcher
 
         var trimmed = customHeadersJson.Trim();
 
-        if (trimmed.StartsWith("{"))
+        if (trimmed.StartsWith('{'))
         {
             try
             {
@@ -642,7 +642,7 @@ public class WebhookDispatcher : IWebhookDispatcher
             foreach (var line in lines)
             {
                 var cleanLine = line.Trim();
-                if (string.IsNullOrWhiteSpace(cleanLine) || cleanLine.StartsWith("#") || cleanLine.StartsWith("//"))
+                if (string.IsNullOrWhiteSpace(cleanLine) || cleanLine.StartsWith('#') || cleanLine.StartsWith("//"))
                 {
                     continue;
                 }
@@ -660,7 +660,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                 }
             }
 
-            if (!addedAny && !trimmed.StartsWith("{"))
+            if (!addedAny && !trimmed.StartsWith('{'))
             {
                 _logger.Warn("Could not parse custom headers from input (header keys: {0})", RedactHeadersForLogging(customHeadersJson));
             }

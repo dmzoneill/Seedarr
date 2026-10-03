@@ -361,7 +361,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
 
             var raw = claim.Value.Trim();
 
-            if (raw.StartsWith("[") && raw.EndsWith("]"))
+            if (raw.StartsWith('[') && raw.EndsWith(']'))
             {
                 try
                 {
@@ -389,7 +389,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
                 }
             }
 
-            if (raw.StartsWith("{") && raw.EndsWith("}"))
+            if (raw.StartsWith('{') && raw.EndsWith('}'))
             {
                 try
                 {

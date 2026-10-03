@@ -75,10 +75,7 @@ public class RemotePathMappingService : IRemotePathMappingService
 
     public RemotePathMapping Add(RemotePathMapping mapping)
     {
-        if (mapping == null)
-        {
-            throw new ArgumentNullException(nameof(mapping));
-        }
+        ArgumentNullException.ThrowIfNull(mapping);
 
         if (_repository != null)
         {
@@ -96,10 +93,7 @@ public class RemotePathMappingService : IRemotePathMappingService
 
     public void Update(RemotePathMapping mapping)
     {
-        if (mapping == null)
-        {
-            throw new ArgumentNullException(nameof(mapping));
-        }
+        ArgumentNullException.ThrowIfNull(mapping);
 
         if (_repository != null)
         {
@@ -247,7 +241,7 @@ public class RemotePathMappingService : IRemotePathMappingService
             trimmed = trimmed.Substring(atIdx + 1);
         }
 
-        if (trimmed.StartsWith("[", StringComparison.Ordinal) && trimmed.Contains(']'))
+        if (trimmed.StartsWith('[') && trimmed.Contains(']'))
         {
             var closingBracket = trimmed.IndexOf(']');
             return trimmed.Substring(1, closingBracket - 1);

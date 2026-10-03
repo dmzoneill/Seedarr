@@ -21,6 +21,7 @@ public class TrackerServerController : Controller
     private readonly IConfigService _configService;
     private readonly IDownloadHistoryRepository _downloadHistoryRepository;
     private readonly Logger _logger;
+    private static readonly JsonSerializerOptions CaseInsensitiveJsonOptions = new() { PropertyNameCaseInsensitive = true };
     private static readonly DateTime StartTime = DateTime.UtcNow;
     private static long _totalAnnounces;
     private static long _totalScrapes;
@@ -117,7 +118,7 @@ public class TrackerServerController : Controller
                     {
                         var meta = JsonSerializer.Deserialize<MediaMetadata>(
                             hist.DataJson,
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            CaseInsensitiveJsonOptions);
 
                         if (meta != null)
                         {

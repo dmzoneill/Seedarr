@@ -1102,7 +1102,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                     var match = available.FirstOrDefault(p =>
                         p.Name.Equals(clientName, StringComparison.OrdinalIgnoreCase) ||
                         p.GetType().Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase) ||
-                        p.Name.ToLowerInvariant().Contains(name));
+                        p.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
                     if (match != null)
                     {
                         return match;

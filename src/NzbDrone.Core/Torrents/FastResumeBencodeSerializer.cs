@@ -54,10 +54,7 @@ public class FastResumeBencodeSerializer : IFastResumeBencodeSerializer
 
     public byte[] Serialize(FastResumeData data)
     {
-        if (data == null)
-        {
-            throw new ArgumentNullException(nameof(data));
-        }
+        ArgumentNullException.ThrowIfNull(data);
 
         var dict = new BDictionary();
 

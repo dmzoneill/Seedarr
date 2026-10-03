@@ -338,17 +338,17 @@ public class AutoTaggerService : IAutoTaggerService,
             op = "==";
             sizePart = trimmed.Substring(2).Trim();
         }
-        else if (trimmed.StartsWith(">"))
+        else if (trimmed.StartsWith('>'))
         {
             op = ">";
             sizePart = trimmed.Substring(1).Trim();
         }
-        else if (trimmed.StartsWith("<"))
+        else if (trimmed.StartsWith('<'))
         {
             op = "<";
             sizePart = trimmed.Substring(1).Trim();
         }
-        else if (trimmed.StartsWith("="))
+        else if (trimmed.StartsWith('='))
         {
             op = "==";
             sizePart = trimmed.Substring(1).Trim();

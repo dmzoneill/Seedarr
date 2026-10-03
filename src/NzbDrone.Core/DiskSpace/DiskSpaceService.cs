@@ -308,7 +308,7 @@ public class DiskSpaceService : IDiskSpaceService
             fullPath = path.Replace('\\', '/');
         }
 
-        if (!fullPath.EndsWith("/"))
+        if (!fullPath.EndsWith('/'))
         {
             fullPath += "/";
         }
@@ -324,7 +324,7 @@ public class DiskSpaceService : IDiskSpaceService
             }
 
             var diskPath = disk.Path.Replace('\\', '/');
-            var checkPath = diskPath.EndsWith("/") ? diskPath : diskPath + "/";
+            var checkPath = diskPath.EndsWith('/') ? diskPath : diskPath + "/";
 
             if (fullPath.StartsWith(checkPath, StringComparison.OrdinalIgnoreCase) ||
                 fullPath.Equals(checkPath, StringComparison.OrdinalIgnoreCase))
@@ -922,7 +922,7 @@ public class DiskSpaceService : IDiskSpaceService
         while ((line = reader.ReadLine()) != null)
         {
             line = line.Trim();
-            if (string.IsNullOrEmpty(line) || line.StartsWith("#"))
+            if (string.IsNullOrEmpty(line) || line.StartsWith('#'))
             {
                 continue;
             }
@@ -974,7 +974,7 @@ public class DiskSpaceService : IDiskSpaceService
         }
 
         var normalizedPath = path.Replace('\\', '/');
-        if (!normalizedPath.EndsWith("/"))
+        if (!normalizedPath.EndsWith('/'))
         {
             normalizedPath += "/";
         }
@@ -985,7 +985,7 @@ public class DiskSpaceService : IDiskSpaceService
         foreach (var mount in mounts)
         {
             var mountPoint = mount.MountPoint.Replace('\\', '/');
-            var checkPoint = mountPoint.EndsWith("/") ? mountPoint : mountPoint + "/";
+            var checkPoint = mountPoint.EndsWith('/') ? mountPoint : mountPoint + "/";
 
             if (normalizedPath.StartsWith(checkPoint, StringComparison.Ordinal) ||
                 normalizedPath.Equals(checkPoint, StringComparison.Ordinal))

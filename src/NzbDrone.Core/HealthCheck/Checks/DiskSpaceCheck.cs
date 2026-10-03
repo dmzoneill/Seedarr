@@ -265,7 +265,7 @@ public class DiskSpaceCheck : IHealthCheck
             fullPath = path.Replace('\\', '/');
         }
 
-        if (!fullPath.EndsWith("/"))
+        if (!fullPath.EndsWith('/'))
         {
             fullPath += "/";
         }
@@ -281,7 +281,7 @@ public class DiskSpaceCheck : IHealthCheck
             }
 
             var diskPath = disk.Path.Replace('\\', '/');
-            var checkPath = diskPath.EndsWith("/") ? diskPath : diskPath + "/";
+            var checkPath = diskPath.EndsWith('/') ? diskPath : diskPath + "/";
 
             if (fullPath.StartsWith(checkPath, StringComparison.OrdinalIgnoreCase) ||
                 fullPath.Equals(checkPath, StringComparison.OrdinalIgnoreCase))
