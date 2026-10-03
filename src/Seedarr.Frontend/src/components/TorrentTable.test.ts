@@ -218,15 +218,16 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
       (React as unknown as Record<string, unknown>).createElement = origCreateElement;
     }
 
-    assert.ok(capturedTrProps, "Must capture row props");
-    assert.strictEqual(capturedTrProps.role, "row");
-    assert.strictEqual(capturedTrProps.tabIndex, 0);
-    assert.strictEqual(typeof capturedTrProps.onKeyDown, "function");
+    const rowProps = capturedTrProps as unknown as CapturedProps;
+    assert.ok(rowProps, "Must capture row props");
+    assert.strictEqual(rowProps.role, "row");
+    assert.strictEqual(rowProps.tabIndex, 0);
+    assert.strictEqual(typeof rowProps.onKeyDown, "function");
 
     // Space key: toggles selection
     let spacePrevented = false;
     let spaceStopped = false;
-    capturedTrProps.onKeyDown({
+    rowProps.onKeyDown?.({
       key: " ",
       preventDefault: () => {
         spacePrevented = true;
@@ -247,7 +248,7 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
     // Enter key: activates torrent
     let enterPrevented = false;
     let enterStopped = false;
-    capturedTrProps.onKeyDown({
+    rowProps.onKeyDown?.({
       key: "Enter",
       preventDefault: () => {
         enterPrevented = true;
@@ -264,7 +265,7 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
     // Other keys (e.g. Tab) should not trigger selection or activation
     toggledId = null;
     selectedId = undefined;
-    capturedTrProps.onKeyDown({
+    rowProps.onKeyDown?.({
       key: "Tab",
       preventDefault: () => {},
       stopPropagation: () => {},
@@ -412,15 +413,16 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
       (React as unknown as Record<string, unknown>).createElement = origCreateElement;
     }
 
-    assert.ok(capturedCardProps, "Must capture card props");
-    assert.strictEqual(capturedCardProps.role, "button");
-    assert.strictEqual(capturedCardProps.tabIndex, 0);
-    assert.strictEqual(typeof capturedCardProps.onKeyDown, "function");
+    const cardProps = capturedCardProps as unknown as CapturedGridProps;
+    assert.ok(cardProps, "Must capture card props");
+    assert.strictEqual(cardProps.role, "button");
+    assert.strictEqual(cardProps.tabIndex, 0);
+    assert.strictEqual(typeof cardProps.onKeyDown, "function");
 
     // Space key: toggles selection
     let spacePrevented = false;
     let spaceStopped = false;
-    capturedCardProps.onKeyDown({
+    cardProps.onKeyDown?.({
       key: " ",
       preventDefault: () => {
         spacePrevented = true;
@@ -441,7 +443,7 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
     // Enter key: selects torrent
     let enterPrevented = false;
     let enterStopped = false;
-    capturedCardProps.onKeyDown({
+    cardProps.onKeyDown?.({
       key: "Enter",
       preventDefault: () => {
         enterPrevented = true;

@@ -199,7 +199,7 @@ export function SecurityTab() {
       showToast("Peer blocklist configuration saved", "success");
     } catch (err: unknown) {
       showToast(
-        err?.message || "Failed to save blocklist configuration",
+        (err as { message?: string })?.message || "Failed to save blocklist configuration",
         "error",
       );
     }
@@ -220,7 +220,7 @@ export function SecurityTab() {
         );
       }
     } catch (err: unknown) {
-      showToast(err?.message || "Failed to synchronize blocklist", "error");
+      showToast((err as { message?: string })?.message || "Failed to synchronize blocklist", "error");
     }
   };
 
@@ -233,7 +233,7 @@ export function SecurityTab() {
       setIpTestResult(res);
     } catch (err: unknown) {
       showToast(
-        err?.message || "Failed to verify IP against blocklist",
+        (err as { message?: string })?.message || "Failed to verify IP against blocklist",
         "error",
       );
     } finally {
@@ -441,7 +441,7 @@ export function SecurityTab() {
       await loadProviders();
       showToast("Identity provider saved successfully", "success");
     } catch (err: unknown) {
-      showToast(err?.message || "Failed to save identity provider", "error");
+      showToast((err as { message?: string })?.message || "Failed to save identity provider", "error");
     }
   };
 
@@ -456,7 +456,7 @@ export function SecurityTab() {
       await loadProviders();
       showToast("Identity provider removed", "success");
     } catch (err: unknown) {
-      showToast(err?.message || "Failed to delete identity provider", "error");
+      showToast((err as { message?: string })?.message || "Failed to delete identity provider", "error");
     }
   };
 
@@ -470,7 +470,7 @@ export function SecurityTab() {
     } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: err?.message || "Connection failed",
+        message: (err as { message?: string })?.message || "Connection failed",
       });
     } finally {
       setTesting(false);

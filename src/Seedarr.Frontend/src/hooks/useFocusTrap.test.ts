@@ -132,9 +132,18 @@ class MockKeyboardEvent {
   }
 }
 
+interface MockDocument {
+  body: MockElement;
+  activeElement: MockElement;
+  contains: (el: unknown) => boolean;
+  addEventListener: (type: string, listener: (e: unknown) => void) => void;
+  removeEventListener: (type: string, listener: (e: unknown) => void) => void;
+  dispatchEvent: (event: unknown) => void;
+}
+
 describe("FocusTrap / useFocusTrap", () => {
   let originalDocument: unknown;
-  let mockDocument: unknown;
+  let mockDocument: MockDocument;
   let documentListeners: Map<string, Set<(e: unknown) => void>>;
   let rootBody: MockElement;
 

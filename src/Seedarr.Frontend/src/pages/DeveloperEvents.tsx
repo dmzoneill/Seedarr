@@ -58,7 +58,7 @@ export default function DeveloperEvents() {
       setActionMessage({ text: `Synthetic event '${publishEventName}' published.`, type: "success" });
       await fetchEvents();
     } catch (err: unknown) {
-      setActionMessage({ text: err?.message || "Failed to publish event.", type: "error" });
+      setActionMessage({ text: (err as { message?: string })?.message || "Failed to publish event.", type: "error" });
     }
   };
 

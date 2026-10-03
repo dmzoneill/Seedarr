@@ -59,11 +59,27 @@ export type VisualActionType =
   | "command"
   | "http";
 
+export interface VisualActionExtra {
+  method?: string;
+  url?: string;
+  headers?: Record<string, string>;
+  auth?: string;
+  json?: boolean;
+  body?: string;
+  timeoutSeconds?: number | string;
+  allowInsecure?: boolean;
+  continueOnError?: boolean;
+  register?: string;
+  deleteData?: boolean;
+  delete_data?: boolean;
+  [key: string]: unknown;
+}
+
 export interface VisualAction {
   id: string;
   type: VisualActionType;
   value: string;
-  extra?: Record<string, unknown>;
+  extra?: VisualActionExtra;
   deleteData?: boolean;
 }
 
@@ -829,7 +845,7 @@ function visualStepsToYaml(
             if (act.extra.url || act.value)
               yaml += `          url: '${(act.extra.url || act.value).replace(/'/g, "''")}'\n`;
 
-            let headers = act.extra.headers || {};
+            const headers = (act.extra.headers || {}) as Record<string, string>;
             if (act.extra.auth === "Bearer Token")
               headers["Authorization"] = "Bearer ${inputs.apiToken}";
             else if (act.extra.auth === "API Key (X-Api-Key)")
@@ -4357,11 +4373,10 @@ if (torrent && torrent.size > 5000000000) {
                                   >
                                     <input
                                       type="checkbox"
-                                      checked={
+                                      checked={Boolean(
                                         act.extra?.deleteData ||
-                                        act.deleteData ||
-                                        false
-                                      }
+                                        act.deleteData
+                                      )}
                                       onChange={(e) => {
                                         const copy = [...visualSteps];
                                         if (
@@ -4565,7 +4580,7 @@ if (torrent && torrent.size > 5000000000) {
                                           if (action) {
                                             const extra = action.extra || {};
                                             const headers =
-                                              extra.headers || {};
+                                              (extra.headers || {}) as Record<string, string>;
                                             extra.headers = headers;
                                             if (v === "bearer")
                                               headers["Authorization"] =
@@ -4605,7 +4620,7 @@ if (torrent && torrent.size > 5000000000) {
                                         <input
                                           type="checkbox"
                                           checked={
-                                            act.extra?.allowInsecure || false
+                                            Boolean(act.extra?.allowInsecure)
                                           }
                                           onChange={(e) => {
                                             const copy = [...visualSteps];
@@ -4633,7 +4648,7 @@ if (torrent && torrent.size > 5000000000) {
                                         <input
                                           type="checkbox"
                                           checked={
-                                            act.extra?.continueOnError || false
+                                            Boolean(act.extra?.continueOnError)
                                           }
                                           onChange={(e) => {
                                             const copy = [...visualSteps];
@@ -4685,7 +4700,7 @@ if (torrent && torrent.size > 5000000000) {
                                         placeholder={t(
                                           "automation.ui.timeoutS",
                                         )}
-                                        value={act.extra?.timeoutSeconds || ""}
+                                        value={act.extra?.timeoutSeconds !== undefined ? String(act.extra.timeoutSeconds) : ""}
                                         onChange={(e) => {
                                           const copy = [...visualSteps];
                                           const action =

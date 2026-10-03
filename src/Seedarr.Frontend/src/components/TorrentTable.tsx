@@ -507,11 +507,12 @@ export const TorrentNameCell: React.FC<{
     ? getMediaDeepLink(historyMatch, arrConnections)
     : null;
   const badges = getTorrentBadges(torrent);
-  const posterSrc =
+  const posterSrc: string | undefined =
     meta?.posterUrl ||
     torrent.posterUrl ||
-    (torrent as unknown as Record<string, unknown>).artworkUrl ||
-    torrent.bannerUrl;
+    ((torrent as unknown as { artworkUrl?: string }).artworkUrl) ||
+    torrent.bannerUrl ||
+    undefined;
 
   return (
     <div

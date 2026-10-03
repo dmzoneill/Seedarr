@@ -389,7 +389,7 @@ export default function DeveloperCommands() {
                       ) : (
                         <input
                           type={p.type === "Int32" || p.type === "Int64" ? "number" : "text"}
-                          value={formParams[p.name] ?? ""}
+                          value={String(formParams[p.name] ?? "")}
                           onChange={(e) => setFormParams({ ...formParams, [p.name]: p.type.startsWith("Int") ? Number.parseInt(e.target.value, 10) || 0 : e.target.value })}
                           style={{
                             width: "100%",

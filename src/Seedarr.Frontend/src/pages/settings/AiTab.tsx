@@ -99,7 +99,9 @@ export function AiTab() {
     } catch (err: unknown) {
       showToast(
         t("settingsTabs.ai.switchError", {
-          error: err.message || t("settingsTabs.notifications.unknownError"),
+          error:
+            (err as { message?: string })?.message ||
+            t("settingsTabs.notifications.unknownError"),
         }),
         "error",
       );
@@ -117,7 +119,9 @@ export function AiTab() {
     } catch (err: unknown) {
       showToast(
         t("settingsTabs.ai.probeFailed", {
-          error: err.message || t("settingsTabs.notifications.unknownError"),
+          error:
+            (err as { message?: string })?.message ||
+            t("settingsTabs.notifications.unknownError"),
         }),
         "error",
       );
