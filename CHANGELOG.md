@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.0.17](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.17) - 2026-10-03
+
+### 🐛 Bug Fixes
+- fix(quality): un-suppress CA1826, CA1847, CA2263, CA1825, CA2249 and resolve diagnostics
+
+### 🔧 Maintenance & Improvements
+- style: fix indentation for editorconfig-checker
+- style(css): format App.css with prettier
+- ci(linters): enable VALIDATE_CSS and fix duplicate CSS selector
+
 ## [v2.0.16](https://github.com/dmzoneill/Seedarr/releases/tag/v2.0.16) - 2026-10-03
 
 ### 🔧 Maintenance & Improvements
