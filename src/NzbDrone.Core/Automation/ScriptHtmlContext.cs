@@ -6,7 +6,7 @@ using AngleSharp.Html.Parser;
 
 namespace NzbDrone.Core.Automation;
 
-public class ScriptHtmlContext
+public sealed class ScriptHtmlContext
 {
     private static readonly HtmlParser Parser = new();
 

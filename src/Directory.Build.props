@@ -72,7 +72,7 @@
   </ItemGroup>
 
   <PropertyGroup Condition="'$(TestProject)'=='true'">
-    <NoWarn>$(NoWarn);CA1861;CA1806;CA5350</NoWarn>
+    <NoWarn>$(NoWarn);CA1861;CA1806;CA5350;CA2201;CA1040</NoWarn>
     <RunSettingsFilePath Condition="Exists('$(SeedarrRootDir).runsettings')">$(SeedarrRootDir).runsettings</RunSettingsFilePath>
   </PropertyGroup>
 

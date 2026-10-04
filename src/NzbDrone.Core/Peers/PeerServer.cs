@@ -67,7 +67,6 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private readonly ConcurrentDictionary<string, Torrent> _torrentCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte[]> _metadataCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, SwarmPieceHistogram> _swarmHistograms = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, ISuperSeedingTracker> _superSeedingTrackers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ISuperSeedingTracker _superSeedingTracker;
     private readonly ISuperSeedingService _superSeedingService;
     private readonly IEventAggregator _eventAggregator;
