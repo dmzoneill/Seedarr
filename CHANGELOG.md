@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.1.3](https://github.com/dmzoneill/Seedarr/releases/tag/v2.1.3) - 2026-10-04
+
+### ✨ Features
+- Add or update GitHub Actions workflows
+
+### 🐛 Bug Fixes
+- fix(quality): re-enable quality exclusions and scope security rules in Seedarr
+- fix(quality): enable CA1835 and prune 7 StyleCop/IDE NoWarn suppressions in Seedarr
+
+### 🔧 Maintenance & Improvements
+- test: add coverage for TorrentController tracker mapping and case-insensitive history metadata
+- test: add MediaCover fallback tests to Api.V1.Test
+- test: add sequential queue handling tests for ConfirmContext
+- test: add tests for MediaCover fallbacks and Readarr editions/series parsing
+- test: add coverage for Automation rules, TrackerBoost injection/harvesting, and SignalR broadcasters
+- test: add unit tests for custom header parsing in WebhookDispatcher and NotificationPayloadBuilder
+- test: add comprehensive coverage for ConfigController, DelugeJsonRpcController, CustomScriptService, and AutoTaggerService
+
 ## [v2.1.2](https://github.com/dmzoneill/Seedarr/releases/tag/v2.1.2) - 2026-10-03
 
 ### 🔧 Maintenance & Improvements
