@@ -43,10 +43,17 @@ public class DeveloperUmlServiceTest
 
     [TestCase("class", "torrents")]
     [TestCase("class", "all")]
+    [TestCase("class", "authentication")]
+    [TestCase("class", "automation")]
+    [TestCase("class", "notifications")]
+    [TestCase("class", "network")]
+    [TestCase("class", "storage")]
     [TestCase("di", "torrents")]
+    [TestCase("di", "all")]
     [TestCase("state", "torrents")]
     [TestCase("state", "trackers")]
     [TestCase("api", "all")]
+    [TestCase("api", "torrents")]
     [TestCase("frontend", "all")]
     public void GenerateDiagram_produces_valid_mermaid_markup(string diagramType, string subsystem)
     {
@@ -84,5 +91,32 @@ public class DeveloperUmlServiceTest
         {
             Assert.That(result.MermaidCode, Does.StartWith("graph TD"));
         }
+    }
+
+    [Test]
+    public void GenerateDiagram_respects_exclude_interfaces_and_methods()
+    {
+        var options = new DeveloperUmlOptions
+        {
+            DiagramType = "class",
+            Subsystem = "torrents",
+            IncludeInterfaces = false,
+            IncludeMethods = false,
+        };
+
+        var result = _service.GenerateDiagram(options);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MermaidCode, Does.StartWith("classDiagram"));
+    }
+
+    [Test]
+    public void GenerateDiagram_falls_back_to_class_diagram_when_unknown_type()
+    {
+        var options = new DeveloperUmlOptions { DiagramType = "unrecognized-type" };
+        var result = _service.GenerateDiagram(options);
+
+        Assert.That(result.DiagramType, Is.EqualTo("class"));
+        Assert.That(result.MermaidCode, Does.StartWith("classDiagram"));
     }
 }
