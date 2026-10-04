@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.3](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.3) - 2026-10-04
+
+### 🔧 Maintenance & Improvements
+- test: add tests for TerminalEnvironmentSanitizer, POCO models, and UML subsystem options
+
 ## [v2.3.2](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.2) - 2026-10-04
 
 ### 🔧 Maintenance & Improvements
