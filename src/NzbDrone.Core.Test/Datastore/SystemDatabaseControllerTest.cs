@@ -27,7 +27,7 @@ public class SystemDatabaseControllerTest
         using (var cmd = _sqliteConnection.CreateCommand())
         {
             cmd.CommandText = "CREATE TABLE Torrents (Id INTEGER PRIMARY KEY, Name TEXT, Size INT); " +
-                             "INSERT INTO Torrents (Name, Size) VALUES ('TestTorrent', 1024);";
+                "INSERT INTO Torrents (Name, Size) VALUES ('TestTorrent', 1024);";
             cmd.ExecuteNonQuery();
         }
 
