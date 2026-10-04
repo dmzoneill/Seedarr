@@ -6,12 +6,17 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Developer;
+using NzbDrone.Core.Developer.GitHub;
+using NzbDrone.Core.Developer.Quality;
+using NzbDrone.Core.Developer.Uml;
 using NzbDrone.Core.Mcp;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Messaging.Events;
@@ -47,6 +52,9 @@ public class SystemDeveloperController : Controller
     private readonly IMainDatabase _mainDatabase;
     private readonly IEventAggregator _eventAggregator;
     private readonly IMcpService _mcpService;
+    private readonly IDeveloperUmlService _umlService;
+    private readonly IDeveloperGitHubService _gitHubService;
+    private readonly IDeveloperQualityService _qualityService;
     private readonly Logger _logger;
 
     public SystemDeveloperController(
@@ -59,7 +67,10 @@ public class SystemDeveloperController : Controller
         IConfigFileProvider configFileProvider = null,
         IMainDatabase mainDatabase = null,
         IEventAggregator eventAggregator = null,
-        IMcpService mcpService = null)
+        IMcpService mcpService = null,
+        IDeveloperUmlService umlService = null,
+        IDeveloperGitHubService gitHubService = null,
+        IDeveloperQualityService qualityService = null)
     {
         _eventStore = eventStore;
         _httpTrafficStore = httpTrafficStore;
@@ -71,6 +82,9 @@ public class SystemDeveloperController : Controller
         _mainDatabase = mainDatabase;
         _eventAggregator = eventAggregator;
         _mcpService = mcpService;
+        _umlService = umlService;
+        _gitHubService = gitHubService;
+        _qualityService = qualityService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -594,6 +608,64 @@ public class SystemDeveloperController : Controller
         }
 
         return string.Concat(val.AsSpan(0, 2), "****", val.AsSpan(val.Length - 2));
+    }
+
+    [HttpGet("uml")]
+    public ActionResult<DeveloperUmlDiagramResult> GetUmlDiagram(
+        [FromQuery] string diagramType = "class",
+        [FromQuery] string subsystem = "all",
+        [FromQuery] bool includeInterfaces = true,
+        [FromQuery] bool includeMethods = true)
+    {
+        var options = new DeveloperUmlOptions
+        {
+            DiagramType = diagramType,
+            Subsystem = subsystem,
+            IncludeInterfaces = includeInterfaces,
+            IncludeMethods = includeMethods
+        };
+        var result = (_umlService ?? new DeveloperUmlService()).GenerateDiagram(options);
+        return Ok(result);
+    }
+
+    [HttpGet("uml/subsystems")]
+    public ActionResult<List<string>> GetUmlSubsystems()
+    {
+        return Ok((_umlService ?? new DeveloperUmlService()).GetAvailableSubsystems());
+    }
+
+    [HttpGet("uml/diagram-types")]
+    public ActionResult<List<string>> GetUmlDiagramTypes()
+    {
+        return Ok((_umlService ?? new DeveloperUmlService()).GetAvailableDiagramTypes());
+    }
+
+    [HttpGet("github/pulls")]
+    public async Task<ActionResult<DeveloperGitHubListResult<DeveloperPullRequestItem>>> GetPullRequests(
+        [FromQuery] string state = "all",
+        CancellationToken cancellationToken = default)
+    {
+        var service = _gitHubService ?? new DeveloperGitHubService();
+        var result = await service.GetPullRequestsAsync(state, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("github/issues")]
+    public async Task<ActionResult<DeveloperGitHubListResult<DeveloperIssueItem>>> GetIssues(
+        [FromQuery] string state = "all",
+        CancellationToken cancellationToken = default)
+    {
+        var service = _gitHubService ?? new DeveloperGitHubService();
+        var result = await service.GetIssuesAsync(state, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("quality")]
+    public async Task<ActionResult<DeveloperQualityReport>> GetQualityReport(CancellationToken cancellationToken = default)
+    {
+        var service = _qualityService ?? new DeveloperQualityService();
+        var report = await service.GetQualityReportAsync(cancellationToken);
+        return Ok(report);
     }
 }
 
