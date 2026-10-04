@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.2](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.2) - 2026-10-04
+
+### 🔧 Maintenance & Improvements
+- test: expand SystemDeveloperController and SystemDatabaseController tests to achieve 83.2% coverage
+
 ## [v2.3.1](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.1) - 2026-10-04
 
 ### ✨ Features
