@@ -27,7 +27,12 @@ public class SystemDatabaseControllerTest
         using (var cmd = _sqliteConnection.CreateCommand())
         {
             cmd.CommandText = "CREATE TABLE Torrents (Id INTEGER PRIMARY KEY, Name TEXT, Size INT); " +
-                "INSERT INTO Torrents (Name, Size) VALUES ('TestTorrent', 1024);";
+                "CREATE INDEX IX_Torrents_Name ON Torrents(Name); " +
+                "INSERT INTO Torrents (Name, Size) VALUES ('TestTorrent', 1024); " +
+                "CREATE TABLE Trackers (Id INTEGER PRIMARY KEY, TorrentId INT REFERENCES Torrents(Id), Url TEXT); " +
+                "INSERT INTO Trackers (TorrentId, Url) VALUES (1, 'udp://tracker.example.com'); " +
+                "CREATE TABLE Metrics (Id INTEGER PRIMARY KEY, Timestamp DATETIME, Active BOOL, Speed REAL, Hash BLOB, Count BIGINT); " +
+                "INSERT INTO Metrics (Timestamp, Active, Speed, Count) VALUES (CURRENT_TIMESTAMP, 1, 12.5, 9999999999);";
             cmd.ExecuteNonQuery();
         }
 
@@ -145,5 +150,39 @@ public class SystemDatabaseControllerTest
         Assert.That(queryResult, Is.Not.Null);
         Assert.That(queryResult.Success, Is.True);
         Assert.That(queryResult.RowsAffected, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task ExecuteQuery_should_handle_syntax_errors_gracefully()
+    {
+        var request = new DatabaseQueryRequest
+        {
+            Query = "SELECT INVALID SYNTAX FROM",
+            ReadOnly = true,
+        };
+
+        var response = await _controller.ExecuteQuery(request);
+        var okResult = response.Result as OkObjectResult;
+
+        Assert.That(okResult, Is.Not.Null);
+        var result = okResult.Value as DatabaseQueryResult;
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ExecuteQuery_should_support_pagination()
+    {
+        var request = new DatabaseQueryRequest
+        {
+            Query = "SELECT Id, Name FROM Torrents LIMIT 1 OFFSET 0",
+            ReadOnly = true,
+        };
+
+        var response = await _controller.ExecuteQuery(request);
+        var okResult = response.Result as OkObjectResult;
+
+        Assert.That(okResult, Is.Not.Null);
     }
 }

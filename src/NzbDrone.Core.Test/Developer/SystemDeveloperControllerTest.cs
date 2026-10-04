@@ -1,14 +1,20 @@
 // Copyright (c) FeedItOut. All rights reserved.
 
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Developer;
 using NzbDrone.Core.Developer.GitHub;
 using NzbDrone.Core.Developer.Quality;
 using NzbDrone.Core.Developer.Uml;
+using NzbDrone.Core.Messaging.Commands;
+using NzbDrone.Core.Messaging.Events;
 using Seedarr.Api.V1.System;
 
 namespace NzbDrone.Core.Test.Developer;
@@ -19,6 +25,11 @@ public class SystemDeveloperControllerTest
     private IDeveloperUmlService _umlService;
     private IDeveloperGitHubService _gitHubService;
     private IDeveloperQualityService _qualityService;
+    private IDeveloperEventStore _eventStore;
+    private IDeveloperHttpTrafficStore _httpTrafficStore;
+    private IDeveloperWebhookStore _webhookStore;
+    private IManageCommandQueue _commandQueue;
+    private IMainDatabase _mainDatabase;
     private SystemDeveloperController _controller;
 
     [SetUp]
@@ -27,8 +38,18 @@ public class SystemDeveloperControllerTest
         _umlService = Substitute.For<IDeveloperUmlService>();
         _gitHubService = Substitute.For<IDeveloperGitHubService>();
         _qualityService = Substitute.For<IDeveloperQualityService>();
+        _eventStore = Substitute.For<IDeveloperEventStore>();
+        _httpTrafficStore = Substitute.For<IDeveloperHttpTrafficStore>();
+        _webhookStore = Substitute.For<IDeveloperWebhookStore>();
+        _commandQueue = Substitute.For<IManageCommandQueue>();
+        _mainDatabase = Substitute.For<IMainDatabase>();
 
         _controller = new SystemDeveloperController(
+            eventStore: _eventStore,
+            httpTrafficStore: _httpTrafficStore,
+            webhookStore: _webhookStore,
+            commandQueue: _commandQueue,
+            mainDatabase: _mainDatabase,
             umlService: _umlService,
             gitHubService: _gitHubService,
             qualityService: _qualityService);
@@ -142,6 +163,131 @@ public class SystemDeveloperControllerTest
     }
 
     [Test]
+    public void GetEvents_should_return_recent_events_from_store()
+    {
+        var entries = new List<DeveloperEventEntry>
+        {
+            new() { Id = "1", EventName = "TorrentAdded", EventType = "TorrentAddedEvent", SourceNamespace = "Core", PayloadJson = "{}" },
+        };
+        _eventStore.GetRecentEvents(10, null).Returns(entries);
+
+        var response = _controller.GetEvents(10, null);
+        Assert.That(response.Value, Is.Not.Null);
+        Assert.That(response.Value.Events.Count, Is.EqualTo(1));
+        Assert.That(response.Value.TotalRecorded, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void PublishSyntheticEvent_should_record_and_return_created_event()
+    {
+        var request = new DeveloperPublishEventRequest
+        {
+            EventName = "CustomTestEvent",
+            PayloadJson = "{\"test\": true}",
+        };
+
+        var response = _controller.PublishSyntheticEvent(request);
+        var okResult = response.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var badResp = _controller.PublishSyntheticEvent(new DeveloperPublishEventRequest { EventName = "" });
+        Assert.That(badResp.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void ClearEvents_should_invoke_store_clear()
+    {
+        var result = _controller.ClearEvents();
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _eventStore.Received().Clear();
+    }
+
+    [Test]
+    public void GetCommands_should_return_command_descriptors()
+    {
+        var response = _controller.GetCommands();
+        Assert.That(response.Value, Is.Not.Null);
+        Assert.That(response.Value.Commands, Is.Not.Null);
+    }
+
+    [Test]
+    public void ExecuteCommand_should_validate_command_name()
+    {
+        var badResp = _controller.ExecuteCommand(new DeveloperCommandExecuteRequest { CommandName = "" });
+        Assert.That(badResp.Result, Is.InstanceOf<BadRequestObjectResult>());
+
+        var missingResp = _controller.ExecuteCommand(new DeveloperCommandExecuteRequest { CommandName = "NonExistentCommandXYZ" });
+        Assert.That(missingResp.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void GetHttpTraffic_should_return_traffic_items()
+    {
+        var items = new List<DeveloperHttpTrafficEntry>
+        {
+            new() { Id = "1", Method = "GET", Url = "https://example.com", StatusCode = 200, DurationMs = 45, IsSuccess = true },
+        };
+        _httpTrafficStore.GetRecent(50, null).Returns(items);
+
+        var response = _controller.GetHttpTraffic(50, null);
+        Assert.That(response.Value, Is.Not.Null);
+        Assert.That(response.Value.Items.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ClearHttpTraffic_should_invoke_traffic_store_clear()
+    {
+        var result = _controller.ClearHttpTraffic();
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _httpTrafficStore.Received().Clear();
+    }
+
+    [Test]
+    public void Webhook_endpoints_should_return_templates_history_and_simulation()
+    {
+        _webhookStore.GetRecent(Arg.Any<int>()).Returns(new List<DeveloperWebhookEntry>());
+
+        var templates = _controller.GetWebhookTemplates();
+        Assert.That(templates.Value, Is.Not.Null);
+        Assert.That(templates.Value.Count, Is.GreaterThanOrEqualTo(2));
+
+        var history = _controller.GetWebhookHistory(10);
+        Assert.That(history.Value, Is.Not.Null);
+
+        var simBad = _controller.SimulateWebhook(new DeveloperWebhookSimulateRequest { PayloadJson = "" });
+        Assert.That(simBad.Result, Is.InstanceOf<BadRequestObjectResult>());
+
+        var simInvalidJson = _controller.SimulateWebhook(new DeveloperWebhookSimulateRequest { PayloadJson = "invalid-json" });
+        Assert.That(simInvalidJson.Result, Is.InstanceOf<BadRequestObjectResult>());
+
+        var simOk = _controller.SimulateWebhook(new DeveloperWebhookSimulateRequest
+        {
+            EventType = "Grab",
+            PayloadJson = "{\"eventType\": \"Grab\", \"series\": {\"title\": \"Show\"}}",
+        });
+        Assert.That(simOk.Result, Is.InstanceOf<OkObjectResult>());
+    }
+
+    [Test]
+    public void GetConfiguration_should_return_configuration_matrix()
+    {
+        var response = _controller.GetConfiguration(unmask: false);
+        Assert.That(response.Value, Is.Not.Null);
+        Assert.That(response.Value.Environment.EnvironmentVariables, Is.Not.Null);
+
+        var unmasked = _controller.GetConfiguration(unmask: true);
+        Assert.That(unmasked.Value, Is.Not.Null);
+    }
+
+    [Test]
+    public void Simulation_endpoint_should_return_status()
+    {
+        var sim = _controller.GetSimulation();
+        Assert.That(sim.Value, Is.Not.Null);
+        Assert.That(sim.Value.IsRunning, Is.True);
+    }
+
+    [Test]
     public void Endpoints_should_handle_null_services_gracefully_with_defaults()
     {
         var defaultController = new SystemDeveloperController();
@@ -154,5 +300,14 @@ public class SystemDeveloperControllerTest
 
         var types = defaultController.GetUmlDiagramTypes();
         Assert.That(types.Result, Is.TypeOf<OkObjectResult>());
+
+        var ev = defaultController.GetEvents();
+        Assert.That(ev.Value, Is.Not.Null);
+
+        var tr = defaultController.GetHttpTraffic();
+        Assert.That(tr.Value, Is.Not.Null);
+
+        var wh = defaultController.GetWebhookHistory();
+        Assert.That(wh.Value, Is.Not.Null);
     }
 }
