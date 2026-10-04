@@ -6,7 +6,6 @@ namespace NzbDrone.Core.MediaInspection;
 
 public class MediaContainerInfo
 {
-    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     public string ContainerFormat { get; set; }
 
     public string VideoCodec { get; set; }

@@ -25,7 +25,6 @@ public class RssRuleController : Controller
     private readonly IRssSyncService _rssSyncService;
     private readonly ITorrentService _torrentService;
     private readonly IIndexerFactory _indexerFactory;
-    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     private static readonly object _syncLock = new();
     private static readonly TimeSpan _syncCooldown = TimeSpan.FromSeconds(15);
