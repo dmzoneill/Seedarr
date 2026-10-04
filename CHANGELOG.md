@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.1](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.1) - 2026-10-04
+
+### ✨ Features
+- Add unit tests for SystemDeveloperController and SystemDatabaseController
+- Add unit tests for SystemDeveloperTestingController
+- Add unit tests for DeveloperDebuggerService and SystemDeveloperDebuggerController
+- Add comprehensive unit tests for TransmissionRpcInputFormatter
+
+### 🔧 Maintenance & Improvements
+- style: fix indentation in SystemDatabaseControllerTest for editorconfig
+- Expand unit tests for DeveloperReplService and SystemDeveloperReplController
+
 ## [v2.3.0](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.0) - 2026-10-04
 
 ### ✨ Features
