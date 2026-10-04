@@ -42,6 +42,10 @@ import DeveloperNetwork from "./pages/DeveloperNetwork";
 import DeveloperWebhooks from "./pages/DeveloperWebhooks";
 import DeveloperConfig from "./pages/DeveloperConfig";
 import DeveloperSimulation from "./pages/DeveloperSimulation";
+import DeveloperQuality from "./pages/DeveloperQuality";
+import DeveloperUml from "./pages/DeveloperUml";
+import DeveloperPullRequests from "./pages/DeveloperPullRequests";
+import DeveloperIssues from "./pages/DeveloperIssues";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
 import { AutomationPage } from "./pages/AutomationPage";
@@ -135,6 +139,10 @@ const systemSubItems: SubNavItem[] = [
 
 const developerSubItems: SubNavItem[] = [
   { path: "/developer/database", label: "Database", labelKey: "nav.database", icon: "🗄️" },
+  { path: "/developer/quality", label: "Quality", labelKey: "nav.quality", icon: "🛡️" },
+  { path: "/developer/uml", label: "UML Diagrams", labelKey: "nav.uml", icon: "📐" },
+  { path: "/developer/pull-requests", label: "Pull Requests", labelKey: "nav.pullRequests", icon: "🐙" },
+  { path: "/developer/issues", label: "Issues", labelKey: "nav.issues", icon: "📋" },
   { path: "/developer/testing", label: "Testing", labelKey: "nav.testing", icon: "🧪" },
   { path: "/developer/repl", label: "REPL", labelKey: "nav.repl", icon: "⚡" },
   { path: "/developer/debugger", label: "Debugger", labelKey: "nav.debugger", icon: "🐞" },
@@ -1717,6 +1725,10 @@ function App() {
                 element={<Navigate to="/developer/database" replace />}
               />
               <Route path="/developer/database" element={<DatabaseExplorer />} />
+              <Route path="/developer/quality" element={<DeveloperQuality />} />
+              <Route path="/developer/uml" element={<DeveloperUml />} />
+              <Route path="/developer/pull-requests" element={<DeveloperPullRequests />} />
+              <Route path="/developer/issues" element={<DeveloperIssues />} />
               <Route path="/developer/testing" element={<DeveloperTesting />} />
               <Route path="/developer/repl" element={<DeveloperRepl />} />
               <Route path="/developer/debugger" element={<DeveloperDebugger />} />
