@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:52:00Z",
+  "updatedAt": "2026-10-06T23:05:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/DownloadClients",
+  "currentSubfolder": "src/Seedarr.Api.V1/Seeding",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Torrents",
-    "completedAt": "2026-10-06T22:52:00Z",
-    "issuesFiled": [1121, 1122, 1123, 1124, 1126, 1127],
+    "subfolder": "src/Seedarr.Api.V1/DownloadClients",
+    "completedAt": "2026-10-06T23:05:00Z",
+    "issuesFiled": [1134, 1135, 1137],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed TorrentController + DownloadHistoryController + mappers. GitHub dedupe: skipped open #898/#942/#943/#957/#959/#960/#941/#896 and related. Filed #1121 (PUT clears limits/priority on partial JSON), #1122 (invalid queue position 200), #1123 (announce success with no service), #1124 (file priorities 200 on failure), #1126 (torrent logs invalid level), #1127 (enrich-all false started). No dotnet build/test."
+    "notes": "Reviewed DownloadClientController, DownloadClientSyncController, DownloadClientResource. GitHub dedupe: skipped open #885/#970/#972/#973/#974/#975/#981/#982/#983/#984/#931 and related core-layer downloadclient issues. Filed #1134 (PUT partial JSON disables/corrupts via default merge), #1135 (GET items 404 on provider factory failure), #1137 (EnrichWithStatus mutates factory cache). No dotnet build/test."
   }
 }
