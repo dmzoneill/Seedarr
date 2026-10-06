@@ -392,9 +392,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             resource.Source = mediaMetadata.ArrType;
         }
 
+        var cleanBase = string.IsNullOrWhiteSpace(_configService?.UrlBase) ? string.Empty : "/" + _configService.UrlBase.Trim('/');
+
         if (!string.IsNullOrEmpty(mediaMetadata.PosterLocalPath))
         {
-            resource.PosterUrl = $"/api/v1/mediacover/{mediaMetadata.TorrentId}/poster.jpg";
+            resource.PosterUrl = $"{cleanBase}/api/v1/mediacover/{mediaMetadata.TorrentId}/poster.jpg";
         }
         else if (!string.IsNullOrEmpty(mediaMetadata.PosterUrl))
         {
@@ -403,7 +405,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         if (!string.IsNullOrEmpty(mediaMetadata.BackdropLocalPath))
         {
-            resource.FanartUrl = $"/api/v1/mediacover/{mediaMetadata.TorrentId}/backdrop.jpg";
+            resource.FanartUrl = $"{cleanBase}/api/v1/mediacover/{mediaMetadata.TorrentId}/backdrop.jpg";
         }
         else if (!string.IsNullOrEmpty(mediaMetadata.BackdropUrl))
         {
@@ -527,7 +529,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
-        return Ok(MediaMetadataResourceMapper.ToResource(meta));
+        return Ok(MediaMetadataResourceMapper.ToResource(meta, _configService?.UrlBase));
     }
 
     [HttpGet("{torrentId:int}/files")]

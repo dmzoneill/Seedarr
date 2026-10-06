@@ -6,19 +6,21 @@ namespace Seedarr.Api.V1.MediaCover;
 
 public static class MediaMetadataResourceMapper
 {
-    public static MediaMetadataResource ToResource(TorrentMediaMetadata model)
+    public static MediaMetadataResource ToResource(TorrentMediaMetadata model, string urlBase = null)
     {
         if (model == null)
         {
             return null;
         }
 
+        var cleanBase = string.IsNullOrWhiteSpace(urlBase) ? string.Empty : "/" + urlBase.Trim('/');
+
         var posterUrl = model.TorrentId > 0 && !string.IsNullOrEmpty(model.PosterLocalPath)
-            ? $"/api/v1/mediacover/{model.TorrentId}/poster.jpg"
+            ? $"{cleanBase}/api/v1/mediacover/{model.TorrentId}/poster.jpg"
             : model.PosterUrl;
 
         var backdropUrl = model.TorrentId > 0 && !string.IsNullOrEmpty(model.BackdropLocalPath)
-            ? $"/api/v1/mediacover/{model.TorrentId}/backdrop.jpg"
+            ? $"{cleanBase}/api/v1/mediacover/{model.TorrentId}/backdrop.jpg"
             : model.BackdropUrl;
 
         return new MediaMetadataResource

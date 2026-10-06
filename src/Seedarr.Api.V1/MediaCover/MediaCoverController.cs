@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Authentication;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.MediaEnrichment;
 using Seedarr.Http;
 using Seedarr.Http.REST;
@@ -27,6 +28,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
 {
     private readonly IMediaEnrichmentService _mediaEnrichmentService;
     private readonly IAppFolderInfo _appFolderInfo;
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
 
     private static readonly HashSet<string> ValidArtworkTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -51,10 +53,12 @@ public class MediaCoverController : RestController<MediaMetadataResource>
 
     public MediaCoverController(
         IMediaEnrichmentService mediaEnrichmentService,
-        IAppFolderInfo appFolderInfo = null)
+        IAppFolderInfo appFolderInfo = null,
+        IConfigService configService = null)
     {
         _mediaEnrichmentService = mediaEnrichmentService;
         _appFolderInfo = appFolderInfo;
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -62,7 +66,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
     public ActionResult<List<MediaMetadataResource>> GetAll()
     {
         var all = _mediaEnrichmentService.GetAllMetadata();
-        return Ok(all.Values.Select(MediaMetadataResourceMapper.ToResource).ToList());
+        return Ok(all.Values.Select(m => MediaMetadataResourceMapper.ToResource(m, _configService?.UrlBase)).ToList());
     }
 
     [HttpDelete("{torrentId:int}")]
@@ -82,7 +86,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             return NotFound();
         }
 
-        return Ok(MediaMetadataResourceMapper.ToResource(meta));
+        return Ok(MediaMetadataResourceMapper.ToResource(meta, _configService?.UrlBase));
     }
 
     [HttpGet("{torrentId:int}/poster.jpg")]
