@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T22:15:00Z",
+  "updatedAt": "2026-10-06T22:25:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents",
+  "currentSubfolder": "src/NzbDrone.Core/Authentication",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Blocklist",
-    "completedAt": "2026-10-06T22:15:00Z",
-    "issuesFileed": [937, 938, 939],
+    "subfolder": "src/NzbDrone.Core/Torrents",
+    "completedAt": "2026-10-06T22:25:00Z",
+    "issuesFiled": [945, 946, 947, 948, 949, 950],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Deduped open #904 (empty 200 clears tree) and #905 (BlocklistAutoUpdate); not re-filed."
+    "note": "Skipped re-filing #912 (CancelRecheck queue stuck); already open."
   }
 }
