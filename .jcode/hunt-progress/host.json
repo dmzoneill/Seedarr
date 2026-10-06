@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-07T00:45:00Z",
+  "updatedAt": "2026-10-07T00:52:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Common/Disk",
+  "currentSubfolder": "src/NzbDrone.Common/Instrumentation",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Host/AppLifetime.cs",
-    "completedAt": "2026-10-07T00:45:00Z",
-    "issuesFiled": [1216, 1217],
+    "subfolder": "src/NzbDrone.Common/Disk",
+    "completedAt": "2026-10-07T00:52:00Z",
+    "issuesFiled": [1229],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Pass #12 AppLifetime.cs: reviewed StartAsync/StopAsync phased shutdown, watchdog (disk/stall/speed/UPnP); deduped open #910 #944 #953 #955 #994 #1065 #1066 #1067 #1157 #1158 #1159; filed #1216 UPnP watchdog ignores inactive peer mapping vs PortForwardCheck; #1217 stall watchdog uses DateAdded and ignores IsVpnPaused vs SeedingEngine"
+    "note": "Pass #13 Disk (DiskProvider, PathSanitizer, IDiskProvider): static review of free-space mount matching, path sanitization, writable probes, and call sites (relocation, package import/export, qBittorrent/Transmission/Deluge rename APIs). Deduped open #968 #969 #977 #980 #1081 #1090 #1165-#1167; filed #1229 ordinal mount prefix case mismatch causing root volume masking on Linux. No dotnet build/test."
   }
 }
