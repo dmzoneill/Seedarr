@@ -64,7 +64,7 @@ public interface IUpnpService
     Task CreateMappings(CancellationToken stoppingToken);
 }
 
-public class UpnpService : BackgroundService, IUpnpService
+public class UpnpService : BackgroundService, IUpnpService, IHandle<ConfigSavedEvent>
 {
     private const int LifetimeSeconds = 7200;
 
@@ -119,7 +119,22 @@ public class UpnpService : BackgroundService, IUpnpService
     {
         lock (_mappings)
         {
-            return new List<PortMapping>(_mappings);
+            var result = new List<PortMapping>(_mappings.Count);
+            foreach (var m in _mappings)
+            {
+                result.Add(new PortMapping
+                {
+                    InternalPort = m.InternalPort,
+                    ExternalPort = m.ExternalPort,
+                    Protocol = m.Protocol,
+                    Description = m.Description,
+                    IsActive = m.IsActive,
+                    ErrorMessage = m.ErrorMessage,
+                    LeaseSeconds = m.LeaseSeconds,
+                    ExpiryUtc = m.ExpiryUtc
+                });
+            }
+            return result;
         }
     }
 
@@ -297,10 +312,13 @@ public class UpnpService : BackgroundService, IUpnpService
                 : Protocol.Tcp;
             var natMapping = new Mapping(protocol, existing.InternalPort, existing.ExternalPort, 0, existing.Description);
             await device.DeletePortMapAsync(natMapping).WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-            existing.IsActive = false;
-            existing.LeaseSeconds = 0;
-            existing.ExpiryUtc = null;
-            existing.ErrorMessage = "Mapping removed";
+            lock (_mappings)
+            {
+                existing.IsActive = false;
+                existing.LeaseSeconds = 0;
+                existing.ExpiryUtc = null;
+                existing.ErrorMessage = "Mapping removed";
+            }
             _logger.Info("UPnP: unmapped disabled {0} port {1} ({2})", existing.Protocol, existing.InternalPort, description);
         }
         catch (Exception ex)
@@ -344,10 +362,13 @@ public class UpnpService : BackgroundService, IUpnpService
                         : Protocol.Tcp;
                     var natMapping = new Mapping(protocol, portMapping.InternalPort, portMapping.ExternalPort, 0, portMapping.Description);
                     await device.DeletePortMapAsync(natMapping).WaitAsync(cts.Token);
-                    portMapping.IsActive = false;
-                    portMapping.LeaseSeconds = 0;
-                    portMapping.ExpiryUtc = null;
-                    portMapping.ErrorMessage = "Mapping removed";
+                    lock (_mappings)
+                    {
+                        portMapping.IsActive = false;
+                        portMapping.LeaseSeconds = 0;
+                        portMapping.ExpiryUtc = null;
+                        portMapping.ErrorMessage = "Mapping removed";
+                    }
                     _logger.Info("UPnP: removed {0} port {1}", portMapping.Protocol, portMapping.InternalPort);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -423,5 +444,27 @@ public class UpnpService : BackgroundService, IUpnpService
                 }
             }
         }
+    }
+
+    public void Handle(ConfigSavedEvent message)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (!_configService.UpnpEnabled)
+                {
+                    await RemoveMappings();
+                    IsAvailable = false;
+                    return;
+                }
+
+                await CreateMappings(CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "UPnP: Error reconciling port mappings after configuration change");
+            }
+        });
     }
 }
