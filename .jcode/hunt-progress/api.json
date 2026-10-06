@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:32:30Z",
+  "updatedAt": "2026-10-06T22:45:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Indexers",
+  "currentSubfolder": "src/Seedarr.Api.V1/Torrents",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/ArrIntegration",
-    "completedAt": "2026-10-06T22:32:30Z",
-    "issuesFiled": [1082, 1083, 1084, 1088, 1089, 1091],
+    "subfolder": "src/Seedarr.Api.V1/Indexers",
+    "completedAt": "2026-10-06T22:45:00Z",
+    "issuesFiled": [1100, 1101, 1102, 1103, 1104],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed ArrConnectionController (CRUD, test/test-direct, sync, image-proxy), ArrSyncController, WebhookReceiverController. Searched GitHub issues+comments. Deduped open #886 (RBAC), closed #185/#721/#567. Pass issues: #1082 PUT partial JSON resets flags/clears tags; #1083 POST create masked ApiKey; #1084 image-proxy arbitrary paths; #1088 POST test-direct omits ApiKey restore when id set; #1089 PUT stale Implementation on ArrType change; #1091 webhooks/arr HTTP 200 on processing failure. No dotnet build/test."
+    "notes": "Reviewed IndexerController (CRUD, test/test-direct, search, download, prowlarr sync, caps), RssRuleController (CRUD, history, sync). Searched GitHub issues+comments. Deduped open #927 (DELETE 200), #913 (HttpClient leak), #929 (RSS sync cooldown). Filed #1100 PUT partial JSON disables/clears tags; #1101 POST create masked ApiKey; #1102 test-direct vs id/test URL policy; #1103 rssrules PUT partial clears lists; #1104 stale Implementation on IndexerType change. No dotnet build/test."
   }
 }
