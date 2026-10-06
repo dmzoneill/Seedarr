@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http;
 
@@ -62,6 +63,7 @@ public class SetupController : Controller
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public ActionResult Complete([FromBody] SetupCompleteRequest request)
     {
         if (_configService.IsSetupCompleted)
@@ -69,6 +71,11 @@ public class SetupController : Controller
             if (User?.Identity?.IsAuthenticated != true)
             {
                 return Unauthorized(new { error = "Setup has already been completed. Authentication is required to reconfigure setup." });
+            }
+
+            if (!User.IsInRole(Roles.Admin))
+            {
+                return Forbid();
             }
         }
 
