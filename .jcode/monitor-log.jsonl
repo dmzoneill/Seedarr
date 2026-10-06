@@ -78,3 +78,4 @@
 }
 {"ts":"2026-10-06T22:09:30Z","kind":"bug-hunt-monitor","openIssues":30,"restarts":["hamster→ox","ladybug→pig","owl→rat"],"workers":["ox","pig","lobster","mosquito","rat"],"scheduleId":"sched_f396c98d"}
 {"ts":"2026-10-06T22:10:13Z","mode":"bug-hunt","openIssues":112,"restarts":0,"workers":["ox","pig","lobster","mosquito","rat"],"note":"all slots active; hamster/ladybug/owl progress writes expected"}
+{"ts":"2026-10-06T22:11:15Z","mode":"bug-hunt","openIssues":30,"restarts":["core:mosquito->ram"],"workers":["ram","pig","lobster","ox","rat"],"scheduleId":"sched_5011e13d","note":"mosquito Auth #986-987; core.json write expected"}
