@@ -12,6 +12,9 @@ public static class NzbDroneLogger
 {
     public const string FileTargetName = "file";
 
+    private const string StandardLayout =
+        "${date:format=yyyy-MM-dd HH\\:mm\\:ss.f}|${level:uppercase=true}|${logger}|${sanitized-message}${onexception:inner=${newline}${sanitized-exception}}";
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "NLog config takes ownership and disposes targets on process exit")]
     public static FileTarget CreateFileTarget(string logFilePath)
     {
@@ -22,18 +25,20 @@ public static class NzbDroneLogger
             ArchiveSuffixFormat = "_{1:yyyyMMdd}_{0}",
             MaxArchiveFiles = 5,
             ArchiveAboveSize = 1_048_576,
-            Layout = "${date:format=yyyy-MM-dd HH\\:mm\\:ss.f}|${level:uppercase=true}|${logger}|${message}${onexception:inner=${newline}${exception:format=toString}}"
+            Layout = StandardLayout
         };
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "NLog config takes ownership and disposes targets on process exit")]
     public static void Register(StartupContext startupContext = null)
     {
+        LogManager.Setup().SetupExtensions(ext => ext.RegisterAssembly(typeof(NzbDroneLogger).Assembly));
+
         var config = new LoggingConfiguration();
 
         var consoleTarget = new ColoredConsoleTarget("console")
         {
-            Layout = "${date:format=yyyy-MM-dd HH\\:mm\\:ss.f}|${level:uppercase=true}|${logger}|${message}${onexception:inner=${newline}${exception:format=toString}}"
+            Layout = StandardLayout
         };
 
         config.AddTarget(consoleTarget);
