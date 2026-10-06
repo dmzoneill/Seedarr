@@ -3,7 +3,8 @@
   "monitor": {
     "cadenceSeconds": 30,
     "mechanism": "schedule.wake_at",
-    "lastValidatedAt": "2026-10-06T21:34:30Z"
+    "lastValidatedAt": "2026-10-06T21:34:30Z",
+    "scheduleId": "sched_a51d89fa"
   },
   "policy": {
     "pushTarget": "origin/main",
