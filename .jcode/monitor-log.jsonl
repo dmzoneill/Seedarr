@@ -103,3 +103,4 @@
 {"ts":"2026-10-06T22:27:49Z","kind":"bug-hunt-monitor","openIssues":30,"restarts":0,"hunters":["shark","peacock","panda","penguin","otter"],"scheduleId":"sched_f2670cff","note":"healthy; core worker name synced rabbit->shark"}
 {"ts":"2026-10-06T22:28:43Z","type":"bug-hunt-monitor","openIssues":201,"restarts":["panda->quail","penguin->raven"],"workers":["shark","peacock","quail","raven","otter"],"note":"panda Ping #1068; penguin AppLifetime #1067; otter REST dedupe only; file alerts expected"}
 {"ts":"2026-10-06T22:29:27Z","mode":"bug-hunt","openIssues":30,"restarts":["peacock->snail(api)","otter->snake(signalr)"],"hunters":["shark","snail","sheep","sloth","snake"],"scheduleId":"sched_176072e0"}
+{"ts":"2026-10-06T22:30:25Z","mode":"bug-hunt","openIssues":30,"restarts":[],"hunters":["shark","snail","sheep","sloth","snake"],"scheduleId":"sched_f9b903c6","note":"0 restarts; all slots active; latest #1080-#1084"}
