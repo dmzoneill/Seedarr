@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:10:00Z",
+  "updatedAt": "2026-10-06T22:18:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/DownloadClients",
+  "currentSubfolder": "src/Seedarr.Api.V1/Seeding",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Torrents",
-    "completedAt": "2026-10-06T22:10:00Z",
-    "issuesFiled": [957, 958, 959, 960],
+    "subfolder": "src/Seedarr.Api.V1/DownloadClients",
+    "completedAt": "2026-10-06T22:18:00Z",
+    "issuesFiled": [970, 972, 973, 974, 975],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Static review of TorrentController, DownloadHistoryController, mappers/resources. Parallel hunters already filed #941-943 (subtitle SourcePath, MoveQueue null body, piecemap default 100). Deduped #896/#898 RBAC. No dotnet build/test."
+    "notes": "Static review of DownloadClientController and DownloadClientSyncController. Filed DELETE 200 (#970), TestDirect vs id/test UrlValidator mismatch (#972), import vs items status inconsistency (#973), missing UrlValidator on create/update (#974), missing ClientType validation (#975). Deduped RBAC #885, core sync bugs #923-925/#931, torrent DELETE pattern #957/#927. No dotnet build/test."
   }
 }
