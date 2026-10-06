@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T22:52:00Z",
+  "updatedAt": "2026-10-07T23:00:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Authentication",
+  "currentSubfolder": "src/Seedarr.Http/Terminal",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Security",
-    "completedAt": "2026-10-07T22:52:00Z",
-    "issuesFiled": [],
+    "subfolder": "src/Seedarr.Http/Authentication",
+    "completedAt": "2026-10-07T23:00:00Z",
+    "issuesFiled": [1160, 1161],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 17: Security (7 files: CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). Static review only. GitHub dedupe: open #876 UrlBase/CSRF pipeline order; #908/#909 HostHeader allowlist bypass (LAN IP, *.local, seedarr); #921 Cors loopback bypass; #1092/#1093/#654 RpcSessionStore singleton/logout/eviction; #877 Rpc vs Basic auth parity; #1040/#1109 forwarded headers/loopback trust. No new root causes beyond existing issues. Next: Authentication. No dotnet build/test."
+    "note": "Pass 18: Authentication (5 files: ApiKeyAuthenticationHandler, BasicAuthenticationHandler, DynamicAuthSchemeManager, ForwardAuthHandler, IDynamicAuthSchemeManager). Static review only. GitHub dedupe: existing open #877 Basic vs Rpc API key parity; #895/#1109 ForwardAuth RBAC/loopback; #893/#906/#922/#1116/#1117/#976 DynamicAuth OIDC; #1105 SmartAuth routing; #1064/#1059 secret encryption. New: #1160 OIDC RoleMappingRules Operator claim vs Operator policy (Admin/User/ReadOnly); #1161 DecryptClientSecret ciphertext fallback on Unprotect failure. Next: Terminal. No dotnet build/test."
   }
 }
