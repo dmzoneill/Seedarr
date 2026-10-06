@@ -332,6 +332,47 @@ public class QBittorrentApiControllerTest
     }
 
     [Test]
+    public void GetMainData_ignores_torrents_with_null_or_empty_infohash_without_throwing()
+    {
+        var validTorrent = new Torrent
+        {
+            Id = 1,
+            Name = "Valid",
+            InfoHash = "validhash",
+            Status = TorrentStatus.Seeding
+        };
+        var nullHashTorrent = new Torrent
+        {
+            Id = 2,
+            Name = "Corrupt Null",
+            InfoHash = null,
+            Status = TorrentStatus.Seeding
+        };
+        var emptyHashTorrent = new Torrent
+        {
+            Id = 3,
+            Name = "Corrupt Empty",
+            InfoHash = "   ",
+            Status = TorrentStatus.Seeding
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { validTorrent, nullHashTorrent, emptyHashTorrent });
+
+        Assert.DoesNotThrow(() =>
+        {
+            var result = _controller.GetMainData(0);
+            Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+            var ok = (OkObjectResult)result.Result;
+            var dict = ok.Value as Dictionary<string, object>;
+            Assert.That(dict, Is.Not.Null);
+            var torrents = dict["torrents"] as Dictionary<string, object>;
+            Assert.That(torrents, Is.Not.Null);
+            Assert.That(torrents.ContainsKey("validhash"), Is.True);
+            Assert.That(torrents.Count, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
     public void AddTags_sets_both_TagIds_and_Label()
     {
         var torrent = new Torrent

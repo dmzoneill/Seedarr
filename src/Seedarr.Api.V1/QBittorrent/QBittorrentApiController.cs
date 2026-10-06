@@ -2149,7 +2149,9 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         {
             sessionState.LastAccessed = DateTime.UtcNow;
 
-            var torrents = _torrentService.GetAll();
+            var torrents = _torrentService.GetAll()
+                .Where(t => !string.IsNullOrWhiteSpace(t.InfoHash))
+                .ToList();
             var localDefaultPath = _configService?.WatchFolderPath ?? "/downloads";
             var defaultPath = RemapLocalToRemote(localDefaultPath);
 
@@ -2196,6 +2198,11 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 var torrentDict = new Dictionary<string, object>();
                 foreach (var t in torrents)
                 {
+                    if (string.IsNullOrWhiteSpace(t.InfoHash))
+                    {
+                        continue;
+                    }
+
                     currentHashes.Add(t.InfoHash);
                     var rawSavePath = !string.IsNullOrWhiteSpace(t.SavePath) ? t.SavePath : (!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : localDefaultPath);
                     var savePath = RemapLocalToRemote(rawSavePath);
@@ -2249,6 +2256,11 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
             foreach (var t in torrents)
             {
+                if (string.IsNullOrWhiteSpace(t.InfoHash))
+                {
+                    continue;
+                }
+
                 currentHashes.Add(t.InfoHash);
                 var rawSavePath = !string.IsNullOrWhiteSpace(t.SavePath) ? t.SavePath : (!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : localDefaultPath);
                 var savePath = RemapLocalToRemote(rawSavePath);
