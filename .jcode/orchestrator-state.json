@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:23:50Z",
+  "updatedAt": "2026-10-06T23:24:30Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_c781b109"
+    "lastScheduleId": "sched_a90da22c"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -27,7 +27,7 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "calf"
+      "worker": "mizaru"
     },
     "http": {
       "area": "src/Seedarr.Http",
@@ -37,12 +37,12 @@
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "hatchling"
+      "worker": "duckling"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "tigress"
+      "worker": "puppy"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 328,
-  "lastMonitorNote": "328 open (gh); 1 restart signalr guppy->tigress Jobs pass; latest #1194-#1198"
+  "githubOpenCount": 330,
+  "lastMonitorNote": "330 open (gh); 3 restarts tigress->puppy, hatchling->duckling, calf->mizaru; latest #1199-#1203"
 }
