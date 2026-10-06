@@ -272,6 +272,11 @@ public class CategoryService : ICategoryService, IQueueService
             VerifySavePathAccess(category.SavePath);
         }
 
+        if (existing != null && existing.IsDefault && !category.IsDefault)
+        {
+            throw new InvalidOperationException($"Cannot unset default on category '{category.Name}'. Designate another category as default instead.");
+        }
+
         if (category.IsDefault)
         {
             ClearExistingDefaults(category.Id);

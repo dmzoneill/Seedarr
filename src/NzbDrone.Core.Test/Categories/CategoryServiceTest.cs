@@ -156,6 +156,18 @@ public class CategoryServiceTest
     }
 
     [Test]
+    public void Update_when_unsetting_default_category_throws_InvalidOperationException()
+    {
+        var existingDefault = new Category { Id = 7, Name = "Movies", IsDefault = true };
+        var catToUpdate = new Category { Id = 7, Name = "Movies", IsDefault = false };
+        _repository.Get(7).Returns(existingDefault);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _subject.Update(catToUpdate));
+        Assert.That(ex.Message, Does.Contain("Cannot unset default on category"));
+        _repository.DidNotReceive().Update(Arg.Any<Category>());
+    }
+
+    [Test]
     public void Update_renamed_category_updates_associated_torrents_and_synchronizes_label()
     {
         var oldCat = new Category { Id = 1, Name = "OldName", IsDefault = false };
