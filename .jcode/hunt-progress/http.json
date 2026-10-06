@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T00:19:33Z",
+  "updatedAt": "2026-10-07T00:33:15Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Authentication",
+  "currentSubfolder": "src/Seedarr.Http/Terminal",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Security",
-    "completedAt": "2026-10-07T00:19:33Z",
-    "issuesFiled": [1200],
+    "subfolder": "src/Seedarr.Http/Authentication",
+    "completedAt": "2026-10-07T00:33:15Z",
+    "issuesFiled": [1211],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 22: Security (7 files: CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). Static review only. GitHub dedupe: existing open #876 (UrlBase before UsePathBase CSRF path matching) commented with file:line; #908/#909/#921/#934/#1092/#1093/#1109/#1040 overlap same themes, no reopen. Filed #1200: loopback IsTrustedProxy lets localhost forge X-Forwarded-Host to bypass CSRF Origin checks without TrustedProxies. Next: Authentication. No dotnet build/test."
+    "note": "Pass 23: Authentication (5 files: ApiKeyAuthenticationHandler, BasicAuthenticationHandler, DynamicAuthSchemeManager, ForwardAuthHandler, IDynamicAuthSchemeManager). Static review only. GitHub dedupe: commented #1109 (ForwardAuth loopback/header trust), #895 (ForwardAuth User vs OIDC ReadOnly); overlaps #893/#906/#877/#1105/#1116/#1117/#922/#1160 left open, no reopen. Filed #1211: ExtractCandidateClaimValues does not parse Keycloak resource_access client roles for RoleMappingRules. Next: Terminal. No dotnet build/test."
   }
 }
