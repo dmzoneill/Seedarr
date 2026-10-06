@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T00:35:00Z",
+  "updatedAt": "2026-10-07T22:35:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -12,10 +12,10 @@
   "currentSubfolder": "src/Seedarr.Http/Terminal",
   "lastPass": {
     "subfolder": "src/Seedarr.Http/Authentication",
-    "completedAt": "2026-10-07T00:35:00Z",
-    "issuesFiled": [1105, 1109],
+    "completedAt": "2026-10-07T22:35:00Z",
+    "issuesFiled": [1105, 1109, 1116, 1117],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 13: Authentication (ApiKeyAuthenticationHandler, BasicAuthenticationHandler, ForwardAuthHandler, DynamicAuthSchemeManager, IDynamicAuthSchemeManager). Skipped duplicates: #877, #893, #895, #906, #1050, #1063, #1040, #1095. Filed #1105: SmartAuth always routes non-empty API-key/Bearer material to ApiKey handler so invalid keys block valid Seedarr_Auth cookie. Filed #1109: loopback always trusted for ForwardAuth enables local header impersonation when provider enabled. Next: Terminal. No dotnet build/test."
+    "note": "Pass 13: Authentication (ApiKeyAuthenticationHandler, BasicAuthenticationHandler, ForwardAuthHandler, DynamicAuthSchemeManager, IDynamicAuthSchemeManager). Deduped existing: #877 Basic username API key, #893 SanitizeProviderId collision, #895 ForwardAuth User vs OIDC ReadOnly, #906 unsanitized OIDC challenge, #1105 SmartAuth cookie vs stale API key (same pass). Filed #1116: ScheduleRetry spawns duplicate OIDC retry loops per provider. Filed #1117: OIDC OnTokenValidated uses Guid.NewGuid when sub missing (unstable NameIdentifier). Prior same-area: #1109 loopback ForwardAuth impersonation. Next: Terminal. No dotnet build/test."
   }
 }
