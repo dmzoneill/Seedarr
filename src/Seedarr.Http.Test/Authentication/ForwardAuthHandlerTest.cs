@@ -7,10 +7,12 @@ using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http.Authentication;
 
@@ -20,6 +22,7 @@ namespace Seedarr.Http.Test.Authentication;
 public class ForwardAuthHandlerTest
 {
     private IConfigFileProvider _configFileProvider;
+    private IIdentityProviderRepository _identityProviderRepository;
     private IOptionsMonitor<ForwardAuthOptions> _optionsMonitor;
     private ForwardAuthOptions _options;
     private ILoggerFactory _loggerFactory;
@@ -29,6 +32,7 @@ public class ForwardAuthHandlerTest
     public void SetUp()
     {
         _configFileProvider = Substitute.For<IConfigFileProvider>();
+        _identityProviderRepository = Substitute.For<IIdentityProviderRepository>();
         _options = new ForwardAuthOptions();
         _optionsMonitor = Substitute.For<IOptionsMonitor<ForwardAuthOptions>>();
         _optionsMonitor.Get(Arg.Any<string>()).Returns(_options);
@@ -41,7 +45,7 @@ public class ForwardAuthHandlerTest
 
     private async Task<AuthenticateResult> AuthenticateAsync(HttpContext context)
     {
-        var handler = new ForwardAuthHandler(_optionsMonitor, _loggerFactory, _encoder, _configFileProvider);
+        var handler = new ForwardAuthHandler(_optionsMonitor, _loggerFactory, _encoder, _configFileProvider, _identityProviderRepository);
         var scheme = new AuthenticationScheme(ForwardAuthOptions.DefaultScheme, null, typeof(ForwardAuthHandler));
         await handler.InitializeAsync(scheme, context);
         return await handler.AuthenticateAsync();
@@ -220,14 +224,16 @@ public class ForwardAuthHandlerTest
     }
 
     [Test]
-    public async Task HandleAuthenticateAsync_WhenNoUsernameHeader_ReturnsNoResult()
+    public async Task HandleAuthenticateAsync_WhenNoUsernameHeader_FailsAuthentication()
     {
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
 
         var result = await AuthenticateAsync(context);
 
-        Assert.That(result.None, Is.True);
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.Failure, Is.Not.Null);
+        Assert.That(result.Failure.Message, Is.EqualTo("ForwardAuth header missing username."));
     }
 
     [Test]
@@ -278,5 +284,120 @@ public class ForwardAuthHandlerTest
 
         Assert.That(result.Succeeded, Is.True);
         Assert.That(result.Principal?.FindFirst(ClaimTypes.Role)?.Value, Is.EqualTo("Auditor"));
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenRemoteIpMatchesIdpTrustedProxies_Succeeds()
+    {
+        var idp = new IdentityProviderDefinition
+        {
+            ProviderType = IdentityProviderType.ForwardAuth,
+            IsEnabled = true,
+            TrustedProxies = "10.0.0.2",
+        };
+        _identityProviderRepository.GetEnabled().Returns(new[] { idp });
+
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("10.0.0.2");
+        context.Request.Headers["X-Forwarded-User"] = "idpuser";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Principal?.Identity?.Name, Is.EqualTo("idpuser"));
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenIdpForwardAuthDisabled_DoesNotTrustIdpProxies()
+    {
+        var idp = new IdentityProviderDefinition
+        {
+            ProviderType = IdentityProviderType.ForwardAuth,
+            IsEnabled = false,
+            TrustedProxies = "10.0.0.2",
+        };
+        _identityProviderRepository.GetEnabled().Returns(new[] { idp });
+
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("10.0.0.2");
+        context.Request.Headers["X-Forwarded-User"] = "idpuser";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.None, Is.True);
+        Assert.That(result.Succeeded, Is.False);
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenRemoteIpNotInAnyTrustedProxies_ReturnsNoResult()
+    {
+        var idp = new IdentityProviderDefinition
+        {
+            ProviderType = IdentityProviderType.ForwardAuth,
+            IsEnabled = true,
+            TrustedProxies = "10.0.0.2",
+        };
+        _identityProviderRepository.GetEnabled().Returns(new[] { idp });
+
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("192.168.1.5");
+        context.Request.Headers["X-Forwarded-User"] = "idpuser";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.None, Is.True);
+        Assert.That(result.Succeeded, Is.False);
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenCombinedProxiesIncludeIdpAndConfigFile_Succeeds()
+    {
+        _configFileProvider.TrustedProxies.Returns("192.168.1.1");
+        var idp = new IdentityProviderDefinition
+        {
+            ProviderType = IdentityProviderType.ForwardAuth,
+            IsEnabled = true,
+            TrustedProxies = "10.0.0.2",
+        };
+        _identityProviderRepository.GetEnabled().Returns(new[] { idp });
+
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("10.0.0.2");
+        context.Request.Headers["X-Forwarded-User"] = "idpuser";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenRepoResolvedFromRequestServices_Succeeds()
+    {
+        var idp = new IdentityProviderDefinition
+        {
+            ProviderType = IdentityProviderType.ForwardAuth,
+            IsEnabled = true,
+            TrustedProxies = "10.50.0.1",
+        };
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        repo.GetEnabled().Returns(new[] { idp });
+
+        var services = new ServiceCollection();
+        services.AddSingleton(repo);
+        var serviceProvider = services.BuildServiceProvider();
+
+        var handler = new ForwardAuthHandler(_optionsMonitor, _loggerFactory, _encoder, _configFileProvider, null);
+        var scheme = new AuthenticationScheme(ForwardAuthOptions.DefaultScheme, null, typeof(ForwardAuthHandler));
+
+        var context = new DefaultHttpContext();
+        context.RequestServices = serviceProvider;
+        context.Connection.RemoteIpAddress = IPAddress.Parse("10.50.0.1");
+        context.Request.Headers["X-Forwarded-User"] = "serviceuser";
+
+        await handler.InitializeAsync(scheme, context);
+        var result = await handler.AuthenticateAsync();
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Principal?.Identity?.Name, Is.EqualTo("serviceuser"));
     }
 }

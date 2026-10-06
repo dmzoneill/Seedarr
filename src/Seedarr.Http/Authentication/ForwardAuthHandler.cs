@@ -7,9 +7,11 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NLog;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http.Security;
 
@@ -49,15 +51,18 @@ public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
     private static readonly char[] GroupDelimiters = [',', '|', ';'];
     private static readonly Logger NLogLogger = LogManager.GetCurrentClassLogger();
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly IIdentityProviderRepository _identityProviderRepository;
 
     public ForwardAuthHandler(
         IOptionsMonitor<ForwardAuthOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        IConfigFileProvider configFileProvider = null)
+        IConfigFileProvider configFileProvider = null,
+        IIdentityProviderRepository identityProviderRepository = null)
         : base(options, logger, encoder)
     {
         _configFileProvider = configFileProvider;
+        _identityProviderRepository = identityProviderRepository;
     }
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -69,7 +74,19 @@ public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        var trustedProxies = CombineProxies(Options.TrustedProxies, _configFileProvider?.TrustedProxies);
+        string idpProxies = null;
+        try
+        {
+            var idpRepo = _identityProviderRepository ?? Context.RequestServices?.GetService<IIdentityProviderRepository>();
+            var forwardAuthIdp = idpRepo?.GetEnabled()?.FirstOrDefault(p => p.ProviderType == IdentityProviderType.ForwardAuth && p.IsEnabled);
+            idpProxies = forwardAuthIdp?.TrustedProxies;
+        }
+        catch (Exception ex)
+        {
+            NLogLogger.Warn(ex, "Failed to resolve ForwardAuth identity provider trusted proxies.");
+        }
+
+        var trustedProxies = CombineProxies(Options.TrustedProxies, _configFileProvider?.TrustedProxies, idpProxies);
         if (!IpSecurityHelper.IsTrustedProxy(remoteIp, trustedProxies))
         {
             NLogLogger.Warn("ForwardAuth authentication rejected: RemoteIpAddress {0} is not a trusted proxy.", remoteIp);
@@ -79,7 +96,7 @@ public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
         var username = GetHeaderValue(Options.UsernameHeaders);
         if (string.IsNullOrWhiteSpace(username))
         {
-            return Task.FromResult(AuthenticateResult.NoResult());
+            return Task.FromResult(AuthenticateResult.Fail("ForwardAuth header missing username."));
         }
 
         var email = GetHeaderValue(Options.EmailHeaders);
@@ -120,19 +137,12 @@ public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }
 
-    private static string CombineProxies(string optProxies, string configProxies)
+    private static string CombineProxies(string optProxies, string configProxies, string idpProxies = null)
     {
-        if (string.IsNullOrWhiteSpace(optProxies))
-        {
-            return configProxies ?? string.Empty;
-        }
+        var proxies = new[] { optProxies, configProxies, idpProxies }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
 
-        if (string.IsNullOrWhiteSpace(configProxies))
-        {
-            return optProxies ?? string.Empty;
-        }
-
-        return $"{optProxies},{configProxies}";
+        return string.Join(",", proxies);
     }
 
     private string GetHeaderValue(string headerNames)
