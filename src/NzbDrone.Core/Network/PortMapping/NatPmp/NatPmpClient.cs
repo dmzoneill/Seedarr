@@ -20,6 +20,7 @@ public class DefaultNatPmpTransport : INatPmpTransport
 {
     private readonly UdpClient _udpClient;
     private readonly bool _ownsClient;
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
     private bool _disposed;
 
     public DefaultNatPmpTransport(AddressFamily addressFamily = AddressFamily.InterNetwork)
@@ -36,49 +37,67 @@ public class DefaultNatPmpTransport : INatPmpTransport
 
     public async Task<byte[]> SendAndReceiveAsync(byte[] request, IPEndPoint endpoint, CancellationToken cancellationToken = default)
     {
-        int[] timeouts = [250, 500, 1000, 2000];
+        ThrowIfDisposed();
+        await _semaphore.WaitAsync(cancellationToken);
 
-        foreach (var timeoutMs in timeouts)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            int[] timeouts = [250, 500, 1000, 2000];
 
-            try
+            foreach (var timeoutMs in timeouts)
             {
-                await _udpClient.SendAsync(request, endpoint, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
-                using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                receiveCts.CancelAfter(timeoutMs);
-
-                var result = await _udpClient.ReceiveAsync(receiveCts.Token);
-                if (result.Buffer != null && result.Buffer.Length > 0)
+                try
                 {
-                    return result.Buffer;
+                    await _udpClient.SendAsync(request, endpoint, cancellationToken);
+
+                    using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    receiveCts.CancelAfter(timeoutMs);
+
+                    var result = await _udpClient.ReceiveAsync(receiveCts.Token);
+                    if (result.Buffer != null && result.Buffer.Length > 0)
+                    {
+                        return result.Buffer;
+                    }
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // Timeout on this attempt, retry with backoff interval
                 }
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                // Timeout on this attempt, retry with backoff interval
-            }
-        }
 
-        throw new TimeoutException($"NAT-PMP request to {endpoint} timed out after retries.");
+            throw new TimeoutException($"NAT-PMP request to {endpoint} timed out after retries.");
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
     }
 
     public async Task SendAsync(byte[] request, IPEndPoint endpoint, CancellationToken cancellationToken = default)
     {
+        ThrowIfDisposed();
         await _udpClient.SendAsync(request, endpoint, cancellationToken);
+    }
+
+    private void ThrowIfDisposed()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
     public void Dispose()
     {
         if (!_disposed)
         {
+            _disposed = true;
+
             if (_ownsClient)
             {
                 _udpClient?.Dispose();
             }
 
-            _disposed = true;
+            _semaphore.Dispose();
         }
     }
 }
@@ -111,6 +130,8 @@ public class NatPmpActiveMapping
     public uint LifetimeSeconds { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime RenewalDueUtc { get; set; }
+    public DateTime ExpiresAtUtc { get; set; }
+    public bool IsActive { get; set; } = true;
     internal ITimer RenewalTimer { get; set; }
 }
 
@@ -350,7 +371,7 @@ public class NatPmpClient : INatPmpClient
         }
     }
 
-    private async Task RenewMappingInternalAsync(NatPmpActiveMapping mapping, CancellationToken cancellationToken)
+    private async Task<bool> RenewMappingInternalAsync(NatPmpActiveMapping mapping, CancellationToken cancellationToken)
     {
         var request = NatPmpPacket.CreatePortMappingRequest(
             mapping.Protocol,
@@ -364,7 +385,7 @@ public class NatPmpClient : INatPmpClient
         if (response.ResultCode != NatPmpResultCode.Success)
         {
             _logger.Warn("Failed to renew NAT-PMP mapping for {0} port {1}: {2}", mapping.Protocol, mapping.InternalPort, NatPmpPacket.GetResultCodeMessage(response.ResultCode));
-            return;
+            return false;
         }
 
         ProcessEpoch(response.Epoch);
@@ -376,10 +397,14 @@ public class NatPmpClient : INatPmpClient
                 mapping.MappedExternalPort = response.MappedExternalPort;
                 mapping.LifetimeSeconds = response.Lifetime;
                 var now = _timeProvider.GetUtcNow().UtcDateTime;
+                mapping.ExpiresAtUtc = now.AddSeconds(response.Lifetime);
                 mapping.RenewalDueUtc = now.AddSeconds(response.Lifetime / 2.0);
+                mapping.IsActive = true;
                 ScheduleRenewal(mapping);
             }
         }
+
+        return true;
     }
 
     private void ProcessEpoch(uint currentEpoch)
@@ -436,6 +461,7 @@ public class NatPmpClient : INatPmpClient
             var key = (protocol, internalPort);
             var now = _timeProvider.GetUtcNow().UtcDateTime;
             var renewalDue = now.AddSeconds(lifetimeSeconds / 2.0);
+            var expiresAtUtc = now.AddSeconds(lifetimeSeconds);
 
             if (_mappings.TryGetValue(key, out var existing))
             {
@@ -443,6 +469,8 @@ public class NatPmpClient : INatPmpClient
                 existing.MappedExternalPort = mappedExternalPort;
                 existing.LifetimeSeconds = lifetimeSeconds;
                 existing.RenewalDueUtc = renewalDue;
+                existing.ExpiresAtUtc = expiresAtUtc;
+                existing.IsActive = true;
                 return existing;
             }
 
@@ -454,7 +482,9 @@ public class NatPmpClient : INatPmpClient
                 MappedExternalPort = mappedExternalPort,
                 LifetimeSeconds = lifetimeSeconds,
                 CreatedAtUtc = now,
-                RenewalDueUtc = renewalDue
+                ExpiresAtUtc = expiresAtUtc,
+                RenewalDueUtc = renewalDue,
+                IsActive = true
             };
 
             _mappings[key] = newMapping;
@@ -462,7 +492,7 @@ public class NatPmpClient : INatPmpClient
         }
     }
 
-    private void ScheduleRenewal(NatPmpActiveMapping mapping)
+    private void ScheduleRenewal(NatPmpActiveMapping mapping, TimeSpan? customDelay = null)
     {
         lock (_syncLock)
         {
@@ -471,15 +501,33 @@ public class NatPmpClient : INatPmpClient
                 return;
             }
 
-            mapping.RenewalTimer?.Dispose();
-
-            var halfLifeSeconds = mapping.LifetimeSeconds / 2.0;
-            if (halfLifeSeconds <= 0)
+            if (!_mappings.TryGetValue((mapping.Protocol, mapping.InternalPort), out var current) || !ReferenceEquals(current, mapping))
             {
                 return;
             }
 
-            var delay = TimeSpan.FromSeconds(halfLifeSeconds);
+            mapping.RenewalTimer?.Dispose();
+
+            TimeSpan delay;
+            if (customDelay.HasValue)
+            {
+                delay = customDelay.Value;
+            }
+            else
+            {
+                var halfLifeSeconds = mapping.LifetimeSeconds / 2.0;
+                if (halfLifeSeconds <= 0)
+                {
+                    return;
+                }
+
+                delay = TimeSpan.FromSeconds(halfLifeSeconds);
+            }
+
+            if (delay <= TimeSpan.Zero)
+            {
+                return;
+            }
 
             mapping.RenewalTimer = _timeProvider.CreateTimer(
                 state =>
@@ -489,17 +537,59 @@ public class NatPmpClient : INatPmpClient
                     {
                         try
                         {
-                            await RenewMappingInternalAsync(m, CancellationToken.None);
+                            var success = await RenewMappingInternalAsync(m, CancellationToken.None);
+                            if (!success)
+                            {
+                                ScheduleRetry(m);
+                            }
                         }
                         catch (Exception ex)
                         {
-                            _logger.Warn(ex, "Error in half-life renewal timer for {0} port {1}", m.Protocol, m.InternalPort);
+                            _logger.Warn(ex, "Error in renewal timer for {0} port {1}", m.Protocol, m.InternalPort);
+                            ScheduleRetry(m);
                         }
                     });
                 },
                 mapping,
                 delay,
                 Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void ScheduleRetry(NatPmpActiveMapping mapping)
+    {
+        lock (_syncLock)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (!_mappings.TryGetValue((mapping.Protocol, mapping.InternalPort), out var current) || !ReferenceEquals(current, mapping))
+            {
+                return;
+            }
+
+            mapping.RenewalTimer?.Dispose();
+
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var expiry = mapping.ExpiresAtUtc != default
+                ? mapping.ExpiresAtUtc
+                : mapping.CreatedAtUtc.AddSeconds(mapping.LifetimeSeconds);
+
+            var remaining = expiry - now;
+            var retrySeconds = remaining.TotalSeconds / 2.0;
+
+            if (retrySeconds <= 0)
+            {
+                _logger.Warn("NAT-PMP mapping for {0} port {1} has expired.", mapping.Protocol, mapping.InternalPort);
+                mapping.IsActive = false;
+                return;
+            }
+
+            var delay = TimeSpan.FromSeconds(retrySeconds);
+            mapping.RenewalDueUtc = now + delay;
+            ScheduleRenewal(mapping, delay);
         }
     }
 
@@ -511,6 +601,7 @@ public class NatPmpClient : INatPmpClient
             {
                 mapping.RenewalTimer?.Dispose();
                 mapping.RenewalTimer = null;
+                mapping.IsActive = false;
             }
         }
     }

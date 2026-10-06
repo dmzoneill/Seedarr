@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Network;
+using NzbDrone.Core.Network.NatPmp;
 using NzbDrone.Core.Network.Pcp;
 
 namespace NzbDrone.Core.Test.Network;
@@ -18,6 +19,7 @@ public class PortMappingEngineTests
     private IGatewayDiscoveryService _gatewayService;
     private IUpnpService _upnpService;
     private IPcpClient _pcpClient;
+    private INatPmpClient _natPmpClient;
 
     [SetUp]
     public void SetUp()
@@ -26,15 +28,17 @@ public class PortMappingEngineTests
         _gatewayService.GetDefaultGatewayAsync().Returns(Task.FromResult(IPAddress.Parse("192.168.1.1")));
         _upnpService = Substitute.For<IUpnpService>();
         _pcpClient = Substitute.For<IPcpClient>();
+        _natPmpClient = Substitute.For<INatPmpClient>();
     }
 
     [Test]
     public void Constructor_initializes_with_default_protocol_none_and_exposes_pcp_client()
     {
-        var engine = new PortMappingEngine(_gatewayService, _upnpService, null, null, _pcpClient);
+        var engine = new PortMappingEngine(_gatewayService, _upnpService, null, null, _pcpClient, _natPmpClient);
 
         Assert.That(engine.CurrentProtocol, Is.EqualTo(PortMappingProtocol.None));
         Assert.That(engine.PcpClient, Is.SameAs(_pcpClient));
+        Assert.That(engine.NatPmpClient, Is.SameAs(_natPmpClient));
     }
 
     [Test]
@@ -146,6 +150,67 @@ public class PortMappingEngineTests
             TimeSpan.FromHours(1));
 
         Assert.That(result.ResultCode, Is.EqualTo(PcpResultCode.UnsupportedVersion));
+        Assert.That(engine.CurrentProtocol, Is.EqualTo(PortMappingProtocol.NatPmp));
+    }
+
+    [Test]
+    public async Task CreatePcpMappingAsync_falls_back_to_natpmp_when_UnsupportedVersion_and_natpmp_configured()
+    {
+        var gateway = IPAddress.Parse("192.168.1.1");
+        var clientIp = IPAddress.Parse("192.168.1.50");
+        var unsupportedVersionResult = new PcpMappingResult
+        {
+            Success = false,
+            ResultCode = PcpResultCode.UnsupportedVersion,
+            ErrorMessage = "Unsupported PCP version"
+        };
+
+        _pcpClient.CreateMappingAsync(
+            gateway,
+            clientIp,
+            6881,
+            6881,
+            PortMappingTransport.Tcp,
+            TimeSpan.FromHours(1),
+            Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(unsupportedVersionResult));
+
+        var natPmpMappingResult = new NatPmpMappingResult(
+            NatPmpProtocol.Tcp,
+            6881,
+            16881,
+            3600,
+            12345);
+
+        _natPmpClient.MapPortAsync(
+            NatPmpProtocol.Tcp,
+            6881,
+            6881,
+            3600,
+            Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(natPmpMappingResult));
+
+        var engine = new PortMappingEngine(
+            _gatewayService,
+            _upnpService,
+            (_, _) => Task.FromResult(PortMappingProtocol.Pcp),
+            null,
+            _pcpClient,
+            _natPmpClient);
+
+        var result = await engine.CreatePcpMappingAsync(
+            gateway,
+            clientIp,
+            6881,
+            6881,
+            PortMappingTransport.Tcp,
+            TimeSpan.FromHours(1));
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ResultCode, Is.EqualTo(PcpResultCode.Success));
+        Assert.That(result.InternalPort, Is.EqualTo(6881));
+        Assert.That(result.ExternalPort, Is.EqualTo(16881));
+        Assert.That(result.Lifetime, Is.EqualTo(TimeSpan.FromSeconds(3600)));
         Assert.That(engine.CurrentProtocol, Is.EqualTo(PortMappingProtocol.NatPmp));
     }
 
@@ -525,6 +590,36 @@ public class PortMappingEngineTests
     }
 
     [Test]
+    public async Task GetStatusAsync_includes_natpmp_active_mappings()
+    {
+        var now = DateTime.UtcNow;
+        var natPmpMapping = new NatPmpActiveMapping
+        {
+            Protocol = NatPmpProtocol.Tcp,
+            InternalPort = 6881,
+            SuggestedExternalPort = 6881,
+            MappedExternalPort = 16881,
+            LifetimeSeconds = 3600,
+            CreatedAtUtc = now,
+            RenewalDueUtc = now.AddSeconds(1800),
+            ExpiresAtUtc = now.AddSeconds(3600),
+            IsActive = true
+        };
+
+        _natPmpClient.ActiveMappings.Returns(new List<NatPmpActiveMapping> { natPmpMapping });
+        _natPmpClient.GatewayAddress.Returns(IPAddress.Parse("192.168.1.1"));
+
+        var engine = new PortMappingEngine(_gatewayService, _upnpService, null, null, _pcpClient, _natPmpClient);
+        engine.DemoteToNatPmp();
+
+        var status = await engine.GetStatusAsync();
+
+        Assert.That(status.Protocol, Is.EqualTo("NAT-PMP"));
+        Assert.That(status.RouterModel, Is.EqualTo("NAT-PMP Gateway"));
+        Assert.That(status.Mappings.Any(m => m.Description == "NAT-PMP Mapping" && m.InternalPort == 6881 && m.ExternalPort == 16881), Is.True);
+    }
+
+    [Test]
     public async Task GetStatusAsync_handles_gateway_discovery_exception_gracefully()
     {
         _gatewayService.GetDefaultGatewayAsync().Returns<Task<IPAddress>>(_ => throw new InvalidOperationException("Gateway unreachable"));
@@ -553,6 +648,7 @@ public class PortMappingEngineTests
         Assert.That(status.Protocol, Is.EqualTo("NAT-PMP"));
         Assert.That(engine.CurrentProtocol, Is.EqualTo(PortMappingProtocol.NatPmp));
         await _upnpService.Received(1).CreateMappings(Arg.Any<CancellationToken>());
+        await _natPmpClient.Received(1).RenewAllMappingsAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]

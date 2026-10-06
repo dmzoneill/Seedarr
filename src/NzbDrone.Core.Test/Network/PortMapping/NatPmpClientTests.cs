@@ -52,6 +52,7 @@ public class NatPmpClientTests
     private class ManualTimeProvider : TimeProvider
     {
         private DateTimeOffset _now;
+        public List<ManualTimer> Timers { get; } = new();
 
         public ManualTimeProvider(DateTimeOffset initial)
         {
@@ -63,6 +64,56 @@ public class NatPmpClientTests
         public void Advance(TimeSpan timeSpan)
         {
             _now = _now.Add(timeSpan);
+        }
+
+        public override ITimer CreateTimer(TimerCallback callback, object state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ManualTimer(callback, state, dueTime, period);
+            Timers.Add(timer);
+            return timer;
+        }
+
+        public class ManualTimer : ITimer
+        {
+            private readonly TimerCallback _callback;
+            private readonly object _state;
+            public TimeSpan DueTime { get; private set; }
+            public TimeSpan Period { get; private set; }
+            public bool Disposed { get; private set; }
+
+            public ManualTimer(TimerCallback callback, object state, TimeSpan dueTime, TimeSpan period)
+            {
+                _callback = callback;
+                _state = state;
+                DueTime = dueTime;
+                Period = period;
+            }
+
+            public void Trigger()
+            {
+                if (!Disposed)
+                {
+                    _callback?.Invoke(_state);
+                }
+            }
+
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                DueTime = dueTime;
+                Period = period;
+                return true;
+            }
+
+            public void Dispose()
+            {
+                Disposed = true;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                Disposed = true;
+                return ValueTask.CompletedTask;
+            }
         }
     }
 
@@ -546,5 +597,73 @@ public class NatPmpClientTests
 
         Assert.That(client.ActiveMappings.Count, Is.EqualTo(0));
         Assert.That(transport.SentAsyncPackets.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Renewal_failure_should_retry_at_half_of_remaining_time_until_expiration()
+    {
+        var transport = new TestNatPmpTransport();
+        var gatewayIp = IPAddress.Parse("192.168.1.1");
+        var baseTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var timeProvider = new ManualTimeProvider(baseTime);
+
+        // Gateway grants 3600 seconds lease
+        transport.Responses.Enqueue(BuildPortMappingResponse(NatPmpProtocol.Tcp, NatPmpResultCode.Success, 500, 6881, 6881, 3600));
+
+        using var client = new NatPmpClient(gatewayIp, transport, timeProvider);
+        await client.MapPortAsync(NatPmpProtocol.Tcp, 6881, 6881, 3600);
+
+        var mapping = client.ActiveMappings[0];
+        Assert.That(mapping.RenewalDueUtc, Is.EqualTo(baseTime.UtcDateTime.AddSeconds(1800)));
+
+        // Advance to 50% lifetime (1800s)
+        timeProvider.Advance(TimeSpan.FromSeconds(1800));
+
+        // Queue failure for first renewal
+        transport.Responses.Enqueue(BuildPortMappingResponse(NatPmpProtocol.Tcp, NatPmpResultCode.NetworkFailure, 501, 6881, 6881, 3600));
+
+        // Trigger half-life renewal timer
+        timeProvider.Timers.Last().Trigger();
+        await Task.Delay(50);
+
+        // Remaining time was 1800s, retry should be scheduled at half of remaining = 900s (at 75% lifetime, 2700s)
+        Assert.That(mapping.RenewalDueUtc, Is.EqualTo(baseTime.UtcDateTime.AddSeconds(2700)));
+
+        // Advance to 75% lifetime (2700s)
+        timeProvider.Advance(TimeSpan.FromSeconds(900));
+
+        // Queue another failure
+        transport.Responses.Enqueue(BuildPortMappingResponse(NatPmpProtocol.Tcp, NatPmpResultCode.NetworkFailure, 502, 6881, 6881, 3600));
+
+        // Trigger second renewal retry
+        timeProvider.Timers.Last().Trigger();
+        await Task.Delay(50);
+
+        // Remaining time was 900s, retry should be scheduled at half of remaining = 450s (at 87.5% lifetime, 3150s)
+        Assert.That(mapping.RenewalDueUtc, Is.EqualTo(baseTime.UtcDateTime.AddSeconds(3150)));
+
+        // Advance to 87.5% lifetime (3150s)
+        timeProvider.Advance(TimeSpan.FromSeconds(450));
+
+        // Now gateway succeeds and grants another 3600s
+        transport.Responses.Enqueue(BuildPortMappingResponse(NatPmpProtocol.Tcp, NatPmpResultCode.Success, 503, 6881, 6881, 3600));
+
+        // Trigger third renewal retry
+        timeProvider.Timers.Last().Trigger();
+        await Task.Delay(50);
+
+        // Renewal succeeded: new renewal due is 1800s from now (3150 + 1800 = 4950s)
+        Assert.That(mapping.RenewalDueUtc, Is.EqualTo(baseTime.UtcDateTime.AddSeconds(3150 + 1800)));
+    }
+
+    [Test]
+    public void DefaultNatPmpTransport_has_semaphore_for_serialization()
+    {
+        using var transport = new DefaultNatPmpTransport();
+        var field = typeof(DefaultNatPmpTransport).GetField("_semaphore", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.That(field, Is.Not.Null);
+        var semaphore = field.GetValue(transport) as SemaphoreSlim;
+        Assert.That(semaphore, Is.Not.Null);
+        Assert.That(semaphore.CurrentCount, Is.EqualTo(1));
     }
 }
