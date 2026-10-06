@@ -731,6 +731,47 @@ public class DiskSpaceServiceTest
     // --- Resilience and mount deduplication tests (#537) ---
 
     [Test]
+    public void GetDiskSpace_should_timeout_slow_network_mount_probe_instead_of_blocking_indefinitely()
+    {
+        var rootDrive = new DriveInfo("/");
+        var nfsDrive = new DriveInfo("/mnt/stale-nfs");
+
+        _subject.DrivesProvider = () => new[] { nfsDrive, rootDrive };
+        _subject.ProcMountsProvider = () =>
+            "/dev/sda1 / ext4 rw,relatime 0 0\n" +
+            "192.168.1.100:/export /mnt/stale-nfs nfs rw,relatime 0 0\n";
+        _subject.DriveTimeout = TimeSpan.FromMilliseconds(100);
+        _subject.DriveStatsReader = drive =>
+        {
+            if (drive.Name.Contains("stale-nfs", StringComparison.Ordinal))
+            {
+                System.Threading.Thread.Sleep(500);
+                return new DriveSpaceStats
+                {
+                    FreeSpace = 1,
+                    TotalSpace = 1,
+                };
+            }
+
+            return new DriveSpaceStats
+            {
+                FreeSpace = 40L * 1024 * 1024 * 1024,
+                TotalSpace = 100L * 1024 * 1024 * 1024,
+                VolumeLabel = "RootVolume",
+                FileSystemType = "ext4",
+            };
+        };
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = _subject.GetDiskSpace(forceRefresh: true);
+        sw.Stop();
+
+        Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(2)));
+        Assert.That(result.Any(d => d.Path == "/"), Is.True);
+        Assert.That(result.Any(d => d.Path.Contains("stale-nfs", StringComparison.Ordinal)), Is.False);
+    }
+
+    [Test]
     public void GetDiskSpace_should_isolate_failing_or_stale_network_mount_and_return_healthy_drives()
     {
         var rootDrive = new DriveInfo("/");
