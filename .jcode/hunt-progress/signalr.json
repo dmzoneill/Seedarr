@@ -1,14 +1,22 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:05:00Z",
+  "updatedAt": "2026-10-06T22:08:00Z",
   "area": "src/NzbDrone.SignalR",
   "currentSubfolder": "src/NzbDrone.SignalR",
+  "rotation": [
+    {
+      "subfolder": "src/NzbDrone.SignalR",
+      "completedAt": "2026-10-06T22:05:00Z",
+      "issuesFiled": [940],
+      "issuesReopened": []
+    }
+  ],
   "lastPass": {
     "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-06T22:05:00Z",
-    "issuesFiled": [940],
+    "completedAt": "2026-10-06T22:08:00Z",
+    "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Reviewed MessageHub, SignalRMessageBroadcaster, PieceStorage, message DTOs; deduped against open signalr issues (#878,#887,#903,#911,#918,#919); filed #940 double stateSnapshot delivery."
+    "note": "Verification pass after piglet slot write: re-read all 7 area files, cross-checked signalr.ts/SignalRProvider.tsx and Http tests; deduped open signalr issues (#878,#887,#903,#911,#918,#919,#935,#936,#940); no new filings."
   }
 }
