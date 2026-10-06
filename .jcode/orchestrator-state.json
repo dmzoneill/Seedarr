@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:27:49Z",
+  "updatedAt": "2026-10-06T22:28:45Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_f2670cff"
+    "lastScheduleId": "sched_3ecec822"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -32,12 +32,12 @@
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "panda"
+      "worker": "quail"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "penguin"
+      "worker": "raven"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 30,
-  "lastMonitorNote": "30 open; 0 restarts; synced core shark; shark/peacock/panda/penguin/otter active; latest #1062-#1066"
+  "githubOpenCount": 201,
+  "lastMonitorNote": "201 open; 2 restarts quail/raven; shark/peacock/otter active; latest #1067-#1076"
 }
