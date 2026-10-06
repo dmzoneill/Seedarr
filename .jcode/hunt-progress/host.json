@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-07T01:05:00Z",
+  "updatedAt": "2026-10-07T01:20:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Common/Composition",
+  "currentSubfolder": "src/NzbDrone.Host/Startup.cs",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Common/Instrumentation",
-    "completedAt": "2026-10-07T01:05:00Z",
-    "issuesFiled": [1237],
+    "subfolder": "src/NzbDrone.Common/Composition",
+    "completedAt": "2026-10-07T01:20:00Z",
+    "issuesFiled": [1245, 1246],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Pass #14 Instrumentation (LogEntryRecord, NzbDroneLogger, RingBufferTarget, Sanitized*LayoutRenderer): static review of NLog registration, async ring buffer, layout redaction, and GetEntries filtering. Deduped open #992 #993 #994 #996 #1099 #1120 #1128 #1184 #1185 #1055; filed #1237 path-embedded private tracker passkeys in announce URLs not redacted by RingBufferTarget.Sanitize. No dotnet build/test."
+    "note": "Pass #15 Composition (AssemblyLoader, ContainerExtensions/KnownTypes, lifecycle attributes): static review of DryIoc auto-registration and assembly loading. Deduped open #1004 #1005 #1006 #1017 #1018 #1020 #1190; filed #1245 null/empty assembly names target BaseDirectory/.dll; #1246 interface-less POCOs registered as transient services. No dotnet build/test."
   }
 }
