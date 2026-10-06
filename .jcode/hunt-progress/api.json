@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:18:00Z",
+  "updatedAt": "2026-10-06T22:15:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -17,10 +17,10 @@
   "currentSubfolder": "src/Seedarr.Api.V1/Backup",
   "lastPass": {
     "subfolder": "src/Seedarr.Api.V1/Seeding",
-    "completedAt": "2026-10-06T22:18:00Z",
-    "issuesFiled": [989, 990],
+    "completedAt": "2026-10-06T22:15:00Z",
+    "issuesFiled": [995],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed SeedingController, SpeedScheduleController, SpeedScheduleResource. Deduped existing open issues #914 (start/stop 404), #916 (history unknown torrent). Filed #989 (start-all omits ForceStart vs per-torrent start; queue demotion), #990 (start-all/stop-all silently toggle AutoStart). SpeedSchedule CRUD/validation/GetActiveLimits align with SpeedPolicy merge and existing closed fixes #690/#280. No dotnet build/test."
+    "notes": "Reviewed SeedingController, SpeedScheduleController, SpeedScheduleResource. Deduped open issues #914 (start/stop 404), #916 (per-torrent history empty), #989 (start-all ForceStart), #990 (start-all/stop-all AutoStart side effect). Filed #995: /seeding/stats vs /seeding/history disagree on activeTorrents and averageRatio (Seeding-only vs Seeding+Downloading). SpeedSchedule CRUD/RBAC/SignalR/GetActiveLimits align with tests; no new speedschedule API gaps filed. No dotnet build/test."
   }
 }
