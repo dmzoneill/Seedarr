@@ -17,14 +17,21 @@ Do not run `dotnet build` or tests on the worker machine. GitHub Actions validat
 
 ## Progress file (workers only)
 
-- Update **`.jcode/hunt-progress.json`** for your slot: `currentSubfolder`, `lastPass` (subfolder, `issuesFiled`, `issuesReopened`, `completedAt`).
-- **Never edit** `.jcode/orchestrator-state.json` (coordinator + monitor only). Race on that file breaks restarts and scheduling.
-- After each subfolder pass, rotate to the next folder under your partition and record it in `hunt-progress.json`.
+- Each hunt slot has its **own** file under `.jcode/hunt-progress/`:
+  - core → `core.json`
+  - api → `api.json`
+  - http → `http.json`
+  - host → `host.json`
+  - signalr → `signalr.json`
+- Update **only your slot file**. Do **not** overwrite `.jcode/hunt-progress.json` (manifest only) or other slot files.
+- Fields: `currentSubfolder`, `lastPass` (subfolder, `issuesFiled`, `issuesReopened`, `completedAt`), optional `rotation` array.
+- **Never edit** `.jcode/orchestrator-state.json` (coordinator + monitor only).
+- After each subfolder pass, rotate to the next folder under your partition and record it in your slot file.
 
 ## Reporting
 
-When a pass completes (or you are blocked), `swarm report` with: area scanned, issues filed/reopened (numbers), next subfolder (also written to `hunt-progress.json`).
+When a pass completes (or you are blocked), `swarm report` with: area scanned, issues filed/reopened (numbers), next subfolder (also written to your slot JSON).
 
 ## Coordinator
 
-Keeps workers busy, restarts idle/stopped hunters, reads `hunt-progress.json` to avoid overlap.
+Keeps workers busy, restarts idle/stopped hunters, reads `.jcode/hunt-progress/*.json` to avoid overlap.

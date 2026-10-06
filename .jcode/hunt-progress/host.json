@@ -1,0 +1,22 @@
+{
+  "slot": "host",
+  "updatedAt": "2026-10-06T22:04:00Z",
+  "area": "src/NzbDrone.Host,src/NzbDrone.Common",
+  "currentSubfolder": "src/NzbDrone.Host/Bootstrap.cs",
+  "rotation": [
+    "src/NzbDrone.Host/Startup.cs",
+    "src/NzbDrone.Host/Bootstrap.cs",
+    "src/NzbDrone.Host/AppLifetime.cs",
+    "src/NzbDrone.Common/Disk",
+    "src/NzbDrone.Common/Instrumentation",
+    "src/NzbDrone.Common/Composition"
+  ],
+  "lastPass": {
+    "subfolder": "src/NzbDrone.Host/Startup.cs",
+    "completedAt": "2026-10-06T22:04:00Z",
+    "issuesFiled": [920],
+    "issuesReopened": [],
+    "taskId": "host-hunter",
+    "note": "UseHttpsRedirection after static/fixtures"
+  }
+}

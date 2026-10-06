@@ -1,66 +1,11 @@
 {
-  "updatedAt": "2026-10-06T22:08:00Z",
-  "note": "Workers update this file only. Coordinator reads it on monitor ticks; never edit orchestrator-state.json from hunters.",
+  "updatedAt": "2026-10-06T22:01:30Z",
+  "note": "Manifest only. Hunters write per-slot files under .jcode/hunt-progress/{core,api,http,host,signalr}.json. Do not overwrite this file from workers.",
   "slots": {
-    "core": {
-      "area": "src/NzbDrone.Core",
-      "currentSubfolder": "src/NzbDrone.Core/Blocklist",
-      "rotation": [
-        "src/NzbDrone.Core/DownloadClients",
-        "src/NzbDrone.Core/Blocklist",
-        "src/NzbDrone.Core/Torrents",
-        "src/NzbDrone.Core/Authentication",
-        "src/NzbDrone.Core/Datastore"
-      ],
-      "lastPass": {
-        "subfolder": "src/NzbDrone.Core/DownloadClients",
-        "completedAt": "2026-10-06T22:08:00Z",
-        "issuesFiled": [923, 924, 925],
-        "issuesReopened": [],
-        "taskId": "core-hunter",
-        "note": "Open #884 already covers MapClientStatus/unknown state clobber; not re-filed."
-      }
-    },
-    "api": {
-      "area": "src/Seedarr.Api.V1",
-      "currentSubfolder": "src/Seedarr.Api.V1",
-      "lastPass": {
-        "subfolder": "src/Seedarr.Api.V1",
-        "completedAt": "2026-10-06T22:03:00Z",
-        "issuesFiled": [913, 914, 916],
-        "issuesReopened": [],
-        "taskId": "api-hunter"
-      }
-    },
-    "http": {
-      "area": "src/Seedarr.Http",
-      "currentSubfolder": "src/Seedarr.Http",
-      "lastPass": null
-    },
-    "host": {
-      "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-      "currentSubfolder": "src/NzbDrone.Host/Bootstrap.cs",
-      "rotation": [
-        "src/NzbDrone.Host/Startup.cs",
-        "src/NzbDrone.Host/Bootstrap.cs",
-        "src/NzbDrone.Host/AppLifetime.cs",
-        "src/NzbDrone.Common/Disk",
-        "src/NzbDrone.Common/Instrumentation",
-        "src/NzbDrone.Common/Composition"
-      ],
-      "lastPass": {
-        "subfolder": "src/NzbDrone.Host/Startup.cs",
-        "completedAt": "2026-10-06T22:04:00Z",
-        "issuesFiled": [920],
-        "issuesReopened": [],
-        "taskId": "host-hunter",
-        "note": "UseHttpsRedirection after static/fixtures; hunt-progress only per coordinator broadcast"
-      }
-    },
-    "signalr": {
-      "area": "src/NzbDrone.SignalR",
-      "currentSubfolder": null,
-      "lastPass": null
-    }
+    "core": ".jcode/hunt-progress/core.json",
+    "api": ".jcode/hunt-progress/api.json",
+    "http": ".jcode/hunt-progress/http.json",
+    "host": ".jcode/hunt-progress/host.json",
+    "signalr": ".jcode/hunt-progress/signalr.json"
   }
 }

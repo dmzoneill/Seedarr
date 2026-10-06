@@ -1,0 +1,13 @@
+{
+  "slot": "api",
+  "updatedAt": "2026-10-06T22:03:00Z",
+  "area": "src/Seedarr.Api.V1",
+  "currentSubfolder": "src/Seedarr.Api.V1",
+  "lastPass": {
+    "subfolder": "src/Seedarr.Api.V1",
+    "completedAt": "2026-10-06T22:03:00Z",
+    "issuesFiled": [913, 914, 916],
+    "issuesReopened": [],
+    "taskId": "api-hunter"
+  }
+}
