@@ -12,9 +12,9 @@
   "lastPass": {
     "subfolder": "src/NzbDrone.SignalR",
     "completedAt": "2026-10-06T22:45:00Z",
-    "issuesFiled": [1016],
+    "issuesFiled": [1019],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "NzbDrone.SignalR pass: reviewed MessageHub (auth/subscriptions/snapshot/TrackerSignalREventHandler), SignalRMessageBroadcaster (dedup/named events/group routing), PieceStorage coalesce, message types; deduped open issues #878 #887 #918 #919 #936 #940 #954 #961 #1002 #1003; filed #1016 dedup cache records payload before async SendAsync succeeds. No dotnet build/test."
+    "note": "SignalR pass: reviewed MessageHub (auth/subscriptions/RequestStateSnapshot), SignalRMessageBroadcaster (dedup/named events), PieceStorage coalesce, tracker handler. GitHub deduped open #940 (snapshot RPC+push), #878 (Clients.All vs groups), #919/#961 (tracker event fanout), #887/#918/#936/#954 (piece map payloads/storage). Filed #1019 PieceCompletedMessage/PieceBatchCompletedMessage Body=self circular JSON breaks hub serialization. No dotnet build/test."
   }
 }
