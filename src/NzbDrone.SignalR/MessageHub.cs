@@ -332,18 +332,6 @@ public class MessageHub : Hub
     }
 
     [Authorize(Policy = Policies.Reader)]
-    public Task TrackerUpdated(object payload)
-    {
-        return Clients.All.SendAsync("trackerUpdated", payload);
-    }
-
-    [Authorize(Policy = Policies.Reader)]
-    public Task TrackerAnnounced(object payload)
-    {
-        return Clients.All.SendAsync("trackerAnnounced", payload);
-    }
-
-    [Authorize(Policy = Policies.Reader)]
     public async Task SubscribeToTorrent(int torrentId)
     {
         if (torrentId <= 0)

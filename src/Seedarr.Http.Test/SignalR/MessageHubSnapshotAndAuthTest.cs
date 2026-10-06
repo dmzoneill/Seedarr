@@ -301,8 +301,6 @@ public class MessageHubSnapshotAndAuthTest
     [TestCase(nameof(MessageHub.UnsubscribeFromTorrent))]
     [TestCase(nameof(MessageHub.SubscribeToChannel))]
     [TestCase(nameof(MessageHub.UnsubscribeFromChannel))]
-    [TestCase(nameof(MessageHub.TrackerUpdated))]
-    [TestCase(nameof(MessageHub.TrackerAnnounced))]
     public void MessageHub_methods_have_AuthorizeAttribute_with_Reader_policy(string methodName)
     {
         var method = typeof(MessageHub).GetMethod(methodName);
@@ -311,5 +309,13 @@ public class MessageHubSnapshotAndAuthTest
 
         Assert.That(attr, Is.Not.Null);
         Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [TestCase("TrackerUpdated")]
+    [TestCase("TrackerAnnounced")]
+    public void MessageHub_should_not_expose_client_callable_tracker_broadcast_methods(string methodName)
+    {
+        var method = typeof(MessageHub).GetMethod(methodName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        Assert.That(method, Is.Null, $"Method '{methodName}' should not be a public client-callable Hub method to prevent event spoofing");
     }
 }
