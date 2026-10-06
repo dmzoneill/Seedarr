@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:45:00Z",
+  "updatedAt": "2026-10-06T23:25:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Jobs",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-06T22:45:00Z",
-    "issuesFiled": [1019],
+    "subfolder": "src/NzbDrone.Core/Jobs",
+    "completedAt": "2026-10-06T23:25:00Z",
+    "issuesFiled": [1026],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "SignalR pass: reviewed MessageHub (auth/subscriptions/RequestStateSnapshot), SignalRMessageBroadcaster (dedup/named events), PieceStorage coalesce, tracker handler. GitHub deduped open #940 (snapshot RPC+push), #878 (Clients.All vs groups), #919/#961 (tracker event fanout), #887/#918/#936/#954 (piece map payloads/storage). Filed #1019 PieceCompletedMessage/PieceBatchCompletedMessage Body=self circular JSON breaks hub serialization. No dotnet build/test."
+    "note": "Jobs pass: reviewed Scheduler and ScheduledTaskCommandExecutor SignalR lifecycle (TaskStarted/TaskCompleted/TaskFailed), TaskManager concurrency/history (no direct hub). Deduped open #911 (cancel/timeout lifecycle), #952 (missing task instance TaskCompleted), #985 (command executor failure terminals), #903 (TaskFailed UI), #971 (TrackerScrapeJob success masking). Filed #1026 duplicate TaskStarted on command-queue manual runs (SystemController + ScheduledTaskCommandExecutor) with mismatched payloads. No dotnet build/test."
   }
 }
