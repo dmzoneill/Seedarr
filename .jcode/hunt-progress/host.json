@@ -1,6 +1,6 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:28:00Z",
+  "updatedAt": "2026-10-06T22:26:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
   "currentSubfolder": "src/NzbDrone.Host/AppLifetime.cs",
   "rotation": [
@@ -13,10 +13,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Host/Bootstrap.cs",
-    "completedAt": "2026-10-06T22:28:00Z",
-    "issuesFiled": [1056],
+    "completedAt": "2026-10-06T22:26:00Z",
+    "issuesFiled": [1061],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #932 #901 #933 #883 #1004 #1005 #1006 #1018; filed unparseable config.xml BindAddress silent 0.0.0.0 fallback in ResolveBindAddress"
+    "note": "Deduped #901 #932 #933 #1056 #883; filed empty urls override skips config listeners and binds ASP.NET defaults (#1061)"
   }
 }
