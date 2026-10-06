@@ -1,7 +1,10 @@
 using System;
+using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Seeding.Scheduling;
@@ -488,5 +491,27 @@ public class SpeedScheduleControllerTest
 
         Assert.DoesNotThrow(() => controllerWithoutSignalR.Update(10, resource));
         Assert.DoesNotThrow(() => controllerWithoutSignalR.Delete(10));
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_Reader_attribute()
+    {
+        var type = typeof(SpeedScheduleController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [TestCase(nameof(SpeedScheduleController.Create))]
+    [TestCase(nameof(SpeedScheduleController.Delete))]
+    public void Mutating_methods_should_have_Authorize_AdminOnly_attribute(string methodName)
+    {
+        var method = typeof(SpeedScheduleController).GetMethods().FirstOrDefault(m => m.Name == methodName);
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 }

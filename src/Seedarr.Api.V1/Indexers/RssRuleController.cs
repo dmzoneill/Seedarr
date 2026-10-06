@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Torrents;
@@ -16,6 +18,7 @@ namespace Seedarr.Api.V1.Indexers;
 /// </summary>
 [V1ApiController("rssrule")]
 [Route("api/v1/rssrules")]
+[Authorize(Policy = Policies.Reader)]
 public class RssRuleController : Controller
 {
     private readonly IRssRuleRepository _rssRuleRepository;
@@ -78,6 +81,7 @@ public class RssRuleController : Controller
     /// Creates a new RSS rule.
     /// </summary>
     [HttpPost]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<RssRuleResource> Create([FromBody] RssRuleResource resource)
     {
         var validationError = ValidateResource(resource, null);
@@ -95,6 +99,7 @@ public class RssRuleController : Controller
     /// Updates an existing RSS rule.
     /// </summary>
     [HttpPut("{id:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<RssRuleResource> Update(int id, [FromBody] RssRuleResource resource)
     {
         if (resource == null)
@@ -124,6 +129,7 @@ public class RssRuleController : Controller
     /// Updates an existing RSS rule without specifying ID in the path.
     /// </summary>
     [HttpPut]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<RssRuleResource> UpdateWithoutId([FromBody] RssRuleResource resource)
     {
         if (resource == null || resource.Id <= 0)
@@ -138,6 +144,7 @@ public class RssRuleController : Controller
     /// Deletes an RSS rule by ID.
     /// </summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Delete(int id)
     {
         _rssRuleRepository.Delete(id);
@@ -181,6 +188,7 @@ public class RssRuleController : Controller
     /// Clears the RSS grab execution audit history.
     /// </summary>
     [HttpDelete("history")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult ClearHistory()
     {
         _rssGrabHistoryRepository?.ClearHistory();
@@ -192,6 +200,7 @@ public class RssRuleController : Controller
     /// </summary>
     [HttpPost("sync")]
     [HttpPost("sync-rss")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<object> SyncRss()
     {
         lock (_syncLock)

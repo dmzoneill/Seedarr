@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Indexers;
 using Seedarr.Api.V1.Indexers;
@@ -330,5 +332,39 @@ public class RssRuleControllerTest
         Assert.That(grabbedCountProp, Is.EqualTo(5));
 
         rssSyncService.Received(1).Sync(true);
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_Reader_attribute()
+    {
+        var type = typeof(RssRuleController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [TestCase(nameof(RssRuleController.Create))]
+    [TestCase(nameof(RssRuleController.Delete))]
+    [TestCase(nameof(RssRuleController.SyncRss))]
+    public void Mutating_methods_should_have_Authorize_Operator_attribute(string methodName)
+    {
+        var method = typeof(RssRuleController).GetMethods().FirstOrDefault(m => m.Name == methodName);
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Operator));
+    }
+
+    [Test]
+    public void ClearHistory_should_have_Authorize_AdminOnly_attribute()
+    {
+        var method = typeof(RssRuleController).GetMethod(nameof(RssRuleController.ClearHistory));
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 }
