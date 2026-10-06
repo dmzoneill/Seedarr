@@ -1,6 +1,6 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:35:00Z",
+  "updatedAt": "2026-10-06T22:40:30Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
   "currentSubfolder": "src/NzbDrone.Common/Composition",
   "rotation": [
@@ -13,10 +13,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Common/Instrumentation",
-    "completedAt": "2026-10-06T22:35:00Z",
-    "issuesFiled": [1120],
+    "completedAt": "2026-10-06T22:40:30Z",
+    "issuesFiled": [1128],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #992 #993 #994 #996 #1055 #1099; filed DebugMode file target minlevel gap (#1120)"
+    "note": "Pass #2 per orchestrator; deduped #992 #993 #994 #996 #1055 #1099 #1120; filed ring buffer Trace rule vs FileLogLevel (#1128)"
   }
 }
