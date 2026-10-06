@@ -3123,4 +3123,29 @@ public class UtpConnectionTest
         Assert.That(connection.QueuingDelay, Is.EqualTo(180_000u));
         Assert.That(connection.OffTarget, Is.LessThan(0.0));
     }
+
+    [Test]
+    public void Receive_when_not_owning_udp_client_should_not_drain_socket_datagrams_directly()
+    {
+        using var sharedUdp = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var port = ((IPEndPoint)sharedUdp.Client.LocalEndPoint!).Port;
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, port);
+
+        using var sender = new UdpClient();
+        var dummyData = new byte[] { 0x01, 0x02, 0x03, 0x04 };
+        sender.Send(dummyData, dummyData.Length, remoteEp);
+
+        Thread.Sleep(50);
+        Assert.That(sharedUdp.Client.Available, Is.GreaterThan(0));
+
+        using var connection = new UtpConnection(sharedUdp, 100, remoteEp, connectionTimeoutSeconds: 1);
+        var backingField = typeof(UtpConnection).GetField("<IsConnected>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        backingField.SetValue(connection, true);
+
+        var buffer = new byte[32];
+        var bytesRead = connection.Receive(buffer, 0, buffer.Length, timeoutMs: 50);
+
+        Assert.That(bytesRead, Is.EqualTo(0));
+        Assert.That(sharedUdp.Client.Available, Is.GreaterThan(0));
+    }
 }

@@ -662,29 +662,6 @@ public class UtpConnection : IUtpConnection
             {
                 while (IsConnected && !_hasReceivedFin && _receiveQueue.Count == 0)
                 {
-                    if (_udpClient?.Client != null && _udpClient.Client.Available > 0)
-                    {
-                        try
-                        {
-                            var endpoint = new IPEndPoint(IPAddress.Any, 0);
-                            byte[] packet;
-                            lock (_socketReceiveLock)
-                            {
-                                packet = _udpClient.Receive(ref endpoint);
-                            }
-
-                            HandleIncomingPacket(packet, endpoint);
-                            if (_receiveQueue.Count > 0)
-                            {
-                                break;
-                            }
-                        }
-                        catch (SocketException ex)
-                        {
-                            _logger.Trace(ex, "SocketException while polling/receiving uTP packet");
-                        }
-                    }
-
                     var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
                     if (elapsed >= effectiveTimeoutMs)
                     {
