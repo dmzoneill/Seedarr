@@ -2,9 +2,12 @@
   "slot": "signalr",
   "updatedAt": "2026-10-06T22:10:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.SignalR",
+  "currentSubfolder": "src/NzbDrone.Core/Jobs",
   "rotation": [
-    "src/NzbDrone.SignalR"
+    "src/NzbDrone.SignalR",
+    "src/NzbDrone.Core/Jobs",
+    "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+    "src/Seedarr.Http/REST"
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.SignalR",
