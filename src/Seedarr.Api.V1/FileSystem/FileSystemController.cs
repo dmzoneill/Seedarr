@@ -7,6 +7,7 @@ using System.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.FileSystem;
 using Seedarr.Http;
 
@@ -28,25 +29,6 @@ public class FileSystemController : Controller
     private static readonly Func<string, bool> FileExistsFunc = (Func<string, bool>)Delegate.CreateDelegate(
         typeof(Func<string, bool>),
         typeof(global::System.IO.File).GetMethod(nameof(global::System.IO.File.Exists), new[] { typeof(string) })!);
-
-    private static readonly HashSet<string> BlockedUnixPaths = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "/etc",
-        "/proc",
-        "/sys",
-        "/dev",
-        "/root",
-        "/var/run",
-        "/boot",
-    };
-
-    private static readonly HashSet<string> BlockedWindowsPaths = new(StringComparer.OrdinalIgnoreCase)
-    {
-        @"C:\Windows",
-        @"C:\Program Files",
-        @"C:\Program Files (x86)",
-        @"C:\ProgramData",
-    };
 
     private readonly IFileSystemValidationService _fileSystemValidationService;
 
@@ -526,26 +508,7 @@ public class FileSystemController : Controller
 
     private static bool IsBlockedPath(string fullPath)
     {
-        if (string.IsNullOrWhiteSpace(fullPath))
-        {
-            return false;
-        }
-
-        var normalized = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var blockedList = OperatingSystem.IsWindows() ? BlockedWindowsPaths : BlockedUnixPaths;
-
-        foreach (var blocked in blockedList)
-        {
-            var normalizedBlocked = blocked.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (normalized.Equals(normalizedBlocked, StringComparison.OrdinalIgnoreCase) ||
-                normalized.StartsWith(normalizedBlocked + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                normalized.StartsWith(normalizedBlocked + "/", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return PathSanitizer.IsBlockedPath(fullPath);
     }
 
     private static bool IsHiddenOrSystem(FileSystemInfo info)

@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using NzbDrone.Common.Disk;
 
@@ -129,5 +130,24 @@ public class PathSanitizerTests
         Assert.That(PathSanitizer.IsPathUnderRoot(root, "../outside.mkv"), Is.False);
         Assert.That(PathSanitizer.IsPathUnderRoot(root, "../../etc/passwd"), Is.False);
         Assert.That(PathSanitizer.IsPathUnderRoot(root, "sub/../../outside.mkv"), Is.False);
+    }
+
+    [Test]
+    public void IsBlockedPath_detects_sensitive_system_directories()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.That(PathSanitizer.IsBlockedPath(@"C:\Windows"), Is.True);
+            Assert.That(PathSanitizer.IsBlockedPath(@"C:\Windows\System32"), Is.True);
+            Assert.That(PathSanitizer.IsBlockedPath(@"C:\Program Files\App"), Is.True);
+            Assert.That(PathSanitizer.IsBlockedPath(@"D:\Windows"), Is.False);
+        }
+        else
+        {
+            Assert.That(PathSanitizer.IsBlockedPath("/etc"), Is.True);
+            Assert.That(PathSanitizer.IsBlockedPath("/etc/ssl/certs"), Is.True);
+            Assert.That(PathSanitizer.IsBlockedPath("/proc/self"), Is.True);
+            Assert.That(PathSanitizer.IsBlockedPath("/tmp/seedarr"), Is.False);
+        }
     }
 }

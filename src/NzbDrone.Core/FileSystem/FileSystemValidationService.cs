@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using NzbDrone.Common.Disk;
 
 namespace NzbDrone.Core.FileSystem;
 
@@ -58,6 +59,15 @@ public class FileSystemValidationService : IFileSystemValidationService
             {
                 IsValid = false,
                 ErrorMessage = "Invalid directory path syntax: " + ex.Message,
+            };
+        }
+
+        if (PathSanitizer.IsBlockedPath(fullPath))
+        {
+            return new FileSystemValidationResult
+            {
+                IsValid = false,
+                ErrorMessage = "Access to system directory is restricted: " + fullPath,
             };
         }
 

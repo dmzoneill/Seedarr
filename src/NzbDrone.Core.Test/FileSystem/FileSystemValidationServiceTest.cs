@@ -142,4 +142,49 @@ public class FileSystemValidationServiceTest
         Assert.That(result.IsValid, Is.True);
         Assert.That(writeAttempted, Is.False);
     }
+
+    [Test]
+    public void ValidateDirectory_should_reject_blocked_system_paths_without_side_effects()
+    {
+        var blockedPath = OperatingSystem.IsWindows() ? @"C:\Windows\seedarr_probe" : "/etc/seedarr_probe";
+        var directoryCreated = false;
+        var writeAttempted = false;
+        var service = new FileSystemValidationService(
+            fileWriter: (p, b) =>
+            {
+                writeAttempted = true;
+                File.WriteAllBytes(p, b);
+            },
+            directoryCreator: p =>
+            {
+                directoryCreated = true;
+                Directory.CreateDirectory(p);
+            });
+
+        var result = service.ValidateDirectory(blockedPath, testWrite: true);
+
+        Assert.That(result.IsValid, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("Access to system directory is restricted"));
+        Assert.That(directoryCreated, Is.False);
+        Assert.That(writeAttempted, Is.False);
+    }
+
+    [Test]
+    public void ValidateDirectory_should_reject_blocked_system_path_even_when_testWrite_is_false()
+    {
+        var blockedPath = OperatingSystem.IsWindows() ? @"C:\Program Files\seedarr" : "/proc/seedarr";
+        var directoryCreated = false;
+        var service = new FileSystemValidationService(
+            directoryCreator: p =>
+            {
+                directoryCreated = true;
+                Directory.CreateDirectory(p);
+            });
+
+        var result = service.ValidateDirectory(blockedPath, testWrite: false);
+
+        Assert.That(result.IsValid, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("Access to system directory is restricted"));
+        Assert.That(directoryCreated, Is.False);
+    }
 }

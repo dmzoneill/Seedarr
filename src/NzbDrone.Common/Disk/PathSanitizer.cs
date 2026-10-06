@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -15,6 +16,25 @@ public static class PathSanitizer
     private static readonly char[] IllegalFileNameChars = new[]
     {
         '<', '>', ':', '"', '/', '\\', '|', '?', '*'
+    };
+
+    private static readonly HashSet<string> BlockedUnixPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "/etc",
+        "/proc",
+        "/sys",
+        "/dev",
+        "/root",
+        "/var/run",
+        "/boot",
+    };
+
+    private static readonly HashSet<string> BlockedWindowsPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        @"C:\Windows",
+        @"C:\Program Files",
+        @"C:\Program Files (x86)",
+        @"C:\ProgramData",
     };
 
     public static bool IsWindowsReservedName(string name)
@@ -111,6 +131,30 @@ public static class PathSanitizer
         {
             var trimmedSegment = segment.Trim();
             if (trimmedSegment == ".." || trimmedSegment == ".")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool IsBlockedPath(string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath))
+        {
+            return false;
+        }
+
+        var normalized = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var blockedList = OperatingSystem.IsWindows() ? BlockedWindowsPaths : BlockedUnixPaths;
+
+        foreach (var blocked in blockedList)
+        {
+            var normalizedBlocked = blocked.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (normalized.Equals(normalizedBlocked, StringComparison.OrdinalIgnoreCase) ||
+                normalized.StartsWith(normalizedBlocked + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                normalized.StartsWith(normalizedBlocked + "/", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
