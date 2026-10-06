@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T23:35:00Z",
+  "updatedAt": "2026-10-06T22:30:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/NzbDrone.SignalR",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
-    "completedAt": "2026-10-06T23:35:00Z",
-    "issuesFiled": [1048],
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-06T22:30:00Z",
+    "issuesFiled": [1060],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "TorrentRecheckService pass: traced QueueRecheck/ExecuteRecheckCoreAsync SignalR (TorrentUpdated, TorrentRecheckProgress) and cancel/failure gaps. Deduped open #912, #936, #951, #988, #991, #1036 (queued cancel/semaphore/wait SignalR and status). Filed #1048 missing TorrentHashCheckCompletedEvent publish after recheck (automation HashCheckCompleted + TrackerAnnounce handlers never triggered). No dotnet build/test."
+    "note": "REST pass: reviewed RestControllerWithSignalR, RestController, RestResource, ResourceValidator, RestPutByIdAttribute. Deduped open #1002 (timer flush while hub offline), #1003 (deleted entity resurrected after reconnect), #1047 (coalesce window advanced on skipped leading-edge broadcast). Filed #1060 Dispose discards pending coalesced updates; Flush() only used in tests, not AppLifetime shutdown. No dotnet build/test."
   }
 }
