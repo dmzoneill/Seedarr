@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:15:00Z",
+  "updatedAt": "2026-10-06T22:22:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Jobs",
-    "completedAt": "2026-10-06T22:15:00Z",
-    "issuesFiled": [985],
+    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+    "completedAt": "2026-10-06T22:22:00Z",
+    "issuesFiled": [988],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Jobs pass: reviewed Scheduler, TaskManager, ScheduledTaskCommandExecutor, history repo, TrackerScrapeJob, DatabaseVacuumTask, ScheduledTask; deduped #911 #952 #971 #821 #903; filed #985 manual command path emits TaskCompleted and omits TaskFailed on exceptions."
+    "note": "TorrentRecheckService pass: reviewed queue/cancel/async recheck paths and SignalR broadcasts; deduped #912 #951 #936 #887 #878; filed #988 ProcessQueueAsync swallows recheck failures after Checking broadcast without terminal TorrentUpdated."
   }
 }
