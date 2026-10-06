@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:35:30Z",
+  "updatedAt": "2026-10-06T23:37:14Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_7335f571"
+    "lastScheduleId": "sched_7137eecb"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -22,27 +22,27 @@
     "core": {
       "area": "src/NzbDrone.Core",
       "status": "running",
-      "worker": "beaver"
+      "worker": "chipmunk"
     },
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "mongoose"
+      "worker": "gecko"
     },
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "cobra"
+      "worker": "locust"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "ferret"
+      "worker": "lemur"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "spaniel"
+      "worker": "canary"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 352,
-  "lastMonitorNote": "352 open (gh); 0 restarts; latest #1221-#1225 blocklist+terminal"
+  "lastMonitorNote": "352 open (gh); 5 restarts idle>90s; latest #1221-#1225"
 }
