@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:02:00Z",
+  "updatedAt": "2026-10-06T22:05:00Z",
   "note": "Workers update this file only. Coordinator reads it on monitor ticks; never edit orchestrator-state.json from hunters.",
   "slots": {
     "core": {
@@ -13,9 +13,9 @@
         "src/NzbDrone.Core/Datastore"
       ],
       "lastPass": {
-        "subfolder": "src/NzbDrone.Core/Datastore",
-        "completedAt": "2026-10-06T22:02:00Z",
-        "issuesFiled": [915],
+        "subfolder": "src/NzbDrone.Core/Authentication",
+        "completedAt": "2026-10-06T22:05:00Z",
+        "issuesFiled": [917],
         "issuesReopened": [],
         "taskId": "core-hunter"
       }
