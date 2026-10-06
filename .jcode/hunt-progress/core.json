@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T23:20:00Z",
+  "updatedAt": "2026-10-07T00:05:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Blocklist",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/DownloadClients",
-    "completedAt": "2026-10-06T23:20:00Z",
-    "issuesFiled": [1012, 1013],
+    "subfolder": "src/NzbDrone.Core/Blocklist",
+    "completedAt": "2026-10-07T00:05:00Z",
+    "issuesFiled": [1021, 1022],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Deduped open issues #923-#1011; filed backoff bypass (#1012) and QBit test false positive (#1013)."
+    "note": "Skipped dupes #904/#905/#937/#938/#939; scanned PeerBlocklistSyncService, archive provider, interval trees, BlocklistUpdateTask."
   }
 }
