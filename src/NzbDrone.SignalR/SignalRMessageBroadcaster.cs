@@ -185,34 +185,34 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
             }
         }
         else if (string.Equals(message.Name, "TorrentAdded", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "torrentAdded", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "torrent_added", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "torrentAdded", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "torrent_added", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("TorrentAdded");
             list.Add("torrent_added");
             list.Add("torrentAdded");
         }
         else if (string.Equals(message.Name, "TorrentUpdated", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "torrentUpdated", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "torrent_updated", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "torrentUpdated", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "torrent_updated", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("TorrentUpdated");
             list.Add("torrent_updated");
             list.Add("torrentUpdated");
         }
         else if (string.Equals(message.Name, "TorrentDeleted", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "torrentDeleted", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "torrent_deleted", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "torrentDeleted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "torrent_deleted", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("TorrentDeleted");
             list.Add("torrent_deleted");
             list.Add("torrentDeleted");
         }
         else if (string.Equals(message.Name, "Seeding", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "SeedingStatsUpdated", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "speedPulse", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "speed_update", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "speedUpdate", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "SeedingStatsUpdated", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "speedPulse", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "speed_update", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "speedUpdate", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("SeedingStatsUpdated");
             list.Add("speed_update");
@@ -220,9 +220,9 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
             list.Add("speedUpdate");
         }
         else if (string.Equals(message.Name, "Health", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "HealthCheckCompleted", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "health_warning", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "healthWarning", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "HealthCheckCompleted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "health_warning", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "healthWarning", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("HealthCheckCompleted");
             list.Add("health_warning");
@@ -249,56 +249,56 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
             list.Add("taskProgress");
         }
         else if (string.Equals(message.Name, "CommandStarted", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "CommandCompleted", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "TaskStarted", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "TaskCompleted", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "task_progress", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "taskProgress", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "CommandCompleted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "TaskStarted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "TaskCompleted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "task_progress", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "taskProgress", StringComparison.OrdinalIgnoreCase))
         {
             list.Add(message.Name);
             list.Add("task_progress");
             list.Add("taskProgress");
         }
         else if (string.Equals(message.Name, "Automation", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "AutomationExecution", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "AutomationScript", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "AutomationExecuted", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "AutomationExecution", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "AutomationScript", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "AutomationExecuted", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("AutomationExecuted");
         }
         else if (string.Equals(message.Name, "AutomationTriggerEvaluation", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "AutomationTriggerEvaluated", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "AutomationTriggerEvaluated", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("AutomationTriggerEvaluated");
         }
         else if (string.Equals(message.Name, "PieceCompleted", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "PieceBatchCompleted", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "pieceMapUpdated", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "piece_map_updated", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "PieceBatchCompleted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "pieceMapUpdated", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "piece_map_updated", StringComparison.OrdinalIgnoreCase))
         {
             list.Add(message.Name);
             list.Add("pieceMapUpdated");
             list.Add("piece_map_updated");
         }
         else if (string.Equals(message.Name, "Tracker", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "Trackers", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "TrackerUpdated", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "trackerUpdated", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "tracker_updated", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "Trackers", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "TrackerUpdated", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "trackerUpdated", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "tracker_updated", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("trackerUpdated");
             list.Add("tracker_updated");
         }
         else if (string.Equals(message.Name, "TrackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "trackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "TrackerAnnounceEvent", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "tracker_announced", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "trackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "TrackerAnnounceEvent", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "tracker_announced", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("trackerAnnounced");
             list.Add("tracker_announced");
         }
         else if (string.Equals(message.Name, "TorrentRecheckProgress", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(message.Name, "torrent_recheck_progress", StringComparison.OrdinalIgnoreCase))
+            string.Equals(message.Name, "torrent_recheck_progress", StringComparison.OrdinalIgnoreCase))
         {
             list.Add("TorrentRecheckProgress");
             list.Add("torrent_recheck_progress");
