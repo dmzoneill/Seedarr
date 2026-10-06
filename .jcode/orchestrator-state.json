@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:58:45Z",
+  "updatedAt": "2026-10-06T22:59:58Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_2494056e"
+    "lastScheduleId": "sched_c92d8e5d"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 286,
-  "lastMonitorNote": "286 open; 1 restart boar->raccoon (Core/DownloadClients); unicorn/kangaroo/skunk/hedgehog active; latest #1155-#1159"
+  "githubOpenCount": 289,
+  "lastMonitorNote": "289 open; 0 restarts; raccoon active; unicorn/kangaroo/skunk/hedgehog <90s; latest #1158-#1162"
 }
