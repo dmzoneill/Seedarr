@@ -18,6 +18,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.RemotePathMappings;
+using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
@@ -130,6 +131,7 @@ public class DelugeJsonRpcController : ControllerBase
     private readonly ICategoryService _categoryService;
     private readonly ITrackerEntryService _trackerService;
     private readonly IDiskSpaceService _diskSpaceService;
+    private readonly IStopPolicy _stopPolicy;
     private readonly Logger _logger;
 
     public static bool IsWebConnected
@@ -152,7 +154,8 @@ public class DelugeJsonRpcController : ControllerBase
         ICallerHostResolver callerHostResolver = null,
         ICategoryService categoryService = null,
         ITrackerEntryService trackerService = null,
-        IDiskSpaceService diskSpaceService = null)
+        IDiskSpaceService diskSpaceService = null,
+        IStopPolicy stopPolicy = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -168,6 +171,7 @@ public class DelugeJsonRpcController : ControllerBase
         _categoryService = categoryService;
         _trackerService = trackerService;
         _diskSpaceService = diskSpaceService;
+        _stopPolicy = stopPolicy;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -1812,10 +1816,51 @@ public class DelugeJsonRpcController : ControllerBase
 
         foreach (var t in matchingTorrents)
         {
+            if (ShouldPreserveTorrent(t))
+            {
+                _logger.Info("Preserving active seeding torrent '{0}' ({1}) during Deluge Arr deletion request", t.Name, t.InfoHash);
+                continue;
+            }
+
             _torrentService.Delete(t.Id, removeData);
         }
 
         return DelugeResult(new { result = true, error = (object)null, id });
+    }
+
+    private bool ShouldPreserveTorrent(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return false;
+        }
+
+        var preserveSeeding = _configService == null || _configService.PreserveSeedingOnArrDelete;
+        if (!preserveSeeding)
+        {
+            return false;
+        }
+
+        var isActivelySeeding = torrent.Status == TorrentStatus.Seeding ||
+            (torrent.Progress >= 1.0 && (torrent.Active || (torrent.Status != TorrentStatus.Stopped && torrent.Status != TorrentStatus.Paused && torrent.Status != TorrentStatus.Error && torrent.Status != TorrentStatus.Downloading)));
+
+        if (!isActivelySeeding)
+        {
+            return false;
+        }
+
+        return !IsSeedingGoalSatisfied(torrent);
+    }
+
+    private bool IsSeedingGoalSatisfied(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return true;
+        }
+
+        var stopPolicy = _stopPolicy ?? new StopPolicy(_configService, tagService: _tagService);
+        return stopPolicy.ShouldStop(torrent);
     }
 
     private IActionResult HandleCoreForceRecheck(JsonElement paramsElem, object id)
