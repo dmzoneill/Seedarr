@@ -169,6 +169,26 @@ public class TorrentRepositoryTest
     }
 
     [Test]
+    public void GetByInfoHashes_matches_case_insensitively_and_trimmed()
+    {
+        InsertTorrent("Torrent 1", "Movies", "a1b2c3d4e5f6");
+        InsertTorrent("Torrent 2", "TV", "f6e5d4c3b2a1");
+
+        var results = _subject.GetByInfoHashes(new[] { "  A1B2C3D4E5F6  ", "F6E5D4C3B2A1" });
+
+        Assert.That(results, Has.Count.EqualTo(2));
+        Assert.That(results.Select(r => r.Name), Is.EquivalentTo(new[] { "Torrent 1", "Torrent 2" }));
+    }
+
+    [Test]
+    public void GetByInfoHashes_returns_empty_when_input_is_null_or_empty()
+    {
+        Assert.That(_subject.GetByInfoHashes(null), Is.Empty);
+        Assert.That(_subject.GetByInfoHashes(new List<string>()), Is.Empty);
+        Assert.That(_subject.GetByInfoHashes(new[] { "   ", "" }), Is.Empty);
+    }
+
+    [Test]
     public void Delete_cascades_deletion_to_TorrentMediaMetadata_and_child_tables()
     {
         using (var connection = _database.OpenConnection())
