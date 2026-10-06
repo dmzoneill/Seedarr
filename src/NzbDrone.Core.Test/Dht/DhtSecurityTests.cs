@@ -237,4 +237,28 @@ public class DhtSecurityTests
         // Node with valid ID must be added to routing table
         Assert.That(service.RoutingTable.NodeCount, Is.EqualTo(1));
     }
+
+    [Test]
+    public void ComputeCrc32c_normalizes_ipv4_mapped_ipv6_addresses_to_match_ipv4()
+    {
+        var ipv4 = IPAddress.Parse("124.31.75.21");
+        var mappedIpv6 = ipv4.MapToIPv6();
+
+        var crcV4 = DhtSecurity.ComputeCrc32c(ipv4, 1);
+        var crcMapped = DhtSecurity.ComputeCrc32c(mappedIpv6, 1);
+
+        Assert.That(crcMapped, Is.EqualTo(crcV4));
+    }
+
+    [Test]
+    public void GenerateNodeId_and_IsNodeIdValid_with_ipv4_mapped_ipv6_addresses()
+    {
+        var ipv4 = IPAddress.Parse("65.23.51.170");
+        var mappedIpv6 = ipv4.MapToIPv6();
+
+        var nodeId = DhtSecurity.GenerateNodeId(mappedIpv6, 22);
+
+        Assert.That(DhtSecurity.IsNodeIdValid(nodeId, mappedIpv6), Is.True);
+        Assert.That(DhtSecurity.IsNodeIdValid(nodeId, ipv4), Is.True);
+    }
 }
