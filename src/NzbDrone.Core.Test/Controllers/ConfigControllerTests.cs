@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -517,5 +519,49 @@ public class ConfigControllerTests
             (bool)d["WatchFolderEnabled"] == true &&
             (string)d["WatchFolderPath"] == "/watch" &&
             (int)d["WatchFolderScanIntervalSeconds"] == 15));
+    }
+
+    [Test]
+    public void SaveConfig_when_config_service_throws_returns_problem_and_does_not_save_xml()
+    {
+        _configService.When(x => x.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>()))
+            .Do(_ => throw new InvalidOperationException("DB connection error"));
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result.Result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(500));
+        _configFileProvider.DidNotReceive().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
+    }
+
+    [Test]
+    public void SaveConfig_when_xml_provider_throws_rolls_back_database_and_returns_problem()
+    {
+        _configFileProvider.When(x => x.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>()))
+            .Do(_ => throw new IOException("Disk write error"));
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result.Result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(500));
+        _configService.Received().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>(), false);
     }
 }

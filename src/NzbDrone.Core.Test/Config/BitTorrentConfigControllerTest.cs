@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -152,5 +153,29 @@ public class BitTorrentConfigControllerTest
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void SaveConfig_should_return_problem_when_config_service_throws()
+    {
+        _configService.When(x => x.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>()))
+            .Do(_ => throw new InvalidOperationException("Database locked"));
+
+        var resource = new BitTorrentConfigResource
+        {
+            EnableDht = true,
+            EnablePex = true,
+            EnableLpd = true,
+            EncryptionMode = "enabled",
+            AnnounceIntervalSeconds = 1800,
+            MinAnnounceIntervalSeconds = 300,
+            ScrapeIntervalSeconds = 900,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result.Result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(500));
     }
 }

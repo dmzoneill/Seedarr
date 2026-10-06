@@ -260,4 +260,30 @@ public class SeedingConfigControllerTest
         Assert.That(resource.IgnoreSlowTorrents, Is.False);
         Assert.That(resource.SlowTorrentThresholdKbps, Is.EqualTo(20));
     }
+
+    [Test]
+    public void SaveConfig_should_return_bad_request_when_MaxUploadSpeedKbps_exceeds_upper_bound()
+    {
+        var resource = new SeedingConfigResource
+        {
+            UploadStoppedMinPercentage = 20,
+            UploadStoppedMaxPercentage = 40,
+            DownloadStoppedMinPercentage = 20,
+            DownloadStoppedMaxPercentage = 40,
+            SpeedVariationMin = 0.2,
+            SpeedVariationMax = 0.8,
+            UploadCustomIntervalMinutes = 5,
+            DownloadCustomIntervalMinutes = 5,
+            MaxUploadSpeedKbps = (int.MaxValue / 1024) + 1,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        var errors = (IList<ValidationFailure>)badRequest.Value;
+
+        Assert.That(errors, Has.Some.Matches<ValidationFailure>(e =>
+            e.PropertyName == nameof(SeedingConfigResource.MaxUploadSpeedKbps)));
+    }
 }

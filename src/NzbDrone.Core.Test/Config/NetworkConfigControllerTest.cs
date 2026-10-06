@@ -302,4 +302,80 @@ public class NetworkConfigControllerTest
         Assert.That(actual.RemoteDnsVerified, Is.True);
         Assert.That(actual.Message, Is.EqualTo("Proxy connection verified successfully."));
     }
+
+    [Test]
+    public void SaveConfig_should_allow_zero_proxy_port_when_force_proxy_is_false_and_proxy_type_is_not_set()
+    {
+        var resource = new NetworkConfigResource
+        {
+            ListeningPort = 51413,
+            MaxGlobalConnections = 200,
+            MaxPerTorrentConnections = 50,
+            MaxUploadSlots = 4,
+            MaxConnectionsPerIp = 5,
+            MaximumHalfOpenConnections = 50,
+            PeerDscp = 0,
+            PeerTos = 0,
+            ForceProxy = false,
+            ProxyType = "None",
+            ProxyPort = 0,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+    }
+
+    [Test]
+    public void SaveConfig_should_reject_zero_proxy_port_when_force_proxy_is_true()
+    {
+        var resource = new NetworkConfigResource
+        {
+            ListeningPort = 51413,
+            MaxGlobalConnections = 200,
+            MaxPerTorrentConnections = 50,
+            MaxUploadSlots = 4,
+            MaxConnectionsPerIp = 5,
+            MaximumHalfOpenConnections = 50,
+            PeerDscp = 0,
+            PeerTos = 0,
+            ForceProxy = true,
+            ProxyPort = 0,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        var errors = (IList<ValidationFailure>)badRequest.Value;
+        Assert.That(errors, Has.Some.Matches<ValidationFailure>(e =>
+            e.PropertyName == nameof(NetworkConfigResource.ProxyPort)));
+    }
+
+    [Test]
+    public void SaveConfig_should_reject_zero_proxy_port_when_proxy_type_is_configured()
+    {
+        var resource = new NetworkConfigResource
+        {
+            ListeningPort = 51413,
+            MaxGlobalConnections = 200,
+            MaxPerTorrentConnections = 50,
+            MaxUploadSlots = 4,
+            MaxConnectionsPerIp = 5,
+            MaximumHalfOpenConnections = 50,
+            PeerDscp = 0,
+            PeerTos = 0,
+            ForceProxy = false,
+            ProxyType = "socks5",
+            ProxyPort = 0,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        var errors = (IList<ValidationFailure>)badRequest.Value;
+        Assert.That(errors, Has.Some.Matches<ValidationFailure>(e =>
+            e.PropertyName == nameof(NetworkConfigResource.ProxyPort)));
+    }
 }

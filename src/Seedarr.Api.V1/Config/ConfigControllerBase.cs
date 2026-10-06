@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
@@ -65,7 +66,18 @@ public abstract class ConfigController<TResource> : Controller
             .Where(prop => prop.Name != "Id" && prop.Name != "ResourceName")
             .ToDictionary(prop => prop.Name, prop => prop.GetValue(resource, null));
 
-        _configService.SaveConfigDictionary(dictionary);
+        try
+        {
+            _configService.SaveConfigDictionary(dictionary);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return Problem(detail: ex.Message, title: "Failed to save configuration.", statusCode: 500);
+        }
 
         return Accepted(resource);
     }

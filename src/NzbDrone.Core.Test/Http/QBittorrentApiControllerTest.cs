@@ -626,6 +626,40 @@ public class QBittorrentApiControllerTest
     }
 
     [Test]
+    public void GetTransferInfo_Guards_Integer_Overflow_For_High_Speed_Limits()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(3000000);
+        _configService.MaxUploadSpeedKbps.Returns(3000000);
+        _configService.AlternativeSpeedEnabled.Returns(false);
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var result = _controller.GetTransferInfo();
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var dict = ((OkObjectResult)result.Result).Value as Dictionary<string, object>;
+        Assert.That(dict, Is.Not.Null);
+        Assert.That(dict["dl_rate_limit"], Is.EqualTo(3000000L * 1024L));
+        Assert.That(dict["up_rate_limit"], Is.EqualTo(3000000L * 1024L));
+    }
+
+    [Test]
+    public void GetPreferences_Guards_Integer_Overflow_For_High_Speed_Limits()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(3000000);
+        _configService.MaxUploadSpeedKbps.Returns(3000000);
+        _configService.AltDownloadSpeedKbps.Returns(3000000);
+        _configService.AltUploadSpeedKbps.Returns(3000000);
+
+        var result = _controller.GetPreferences();
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var dict = ((OkObjectResult)result.Result).Value as Dictionary<string, object>;
+        Assert.That(dict, Is.Not.Null);
+        Assert.That(dict["dl_limit"], Is.EqualTo(3000000L * 1024L));
+        Assert.That(dict["up_limit"], Is.EqualTo(3000000L * 1024L));
+        Assert.That(dict["alt_dl_limit"], Is.EqualTo(3000000L * 1024L));
+        Assert.That(dict["alt_up_limit"], Is.EqualTo(3000000L * 1024L));
+    }
+
+    [Test]
     public void GetFiles_Handles_Completed_Vs_Partial_Files()
     {
         var partialTorrent = new Torrent
