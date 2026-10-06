@@ -1,5 +1,10 @@
 {
-  "updatedAt": "2026-10-06T21:35:00Z",
+  "updatedAt": "2026-10-06T21:34:30Z",
+  "monitor": {
+    "cadenceSeconds": 30,
+    "mechanism": "schedule.wake_at",
+    "lastValidatedAt": "2026-10-06T21:34:30Z"
+  },
   "policy": {
     "pushTarget": "origin/main",
     "runTestsLocally": false,
