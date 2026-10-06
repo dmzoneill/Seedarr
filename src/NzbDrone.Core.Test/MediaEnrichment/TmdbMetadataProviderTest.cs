@@ -328,6 +328,42 @@ public class TmdbMetadataProviderTest
         Assert.That(ConfigService.DefaultTmdbApiKey, Is.Not.Null.And.Not.Empty);
     }
 
+    [Test]
+    public async Task SearchMovieAsync_returns_null_when_network_exceptions_persist_across_all_retries()
+    {
+        var attempts = 0;
+        var handler = new FakeHttpMessageHandler(_ =>
+        {
+            attempts++;
+            throw new HttpRequestException("Simulated network failure");
+        });
+
+        using var httpClient = new HttpClient(handler);
+        var provider = new TmdbMetadataProvider(_configService, httpClient)
+        {
+            DelayAsync = (_, _) => Task.CompletedTask
+        };
+
+        var result = await provider.SearchMovieAsync("Inception", 2010);
+
+        Assert.That(result, Is.Null);
+        Assert.That(attempts, Is.EqualTo(4)); // 1 initial attempt + 3 retries
+    }
+
+    [Test]
+    public async Task TokenBucketRateLimiter_WaitForTokenAsync_consumes_tokens_and_refills()
+    {
+        var limiter = new TokenBucketRateLimiter(2, 20);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        // Consume initial burst
+        await limiter.WaitForTokenAsync(cts.Token);
+        await limiter.WaitForTokenAsync(cts.Token);
+
+        // Third call waits for refill and completes without hanging
+        await limiter.WaitForTokenAsync(cts.Token);
+    }
+
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
