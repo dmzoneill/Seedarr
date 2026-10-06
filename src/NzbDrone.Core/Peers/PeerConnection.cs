@@ -73,6 +73,7 @@ public class PeerConnection : IDisposable
     public bool IsLocalPeer => IPAddressExtensions.IsLocalSubnet(RemoteIp) || string.Equals(DiscoverySource, "lpd", StringComparison.OrdinalIgnoreCase);
     public DateTime LastBytesReceived { get; set; } = DateTime.UtcNow;
     public bool IsConnected => !_isDisposed && (_client != null ? _client.Connected : (_activeStream != null));
+    public bool IsDisposed => _isDisposed;
     public bool IsEncrypted { get; private set; }
     public CryptoMethod EncryptionMethod { get; internal set; }
     public bool AmChoking { get; set; } = true;

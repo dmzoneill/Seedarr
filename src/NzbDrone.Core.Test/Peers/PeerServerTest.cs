@@ -4621,4 +4621,39 @@ public class PeerServerTest
         conn.Received().Dispose();
         _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
     }
+
+    [Test]
+    public async Task HandleInboundPeerConnectionAsync_should_dispose_connection_when_handshake_fails()
+    {
+        var conn = CreateTestConnection();
+        var method = typeof(PeerServer).GetMethod("HandleInboundPeerConnectionAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        var task = (Task)method.Invoke(_server, new object[] { conn, CancellationToken.None, null, null })!;
+        await task;
+
+        Assert.That(conn.IsDisposed, Is.True);
+        Assert.That(conn.IsConnected, Is.False);
+    }
+
+    [Test]
+    public async Task HandleInboundPeerConnectionAsync_should_dispose_connection_when_quota_exceeded()
+    {
+        var conn = CreateTestConnection();
+        conn.InfoHash = "0102030405060708091011121314151617181920";
+
+        var torrent = new Torrent { Id = 1, InfoHash = conn.InfoHash };
+        _torrentService.GetByInfoHash(conn.InfoHash).Returns(torrent);
+
+        _connectionManager.TryReserveSlot(conn.InfoHash, true, out _).Returns(false);
+
+        var handshakeField = typeof(PeerConnection).GetField("_receivedHandshake", BindingFlags.NonPublic | BindingFlags.Instance);
+        handshakeField?.SetValue(conn, true);
+
+        var method = typeof(PeerServer).GetMethod("HandleInboundPeerConnectionAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var task = (Task)method.Invoke(_server, new object[] { conn, CancellationToken.None, null, null })!;
+        await task;
+
+        Assert.That(conn.IsDisposed, Is.True);
+        Assert.That(conn.IsConnected, Is.False);
+    }
 }
