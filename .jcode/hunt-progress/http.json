@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T00:55:00Z",
+  "updatedAt": "2026-10-07T00:58:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Authentication",
+  "currentSubfolder": "src/Seedarr.Http/Terminal",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Security",
-    "completedAt": "2026-10-07T00:55:00Z",
-    "issuesFiled": [1244],
+    "subfolder": "src/Seedarr.Http/Authentication",
+    "completedAt": "2026-10-07T00:58:00Z",
+    "issuesFiled": [1249],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 27: Security (7 files: CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). Static review only. GitHub dedupe: overlaps #876 #908 #909 #921 #934 #1200 #1092 #1093 #877 left open; filed #1244 (HostHeaderValidation vs X-Forwarded-Host/TrustedProxies mismatch vs CSRF). No reopen. Next: Authentication. No dotnet build/test."
+    "note": "Pass 28: Authentication (5 files: ApiKeyAuthenticationHandler, BasicAuthenticationHandler, DynamicAuthSchemeManager, ForwardAuthHandler, IDynamicAuthSchemeManager). Static review only. GitHub dedupe: overlaps #877 #895 #893 #906 #922 #1105 #1109 #1116 #1117 #1160 #1161 #1211 #1240 left open; filed #1249 (SmartAuth ForwardAuth before Seedarr_Auth cookie). No reopen. Next: Terminal. No dotnet build/test."
   }
 }
