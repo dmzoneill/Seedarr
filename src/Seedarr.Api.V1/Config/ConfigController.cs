@@ -198,14 +198,58 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             { "AllowedOrigins", resource.AllowedOrigins ?? string.Empty }
         };
 
-        _configFileProvider.SaveConfigDictionary(xmlValues);
-
         var dbDictionary = resource.GetType()
             .GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Where(prop => prop.Name != "Id" && prop.Name != "ResourceName" && !XmlBoundProperties.Contains(prop.Name))
             .ToDictionary(prop => prop.Name, prop => prop.GetValue(resource, null));
 
-        _configService.SaveConfigDictionary(dbDictionary);
+        var existingDbValues = dbDictionary.Keys
+            .ToDictionary(k => k, k => (object)_configService.GetValue(k, string.Empty));
+
+        var existingXmlValues = _configFileProvider != null
+            ? xmlValues.Keys.ToDictionary(k => k, k => typeof(IConfigFileProvider).GetProperty(k)?.GetValue(_configFileProvider, null))
+            : new Dictionary<string, object>();
+
+        try
+        {
+            _configService.SaveConfigDictionary(dbDictionary);
+            if (_configFileProvider != null)
+            {
+                _configFileProvider.SaveConfigDictionary(xmlValues);
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            try
+            {
+                _configService.SaveConfigDictionary(existingDbValues, false);
+                if (_configFileProvider != null)
+                {
+                    _configFileProvider.SaveConfigDictionary(existingXmlValues);
+                }
+            }
+            catch
+            {
+            }
+
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                _configService.SaveConfigDictionary(existingDbValues, false);
+                if (_configFileProvider != null)
+                {
+                    _configFileProvider.SaveConfigDictionary(existingXmlValues);
+                }
+            }
+            catch
+            {
+            }
+
+            return Problem(detail: ex.Message, title: "Failed to save configuration.", statusCode: 500);
+        }
 
         return Accepted(resource);
     }
@@ -256,16 +300,16 @@ public class SeedingConfigController : ConfigController<SeedingConfigResource>
         : base(configService)
     {
         SharedValidator.RuleFor(c => c.MaxUploadSpeedKbps)
-            .GreaterThanOrEqualTo(0);
+            .InclusiveBetween(0, int.MaxValue / 1024);
 
         SharedValidator.RuleFor(c => c.MaxDownloadSpeedKbps)
-            .GreaterThanOrEqualTo(0);
+            .InclusiveBetween(0, int.MaxValue / 1024);
 
         SharedValidator.RuleFor(c => c.AltUploadSpeedKbps)
-            .GreaterThanOrEqualTo(0);
+            .InclusiveBetween(0, int.MaxValue / 1024);
 
         SharedValidator.RuleFor(c => c.AltDownloadSpeedKbps)
-            .GreaterThanOrEqualTo(0);
+            .InclusiveBetween(0, int.MaxValue / 1024);
 
         SharedValidator.RuleFor(c => c.GlobalSeedRatioLimit)
             .GreaterThanOrEqualTo(0);
@@ -401,7 +445,11 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
             .InclusiveBetween(0, 255);
 
         SharedValidator.RuleFor(c => c.ProxyPort)
-            .InclusiveBetween(1, 65535);
+            .InclusiveBetween(0, 65535);
+
+        SharedValidator.RuleFor(c => c.ProxyPort)
+            .InclusiveBetween(1, 65535)
+            .When(c => c.ForceProxy || (!string.IsNullOrWhiteSpace(c.ProxyType) && !c.ProxyType.Equals("None", StringComparison.OrdinalIgnoreCase)));
 
         SharedValidator.RuleFor(c => c.VpnStabilizationDelaySeconds)
             .GreaterThanOrEqualTo(0);

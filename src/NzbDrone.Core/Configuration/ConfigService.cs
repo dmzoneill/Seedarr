@@ -385,11 +385,11 @@ public class ConfigService : IConfigService
         return defaultValue;
     }
 
-    // Speed limits are always finite: a stored value of 0 (legacy "unlimited") resolves to the default.
+    // Speed limits allow 0 for unlimited transfer rates.
     private int GetPositiveSpeedKbps(string key, int defaultValue)
     {
         var value = GetValueInt(key, defaultValue);
-        return value > 0 ? value : defaultValue;
+        return value >= 0 ? value : defaultValue;
     }
 
     // Instance Identity

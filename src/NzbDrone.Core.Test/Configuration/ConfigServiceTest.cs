@@ -881,11 +881,22 @@ namespace NzbDrone.Core.Test.Configuration
         }
 
         [Test]
-        public void MaxUploadSpeedKbps_should_resolve_stored_zero_to_default()
+        public void MaxUploadSpeedKbps_should_allow_stored_zero_for_unlimited()
         {
             _repository.All().Returns(new List<ConfigModel>
             {
                 new ConfigModel { Key = "MaxUploadSpeedKbps", Value = "0" }
+            }.AsQueryable());
+
+            Assert.That(_subject.MaxUploadSpeedKbps, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void MaxUploadSpeedKbps_should_resolve_stored_negative_to_default()
+        {
+            _repository.All().Returns(new List<ConfigModel>
+            {
+                new ConfigModel { Key = "MaxUploadSpeedKbps", Value = "-1" }
             }.AsQueryable());
 
             Assert.That(_subject.MaxUploadSpeedKbps, Is.EqualTo(ConfigService.DefaultMaxUploadSpeedKbps));
