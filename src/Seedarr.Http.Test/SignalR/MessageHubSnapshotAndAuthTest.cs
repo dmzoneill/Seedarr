@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections.Features;
 using Microsoft.AspNetCore.Http.Features;
@@ -11,6 +13,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Torrents;
 using NzbDrone.SignalR;
@@ -281,5 +284,32 @@ public class MessageHubSnapshotAndAuthTest
         _callerContext.DidNotReceive().Abort();
         Assert.That(MessageHub.IsConnected, Is.True);
         Assert.That(_httpContext.User?.Identity?.Name, Is.EqualTo("jwtuser"));
+    }
+
+    [Test]
+    public void MessageHub_has_AuthorizeAttribute_with_Reader_policy()
+    {
+        var type = typeof(MessageHub);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [TestCase(nameof(MessageHub.RequestStateSnapshot))]
+    [TestCase(nameof(MessageHub.SubscribeToTorrent))]
+    [TestCase(nameof(MessageHub.UnsubscribeFromTorrent))]
+    [TestCase(nameof(MessageHub.SubscribeToChannel))]
+    [TestCase(nameof(MessageHub.UnsubscribeFromChannel))]
+    [TestCase(nameof(MessageHub.TrackerUpdated))]
+    [TestCase(nameof(MessageHub.TrackerAnnounced))]
+    public void MessageHub_methods_have_AuthorizeAttribute_with_Reader_policy(string methodName)
+    {
+        var method = typeof(MessageHub).GetMethod(methodName);
+        Assert.That(method, Is.Not.Null);
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
     }
 }
