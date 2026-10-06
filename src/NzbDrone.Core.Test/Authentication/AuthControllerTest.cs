@@ -684,4 +684,35 @@ public class AuthControllerTest
         Assert.That(user.Roles, Does.Not.Contain(Roles.Admin));
         Assert.That(capturedPrincipal.Claims.Any(c => c.Type == ClaimTypes.Role && c.Value == Roles.ReadOnly), Is.True);
     }
+
+    [Test]
+    public void GetClientIpAddress_Ignores_Forwarded_Headers_When_Not_From_Trusted_Proxy()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("198.51.100.5"); // Untrusted external IP
+        httpContext.Request.Headers["X-Forwarded-For"] = "203.0.113.199";
+        httpContext.Request.Headers["X-Real-IP"] = "203.0.113.200";
+
+        _configFileProvider.TrustedProxies.Returns("127.0.0.1, 10.0.0.0/8");
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var ip = _controller.GetClientIpAddress();
+
+        Assert.That(ip, Is.EqualTo("198.51.100.5")); // Direct connection IP used, spoofed headers ignored
+    }
+
+    [Test]
+    public void GetClientIpAddress_Uses_Forwarded_Header_When_From_Trusted_Proxy()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1"); // Trusted proxy
+        httpContext.Request.Headers["X-Forwarded-For"] = "203.0.113.199";
+
+        _configFileProvider.TrustedProxies.Returns("127.0.0.1");
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var ip = _controller.GetClientIpAddress();
+
+        Assert.That(ip, Is.EqualTo("203.0.113.199"));
+    }
 }

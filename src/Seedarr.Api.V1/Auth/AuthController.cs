@@ -16,6 +16,7 @@ using NLog;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http;
+using Seedarr.Http.Security;
 
 namespace Seedarr.Api.V1.Auth;
 
@@ -361,15 +362,44 @@ public class AuthController : ControllerBase
             return "127.0.0.1";
         }
 
-        if (Request?.Headers != null && Request.Headers.TryGetValue("X-Forwarded-For", out var xffValues))
+        var remoteIp = HttpContext.Connection?.RemoteIpAddress;
+        var isTrustedProxy = remoteIp != null && IpSecurityHelper.IsTrustedProxy(remoteIp, _configFileProvider?.TrustedProxies);
+
+        if (isTrustedProxy)
         {
-            var raw = xffValues.ToString();
-            if (!string.IsNullOrWhiteSpace(raw))
+            if (Request?.Headers != null && Request.Headers.TryGetValue("X-Forwarded-For", out var xffValues))
             {
-                var first = raw.Split(',')[0].Trim();
-                if (!string.IsNullOrWhiteSpace(first))
+                var raw = xffValues.ToString();
+                if (!string.IsNullOrWhiteSpace(raw))
                 {
+                    var hops = raw.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    for (var i = hops.Length - 1; i >= 0; i--)
+                    {
+                        var hop = CleanAndValidateIp(hops[i].Trim());
+                        if (!string.IsNullOrWhiteSpace(hop) && IPAddress.TryParse(hop, out var parsedHop))
+                        {
+                            if (!IpSecurityHelper.IsTrustedProxy(parsedHop, _configFileProvider?.TrustedProxies))
+                            {
+                                return hop;
+                            }
+                        }
+                    }
+
+                    var first = hops[0].Trim();
                     var parsed = CleanAndValidateIp(first);
+                    if (!string.IsNullOrWhiteSpace(parsed))
+                    {
+                        return parsed;
+                    }
+                }
+            }
+
+            if (Request?.Headers != null && Request.Headers.TryGetValue("X-Real-IP", out var realIpValues))
+            {
+                var raw = realIpValues.ToString();
+                if (!string.IsNullOrWhiteSpace(raw))
+                {
+                    var parsed = CleanAndValidateIp(raw.Trim());
                     if (!string.IsNullOrWhiteSpace(parsed))
                     {
                         return parsed;
@@ -378,20 +408,6 @@ public class AuthController : ControllerBase
             }
         }
 
-        if (Request?.Headers != null && Request.Headers.TryGetValue("X-Real-IP", out var realIpValues))
-        {
-            var raw = realIpValues.ToString();
-            if (!string.IsNullOrWhiteSpace(raw))
-            {
-                var parsed = CleanAndValidateIp(raw.Trim());
-                if (!string.IsNullOrWhiteSpace(parsed))
-                {
-                    return parsed;
-                }
-            }
-        }
-
-        var remoteIp = HttpContext.Connection?.RemoteIpAddress;
         if (remoteIp != null)
         {
             var effective = remoteIp.IsIPv4MappedToIPv6 ? remoteIp.MapToIPv4() : remoteIp;
