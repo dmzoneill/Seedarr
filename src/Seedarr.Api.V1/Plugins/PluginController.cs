@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Plugins;
 using Seedarr.Http;
 
@@ -10,6 +12,7 @@ namespace Seedarr.Api.V1.Plugins;
 [V1ApiController("plugins")]
 [Route("api/v1/plugins")]
 [Route("api/v1/plugin")]
+[Authorize(Policy = Policies.AdminOnly)]
 public class PluginController : ControllerBase
 {
     private readonly IPluginService _pluginService;

@@ -121,4 +121,43 @@ public class PluginManifestTest
 
         Assert.Throws<SecurityException>(() => manifest.ValidateAndResolveEntrypoint(_tempDir));
     }
+
+    [Test]
+    public void ValidateAndResolveEntrypoint_should_throw_SecurityException_when_symlink_points_outside_plugin_dir()
+    {
+        var outsideFile = Path.Combine(Path.GetTempPath(), "outside_" + Guid.NewGuid().ToString("N") + ".sh");
+        File.WriteAllText(outsideFile, "#!/bin/sh\necho outside");
+        var symlinkPath = Path.Combine(_tempDir, "link_to_outside.sh");
+
+        try
+        {
+            File.CreateSymbolicLink(symlinkPath, outsideFile);
+        }
+        catch
+        {
+            // If environment doesn't allow symlink creation, pass gracefully
+            File.Delete(outsideFile);
+            return;
+        }
+
+        try
+        {
+            var manifest = new PluginManifest
+            {
+                Id = "test-plugin",
+                Name = "Test",
+                Version = "1.0.0",
+                Entrypoint = "link_to_outside.sh"
+            };
+
+            Assert.Throws<SecurityException>(() => manifest.ValidateAndResolveEntrypoint(_tempDir));
+        }
+        finally
+        {
+            if (File.Exists(outsideFile))
+            {
+                File.Delete(outsideFile);
+            }
+        }
+    }
 }
