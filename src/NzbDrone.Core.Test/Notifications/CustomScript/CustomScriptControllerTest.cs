@@ -1,7 +1,10 @@
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Notifications;
 using Seedarr.Api.V1.CustomScript;
 
@@ -83,5 +86,35 @@ public class CustomScriptControllerTest
         Assert.That(testResult.ExitCode, Is.EqualTo(0));
         Assert.That(testResult.Stdout, Is.EqualTo("Script executed successfully"));
         Assert.That(testResult.ExecutionTimeMs, Is.EqualTo(45));
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_AdminOnly_attribute()
+    {
+        var type = typeof(CustomScriptController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
+    }
+
+    [Test]
+    public async Task TestScript_with_unauthorized_directory_should_reject()
+    {
+        var request = new CustomScriptTestRequest
+        {
+            ScriptPath = "/tmp/evil.sh",
+            Arguments = "-c whoami",
+        };
+
+        var actionResult = await _controller.TestScript(request);
+        var okResult = actionResult.Result as OkObjectResult;
+
+        Assert.That(okResult, Is.Not.Null);
+        var testResult = okResult.Value as CustomScriptTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Stderr, Does.Contain("not permitted"));
+        _customScriptService.DidNotReceive().TestScriptAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
     }
 }
