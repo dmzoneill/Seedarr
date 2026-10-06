@@ -210,6 +210,31 @@ public class TrafficPatternSimulatorTest
         Assert.That(result, Is.EqualTo(0.5).Within(0.01));
     }
 
+    [Test]
+    public void GetSpeedMultiplier_should_handle_nan_behavior_variation_and_return_finite_multiplier()
+    {
+        _configService.RealisticVariations.Returns(true);
+        _configService.BehaviorVariation.Returns(double.NaN);
+
+        var result = _simulator.GetSpeedMultiplier(SeedingProfile.Balanced);
+
+        Assert.That(double.IsFinite(result), Is.True);
+        Assert.That(result, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void GetSpeedMultiplier_should_handle_infinity_behavior_variation_and_return_finite_multiplier()
+    {
+        _configService.RealisticVariations.Returns(true);
+        _configService.BehaviorVariation.Returns(double.PositiveInfinity);
+
+        var result = _simulator.GetSpeedMultiplier(SeedingProfile.Balanced);
+
+        Assert.That(double.IsFinite(result), Is.True);
+        Assert.That(result, Is.GreaterThanOrEqualTo(0.05));
+        Assert.That(result, Is.LessThanOrEqualTo(5.0));
+    }
+
     // --- State machine and burst/idle path tests ---
 
     /// <summary>

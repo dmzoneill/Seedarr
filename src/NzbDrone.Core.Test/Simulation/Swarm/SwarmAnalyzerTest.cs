@@ -318,4 +318,48 @@ public class SwarmAnalyzerTest
         Assert.That(result.Confidence, Is.EqualTo(1.0));
         Assert.That(result.Reason, Is.EqualTo("No active leeches requesting data; pausing upload allocation"));
     }
+
+    [Test]
+    public void ComputeMetrics_should_handle_nan_availability()
+    {
+        var snapshot = new SwarmSnapshot { SeedCount = 10, LeechCount = 5, PieceAvailability = double.NaN };
+        var metrics = _analyzer.ComputeMetrics(snapshot);
+
+        Assert.That(double.IsFinite(metrics.PieceAvailabilityScore), Is.True);
+        Assert.That(metrics.PieceAvailabilityScore, Is.EqualTo(0));
+        Assert.That(double.IsFinite(metrics.SwarmSaturationScore), Is.True);
+        Assert.That(metrics.SwarmSaturationScore, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ComputeMetrics_should_handle_infinity_availability()
+    {
+        var snapshot = new SwarmSnapshot { SeedCount = 10, LeechCount = 5, PieceAvailability = double.PositiveInfinity };
+        var metrics = _analyzer.ComputeMetrics(snapshot);
+
+        Assert.That(double.IsFinite(metrics.PieceAvailabilityScore), Is.True);
+        Assert.That(double.IsFinite(metrics.SwarmSaturationScore), Is.True);
+    }
+
+    [Test]
+    public void Analyze_should_handle_nan_availability_without_nan_confidence()
+    {
+        var snapshot = new SwarmSnapshot { SeedCount = 2, LeechCount = 5, PieceAvailability = double.NaN };
+        var result = _analyzer.Analyze(snapshot);
+
+        Assert.That(double.IsFinite(result.Confidence), Is.True);
+        Assert.That(result.Confidence, Is.GreaterThanOrEqualTo(0));
+    }
+
+    [Test]
+    public void Analyze_should_handle_nan_adaptation_rate()
+    {
+        _configService.SwarmAdaptationRate.Returns(double.NaN);
+
+        var snapshot = new SwarmSnapshot { SeedCount = 10, LeechCount = 10, PieceAvailability = 4.0 };
+        var result = _analyzer.Analyze(snapshot);
+
+        Assert.That(double.IsFinite(result.Confidence), Is.True);
+        Assert.That(result.Confidence, Is.EqualTo(0));
+    }
 }
