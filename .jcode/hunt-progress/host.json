@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:26:00Z",
+  "updatedAt": "2026-10-06T22:30:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Host/AppLifetime.cs",
+  "currentSubfolder": "src/NzbDrone.Common/Disk",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Host/Bootstrap.cs",
-    "completedAt": "2026-10-06T22:26:00Z",
-    "issuesFiled": [1061],
+    "subfolder": "src/NzbDrone.Host/AppLifetime.cs",
+    "completedAt": "2026-10-06T22:30:00Z",
+    "issuesFiled": [1065, 1066],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #901 #932 #933 #1056 #883; filed empty urls override skips config listeners and binds ASP.NET defaults (#1061)"
+    "note": "Deduped #944 #953 #955 #910; filed duplicate stall/speed automation with SeedingEngine (#1065) and inactive torrent speed totals (#1066)"
   }
 }
