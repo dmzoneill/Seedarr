@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Exceptions;
@@ -141,19 +143,38 @@ public class DiskAllocationService : IDiskAllocationService
         stream.Flush();
     }
 
-    private static string ResolveFilePath(string baseDirectory, string filePath)
+    internal static string ResolveFilePath(string baseDirectory, string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
         {
             return null;
         }
 
-        if (Path.IsPathRooted(filePath))
+        if (Path.IsPathRooted(filePath) || PathSanitizer.ContainsPathTraversal(filePath))
         {
-            return filePath;
+            throw new SecurityException($"Path traversal attempt detected in torrent file path: {filePath}");
         }
 
-        var normalizedRelative = filePath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
-        return string.IsNullOrWhiteSpace(baseDirectory) ? normalizedRelative : Path.Combine(baseDirectory, normalizedRelative);
+        var canonicalBase = !string.IsNullOrWhiteSpace(baseDirectory)
+            ? Path.GetFullPath(baseDirectory)
+            : Directory.GetCurrentDirectory();
+
+        if (!canonicalBase.EndsWith(Path.DirectorySeparatorChar))
+        {
+            canonicalBase += Path.DirectorySeparatorChar;
+        }
+
+        var normalizedRelative = filePath.Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar)
+            .TrimStart(Path.DirectorySeparatorChar);
+
+        var fullTarget = Path.GetFullPath(Path.Combine(canonicalBase, normalizedRelative));
+
+        if (!fullTarget.StartsWith(canonicalBase, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new SecurityException($"Path traversal attempt detected in torrent file path: {filePath}");
+        }
+
+        return fullTarget;
     }
 }

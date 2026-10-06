@@ -232,4 +232,27 @@ public class DiskAllocationServiceTest
         Assert.That(File.Exists(file), Is.True);
         Assert.That(new FileInfo(file).Length, Is.EqualTo(5000));
     }
+
+    [Test]
+    public void ResolveFilePath_should_throw_SecurityException_on_path_traversal()
+    {
+        Assert.Throws<System.Security.SecurityException>(() =>
+            DiskAllocationService.ResolveFilePath(_tempDir, "../../etc/passwd"));
+    }
+
+    [Test]
+    public void ResolveFilePath_should_throw_SecurityException_on_rooted_path()
+    {
+        var rooted = OperatingSystem.IsWindows() ? "C:\\Windows\\win.ini" : "/etc/shadow";
+        Assert.Throws<System.Security.SecurityException>(() =>
+            DiskAllocationService.ResolveFilePath(_tempDir, rooted));
+    }
+
+    [Test]
+    public void ResolveFilePath_should_resolve_safe_subpath()
+    {
+        var resolved = DiskAllocationService.ResolveFilePath(_tempDir, "sub/dir/safe.dat");
+        var expected = Path.GetFullPath(Path.Combine(_tempDir, "sub", "dir", "safe.dat"));
+        Assert.That(resolved, Is.EqualTo(expected));
+    }
 }

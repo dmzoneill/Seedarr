@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security;
 using Microsoft.Win32.SafeHandles;
+using NzbDrone.Common.Disk;
 
 namespace NzbDrone.Core.Torrents;
 
@@ -704,13 +706,32 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
             return null;
         }
 
-        if (Path.IsPathRooted(filePath))
+        if (Path.IsPathRooted(filePath) || PathSanitizer.ContainsPathTraversal(filePath))
         {
-            return filePath;
+            throw new SecurityException($"Path traversal attempt detected in torrent file path: {filePath}");
         }
 
-        var normalizedPath = filePath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-        return string.IsNullOrEmpty(baseDirectory) ? normalizedPath : Path.Combine(baseDirectory, normalizedPath);
+        var canonicalBase = !string.IsNullOrWhiteSpace(baseDirectory)
+            ? Path.GetFullPath(baseDirectory)
+            : Directory.GetCurrentDirectory();
+
+        if (!canonicalBase.EndsWith(Path.DirectorySeparatorChar))
+        {
+            canonicalBase += Path.DirectorySeparatorChar;
+        }
+
+        var normalizedRelative = filePath.Replace('\\', Path.DirectorySeparatorChar)
+            .Replace('/', Path.DirectorySeparatorChar)
+            .TrimStart(Path.DirectorySeparatorChar);
+
+        var fullTarget = Path.GetFullPath(Path.Combine(canonicalBase, normalizedRelative));
+
+        if (!fullTarget.StartsWith(canonicalBase, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new SecurityException($"Path traversal attempt detected in torrent file path: {filePath}");
+        }
+
+        return fullTarget;
     }
 
     public static string ResolveFilePath(string baseDirectory, Torrent torrent, string filePath)
@@ -720,16 +741,10 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
             return null;
         }
 
-        if (Path.IsPathRooted(filePath))
-        {
-            return filePath;
-        }
-
         var basePath = !string.IsNullOrWhiteSpace(baseDirectory)
             ? baseDirectory
             : (!string.IsNullOrWhiteSpace(torrent?.SavePath) ? torrent.SavePath : string.Empty);
 
-        var normalizedPath = filePath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
-        return string.IsNullOrEmpty(basePath) ? normalizedPath : Path.Combine(basePath, normalizedPath);
+        return ResolveFilePath(basePath, filePath);
     }
 }
