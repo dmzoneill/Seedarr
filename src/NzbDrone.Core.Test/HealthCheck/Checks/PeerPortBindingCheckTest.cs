@@ -69,4 +69,21 @@ public class PeerPortBindingCheckTest
         Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Error));
         Assert.That(result.Message, Does.Contain("Peer server is not initialized or unavailable"));
     }
+
+    [Test]
+    public void Check_should_return_error_when_listening_port_mismatches_configured_port()
+    {
+        var configService = Substitute.For<NzbDrone.Core.Configuration.IConfigService>();
+        configService.ListeningPort.Returns(6882);
+
+        _peerServer.IsListening.Returns(true);
+        _peerServer.BindFailed.Returns(false);
+        _peerServer.ListeningPort.Returns(6881);
+
+        var subject = new PeerPortBindingCheck(_peerServer, configService);
+        var result = subject.Check();
+
+        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Error));
+        Assert.That(result.Message, Does.Contain("Port 6881 failed to bind or is already in use by another application"));
+    }
 }

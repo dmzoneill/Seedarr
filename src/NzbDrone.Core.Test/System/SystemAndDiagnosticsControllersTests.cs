@@ -349,7 +349,7 @@ public class SystemAndDiagnosticsControllersTests
         {
             new HealthCheckResult(typeof(DiskSpaceCheck), HealthCheckResultType.Ok, "Sufficient disk space"),
             new HealthCheckResult(typeof(IndexerHealthCheck), HealthCheckResultType.Warning, "Indexer response latency high"),
-            new HealthCheckResult(typeof(PeerListeningPortHealthCheck), HealthCheckResultType.Error, "Listening port is unreachable")
+            new HealthCheckResult(typeof(PeerPortBindingCheck), HealthCheckResultType.Error, "Listening port is unreachable")
         };
 
         _healthCheckService.PerformChecksAsync(Arg.Any<CancellationToken>())
