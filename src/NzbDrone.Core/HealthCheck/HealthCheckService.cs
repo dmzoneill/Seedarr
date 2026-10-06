@@ -28,6 +28,7 @@ public class HealthCheckService : IHealthCheckService
     private readonly ConcurrentDictionary<string, HealthCheckResultType> _previousResults = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly object _cacheLock = new();
+    private readonly SemaphoreSlim _executionLock = new(1, 1);
     private List<HealthCheckResult> _cachedResults;
     private DateTime _lastRunTimeUtc = DateTime.MinValue;
     private TimeSpan _cacheDuration = TimeSpan.FromSeconds(15);
@@ -77,46 +78,101 @@ public class HealthCheckService : IHealthCheckService
         return PerformChecksAsync(CancellationToken.None).GetAwaiter().GetResult();
     }
 
-    public Task<List<HealthCheckResult>> PerformChecksAsync(CancellationToken cancellationToken = default)
+    public async Task<List<HealthCheckResult>> PerformChecksAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         lock (_cacheLock)
         {
             if (_cachedResults != null && DateTime.UtcNow - _lastRunTimeUtc < _cacheDuration)
             {
-                return Task.FromResult(_cachedResults.ToList());
+                return _cachedResults.ToList();
+            }
+        }
+
+        await _executionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            lock (_cacheLock)
+            {
+                if (_cachedResults != null && DateTime.UtcNow - _lastRunTimeUtc < _cacheDuration)
+                {
+                    return _cachedResults.ToList();
+                }
             }
 
             var results = new List<HealthCheckResult>();
-            foreach (var check in _healthChecks)
+            if (_healthChecks != null)
             {
-                var checkName = check.GetType().Name;
-                try
+                foreach (var check in _healthChecks)
                 {
-                    var task = Task.Run(() => check.Check());
-                    if (task.Wait(_checkTimeout, cancellationToken))
+                    if (check == null)
                     {
-                        results.Add(task.Result);
+                        continue;
                     }
-                    else
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var checkName = check.GetType().Name;
+                    try
                     {
-                        results.Add(HealthCheckResult.Error(checkName, "Health check timed out"));
+                        var task = Task.Run(() => check.Check());
+                        task.ContinueWith(
+                            t => _logger.Debug(t.Exception, "Health check {0} faulted in background", checkName),
+                            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+
+                        var delayTask = Task.Delay(_checkTimeout, cancellationToken);
+                        var completedTask = await Task.WhenAny(task, delayTask).ConfigureAwait(false);
+
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+
+                        if (completedTask == task)
+                        {
+                            var checkResult = await task.ConfigureAwait(false);
+                            if (checkResult != null)
+                            {
+                                results.Add(checkResult);
+                            }
+                            else
+                            {
+                                _logger.Warn("Health check {0} returned a null result", checkName);
+                                results.Add(HealthCheckResult.Error(checkName, "Health check returned null result"));
+                            }
+                        }
+                        else
+                        {
+                            results.Add(HealthCheckResult.Error(checkName, "Health check timed out"));
+                        }
                     }
-                }
-                catch (AggregateException aex)
-                {
-                    var inner = aex.InnerExceptions.Count == 1 ? aex.InnerExceptions[0] : aex;
-                    _logger.Debug(inner, "Health check {0} threw an exception", checkName);
-                    results.Add(HealthCheckResult.Error(checkName, $"Health check failed with exception: {inner.Message}"));
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex, "Health check {0} threw an unhandled exception", checkName);
-                    results.Add(HealthCheckResult.Error(checkName, $"Health check failed with exception: {ex.Message}"));
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        _logger.Debug("Health checks canceled");
+                        throw;
+                    }
+                    catch (AggregateException aex)
+                    {
+                        var inner = aex.InnerExceptions.Count == 1 ? aex.InnerExceptions[0] : aex;
+                        _logger.Debug(inner, "Health check {0} threw an exception", checkName);
+                        results.Add(HealthCheckResult.Error(checkName, $"Health check failed with exception: {inner.Message}"));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "Health check {0} threw an unhandled exception", checkName);
+                        results.Add(HealthCheckResult.Error(checkName, $"Health check failed with exception: {ex.Message}"));
+                    }
                 }
             }
 
             foreach (var result in results)
             {
+                if (result == null)
+                {
+                    continue;
+                }
+
                 var source = result.Source ?? string.Empty;
                 var isDegraded = IsDegraded(result.Type);
 
@@ -151,8 +207,11 @@ public class HealthCheckService : IHealthCheckService
                 _previousResults[source] = result.Type;
             }
 
-            _cachedResults = results.ToList();
-            _lastRunTimeUtc = DateTime.UtcNow;
+            lock (_cacheLock)
+            {
+                _cachedResults = results.ToList();
+                _lastRunTimeUtc = DateTime.UtcNow;
+            }
 
             _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
             {
@@ -161,7 +220,11 @@ public class HealthCheckService : IHealthCheckService
                 Body = _cachedResults
             });
 
-            return Task.FromResult(results);
+            return results;
+        }
+        finally
+        {
+            _executionLock.Release();
         }
     }
 

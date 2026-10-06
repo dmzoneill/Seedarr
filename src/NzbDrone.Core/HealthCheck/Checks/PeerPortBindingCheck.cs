@@ -13,7 +13,15 @@ public class PeerPortBindingCheck : IProvideHealthCheck
 
     public HealthCheckResult Check()
     {
-        if (_peerServer != null && (_peerServer.BindFailed || !_peerServer.IsListening))
+        if (_peerServer == null)
+        {
+            return new HealthCheckResult(
+                GetType(),
+                HealthCheckResultType.Error,
+                "Peer server is not initialized or unavailable.");
+        }
+
+        if (_peerServer.BindFailed || !_peerServer.IsListening)
         {
             var port = _peerServer.ListeningPort;
             var portStr = port > 0 ? $"Port {port}" : "Peer listening port";

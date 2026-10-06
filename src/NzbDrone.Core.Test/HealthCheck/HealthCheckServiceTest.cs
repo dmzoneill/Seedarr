@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NLog.Config;
 using NSubstitute;
@@ -373,5 +374,88 @@ public class HealthCheckServiceTest
 
         broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Name == "HealthCheckCompleted"));
+    }
+
+    [Test]
+    public void PerformChecks_should_handle_null_result_from_health_check()
+    {
+        var nullCheck = Substitute.For<IHealthCheck>();
+        nullCheck.Check().Returns((HealthCheckResult)null);
+
+        _subject = new HealthCheckService(new List<IHealthCheck> { nullCheck });
+
+        var results = _subject.PerformChecks();
+
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results.First().Type, Is.EqualTo(HealthCheckResultType.Error));
+        Assert.That(results.First().Message, Does.Contain("null"));
+    }
+
+    [Test]
+    public void PerformChecksAsync_should_throw_OperationCanceledException_when_cancellationToken_is_cancelled()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var check = Substitute.For<IHealthCheck>();
+        check.Check().Returns(HealthCheckResult.Ok("OkCheck"));
+
+        _subject = new HealthCheckService(new List<IHealthCheck> { check });
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await _subject.PerformChecksAsync(cts.Token);
+        });
+
+        check.DidNotReceive().Check();
+    }
+
+    [Test]
+    public void PerformChecksAsync_should_abort_remaining_checks_when_cancellationToken_is_cancelled()
+    {
+        using var cts = new CancellationTokenSource();
+
+        var check1 = Substitute.For<IHealthCheck>();
+        check1.Check().Returns(_ =>
+        {
+            cts.Cancel();
+            return HealthCheckResult.Ok("Check1");
+        });
+
+        var check2 = Substitute.For<IHealthCheck>();
+        check2.Check().Returns(HealthCheckResult.Ok("Check2"));
+
+        _subject = new HealthCheckService(new List<IHealthCheck> { check1, check2 });
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await _subject.PerformChecksAsync(cts.Token);
+        });
+
+        check2.DidNotReceive().Check();
+    }
+
+    [Test]
+    public void PerformChecks_should_observe_exceptions_from_timed_out_tasks()
+    {
+        var faultedSlowCheck = Substitute.For<IHealthCheck>();
+        faultedSlowCheck.Check().Returns(_ =>
+        {
+            Thread.Sleep(80);
+            throw new InvalidOperationException("Late background failure");
+        });
+
+        _subject = new HealthCheckService(new List<IHealthCheck> { faultedSlowCheck })
+        {
+            CheckTimeout = TimeSpan.FromMilliseconds(20)
+        };
+
+        var results = _subject.PerformChecks();
+
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results.First().Type, Is.EqualTo(HealthCheckResultType.Error));
+        Assert.That(results.First().Message, Does.Contain("timed out"));
+
+        Thread.Sleep(100);
     }
 }

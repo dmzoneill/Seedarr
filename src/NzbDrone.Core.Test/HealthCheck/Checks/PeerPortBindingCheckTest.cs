@@ -61,11 +61,12 @@ public class PeerPortBindingCheckTest
     }
 
     [Test]
-    public void Check_should_return_ok_when_peer_server_is_null()
+    public void Check_should_return_error_when_peer_server_is_null()
     {
         var subject = new PeerPortBindingCheck(null);
         var result = subject.Check();
 
-        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
+        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Error));
+        Assert.That(result.Message, Does.Contain("Peer server is not initialized or unavailable"));
     }
 }
