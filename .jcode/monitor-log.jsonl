@@ -112,3 +112,4 @@
 {"at": "2026-10-06T22:36:05Z", "kind": "bug-hunt-monitor", "scheduleId": "sched_874e6af9", "openIssues": 246, "restarts": 0, "workers": ["spider", "t-rex", "squid", "swan", "snake"], "note": "all slots healthy; nudged t-rex+snake"}
 {"ts": "2026-10-06T22:37:12Z", "mode": "bug-hunt", "openIssues": 246, "restarts": ["core:spider->walrus", "http:squid->yak"], "workers": ["walrus", "t-rex", "yak", "swan", "snake"], "scheduleId": "sched_800b6075", "note": "idle>90s core+http replaced"}
 {"ts":"2026-10-06T22:38:18Z","mode":"bug-hunt","openIssues":30,"restarts":0,"workers":["tiger","t-rex","turkey","swan","snake"],"note":"all healthy; core tiger(walrus) http turkey(yak); latest #1116-#1120"}
+{"ts":"2026-10-06T22:39:20Z","mode":"bug-hunt","openIssues":30,"restarts":0,"workers":["tiger","t-rex","turkey","swan","snake"],"note":"0 restarts; turkey running Terminal"}
