@@ -105,4 +105,30 @@ public class McpControllerTest
         Assert.That(output, Does.Contain("event: endpoint"));
         Assert.That(output, Does.Contain("/api/v1/mcp/message?sessionId="));
     }
+
+    [Test]
+    public async Task GetSse_should_include_PathBase_in_endpoint_event_when_present()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.PathBase = "/seedarr";
+        var stream = new MemoryStream();
+        context.Response.Body = stream;
+        _controller.ControllerContext = new ControllerContext { HttpContext = context };
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+        try
+        {
+            await _controller.GetSse(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        stream.Position = 0;
+        using var reader = new StreamReader(stream);
+        var output = await reader.ReadToEndAsync();
+
+        Assert.That(output, Does.Contain("event: endpoint"));
+        Assert.That(output, Does.Contain("data: /seedarr/api/v1/mcp/message?sessionId="));
+    }
 }
