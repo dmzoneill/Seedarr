@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T23:58:00Z",
+  "updatedAt": "2026-10-07T00:15:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Config",
+  "currentSubfolder": "src/Seedarr.Api.V1/System",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Automation",
-    "completedAt": "2026-10-06T23:58:00Z",
-    "issuesFiled": [1154, 1155, 1156],
+    "subfolder": "src/Seedarr.Api.V1/Config",
+    "completedAt": "2026-10-07T00:15:00Z",
+    "issuesFiled": [1168, 1169, 1170, 1171],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed AutomationController, AutomationScriptResource. GitHub dedupe: skipped open #1014/#1015/#930/#1025 (truncated log PUT, DELETE 200, missing script 200, missing torrentId). Filed #1154 (run/execute ignores IsEnabled), #1155 (SignalR AutomationExecuted duplicates full OutputLog), #1156 (marketplace install 400 for unknown template). No dotnet build/test."
+    "notes": "Reviewed Config controllers/resources (General/Network/Seeding/BitTorrent/PeerProtocol/Protocols/Simulation/Tracker/Scheduler/Advanced, IdentityProvider, AiConfig stub). GitHub dedupe: skipped open #1033/#1035/#1042/#1034/#1041/#1140 and related auth issues. Filed #1168 (IdentityProvider DELETE deletes DB before scheme removal), #1169 (Config GET by id ignores route id), #1170 (GeneralConfig PUT wipes TmdbApiKey when omitted), #1171 (WatchFolderScanInterval GET 0 vs PUT validator >=1). No dotnet build/test."
   }
 }
