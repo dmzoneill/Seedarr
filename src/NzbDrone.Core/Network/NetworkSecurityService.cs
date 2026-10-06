@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.NetworkInformation;
 using NLog;
 using NzbDrone.Core.Configuration;
@@ -32,7 +33,7 @@ public class NetworkSecurityService : INetworkSecurityService
         try
         {
             return NetworkInterface.GetAllNetworkInterfaces()
-                .Where(nic => nic.OperationalStatus == OperationalStatus.Up &&
+                .Where(nic => IsInterfaceOperational(nic) &&
                     nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                 .Select(nic => nic.Name)
                 .Distinct()
@@ -61,11 +62,18 @@ public class NetworkSecurityService : INetworkSecurityService
 
         try
         {
+            if (IPAddress.TryParse(interfaceName, out var targetIp))
+            {
+                return NetworkInterface.GetAllNetworkInterfaces().Any(nic =>
+                    IsInterfaceOperational(nic) &&
+                    nic.GetIPProperties()?.UnicastAddresses.Any(a => a.Address.Equals(targetIp)) == true);
+            }
+
             var nic = NetworkInterface.GetAllNetworkInterfaces()
                 .FirstOrDefault(n => string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
 
-            return nic != null && nic.OperationalStatus == OperationalStatus.Up;
+            return nic != null && IsInterfaceOperational(nic);
         }
         catch
         {
@@ -81,5 +89,41 @@ public class NetworkSecurityService : INetworkSecurityService
         }
 
         return false;
+    }
+
+    private static bool IsInterfaceOperational(NetworkInterface nic)
+    {
+        if (nic == null)
+        {
+            return false;
+        }
+
+        if (nic.OperationalStatus == OperationalStatus.Up)
+        {
+            return true;
+        }
+
+        if (nic.OperationalStatus == OperationalStatus.Unknown &&
+            nic.NetworkInterfaceType == NetworkInterfaceType.Tunnel &&
+            HasValidUnicastAddresses(nic))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasValidUnicastAddresses(NetworkInterface nic)
+    {
+        var unicast = nic.GetIPProperties()?.UnicastAddresses;
+        return unicast != null && unicast.Any(a =>
+            !IPAddress.IsLoopback(a.Address) &&
+            !a.Address.Equals(IPAddress.Any) &&
+            !a.Address.Equals(IPAddress.None) &&
+            !a.Address.Equals(IPAddress.IPv6Any) &&
+            !a.Address.Equals(IPAddress.IPv6None) &&
+            !a.Address.IsIPv6LinkLocal &&
+            !a.Address.IsIPv6SiteLocal &&
+            !a.Address.IsIPv6Multicast);
     }
 }

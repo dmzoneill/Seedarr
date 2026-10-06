@@ -432,6 +432,19 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             _logger.Error(ex, "Error disconnecting peers after VPN kill switch triggered");
         }
 
+        try
+        {
+            _utpManager?.TeardownActiveConnections();
+            if (HasDedicatedBindInterface())
+            {
+                _utpManager?.StopListener();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Error tearing down uTP connections after VPN kill switch triggered");
+        }
+
         if (HasDedicatedBindInterface())
         {
             StopListener();
@@ -1305,7 +1318,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
 
-            if (nic == null || nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+            var isNicOperational = nic != null && (nic.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up ||
+                (nic.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Unknown &&
+                 nic.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Tunnel));
+
+            if (!isNicOperational)
             {
                 return null;
             }
