@@ -94,3 +94,4 @@
 {"ts":"2026-10-06T22:20:30Z","mode":"bug-hunt","openIssues":30,"restarts":[],"scheduleId":"sched_c906836f","hunters":["crab","goat","duck","deer","frog"],"note":"bear api.json expected; all active"}
 {"at":"2026-10-06T22:21:28Z","event":"bug-hunt-monitor","openIssues":30,"restarts":["crab->horse","duck->lion","frog->wolf"],"hunters":["horse","goat","lion","deer","wolf"],"note":"#1031-#1035 latest; 3 slot restarts"}
 {"ts":"2026-10-06T22:21:57Z","mode":"bug-hunt","openIssues":30,"hunters":["horse","goat","lion","deer","wolf"],"restarts":0,"note":"healthy; frog/duck/crab hunt-progress writes expected"}
+{"ts":"2026-10-06T22:23:00Z","mode":"bug-hunt","openIssues":30,"restarts":1,"restartsDetail":["api:goat->koala"],"workers":["horse","koala","lion","deer","wolf"],"scheduleId":"sched_401469ef","note":"goat completed Config pass #1041/#1042"}
