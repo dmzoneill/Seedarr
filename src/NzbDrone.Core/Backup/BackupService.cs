@@ -31,6 +31,7 @@ public class BackupService : IBackupService
     private const string DbFileName = "seedarr.db";
     private const string ConfigFileName = "config.xml";
     private static readonly byte[] SqliteMagicHeader = { 0x53, 0x51, 0x4C, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6F, 0x72, 0x6D, 0x61, 0x74, 0x20, 0x33, 0x00 };
+    private static readonly object BackupLock = new object();
 
     private static readonly RetryPolicy DefaultVacuumRetryPolicy = Policy
         .Handle<SqliteException>(ex => ex.SqliteErrorCode is 5 or 6)
@@ -94,76 +95,69 @@ public class BackupService : IBackupService
 
     public BackupInfo CreateBackup(BackupType type = BackupType.Manual)
     {
-        try
+        lock (BackupLock)
         {
-            var backupFolder = GetBackupFolder();
-            Directory.CreateDirectory(backupFolder);
-
-            var version = BuildInfo.Version.ToString();
-            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd_HH-mm-ss-fff");
-            var backupFileName = $"seedarr_backup_{version}_{timestamp}.zip";
-            var backupPath = Path.Combine(backupFolder, backupFileName);
-            var configPath = Path.Combine(_appFolderInfo.AppDataFolder, ConfigFileName);
-
-            if (_connectionStringFactory.DatabaseType == DatabaseType.SQLite)
+            try
             {
-                var dbPath = Path.Combine(_appFolderInfo.AppDataFolder, DbFileName);
+                var backupFolder = GetBackupFolder();
+                Directory.CreateDirectory(backupFolder);
 
-                if (!File.Exists(dbPath))
+                var version = BuildInfo.Version.ToString();
+                var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd_HH-mm-ss-fff");
+                var backupFileName = $"seedarr_backup_{version}_{timestamp}.zip";
+                var backupPath = Path.Combine(backupFolder, backupFileName);
+                var configPath = Path.Combine(_appFolderInfo.AppDataFolder, ConfigFileName);
+
+                if (_connectionStringFactory.DatabaseType == DatabaseType.SQLite)
                 {
-                    var msg = $"Database file not found at {dbPath}, skipping backup";
-                    _logger.Warn(msg);
-                    _eventAggregator?.PublishEvent(new BackupFailedEvent(type, msg, new FileNotFoundException(msg, dbPath)));
-                    return null;
-                }
+                    var dbPath = Path.Combine(_appFolderInfo.AppDataFolder, DbFileName);
 
-                var dbFileInfo = new FileInfo(dbPath);
-                var requiredSpace = (dbFileInfo.Length * 3) + (100 * 1024 * 1024);
-
-                try
-                {
-                    var root = Path.GetPathRoot(Path.GetFullPath(_appFolderInfo.AppDataFolder)) ?? "/";
-                    var drive = new DriveInfo(root);
-                    if (drive.IsReady && drive.AvailableFreeSpace < requiredSpace)
+                    if (!File.Exists(dbPath))
                     {
-                        var msg = $"Insufficient disk space to create backup. Required: {requiredSpace / (1024 * 1024)} MB, Available: {drive.AvailableFreeSpace / (1024 * 1024)} MB.";
+                        var msg = $"Database file not found at {dbPath}, skipping backup";
                         _logger.Warn(msg);
-                        var failureEx = new InvalidOperationException(msg);
-                        _eventAggregator?.PublishEvent(new BackupFailedEvent(type, msg, failureEx));
-                        throw failureEx;
-                    }
-                }
-                catch (Exception ex) when (ex is not InvalidOperationException)
-                {
-                    _logger.Warn(ex, "Unable to determine free disk space for backup pre-flight check");
-                }
-
-                var dbStagingPath = dbPath + ".backup-staging";
-
-                try
-                {
-                    if (File.Exists(dbStagingPath))
-                    {
-                        File.Delete(dbStagingPath);
+                        _eventAggregator?.PublishEvent(new BackupFailedEvent(type, msg, new FileNotFoundException(msg, dbPath)));
+                        return null;
                     }
 
-                    var connStr = DbFactory.CleanSqliteConnectionString(_connectionStringFactory.MainDbConnectionString);
-                    using var conn = new SqliteConnection(connStr);
-                    conn.DefaultTimeout = 30;
-                    conn.Open();
+                    var dbFileInfo = new FileInfo(dbPath);
+                    var requiredSpace = (dbFileInfo.Length * 3) + (100 * 1024 * 1024);
 
-                    using (var pragmaCmd = conn.CreateCommand())
+                    try
                     {
-                        pragmaCmd.CommandText = "PRAGMA busy_timeout = 30000; PRAGMA wal_checkpoint(PASSIVE);";
-                        pragmaCmd.ExecuteNonQuery();
-                        OnSqliteConnectionConfigured?.Invoke(conn, pragmaCmd.CommandText);
-                    }
-
-                    (VacuumRetryPolicy ?? DefaultVacuumRetryPolicy).Execute(() =>
-                    {
-                        if (conn.State != ConnectionState.Open)
+                        var root = Path.GetPathRoot(Path.GetFullPath(_appFolderInfo.AppDataFolder)) ?? "/";
+                        var drive = new DriveInfo(root);
+                        if (drive.IsReady && drive.AvailableFreeSpace < requiredSpace)
                         {
-                            conn.Open();
+                            var msg = $"Insufficient disk space to create backup. Required: {requiredSpace / (1024 * 1024)} MB, Available: {drive.AvailableFreeSpace / (1024 * 1024)} MB.";
+                            _logger.Warn(msg);
+                            var failureEx = new InvalidOperationException(msg);
+                            _eventAggregator?.PublishEvent(new BackupFailedEvent(type, msg, failureEx));
+                            throw failureEx;
+                        }
+                    }
+                    catch (Exception ex) when (ex is not InvalidOperationException)
+                    {
+                        _logger.Warn(ex, "Unable to determine free disk space for backup pre-flight check");
+                    }
+
+                    var dbStagingPath = dbPath + $".backup-staging-{Guid.NewGuid():N}";
+
+                    try
+                    {
+                        if (Directory.Exists(_appFolderInfo.AppDataFolder))
+                        {
+                            foreach (var staleFile in Directory.GetFiles(_appFolderInfo.AppDataFolder, $"{DbFileName}.backup-staging*"))
+                            {
+                                try
+                                {
+                                    File.Delete(staleFile);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.Debug(ex, "Failed to clean up stale staging file {0}", staleFile);
+                                }
+                            }
                         }
 
                         if (File.Exists(dbStagingPath))
@@ -171,74 +165,99 @@ public class BackupService : IBackupService
                             File.Delete(dbStagingPath);
                         }
 
-                        using var cmd = conn.CreateCommand();
+                        var connStr = DbFactory.CleanSqliteConnectionString(_connectionStringFactory.MainDbConnectionString);
+                        using var conn = new SqliteConnection(connStr);
+                        conn.DefaultTimeout = 30;
+                        conn.Open();
+
+                        using (var pragmaCmd = conn.CreateCommand())
+                        {
+                            pragmaCmd.CommandText = "PRAGMA busy_timeout = 30000; PRAGMA wal_checkpoint(PASSIVE);";
+                            pragmaCmd.ExecuteNonQuery();
+                            OnSqliteConnectionConfigured?.Invoke(conn, pragmaCmd.CommandText);
+                        }
+
+                        (VacuumRetryPolicy ?? DefaultVacuumRetryPolicy).Execute(() =>
+                        {
+                            if (conn.State != ConnectionState.Open)
+                            {
+                                conn.Open();
+                            }
+
+                            if (File.Exists(dbStagingPath))
+                            {
+                                File.Delete(dbStagingPath);
+                            }
+
+                            using var cmd = conn.CreateCommand();
 #pragma warning disable CA2100 // Internal staging snapshot path
-                        cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
+                            cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
 #pragma warning restore CA2100
-                        (ExecuteVacuumCommand ?? (c => c.ExecuteNonQuery()))(cmd);
-                    });
+                            (ExecuteVacuumCommand ?? (c => c.ExecuteNonQuery()))(cmd);
+                        });
+
+                        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+                        {
+                            zip.CreateEntryFromFile(dbStagingPath, DbFileName);
+
+                            if (File.Exists(configPath))
+                            {
+                                zip.CreateEntryFromFile(configPath, ConfigFileName);
+                            }
+
+                            CreateManifestEntry(zip, version, "SQLite", false, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (File.Exists(dbStagingPath))
+                        {
+                            File.Delete(dbStagingPath);
+                        }
+                    }
+                }
+                else
+                {
+                    var warning = "PostgreSQL backup contains configuration only. External database tools (pg_dump / pg_restore) are required for database backup and restoration.";
+                    _logger.Warn("Creating PostgreSQL backup: configuration only (IsConfigOnly = true). External database tools (pg_dump / pg_restore) are required for database restoration.");
 
                     using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
                     {
-                        zip.CreateEntryFromFile(dbStagingPath, DbFileName);
-
                         if (File.Exists(configPath))
                         {
                             zip.CreateEntryFromFile(configPath, ConfigFileName);
                         }
 
-                        CreateManifestEntry(zip, version, "SQLite", false, null);
+                        CreateManifestEntry(zip, version, _connectionStringFactory.DatabaseType.ToString(), true, warning);
                     }
                 }
-                finally
+
+                _logger.Info("Backup created: {0}", backupPath);
+
+                var fileInfo = new FileInfo(backupPath);
+                var isPostgres = _connectionStringFactory.DatabaseType == DatabaseType.PostgreSQL;
+
+                var backupInfo = new BackupInfo
                 {
-                    if (File.Exists(dbStagingPath))
-                    {
-                        File.Delete(dbStagingPath);
-                    }
-                }
+                    Name = fileInfo.Name,
+                    Path = fileInfo.FullName,
+                    Size = fileInfo.Length,
+                    Time = fileInfo.CreationTimeUtc,
+                    IsConfigOnly = isPostgres
+                };
+
+                PruneBackups();
+
+                _eventAggregator?.PublishEvent(new BackupCreatedEvent(backupInfo.Path, backupInfo.Name, type, backupInfo.Size));
+
+                return backupInfo;
             }
-            else
+            catch (Exception ex) when (ex is not InvalidOperationException)
             {
-                var warning = "PostgreSQL backup contains configuration only. External database tools (pg_dump / pg_restore) are required for database backup and restoration.";
-                _logger.Warn("Creating PostgreSQL backup: configuration only (IsConfigOnly = true). External database tools (pg_dump / pg_restore) are required for database restoration.");
-
-                using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
-                {
-                    if (File.Exists(configPath))
-                    {
-                        zip.CreateEntryFromFile(configPath, ConfigFileName);
-                    }
-
-                    CreateManifestEntry(zip, version, _connectionStringFactory.DatabaseType.ToString(), true, warning);
-                }
+                _logger.Error(ex, "Failed to create backup");
+                _eventAggregator?.PublishEvent(new BackupFailedEvent(type, ex.Message, ex));
+                throw;
             }
-
-            _logger.Info("Backup created: {0}", backupPath);
-
-            var fileInfo = new FileInfo(backupPath);
-            var isPostgres = _connectionStringFactory.DatabaseType == DatabaseType.PostgreSQL;
-
-            var backupInfo = new BackupInfo
-            {
-                Name = fileInfo.Name,
-                Path = fileInfo.FullName,
-                Size = fileInfo.Length,
-                Time = fileInfo.CreationTimeUtc,
-                IsConfigOnly = isPostgres
-            };
-
-            PruneBackups();
-
-            _eventAggregator?.PublishEvent(new BackupCreatedEvent(backupInfo.Path, backupInfo.Name, type, backupInfo.Size));
-
-            return backupInfo;
-        }
-        catch (Exception ex) when (ex is not InvalidOperationException)
-        {
-            _logger.Error(ex, "Failed to create backup");
-            _eventAggregator?.PublishEvent(new BackupFailedEvent(type, ex.Message, ex));
-            throw;
         }
     }
 

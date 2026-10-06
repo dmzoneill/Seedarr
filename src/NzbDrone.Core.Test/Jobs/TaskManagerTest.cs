@@ -603,4 +603,84 @@ public class TaskManagerTest
         Assert.That(result, Is.Not.Null);
         Assert.That(result.TypeName, Is.EqualTo("EnabledLater"));
     }
+
+    [Test]
+    public void IsRunning_should_match_when_started_with_full_name_and_queried_with_short_name()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "NzbDrone.Core.Backup.BackupJob",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        _subject.RecordTaskStarted("NzbDrone.Core.Backup.BackupJob");
+
+        Assert.That(_subject.IsRunning("BackupJob"), Is.True);
+        Assert.That(_subject.IsRunning("NzbDrone.Core.Backup.BackupJob"), Is.True);
+    }
+
+    [Test]
+    public void IsRunning_should_match_when_started_with_short_name_and_queried_with_full_name()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "NzbDrone.Core.Backup.BackupJob",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        _subject.RecordTaskStarted("BackupJob");
+
+        Assert.That(_subject.IsRunning("BackupJob"), Is.True);
+        Assert.That(_subject.IsRunning("NzbDrone.Core.Backup.BackupJob"), Is.True);
+    }
+
+    [Test]
+    public void UpdateLastExecution_should_match_by_short_name()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "NzbDrone.Core.Backup.BackupJob",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        _subject.UpdateLastExecution("BackupJob");
+
+        _repository.Received(1).Update(Arg.Is<ScheduledTask>(t =>
+            t.TypeName == "NzbDrone.Core.Backup.BackupJob" && t.LastExecution > DateTime.UtcNow.AddMinutes(-1)));
+    }
+
+    [Test]
+    public void RecordTaskFinished_should_match_active_task_when_called_with_short_name()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "NzbDrone.Core.Backup.BackupJob",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var startTime = DateTime.UtcNow;
+        _subject.RecordTaskStarted("NzbDrone.Core.Backup.BackupJob");
+        Assert.That(_subject.IsRunning("BackupJob"), Is.True);
+
+        _subject.RecordTaskFinished("BackupJob", startTime);
+
+        Assert.That(_subject.IsRunning("BackupJob"), Is.False);
+        Assert.That(_subject.IsRunning("NzbDrone.Core.Backup.BackupJob"), Is.False);
+    }
 }
