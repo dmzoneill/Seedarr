@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,31 +11,59 @@ using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.SignalR;
 
-public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
+public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
 {
     public static readonly TimeSpan DefaultDeduplicationWindow = TimeSpan.FromMilliseconds(1000);
+    public static readonly TimeSpan DefaultPruneInterval = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan StaleThreshold = TimeSpan.FromMinutes(2);
+    public const int MaxCacheSize = 1000;
 
     private readonly IHubContext<MessageHub> _hubContext;
     private readonly Logger _logger;
     private readonly TimeSpan _deduplicationWindow;
     private readonly ConcurrentDictionary<string, (string PayloadFingerprint, DateTime Timestamp)> _recentPayloads = new();
+    private readonly Timer _pruneTimer;
+    private bool _disposed;
 
     public SignalRMessageBroadcaster(IHubContext<MessageHub> hubContext)
-        : this(hubContext, DefaultDeduplicationWindow)
+        : this(hubContext, DefaultDeduplicationWindow, DefaultPruneInterval)
     {
     }
 
     public SignalRMessageBroadcaster(IHubContext<MessageHub> hubContext, TimeSpan deduplicationWindow)
+        : this(hubContext, deduplicationWindow, DefaultPruneInterval)
+    {
+    }
+
+    public SignalRMessageBroadcaster(IHubContext<MessageHub> hubContext, TimeSpan deduplicationWindow, TimeSpan pruneInterval)
     {
         _hubContext = hubContext;
         _logger = LogManager.GetCurrentClassLogger();
         _deduplicationWindow = deduplicationWindow;
+        if (pruneInterval > TimeSpan.Zero)
+        {
+            _pruneTimer = new Timer(_ => PruneStalePayloads(), null, pruneInterval, pruneInterval);
+        }
     }
 
     public bool IsConnected => MessageHub.IsConnected;
 
+    public int RecentPayloadCount => _recentPayloads.Count;
+
     public void ResetDeduplicationCache()
     {
+        _recentPayloads.Clear();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _pruneTimer?.Dispose();
         _recentPayloads.Clear();
     }
 
@@ -283,7 +312,15 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
             }
         }
 
-        PruneStalePayloads(now);
+        if (_recentPayloads.Count >= MaxCacheSize && !_recentPayloads.ContainsKey(key))
+        {
+            PruneStalePayloads(now);
+            if (_recentPayloads.Count >= MaxCacheSize)
+            {
+                EvictOldestEntries(MaxCacheSize - 1);
+            }
+        }
+
         _recentPayloads[key] = (fingerprint, now);
         return false;
     }
@@ -337,11 +374,18 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
         }
     }
 
-    private void PruneStalePayloads(DateTime now)
+    public void PruneStalePayloads(DateTime? now = null)
     {
-        if (_recentPayloads.Count > 500)
+        if (_disposed || _recentPayloads.IsEmpty)
         {
-            var staleThreshold = now - TimeSpan.FromMinutes(2);
+            return;
+        }
+
+        try
+        {
+            var current = now ?? DateTime.UtcNow;
+            var staleThreshold = current - StaleThreshold;
+
             foreach (var kvp in _recentPayloads)
             {
                 if (kvp.Value.Timestamp < staleThreshold)
@@ -349,6 +393,34 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
                     _recentPayloads.TryRemove(kvp.Key, out _);
                 }
             }
+
+            if (_recentPayloads.Count > MaxCacheSize)
+            {
+                EvictOldestEntries(MaxCacheSize);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Trace(ex, "Failed to prune stale SignalR payload cache");
+        }
+    }
+
+    private void EvictOldestEntries(int targetCount)
+    {
+        var excess = _recentPayloads.Count - targetCount;
+        if (excess <= 0)
+        {
+            return;
+        }
+
+        var oldestEntries = _recentPayloads
+            .OrderBy(kvp => kvp.Value.Timestamp)
+            .Take(excess)
+            .ToList();
+
+        foreach (var entry in oldestEntries)
+        {
+            _recentPayloads.TryRemove(entry.Key, out _);
         }
     }
 }

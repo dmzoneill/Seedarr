@@ -109,4 +109,40 @@ public class PieceStorageTest
             m.PieceIndexes.Count == 3 &&
             m.BytesDownloaded == 6000));
     }
+
+    [Test]
+    public void Flush_prunes_empty_pending_batches()
+    {
+        const string hash = "prune-test-hash";
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.FromMilliseconds(500));
+
+        storage.MarkPieceVerified(hash, 1, 1000);
+        storage.MarkPieceVerified(hash, 2, 2000);
+
+        Assert.That(storage.PendingBatchCount, Is.EqualTo(1));
+
+        storage.Flush();
+
+        Assert.That(storage.PendingBatchCount, Is.EqualTo(0));
+
+        // Verify that queuing new pieces after flush recreates batch and can be flushed again
+        storage.MarkPieceVerified(hash, 3, 3000);
+        Assert.That(storage.PendingBatchCount, Is.EqualTo(1));
+
+        storage.Flush();
+        Assert.That(storage.PendingBatchCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void CloseHandles_prunes_pending_batches()
+    {
+        const string hash = "close-handles-test-hash";
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.FromMilliseconds(500));
+
+        storage.MarkPieceVerified(hash, 1, 1000);
+        Assert.That(storage.PendingBatchCount, Is.EqualTo(1));
+
+        storage.CloseHandles(hash);
+        Assert.That(storage.PendingBatchCount, Is.EqualTo(0));
+    }
 }
