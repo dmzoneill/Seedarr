@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T23:05:00Z",
+  "updatedAt": "2026-10-06T23:30:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/ArrIntegration",
+  "currentSubfolder": "src/Seedarr.Api.V1/Indexers",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Notifications",
-    "completedAt": "2026-10-06T23:05:00Z",
-    "issuesFiled": [1070, 1073, 1075, 1076],
+    "subfolder": "src/Seedarr.Api.V1/ArrIntegration",
+    "completedAt": "2026-10-06T23:30:00Z",
+    "issuesFiled": [1082, 1083, 1084],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed NotificationController and NotificationResource (CRUD, schema, test/test-direct, masking/RestoreSecrets, CustomScript allowlist). Searched GitHub issues+comments. Deduped open #888 (NotificationController RBAC), closed #715/#716/#790 (partial overlap on TestDirect masking/SSRF). Filed #1070 PUT partial JSON resets trigger toggles to NotificationResource defaults; #1073 FallbackNotificationId not mapped in API; #1075 CustomScript save and POST {id}/test skip authorized-directory enforcement vs TestDirect; #1076 POST create persists masked secrets when cloning GET payloads. No dotnet build/test."
+    "notes": "Reviewed ArrConnectionController (CRUD, test/test-direct, sync, image-proxy), ArrSyncController, WebhookReceiverController (arr webhook auth). Searched GitHub issues+comments. Deduped closed #185/#721/#567 (webhook auth aliases, webhook unregister, cover proxy feature). Filed #1082 PUT partial JSON resets enable/webhook/sync flags and clears tags/category/savePath; #1083 POST create persists masked ApiKey (PUT restores); #1084 image-proxy allows arbitrary Arr paths with stored API key (not MediaCover-only). No dotnet build/test."
   }
 }
