@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
   "updatedAt": "2026-10-06T23:35:00Z",
-  "area": "src/NzbDrone.Core/Jobs",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+  "area": "src/NzbDrone.SignalR",
+  "currentSubfolder": "src/NzbDrone.Core/Jobs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Jobs",
+    "subfolder": "src/NzbDrone.SignalR",
     "completedAt": "2026-10-06T23:35:00Z",
-    "issuesFiled": [],
+    "issuesFiled": [1094, 1095],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "NzbDrone.Core/Jobs pass: reviewed Scheduler and ScheduledTaskCommandExecutor SignalR lifecycle (TaskStarted/TaskCompleted/TaskFailed), TaskManager state/history, TrackerScrapeJob and other IScheduledTask shells. Deduped open #903, #911, #952, #971, #985, #1026. Comment on #985 confirming command-queue failure/cancel emits TaskCompleted without TaskFailed (executor finally vs Scheduler gating). No new issues filed. No dotnet build/test."
+    "note": "SignalR partition pass: reviewed MessageHub (OnConnectedAsync auth paths, subscriptions, RequestStateSnapshot, TrackerSignalREventHandler), SignalRMessageBroadcaster (dedupe/named events/group routing), PieceStorage coalesce/broadcast, piece message DTOs, StateSnapshotResource. Traced tests in Seedarr.Http.Test/SignalR. Deduped open #878, #887, #919, #936, #940, #954, #961, #1016, #1019, #1060 and related. Filed #1094 MarkPiecesVerified bypasses PieceStorage coalesce window; #1095 access_token JWT handshake leaves synthetic Authorization header on HttpContext. No code fixes; no dotnet build/test."
   }
 }
