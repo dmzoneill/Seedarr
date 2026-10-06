@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-07T00:22:00Z",
+  "updatedAt": "2026-10-07T00:30:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Host/Bootstrap.cs",
+  "currentSubfolder": "src/NzbDrone.Host/AppLifetime.cs",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Host/Startup.cs",
-    "completedAt": "2026-10-07T00:22:00Z",
-    "issuesFiled": [1196],
+    "subfolder": "src/NzbDrone.Host/Bootstrap.cs",
+    "completedAt": "2026-10-07T00:30:00Z",
+    "issuesFiled": [1208],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Pass #10 Startup.cs: reviewed pipeline order, SmartAuth, static/swagger/terminal/SignalR wiring; deduped open #883 #894 #920 #1030 #1031 #1040 #1105 #1109 #1141 #1190; filed #1196 FallbackPolicy blocks anonymous SPA deep links (/login refresh) via MapFallbackToFile"
+    "note": "Pass #11 Bootstrap.cs: reviewed CreateApplication ordering (Configure vs RegisterTables/IMainDatabase/logging), Kestrel Listen/SSL cert selector, urls override, port-collision + misleading listen logs; deduped open #883 #901 #932 #933 #1056 #1061 #1150 #1004 #1005; filed #1208 urls override skips ICertificateManager HTTPS wiring for https:// endpoints"
   }
 }
