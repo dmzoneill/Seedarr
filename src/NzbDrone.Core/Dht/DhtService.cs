@@ -783,15 +783,18 @@ public class DhtService : BackgroundService, IDhtService,
             return;
         }
 
-        if (args.ContainsKey("id") && args["id"] is BString queryIdStr && queryIdStr.Value.Length == 20)
+        if (!args.ContainsKey("id") || args["id"] is not BString queryIdStr || queryIdStr.Value.Length != 20)
         {
-            var queryingNodeId = queryIdStr.Value.ToArray();
-            if (!IsNodeIdValidForEndpoint(queryingNodeId, sender))
-            {
-                _logger.Debug("DHT query from {0} rejected: invalid BEP 42 node ID", sender);
-                SendErrorResponse(sender, transactionId, 203, "Invalid Node ID");
-                return;
-            }
+            SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+            return;
+        }
+
+        var queryingNodeId = queryIdStr.Value.ToArray();
+        if (!IsNodeIdValidForEndpoint(queryingNodeId, sender))
+        {
+            _logger.Debug("DHT query from {0} rejected: invalid BEP 42 node ID", sender);
+            SendErrorResponse(sender, transactionId, 203, "Invalid Node ID");
+            return;
         }
 
         var queryType = qStr.ToString();
@@ -876,11 +879,14 @@ public class DhtService : BackgroundService, IDhtService,
             }
         }
 
-        var response = (BDictionary)message["r"];
-
-        if (response.ContainsKey("id"))
+        if (!message.ContainsKey("r") || message["r"] is not BDictionary response)
         {
-            var nodeId = ((BString)response["id"]).Value.ToArray();
+            return;
+        }
+
+        if (response.TryGetValue("id", out var idObj) && idObj is BString idStr && idStr.Value.Length == 20)
+        {
+            var nodeId = idStr.Value.ToArray();
             if (IsNodeIdValidForEndpoint(nodeId, sender))
             {
                 _routingTable.AddNode(new DhtNode
@@ -893,13 +899,13 @@ public class DhtService : BackgroundService, IDhtService,
         }
 
         // Parse compact node info from find_node / get_peers responses
-        if (response.ContainsKey("nodes") && response["nodes"] is BString nodesBStr)
+        if (response.TryGetValue("nodes", out var nodesObj) && nodesObj is BString nodesBStr)
         {
             var nodesData = nodesBStr.Value;
             ParseCompactNodes(nodesData.Span);
         }
 
-        if (response.ContainsKey("nodes6") && response["nodes6"] is BString nodes6BStr)
+        if (response.TryGetValue("nodes6", out var nodes6Obj) && nodes6Obj is BString nodes6BStr)
         {
             var nodes6Data = nodes6BStr.Value;
             ParseCompactNodes6(nodes6Data.Span);
@@ -913,34 +919,38 @@ public class DhtService : BackgroundService, IDhtService,
 
         // Parse peer values from get_peers responses
         var discoveredPeers = new List<TrackerPeer>();
-        if (response.ContainsKey("values"))
+        if (response.TryGetValue("values", out var valuesObj) && valuesObj is BList values)
         {
-            var values = (BList)response["values"];
             foreach (var value in values)
             {
-                var peerData = ((BString)value).Value;
-                if (peerData.Length == 6)
+                if (value is BString bValue)
                 {
-                    var ip = new IPAddress(peerData.Slice(0, 4).Span);
-                    var port = (peerData.Span[4] << 8) | peerData.Span[5];
-                    discoveredPeers.Add(new TrackerPeer { Ip = ip.ToString(), Port = port });
-                    _logger.Debug("DHT get_peers response: peer {0}:{1}", ip, port);
+                    var peerData = bValue.Value;
+                    if (peerData.Length == 6)
+                    {
+                        var ip = new IPAddress(peerData.Slice(0, 4).Span);
+                        var port = (peerData.Span[4] << 8) | peerData.Span[5];
+                        discoveredPeers.Add(new TrackerPeer { Ip = ip.ToString(), Port = port });
+                        _logger.Debug("DHT get_peers response: peer {0}:{1}", ip, port);
+                    }
                 }
             }
         }
 
-        if (response.ContainsKey("values6"))
+        if (response.TryGetValue("values6", out var values6Obj) && values6Obj is BList values6)
         {
-            var values6 = (BList)response["values6"];
             foreach (var value in values6)
             {
-                var peerData = ((BString)value).Value;
-                if (peerData.Length == 18)
+                if (value is BString bValue)
                 {
-                    var ip = new IPAddress(peerData.Slice(0, 16).Span);
-                    var port = (peerData.Span[16] << 8) | peerData.Span[17];
-                    discoveredPeers.Add(new TrackerPeer { Ip = ip.ToString(), Port = port });
-                    _logger.Debug("DHT get_peers response (IPv6): peer {0}:{1}", ip, port);
+                    var peerData = bValue.Value;
+                    if (peerData.Length == 18)
+                    {
+                        var ip = new IPAddress(peerData.Slice(0, 16).Span);
+                        var port = (peerData.Span[16] << 8) | peerData.Span[17];
+                        discoveredPeers.Add(new TrackerPeer { Ip = ip.ToString(), Port = port });
+                        _logger.Debug("DHT get_peers response (IPv6): peer {0}:{1}", ip, port);
+                    }
                 }
             }
         }
@@ -957,9 +967,9 @@ public class DhtService : BackgroundService, IDhtService,
         }
 
         // If this was an announce query and we received a token, send announce_peer
-        if (pending.IsAnnounce && response.ContainsKey("token") && pending.InfoHash != null)
+        if (pending.IsAnnounce && response.TryGetValue("token", out var tokenObj) && tokenObj is BString tokenBStr && pending.InfoHash != null)
         {
-            var token = ((BString)response["token"]).Value.ToArray();
+            var token = tokenBStr.Value.ToArray();
             var announcePort = pending.Port > 0 ? pending.Port : (_configService.ListeningPort > 0 ? _configService.ListeningPort : 6881);
             _ = Task.Run(async () =>
             {
@@ -1105,6 +1115,11 @@ public class DhtService : BackgroundService, IDhtService,
 
                     port = (int)portNumber.Value;
                 }
+                else
+                {
+                    SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+                    return;
+                }
             }
         }
         else if (args.ContainsKey("port"))
@@ -1116,6 +1131,11 @@ public class DhtService : BackgroundService, IDhtService,
             }
 
             port = (int)portNumber.Value;
+        }
+        else
+        {
+            SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+            return;
         }
 
         if (port < 1 || port > 65535)
@@ -1414,9 +1434,13 @@ public class DhtService : BackgroundService, IDhtService,
 
     private void HandleFindNodeQuery(BDictionary args, IPEndPoint sender, BString transactionId)
     {
-        var targetId = args.ContainsKey("target") && args["target"] is BString targetStr && targetStr.Value.Length == 20
-            ? targetStr.Value.ToArray()
-            : _nodeId;
+        if (!args.ContainsKey("target") || args["target"] is not BString targetStr || targetStr.Value.Length != 20)
+        {
+            SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+            return;
+        }
+
+        var targetId = targetStr.Value.ToArray();
 
         var r = new BDictionary
         {
@@ -1789,7 +1813,7 @@ public class DhtService : BackgroundService, IDhtService,
 
     private async Task SendGetPeersInternal(IPEndPoint target, byte[] infoHash, bool isAnnounce, int port, CancellationToken ct = default)
     {
-        if (_udpClient == null || infoHash == null)
+        if (_udpClient == null || target == null || infoHash == null)
         {
             return;
         }
@@ -1875,7 +1899,7 @@ public class DhtService : BackgroundService, IDhtService,
 
     public async Task SendAnnouncePeer(IPEndPoint target, byte[] infoHash, int port, byte[] token, bool impliedPort = false, CancellationToken ct = default)
     {
-        if (_udpClient == null || infoHash == null || token == null)
+        if (_udpClient == null || target == null || infoHash == null || token == null)
         {
             return;
         }
