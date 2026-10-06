@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T23:33:16Z",
+  "updatedAt": "2026-10-06T23:40:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/Seedarr.Http/Ping",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Terminal",
-    "completedAt": "2026-10-06T23:33:16Z",
-    "issuesFiled": [1223],
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-06T23:40:00Z",
+    "issuesFiled": [1230],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 24: Terminal (10 files: FallbackProcessSession, IPtyTerminalService, ITerminalSession, LinuxPtySession, NativePty, PtyProcessSession, PtyTerminalService, TerminalEnvironmentSanitizer, TerminalHub, TerminalWebSocketHandler). Static review only. GitHub dedupe: commented #892 (TerminalHub/WebSocket Admin RBAC + Context.User); overlaps #902 #967 #1027 #1132 #1173 #1174 #956 #965 #966 left open, no reopen. Filed #1223: WebSocket/SignalR PTY cols/rows missing upper-bound clamp vs PtyTerminalService. Next: REST. No dotnet build/test."
+    "note": "Pass 25: REST (5 files: RestController, RestControllerWithSignalR, RestResource, ResourceValidator, Attributes/RestPutByIdAttribute). Static review only. GitHub dedupe: overlaps #1047 #1002 #1003 #1060 #1140 #1049 #1214 #1215 #1187 left open; no reopen. Filed #1230: coalesce window expiry drops newer _pendingUpdates in favor of stale incoming ModelEvent. Next: Ping. No dotnet build/test."
   }
 }
