@@ -1,21 +1,22 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T00:05:00Z",
+  "updatedAt": "2026-10-06T22:29:27Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Datastore",
+  "currentSubfolder": "src/NzbDrone.Core/Jobs",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
     "src/NzbDrone.Core/Torrents",
     "src/NzbDrone.Core/Authentication",
-    "src/NzbDrone.Core/Datastore"
+    "src/NzbDrone.Core/Datastore",
+    "src/NzbDrone.Core/Jobs"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Authentication",
-    "completedAt": "2026-10-07T00:05:00Z",
-    "issuesFiled": [1062, 1064],
+    "subfolder": "src/NzbDrone.Core/Datastore",
+    "completedAt": "2026-10-06T22:29:27Z",
+    "issuesFiled": [1077, 1078, 1079, 1080],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Authentication pass: filed #1062 (revocation retention vs sliding cookies), #1064 (EncryptClientSecret fail-open). Deduped open #917, #976, #978, #979, #986, #987 (not re-filed). Static review only; no dotnet build/test."
+    "note": "Datastore pass: filed #1077 (TimeOnlyTypeHandler parse throws), #1078 (SqliteDoubleTypeHandler NULL), #1079 (RevokedSession COLLATE NOCASE breaks PostgreSQL), #1080 (RevokedSessions missing RevokedAtUtc index). Deduped open #882, #915, #997, #998, #999, #1000, #986 (not re-filed). Static review only; no dotnet build/test."
   }
 }
