@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:40:30Z",
+  "updatedAt": "2026-10-06T22:43:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Common/Composition",
+  "currentSubfolder": "src/NzbDrone.Host/Startup.cs",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Common/Instrumentation",
-    "completedAt": "2026-10-06T22:40:30Z",
-    "issuesFiled": [1128],
+    "subfolder": "src/NzbDrone.Common/Composition",
+    "completedAt": "2026-10-06T22:43:00Z",
+    "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Pass #2 per orchestrator; deduped #992 #993 #994 #996 #1055 #1099 #1120; filed ring buffer Trace rule vs FileLogLevel (#1128)"
+    "note": "Pass #3 Composition (6 files): AssemblyLoader/AutoAddServices/KnownTypes/lifecycle attributes reviewed; deduped open #1004 #1005 #1006 #1017 #1018 #1020; no new root causes"
   }
 }
