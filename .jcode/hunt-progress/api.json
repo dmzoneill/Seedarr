@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:20:00Z",
+  "updatedAt": "2026-10-06T22:25:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Automation",
+  "currentSubfolder": "src/Seedarr.Api.V1/Config",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Backup",
-    "completedAt": "2026-10-06T22:20:00Z",
-    "issuesFiled": [1001],
+    "subfolder": "src/Seedarr.Api.V1/Automation",
+    "completedAt": "2026-10-06T22:25:00Z",
+    "issuesFiled": [1014, 1015],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed BackupController and BackupResource against BackupService and BackupControllerTest. Deduped open issues #926 (CreateBackup hardcodes Id=1), #928 (unstable list-index ids). Filed #1001: POST /backup/restore accepts any Backups/*.zip while GET lists only seedarr_backup_*.zip and DELETE fileName requires list membership, leaving orphan zips restorable but not deletable via API. RBAC (Reader list vs Admin mutate/download), path traversal checks, and restore exception mapping align with tests. No dotnet build/test."
+    "notes": "Reviewed AutomationController, AutomationScriptResource, AutomationService, AutomationControllerTest (Api.V1 + Core RBAC). Searched GitHub issues+comments. Deduped open #930 (run/execute 200 when script id missing). Filed #1014: PUT round-trip from GET list persists 500-char LastExecutionLog preview and corrupts full log. Filed #1015: DELETE returns 200 when script id missing (same pattern as #927 indexers). RBAC: class Reader; Create/Delete/Run/Test/marketplace install AdminOnly. No dotnet build/test."
   }
 }
