@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T00:55:00Z",
-  "area": "src/NzbDrone.Core/Jobs",
-  "currentSubfolder": "src/NzbDrone.Core/Jobs",
+  "updatedAt": "2026-10-07T00:21:35Z",
+  "area": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-07T00:55:00Z",
-    "issuesFiled": [1194, 1195],
+    "subfolder": "src/NzbDrone.Core/Jobs",
+    "completedAt": "2026-10-07T00:21:35Z",
+    "issuesFiled": [1202, 1203],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Hub pass: reviewed MessageHub (OnConnectedAsync auth handshake, SubscribeToTorrent/Channel, RequestStateSnapshot), SignalRMessageBroadcaster (dedup/GetNamedEvents/group routing), TrackerSignalREventHandler, piece message DTOs, StateSnapshotResource; cross-checked Seedarr.Http.Test SignalR coverage. GitHub dedupe: open issues already cover Clients.All vs groups (#878), trackerAnnounced on status (#919), redundant tracker named events (#961), auth header leak on JWT handshake (#1095), duplicate snapshot RPC+push (#940), dedup before SendAsync (#1016), piece circular JSON (#1019), TaskFailed frontend guard (#903). Filed #1194 RequestStateSnapshot unhandled GetAll exceptions; #1195 BroadcastToChannel missing Trim vs hub subscribe. No issues reopened. Next: src/NzbDrone.Core/Jobs. No code fixes; no dotnet build/test."
+    "note": "Jobs pass: reviewed Scheduler (SignalR TaskStarted/Completed/Failed, 10m timeout, jitter), TaskManager (normalize keys, history, cancel), ScheduledTaskCommandExecutor (manual queue lifecycle), TrackerScrapeJob, DatabaseVacuumTask, ScheduledTaskHistoryRepository, models/commands. Cross-checked NzbDrone.Core.Test/Jobs (SchedulerTest, TaskManagerTest, ScheduledTaskCommandExecutorTest, ScheduledTaskHistoryRepositoryTest). GitHub dedupe: open issues already cover command-queue TaskCompleted on fail/cancel (#985), scheduler cancel orphan TaskStarted (#911), missing instance TaskCompleted (#952), TrackerScrapeJob swallow (#971), cancellation token default shim (#821), scheduler RecordTaskFailed stack truncation (#1162). Filed #1202 RecordTaskFailed sets HistoryRecorded when history insert fails (silent audit loss); #1203 Scheduler SignalR TypeName uses raw DB string vs TaskManager normalized full name. No issues reopened. Next: src/NzbDrone.Core/Torrents/TorrentRecheckService.cs. No code fixes; no dotnet build/test."
   }
 }
