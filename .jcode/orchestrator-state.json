@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:08:21Z",
+  "updatedAt": "2026-10-06T23:09:21Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_f5b2bc3a"
+    "lastScheduleId": "sched_a9f9a7d9"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -32,7 +32,7 @@
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "octopus"
+      "worker": "kitten"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 304,
-  "lastMonitorNote": "304 open; 1 restart scorpion->hog signalr idle>90s; latest #1173-#1177 blocklist+http"
+  "lastMonitorNote": "304 open; 1 restart octopus->kitten http idle>90s; latest #1173-#1177 terminal+blocklist"
 }
