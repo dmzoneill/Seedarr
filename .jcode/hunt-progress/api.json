@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T00:55:00Z",
+  "updatedAt": "2026-10-07T00:48:30Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Backup",
+  "currentSubfolder": "src/Seedarr.Api.V1/Automation",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Seeding",
-    "completedAt": "2026-10-07T00:55:00Z",
-    "issuesFiled": [1238, 1239],
+    "subfolder": "src/Seedarr.Api.V1/Backup",
+    "completedAt": "2026-10-07T00:48:30Z",
+    "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Static review: SeedingController, SpeedScheduleController, SpeedScheduleResource. GitHub dedupe: skipped existing open issues #914/#916/#989/#990/#995/#1142/#1143 and related core duplicates. Filed #1238 (idempotent POST /seeding/stop re-publishes SeedingStoppedEvent and duplicate tracker stopped announces), #1239 (SpeedSchedule negative Priority accepted by API). No dotnet build/test."
+    "notes": "Static review: BackupController.cs, BackupResource.cs (+ BackupService contract). GitHub dedupe: skipped existing open issues #926, #928, #1001, #1007, #1148, #1149 (ids, create response, restore/list mismatch, case sensitivity, DELETE id/fileName). No new root causes found. No dotnet build/test."
   }
 }
