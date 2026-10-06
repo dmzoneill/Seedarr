@@ -170,4 +170,39 @@ public class SetupControllerTest
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
     }
+
+    [TestCase("User")]
+    [TestCase("ReadOnly")]
+    public void Complete_should_forbid_non_admin_when_setup_is_already_completed(string role)
+    {
+        _configService.IsSetupCompleted.Returns(true);
+
+        var identity = new ClaimsIdentity(
+            new[]
+            {
+                new Claim(ClaimTypes.Name, "testuser"),
+                new Claim(ClaimTypes.Role, role),
+            },
+            "TestAuth");
+
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(identity),
+        };
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext,
+        };
+
+        var request = new SetupCompleteRequest
+        {
+            Username = "admin",
+            Password = "NewStrongPassword123!",
+        };
+
+        var result = _controller.Complete(request);
+
+        Assert.That(result, Is.InstanceOf<ForbidResult>());
+    }
 }
