@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T00:45:00Z",
+  "updatedAt": "2026-10-07T00:55:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Indexers",
+  "currentSubfolder": "src/Seedarr.Api.V1/Torrents",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/ArrIntegration",
-    "completedAt": "2026-10-07T00:45:00Z",
-    "issuesFiled": [1197, 1198],
+    "subfolder": "src/Seedarr.Api.V1/Indexers",
+    "completedAt": "2026-10-07T00:55:00Z",
+    "issuesFiled": [1204, 1205, 1206, 1207],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed ArrConnectionController, ArrSyncController, WebhookReceiverController. GitHub dedupe: skipped open #886/#1082-#1084/#1088-#1089/#1091 (RBAC, partial PUT, masked ApiKey clone/test, Implementation stale on ArrType change, webhook 200 on failure, image-proxy SSRF). Filed #1197 (image-proxy ignores disabled connections), #1198 (PUT skips webhook cleanup when only arrType changes). No dotnet build/test."
+    "notes": "Reviewed IndexerController, RssRuleController, RssRuleResource, RssGrabHistoryResource. GitHub dedupe: skipped open #927/#913/#1100-#1115/#1102/#1111/#1114/#929/#1103/#1113 (DELETE 200, proxy HttpClient leak, partial PUT/masked ApiKey, test loopback mismatch, caps empty on failure, rss sync/cooldown/partial PUT). Filed #1204 (category-only search empty), #1205 (multi-indexer search pagination), #1206 (prowlarr sync baseUrl SSRF), #1207 (TestDirect ApiKey null NRE). No dotnet build/test."
   }
 }
