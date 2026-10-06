@@ -145,6 +145,7 @@ public class BlocklistControllerTests
         };
         _syncService.ActiveRules.Returns(activeRules);
         _syncService.RuleCount.Returns(2);
+        _syncService.IsBlocked(Arg.Is<IPAddress>(ip => ip.ToString() == "198.51.100.42" || ip.ToString() == "2001:db8:abc:1::1")).Returns(true);
 
         // Act - test blocked IPv4
         var resultV4 = _controller.TestIp(new BlocklistTestRequest { Ip = "198.51.100.42" });
@@ -199,5 +200,47 @@ public class BlocklistControllerTests
     {
         var result = _controller.TestIp(new BlocklistTestRequest { Ip = ip });
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void GetBlocklist_should_use_interval_tree_counts_when_available()
+    {
+        // Arrange
+        var activeRules = new List<string>
+        {
+            "192.168.1.0/24",
+            "2001:db8::/32"
+        };
+        var tree = Ipv6IntervalTree.Parse(activeRules);
+        _syncService.IntervalTree.Returns(tree);
+        _syncService.RuleCount.Returns(2);
+
+        // Act
+        var actionResult = _controller.GetBlocklist();
+
+        // Assert
+        Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)actionResult.Result;
+        var resource = (BlocklistResource)okResult.Value;
+
+        Assert.That(resource.Ipv4RuleCount, Is.EqualTo(1));
+        Assert.That(resource.Ipv6RuleCount, Is.EqualTo(1));
+        Assert.That(resource.TotalRuleCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void TestIp_should_call_sync_service_is_blocked_directly()
+    {
+        // Arrange
+        var activeRules = new List<string> { "192.168.1.0/24" };
+        _syncService.ActiveRules.Returns(activeRules);
+        _syncService.RuleCount.Returns(1);
+        _syncService.IsBlocked(Arg.Any<IPAddress>()).Returns(false);
+
+        // Act
+        _controller.TestIp(new BlocklistTestRequest { Ip = "192.168.1.50" });
+
+        // Assert
+        _syncService.Received(1).IsBlocked(Arg.Is<IPAddress>(ip => ip.ToString() == "192.168.1.50"));
     }
 }

@@ -71,7 +71,7 @@ public class BlocklistController : Controller
     public async Task<ActionResult<BlocklistSyncResponse>> SyncBlocklistAsync(CancellationToken cancellationToken = default)
     {
         var result = await _syncService.SyncBlocklistAsync(force: true, cancellationToken: cancellationToken);
-        var (v4, v6) = CountRules();
+        var (v4, v6) = GetRuleCounts();
         var totalRules = _syncService.RuleCount > 0 ? _syncService.RuleCount : (v4 + v6);
 
         return Ok(new BlocklistSyncResponse
@@ -111,8 +111,7 @@ public class BlocklistController : Controller
             });
         }
 
-        var tree = Ipv6IntervalTree.Parse(rules);
-        var isBlocked = tree.Contains(address);
+        var isBlocked = _syncService.IsBlocked(address);
 
         string matchedRule = null;
         if (isBlocked)
@@ -129,7 +128,7 @@ public class BlocklistController : Controller
 
     private BlocklistResource BuildResource()
     {
-        var (v4, v6) = CountRules();
+        var (v4, v6) = GetRuleCounts();
         var totalRules = _syncService.RuleCount > 0 ? _syncService.RuleCount : (v4 + v6);
         var lastChecked = _syncService.LastCheckedUtc;
         var autoUpdate = _configService.BlocklistAutoUpdate;
@@ -156,6 +155,19 @@ public class BlocklistController : Controller
             NextScheduledSyncUtc = nextScheduled,
             NextAllowedSyncUtc = _syncService.NextAllowedSyncUtc
         };
+    }
+
+    private (int V4Count, int V6Count) GetRuleCounts()
+    {
+        var tree = _syncService.IntervalTree;
+        if (tree != null)
+        {
+            var v4 = tree.Ipv4Tree?.IntervalCount ?? 0;
+            var v6 = Math.Max(0, tree.IntervalCount - v4);
+            return (v4, v6);
+        }
+
+        return CountRules();
     }
 
     private (int V4Count, int V6Count) CountRules()
@@ -199,6 +211,8 @@ public class BlocklistController : Controller
         var isV4 = address.AddressFamily == AddressFamily.InterNetwork;
         var mappedV4 = address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : null;
         var targetV4 = isV4 ? address : mappedV4;
+        var targetV4Val = targetV4?.ToUInt32() ?? 0;
+        var targetV6Val = address.ToUInt128();
 
         foreach (var rule in rules)
         {
@@ -208,15 +222,14 @@ public class BlocklistController : Controller
             }
 
             var trimmed = rule.Trim();
-            if (trimmed.StartsWith('#') || trimmed.StartsWith("//", StringComparison.Ordinal))
+            if (trimmed.StartsWith('#') || trimmed.StartsWith("//", StringComparison.Ordinal) || trimmed.StartsWith(';'))
             {
                 continue;
             }
 
             if (targetV4 != null && Ipv4IntervalTree.TryParse(trimmed, out var v4Range))
             {
-                var v4Tree = new Ipv4IntervalTree(new[] { v4Range });
-                if (v4Tree.Contains(targetV4))
+                if (targetV4Val >= v4Range.Start && targetV4Val <= v4Range.End)
                 {
                     return trimmed;
                 }
@@ -224,8 +237,7 @@ public class BlocklistController : Controller
 
             if (Ipv6IntervalTree.TryParse(trimmed, out var v6Range))
             {
-                var v6Tree = new Ipv6IntervalTree(new[] { v6Range });
-                if (v6Tree.Contains(address))
+                if (targetV6Val >= v6Range.Start && targetV6Val <= v6Range.End)
                 {
                     return trimmed;
                 }

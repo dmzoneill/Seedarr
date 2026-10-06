@@ -20,6 +20,8 @@ public interface IPeerBlocklistSyncService
 
     int RuleCount { get; }
 
+    Ipv6IntervalTree IntervalTree { get; }
+
     DateTime? LastCheckedUtc { get; }
 
     bool IsSyncAllowed(DateTime? now = null);
