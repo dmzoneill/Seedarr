@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:11:28Z",
+  "updatedAt": "2026-10-06T23:12:47Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_895ec208"
+    "lastScheduleId": "sched_41dc3567"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -27,17 +27,17 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "stallion"
+      "worker": "vole"
     },
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "kitten"
+      "worker": "hare"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "dromedary"
+      "worker": "dragon"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 312,
-  "lastMonitorNote": "312 open; 0 restarts; all hunters healthy <90s idle; latest #1181-#1185"
+  "githubOpenCount": 314,
+  "lastMonitorNote": "314 open; 3 restarts kitten/stallion/dromedary; latest #1183-#1187"
 }
