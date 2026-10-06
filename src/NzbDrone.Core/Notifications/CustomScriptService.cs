@@ -493,28 +493,32 @@ public class CustomScriptService : ICustomScriptService, IDisposable
         var sb = new StringBuilder();
         var totalCharsRead = 0;
         var maxChars = maxBytes; // 1 char >= 1 byte
+        var truncated = false;
         int charsRead;
 
         try
         {
             while ((charsRead = await reader.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false)) > 0)
             {
-                if (totalCharsRead + charsRead <= maxChars)
+                if (!truncated)
                 {
-                    sb.Append(buffer, 0, charsRead);
-                    totalCharsRead += charsRead;
-                }
-                else
-                {
-                    var remaining = maxChars - totalCharsRead;
-                    if (remaining > 0)
+                    if (totalCharsRead + charsRead <= maxChars)
                     {
-                        sb.Append(buffer, 0, remaining);
-                        totalCharsRead += remaining;
+                        sb.Append(buffer, 0, charsRead);
+                        totalCharsRead += charsRead;
                     }
+                    else
+                    {
+                        var remaining = maxChars - totalCharsRead;
+                        if (remaining > 0)
+                        {
+                            sb.Append(buffer, 0, remaining);
+                            totalCharsRead += remaining;
+                        }
 
-                    sb.Append("\n[... output truncated after reaching maximum capture limit ...]");
-                    break;
+                        sb.Append("\n[... output truncated after reaching maximum capture limit ...]");
+                        truncated = true;
+                    }
                 }
             }
         }

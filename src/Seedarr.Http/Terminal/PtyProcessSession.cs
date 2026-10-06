@@ -138,6 +138,23 @@ else:
         this._outputStream = process.StandardOutput.BaseStream;
         this._controlPipePath = controlPipePath;
         this._controlPipeStream = controlPipeStream;
+
+        _ = DrainStreamAsync(process.StandardError.BaseStream);
+    }
+
+    private static async Task DrainStreamAsync(Stream stream)
+    {
+        var buffer = new byte[4096];
+        try
+        {
+            while (await stream.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false) > 0)
+            {
+            }
+        }
+        catch
+        {
+            // Ignore EOF or stream closure
+        }
     }
 
     public static PtyProcessSession Start(string cwd, int cols, int rows)
