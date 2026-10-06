@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:10:00Z",
+  "updatedAt": "2026-10-06T22:12:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Jobs",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-06T22:10:00Z",
-    "issuesFiled": [961],
+    "subfolder": "src/NzbDrone.Core/Jobs",
+    "completedAt": "2026-10-06T22:12:00Z",
+    "issuesFiled": [971],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Second pass: re-reviewed MessageHub (auth/subscribe/RequestStateSnapshot/TrackerSignalREventHandler), SignalRMessageBroadcaster dedup+GetNamedEvents, PieceStorage coalesce/Clear paths, DTOs; deduped #940 #919 #887 #954 #936 #918 #878; filed #961 quad tracker named-event fan-out."
+    "note": "Jobs pass: reviewed Scheduler/TaskManager/ScheduledTaskCommandExecutor/history/tasks; deduped #911 #952 #903 #821 #316; filed #971 TrackerScrapeJob swallows failures; commented on #911 for manual-run exception TaskCompleted/TaskFailed gap."
   }
 }
