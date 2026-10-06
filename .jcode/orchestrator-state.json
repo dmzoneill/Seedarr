@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T20:54:30Z",
+  "updatedAt": "2026-10-06T20:55:30Z",
   "policy": {
     "pushTarget": "origin/main",
     "runTestsLocally": false,
@@ -7,11 +7,11 @@
     "continuousDispatch": true
   },
   "slots": {
-    "torrents": { "issue": 841, "status": "assigned", "worker": "microbe", "worktree": "../seedarr_worktrees/issue-841" },
-    "diskspace": { "issue": 755, "status": "assigned", "worker": "bonehound", "worktree": "../seedarr_worktrees/issue-755" },
-    "rss": { "issue": 725, "status": "assigned", "worker": "sabertooth", "worktree": "../seedarr_worktrees/issue-725" },
-    "extraction": { "issue": 492, "status": "assigned", "worker": "mushroom", "worktree": "../seedarr_worktrees/issue-492" },
-    "trackers": { "issue": 411, "status": "assigned", "worker": "cactus", "worktree": "../seedarr_worktrees/issue-411" }
+    "torrents": { "issue": 841, "status": "in_progress", "worker": "clover", "worktree": "../seedarr_worktrees/issue-841" },
+    "diskspace": { "issue": 755, "status": "in_progress", "worker": "sunflower", "worktree": "../seedarr_worktrees/issue-755" },
+    "rss": { "issue": 725, "status": "in_progress", "worker": "hibiscus", "worktree": "../seedarr_worktrees/issue-725" },
+    "extraction": { "issue": 492, "status": "in_progress", "worker": "blossom", "worktree": "../seedarr_worktrees/issue-492" },
+    "trackers": { "issue": 411, "status": "in_progress", "worker": "daisy", "worktree": "../seedarr_worktrees/issue-411" }
   },
   "queue": [397, 189, 186],
   "completed": [811, 814, 815, 863, 869]
