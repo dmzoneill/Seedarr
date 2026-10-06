@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:30:06Z",
+  "updatedAt": "2026-10-06T23:31:14Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_085e2bdc"
+    "lastScheduleId": "sched_142d785b"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -22,7 +22,7 @@
     "core": {
       "area": "src/NzbDrone.Core",
       "status": "running",
-      "worker": "kikazaru"
+      "worker": "beaver"
     },
     "api": {
       "area": "src/Seedarr.Api.V1",
@@ -32,7 +32,7 @@
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "iwazaru"
+      "worker": "cobra"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 340,
-  "lastMonitorNote": "340 open (gh); 2 restarts mizaru->mongoose api/Torrents duckling->ferret host/AppLifetime; latest #1209-#1213"
+  "githubOpenCount": 342,
+  "lastMonitorNote": "342 open (gh); 2 restarts kikazaru->beaver core/Blocklist iwazaru->cobra http/Terminal; latest #1211-#1215"
 }
