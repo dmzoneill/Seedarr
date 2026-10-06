@@ -1,14 +1,14 @@
 {
-  "updatedAt": "2026-10-06T21:40:15Z",
-  "lastValidationAt": "2026-10-06T21:40:15Z",
-  "lastValidationNote": "bh4: commit 2d300a2b on origin/main; bug-hunt state+playbook pushed; 5 hunters running; sched_73917708 active",
+  "updatedAt": "2026-10-06T21:42:30Z",
+  "lastValidationAt": "2026-10-06T21:42:30Z",
+  "lastValidationNote": "Gap: sched_73917708 missing at runtime (schedule list empty). Restored sched_81cc8e4e. Hunters active on partitions; 0 hunter reports and 0 new issues yet (<3m since spawn).",
   "status": "running",
   "mode": "bug-hunt",
   "monitor": {
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_73917708"
+    "lastScheduleId": "sched_81cc8e4e"
   },
   "policy": {
     "pushTarget": "origin/main",
