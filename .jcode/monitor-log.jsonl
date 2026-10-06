@@ -12,3 +12,4 @@
 {"ts":"2026-10-06T21:42:58Z","event":"bug_hunt_monitor","scheduleId":"sched_87bd08e4","workers":{"seedling":"ready","evergreen":"ready","palmtree":"ready","herb":"ready","ant":"ready"},"restarts":0,"openIssues":8,"action":"chain_wake_60s"}
 {"ts":"2026-10-06T21:43:47Z","event":"bug_hunt_monitor","scheduleId":"sched_1c304304","workers":{"seedling":"ready","evergreen":"ready","bat":"spawned","herb":"ready","ant":"ready"},"restarts":1,"restartDetail":"palmtree>90s->bat","openIssues":8,"action":"chain_wake_60s,broadcast_nudge"}
 {"at": "2026-10-06T21:44:23Z", "kind": "bug-hunt-monitor", "openIssues": 8, "restarts": 0, "hunters": ["seedling", "evergreen", "bat", "herb", "ant"], "scheduleId": "sched_34a99055", "note": "healthy"}
+{"ts":"2026-10-06T21:44:50Z","event":"bug_hunt_monitor","scheduleId":"sched_c132a0ea","workers":{"seedling":"running","evergreen":"running","bat":"running","herb":"running","ant":"running"},"restarts":0,"openIssues":8,"action":"chain_wake_60s"}

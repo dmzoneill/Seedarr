@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T21:44:23Z",
+  "updatedAt": "2026-10-06T21:44:50Z",
   "lastValidationAt": "2026-10-06T21:42:30Z",
   "lastValidationNote": "Gap: sched_73917708 missing at runtime (schedule list empty). Restored sched_81cc8e4e. Hunters active on partitions; 0 hunter reports and 0 new issues yet (<3m since spawn).",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_34a99055"
+    "lastScheduleId": "sched_c132a0ea"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -68,5 +68,5 @@
     189
   ],
   "githubOpenCount": 8,
-  "lastMonitorNote": "8 open (#879-883); all 5 hunters active (<90s); 0 restarts"
+  "lastMonitorNote": "8 open (#876-883); all 5 hunters running; 0 restarts"
 }
