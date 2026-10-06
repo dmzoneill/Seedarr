@@ -46,12 +46,19 @@
     }
   },
   "rotation": [
-    "src/NzbDrone.Core/Torrents",
     "src/NzbDrone.Core/Datastore",
-    "src/NzbDrone.Core/Download",
+    "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
-    "src/Seedarr.Api.V1/Controllers"
+    "src/Seedarr.Api.V1/Controllers",
+    "src/NzbDrone.Core/Torrents"
   ],
+  "lastCoreHunt": {
+    "taskId": "core-hunter",
+    "area": "src/NzbDrone.Core/Torrents",
+    "completedAt": "2026-10-06T21:58:00Z",
+    "issuesFiled": [912],
+    "issuesReopened": []
+  },
   "completedFixIssues": [
     811,
     814,
