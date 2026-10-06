@@ -1,8 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
@@ -236,5 +239,29 @@ public class TagControllerTest
         var result = _controller.Create(new TagResource { Label = "Existing" });
 
         Assert.That(result.Result, Is.InstanceOf<ConflictObjectResult>());
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_Reader_attribute()
+    {
+        var type = typeof(TagController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [TestCase(nameof(TagController.Create))]
+    [TestCase(nameof(TagController.Delete))]
+    [TestCase(nameof(TagController.BulkAssign))]
+    [TestCase(nameof(TagController.BulkRemove))]
+    public void Mutating_methods_should_have_Authorize_Operator_attribute(string methodName)
+    {
+        var method = typeof(TagController).GetMethods().FirstOrDefault(m => m.Name == methodName);
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Operator));
     }
 }

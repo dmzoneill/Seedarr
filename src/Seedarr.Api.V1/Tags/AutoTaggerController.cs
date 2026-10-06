@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Tags;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Tags;
 
 [V1ApiController("autotag")]
+[Authorize(Policy = Policies.Reader)]
 public class AutoTaggerController : ControllerBase
 {
     private readonly IAutoTaggerService _autoTaggerService;
@@ -20,6 +23,7 @@ public class AutoTaggerController : ControllerBase
     }
 
     [HttpGet("rules")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<List<AutoTaggerRuleResource>> GetRules()
     {
         var rules = _autoTaggerService.GetAllRules();
@@ -35,6 +39,7 @@ public class AutoTaggerController : ControllerBase
     }
 
     [HttpPost("rules")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<AutoTaggerRuleResource> SaveRule([FromBody] AutoTaggerRuleResource resource)
     {
         if (resource == null)
@@ -81,6 +86,7 @@ public class AutoTaggerController : ControllerBase
     }
 
     [HttpDelete("rules/{id:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult DeleteRule(int id)
     {
         _autoTaggerService.DeleteRule(id);
@@ -88,6 +94,7 @@ public class AutoTaggerController : ControllerBase
     }
 
     [HttpPost("evaluate")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Evaluate()
     {
         _autoTaggerService.EvaluateAll();
