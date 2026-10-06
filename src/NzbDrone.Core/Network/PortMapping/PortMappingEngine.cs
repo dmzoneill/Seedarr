@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Network.NatPmp;
 using NzbDrone.Core.Network.Pcp;
 using Open.Nat;
 
@@ -18,23 +19,27 @@ public class PortMappingEngine : IPortMappingEngine
     private readonly IGatewayDiscoveryService _gatewayDiscoveryService;
     private readonly IUpnpService _upnpService;
     private readonly IPcpClient _pcpClient;
+    private readonly INatPmpClient _natPmpClient;
     private readonly Func<IPAddress, CancellationToken, Task<PortMappingProtocol>> _udpProber;
     private readonly Func<CancellationToken, Task<bool>> _upnpProber;
     private readonly Logger _logger;
 
     public PortMappingProtocol CurrentProtocol { get; private set; } = PortMappingProtocol.None;
     public IPcpClient PcpClient => _pcpClient;
+    public INatPmpClient NatPmpClient => _natPmpClient;
 
     public PortMappingEngine(
         IGatewayDiscoveryService gatewayDiscoveryService,
         IUpnpService upnpService = null,
         Func<IPAddress, CancellationToken, Task<PortMappingProtocol>> udpProber = null,
         Func<CancellationToken, Task<bool>> upnpProber = null,
-        IPcpClient pcpClient = null)
+        IPcpClient pcpClient = null,
+        INatPmpClient natPmpClient = null)
     {
         _gatewayDiscoveryService = gatewayDiscoveryService;
         _upnpService = upnpService;
         _pcpClient = pcpClient;
+        _natPmpClient = natPmpClient;
         _logger = LogManager.GetCurrentClassLogger();
         _udpProber = udpProber ?? ProbeUdpAsync;
         _upnpProber = upnpProber ?? ProbeUpnpAsync;
@@ -64,6 +69,43 @@ public class PortMappingEngine : IPortMappingEngine
         if (result.ResultCode == PcpResultCode.UnsupportedVersion)
         {
             DemoteToNatPmp();
+
+            if (_natPmpClient != null)
+            {
+                var natPmpProtocol = protocol switch
+                {
+                    PortMappingTransport.Tcp => NatPmpProtocol.Tcp,
+                    PortMappingTransport.Udp => NatPmpProtocol.Udp,
+                    _ => NatPmpProtocol.None
+                };
+
+                try
+                {
+                    var natPmpResult = await _natPmpClient.MapPortAsync(
+                        natPmpProtocol,
+                        (ushort)internalPort,
+                        (ushort)suggestedExternalPort,
+                        (uint)lifetime.TotalSeconds,
+                        cancellationToken);
+
+                    return new PcpMappingResult
+                    {
+                        Success = true,
+                        Version = 0,
+                        ResultCode = PcpResultCode.Success,
+                        Lifetime = TimeSpan.FromSeconds(natPmpResult.LifetimeSeconds),
+                        Epoch = natPmpResult.Epoch,
+                        Protocol = protocol,
+                        InternalPort = natPmpResult.InternalPort,
+                        ExternalPort = natPmpResult.MappedExternalPort,
+                        ErrorMessage = null
+                    };
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "NAT-PMP fallback mapping failed after PCP UnsupportedVersion demotion");
+                }
+            }
         }
 
         return result;
@@ -263,6 +305,11 @@ public class PortMappingEngine : IPortMappingEngine
             _logger.Debug(ex, "Failed to resolve default gateway for status");
         }
 
+        if (string.IsNullOrEmpty(gatewayIp) && _natPmpClient?.GatewayAddress != null)
+        {
+            gatewayIp = _natPmpClient.GatewayAddress.ToString();
+        }
+
         var protocol = CurrentProtocol;
         if (protocol == PortMappingProtocol.None && _upnpService != null && _upnpService.IsAvailable)
         {
@@ -309,6 +356,28 @@ public class PortMappingEngine : IPortMappingEngine
                     Description = "PCP Mapping",
                     LeaseSeconds = (int)m.Lifetime.TotalSeconds,
                     ExpiryUtc = m.CreatedAtUtc.Add(m.Lifetime),
+                    IsActive = m.IsActive,
+                    Status = m.IsActive ? "Active" : "Inactive"
+                });
+            }
+        }
+
+        if (_natPmpClient != null && _natPmpClient.ActiveMappings.Count > 0)
+        {
+            foreach (var m in _natPmpClient.ActiveMappings)
+            {
+                var expiryUtc = m.ExpiresAtUtc != default
+                    ? m.ExpiresAtUtc
+                    : m.CreatedAtUtc.AddSeconds(m.LifetimeSeconds);
+
+                mappings.Add(new EnrichedPortMapping
+                {
+                    InternalPort = m.InternalPort,
+                    ExternalPort = m.MappedExternalPort,
+                    Protocol = m.Protocol.ToString().ToUpperInvariant(),
+                    Description = "NAT-PMP Mapping",
+                    LeaseSeconds = (int)m.LifetimeSeconds,
+                    ExpiryUtc = expiryUtc,
                     IsActive = m.IsActive,
                     Status = m.IsActive ? "Active" : "Inactive"
                 });
@@ -370,6 +439,18 @@ public class PortMappingEngine : IPortMappingEngine
             catch (Exception ex)
             {
                 _logger.Warn(ex, "PortMappingEngine: UPnP mapping refresh failed");
+            }
+        }
+
+        if (_natPmpClient != null)
+        {
+            try
+            {
+                await _natPmpClient.RenewAllMappingsAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "PortMappingEngine: NAT-PMP mapping refresh failed");
             }
         }
 

@@ -32,6 +32,7 @@ public class PcpActiveMapping
     public byte[] Nonce { get; init; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime RenewalDueUtc { get; set; }
+    public DateTime ExpiresAtUtc { get; set; }
     public bool IsActive { get; set; } = true;
     internal ITimer RenewalTimer { get; set; }
 }

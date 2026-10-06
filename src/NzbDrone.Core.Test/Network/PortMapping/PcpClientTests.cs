@@ -49,6 +49,74 @@ public class PcpClientTests
         }
     }
 
+    private class ManualTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _now;
+        public List<ManualTimer> Timers { get; } = new();
+
+        public ManualTimeProvider(DateTimeOffset initial)
+        {
+            _now = initial;
+        }
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan timeSpan)
+        {
+            _now = _now.Add(timeSpan);
+        }
+
+        public override ITimer CreateTimer(TimerCallback callback, object state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ManualTimer(callback, state, dueTime, period);
+            Timers.Add(timer);
+            return timer;
+        }
+
+        public class ManualTimer : ITimer
+        {
+            private readonly TimerCallback _callback;
+            private readonly object _state;
+            public TimeSpan DueTime { get; private set; }
+            public TimeSpan Period { get; private set; }
+            public bool Disposed { get; private set; }
+
+            public ManualTimer(TimerCallback callback, object state, TimeSpan dueTime, TimeSpan period)
+            {
+                _callback = callback;
+                _state = state;
+                DueTime = dueTime;
+                Period = period;
+            }
+
+            public void Trigger()
+            {
+                if (!Disposed)
+                {
+                    _callback?.Invoke(_state);
+                }
+            }
+
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                DueTime = dueTime;
+                Period = period;
+                return true;
+            }
+
+            public void Dispose()
+            {
+                Disposed = true;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                Disposed = true;
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
     private static byte[] BuildMapResponse(
         PcpResultCode resultCode,
         uint lifetimeSeconds,
@@ -497,5 +565,78 @@ public class PcpClientTests
         Assert.That(status.Mappings[0].ExternalPort, Is.EqualTo(16881));
         Assert.That(status.Mappings[0].Protocol, Is.EqualTo("TCP"));
         Assert.That(status.Mappings[0].Status, Is.EqualTo("Active"));
+    }
+
+    [Test]
+    public void DefaultPcpTransport_has_semaphore_for_serialization()
+    {
+        using var transport = new DefaultPcpTransport();
+        var field = typeof(DefaultPcpTransport).GetField("_semaphore", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.That(field, Is.Not.Null);
+        var semaphore = field.GetValue(transport) as SemaphoreSlim;
+        Assert.That(semaphore, Is.Not.Null);
+        Assert.That(semaphore.CurrentCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task PcpClient_renewal_failure_should_retry_at_half_of_remaining_time()
+    {
+        var transport = new TestPcpTransport();
+        var gatewayIp = IPAddress.Parse("192.168.1.1");
+        var clientIp = IPAddress.Parse("192.168.1.105");
+        var baseTime = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var timeProvider = new ManualTimeProvider(baseTime);
+
+        transport.ResponseHandler = request =>
+        {
+            var reqNonce = request.AsSpan(24, 12).ToArray();
+            return BuildMapResponse(
+                resultCode: PcpResultCode.Success,
+                lifetimeSeconds: 3600,
+                epoch: 500,
+                nonce: reqNonce,
+                protocol: PortMappingTransport.Tcp,
+                internalPort: 6881,
+                assignedExternalPort: 16881,
+                assignedAddress: IPAddress.Parse("203.0.113.1"));
+        };
+
+        using var client = new PcpClient(transport, timeProvider);
+        var result = await client.CreateMappingAsync(
+            gateway: gatewayIp,
+            clientIp: clientIp,
+            internalPort: 6881,
+            suggestedExternalPort: 6881,
+            protocol: PortMappingTransport.Tcp,
+            lifetime: TimeSpan.FromSeconds(3600));
+
+        Assert.That(result.Success, Is.True);
+        var mapping = client.ActiveMappings[0];
+        Assert.That(mapping.RenewalDueUtc, Is.EqualTo(baseTime.UtcDateTime.AddSeconds(1800)));
+
+        // Advance to 50% lifetime (1800s)
+        timeProvider.Advance(TimeSpan.FromSeconds(1800));
+
+        // Set response handler to return failure
+        transport.ResponseHandler = request =>
+        {
+            var reqNonce = request.AsSpan(24, 12).ToArray();
+            return BuildMapResponse(
+                resultCode: PcpResultCode.NetworkFailure,
+                lifetimeSeconds: 0,
+                epoch: 501,
+                nonce: reqNonce,
+                protocol: PortMappingTransport.Tcp,
+                internalPort: 6881,
+                assignedExternalPort: 0,
+                assignedAddress: IPAddress.Any);
+        };
+
+        // Trigger half-life renewal timer
+        timeProvider.Timers.Last().Trigger();
+        await Task.Delay(50);
+
+        // Remaining time was 1800s, retry should be scheduled at half of remaining = 900s (2700s)
+        Assert.That(mapping.RenewalDueUtc, Is.EqualTo(baseTime.UtcDateTime.AddSeconds(2700)));
     }
 }

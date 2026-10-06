@@ -16,6 +16,7 @@ public class DefaultPcpTransport : IPcpTransport
     private readonly ConcurrentDictionary<AddressFamily, UdpClient> _clients = new();
     private readonly UdpClient _fixedClient;
     private readonly bool _ownsClients;
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
     private bool _disposed;
 
     public DefaultPcpTransport()
@@ -38,33 +39,42 @@ public class DefaultPcpTransport : IPcpTransport
     public async Task<byte[]> SendAndReceiveAsync(byte[] request, IPEndPoint endpoint, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        var client = GetClient(endpoint.AddressFamily);
-        int[] timeouts = [250, 500, 1000, 2000];
+        await _semaphore.WaitAsync(cancellationToken);
 
-        foreach (var timeoutMs in timeouts)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            var client = GetClient(endpoint.AddressFamily);
+            int[] timeouts = [250, 500, 1000, 2000];
 
-            try
+            foreach (var timeoutMs in timeouts)
             {
-                await client.SendAsync(request, endpoint, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
 
-                using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                receiveCts.CancelAfter(timeoutMs);
-
-                var result = await client.ReceiveAsync(receiveCts.Token);
-                if (result.Buffer != null && result.Buffer.Length > 0)
+                try
                 {
-                    return result.Buffer;
+                    await client.SendAsync(request, endpoint, cancellationToken);
+
+                    using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    receiveCts.CancelAfter(timeoutMs);
+
+                    var result = await client.ReceiveAsync(receiveCts.Token);
+                    if (result.Buffer != null && result.Buffer.Length > 0)
+                    {
+                        return result.Buffer;
+                    }
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // Timeout on this attempt, retry with backoff interval
                 }
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                // Timeout on this attempt, retry with backoff interval
-            }
-        }
 
-        throw new TimeoutException($"PCP request to {endpoint} timed out after retries.");
+            throw new TimeoutException($"PCP request to {endpoint} timed out after retries.");
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
     }
 
     public async Task SendAsync(byte[] request, IPEndPoint endpoint, CancellationToken cancellationToken = default)
@@ -93,6 +103,8 @@ public class DefaultPcpTransport : IPcpTransport
     {
         if (!_disposed)
         {
+            _disposed = true;
+
             if (_ownsClients)
             {
                 foreach (var client in _clients.Values)
@@ -103,7 +115,7 @@ public class DefaultPcpTransport : IPcpTransport
                 _clients.Clear();
             }
 
-            _disposed = true;
+            _semaphore.Dispose();
         }
     }
 }
@@ -382,33 +394,110 @@ public class PcpClient : IPcpClient
         }
     }
 
-    private void ScheduleRenewal(IPAddress gateway, IPAddress clientIp, PcpActiveMapping mapping)
+    private void ScheduleRenewal(IPAddress gateway, IPAddress clientIp, PcpActiveMapping mapping, TimeSpan? customDelay = null)
     {
-        mapping.RenewalTimer?.Dispose();
-
-        var halfLifetimeSeconds = mapping.Lifetime.TotalSeconds / 2.0;
-        if (halfLifetimeSeconds <= 0)
+        lock (_syncLock)
         {
-            return;
-        }
-
-        var halfLifetime = TimeSpan.FromSeconds(halfLifetimeSeconds);
-
-        mapping.RenewalTimer = _timeProvider.CreateTimer(
-            async _ =>
+            if (_disposed)
             {
-                try
+                return;
+            }
+
+            if (!_mappings.TryGetValue((mapping.Protocol, mapping.InternalPort), out var current) || !ReferenceEquals(current, mapping))
+            {
+                return;
+            }
+
+            mapping.RenewalTimer?.Dispose();
+
+            TimeSpan delay;
+            if (customDelay.HasValue)
+            {
+                delay = customDelay.Value;
+            }
+            else
+            {
+                var halfLifetimeSeconds = mapping.Lifetime.TotalSeconds / 2.0;
+                if (halfLifetimeSeconds <= 0)
                 {
-                    await CreateMappingAsync(gateway, clientIp, mapping.InternalPort, mapping.AssignedExternalPort, mapping.Protocol, mapping.Lifetime, mapping.Nonce, CancellationToken.None);
+                    return;
                 }
-                catch (Exception ex)
+
+                delay = TimeSpan.FromSeconds(halfLifetimeSeconds);
+            }
+
+            if (delay <= TimeSpan.Zero)
+            {
+                return;
+            }
+
+            mapping.RenewalTimer = _timeProvider.CreateTimer(
+                async _ =>
                 {
-                    _logger.Warn(ex, "Background renewal failed for PCP {0} port {1}", mapping.Protocol, mapping.InternalPort);
-                }
-            },
-            null,
-            halfLifetime,
-            Timeout.InfiniteTimeSpan);
+                    try
+                    {
+                        var result = await CreateMappingAsync(
+                            gateway,
+                            clientIp,
+                            mapping.InternalPort,
+                            mapping.AssignedExternalPort,
+                            mapping.Protocol,
+                            mapping.Lifetime,
+                            mapping.Nonce,
+                            CancellationToken.None);
+
+                        if (result == null || !result.Success)
+                        {
+                            ScheduleRetry(gateway, clientIp, mapping);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Background renewal failed for PCP {0} port {1}", mapping.Protocol, mapping.InternalPort);
+                        ScheduleRetry(gateway, clientIp, mapping);
+                    }
+                },
+                null,
+                delay,
+                Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void ScheduleRetry(IPAddress gateway, IPAddress clientIp, PcpActiveMapping mapping)
+    {
+        lock (_syncLock)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            if (!_mappings.TryGetValue((mapping.Protocol, mapping.InternalPort), out var current) || !ReferenceEquals(current, mapping))
+            {
+                return;
+            }
+
+            mapping.RenewalTimer?.Dispose();
+
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            var expiry = mapping.ExpiresAtUtc != default
+                ? mapping.ExpiresAtUtc
+                : mapping.CreatedAtUtc.Add(mapping.Lifetime);
+
+            var remaining = expiry - now;
+            var retrySeconds = remaining.TotalSeconds / 2.0;
+
+            if (retrySeconds <= 0)
+            {
+                _logger.Warn("PCP mapping for {0} port {1} has expired.", mapping.Protocol, mapping.InternalPort);
+                mapping.IsActive = false;
+                return;
+            }
+
+            var delay = TimeSpan.FromSeconds(retrySeconds);
+            mapping.RenewalDueUtc = now + delay;
+            ScheduleRenewal(gateway, clientIp, mapping, delay);
+        }
     }
 
     private PcpActiveMapping UpdateOrAddActiveMapping(
@@ -425,6 +514,7 @@ public class PcpClient : IPcpClient
             var key = (protocol, internalPort);
             var now = _timeProvider.GetUtcNow().UtcDateTime;
             var renewalDue = now.AddSeconds(lifetime.TotalSeconds / 2.0);
+            var expiresAtUtc = now.Add(lifetime);
 
             if (_mappings.TryGetValue(key, out var existing))
             {
@@ -433,6 +523,7 @@ public class PcpClient : IPcpClient
                 existing.AssignedExternalAddress = assignedExternalAddress;
                 existing.Lifetime = lifetime;
                 existing.RenewalDueUtc = renewalDue;
+                existing.ExpiresAtUtc = expiresAtUtc;
                 existing.IsActive = true;
                 return existing;
             }
@@ -447,6 +538,7 @@ public class PcpClient : IPcpClient
                 Lifetime = lifetime,
                 Nonce = nonce,
                 CreatedAtUtc = now,
+                ExpiresAtUtc = expiresAtUtc,
                 RenewalDueUtc = renewalDue,
                 IsActive = true
             };
