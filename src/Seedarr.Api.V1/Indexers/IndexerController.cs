@@ -98,6 +98,16 @@ public class IndexerController : Controller
             return BadRequest("Request body cannot be null");
         }
 
+        if (string.IsNullOrWhiteSpace(definition.Url))
+        {
+            return BadRequest("URL cannot be empty.");
+        }
+
+        if (!UrlValidator.IsSafeUrl(definition.Url))
+        {
+            return BadRequest("Target host/URL is not permitted.");
+        }
+
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
             definition.Implementation = $"{definition.IndexerType}Indexer";
@@ -125,6 +135,16 @@ public class IndexerController : Controller
         if (existing == null)
         {
             return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.Url))
+        {
+            return BadRequest("URL cannot be empty.");
+        }
+
+        if (!UrlValidator.IsSafeUrl(definition.Url))
+        {
+            return BadRequest("Target host/URL is not permitted.");
         }
 
         definition.Id = id;
