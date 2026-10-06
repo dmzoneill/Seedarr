@@ -590,6 +590,40 @@ public class TransmissionRpcControllerTest
     }
 
     [Test]
+    public async Task HandleRpc_TorrentAdd_DuplicateTorrent_When_Match_Not_Found_Does_Not_Return_Unrelated_Torrent()
+    {
+        var torrent1 = new Torrent
+        {
+            Id = 1,
+            Name = "Unrelated First Torrent",
+            InfoHash = "1111111111111111111111111111111111111111",
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent1 });
+        _torrentService.GetByInfoHash("3333333333333333333333333333333333333333").Returns((Torrent)null);
+        _torrentImportService.ImportFromMagnet(Arg.Is<string>(s => s.Contains("3333333333333333333333333333333333333333")))
+            .Returns(_ => throw new InvalidOperationException("Torrent already exists"));
+
+        var magnet = "magnet:?xt=urn:btih:3333333333333333333333333333333333333333&dn=MissingDuplicate";
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-add",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["filename"] = JsonDocument.Parse($"\"{magnet}\"").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("duplicate torrent but matching torrent not found"));
+        Assert.That(response.Arguments, Is.Null);
+    }
+
+    [Test]
     public async Task HandleRpc_TorrentSet_WithEmptyLabelsArray_Clears_Labels_And_TagIds()
     {
         var torrent = new Torrent
