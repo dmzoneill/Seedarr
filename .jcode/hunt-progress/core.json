@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T02:00:00Z",
+  "updatedAt": "2026-10-07T22:55:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Datastore",
+  "currentSubfolder": "src/NzbDrone.Core/DownloadClients",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Authentication",
-    "completedAt": "2026-10-07T02:00:00Z",
-    "issuesFiled": [1144, 1145, 1146],
+    "subfolder": "src/NzbDrone.Core/Datastore",
+    "completedAt": "2026-10-07T22:55:00Z",
+    "issuesFiled": [1151, 1152, 1153],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Authentication pass: filed #1144 (ForwardAuth TestConnection no-op), #1145 (redirect responses treated as failure), #1146 (SAML ignores IssuerUrl fallback). Deduped open #976, #978-#979, #986-#987, #1058-#1064, #1079-#1080, #1105, #1116-#1117 and related. Static review only; no dotnet build/test."
+    "note": "Datastore pass: static review of BasicRepository, DbFactory, MainDatabase, maintenance/WAL tasks, ConnectionStringFactory, migrations 001-070. Filed #1151 (Postgres connection string escaping), #1152 (WalCheckpointTask RESTART on PG), #1153 (UpdateMany null). Deduped existing open #882, #915, #997-#1000, #1077-#1080, #1078-#1087, #1063. No dotnet build/test."
   }
 }
