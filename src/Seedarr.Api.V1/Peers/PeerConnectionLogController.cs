@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerServer;
@@ -10,6 +12,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.Peers;
 
 [V1ApiController("peerlog")]
+[Authorize(Policy = Policies.Reader)]
 public class PeerConnectionLogController : Controller
 {
     private readonly IPeerConnectionLogService _logService;
@@ -395,6 +398,7 @@ public class PeerConnectionLogController : Controller
     }
 
     [HttpDelete]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Purge([FromQuery] DateTime? before)
     {
         var purgeDate = before ?? DateTime.UtcNow.AddDays(-30);
