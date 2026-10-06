@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T22:20:00Z",
+  "updatedAt": "2026-10-06T22:35:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Security",
+  "currentSubfolder": "src/Seedarr.Http/Authentication",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/REST + src/Seedarr.Http/Ping",
-    "completedAt": "2026-10-06T22:20:00Z",
+    "subfolder": "src/Seedarr.Http/Security",
+    "completedAt": "2026-10-06T22:35:00Z",
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 6: REST (RestController, RestControllerWithSignalR, RestResource, ResourceValidator, RestPutByIdAttribute, ConfigControllerBase/RestPutById usage) and Ping (PingController). GitHub dedupe: coalesce #628, disconnect/null #757, ForwardAuth role #895, Host allowlist #908/#909. No new defects filed; hunt-progress/http.json only. No dotnet build/test."
+    "note": "Pass 7: Security (CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). GitHub dedupe: CSRF loopback #934, UrlBase #876, Basic API key username #877, Host allowlist #908/#909, CORS loopback #921; RpcSessionStore perf #654 closed. No new defects filed; hunt-progress/http.json only. No dotnet build/test."
   }
 }
