@@ -12,9 +12,9 @@
   "lastPass": {
     "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
     "completedAt": "2026-10-06T23:35:00Z",
-    "issuesFiled": [1036],
+    "issuesFiled": [1048],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "TorrentRecheckService pass: reviewed QueueRecheck/ProcessQueueAsync/ExecuteRecheckCoreAsync SignalR (TorrentUpdated, TorrentRecheckProgress, dual BroadcastMessage+BroadcastToTorrent). Deduped open #951 (duplicate All+group), #988 (queue failure terminal), #991 (RecheckAsync early cancel), #912 (queued cancel skip). Filed #1036 CancelRecheck during ProcessQueue semaphore wait OCE omits status revert and TorrentUpdated. No dotnet build/test."
+    "note": "TorrentRecheckService pass: traced QueueRecheck/ExecuteRecheckCoreAsync SignalR (TorrentUpdated, TorrentRecheckProgress) and cancel/failure gaps. Deduped open #912, #936, #951, #988, #991, #1036 (queued cancel/semaphore/wait SignalR and status). Filed #1048 missing TorrentHashCheckCompletedEvent publish after recheck (automation HashCheckCompleted + TrackerAnnounce handlers never triggered). No dotnet build/test."
   }
 }
