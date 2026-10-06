@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:18:00Z",
+  "updatedAt": "2026-10-06T22:12:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -17,10 +17,10 @@
   "currentSubfolder": "src/Seedarr.Api.V1/Seeding",
   "lastPass": {
     "subfolder": "src/Seedarr.Api.V1/DownloadClients",
-    "completedAt": "2026-10-06T22:18:00Z",
-    "issuesFiled": [970, 972, 973, 974, 975],
+    "completedAt": "2026-10-06T22:12:00Z",
+    "issuesFiled": [981, 982, 983, 984],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Static review of DownloadClientController and DownloadClientSyncController. Filed DELETE 200 (#970), TestDirect vs id/test UrlValidator mismatch (#972), import vs items status inconsistency (#973), missing UrlValidator on create/update (#974), missing ClientType validation (#975). Deduped RBAC #885, core sync bugs #923-925/#931, torrent DELETE pattern #957/#927. No dotnet build/test."
+    "notes": "Reviewed DownloadClientController, DownloadClientResource, DownloadClientSyncController. Deduped parallel filings #970-975, #972-974 (DELETE 404, TestDirect loopback, UrlValidator Create/Update, ClientType, import 404 vs 400). Filed API-layer gaps: Create/Update omit EnrichWithStatus (#981), Update skips ResetClientStatus (#982), TestConnection vs TestDirect status mismatch (#983), batch import null body (#984). RBAC #885 and core sync bugs #923-925, #931 left open. No dotnet build/test."
   }
 }
