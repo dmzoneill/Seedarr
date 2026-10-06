@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:45:00Z",
+  "updatedAt": "2026-10-06T22:46:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -17,10 +17,10 @@
   "currentSubfolder": "src/Seedarr.Api.V1/Torrents",
   "lastPass": {
     "subfolder": "src/Seedarr.Api.V1/Indexers",
-    "completedAt": "2026-10-06T22:45:00Z",
-    "issuesFiled": [1100, 1101, 1102, 1103, 1104],
+    "completedAt": "2026-10-06T22:46:00Z",
+    "issuesFiled": [1100, 1101, 1102, 1103, 1104, 1110, 1113, 1114, 1115],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed IndexerController (CRUD, test/test-direct, search, download, prowlarr sync, caps), RssRuleController (CRUD, history, sync). Searched GitHub issues+comments. Deduped open #927 (DELETE 200), #913 (HttpClient leak), #929 (RSS sync cooldown). Filed #1100 PUT partial JSON disables/clears tags; #1101 POST create masked ApiKey; #1102 test-direct vs id/test URL policy; #1103 rssrules PUT partial clears lists; #1104 stale Implementation on IndexerType change. No dotnet build/test."
+    "notes": "Reviewed IndexerController + RssRuleController. GitHub dedupe: skipped open #927/#913/#929. Slot filings include #1100-#1104 (partial PUT, masked POST, loopback test policy, rssrules PUT, stale Implementation) plus #1110 (test-direct stale id), #1113 (rssrules DELETE 404), #1114 (rss sync false success), #1115 (caps empty on failure). Overlap: #1106-#1108 and #1111-#1112 duplicate #1100-#1104. No dotnet build/test."
   }
 }
