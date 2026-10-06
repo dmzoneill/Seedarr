@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:20:00Z",
+  "updatedAt": "2026-10-06T22:35:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/NzbDrone.SignalR",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
-    "completedAt": "2026-10-06T22:20:00Z",
-    "issuesFiled": [991],
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-06T22:35:00Z",
+    "issuesFiled": [1002],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "TorrentRecheckService pass: deduped open #912 #936 #951 #988; filed #991 RecheckAsync early cancel sets Paused without TorrentUpdated/ModelEvent; commented #912 on missing SignalR when cancel leaves QueuedForChecking. No dotnet build/test."
+    "note": "REST pass: RestControllerWithSignalR coalesce/Flush/Dispose/DispatchBroadcast paths; RestController, RestResource, ResourceValidator, RestPutByIdAttribute (no direct SignalR). Deduped #628 #757 #878. Filed #1002 coalesce timer drops pending when IsConnected false at dispatch. No dotnet build/test."
   }
 }
