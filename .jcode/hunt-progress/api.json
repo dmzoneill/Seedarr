@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:25:00Z",
+  "updatedAt": "2026-10-06T22:35:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Config",
+  "currentSubfolder": "src/Seedarr.Api.V1/System",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Automation",
-    "completedAt": "2026-10-06T22:25:00Z",
-    "issuesFiled": [1025],
+    "subfolder": "src/Seedarr.Api.V1/Config",
+    "completedAt": "2026-10-06T22:35:00Z",
+    "issuesFiled": [1033, 1034, 1035],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed AutomationController, AutomationScriptResource, NzbDrone.Core.Test/Automation/AutomationControllerTest, Seedarr.Api.V1.Test/Automation/AutomationControllerTest, AutomationService/TestScript+ExecuteScript torrent lookup. Searched GitHub issues+comments. Deduped open #930 (run missing script id), #1014 (PUT truncated LastExecutionLog from list), #1015 (DELETE missing id returns 200). Filed #1025: POST test uses simulated torrent and POST run ignores context when torrentId does not exist. RBAC: class Reader; Create/Update/Delete/Run/Test/Install AdminOnly. No dotnet build/test."
+    "notes": "Reviewed ConfigController.cs (General/Seeding/Network/BitTorrent/PeerProtocol/Protocols/Simulation/TrackerServer/Scheduler/Advanced), ConfigControllerBase.cs, AiConfigController.cs, IdentityProviderConfigController.cs, resource mappers, and tests under NzbDrone.Core.Test/Config, NzbDrone.Core.Test/Controllers/ConfigControllerTests.cs, Seedarr.Api.V1.Test/Config, NzbDrone.Automation.Test/Tests/ConfigApiTests.cs. Searched GitHub issues+comments (dmzoneill/Seedarr). Deduped auth OIDC scheme collisions (#893, #906, #976) and closed identity-provider hardening (#563, #564, #711). Filed #1033 AiConfigController stub contract/persistence; #1034 IdentityProvider DB commit before scheme sync without rollback; #1035 GeneralConfig TmdbApiKey plaintext for Reader. No dotnet build/test."
   }
 }
