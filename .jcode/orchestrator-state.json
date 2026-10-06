@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:28:45Z",
+  "updatedAt": "2026-10-06T22:29:27Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_3ecec822"
+    "lastScheduleId": "sched_176072e0"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -27,22 +27,22 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "peacock"
+      "worker": "snail"
     },
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "quail"
+      "worker": "sheep"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "raven"
+      "worker": "sloth"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "otter"
+      "worker": "snake"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 201,
-  "lastMonitorNote": "201 open; 2 restarts quail/raven; shark/peacock/otter active; latest #1067-#1076"
+  "githubOpenCount": 30,
+  "lastMonitorNote": "30 open; 2 restarts peacock→snail (Api ArrIntegration), otter→snake (SignalR); shark/sheep/sloth active; latest #1073-#1077; peacock api.json expected"
 }
