@@ -39,7 +39,8 @@ public class McpController : ControllerBase
 
         try
         {
-            var endpointMessage = $"event: endpoint\r\ndata: /api/v1/mcp/message?sessionId={sessionId}\r\n\r\n";
+            var pathBase = Request.PathBase.HasValue ? Request.PathBase.Value.TrimEnd('/') : string.Empty;
+            var endpointMessage = $"event: endpoint\r\ndata: {pathBase}/api/v1/mcp/message?sessionId={sessionId}\r\n\r\n";
             await Response.WriteAsync(endpointMessage, cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
 
