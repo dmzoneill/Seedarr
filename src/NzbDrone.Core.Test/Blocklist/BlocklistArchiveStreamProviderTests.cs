@@ -320,6 +320,102 @@ public class BlocklistArchiveStreamProviderTests
         Assert.That(service.Metadata.ConsecutiveFailures, Is.EqualTo(1));
     }
 
+    [Test]
+    public async Task ExtractRulesAsync_should_stream_and_decompress_zip_archive_from_non_seekable_stream()
+    {
+        var entries = new[]
+        {
+            ("readme.txt", "Bluetack archive info"),
+            ("rules.p2p", "# Non-seekable zip test\n192.168.1.1\n10.0.0.1\n")
+        };
+        var zipBytes = CreateZipBytes(entries);
+        using var stream = new NonSeekableStream(zipBytes);
+
+        var rules = await _provider.ExtractRulesAsync(stream, url: "http://example.com/rules.zip");
+
+        Assert.That(rules.Count, Is.EqualTo(2));
+        Assert.That(rules[0], Is.EqualTo("192.168.1.1"));
+        Assert.That(rules[1], Is.EqualTo("10.0.0.1"));
+    }
+
+    [Test]
+    public void ExtractRulesAsync_should_abort_when_compressed_bytes_quota_exceeded_on_non_seekable_zip_stream()
+    {
+        var entries = new[]
+        {
+            ("rules.p2p", "192.168.1.1\n")
+        };
+        var zipBytes = CreateZipBytes(entries);
+        var options = new BlocklistArchiveStreamOptions
+        {
+            MaxUncompressedBytes = 10
+        };
+        var strictProvider = new BlocklistArchiveStreamProvider(options);
+        using var stream = new NonSeekableStream(zipBytes);
+
+        var ex = Assert.ThrowsAsync<BlocklistQuotaExceededException>(async () =>
+        {
+            await strictProvider.ExtractRulesAsync(stream, url: "http://example.com/rules.zip");
+        });
+
+        Assert.That(ex.Message, Does.Contain("quota"));
+    }
+
+    [Test]
+    public async Task PeerBlocklistSyncService_should_seamlessly_sync_zip_blocklist_from_non_seekable_stream()
+    {
+        using var mockHandler = new MockHttpMessageHandler();
+        using var httpClient = new HttpClient(mockHandler);
+        var now = new DateTime(2026, 9, 20, 10, 0, 0, DateTimeKind.Utc);
+
+        var service = new PeerBlocklistSyncService(
+            httpClient,
+            configService: null,
+            nowProvider: () => now,
+            streamProvider: _provider);
+
+        var entries = new[]
+        {
+            ("readme.txt", "Bluetack info"),
+            ("rules.p2p", "# Bluetack\n192.168.10.0/24\n10.20.30.40\n")
+        };
+        var zipBytes = CreateZipBytes(entries);
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new NonSeekableStream(zipBytes))
+        };
+        response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+        mockHandler.EnqueueResponse(response);
+
+        var result = await service.SyncAsync("http://example.com/blocklist.zip");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RuleCount, Is.EqualTo(2));
+        Assert.That(service.ActiveRules.Count, Is.EqualTo(2));
+        Assert.That(service.ActiveRules[0], Is.EqualTo("192.168.10.0/24"));
+        Assert.That(service.ActiveRules[1], Is.EqualTo("10.20.30.40"));
+    }
+
+    private sealed class NonSeekableStream : MemoryStream
+    {
+        public NonSeekableStream(byte[] data)
+            : base(data)
+        {
+        }
+
+        public override bool CanSeek => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    }
+
     private static byte[] CreateGzipBytes(string content)
     {
         using var ms = new MemoryStream();

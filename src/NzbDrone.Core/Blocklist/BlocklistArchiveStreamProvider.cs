@@ -172,38 +172,72 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
             }
             else if (format == BlocklistArchiveFormat.Zip)
             {
-                using var archive = new ZipArchive(fullStream, ZipArchiveMode.Read, leaveOpen: false);
-                var validEntries = archive.Entries
-                    .Where(e => !e.FullName.EndsWith('/') && !e.FullName.EndsWith('\\') && !IsZipSlip(e.FullName))
-                    .ToList();
+                Stream seekableStream = fullStream;
+                MemoryStream memoryBuffer = null;
 
-                if (validEntries.Count == 0)
+                try
                 {
-                    yield break;
-                }
+                    if (!fullStream.CanSeek)
+                    {
+                        memoryBuffer = new MemoryStream();
+                        var bufferSize = _options.BufferSize > 0 ? _options.BufferSize : BlocklistArchiveStreamOptions.DefaultBufferSize;
+                        var buffer = new byte[bufferSize];
+                        int read;
+                        while ((read = await fullStream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false)) > 0)
+                        {
+                            if (_options.MaxUncompressedBytes > 0 && memoryBuffer.Length + read > _options.MaxUncompressedBytes)
+                            {
+                                throw new BlocklistQuotaExceededException(
+                                    $"Compressed archive size exceeded safety quota of {_options.MaxUncompressedBytes:N0} bytes.");
+                            }
 
-                var primaryEntry = SelectPrimaryBlocklistEntry(validEntries);
-                if (_options.MaxUncompressedBytes > 0 && primaryEntry.Length > _options.MaxUncompressedBytes)
-                {
-                    throw new BlocklistQuotaExceededException(
-                        $"Zip entry uncompressed size ({primaryEntry.Length} bytes) exceeds safety quota of {_options.MaxUncompressedBytes} bytes.");
-                }
+                            await memoryBuffer.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                        }
+
+                        memoryBuffer.Position = 0;
+                        seekableStream = memoryBuffer;
+                    }
+
+                    using var archive = new ZipArchive(seekableStream, ZipArchiveMode.Read, leaveOpen: false);
+                    var validEntries = archive.Entries
+                        .Where(e => !e.FullName.EndsWith('/') && !e.FullName.EndsWith('\\') && !IsZipSlip(e.FullName))
+                        .ToList();
+
+                    if (validEntries.Count == 0)
+                    {
+                        yield break;
+                    }
+
+                    var primaryEntry = SelectPrimaryBlocklistEntry(validEntries);
+                    if (_options.MaxUncompressedBytes > 0 && primaryEntry.Length > _options.MaxUncompressedBytes)
+                    {
+                        throw new BlocklistQuotaExceededException(
+                            $"Zip entry uncompressed size ({primaryEntry.Length} bytes) exceeds safety quota of {_options.MaxUncompressedBytes} bytes.");
+                    }
 
 #pragma warning disable CA1849
-                await using var entryStream = primaryEntry.Open();
+                    await using var entryStream = primaryEntry.Open();
 #pragma warning restore CA1849
-                await using var countingStream = new QuotaCountingStream(entryStream, _options.MaxUncompressedBytes, leaveOpen: false);
-                using var reader = new StreamReader(
-                    countingStream,
-                    Encoding.UTF8,
-                    detectEncodingFromByteOrderMarks: true,
-                    bufferSize: _options.BufferSize,
-                    leaveOpen: false);
+                    await using var countingStream = new QuotaCountingStream(entryStream, _options.MaxUncompressedBytes, leaveOpen: false);
+                    using var reader = new StreamReader(
+                        countingStream,
+                        Encoding.UTF8,
+                        detectEncodingFromByteOrderMarks: true,
+                        bufferSize: _options.BufferSize,
+                        leaveOpen: false);
 
-                string line;
-                while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) != null)
+                    string line;
+                    while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) != null)
+                    {
+                        yield return line;
+                    }
+                }
+                finally
                 {
-                    yield return line;
+                    if (memoryBuffer != null)
+                    {
+                        await memoryBuffer.DisposeAsync().ConfigureAwait(false);
+                    }
                 }
             }
             else
