@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T23:25:00Z",
+  "updatedAt": "2026-10-06T23:35:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Jobs",
-    "completedAt": "2026-10-06T23:25:00Z",
-    "issuesFiled": [1026],
+    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+    "completedAt": "2026-10-06T23:35:00Z",
+    "issuesFiled": [1036],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Jobs pass: reviewed Scheduler and ScheduledTaskCommandExecutor SignalR lifecycle (TaskStarted/TaskCompleted/TaskFailed), TaskManager concurrency/history (no direct hub). Deduped open #911 (cancel/timeout lifecycle), #952 (missing task instance TaskCompleted), #985 (command executor failure terminals), #903 (TaskFailed UI), #971 (TrackerScrapeJob success masking). Filed #1026 duplicate TaskStarted on command-queue manual runs (SystemController + ScheduledTaskCommandExecutor) with mismatched payloads. No dotnet build/test."
+    "note": "TorrentRecheckService pass: reviewed QueueRecheck/ProcessQueueAsync/ExecuteRecheckCoreAsync SignalR (TorrentUpdated, TorrentRecheckProgress, dual BroadcastMessage+BroadcastToTorrent). Deduped open #951 (duplicate All+group), #988 (queue failure terminal), #991 (RecheckAsync early cancel), #912 (queued cancel skip). Filed #1036 CancelRecheck during ProcessQueue semaphore wait OCE omits status revert and TorrentUpdated. No dotnet build/test."
   }
 }
