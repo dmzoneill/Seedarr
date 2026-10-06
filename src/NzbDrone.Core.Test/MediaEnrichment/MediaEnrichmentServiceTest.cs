@@ -320,6 +320,62 @@ public class MediaEnrichmentServiceTest
     }
 
     [Test]
+    public async Task CleanupTorrentCache_DoesNotDeleteSiblingDirectoriesSharingPrefix()
+    {
+        var mediaCoverDir = Path.Combine(_tempDirectory, "MediaCover");
+        Directory.CreateDirectory(mediaCoverDir);
+
+        var siblingDir = Path.Combine(_tempDirectory, "MediaCover_backup");
+        var siblingSubDir = Path.Combine(siblingDir, "sub");
+        Directory.CreateDirectory(siblingSubDir);
+
+        var siblingFile = Path.Combine(siblingSubDir, "poster.jpg");
+        await File.WriteAllBytesAsync(siblingFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+        var meta = new TorrentMediaMetadata
+        {
+            Id = 1,
+            TorrentId = 42,
+            PosterLocalPath = siblingFile
+        };
+
+        _repository.GetByTorrentId(42).Returns(meta);
+
+        _service.CleanupTorrentCache(42);
+
+        Assert.That(Directory.Exists(siblingDir), Is.True);
+        Assert.That(Directory.Exists(siblingSubDir), Is.True);
+        Assert.That(File.Exists(siblingFile), Is.True);
+    }
+
+    [Test]
+    public async Task CleanupTorrentCache_PrunesCacheDirInsideMediaCover()
+    {
+        var mediaCoverDir = Path.Combine(_tempDirectory, "MediaCover");
+        Directory.CreateDirectory(mediaCoverDir);
+
+        var cacheSubDir = Path.Combine(mediaCoverDir, "custom_hash");
+        Directory.CreateDirectory(cacheSubDir);
+
+        var cacheFile = Path.Combine(cacheSubDir, "poster.jpg");
+        await File.WriteAllBytesAsync(cacheFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+        var meta = new TorrentMediaMetadata
+        {
+            Id = 1,
+            TorrentId = 42,
+            PosterLocalPath = cacheFile
+        };
+
+        _repository.GetByTorrentId(42).Returns(meta);
+
+        _service.CleanupTorrentCache(42);
+
+        Assert.That(Directory.Exists(cacheSubDir), Is.False);
+        Assert.That(Directory.Exists(mediaCoverDir), Is.True);
+    }
+
+    [Test]
     public async Task CacheArtworkAsync_WhenLocalValidImage_CopiesToMediaCoverDir()
     {
         var sourceImage = Path.Combine(_tempDirectory, "source.jpg");

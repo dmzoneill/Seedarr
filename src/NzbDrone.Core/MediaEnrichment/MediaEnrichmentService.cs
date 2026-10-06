@@ -1460,9 +1460,15 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         {
             var dir = Path.GetDirectoryName(Path.GetFullPath(filePath));
             var fullCacheBase = Path.GetFullPath(mediaCacheBase);
+            if (!fullCacheBase.EndsWith(Path.DirectorySeparatorChar) &&
+                !fullCacheBase.EndsWith(Path.AltDirectorySeparatorChar))
+            {
+                fullCacheBase += Path.DirectorySeparatorChar;
+            }
+
             if (dir != null &&
-                dir.StartsWith(fullCacheBase, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(dir, fullCacheBase, StringComparison.OrdinalIgnoreCase) &&
+                (dir + Path.DirectorySeparatorChar).StartsWith(fullCacheBase, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(dir, Path.GetFullPath(mediaCacheBase), StringComparison.OrdinalIgnoreCase) &&
                 Directory.Exists(dir))
             {
                 Directory.Delete(dir, recursive: true);
