@@ -228,12 +228,20 @@ public class ArchiveExtractorServiceTest
 
     private static void CreateSampleZip(string zipFilePath, string entryName, string content)
     {
+        CreateMultiEntryZip(zipFilePath, new[] { (entryName, content) });
+    }
+
+    private static void CreateMultiEntryZip(string zipFilePath, (string Name, string Content)[] entries)
+    {
         using var zipStream = new FileStream(zipFilePath, FileMode.Create);
         using var archive = new ZipArchive(zipStream, ZipArchiveMode.Create);
-        var entry = archive.CreateEntry(entryName);
-        using var entryStream = entry.Open();
-        var bytes = Encoding.UTF8.GetBytes(content);
-        entryStream.Write(bytes, 0, bytes.Length);
+        foreach (var (name, content) in entries)
+        {
+            var entry = archive.CreateEntry(name);
+            using var entryStream = entry.Open();
+            var bytes = Encoding.UTF8.GetBytes(content);
+            entryStream.Write(bytes, 0, bytes.Length);
+        }
     }
 
     private static void CreateSymlinkZip(string zipFilePath, string entryName, string targetPath)
@@ -269,6 +277,64 @@ public class ArchiveExtractorServiceTest
         Assert.That(result.ErrorMessage, Does.Contain("Zip-Slip"));
         _eventAggregator.Received(1).PublishEvent(Arg.Is<ArchiveExtractionFailedEvent>(e => e.ErrorMessage.Contains("Zip-Slip")));
         Assert.That(File.Exists(Path.Combine(_tempDir, "evil.txt")), Is.False);
+    }
+
+    [Test]
+    public async Task ExtractTorrentArchiveAsync_rolls_back_prior_entries_when_later_entry_fails()
+    {
+        var torrentDir = Path.Combine(_tempDir, "TorrentDataRollback");
+        var extractDir = Path.Combine(_tempDir, "ExtractedRollback");
+        Directory.CreateDirectory(torrentDir);
+
+        var goodZipPath = Path.Combine(torrentDir, "A-Good.zip");
+        var secondZipPath = Path.Combine(torrentDir, "B-Second.zip");
+        CreateSampleZip(goodZipPath, "safe.mkv", "legitimate payload");
+        CreateSampleZip(secondZipPath, "second.mkv", "second payload");
+
+        var diskMock = Substitute.For<IDiskProvider>();
+        var spaceChecks = 0;
+        diskMock.GetAvailableFreeSpace(Arg.Any<string>()).Returns(_ =>
+        {
+            spaceChecks++;
+            return spaceChecks <= 2 ? 1_000_000L : 50L;
+        });
+
+        var subject = new ArchiveExtractorService(_eventAggregator, diskMock);
+
+        var torrent = new Torrent
+        {
+            Id = 62,
+            Name = "Rollback.Release",
+            SavePath = torrentDir,
+        };
+
+        var result = await subject.ExtractTorrentArchiveAsync(torrent, destination: extractDir);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("Insufficient free disk space"));
+        Assert.That(File.Exists(Path.Combine(extractDir, "safe.mkv")), Is.False, "Partial extraction must be rolled back");
+        Assert.That(File.Exists(Path.Combine(extractDir, "second.mkv")), Is.False);
+    }
+
+    [Test]
+    public void WriteBoundedDecompressedStream_rejects_output_exceeding_declared_entry_length()
+    {
+        var destination = Path.Combine(_tempDir, "bounded.bin");
+        using var payload = new MemoryStream(Encoding.UTF8.GetBytes(new string('z', 2048)));
+        var archiveBytesWritten = 0L;
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            _subject.WriteBoundedDecompressedStream(
+                payload,
+                destination,
+                "spoofed.bin",
+                declaredUncompressedLength: 512,
+                declaredCompressedLength: 64,
+                archiveDeclaredTotalUncompressed: 512,
+                ref archiveBytesWritten));
+
+        Assert.That(ex.Message, Does.Contain("exceeding declared uncompressed size"));
+        Assert.That(File.Exists(destination), Is.False);
     }
 
     [Test]

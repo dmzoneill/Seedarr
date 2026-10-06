@@ -360,7 +360,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return (history, parsed);
     }
 
-    private static void ApplyMediaMetadataToResource(TorrentResource resource, TorrentMediaMetadata mediaMetadata)
+    private void ApplyMediaMetadataToResource(TorrentResource resource, TorrentMediaMetadata mediaMetadata)
     {
         if (mediaMetadata == null)
         {

@@ -11,7 +11,6 @@ using NzbDrone.Common.Disk;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 using SharpCompress.Archives;
-using SharpCompress.Common;
 
 namespace NzbDrone.Core.Extraction;
 
@@ -20,6 +19,8 @@ public class ArchiveExtractorService : IArchiveExtractorService
     public const double DefaultFreeSpaceSafetyMargin = 1.15;
     public const double DefaultMaxCompressionRatio = 100.0;
     public const long DefaultMaxSingleFileUncompressedSize = 250L * 1024 * 1024 * 1024; // 250 GB
+    private const int ExtractionBufferSize = 81920;
+    private const long MinBytesForCompressionRatioCheck = 10 * 1024;
 
     private static readonly Regex SecondaryPartRarRegex = new(@"\.part(?!0*1\.rar$)(\d+)\.rar$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PrimaryPartRarRegex = new(@"\.part0*1\.rar$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -292,10 +293,16 @@ public class ArchiveExtractorService : IArchiveExtractorService
         }
         catch (Exception ex)
         {
+            var rolledBack = RollbackExtractedFiles(extractedFiles, destDir);
             var extractError = $"Archive extraction failed for torrent '{torrent.Name}': {ex.Message}";
             _logger.Error(ex, extractError);
             result.Success = false;
             result.ErrorMessage = extractError;
+            if (rolledBack > 0)
+            {
+                _logger.Info("Rolled back {0} partially extracted file(s) after extraction failure for torrent '{1}'", rolledBack, torrent.Name);
+            }
+
             _eventAggregator.PublishEvent(new ArchiveExtractionFailedEvent(torrent, extractError));
         }
 
@@ -618,6 +625,10 @@ public class ArchiveExtractorService : IArchiveExtractorService
             throw new InvalidOperationException($"Insufficient free disk space on '{canonicalTargetDir}'. Required: {requiredSpace:N0} bytes (including {(FreeSpaceSafetyMargin - 1.0) * 100:0}% safety margin for {totalUncompressedSize:N0} bytes uncompressed), Available: {availableSpace:N0} bytes.");
         }
 
+        var archiveBytesWritten = 0L;
+
+        try
+        {
         if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         {
             using var zipArchive = ZipFile.OpenRead(archivePath);
@@ -640,7 +651,17 @@ public class ArchiveExtractorService : IArchiveExtractorService
                     Directory.CreateDirectory(parentDir);
                 }
 
-                entry.ExtractToFile(fullDestinationPath, overwrite: true);
+                using (var entryStream = entry.Open())
+                {
+                    WriteBoundedDecompressedStream(
+                        entryStream,
+                        fullDestinationPath,
+                        entry.FullName,
+                        entry.Length,
+                        entry.CompressedLength,
+                        totalUncompressedSize,
+                        ref archiveBytesWritten);
+                }
 
                 var fileInfo = new FileInfo(fullDestinationPath);
                 if (fileInfo.LinkTarget != null)
@@ -691,11 +712,17 @@ public class ArchiveExtractorService : IArchiveExtractorService
                 Directory.CreateDirectory(parentDir);
             }
 
-            entry.WriteToFile(fullDestinationPath, new ExtractionOptions
+            using (var entryStream = entry.OpenEntryStream())
             {
-                ExtractFullPath = true,
-                Overwrite = true,
-            });
+                WriteBoundedDecompressedStream(
+                    entryStream,
+                    fullDestinationPath,
+                    entryKey,
+                    entry.Size,
+                    entry.CompressedSize,
+                    totalUncompressedSize,
+                    ref archiveBytesWritten);
+            }
 
             var fileInfo = new FileInfo(fullDestinationPath);
             if (fileInfo.LinkTarget != null)
@@ -721,8 +748,166 @@ public class ArchiveExtractorService : IArchiveExtractorService
 
             extractedFiles.Add(fullDestinationPath);
         }
+        }
+        catch
+        {
+            RollbackExtractedFiles(extractedFiles, destination);
+            throw;
+        }
 
         return extractedFiles;
+    }
+
+    internal void WriteBoundedDecompressedStream(
+        Stream decompressedSource,
+        string destinationPath,
+        string entryName,
+        long declaredUncompressedLength,
+        long declaredCompressedLength,
+        long archiveDeclaredTotalUncompressed,
+        ref long archiveBytesWritten)
+    {
+        if (decompressedSource == null)
+        {
+            throw new InvalidOperationException($"Archive entry '{entryName}' has no readable stream.");
+        }
+
+        var buffer = new byte[ExtractionBufferSize];
+        long entryBytesWritten = 0;
+
+        try
+        {
+            using var output = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, ExtractionBufferSize);
+            int chunkBytes;
+            while ((chunkBytes = decompressedSource.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                entryBytesWritten += chunkBytes;
+                archiveBytesWritten += chunkBytes;
+
+                if (entryBytesWritten > MaxSingleFileUncompressedSize)
+                {
+                    throw new InvalidOperationException(
+                        $"Archive entry '{entryName}' exceeded maximum single file uncompressed limit of {MaxSingleFileUncompressedSize} bytes during extraction.");
+                }
+
+                if (declaredUncompressedLength > 0 && entryBytesWritten > declaredUncompressedLength)
+                {
+                    throw new InvalidOperationException(
+                        $"Archive entry '{entryName}' decompressed to {entryBytesWritten} bytes, exceeding declared uncompressed size of {declaredUncompressedLength} bytes.");
+                }
+
+                if (archiveDeclaredTotalUncompressed > 0 && archiveBytesWritten > archiveDeclaredTotalUncompressed)
+                {
+                    throw new InvalidOperationException(
+                        $"Archive decompressed to {archiveBytesWritten} bytes, exceeding declared total uncompressed size of {archiveDeclaredTotalUncompressed} bytes.");
+                }
+
+                if (entryBytesWritten > MinBytesForCompressionRatioCheck)
+                {
+                    var compressedBytes = Math.Max(1L, declaredCompressedLength);
+                    var ratio = (double)entryBytesWritten / compressedBytes;
+                    if (ratio > MaxCompressionRatio)
+                    {
+                        throw new InvalidOperationException(
+                            $"Zip-bomb detected during extraction: archive entry '{entryName}' has compression ratio of {ratio:F1}:1 (uncompressed: {entryBytesWritten}, compressed: {declaredCompressedLength}), exceeding limit of {MaxCompressionRatio:F1}:1.");
+                    }
+                }
+
+                output.Write(buffer, 0, chunkBytes);
+            }
+        }
+        catch
+        {
+            TryDeleteFile(destinationPath);
+            throw;
+        }
+    }
+
+    private static int RollbackExtractedFiles(IReadOnlyList<string> extractedFiles, string destinationRoot)
+    {
+        if (extractedFiles == null || extractedFiles.Count == 0)
+        {
+            return 0;
+        }
+
+        var deletedCount = 0;
+        var canonicalRoot = string.IsNullOrWhiteSpace(destinationRoot)
+            ? null
+            : Path.GetFullPath(destinationRoot);
+
+        foreach (var extractedFile in extractedFiles.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(extractedFile))
+            {
+                continue;
+            }
+
+            if (canonicalRoot != null)
+            {
+                var canonicalFile = Path.GetFullPath(extractedFile);
+                var rootPrefix = canonicalRoot.EndsWith(Path.DirectorySeparatorChar)
+                    ? canonicalRoot
+                    : canonicalRoot + Path.DirectorySeparatorChar;
+
+                if (!canonicalFile.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+            }
+
+            if (TryDeleteFile(extractedFile))
+            {
+                deletedCount++;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(canonicalRoot))
+        {
+            PruneEmptyDirectoriesUnderRoot(canonicalRoot);
+        }
+
+        return deletedCount;
+    }
+
+    private static void PruneEmptyDirectoriesUnderRoot(string canonicalRoot)
+    {
+        if (!Directory.Exists(canonicalRoot))
+        {
+            return;
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(canonicalRoot, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length))
+        {
+            try
+            {
+                if (Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
+                {
+                    Directory.Delete(directory);
+                }
+            }
+            catch
+            {
+                // Ignore cleanup errors for individual directories
+            }
+        }
+    }
+
+    private static bool TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+                return true;
+            }
+        }
+        catch
+        {
+            // Ignore deletion failure
+        }
+
+        return false;
     }
 
     private static void CollectCompanionVolumes(string primaryArchivePath, HashSet<string> filesToDelete)
