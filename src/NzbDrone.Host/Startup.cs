@@ -154,7 +154,7 @@ public class Startup
                     var configTrustedProxies = configFileProvider?.TrustedProxies;
                     var idpRepo = context.RequestServices.GetService<IIdentityProviderRepository>();
                     var forwardAuthIdp = idpRepo?.GetEnabled()?.FirstOrDefault(p => p.ProviderType == IdentityProviderType.ForwardAuth);
-                    var isForwardAuthEnabled = forwardAuthIdp != null || !string.IsNullOrWhiteSpace(configTrustedProxies);
+                    var isForwardAuthEnabled = forwardAuthIdp != null && forwardAuthIdp.IsEnabled;
 
                     if (isForwardAuthEnabled && remoteIp != null)
                     {
