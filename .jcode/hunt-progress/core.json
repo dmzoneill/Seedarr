@@ -1,6 +1,6 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T22:45:00Z",
+  "updatedAt": "2026-10-06T23:15:00Z",
   "area": "src/NzbDrone.Core",
   "currentSubfolder": "src/NzbDrone.Core/Datastore",
   "rotation": [
@@ -12,10 +12,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Core/Authentication",
-    "completedAt": "2026-10-06T22:45:00Z",
-    "issuesFiled": [976, 978, 979],
+    "completedAt": "2026-10-06T23:15:00Z",
+    "issuesFiled": [986, 987],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Deduped open #917 IssuedUtc revocation (host), #893 SanitizeProviderId, closed #863/#563 session persist and secret encryption; not re-filed."
+    "note": "Deduped open #917 IssuedUtc/revocation, #979 IdentityProvider CreatedAt; not re-filed."
   }
 }
