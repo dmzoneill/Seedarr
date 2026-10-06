@@ -589,6 +589,21 @@ public class UpnpServiceTest
             m.PublicPort == 6969 && m.Description == "Seedarr Tracker UDP"));
     }
 
+    [Test]
+    public void UpnpService_implements_IHandle_ConfigSavedEvent()
+    {
+        Assert.That(_subject is IHandle<ConfigSavedEvent>, Is.True);
+    }
+
+    [Test]
+    public void GetMappings_returns_independent_snapshots()
+    {
+        var mappings1 = _subject.GetMappings();
+        var mappings2 = _subject.GetMappings();
+
+        Assert.That(mappings1, Is.Not.SameAs(mappings2));
+    }
+
     private static MappingException CreateMappingException(int errorCode, string errorText)
     {
         var ctor = typeof(MappingException).GetConstructor(
