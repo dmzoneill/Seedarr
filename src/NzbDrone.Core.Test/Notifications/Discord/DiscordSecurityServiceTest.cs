@@ -127,4 +127,90 @@ public class DiscordSecurityServiceTest
 
         Assert.That(isValid, Is.True);
     }
+
+    [Test]
+    public void VerifySignature_should_return_false_when_signature_is_replayed()
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        var bodyBytes = Encoding.UTF8.GetBytes("{\"type\":1}");
+        var signatureHex = _service.GenerateSignature(_privateKeyHex, timestamp, bodyBytes);
+
+        var firstResult = _service.VerifySignature(signatureHex, timestamp, bodyBytes, _publicKeyHex);
+        var replayResult = _service.VerifySignature(signatureHex, timestamp, bodyBytes, _publicKeyHex);
+
+        Assert.That(firstResult, Is.True);
+        Assert.That(replayResult, Is.False);
+    }
+
+    [Test]
+    public void VerifySignature_should_return_false_when_replayed_with_different_casing()
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        var bodyBytes = Encoding.UTF8.GetBytes("{\"type\":1}");
+        var signatureHex = _service.GenerateSignature(_privateKeyHex, timestamp, bodyBytes);
+
+        var firstResult = _service.VerifySignature(signatureHex.ToLowerInvariant(), timestamp, bodyBytes, _publicKeyHex);
+        var replayResult = _service.VerifySignature(signatureHex.ToUpperInvariant(), timestamp, bodyBytes, _publicKeyHex);
+
+        Assert.That(firstResult, Is.True);
+        Assert.That(replayResult, Is.False);
+    }
+
+    [Test]
+    public void VerifySignature_should_allow_signature_again_after_cache_cleared()
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        var bodyBytes = Encoding.UTF8.GetBytes("{\"type\":1}");
+        var signatureHex = _service.GenerateSignature(_privateKeyHex, timestamp, bodyBytes);
+
+        var firstResult = _service.VerifySignature(signatureHex, timestamp, bodyBytes, _publicKeyHex);
+        Assert.That(firstResult, Is.True);
+        Assert.That(_service.ReplayCacheCount, Is.EqualTo(1));
+
+        _service.ClearReplayCache();
+        Assert.That(_service.ReplayCacheCount, Is.EqualTo(0));
+
+        var secondResult = _service.VerifySignature(signatureHex, timestamp, bodyBytes, _publicKeyHex);
+        Assert.That(secondResult, Is.True);
+    }
+
+    [Test]
+    public void VerifySignature_should_return_false_when_timestamp_is_in_future_beyond_clock_skew()
+    {
+        var futureTimestamp = DateTimeOffset.UtcNow.AddSeconds(30).ToUnixTimeSeconds().ToString();
+        var bodyBytes = Encoding.UTF8.GetBytes("{\"type\":1}");
+        var signatureHex = _service.GenerateSignature(_privateKeyHex, futureTimestamp, bodyBytes);
+
+        var isValid = _service.VerifySignature(signatureHex, futureTimestamp, bodyBytes, _publicKeyHex);
+
+        Assert.That(isValid, Is.False);
+    }
+
+    [Test]
+    public void VerifySignature_should_return_true_when_timestamp_is_in_future_within_clock_skew()
+    {
+        var futureTimestamp = DateTimeOffset.UtcNow.AddSeconds(5).ToUnixTimeSeconds().ToString();
+        var bodyBytes = Encoding.UTF8.GetBytes("{\"type\":1}");
+        var signatureHex = _service.GenerateSignature(_privateKeyHex, futureTimestamp, bodyBytes);
+
+        var isValid = _service.VerifySignature(signatureHex, futureTimestamp, bodyBytes, _publicKeyHex);
+
+        Assert.That(isValid, Is.True);
+    }
+
+    [TestCase("999999999999999999")]
+    [TestCase("-999999999999999999")]
+    [TestCase("9223372036854775807")]
+    [TestCase("-9223372036854775808")]
+    public void VerifySignature_should_return_false_without_throwing_for_extreme_timestamp_values(string extremeTimestamp)
+    {
+        var bodyBytes = Encoding.UTF8.GetBytes("{\"type\":1}");
+        var signatureHex = new string('a', 128);
+
+        Assert.DoesNotThrow(() =>
+        {
+            var isValid = _service.VerifySignature(signatureHex, extremeTimestamp, bodyBytes, _publicKeyHex);
+            Assert.That(isValid, Is.False);
+        });
+    }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -11,6 +12,78 @@ public class DiscordSecurityService : IDiscordSecurityService
     public const int SignatureLengthBytes = 64;
     public const int PublicKeyLengthBytes = 32;
     public static readonly TimeSpan MaxRequestAge = TimeSpan.FromMinutes(5);
+    public static readonly TimeSpan MaxClockSkew = TimeSpan.FromSeconds(15);
+
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _replayCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _purgeLock = new();
+    private DateTimeOffset _lastPurgeTime = DateTimeOffset.UtcNow;
+
+    public int ReplayCacheCount => _replayCache.Count;
+
+    public void ClearReplayCache()
+    {
+        _replayCache.Clear();
+    }
+
+    public int PurgeExpired()
+    {
+        lock (_purgeLock)
+        {
+            return PurgeExpiredInternal(DateTimeOffset.UtcNow);
+        }
+    }
+
+    private int PurgeExpiredInternal(DateTimeOffset now)
+    {
+        _lastPurgeTime = now;
+        var count = 0;
+        foreach (var kvp in _replayCache)
+        {
+            if (kvp.Value <= now)
+            {
+                if (_replayCache.TryRemove(kvp.Key, out _))
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private void CleanupExpiredEntriesIfDue()
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (now - _lastPurgeTime < TimeSpan.FromMinutes(1) && _replayCache.Count < 1000)
+        {
+            return;
+        }
+
+        lock (_purgeLock)
+        {
+            if (now - _lastPurgeTime < TimeSpan.FromMinutes(1) && _replayCache.Count < 1000)
+            {
+                return;
+            }
+
+            PurgeExpiredInternal(now);
+        }
+    }
+
+    private bool IsReplayed(string signatureHex)
+    {
+        if (_replayCache.TryGetValue(signatureHex, out var expiresAt))
+        {
+            if (expiresAt > DateTimeOffset.UtcNow)
+            {
+                return true;
+            }
+
+            _replayCache.TryRemove(signatureHex, out _);
+        }
+
+        return false;
+    }
 
     public bool VerifySignature(string signatureHex, string timestamp, byte[] bodyBytes, string publicKeyHex)
     {
@@ -26,12 +99,14 @@ public class DiscordSecurityService : IDiscordSecurityService
             return false;
         }
 
+        var normalizedSignature = signatureHex.Trim();
+
         byte[] signatureBytes;
         byte[] publicKeyBytes;
 
         try
         {
-            signatureBytes = Convert.FromHexString(signatureHex.Trim());
+            signatureBytes = Convert.FromHexString(normalizedSignature);
             publicKeyBytes = Convert.FromHexString(publicKeyHex.Trim());
         }
         catch (FormatException)
@@ -40,6 +115,11 @@ public class DiscordSecurityService : IDiscordSecurityService
         }
 
         if (signatureBytes.Length != SignatureLengthBytes || publicKeyBytes.Length != PublicKeyLengthBytes)
+        {
+            return false;
+        }
+
+        if (IsReplayed(normalizedSignature))
         {
             return false;
         }
@@ -58,7 +138,19 @@ public class DiscordSecurityService : IDiscordSecurityService
                 signer.BlockUpdate(bodyBytes, 0, bodyBytes.Length);
             }
 
-            return signer.VerifySignature(signatureBytes);
+            if (!signer.VerifySignature(signatureBytes))
+            {
+                return false;
+            }
+
+            var expiresAt = DateTimeOffset.UtcNow + MaxRequestAge + MaxClockSkew;
+            if (!_replayCache.TryAdd(normalizedSignature, expiresAt))
+            {
+                return false;
+            }
+
+            CleanupExpiredEntriesIfDue();
+            return true;
         }
         catch
         {
@@ -94,24 +186,40 @@ public class DiscordSecurityService : IDiscordSecurityService
     {
         DateTimeOffset requestTime;
 
-        if (long.TryParse(timestamp, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unixTime))
+        try
         {
-            requestTime = unixTime > 9999999999L
-                ? DateTimeOffset.FromUnixTimeMilliseconds(unixTime)
-                : DateTimeOffset.FromUnixTimeSeconds(unixTime);
+            if (long.TryParse(timestamp, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unixTime))
+            {
+                requestTime = unixTime > 9999999999L
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(unixTime)
+                    : DateTimeOffset.FromUnixTimeSeconds(unixTime);
+            }
+            else if (DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedDt))
+            {
+                requestTime = parsedDt;
+            }
+            else
+            {
+                return false;
+            }
         }
-        else if (DateTimeOffset.TryParse(timestamp, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedDt))
-        {
-            requestTime = parsedDt;
-        }
-        else
+        catch (ArgumentOutOfRangeException)
         {
             return false;
         }
 
         var now = DateTimeOffset.UtcNow;
-        var difference = (now - requestTime).Duration();
 
-        return difference <= MaxRequestAge;
+        if (requestTime > now + MaxClockSkew)
+        {
+            return false;
+        }
+
+        if (requestTime < now - MaxRequestAge)
+        {
+            return false;
+        }
+
+        return true;
     }
 }
