@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T00:10:00Z",
-  "area": "src/Seedarr.Http/REST",
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "updatedAt": "2026-10-07T00:35:00Z",
+  "area": "src/NzbDrone.SignalR",
+  "currentSubfolder": "src/NzbDrone.SignalR",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
-    "completedAt": "2026-10-07T00:10:00Z",
-    "issuesFiled": [1172],
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-07T00:35:00Z",
+    "issuesFiled": [1186],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "TorrentRecheckService.cs pass: reviewed QueueRecheck/ProcessQueueAsync queue drain + SignalR lifecycle (TorrentUpdated, TorrentRecheckProgress throttling), CancelRecheck vs ExecuteRecheckCoreAsync cancel paths, direct RecheckAsync vs queued failure handling, state machine transitions, broadcaster dedup keys. GitHub dedupe: existing open issues cover early RecheckAsync cancel without broadcast (#991), cancel during semaphore wait (#1036), queued cancel status (#912), swallowed queue failures (#988), double broadcast (#951), SetVerifiedPieces piece map (#936), HashCheckCompleted (#1048). Filed #1172 stranded queue when ProcessQueueAsync spawn races lock release. Commented on #988 with direct RecheckAsync failure path (same missing terminal broadcast). No issues reopened. Next: src/Seedarr.Http/REST. No code fixes; no dotnet build/test."
+    "note": "REST pass: reviewed RestController, RestResource, ResourceValidator, RestPutByIdAttribute, RestControllerWithSignalR coalesce/Flush/Dispose/PruneStaleBroadcastTimes and Seedarr.Http.Test coverage. GitHub dedupe: open issues already cover throttle window advance (#1047), offline timer flush (#1002), offline lifecycle vs pending (#1003), shutdown Flush (#1060), RestResource.ToLower (#1049), RestPutById routing (#1140). Filed #1186 singleton IHandle TorrentController vs per-request MVC instances not sharing broadcast enrichment caches after InvalidateBroadcastCache. No issues reopened. Next: src/NzbDrone.SignalR. No code fixes; no dotnet build/test."
   }
 }
