@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T23:45:00Z",
+  "updatedAt": "2026-10-07T00:55:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Security",
+  "currentSubfolder": "src/Seedarr.Http/Authentication",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Ping",
-    "completedAt": "2026-10-06T23:45:00Z",
-    "issuesFiled": [],
+    "subfolder": "src/Seedarr.Http/Security",
+    "completedAt": "2026-10-07T00:55:00Z",
+    "issuesFiled": [1244],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 26: Ping (PingController.cs only). Static review only. Unconditional OK at lines 11-14; no DB/config probe, no HttpHead. GitHub dedupe: overlaps #1068 #1069 left open; commented on #1068. No new Ping-folder defects filed. Next: Security. No dotnet build/test."
+    "note": "Pass 27: Security (7 files: CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). Static review only. GitHub dedupe: overlaps #876 #908 #909 #921 #934 #1200 #1092 #1093 #877 left open; filed #1244 (HostHeaderValidation vs X-Forwarded-Host/TrustedProxies mismatch vs CSRF). No reopen. Next: Authentication. No dotnet build/test."
   }
 }
