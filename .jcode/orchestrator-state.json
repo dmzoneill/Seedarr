@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:14:42Z",
+  "updatedAt": "2026-10-06T22:16:01Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_c225dff2"
+    "lastScheduleId": "sched_21b2e9d8"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -32,7 +32,7 @@
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "shrimp"
+      "worker": "butterfly"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -42,7 +42,7 @@
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "rooster"
+      "worker": "badger"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 127,
-  "lastMonitorNote": "127 open; 0 restarts; 5 hunters active (buffalo,sauropod,shrimp,blowfish,rooster)"
+  "githubOpenCount": 30,
+  "lastMonitorNote": "30 open; 2 restarts (shrimp->butterfly http, rooster->badger signalr); buffalo,sauropod,blowfish active"
 }
