@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:28:47Z",
+  "updatedAt": "2026-10-06T23:30:06Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_ca18effc"
+    "lastScheduleId": "sched_085e2bdc"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -27,7 +27,7 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "mizaru"
+      "worker": "mongoose"
     },
     "http": {
       "area": "src/Seedarr.Http",
@@ -37,7 +37,7 @@
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "duckling"
+      "worker": "ferret"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 340,
-  "lastMonitorNote": "340 open (gh); 0 restarts; stopped orphan puppy; latest #1211-#1213"
+  "lastMonitorNote": "340 open (gh); 2 restarts mizaru->mongoose api/Torrents duckling->ferret host/AppLifetime; latest #1209-#1213"
 }
