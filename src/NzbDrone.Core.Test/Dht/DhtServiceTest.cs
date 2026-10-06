@@ -3664,7 +3664,7 @@ public class DhtServiceTest
     public void HandleResponse_with_malformed_r_or_values_does_not_throw()
     {
         SetUdpClient();
-        var txKey = "01020304";
+        _ = "01020304";
         var sender = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881);
         AddPendingQuery(new byte[] { 0x01, 0x02, 0x03, 0x04 }, sender);
 

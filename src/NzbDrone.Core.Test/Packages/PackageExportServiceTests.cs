@@ -394,6 +394,6 @@ public class PackageExportServiceTests
         }
 
         Assert.That(entryNames.Any(e => e.Contains("..")), Is.False, "Archive entries must never contain traversal sequence '..'");
-        Assert.That(entryNames.Any(e => e.StartsWith("/")), Is.False, "Archive entries must not start with '/'");
+        Assert.That(entryNames.Any(e => e.StartsWith('/')), Is.False, "Archive entries must not start with '/'");
     }
 }

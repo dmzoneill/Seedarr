@@ -115,6 +115,6 @@ public class CustomScriptControllerTest
         Assert.That(testResult, Is.Not.Null);
         Assert.That(testResult.Success, Is.False);
         Assert.That(testResult.Stderr, Does.Contain("not permitted"));
-        _customScriptService.DidNotReceive().TestScriptAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
+        await _customScriptService.DidNotReceive().TestScriptAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>());
     }
 }
