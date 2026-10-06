@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-07T01:20:00Z",
+  "updatedAt": "2026-10-07T00:00:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Host/Startup.cs",
+  "currentSubfolder": "src/NzbDrone.Host/Bootstrap.cs",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Common/Composition",
-    "completedAt": "2026-10-07T01:20:00Z",
-    "issuesFiled": [1245, 1246],
+    "subfolder": "src/NzbDrone.Host/Startup.cs",
+    "completedAt": "2026-10-07T00:00:00Z",
+    "issuesFiled": [1251],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Pass #15 Composition (AssemblyLoader, ContainerExtensions/KnownTypes, lifecycle attributes): static review of DryIoc auto-registration and assembly loading. Deduped open #1004 #1005 #1006 #1017 #1018 #1020 #1190; filed #1245 null/empty assembly names target BaseDirectory/.dll; #1246 interface-less POCOs registered as transient services. No dotnet build/test."
+    "note": "Pass #16 Startup.cs: static review of ConfigureServices/Configure pipeline (SmartAuth, data protection, SignalR, static/fixtures, swagger gate, terminal WS wiring). Deduped open #1040 #1028 #1030 #907 #920 #894 #1031 #1196 #1105 #1249 #883 #892 #917 #1141; filed #1251 dynamic OIDC scheme registration deferred to AppLifetime.StartAsync (race with first requests). No dotnet build/test."
   }
 }
