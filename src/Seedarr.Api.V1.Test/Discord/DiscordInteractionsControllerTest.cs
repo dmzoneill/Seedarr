@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -189,5 +190,61 @@ public class DiscordInteractionsControllerTest
         Assert.That(okResult.Value, Is.EqualTo(expectedResponse));
 
         await _interactionHandler.Received(1).HandleInteractionAsync(Arg.Is<DiscordInteraction>(i => i.Type == 3 && i.Data.CustomId == "pause:15"), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ReceiveInteraction_should_verify_signature_against_raw_body_bytes()
+    {
+        var rawJson = "{\"type\":1,\"custom_unmapped_field\":12345}";
+        var expectedBytes = Encoding.UTF8.GetBytes(rawJson);
+        SetupRequest(ValidSignature, ValidTimestamp, rawJson);
+
+        _securityService.VerifySignature(ValidSignature, ValidTimestamp, Arg.Is<byte[]>(b => b.SequenceEqual(expectedBytes)), ValidPublicKey)
+            .Returns(true);
+
+        var result = await _controller.ReceiveInteraction();
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _securityService.Received(1).VerifySignature(
+            ValidSignature,
+            ValidTimestamp,
+            Arg.Is<byte[]>(b => b.SequenceEqual(expectedBytes)),
+            ValidPublicKey);
+    }
+
+    [Test]
+    public async Task ReceiveInteraction_should_return_400_when_body_is_empty()
+    {
+        SetupRequest(ValidSignature, ValidTimestamp, "");
+
+        _securityService.VerifySignature(ValidSignature, ValidTimestamp, Arg.Any<byte[]>(), ValidPublicKey)
+            .Returns(true);
+
+        var result = await _controller.ReceiveInteraction();
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
+        Assert.That(badRequest.Value, Is.EqualTo("Missing interaction payload"));
+
+        await _interactionHandler.DidNotReceive().HandleInteractionAsync(Arg.Any<DiscordInteraction>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ReceiveInteraction_should_return_400_when_body_is_invalid_json()
+    {
+        SetupRequest(ValidSignature, ValidTimestamp, "invalid-json-payload");
+
+        _securityService.VerifySignature(ValidSignature, ValidTimestamp, Arg.Any<byte[]>(), ValidPublicKey)
+            .Returns(true);
+
+        var result = await _controller.ReceiveInteraction();
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
+        Assert.That(badRequest.Value, Is.EqualTo("Invalid interaction JSON"));
+
+        await _interactionHandler.DidNotReceive().HandleInteractionAsync(Arg.Any<DiscordInteraction>(), Arg.Any<CancellationToken>());
     }
 }
