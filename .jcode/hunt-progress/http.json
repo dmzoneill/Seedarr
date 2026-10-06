@@ -16,6 +16,6 @@
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 7: Security (CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). GitHub dedupe: CSRF loopback #934, UrlBase #876, Basic API key username #877, Host allowlist #908/#909, CORS loopback #921; RpcSessionStore perf #654 closed. No new defects filed; hunt-progress/http.json only. No dotnet build/test."
+    "note": "Pass 7: Security (CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). GitHub dedupe: open #934 CSRF loopback alias, #921 CORS loopback allowlist, #908/#909 Host allowlist bypasses, #876 UrlBase CSRF order, #877 Basic vs Rpc API-key username; closed #865/#652 CSRF hardening. No new distinct defects filed. Next: Authentication. No dotnet build/test."
   }
 }
