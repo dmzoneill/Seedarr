@@ -175,20 +175,20 @@ public class PortMappingControllerTests
     }
 
     [Test]
-    public void PortMappingHealthCheck_should_return_ok_when_upnp_disabled()
+    public void PortForwardCheck_should_return_ok_when_upnp_disabled()
     {
         var configService = Substitute.For<IConfigService>();
         configService.UpnpEnabled.Returns(false);
         var upnpService = Substitute.For<IUpnpService>();
 
-        var healthCheck = new PortMappingHealthCheck(configService, upnpService);
+        var healthCheck = new PortForwardCheck(configService, upnpService);
         var result = healthCheck.Check();
 
         Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
     }
 
     [Test]
-    public void PortMappingHealthCheck_should_return_ok_when_peer_port_mapped_successfully()
+    public void PortForwardCheck_should_return_ok_when_peer_port_mapped_successfully()
     {
         var configService = Substitute.For<IConfigService>();
         configService.UpnpEnabled.Returns(true);
@@ -207,14 +207,14 @@ public class PortMappingControllerTests
             }
         });
 
-        var healthCheck = new PortMappingHealthCheck(configService, upnpService);
+        var healthCheck = new PortForwardCheck(configService, upnpService);
         var result = healthCheck.Check();
 
         Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
     }
 
     [Test]
-    public void PortMappingHealthCheck_should_return_warning_when_upnp_service_unavailable()
+    public void PortForwardCheck_should_return_warning_when_upnp_service_unavailable()
     {
         var configService = Substitute.For<IConfigService>();
         configService.UpnpEnabled.Returns(true);
@@ -224,7 +224,7 @@ public class PortMappingControllerTests
         upnpService.IsAvailable.Returns(false);
         upnpService.GetMappings().Returns(new List<PortMapping>());
 
-        var healthCheck = new PortMappingHealthCheck(configService, upnpService);
+        var healthCheck = new PortForwardCheck(configService, upnpService);
         var result = healthCheck.Check();
 
         Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Warning));
@@ -232,7 +232,7 @@ public class PortMappingControllerTests
     }
 
     [Test]
-    public void PortMappingHealthCheck_should_return_warning_when_peer_mapping_failed()
+    public void PortForwardCheck_should_return_warning_when_peer_mapping_failed()
     {
         var configService = Substitute.For<IConfigService>();
         configService.UpnpEnabled.Returns(true);
@@ -252,7 +252,7 @@ public class PortMappingControllerTests
             }
         });
 
-        var healthCheck = new PortMappingHealthCheck(configService, upnpService);
+        var healthCheck = new PortForwardCheck(configService, upnpService);
         var result = healthCheck.Check();
 
         Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Warning));

@@ -1,3 +1,4 @@
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 
 namespace NzbDrone.Core.HealthCheck.Checks;
@@ -5,10 +6,12 @@ namespace NzbDrone.Core.HealthCheck.Checks;
 public class PeerPortBindingCheck : IProvideHealthCheck
 {
     private readonly IPeerServer _peerServer;
+    private readonly IConfigService _configService;
 
-    public PeerPortBindingCheck(IPeerServer peerServer = null)
+    public PeerPortBindingCheck(IPeerServer peerServer = null, IConfigService configService = null)
     {
         _peerServer = peerServer;
+        _configService = configService;
     }
 
     public HealthCheckResult Check()
@@ -21,9 +24,12 @@ public class PeerPortBindingCheck : IProvideHealthCheck
                 "Peer server is not initialized or unavailable.");
         }
 
-        if (_peerServer.BindFailed || !_peerServer.IsListening)
+        var configuredPort = _configService?.ListeningPort ?? 0;
+
+        if (_peerServer.BindFailed || !_peerServer.IsListening ||
+            (_peerServer.ListeningPort > 0 && configuredPort > 0 && _peerServer.ListeningPort != configuredPort))
         {
-            var port = _peerServer.ListeningPort;
+            var port = _peerServer.ListeningPort > 0 ? _peerServer.ListeningPort : configuredPort;
             var portStr = port > 0 ? $"Port {port}" : "Peer listening port";
             var errorDetail = !string.IsNullOrWhiteSpace(_peerServer.BindErrorMessage)
                 ? $" ({_peerServer.BindErrorMessage})"

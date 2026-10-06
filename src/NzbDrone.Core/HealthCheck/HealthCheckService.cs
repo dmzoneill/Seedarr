@@ -117,9 +117,11 @@ public class HealthCheckService : IHealthCheckService
                     try
                     {
                         var task = Task.Run(() => check.Check());
-                        task.ContinueWith(
+                        _ = task.ContinueWith(
                             t => _logger.Debug(t.Exception, "Health check {0} faulted in background", checkName),
-                            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+                            CancellationToken.None,
+                            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                            TaskScheduler.Default);
 
                         var delayTask = Task.Delay(_checkTimeout, cancellationToken);
                         var completedTask = await Task.WhenAny(task, delayTask).ConfigureAwait(false);
