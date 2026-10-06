@@ -1257,12 +1257,22 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     [Authorize(Policy = Policies.Operator)]
     public ActionResult<TorrentResource> Create([FromBody] TorrentResource resource)
     {
+        if (resource == null)
+        {
+            return BadRequest(new { message = "Request body is required." });
+        }
+
         var defaultPath = _configService?.TorrentSaveDirectory ?? string.Empty;
 
         if (!string.IsNullOrEmpty(resource.MagnetLink))
         {
             try
             {
+                if (!string.IsNullOrWhiteSpace(resource.SavePath))
+                {
+                    CategoryService.ValidateSavePath(resource.SavePath);
+                }
+
                 var imported = _torrentImportService.ImportFromMagnet(resource.MagnetLink);
                 var shouldUpdate = false;
 
@@ -1336,6 +1346,18 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.Errors);
+        }
+
+        if (!string.IsNullOrWhiteSpace(resource.SavePath))
+        {
+            try
+            {
+                CategoryService.ValidateSavePath(resource.SavePath);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         if (string.IsNullOrWhiteSpace(resource.InfoHash) || !global::System.Text.RegularExpressions.Regex.IsMatch(resource.InfoHash, "^[a-fA-F0-9]{40}$"))
@@ -1516,10 +1538,27 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     [Authorize(Policy = Policies.Operator)]
     public ActionResult<TorrentResource> Update(int id, [FromBody] TorrentResource resource)
     {
+        if (resource == null)
+        {
+            return BadRequest(new { message = "Request body is required." });
+        }
+
         var validationResult = SharedValidator.Validate(resource);
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.Errors);
+        }
+
+        if (!string.IsNullOrWhiteSpace(resource.SavePath))
+        {
+            try
+            {
+                CategoryService.ValidateSavePath(resource.SavePath);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // Detect Force Complete: when progress is set to 1.0 via PUT, mark ForceCompleted
@@ -1536,7 +1575,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         LogUpdateTransitions(existing, resource);
 
-        var updates = TorrentResourceMapper.ToModel(resource);
+        var updates = TorrentResourceMapper.ToModel(resource, existing);
         var updated = _torrentService.UpdateUserFields(id, updates);
         return MapTorrentToResource(updated);
     }

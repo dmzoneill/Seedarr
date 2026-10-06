@@ -87,8 +87,25 @@ public static class TorrentResourceMapper
         return resource;
     }
 
-    public static Torrent ToModel(TorrentResource resource)
+    public static Torrent ToModel(TorrentResource resource, Torrent existing = null)
     {
+        if (resource == null)
+        {
+            return null;
+        }
+
+        var status = TorrentStatus.Stopped;
+        if (!string.IsNullOrWhiteSpace(resource.Status))
+        {
+            status = Enum.TryParse<TorrentStatus>(resource.Status, true, out var parsedStatus)
+                ? parsedStatus
+                : (existing != null ? existing.Status : TorrentStatus.Stopped);
+        }
+        else if (existing != null)
+        {
+            status = existing.Status;
+        }
+
         return new Torrent
         {
             Id = resource.Id,
@@ -101,7 +118,7 @@ public static class TorrentResourceMapper
             CreatedBy = resource.CreatedBy,
             CreationDate = resource.CreationDate,
             IsPrivate = resource.IsPrivate,
-            Status = Enum.TryParse<TorrentStatus>(resource.Status, true, out var status) ? status : TorrentStatus.Stopped,
+            Status = status,
             Uploaded = resource.Uploaded,
             Downloaded = resource.Downloaded,
             Ratio = resource.Ratio,

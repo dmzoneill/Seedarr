@@ -21,6 +21,11 @@ public static class MagnetLinkParser
 {
     public static ParsedMagnetLink Parse(string magnetUri)
     {
+        if (string.IsNullOrWhiteSpace(magnetUri) || !magnetUri.TrimStart().StartsWith("magnet:?", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Invalid magnet link: URI must start with 'magnet:?'");
+        }
+
         var queryStart = magnetUri.IndexOf('?');
         if (queryStart < 0)
         {
