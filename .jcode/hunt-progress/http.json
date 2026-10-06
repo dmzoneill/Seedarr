@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T00:05:00Z",
+  "updatedAt": "2026-10-07T00:35:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Authentication",
+  "currentSubfolder": "src/Seedarr.Http/Terminal",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Security",
-    "completedAt": "2026-10-07T00:05:00Z",
-    "issuesFiled": [1093],
+    "subfolder": "src/Seedarr.Http/Authentication",
+    "completedAt": "2026-10-07T00:35:00Z",
+    "issuesFiled": [1105, 1109],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 12: Security (CsrfProtectionMiddleware, HostHeaderValidationMiddleware, SecurityHeadersMiddleware, CorsSecurityHelper, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore). Reviewed middleware pipeline order in Startup.cs. Many host/CSRF/CORS issues already open (#876, #908, #909, #921, #934). Filed #1093: POST /api/v1/auth/logout does not invalidate IRpcSessionStore or emulated client cookies (SID/_session_id/deluge-session); InvalidateAll has no production callers. Commented on #654 (shell mangled). Next: Authentication. No dotnet build/test."
+    "note": "Pass 13: Authentication (ApiKeyAuthenticationHandler, BasicAuthenticationHandler, ForwardAuthHandler, DynamicAuthSchemeManager, IDynamicAuthSchemeManager). Skipped duplicates: #877, #893, #895, #906, #1050, #1063, #1040, #1095. Filed #1105: SmartAuth always routes non-empty API-key/Bearer material to ApiKey handler so invalid keys block valid Seedarr_Auth cookie. Filed #1109: loopback always trusted for ForwardAuth enables local header impersonation when provider enabled. Next: Terminal. No dotnet build/test."
   }
 }
