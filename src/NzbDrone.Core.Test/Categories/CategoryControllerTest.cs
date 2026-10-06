@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
@@ -367,5 +370,27 @@ public class CategoryControllerTest
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
         Assert.That(badRequest.Value, Does.Contain("Cannot access or write to save path '/root/forbidden'"));
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_Reader_attribute()
+    {
+        var type = typeof(CategoryController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [TestCase(nameof(CategoryController.Add))]
+    [TestCase(nameof(CategoryController.Delete))]
+    public void Mutating_methods_should_have_Authorize_Operator_attribute(string methodName)
+    {
+        var method = typeof(CategoryController).GetMethods().FirstOrDefault(m => m.Name == methodName);
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Operator));
     }
 }

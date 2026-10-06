@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Categories;
 using NzbDrone.SignalR;
 using Seedarr.Http;
@@ -12,6 +14,7 @@ namespace Seedarr.Api.V1.Categories;
 
 [V1ApiController("categories")]
 [Route("api/v1/category")]
+[Authorize(Policy = Policies.Reader)]
 public class CategoryController : RestControllerWithSignalR<CategoryResource, Category>
 {
     private readonly ICategoryService _categoryService;
@@ -25,6 +28,7 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
     }
 
     [HttpGet]
+    [Authorize(Policy = Policies.Reader)]
     [ProducesResponseType(typeof(List<CategoryResource>), StatusCodes.Status200OK)]
     public ActionResult<List<CategoryResource>> GetAll()
     {
@@ -34,6 +38,7 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Policy = Policies.Reader)]
     [ProducesResponseType(typeof(CategoryResource), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<CategoryResource> GetById(int id)
@@ -48,6 +53,7 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.Operator)]
     [ProducesResponseType(typeof(CategoryResource), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public ActionResult<CategoryResource> Add([FromBody] CategoryResource resource)
@@ -89,6 +95,7 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
 
     [HttpPut("{id:int}")]
     [HttpPut]
+    [Authorize(Policy = Policies.Operator)]
     [ProducesResponseType(typeof(CategoryResource), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -143,6 +150,7 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.Operator)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public ActionResult Delete(int id)

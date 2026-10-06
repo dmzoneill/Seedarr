@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
@@ -12,6 +14,7 @@ using Seedarr.Http.REST;
 namespace Seedarr.Api.V1.Tags;
 
 [V1ApiController("tag")]
+[Authorize(Policy = Policies.Reader)]
 public class TagController : RestControllerWithSignalR<TagResource, Tag>
 {
     private readonly ITagService _tagService;
@@ -37,6 +40,7 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
     }
 
     [HttpGet]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<List<TagResource>> GetAll()
     {
         var tags = _tagService.GetAll();
@@ -51,6 +55,7 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Policy = Policies.Reader)]
     public ActionResult<TagResource> Get(int id)
     {
         var tag = _tagService.Get(id);
@@ -64,6 +69,7 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<TagResource> Create([FromBody] TagResource resource)
     {
         if (resource == null)
@@ -99,6 +105,7 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
 
     [HttpPut("{id:int}")]
     [HttpPut]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<TagResource> Update([FromBody] TagResource resource, int? id = null)
     {
         if (resource == null)
@@ -147,6 +154,7 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
     public ActionResult<TagResource> Update(int id, TagResource resource) => Update(resource, id);
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Delete(int id)
     {
         _tagService.Delete(id);
@@ -154,6 +162,7 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
     }
 
     [HttpPost("bulk-assign")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult BulkAssign([FromBody] BulkTagRequest request)
     {
         if (request == null)
@@ -200,6 +209,7 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
     }
 
     [HttpPost("bulk-remove")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult BulkRemove([FromBody] BulkTagRequest request)
     {
         if (request == null)
