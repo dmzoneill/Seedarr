@@ -25,4 +25,4 @@ Non-overlapping issue slots, worktrees `../seedarr_worktrees/issue-<N>`, continu
 - No local `dotnet build` / test runs.
 - Simulation semantics apply to severity and tests.
 
-State: `orchestrator-state.json`
+State: `orchestrator-state.json` (coordinator only). Hunter rotation: `hunt-progress.json`.

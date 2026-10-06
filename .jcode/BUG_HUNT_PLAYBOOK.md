@@ -15,10 +15,16 @@ Do **not** implement fixes in this mode unless the orchestrator assigns fix mode
 
 Do not run `dotnet build` or tests on the worker machine. GitHub Actions validates fixes later.
 
+## Progress file (workers only)
+
+- Update **`.jcode/hunt-progress.json`** for your slot: `currentSubfolder`, `lastPass` (subfolder, `issuesFiled`, `issuesReopened`, `completedAt`).
+- **Never edit** `.jcode/orchestrator-state.json` (coordinator + monitor only). Race on that file breaks restarts and scheduling.
+- After each subfolder pass, rotate to the next folder under your partition and record it in `hunt-progress.json`.
+
 ## Reporting
 
-When a pass completes (or you are blocked), `swarm report` with: area scanned, issues filed/reopened (numbers), next area suggestion.
+When a pass completes (or you are blocked), `swarm report` with: area scanned, issues filed/reopened (numbers), next subfolder (also written to `hunt-progress.json`).
 
 ## Coordinator
 
-Keeps workers busy, restarts idle/stopped hunters, rotates code areas to avoid overlap.
+Keeps workers busy, restarts idle/stopped hunters, reads `hunt-progress.json` to avoid overlap.
