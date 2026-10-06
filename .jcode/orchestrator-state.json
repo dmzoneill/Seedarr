@@ -1,0 +1,17 @@
+{
+  "updatedAt": "2026-10-06T20:45:00Z",
+  "policy": {
+    "pushTarget": "origin/main",
+    "runTestsLocally": false,
+    "simulationContext": "Seedarr is a BitTorrent seeding simulator; preserve simulated I/O semantics."
+  },
+  "slots": {
+    "auth": { "issue": 863, "status": "assigned", "worktree": "../seedarr_worktrees/issue-863" },
+    "diskprovider": { "issue": 815, "status": "assigned", "worktree": "../seedarr_worktrees/issue-815" },
+    "filesystem": { "issue": 814, "status": "assigned", "worktree": "../seedarr_worktrees/issue-814" },
+    "update": { "issue": 811, "status": "assigned", "worktree": "../seedarr_worktrees/issue-811" },
+    "downloadclients": { "issue": 869, "status": "assigned", "worktree": "../seedarr_worktrees/issue-869" }
+  },
+  "queue": [841, 755, 725, 492, 411, 397, 189, 186],
+  "completed": []
+}
