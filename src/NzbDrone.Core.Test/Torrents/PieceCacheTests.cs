@@ -258,12 +258,17 @@ public class PieceCacheTests
         var cache = new PieceCache(maxCacheSizeBytes: 32768);
         var pieceLength = 16384;
         var block = new byte[8192];
+        var fullPiece = new byte[16384];
+        var hash = SHA1.HashData(fullPiece);
 
+        cache.AddBlock(1, 0, 0, fullPiece, pieceLength);
+        cache.VerifyAndFlushPiece(1, 0, hash, _storage, _torrent, _files);
+
+        cache.AddBlock(1, 1, 0, fullPiece, pieceLength);
+        cache.VerifyAndFlushPiece(1, 1, hash, _storage, _torrent, _files);
+
+        // Touch piece 0 by adding block (makes piece 0 MRU and piece 1 the LRU)
         cache.AddBlock(1, 0, 0, block, pieceLength);
-        cache.AddBlock(1, 1, 0, block, pieceLength);
-
-        // Touch piece 0 by adding second block (makes piece 1 the LRU)
-        cache.AddBlock(1, 0, 8192, block, pieceLength);
 
         // Add piece 2, requiring eviction
         cache.AddBlock(1, 2, 0, block, pieceLength);
@@ -271,6 +276,25 @@ public class PieceCacheTests
         // Piece 1 is evicted because piece 0 was more recently used
         Assert.That(cache.ContainsPiece(1, 0), Is.True);
         Assert.That(cache.ContainsPiece(1, 1), Is.False);
+        Assert.That(cache.ContainsPiece(1, 2), Is.True);
+    }
+
+    [Test]
+    public void EvictToLimit_does_not_evict_unflushed_pieces_when_cache_limit_reached()
+    {
+        var cache = new PieceCache(maxCacheSizeBytes: 32768);
+        var pieceLength = 16384;
+        var block = new byte[8192];
+
+        cache.AddBlock(1, 0, 0, block, pieceLength);
+        cache.AddBlock(1, 1, 0, block, pieceLength);
+
+        // Neither piece 0 nor piece 1 is flushed. Adding piece 2 exceeds 32768.
+        cache.AddBlock(1, 2, 0, block, pieceLength);
+
+        // In-flight unflushed pieces must not be discarded
+        Assert.That(cache.ContainsPiece(1, 0), Is.True);
+        Assert.That(cache.ContainsPiece(1, 1), Is.True);
         Assert.That(cache.ContainsPiece(1, 2), Is.True);
     }
 

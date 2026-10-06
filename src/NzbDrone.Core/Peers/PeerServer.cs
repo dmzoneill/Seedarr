@@ -545,6 +545,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
 
         _endgameManager?.ClearTorrent(torrent.Id);
+        _pieceCache?.ClearTorrent(torrent.Id);
 
         var connections = _connectionManager?.GetConnections(torrent.InfoHash);
         if (connections == null)
@@ -830,6 +831,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         if (torrentId > 0)
         {
             _endgameManager?.ClearTorrent(torrentId);
+            _pieceCache?.ClearTorrent(torrentId);
         }
 
         var infoHash = message?.Torrent?.InfoHash;

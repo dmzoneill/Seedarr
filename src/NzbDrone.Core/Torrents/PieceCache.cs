@@ -297,8 +297,6 @@ public class PieceCache : IPieceCache
                 }
             }
 
-            targetNode ??= _lruList.Last;
-
             if (targetNode == null)
             {
                 break;
