@@ -594,4 +594,34 @@ public class SignalRMessageBroadcasterTest
 
         Assert.That(_broadcaster.RecentPayloadCount, Is.LessThanOrEqualTo(SignalRMessageBroadcaster.MaxCacheSize));
     }
+
+    [Test]
+    public void BroadcastMessage_swallows_synchronous_exceptions_without_crashing_caller()
+    {
+        _hubClients.All.Returns(_ => throw new ObjectDisposedException("HubContext"));
+
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 1 }
+        };
+
+        Assert.DoesNotThrow(() => _broadcaster.BroadcastMessage(msg));
+    }
+
+    [Test]
+    public void BroadcastToGroup_swallows_synchronous_exceptions_without_crashing_caller()
+    {
+        _hubClients.Group(Arg.Any<string>()).Returns(_ => throw new ObjectDisposedException("HubContext"));
+
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 1 }
+        };
+
+        Assert.DoesNotThrow(() => _broadcaster.BroadcastToGroup("test-group", msg));
+    }
 }
