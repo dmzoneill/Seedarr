@@ -2,17 +2,20 @@
   "slot": "http",
   "updatedAt": "2026-10-06T22:20:00Z",
   "area": "src/Seedarr.Http",
-  "currentSubfolder": "src/Seedarr.Http",
   "rotation": [
-    "src/Seedarr.Http",
+    "src/Seedarr.Http/REST",
+    "src/Seedarr.Http/Ping",
+    "src/Seedarr.Http/Security",
+    "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
+  "currentSubfolder": "src/Seedarr.Http/Security",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Terminal + src/Seedarr.Http.Test/SignalR",
+    "subfolder": "src/Seedarr.Http/REST + src/Seedarr.Http/Ping",
     "completedAt": "2026-10-06T22:20:00Z",
-    "issuesFiled": [966, 967],
+    "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 6: Terminal static review (LinuxPty fork UAF race, WebSocket ex.Message leak); deduped #902/#956/#965; hunt-progress/http.json only"
+    "note": "Pass 6: REST (RestController, RestControllerWithSignalR, RestResource, ResourceValidator, RestPutByIdAttribute, ConfigControllerBase/RestPutById usage) and Ping (PingController). GitHub dedupe: coalesce #628, disconnect/null #757, ForwardAuth role #895, Host allowlist #908/#909. No new defects filed; hunt-progress/http.json only. No dotnet build/test."
   }
 }
