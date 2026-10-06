@@ -21,6 +21,9 @@ public class FastResumeBencodeSerializer : IFastResumeBencodeSerializer
     public const string DefaultFileFormat = "libtorrent resume file";
     public const int DefaultFileVersion = 1;
 
+    private const long MinUnixSeconds = -62135596800L;
+    private const long MaxUnixSeconds = 253402300799L;
+
     public static byte[] SerializeToBytes(FastResumeData data)
     {
         return new FastResumeBencodeSerializer().Serialize(data);
@@ -218,9 +221,23 @@ public class FastResumeBencodeSerializer : IFastResumeBencodeSerializer
             foreach (var file in data.Files)
             {
                 fileSizesList.Add((IBObject)new BNumber(file.Length));
-                var mtimeSec = file.Mtime.HasValue
-                    ? new DateTimeOffset(file.Mtime.Value.ToUniversalTime()).ToUnixTimeSeconds()
-                    : 0;
+                long mtimeSec = 0;
+                if (file.Mtime.HasValue)
+                {
+                    try
+                    {
+                        var sec = new DateTimeOffset(file.Mtime.Value.ToUniversalTime()).ToUnixTimeSeconds();
+                        if (sec is >= MinUnixSeconds and <= MaxUnixSeconds)
+                        {
+                            mtimeSec = sec;
+                        }
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        mtimeSec = 0;
+                    }
+                }
+
                 mtimeList.Add((IBObject)new BNumber(mtimeSec));
                 mappedFilesList.Add(new BString(file.Path ?? string.Empty));
             }
@@ -280,7 +297,7 @@ public class FastResumeBencodeSerializer : IFastResumeBencodeSerializer
         if (dict.ContainsKey("pieces") && dict["pieces"] is BString piecesStr)
         {
             var pBytes = piecesStr.Value.ToArray();
-            if (pBytes.Length > 0)
+            if (pBytes.Length > 0 && pBytes.Length <= int.MaxValue / 8)
             {
                 var isV1BytePerPiece = fileVersion <= 1 && pBytes.All(b => b <= 3);
                 if (isV1BytePerPiece)
@@ -429,9 +446,16 @@ public class FastResumeBencodeSerializer : IFastResumeBencodeSerializer
             }
 
             DateTime? mtime = null;
-            if (mtimeList != null && i < mtimeList.Count && mtimeList[i] is BNumber mtNum && mtNum.Value > 0)
+            if (mtimeList != null && i < mtimeList.Count && mtimeList[i] is BNumber mtNum && mtNum.Value > 0 && mtNum.Value <= MaxUnixSeconds)
             {
-                mtime = DateTimeOffset.FromUnixTimeSeconds(mtNum.Value).UtcDateTime;
+                try
+                {
+                    mtime = DateTimeOffset.FromUnixTimeSeconds(mtNum.Value).UtcDateTime;
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    mtime = null;
+                }
             }
 
             string path = null;

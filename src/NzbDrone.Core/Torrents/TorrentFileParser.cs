@@ -75,6 +75,8 @@ public class TorrentFileParser : ITorrentFileParser
     private const int MaxRecursionDepth = 32;
     private const long MinPieceLength = 16384; // 16 KiB
     private const long MaxPieceLength = 67108864; // 64 MiB
+    private const long MinUnixSeconds = -62135596800L;
+    private const long MaxUnixSeconds = 253402300799L;
 
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
     private static readonly char[] PathSeparators = ['/', '\\'];
@@ -323,9 +325,26 @@ public class TorrentFileParser : ITorrentFileParser
                 Files = new List<ParsedTorrentFile>()
             };
 
-            if (torrent.ContainsKey("creation date") && torrent["creation date"] is BNumber creationDateNum)
+            if (torrent.ContainsKey("creation date"))
             {
-                result.CreationDate = DateTimeOffset.FromUnixTimeSeconds(creationDateNum.Value).UtcDateTime;
+                if (torrent["creation date"] is not BNumber creationDateNum)
+                {
+                    throw new InvalidTorrentFileException("Malformed torrent file: 'creation date' must be an integer.");
+                }
+
+                if (creationDateNum.Value is < MinUnixSeconds or > MaxUnixSeconds)
+                {
+                    throw new InvalidTorrentFileException($"Invalid 'creation date': {creationDateNum.Value}. Must be between {MinUnixSeconds} and {MaxUnixSeconds}.");
+                }
+
+                try
+                {
+                    result.CreationDate = DateTimeOffset.FromUnixTimeSeconds(creationDateNum.Value).UtcDateTime;
+                }
+                catch (ArgumentOutOfRangeException ex)
+                {
+                    throw new InvalidTorrentFileException($"Invalid 'creation date': {creationDateNum.Value}.", ex);
+                }
             }
 
             if (fileTree != null)
