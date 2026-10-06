@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:48:30Z",
+  "updatedAt": "2026-10-06T23:49:34Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_e85ec3f1"
+    "lastScheduleId": "sched_f26791cf"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -22,7 +22,7 @@
     "core": {
       "area": "src/NzbDrone.Core",
       "status": "running",
-      "worker": "mole"
+      "worker": "anteater"
     },
     "api": {
       "area": "src/Seedarr.Api.V1",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 368,
-  "lastMonitorNote": "368 open; 2 restarts gerbil→ibis meerkat→platypus idle>90s; mole/jay/heron active"
+  "githubOpenCount": 370,
+  "lastMonitorNote": "370 open; 1 restart mole→anteater Datastore after Auth #1240/#1241; ibis/jay/platypus/heron active"
 }
