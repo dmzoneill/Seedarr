@@ -77,3 +77,4 @@
   "note": "30 open gh; 5 hunters healthy hamster ladybug lobster mosquito owl; 0 restarts; per-slot hunt-progress writes expected"
 }
 {"ts":"2026-10-06T22:09:30Z","kind":"bug-hunt-monitor","openIssues":30,"restarts":["hamster→ox","ladybug→pig","owl→rat"],"workers":["ox","pig","lobster","mosquito","rat"],"scheduleId":"sched_f396c98d"}
+{"ts":"2026-10-06T22:10:13Z","mode":"bug-hunt","openIssues":112,"restarts":0,"workers":["ox","pig","lobster","mosquito","rat"],"note":"all slots active; hamster/ladybug/owl progress writes expected"}
