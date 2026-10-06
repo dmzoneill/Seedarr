@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Categories;
@@ -404,7 +405,7 @@ public class DiskSpaceService : IDiskSpaceService
                     }
                 }
 
-                if (!TryGetDriveStats(drive, out var stats))
+                if (!TryGetDriveStats(drive, mountInfo, out var stats))
                 {
                     continue;
                 }
@@ -664,7 +665,7 @@ public class DiskSpaceService : IDiskSpaceService
                 }
             }
 
-            if (!TryGetDriveStats(drive, out var stats))
+            if (!TryGetDriveStats(drive, mountInfo, out var stats))
             {
                 return;
             }
@@ -692,7 +693,7 @@ public class DiskSpaceService : IDiskSpaceService
         }
     }
 
-    private bool TryGetDriveStats(DriveInfo drive, out DriveSpaceStats stats)
+    private bool TryGetDriveStats(DriveInfo drive, MountInfo mountInfo, out DriveSpaceStats stats)
     {
         stats = default;
         if (drive == null)
@@ -702,22 +703,26 @@ public class DiskSpaceService : IDiskSpaceService
 
         try
         {
-            if (DriveStatsReader != null)
+            DriveSpaceStats? probeResult;
+            if (ShouldTimeoutDriveProbe(drive, mountInfo))
             {
-                var custom = DriveStatsReader(drive);
-                if (custom.HasValue)
+                var task = Task.Run(() => ProbeDriveStats(drive));
+                if (!task.Wait(DriveTimeout))
                 {
-                    stats = custom.Value;
-                    return true;
+                    _logger.Warn("Timed out inspecting network drive {0}", drive.Name);
+                    return false;
                 }
 
-                return false;
+                probeResult = task.Result;
+            }
+            else
+            {
+                probeResult = ProbeDriveStats(drive);
             }
 
-            var direct = ReadDriveStats(drive);
-            if (direct.HasValue)
+            if (probeResult.HasValue)
             {
-                stats = direct.Value;
+                stats = probeResult.Value;
                 return true;
             }
 
@@ -728,6 +733,42 @@ public class DiskSpaceService : IDiskSpaceService
             _logger.Warn(ex, "Failed to inspect drive {0}", drive.Name);
             return false;
         }
+    }
+
+    private DriveSpaceStats? ProbeDriveStats(DriveInfo drive)
+    {
+        if (DriveStatsReader != null)
+        {
+            return DriveStatsReader(drive);
+        }
+
+        return ReadDriveStats(drive);
+    }
+
+    private static bool ShouldTimeoutDriveProbe(DriveInfo drive, MountInfo mountInfo)
+    {
+        try
+        {
+            if (drive.DriveType == DriveType.Network)
+            {
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _staticLogger.Trace(ex, "Failed to query drive type for timeout probe on {0}", drive?.Name);
+        }
+
+        if (!string.IsNullOrWhiteSpace(mountInfo?.FileSystemType))
+        {
+            var networkFs = new[] { "nfs", "nfs4", "cifs", "smb3", "smbfs", "fuse.sshfs", "sshfs", "glusterfs", "ceph" };
+            if (networkFs.Any(fs => string.Equals(fs, mountInfo.FileSystemType, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static DriveSpaceStats? ReadDriveStats(DriveInfo drive)
