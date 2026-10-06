@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:20:00Z",
+  "updatedAt": "2026-10-06T22:10:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -17,10 +17,10 @@
   "currentSubfolder": "src/Seedarr.Api.V1/DownloadClients",
   "lastPass": {
     "subfolder": "src/Seedarr.Api.V1/Torrents",
-    "completedAt": "2026-10-06T22:20:00Z",
-    "issuesFiled": [941, 942, 943],
+    "completedAt": "2026-10-06T22:10:00Z",
+    "issuesFiled": [957, 958, 959, 960],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "TorrentController + DownloadHistoryController; duplicate GitHub search before each filing"
+    "notes": "Static review of TorrentController, DownloadHistoryController, mappers/resources. Parallel hunters already filed #941-943 (subtitle SourcePath, MoveQueue null body, piecemap default 100). Deduped #896/#898 RBAC. No dotnet build/test."
   }
 }
