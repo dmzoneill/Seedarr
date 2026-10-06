@@ -1,6 +1,6 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:32:00Z",
+  "updatedAt": "2026-10-06T22:31:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
   "currentSubfolder": "src/NzbDrone.Common/Instrumentation",
   "rotation": [
@@ -13,10 +13,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Common/Disk",
-    "completedAt": "2026-10-06T22:32:00Z",
-    "issuesFiled": [1081],
+    "completedAt": "2026-10-06T22:31:00Z",
+    "issuesFiled": [1090],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #968 #969 #977 #980; filed Windows volume mount point free-space mismatch (#1081)"
+    "note": "Deduped #968 #969 #977 #980 #1081; filed SanitizePath .. collapse mismatch (#1090)"
   }
 }
