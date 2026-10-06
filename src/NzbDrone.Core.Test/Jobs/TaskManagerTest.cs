@@ -347,6 +347,9 @@ public class TaskManagerTest
         Assert.That(_subject.IsRunning("TestTask"), Is.False);
         Assert.That(_subject.IsCanceled("TestTask"), Is.True);
         Assert.That(_subject.GetTaskStatus("TestTask"), Is.EqualTo("Canceled"));
+        _repository.Received().Update(Arg.Is<ScheduledTask>(t =>
+            t.LastStatus == TaskExecutionStatus.Canceled &&
+            t.LastErrorMessage == "Task execution was canceled or timed out"));
     }
 
     [Test]
