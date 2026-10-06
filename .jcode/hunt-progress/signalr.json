@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T00:30:00Z",
-  "area": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "updatedAt": "2026-10-07T00:35:00Z",
+  "area": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/NzbDrone.SignalR",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
-    "completedAt": "2026-10-07T00:30:00Z",
-    "issuesFiled": [1209, 1210],
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-07T00:35:00Z",
+    "issuesFiled": [1214, 1215],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "TorrentRecheck pass: reviewed TorrentRecheckService (queue ProcessQueueAsync, CancelRecheck, ExecuteRecheckCoreAsync SignalR TorrentUpdated/TorrentRecheckProgress, state machine coordination), TorrentService.Recheck->QueueRecheck, TorrentController recheck API, FastResumeService TriggerRecheckFallback, AutomationService ShouldRecheck stub, TorrentRecheckServiceTest + AutomationServiceTest. Cross-checked open GH: #912 #951 #988 #991 #1036 #1038 #1048 #1172 #1188 #936 already cover cancel/queue failures, double broadcast, early cancel SignalR, hash-check event, fallback path bugs. Filed #1209 automation recheck never calls ITorrentRecheckService (stuck Checking, no TorrentRecheckProgress); #1210 presence fallback trusts Progress when files/hashes missing (false complete + SignalR). No issues reopened. Next: src/Seedarr.Http/REST. No code fixes; no dotnet build/test."
+    "note": "REST pass: reviewed RestControllerWithSignalR (coalesce Handle/Flush/timer/dispose, IsConnected gating, PruneStaleBroadcastTimes), RestController, RestResource.ResourceName, ResourceValidator, RestPutByIdAttribute. Cross-checked open GH: #628 #757 #878 #1002 #1003 #1047 #1049 #1060 #1140 #1186 #1187 already cover disconnect/timer/resurrect, throttle advance before broadcast, shutdown Flush, ResourceName culture, optional PUT id route, TorrentController broadcast caches, reconnect coalesce window. Filed #1214 _lastBroadcastTimes prune only on Updated coalesce path (unbounded growth on Created-only catalogs); #1215 Created stamps coalesce window delaying first Updated after import. No issues reopened. Next: src/NzbDrone.SignalR. No code fixes; no dotnet build/test."
   }
 }
