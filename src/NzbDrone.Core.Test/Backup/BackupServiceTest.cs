@@ -779,4 +779,20 @@ public class BackupServiceTest
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
         Assert.That(File.Exists(dbRestorePath), Is.False);
     }
+
+    [Test]
+    public void CreateBackup_should_clean_up_any_stale_staging_files_with_guid_suffixes()
+    {
+        CreateTestSqliteDatabase();
+        var staleStagingFile1 = Path.Combine(_tempDir, "seedarr.db.backup-staging-1234");
+        var staleStagingFile2 = Path.Combine(_tempDir, "seedarr.db.backup-staging");
+        File.WriteAllText(staleStagingFile1, "stale 1");
+        File.WriteAllText(staleStagingFile2, "stale 2");
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(File.Exists(staleStagingFile1), Is.False);
+        Assert.That(File.Exists(staleStagingFile2), Is.False);
+    }
 }
