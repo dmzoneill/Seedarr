@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T00:35:00Z",
+  "updatedAt": "2026-10-07T00:45:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Ping",
+  "currentSubfolder": "src/Seedarr.Http/Security",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/REST",
-    "completedAt": "2026-10-07T00:35:00Z",
-    "issuesFiled": [1187],
+    "subfolder": "src/Seedarr.Http/Ping",
+    "completedAt": "2026-10-07T00:45:00Z",
+    "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 20: REST (5 files: RestController, RestControllerWithSignalR, RestResource, ResourceValidator, Attributes/RestPutByIdAttribute). Static review only. GitHub dedupe: existing open #1002/#1003/#1047/#1049/#1060/#1140 and related. New: #1187 stale _lastBroadcastTimes coalesce window after hub reconnect delays first post-reconnect Updated. Next: Ping. No dotnet build/test."
+    "note": "Pass 21: Ping (PingController.cs, PingResource). Static review only. Reviewed [AllowAnonymous] GET /ping, UrlBase via UsePathBase, SmartAuth interaction, CSRF safe-method exemption, podman-compose/Makefile curl -f probes. Sole defect: unconditional Ok(Status=OK) with no DB/config probe and no HttpHead (Sonarr parity). GitHub dedupe: open #1068 and #1069 (same root cause); commented on #1068. No new issues filed. Next: Security. No dotnet build/test."
   }
 }
