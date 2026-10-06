@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:15:00Z",
+  "updatedAt": "2026-10-06T22:25:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Common/Disk",
+  "currentSubfolder": "src/NzbDrone.Common/Instrumentation",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Host/AppLifetime.cs",
-    "completedAt": "2026-10-06T22:15:00Z",
-    "issuesFiled": [953, 955],
+    "subfolder": "src/NzbDrone.Common/Disk",
+    "completedAt": "2026-10-06T22:25:00Z",
+    "issuesFiled": [968, 969],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #910 #944; filed host stop token skipped stopped announces + StartAsync ignores cancellationToken"
+    "note": "Deduped #815 #814; filed IsValidPath vs IsBlockedPath gap + GetAvailableFreeSpace Linux root fallback when mount match fails"
   }
 }
