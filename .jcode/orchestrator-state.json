@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-10-06T21:34:30Z",
+  "updatedAt": "2026-10-06T21:34:07Z",
   "monitor": {
     "cadenceSeconds": 30,
     "mechanism": "schedule.wake_at",
-    "lastValidatedAt": "2026-10-06T21:34:30Z",
-    "scheduleId": "sched_a51d89fa"
+    "lastValidatedAt": "2026-10-06T21:34:07Z",
+    "scheduleId": "sched_1474a7d1"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -16,8 +16,8 @@
   "slots": {
     "terminal": { "issue": 397, "status": "in_progress", "worker": "fern/tulip", "worktree": "../seedarr_worktrees/issue-397" },
     "logging": { "issue": 189, "status": "in_progress", "worker": "moss/rose", "worktree": "../seedarr_worktrees/issue-189" },
-    "emulation": { "issue": 186, "status": "in_progress", "worker": "lichen/maple", "worktree": "../seedarr_worktrees/issue-186" }
+    "emulation": { "issue": null, "status": "idle", "worker": null, "worktree": null, "note": "#186 closed; maple stopped" }
   },
   "queue": [],
-  "completed": [811, 814, 815, 863, 869, 841, 755, 725, 492, 411]
+  "completed": [811, 814, 815, 863, 869, 841, 755, 725, 492, 411, 186]
 }
