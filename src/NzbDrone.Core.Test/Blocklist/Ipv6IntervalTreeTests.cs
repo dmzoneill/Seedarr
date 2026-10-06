@@ -382,4 +382,19 @@ public class Ipv6IntervalTreeTests
         Assert.That(r4.Start, Is.EqualTo(IPAddress.Parse("10.0.0.0").ToUInt32()));
         Assert.That(r4.End, Is.EqualTo(IPAddress.Parse("10.0.0.255").ToUInt32()));
     }
+
+    [Test]
+    public void Ipv6IntervalTree_TryParse_handles_hyphenated_labels_and_ranges()
+    {
+        Assert.That(Ipv6IntervalTree.TryParse("Spamhaus-DROP:2001:db8::1-2001:db8::10", out var r1), Is.True);
+        Assert.That(r1.Start, Is.EqualTo(IPAddress.Parse("2001:db8::1").ToUInt128()));
+        Assert.That(r1.End, Is.EqualTo(IPAddress.Parse("2001:db8::10").ToUInt128()));
+
+        Assert.That(Ipv6IntervalTree.TryParse("Level-1:2001:db8::/32", out var r2), Is.True);
+        Assert.That(r2.Start, Is.EqualTo(IPAddress.Parse("2001:db8::").ToUInt128()));
+
+        Assert.That(Ipv6IntervalTree.TryParse("Bad-Peers-Feed:2001:db8::1 - 2001:db8::ff , 000 , Bad IPv6", out var r3), Is.True);
+        Assert.That(r3.Start, Is.EqualTo(IPAddress.Parse("2001:db8::1").ToUInt128()));
+        Assert.That(r3.End, Is.EqualTo(IPAddress.Parse("2001:db8::ff").ToUInt128()));
+    }
 }
