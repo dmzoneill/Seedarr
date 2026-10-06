@@ -35,26 +35,31 @@ public class TelegramPollingService : BackgroundService, ITelegramPollingService
     private readonly ITelegramUpdateHandler _updateHandler;
     private readonly TelegramSettings _settings;
     private readonly HttpClient _httpClient;
+    private readonly ITelegramBotLifecycle _botLifecycle;
     private readonly Logger _logger;
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
     private long _offset;
+    private bool _webhookCleanedUp;
 
     public TelegramPollingService(
         IConfigService configService,
         ITelegramUpdateHandler updateHandler,
         HttpClient httpClient = null,
-        TelegramSettings settings = null)
+        TelegramSettings settings = null,
+        ITelegramBotLifecycle botLifecycle = null)
     {
         _configService = configService;
         _updateHandler = updateHandler;
         _httpClient = httpClient ?? SharedHttpClient;
         _settings = settings ?? new TelegramSettings();
+        _botLifecycle = botLifecycle ?? new TelegramBotLifecycle(_configService, _httpClient, _settings);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
     public long CurrentOffset
     {
-        get => _offset;
-        set => _offset = value;
+        get => Interlocked.Read(ref _offset);
+        set => Interlocked.Exchange(ref _offset, value);
     }
 
     private string GetBotToken()
@@ -64,51 +69,60 @@ public class TelegramPollingService : BackgroundService, ITelegramPollingService
 
     public async Task<int> PollOnceAsync(CancellationToken cancellationToken = default)
     {
-        var botToken = GetBotToken();
-        if (string.IsNullOrWhiteSpace(botToken))
+        await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            return 0;
-        }
-
-        var url = $"https://api.telegram.org/bot{botToken}/getUpdates?offset={_offset}&timeout=30";
-        using var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
-
-        if ((int)response.StatusCode == 429 || response.StatusCode == (HttpStatusCode)429)
-        {
-            throw new HttpRequestException("Telegram API rate limit reached (HTTP 429)", null, HttpStatusCode.TooManyRequests);
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.Warn("Telegram getUpdates failed with status {0}", response.StatusCode);
-            return 0;
-        }
-
-        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        var apiResult = JsonSerializer.Deserialize<TelegramApiResponse<List<TelegramUpdate>>>(json, JsonOptions);
-
-        if (apiResult?.Result == null || apiResult.Result.Count == 0)
-        {
-            return 0;
-        }
-
-        var processedCount = 0;
-        var orderedUpdates = apiResult.Result.OrderBy(u => u.UpdateId).ToList();
-
-        foreach (var update in orderedUpdates)
-        {
-            if (update.UpdateId < _offset)
+            var botToken = GetBotToken();
+            if (string.IsNullOrWhiteSpace(botToken))
             {
-                _logger.Debug("Skipping already processed update {0}", update.UpdateId);
-                continue;
+                return 0;
             }
 
-            _offset = update.UpdateId + 1;
-            await _updateHandler.HandleUpdateAsync(update, cancellationToken).ConfigureAwait(false);
-            processedCount++;
-        }
+            var offset = CurrentOffset;
+            var url = $"https://api.telegram.org/bot{botToken}/getUpdates?offset={offset}&timeout=30";
+            using var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
 
-        return processedCount;
+            if ((int)response.StatusCode == 429 || response.StatusCode == (HttpStatusCode)429)
+            {
+                throw new HttpRequestException("Telegram API rate limit reached (HTTP 429)", null, HttpStatusCode.TooManyRequests);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.Warn("Telegram getUpdates failed with status {0}", response.StatusCode);
+                throw new HttpRequestException($"Telegram getUpdates failed with status {response.StatusCode}", null, response.StatusCode);
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var apiResult = JsonSerializer.Deserialize<TelegramApiResponse<List<TelegramUpdate>>>(json, JsonOptions);
+
+            if (apiResult?.Result == null || apiResult.Result.Count == 0)
+            {
+                return 0;
+            }
+
+            var processedCount = 0;
+            var orderedUpdates = apiResult.Result.OrderBy(u => u.UpdateId).ToList();
+
+            foreach (var update in orderedUpdates)
+            {
+                if (update.UpdateId < CurrentOffset)
+                {
+                    _logger.Debug("Skipping already processed update {0}", update.UpdateId);
+                    continue;
+                }
+
+                CurrentOffset = update.UpdateId + 1;
+                await _updateHandler.HandleUpdateAsync(update, cancellationToken).ConfigureAwait(false);
+                processedCount++;
+            }
+
+            return processedCount;
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -121,6 +135,7 @@ public class TelegramPollingService : BackgroundService, ITelegramPollingService
             {
                 if (!_configService.TelegramUsePolling)
                 {
+                    _webhookCleanedUp = false;
                     await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
                     continue;
                 }
@@ -129,6 +144,19 @@ public class TelegramPollingService : BackgroundService, ITelegramPollingService
                 {
                     await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken).ConfigureAwait(false);
                     continue;
+                }
+
+                if (!_webhookCleanedUp && _botLifecycle != null)
+                {
+                    try
+                    {
+                        await _botLifecycle.DeleteWebhookAsync(dropPendingUpdates: false, stoppingToken).ConfigureAwait(false);
+                        _webhookCleanedUp = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to ensure Telegram webhook deleted prior to polling");
+                    }
                 }
 
                 await PollOnceAsync(stoppingToken).ConfigureAwait(false);
@@ -142,6 +170,16 @@ public class TelegramPollingService : BackgroundService, ITelegramPollingService
                 _logger.Warn("Telegram API rate limit (HTTP 429) encountered. Backing off for 30s.");
                 await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken).ConfigureAwait(false);
             }
+            catch (HttpRequestException ex)
+            {
+                if (ex.StatusCode == HttpStatusCode.Conflict)
+                {
+                    _webhookCleanedUp = false;
+                }
+
+                _logger.Warn("Telegram getUpdates request failed with status {0}. Backing off for 5s.", ex.StatusCode);
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
+            }
             catch (Exception ex)
             {
                 _logger.Error(ex, "Error while polling Telegram updates. Backing off for 5s.");
@@ -150,5 +188,11 @@ public class TelegramPollingService : BackgroundService, ITelegramPollingService
         }
 
         _logger.Info("Telegram polling worker stopped.");
+    }
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        _semaphore.Dispose();
     }
 }
