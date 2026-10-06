@@ -186,6 +186,11 @@ public class TelegramUpdateHandler : ITelegramUpdateHandler
 
     public bool IsAuthorized(long chatId, long? userId = null)
     {
+        if (chatId < 0)
+        {
+            return userId.HasValue && _settings.AllowedChatIds != null && _settings.AllowedChatIds.Contains(userId.Value);
+        }
+
         if (_settings.AllowedChatIds != null && _settings.AllowedChatIds.Count > 0)
         {
             return _settings.AllowedChatIds.Contains(chatId) || (userId.HasValue && _settings.AllowedChatIds.Contains(userId.Value));

@@ -82,6 +82,89 @@ public class TelegramUpdateHandlerTest
     }
 
     [Test]
+    public void IsAuthorized_should_return_false_for_group_chat_when_userId_is_null()
+    {
+        _settings.AllowedChatIds = new List<long> { -100123456789, 1001 };
+        Assert.That(_handler.IsAuthorized(-100123456789, null), Is.False);
+    }
+
+    [Test]
+    public void IsAuthorized_should_return_false_for_group_chat_when_userId_is_not_in_AllowedChatIds()
+    {
+        _settings.AllowedChatIds = new List<long> { -100123456789, 1001 };
+        Assert.That(_handler.IsAuthorized(-100123456789, 8888), Is.False);
+    }
+
+    [Test]
+    public void IsAuthorized_should_return_true_for_group_chat_when_userId_is_in_AllowedChatIds()
+    {
+        _settings.AllowedChatIds = new List<long> { -100123456789, 1001 };
+        Assert.That(_handler.IsAuthorized(-100123456789, 1001), Is.True);
+    }
+
+    [Test]
+    public void IsAuthorized_should_return_false_for_group_chat_when_AllowedChatIds_is_empty_even_if_ChatId_matches()
+    {
+        _settings.AllowedChatIds = new List<long>();
+        _settings.ChatId = "-100123456789";
+
+        Assert.That(_handler.IsAuthorized(-100123456789, 1001), Is.False);
+        Assert.That(_handler.IsAuthorized(-100123456789, null), Is.False);
+    }
+
+    [Test]
+    public async Task HandleUpdateAsync_group_chat_message_from_unauthorized_user_should_return_unauthorized()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.OK, "{}");
+        _settings.AllowedChatIds = new List<long> { -100123456789, 1001 };
+
+        var update = new TelegramUpdate
+        {
+            UpdateId = 10,
+            Message = new TelegramMessage
+            {
+                MessageId = 50,
+                Chat = new TelegramChat { Id = -100123456789 },
+                From = new TelegramUser { Id = 8888 },
+                Text = "/status"
+            }
+        };
+
+        var response = await _handler.HandleUpdateAsync(update);
+
+        Assert.That(response.Authorized, Is.False);
+        Assert.That(response.Success, Is.False);
+        Assert.That(response.Handled, Is.True);
+        Assert.That(_httpHandler.Requests.Count, Is.EqualTo(1));
+        Assert.That(_httpHandler.LastRequest.RequestUri.ToString(), Does.Contain("sendMessage"));
+    }
+
+    [Test]
+    public async Task HandleUpdateAsync_group_chat_message_from_authorized_user_should_be_authorized()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.OK, "{}");
+        _settings.AllowedChatIds = new List<long> { -100123456789, 1001 };
+
+        var update = new TelegramUpdate
+        {
+            UpdateId = 11,
+            Message = new TelegramMessage
+            {
+                MessageId = 51,
+                Chat = new TelegramChat { Id = -100123456789 },
+                From = new TelegramUser { Id = 1001 },
+                Text = "/start"
+            }
+        };
+
+        var response = await _handler.HandleUpdateAsync(update);
+
+        Assert.That(response.Authorized, Is.True);
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.Command, Is.EqualTo("/start"));
+    }
+
+    [Test]
     public async Task HandleUpdateAsync_unauthorized_message_should_return_unauthorized_and_send_rejection()
     {
         _httpHandler.Enqueue(HttpStatusCode.OK, "{}");
