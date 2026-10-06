@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Dht;
 using NzbDrone.Core.Network;
@@ -12,6 +14,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.Network;
 
 [V1ApiController("network")]
+[Authorize(Policy = Policies.Reader)]
 public class NetworkController : Controller
 {
     private readonly INetworkStatusService _networkStatusService;
@@ -258,6 +261,7 @@ public class NetworkController : Controller
     }
 
     [HttpPost("test-port")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<ActionResult<PortTestResult>> TestPortAsync(
         [FromQuery] int? port = null,
         CancellationToken cancellationToken = default)
