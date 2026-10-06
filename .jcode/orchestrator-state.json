@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:14:51Z",
+  "updatedAt": "2026-10-06T23:15:36Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_5c1f2c06"
+    "lastScheduleId": "sched_0b8014e3"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 30,
-  "lastMonitorNote": "30 open (gh); 1 restart hog->guppy SignalR; latest #1185-#1189"
+  "lastMonitorNote": "30 open (gh); 0 restarts; latest #1186-#1190 composition/torrents/http/signalr"
 }
