@@ -1,22 +1,20 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:08:00Z",
+  "updatedAt": "2026-10-06T22:10:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.SignalR",
+  "currentSubfolder": "src/NzbDrone.Core/Jobs",
   "rotation": [
-    {
-      "subfolder": "src/NzbDrone.SignalR",
-      "completedAt": "2026-10-06T22:05:00Z",
-      "issuesFiled": [940],
-      "issuesReopened": []
-    }
+    "src/NzbDrone.SignalR",
+    "src/NzbDrone.Core/Jobs",
+    "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+    "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-06T22:08:00Z",
-    "issuesFiled": [],
+    "subfolder": "src/NzbDrone.Core/Jobs + TorrentRecheckService + Seedarr.Http/REST (callers)",
+    "completedAt": "2026-10-06T22:10:00Z",
+    "issuesFiled": [951, 952, 954],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Verification pass after piglet slot write: re-read all 7 area files, cross-checked signalr.ts/SignalRProvider.tsx and Http tests; deduped open signalr issues (#878,#887,#903,#911,#918,#919,#935,#936,#940); no new filings."
+    "note": "Scheduler/ScheduledTaskCommandExecutor, TorrentRecheckService dual broadcast, RestControllerWithSignalR, HealthCheck; cross-checked open issues #878-940. Slot file only."
   }
 }
