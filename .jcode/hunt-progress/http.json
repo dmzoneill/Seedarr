@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T22:45:00Z",
+  "updatedAt": "2026-10-06T23:20:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -12,10 +12,10 @@
   "currentSubfolder": "src/Seedarr.Http/Terminal",
   "lastPass": {
     "subfolder": "src/Seedarr.Http/Authentication",
-    "completedAt": "2026-10-06T22:45:00Z",
+    "completedAt": "2026-10-06T23:20:00Z",
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 8: Authentication (ApiKeyAuthenticationHandler, BasicAuthenticationHandler, DynamicAuthSchemeManager, ForwardAuthHandler, IDynamicAuthSchemeManager). Cross-checked SmartAuth routing in Startup.cs and RpcAuthenticationHelper. GitHub dedupe: open #877 Basic API-key-in-username vs Rpc/CSRF, #895 ForwardAuth User vs OIDC ReadOnly RBAC default, #893 SanitizeProviderId scheme collision, #922 OIDC CallbackPath UrlBase; closed #862 thread-safe DynamicAuth, #563 encrypted OIDC secrets. No new distinct defects filed. Next: Terminal. No dotnet build/test."
+    "note": "Pass 8: Authentication (ApiKeyAuthenticationHandler, BasicAuthenticationHandler, DynamicAuthSchemeManager, ForwardAuthHandler, IDynamicAuthSchemeManager). GitHub dedupe: open #877 Basic vs Rpc API-key username, #895 ForwardAuth User vs OIDC ReadOnly default, #922 OIDC CallbackPath UrlBase; closed #864/#367 ForwardAuth proxy activation, #862 DynamicAuth thread-safety, #711 OIDC SSRF/collision. No new distinct defects filed. Next: Terminal. No dotnet build/test."
   }
 }
