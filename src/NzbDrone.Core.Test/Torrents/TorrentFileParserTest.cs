@@ -2245,4 +2245,29 @@ public class TorrentFileParserTest
         Assert.That(result.Files, Has.Count.EqualTo(1));
         Assert.That(result.Files[0].Path, Is.EqualTo("MyTorrentCool/folder/file.txt"));
     }
+
+    [TestCase(253402300800L)]
+    [TestCase(-62135596801L)]
+    [TestCase(long.MaxValue)]
+    [TestCase(long.MinValue)]
+    public void Parse_should_throw_when_creation_date_is_out_of_unix_bounds(long outOfBoundsUnixTime)
+    {
+        var torrentDict = CreateMinimalTorrent();
+        torrentDict.Add("creation date", new BNumber(outOfBoundsUnixTime));
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("creation date"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_creation_date_is_not_an_integer()
+    {
+        var torrentDict = CreateMinimalTorrent();
+        torrentDict.Add("creation date", new BString("2024-01-01"));
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("creation date"));
+    }
 }

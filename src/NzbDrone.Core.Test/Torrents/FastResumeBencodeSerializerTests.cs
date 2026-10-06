@@ -352,4 +352,42 @@ public class FastResumeBencodeSerializerTests
         Assert.That(deserialized.InfoHash, Is.EqualTo(original.InfoHash));
         Assert.That(deserialized.Bitfield, Is.EqualTo(original.Bitfield));
     }
+
+    [TestCase(253402300800L)]
+    [TestCase(300000000000L)]
+    [TestCase(long.MaxValue)]
+    [TestCase(-1L)]
+    [TestCase(long.MinValue)]
+    public void Deserialize_handles_out_of_range_or_invalid_mtime_without_throwing(long invalidMtime)
+    {
+        var dict = new BDictionary
+        {
+            ["file sizes"] = new BList { (IBObject)new BNumber(1024) },
+            ["mtime"] = new BList { (IBObject)new BNumber(invalidMtime) },
+            ["mapped_files"] = new BList { (IBObject)new BString("file.mkv") }
+        };
+
+        var data = _serializer.Deserialize(dict.EncodeAsBytes());
+
+        Assert.That(data.Files, Has.Count.EqualTo(1));
+        Assert.That(data.Files[0].Mtime, Is.Null);
+    }
+
+    [Test]
+    public void Serialize_handles_extreme_mtime_without_throwing()
+    {
+        var data = new FastResumeData
+        {
+            Files = new List<FastResumeFileEntry>
+            {
+                new() { Path = "min.mkv", Length = 100, Mtime = DateTime.MinValue },
+                new() { Path = "max.mkv", Length = 200, Mtime = DateTime.MaxValue }
+            }
+        };
+
+        var bytes = _serializer.Serialize(data);
+        var restored = _serializer.Deserialize(bytes);
+
+        Assert.That(restored.Files, Has.Count.EqualTo(2));
+    }
 }
