@@ -27,7 +27,7 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "sheep"
+      "worker": "sauropod"
     },
     "http": {
       "area": "src/Seedarr.Http",
@@ -37,7 +37,7 @@
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "snail"
+      "worker": "blowfish"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 30,
-  "lastMonitorNote": "30 open; 2 restarts pig->sheep api, ox->snail host; pig/ox hunt-progress expected"
+  "lastMonitorNote": "30 open; 2 restarts pig->sauropod api, ox->blowfish host; pig/ox hunt-progress expected"
 }
