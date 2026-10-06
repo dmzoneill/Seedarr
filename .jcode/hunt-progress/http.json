@@ -1,14 +1,18 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T22:08:00Z",
+  "updatedAt": "2026-10-06T22:15:00Z",
   "area": "src/Seedarr.Http",
-  "currentSubfolder": "src/Seedarr.Http",
+  "currentSubfolder": "src/Seedarr.Http/Terminal",
+  "rotation": [
+    "src/Seedarr.Http",
+    "src/Seedarr.Http/Terminal"
+  ],
   "lastPass": {
-    "subfolder": "src/Seedarr.Http + src/Seedarr.Http.Test",
-    "completedAt": "2026-10-06T22:08:00Z",
-    "issuesFiled": [934],
+    "subfolder": "src/Seedarr.Http/Terminal + src/Seedarr.Http.Test/SignalR",
+    "completedAt": "2026-10-06T22:15:00Z",
+    "issuesFiled": [956],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 4: Security/Auth/Terminal/REST static review; hunt-progress/http.json only"
+    "note": "Pass 5: Terminal/LinuxPty env inheritance static review; deduped #397; hunt-progress/http.json only"
   }
 }
