@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:17:45Z",
+  "updatedAt": "2026-10-06T22:18:30Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_05d0d3a7"
+    "lastScheduleId": "sched_a9ab8b1b"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 30,
-  "lastMonitorNote": "30 open; 1 restart buffalo->crab(core); bear,butterfly,blowfish,badger active"
+  "lastMonitorNote": "30 open; 0 restarts; buffalo core.json expected; crab,bear,butterfly,blowfish,badger active"
 }
