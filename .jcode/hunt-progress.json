@@ -1,22 +1,23 @@
 {
-  "updatedAt": "2026-10-06T21:59:00Z",
+  "updatedAt": "2026-10-06T22:02:00Z",
   "note": "Workers update this file only. Coordinator reads it on monitor ticks; never edit orchestrator-state.json from hunters.",
   "slots": {
     "core": {
       "area": "src/NzbDrone.Core",
-      "currentSubfolder": "src/NzbDrone.Core/Authentication",
+      "currentSubfolder": "src/NzbDrone.Core/DownloadClients",
       "rotation": [
-        "src/NzbDrone.Core/Datastore",
         "src/NzbDrone.Core/DownloadClients",
         "src/NzbDrone.Core/Blocklist",
         "src/NzbDrone.Core/Torrents",
-        "src/NzbDrone.Core/Authentication"
+        "src/NzbDrone.Core/Authentication",
+        "src/NzbDrone.Core/Datastore"
       ],
       "lastPass": {
-        "subfolder": "src/NzbDrone.Core/Torrents",
-        "completedAt": "2026-10-06T21:58:00Z",
-        "issuesFiled": [912],
-        "issuesReopened": []
+        "subfolder": "src/NzbDrone.Core/Datastore",
+        "completedAt": "2026-10-06T22:02:00Z",
+        "issuesFiled": [915],
+        "issuesReopened": [],
+        "taskId": "core-hunter"
       }
     },
     "api": {
