@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T00:35:00Z",
-  "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.SignalR",
+  "updatedAt": "2026-10-07T00:55:00Z",
+  "area": "src/NzbDrone.Core/Jobs",
+  "currentSubfolder": "src/NzbDrone.Core/Jobs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/REST",
-    "completedAt": "2026-10-07T00:35:00Z",
-    "issuesFiled": [1186],
+    "subfolder": "src/NzbDrone.SignalR",
+    "completedAt": "2026-10-07T00:55:00Z",
+    "issuesFiled": [1194, 1195],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "REST pass: reviewed RestController, RestResource, ResourceValidator, RestPutByIdAttribute, RestControllerWithSignalR coalesce/Flush/Dispose/PruneStaleBroadcastTimes and Seedarr.Http.Test coverage. GitHub dedupe: open issues already cover throttle window advance (#1047), offline timer flush (#1002), offline lifecycle vs pending (#1003), shutdown Flush (#1060), RestResource.ToLower (#1049), RestPutById routing (#1140). Filed #1186 singleton IHandle TorrentController vs per-request MVC instances not sharing broadcast enrichment caches after InvalidateBroadcastCache. No issues reopened. Next: src/NzbDrone.SignalR. No code fixes; no dotnet build/test."
+    "note": "Hub pass: reviewed MessageHub (OnConnectedAsync auth handshake, SubscribeToTorrent/Channel, RequestStateSnapshot), SignalRMessageBroadcaster (dedup/GetNamedEvents/group routing), TrackerSignalREventHandler, piece message DTOs, StateSnapshotResource; cross-checked Seedarr.Http.Test SignalR coverage. GitHub dedupe: open issues already cover Clients.All vs groups (#878), trackerAnnounced on status (#919), redundant tracker named events (#961), auth header leak on JWT handshake (#1095), duplicate snapshot RPC+push (#940), dedup before SendAsync (#1016), piece circular JSON (#1019), TaskFailed frontend guard (#903). Filed #1194 RequestStateSnapshot unhandled GetAll exceptions; #1195 BroadcastToChannel missing Trim vs hub subscribe. No issues reopened. Next: src/NzbDrone.Core/Jobs. No code fixes; no dotnet build/test."
   }
 }
