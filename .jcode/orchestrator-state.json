@@ -1,5 +1,7 @@
 {
-  "updatedAt": "2026-10-06T21:39:30Z",
+  "updatedAt": "2026-10-06T21:40:15Z",
+  "lastValidationAt": "2026-10-06T21:40:15Z",
+  "lastValidationNote": "bh4: commit 2d300a2b on origin/main; bug-hunt state+playbook pushed; 5 hunters running; sched_73917708 active",
   "status": "running",
   "mode": "bug-hunt",
   "monitor": {
