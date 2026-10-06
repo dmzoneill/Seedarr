@@ -1,9 +1,12 @@
 using System;
 using System.IO;
+using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Authentication;
 using Seedarr.Api.V1.System;
 
 namespace NzbDrone.Core.Test.Controllers;
@@ -205,5 +208,26 @@ public class LogFileControllerTest
         var result = _controller.ClearLogFiles();
 
         Assert.That(result, Is.InstanceOf<OkResult>());
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_Reader_attribute()
+    {
+        var type = typeof(LogFileController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [Test]
+    public void ClearLogFiles_should_have_Authorize_AdminOnly_attribute()
+    {
+        var method = typeof(LogFileController).GetMethod(nameof(LogFileController.ClearLogFiles));
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 }

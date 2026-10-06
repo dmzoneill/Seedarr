@@ -4,13 +4,16 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Authentication;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.System;
 
 [V1ApiController("logfile")]
+[Authorize(Policy = Policies.Reader)]
 public class LogFileController : ControllerBase
 {
     private static readonly HashSet<string> ActiveLogFileNames = new(StringComparer.OrdinalIgnoreCase)
@@ -123,6 +126,7 @@ public class LogFileController : ControllerBase
     }
 
     [HttpDelete]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult ClearLogFiles()
     {
         var logDir = Path.Combine(_appFolderInfo.AppDataFolder, "logs");
