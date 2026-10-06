@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T22:25:00Z",
+  "updatedAt": "2026-10-06T23:35:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -12,10 +12,10 @@
   "currentSubfolder": "src/Seedarr.Http/REST",
   "lastPass": {
     "subfolder": "src/Seedarr.Http/Terminal",
-    "completedAt": "2026-10-06T22:25:00Z",
-    "issuesFiled": [],
+    "completedAt": "2026-10-06T23:35:00Z",
+    "issuesFiled": [1027],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 9: Terminal (TerminalHub, TerminalWebSocketHandler, PtyTerminalService, PtyProcessSession, LinuxPtySession, FallbackProcessSession, NativePty, TerminalEnvironmentSanitizer). GitHub dedupe: open #892 TerminalHub HttpContext-null auth skip and API-key admin RBAC gap, #902 WebSocket cwd not confined to save paths, #956/#965 LinuxPtySession unsanitized host env vs TerminalEnvironmentSanitizer, #966 parent frees fork argv/env before child execve, #967 CreateSession exception echoed to WebSocket client; closed #818 PtyProcessSession stderr drain, #397 env sanitize/RBAC. No new distinct defects filed. Next: REST (rotation wrap). No dotnet build/test."
+    "note": "Pass 9: Terminal (10 files: TerminalHub, TerminalWebSocketHandler, PtyTerminalService, LinuxPtySession, PtyProcessSession, FallbackProcessSession, NativePty, TerminalEnvironmentSanitizer, interfaces). GitHub dedupe: open #892 TerminalHub HttpContext/auth, #902 cwd confinement, #956/#965 LinuxPty env, #966 fork argv UAF, #967 WebSocket ex.Message; closed #397/#396 terminal env/PTY. Filed #1027 PtyTerminalService python-before-native LinuxPty ordering. Next: REST. No dotnet build/test."
   }
 }
