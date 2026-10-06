@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T01:45:00Z",
+  "updatedAt": "2026-10-07T02:00:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Authentication",
+  "currentSubfolder": "src/NzbDrone.Core/Datastore",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents",
-    "completedAt": "2026-10-07T01:45:00Z",
-    "issuesFiled": [1136, 1138, 1139],
+    "subfolder": "src/NzbDrone.Core/Authentication",
+    "completedAt": "2026-10-07T02:00:00Z",
+    "issuesFiled": [1144, 1145, 1146],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Torrents pass: filed #1136 (ImportFromMagnet omits MagnetUrl), #1138 (TorrentExporter zero piece hashes), #1139 (FastResume compact bitfield misread). Comment on #1044 for DownloadHistoryService.ReAddFromHistory magnet tier++. Deduped open #945, #948, #1038, #1043-#1046, #950, #1048, #1121-#1123 and related. Static review only; no dotnet build/test."
+    "note": "Authentication pass: filed #1144 (ForwardAuth TestConnection no-op), #1145 (redirect responses treated as failure), #1146 (SAML ignores IssuerUrl fallback). Deduped open #976, #978-#979, #986-#987, #1058-#1064, #1079-#1080, #1105, #1116-#1117 and related. Static review only; no dotnet build/test."
   }
 }
