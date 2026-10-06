@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T23:00:00Z",
+  "updatedAt": "2026-10-07T00:15:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Terminal",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Authentication",
-    "completedAt": "2026-10-07T23:00:00Z",
-    "issuesFiled": [1160, 1161],
+    "subfolder": "src/Seedarr.Http/Terminal",
+    "completedAt": "2026-10-07T00:15:00Z",
+    "issuesFiled": [1173, 1174],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 18: Authentication (5 files: ApiKeyAuthenticationHandler, BasicAuthenticationHandler, DynamicAuthSchemeManager, ForwardAuthHandler, IDynamicAuthSchemeManager). Static review only. GitHub dedupe: existing open #877 Basic vs Rpc API key parity; #895/#1109 ForwardAuth RBAC/loopback; #893/#906/#922/#1116/#1117/#976 DynamicAuth OIDC; #1105 SmartAuth routing; #1064/#1059 secret encryption. New: #1160 OIDC RoleMappingRules Operator claim vs Operator policy (Admin/User/ReadOnly); #1161 DecryptClientSecret ciphertext fallback on Unprotect failure. Next: Terminal. No dotnet build/test."
+    "note": "Pass 19: Terminal (10 files: FallbackProcessSession, IPtyTerminalService, ITerminalSession, LinuxPtySession, NativePty, PtyProcessSession, PtyTerminalService, TerminalEnvironmentSanitizer, TerminalHub, TerminalWebSocketHandler). Static review only. GitHub dedupe: existing open #892/#902/#956/#965/#966/#1027/#1131/#1132/#1133 and related. New: #1173 FallbackProcessSession bounded channel Wait backpressure deadlocks shell when WS consumer stalls; #1174 LinuxPtySession forkpty error uses GetLastWin32Error on Linux. Commented #892 (AuthenticateAsync hydrates httpContext.User but Admin RBAC reads Context.User only). Next: REST. No dotnet build/test."
   }
 }
