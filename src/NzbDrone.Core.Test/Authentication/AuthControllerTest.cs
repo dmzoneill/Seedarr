@@ -303,6 +303,66 @@ public class AuthControllerTest
     }
 
     [Test]
+    public void SessionRevocationService_IsSessionRevoked_ReturnsFalse_WhenIssuedUtcMissing()
+    {
+        var service = new SessionRevocationService();
+        var now = DateTime.UtcNow;
+
+        service.RevokeSession("user-a", now);
+
+        Assert.That(service.IsSessionRevoked("user-a", DateTime.MinValue), Is.False);
+        Assert.That(service.IsSessionRevoked("user-a", default), Is.False);
+    }
+
+    [Test]
+    public void SessionRevocationService_RevokeSession_PersistsToRepository()
+    {
+        var repository = Substitute.For<IRevokedSessionRepository>();
+        var service = new SessionRevocationService(repository);
+        var now = DateTime.UtcNow;
+
+        service.RevokeSession("session-persist", now);
+
+        repository.Received(1).Upsert(
+            "session-persist",
+            Arg.Is<DateTime>(t => Math.Abs((t - now).TotalSeconds) < 1),
+            Arg.Is<DateTime>(t => Math.Abs((t - now.AddDays(30)).TotalSeconds) < 1));
+    }
+
+    [Test]
+    public void SessionRevocationService_LoadsActiveRevocationsOnConstruction()
+    {
+        var repository = Substitute.For<IRevokedSessionRepository>();
+        var revokedAt = DateTime.UtcNow.AddHours(-1);
+        repository.GetActive(Arg.Any<DateTime>()).Returns(new[]
+        {
+            new RevokedSession
+            {
+                SessionKey = "loaded-session",
+                RevokedAtUtc = revokedAt,
+                ExpiresAtUtc = revokedAt.AddDays(30),
+            },
+        });
+
+        var service = new SessionRevocationService(repository);
+
+        Assert.That(service.IsSessionRevoked("loaded-session", revokedAt.AddMinutes(-5)), Is.True);
+    }
+
+    [Test]
+    public void SessionRevocationService_ClearExpired_DeletesFromRepository()
+    {
+        var repository = Substitute.For<IRevokedSessionRepository>();
+        var service = new SessionRevocationService(repository);
+        var oldTime = DateTime.UtcNow.AddDays(-40);
+
+        service.RevokeSession("session-old", oldTime);
+        service.ClearExpired(TimeSpan.FromDays(30));
+
+        repository.Received(1).DeleteExpired(Arg.Is<DateTime>(d => d <= DateTime.UtcNow.AddDays(-30)));
+    }
+
+    [Test]
     public async Task OnValidatePrincipal_WhenSessionIsRevoked_RejectsPrincipalAndSignsOut()
     {
         var revocationService = new SessionRevocationService();

@@ -44,6 +44,7 @@ public static class TableRegistration
         TableMapping.Register<Trackers.Metrics.TrackerMetricSnapshot>("TrackerMetricSnapshots");
         TableMapping.Register<TorrentMediaMetadata>("TorrentMediaMetadata");
         TableMapping.Register<IdentityProviderDefinition>("IdentityProviders");
+        TableMapping.Register<RevokedSession>("RevokedSessions");
         TableMapping.Register<RssRule>("RssRules");
         TableMapping.Register<Category>("Categories");
         TableMapping.Register<AutomationScript>("AutomationScripts");

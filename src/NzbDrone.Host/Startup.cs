@@ -206,7 +206,12 @@ public class Startup
                         return;
                     }
 
-                    var issuedUtc = context.Properties.IssuedUtc?.UtcDateTime ?? DateTime.MinValue;
+                    if (!context.Properties.IssuedUtc.HasValue)
+                    {
+                        context.Properties.IssuedUtc = DateTimeOffset.UtcNow;
+                    }
+
+                    var issuedUtc = context.Properties.IssuedUtc.Value.UtcDateTime;
                     var sessionId = context.Principal?.FindFirst("SessionId")?.Value;
                     var username = context.Principal?.Identity?.Name;
 

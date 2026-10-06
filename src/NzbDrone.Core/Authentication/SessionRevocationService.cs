@@ -7,9 +7,15 @@ namespace NzbDrone.Core.Authentication;
 public class SessionRevocationService : ISessionRevocationService
 {
     private readonly ConcurrentDictionary<string, DateTime> _revokedSessions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IRevokedSessionRepository _repository;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private static readonly TimeSpan DefaultRetention = TimeSpan.FromDays(30);
-    private int _operationCount;
+
+    public SessionRevocationService(IRevokedSessionRepository repository = null)
+    {
+        _repository = repository;
+        LoadActiveRevocations();
+    }
 
     public void RevokeSession(string sessionIdOrUser)
     {
@@ -29,12 +35,10 @@ public class SessionRevocationService : ISessionRevocationService
             revokedAtUtc,
             (_, existing) => revokedAtUtc > existing ? revokedAtUtc : existing);
 
-        _logger.Debug("Revoked session or user token: {0} at {1:u}", key, revokedAtUtc);
+        var expiresAtUtc = revokedAtUtc + DefaultRetention;
+        _repository?.Upsert(key, revokedAtUtc, expiresAtUtc);
 
-        if (System.Threading.Interlocked.Increment(ref _operationCount) % 100 == 0)
-        {
-            ClearExpired();
-        }
+        _logger.Debug("Revoked session or user token: {0} at {1:u}", key, revokedAtUtc);
     }
 
     public bool IsSessionRevoked(string sessionIdOrUser, DateTime issuedUtc)
@@ -44,10 +48,14 @@ public class SessionRevocationService : ISessionRevocationService
             return false;
         }
 
+        if (issuedUtc == default || issuedUtc == DateTime.MinValue)
+        {
+            return false;
+        }
+
         var key = sessionIdOrUser.Trim();
         if (_revokedSessions.TryGetValue(key, out var revokedAtUtc))
         {
-            // If the ticket was issued at or before the revocation timestamp, it is revoked.
             return issuedUtc <= revokedAtUtc;
         }
 
@@ -65,6 +73,38 @@ public class SessionRevocationService : ISessionRevocationService
             {
                 _revokedSessions.TryRemove(kvp.Key, out _);
             }
+        }
+
+        _repository?.DeleteExpired(cutoff);
+    }
+
+    private void LoadActiveRevocations()
+    {
+        if (_repository == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var now = DateTime.UtcNow;
+            foreach (var entry in _repository.GetActive(now))
+            {
+                if (string.IsNullOrWhiteSpace(entry.SessionKey))
+                {
+                    continue;
+                }
+
+                var key = entry.SessionKey.Trim();
+                _revokedSessions.AddOrUpdate(
+                    key,
+                    entry.RevokedAtUtc,
+                    (_, existing) => entry.RevokedAtUtc > existing ? entry.RevokedAtUtc : existing);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to load revoked sessions from database; continuing with in-memory cache only");
         }
     }
 }
