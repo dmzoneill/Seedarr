@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T23:35:00Z",
+  "updatedAt": "2026-10-06T23:45:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Jobs",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-06T23:35:00Z",
-    "issuesFiled": [1094, 1095],
-    "issuesReopened": [],
+    "subfolder": "src/NzbDrone.Core/Jobs",
+    "completedAt": "2026-10-06T23:45:00Z",
+    "issuesFiled": [1125],
+    "issuesReopened": [821],
     "taskId": "signalr-hunter",
-    "note": "SignalR partition pass: reviewed MessageHub (OnConnectedAsync auth paths, subscriptions, RequestStateSnapshot, TrackerSignalREventHandler), SignalRMessageBroadcaster (dedupe/named events/group routing), PieceStorage coalesce/broadcast, piece message DTOs, StateSnapshotResource. Traced tests in Seedarr.Http.Test/SignalR. Deduped open #878, #887, #919, #936, #940, #954, #961, #1016, #1019, #1060 and related. Filed #1094 MarkPiecesVerified bypasses PieceStorage coalesce window; #1095 access_token JWT handshake leaves synthetic Authorization header on HttpContext. No code fixes; no dotnet build/test."
+    "note": "Jobs partition pass: reviewed Scheduler (due checks, jitter, SignalR lifecycle), TaskManager (normalization, history, cancel/fail paths), ScheduledTaskCommandExecutor, ScheduledTask/CalculateNextExecution, TrackerScrapeJob, DatabaseVacuumTask, ScheduledTaskHistoryRepository. Traced tests in NzbDrone.Core.Test/Jobs. Deduped open #971 (TrackerScrapeJob swallows failures), #952/#985/#911 (SignalR task lifecycle), #1053 (API history limits). Reopened #821 with comment: IJob default Execute(CancellationToken) still drops token post-partial-fix. Commented #952 on DB Success/history for missing task instances. Filed #1125 Scheduler/GetNextScheduled naive AddMinutes vs CalculateNextExecution after missed intervals. No code fixes; no dotnet build/test."
   }
 }
