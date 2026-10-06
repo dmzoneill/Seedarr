@@ -1,6 +1,6 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:12:00Z",
+  "updatedAt": "2026-10-06T22:15:00Z",
   "area": "src/NzbDrone.SignalR",
   "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
   "rotation": [
@@ -11,10 +11,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Core/Jobs",
-    "completedAt": "2026-10-06T22:12:00Z",
-    "issuesFiled": [971],
+    "completedAt": "2026-10-06T22:15:00Z",
+    "issuesFiled": [985],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Jobs pass: reviewed Scheduler/TaskManager/ScheduledTaskCommandExecutor/history/tasks; deduped #911 #952 #903 #821 #316; filed #971 TrackerScrapeJob swallows failures; commented on #911 for manual-run exception TaskCompleted/TaskFailed gap."
+    "note": "Jobs pass: reviewed Scheduler, TaskManager, ScheduledTaskCommandExecutor, history repo, TrackerScrapeJob, DatabaseVacuumTask, ScheduledTask; deduped #911 #952 #971 #821 #903; filed #985 manual command path emits TaskCompleted and omits TaskFailed on exceptions."
   }
 }
