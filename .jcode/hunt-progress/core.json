@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T23:35:00Z",
+  "updatedAt": "2026-10-06T23:45:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents",
+  "currentSubfolder": "src/NzbDrone.Core/Authentication",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Blocklist",
-    "completedAt": "2026-10-06T23:35:00Z",
-    "issuesFiled": [1021, 1022, 1023, 1024, 1029, 1032],
+    "subfolder": "src/NzbDrone.Core/Torrents",
+    "completedAt": "2026-10-06T23:45:00Z",
+    "issuesFiled": [1037, 1038, 1039],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Deduped open #904-#939 and #1021-#1024; filed local backoff LastCheckedUtc (#1029) and manual sync when disabled (#1032)."
+    "note": "Deduped open recheck/cancel/fastresume/watch-folder duplicates (#912, #950, #946, #964, etc.); filed watch-folder debounce race (#1037), recheck path fallback (#1038), padding preallocation (#1039)."
   }
 }
