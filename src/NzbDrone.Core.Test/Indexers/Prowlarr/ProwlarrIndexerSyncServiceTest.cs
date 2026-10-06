@@ -194,6 +194,46 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
         }
 
         [Test]
+        public void Sync_should_remove_pruned_indexer_from_rss_rules()
+        {
+            var rssRuleRepo = Substitute.For<IRssRuleRepository>();
+            var subject = new ProwlarrIndexerSyncService(_indexerRepository, _httpClient, rssRuleRepository: rssRuleRepo);
+
+            var syncedIndexer = new IndexerDefinition
+            {
+                Id = 102,
+                Name = "Prowlarr - RemovedTracker",
+                IndexerType = "Torznab",
+                ConfigContract = ProwlarrSyncMetadata.ConfigContractName,
+                Url = "http://prowlarr:9696/20",
+                Settings = ProwlarrSyncMetadata.BuildSettingsJson(20, 1)
+            };
+
+            _indexerRepository.All().Returns(new List<IndexerDefinition> { _prowlarrDefinition, syncedIndexer });
+
+            var rule = new RssRule
+            {
+                Id = 1,
+                Name = "Movie Rule",
+                IndexerIds = new List<int> { 101, 102, 103 }
+            };
+            rssRuleRepo.All().Returns(new List<RssRule> { rule });
+
+            _httpHandler.Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]")
+            };
+
+            var result = subject.Sync();
+
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Removed, Is.EqualTo(1));
+            Assert.That(rule.IndexerIds, Does.Not.Contain(102));
+            Assert.That(rule.IndexerIds, Is.EqualTo(new List<int> { 101, 103 }));
+            rssRuleRepo.Received(1).Update(rule);
+        }
+
+        [Test]
         public void Sync_should_not_prune_manual_torznab_indexers_or_root_prowlarr()
         {
             var manualTorznab = new IndexerDefinition

@@ -15,15 +15,18 @@ public class ProwlarrIndexerSyncService : IProwlarrIndexerSyncService
     private readonly IIndexerRepository _indexerRepository;
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
+    private readonly IRssRuleRepository _rssRuleRepository;
 
     public ProwlarrIndexerSyncService(
         IIndexerRepository indexerRepository,
         HttpClient httpClient = null,
-        Logger logger = null)
+        Logger logger = null,
+        IRssRuleRepository rssRuleRepository = null)
     {
         _indexerRepository = indexerRepository;
         _httpClient = httpClient ?? DefaultClient;
         _logger = logger ?? LogManager.GetCurrentClassLogger();
+        _rssRuleRepository = rssRuleRepository;
     }
 
     public ProwlarrSyncResult Sync(int? prowlarrIndexerDefinitionId = null, string baseUrl = null, string apiKey = null)
@@ -321,6 +324,27 @@ public class ProwlarrIndexerSyncService : IProwlarrIndexerSyncService
             if (!localProwlarrId.HasValue || !activeProwlarrIds.Contains(localProwlarrId.Value))
             {
                 _indexerRepository.Delete(local.Id);
+
+                if (_rssRuleRepository != null)
+                {
+                    try
+                    {
+                        var rules = _rssRuleRepository.All();
+                        foreach (var rule in rules)
+                        {
+                            if (rule.IndexerIds != null && rule.IndexerIds.Contains(local.Id))
+                            {
+                                rule.IndexerIds.RemoveAll(x => x == local.Id);
+                                _rssRuleRepository.Update(rule);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to clean orphaned indexer reference {0} from RSS rules", local.Id);
+                    }
+                }
+
                 result.Removed++;
                 _logger.Info(
                     "Pruned removed Prowlarr indexer: {0} (Id={1}, ProwlarrId={2})",
