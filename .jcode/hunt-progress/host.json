@@ -14,9 +14,9 @@
   "lastPass": {
     "subfolder": "src/NzbDrone.Host/AppLifetime.cs",
     "completedAt": "2026-10-06T22:15:00Z",
-    "issuesFiled": [944],
+    "issuesFiled": [953, 955],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Watchdog not drained before phase-2 SaveAll/UpdateMany; deduped #910 startup ordering"
+    "note": "Deduped #910 #944; filed host stop token skipped stopped announces + StartAsync ignores cancellationToken"
   }
 }
