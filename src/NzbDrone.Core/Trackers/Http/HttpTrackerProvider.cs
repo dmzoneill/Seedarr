@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -221,14 +222,18 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
                 var peers = dict["peers"];
                 if (peers is BList peerList)
                 {
-                    foreach (var peer in peerList.Cast<BDictionary>())
+                    foreach (var peer in peerList.OfType<BDictionary>())
                     {
-                        response.Peers.Add(new TrackerPeer
+                        if (peer.TryGetValue("ip", out var ipVal) && ipVal is BString ipStr &&
+                            peer.TryGetValue("port", out var portVal) && portVal is BNumber portNum)
                         {
-                            Ip = ((BString)peer["ip"]).ToString(),
-                            Port = (int)((BNumber)peer["port"]).Value,
-                            PeerId = peer.ContainsKey("peer id") ? ((BString)peer["peer id"]).ToString() : null
-                        });
+                            response.Peers.Add(new TrackerPeer
+                            {
+                                Ip = ipStr.ToString(),
+                                Port = (int)portNum.Value,
+                                PeerId = peer.TryGetValue("peer id", out var peerIdVal) && peerIdVal is BString peerIdStr ? peerIdStr.ToString() : null
+                            });
+                        }
                     }
                 }
                 else if (peers is BString compactPeers)
@@ -241,6 +246,18 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
                         var port = (span[i + 4] << 8) | span[i + 5];
                         response.Peers.Add(new TrackerPeer { Ip = ip, Port = port });
                     }
+                }
+            }
+
+            if (dict.ContainsKey("peers6") && dict["peers6"] is BString compactPeers6)
+            {
+                var data = compactPeers6.Value;
+                for (var i = 0; i + 17 < data.Length; i += 18)
+                {
+                    var span = data.Span;
+                    var ip = new IPAddress(span.Slice(i, 16)).ToString();
+                    var port = (span[i + 16] << 8) | span[i + 17];
+                    response.Peers.Add(new TrackerPeer { Ip = ip, Port = port });
                 }
             }
 
