@@ -1,18 +1,17 @@
 {
-  "updatedAt": "2026-10-06T20:55:30Z",
+  "updatedAt": "2026-10-06T21:35:00Z",
   "policy": {
     "pushTarget": "origin/main",
     "runTestsLocally": false,
     "simulationContext": "Seedarr is a BitTorrent seeding simulator; preserve simulated I/O semantics.",
-    "continuousDispatch": true
+    "continuousDispatch": true,
+    "monitorIntervalSeconds": 30
   },
   "slots": {
-    "torrents": { "issue": 841, "status": "in_progress", "worker": "clover", "worktree": "../seedarr_worktrees/issue-841" },
-    "diskspace": { "issue": 755, "status": "in_progress", "worker": "sunflower", "worktree": "../seedarr_worktrees/issue-755" },
-    "rss": { "issue": 725, "status": "in_progress", "worker": "hibiscus", "worktree": "../seedarr_worktrees/issue-725" },
-    "extraction": { "issue": 492, "status": "in_progress", "worker": "blossom", "worktree": "../seedarr_worktrees/issue-492" },
-    "trackers": { "issue": 411, "status": "in_progress", "worker": "daisy", "worktree": "../seedarr_worktrees/issue-411" }
+    "terminal": { "issue": 397, "status": "in_progress", "worker": "fern/tulip", "worktree": "../seedarr_worktrees/issue-397" },
+    "logging": { "issue": 189, "status": "in_progress", "worker": "moss/rose", "worktree": "../seedarr_worktrees/issue-189" },
+    "emulation": { "issue": 186, "status": "in_progress", "worker": "lichen/maple", "worktree": "../seedarr_worktrees/issue-186" }
   },
-  "queue": [397, 189, 186],
-  "completed": [811, 814, 815, 863, 869]
+  "queue": [],
+  "completed": [811, 814, 815, 863, 869, 841, 755, 725, 492, 411]
 }
