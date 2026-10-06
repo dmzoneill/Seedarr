@@ -1804,26 +1804,49 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         if (action is "delete" or "remove")
         {
             var distinctIds = resource.TorrentIds.Distinct().ToList();
+            var existingIds = new List<int>();
+            foreach (var id in distinctIds)
+            {
+                if (_torrentService.Get(id) == null)
+                {
+                    result.FailedIds[id] = $"Torrent {id} not found";
+                    result.FailedCount++;
+                    result.Errors.Add($"Torrent {id}: not found");
+                    continue;
+                }
+
+                existingIds.Add(id);
+            }
+
+            if (existingIds.Count == 0)
+            {
+                return Ok(result);
+            }
+
+            foreach (var id in existingIds)
+            {
+                _eventLogService?.Info(id, "Bulk", $"Deleted torrent (deleteFiles={resource.DeleteFiles})");
+            }
+
             try
             {
-                _torrentService.DeleteMany(distinctIds, resource.DeleteFiles);
-                foreach (var id in distinctIds)
+                _torrentService.DeleteMany(existingIds, resource.DeleteFiles);
+                foreach (var id in existingIds)
                 {
                     result.SucceededIds.Add(id);
                     result.SuccessCount++;
-                    _eventLogService?.Info(id, "Bulk", $"Deleted torrent (deleteFiles={resource.DeleteFiles})");
                     InvalidateBroadcastCache(id);
                 }
             }
             catch (Exception ex)
             {
-                result.FailedCount = distinctIds.Count;
+                result.FailedCount += existingIds.Count;
                 result.Errors.Add(ex.Message);
-                foreach (var id in distinctIds)
+                foreach (var id in existingIds)
                 {
                     result.FailedIds[id] = ex.Message;
                 }
-                _logger.Error(ex, "Failed to execute bulk delete for {0} torrents", distinctIds.Count);
+                _logger.Error(ex, "Failed to execute bulk delete for {0} torrents", existingIds.Count);
             }
 
             return Ok(result);
@@ -1918,8 +1941,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                         throw new KeyNotFoundException($"Torrent {id} not found");
                     }
 
-                    _torrentService.Delete(id, resource.DeleteFiles);
                     _eventLogService?.Info(id, "Bulk", $"Deleted torrent (deleteFiles={resource.DeleteFiles})");
+                    _torrentService.Delete(id, resource.DeleteFiles);
                     break;
                 }
 

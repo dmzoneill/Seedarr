@@ -13,6 +13,7 @@ using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network.Vpn;
+using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Torrents
@@ -729,6 +730,76 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.DeleteMany(new List<int>());
 
             _repository.DidNotReceive().DeleteMany(Arg.Any<List<int>>(), Arg.Any<bool>());
+        }
+
+        [Test]
+        public void DeleteMany_should_not_delete_payload_when_repository_DeleteMany_throws()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "seedarr_test_bulk_rollback_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var payloadFile = Path.Combine(tempDir, "sample.mkv");
+            File.WriteAllText(payloadFile, "test data");
+
+            var torrent = new Torrent
+            {
+                Id = 1,
+                Name = "TestTorrent",
+                SavePath = tempDir,
+                InfoHash = "abc123"
+            };
+            var file = new TorrentFile
+            {
+                TorrentId = 1,
+                Path = "sample.mkv"
+            };
+
+            _repository.All().Returns(new List<Torrent> { torrent }.AsQueryable());
+            _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+            _repository.When(x => x.DeleteMany(Arg.Any<List<int>>(), true))
+                .Do(_ => throw new InvalidOperationException("db rollback"));
+
+            try
+            {
+                Assert.Throws<InvalidOperationException>(() => _subject.DeleteMany(new List<int> { 1 }, deleteFiles: true));
+
+                Assert.That(File.Exists(payloadFile), Is.True);
+                _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentDeletedEvent>());
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+        }
+
+        [Test]
+        public void DeleteMany_should_disconnect_peers_before_repository_delete_when_deleteFiles_is_true()
+        {
+            var connectionManager = Substitute.For<IConnectionManager>();
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator, connectionManager: connectionManager);
+
+            var torrent = new Torrent
+            {
+                Id = 1,
+                Name = "TestTorrent",
+                InfoHash = "hash1",
+                Status = TorrentStatus.Seeding
+            };
+
+            _repository.All().Returns(new List<Torrent> { torrent }.AsQueryable());
+            _repository.Get(1).Returns(torrent);
+            _repository.Update(Arg.Any<Torrent>()).Returns(torrent);
+
+            subject.DeleteMany(new List<int> { 1 }, deleteFiles: true);
+
+            Received.InOrder(() =>
+            {
+                connectionManager.DisconnectByInfoHash("hash1");
+                _repository.DeleteMany(Arg.Is<List<int>>(l => l.Contains(1)), true);
+                _eventAggregator.PublishEvent(Arg.Any<TorrentDeletedEvent>());
+            });
         }
 
         [Test]
