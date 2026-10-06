@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T23:05:00Z",
+  "updatedAt": "2026-10-06T23:50:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Seeding",
+  "currentSubfolder": "src/Seedarr.Api.V1/Backup",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/DownloadClients",
-    "completedAt": "2026-10-06T23:05:00Z",
-    "issuesFiled": [1134, 1135, 1137],
+    "subfolder": "src/Seedarr.Api.V1/Seeding",
+    "completedAt": "2026-10-06T23:50:00Z",
+    "issuesFiled": [1142, 1143],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed DownloadClientController, DownloadClientSyncController, DownloadClientResource. GitHub dedupe: skipped open #885/#970/#972/#973/#974/#975/#981/#982/#983/#984/#931 and related core-layer downloadclient issues. Filed #1134 (PUT partial JSON disables/corrupts via default merge), #1135 (GET items 404 on provider factory failure), #1137 (EnrichWithStatus mutates factory cache). No dotnet build/test."
+    "notes": "Reviewed SeedingController, SpeedScheduleController, SpeedScheduleResource. GitHub dedupe: skipped open #914/#916/#989/#990/#995 (SeedingController/service-layer) and closed RBAC #833. Filed #1142 (PUT /speedschedule/{id} partial JSON resets IsEnabled/speeds/priority), #1143 (POST /speedschedule omitted fields default to disabled + 0 B/s pause). No dotnet build/test."
   }
 }
