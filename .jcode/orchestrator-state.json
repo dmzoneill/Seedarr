@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:32:26Z",
+  "updatedAt": "2026-10-06T23:33:33Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_35258a73"
+    "lastScheduleId": "sched_0207d421"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -42,7 +42,7 @@
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "retriever"
+      "worker": "spaniel"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 347,
-  "lastMonitorNote": "347 open (gh); 0 restarts; beaver/mongoose/cobra/ferret/retriever healthy; latest #1211-#1215"
+  "githubOpenCount": 350,
+  "lastMonitorNote": "350 open (gh); 1 restart retriever→spaniel; latest #1219-#1223"
 }
