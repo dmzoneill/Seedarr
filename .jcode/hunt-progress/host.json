@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:22:30Z",
+  "updatedAt": "2026-10-06T22:28:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Host/Bootstrap.cs",
+  "currentSubfolder": "src/NzbDrone.Host/AppLifetime.cs",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Host/Startup.cs",
-    "completedAt": "2026-10-06T22:22:30Z",
-    "issuesFiled": [1040],
+    "subfolder": "src/NzbDrone.Host/Bootstrap.cs",
+    "completedAt": "2026-10-06T22:28:00Z",
+    "issuesFiled": [1056],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #894 #876 #883 #907 #917 #920 #1028 #1030 #1031 #892; filed ForwardedHeaders trust-list clear enables X-Forwarded-* spoof for ForwardAuth proxy gate"
+    "note": "Deduped #932 #901 #933 #883 #1004 #1005 #1006 #1018; filed unparseable config.xml BindAddress silent 0.0.0.0 fallback in ResolveBindAddress"
   }
 }
