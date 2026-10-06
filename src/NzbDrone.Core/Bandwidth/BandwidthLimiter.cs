@@ -147,6 +147,55 @@ public class BandwidthLimiter : IBandwidthLimiter
         return false;
     }
 
+    public long GetEffectiveUploadMaxBurst(string infoHash = null, string peerId = null)
+    {
+        var maxBurst = long.MaxValue;
+
+        if (!GlobalUploadBucket.IsUnlimited)
+        {
+            maxBurst = Math.Min(maxBurst, GlobalUploadBucket.MaxBurstBytes);
+        }
+
+        if (!string.IsNullOrEmpty(infoHash) && _torrentUploadBuckets.TryGetValue(infoHash, out var tb) && !tb.IsUnlimited)
+        {
+            maxBurst = Math.Min(maxBurst, tb.MaxBurstBytes);
+        }
+
+        if (!string.IsNullOrEmpty(peerId) && _peerUploadBuckets.TryGetValue(peerId, out var pb) && !pb.IsUnlimited)
+        {
+            maxBurst = Math.Min(maxBurst, pb.MaxBurstBytes);
+        }
+
+        return Math.Max(1, maxBurst);
+    }
+
+    public long GetEffectiveDownloadMaxBurst(string infoHash = null, string peerId = null)
+    {
+        var maxBurst = long.MaxValue;
+
+        if (!GlobalDownloadBucket.IsUnlimited)
+        {
+            maxBurst = Math.Min(maxBurst, GlobalDownloadBucket.MaxBurstBytes);
+        }
+
+        if (!string.IsNullOrEmpty(infoHash) && _torrentDownloadBuckets.TryGetValue(infoHash, out var tb) && !tb.IsUnlimited)
+        {
+            maxBurst = Math.Min(maxBurst, tb.MaxBurstBytes);
+        }
+
+        if (!string.IsNullOrEmpty(peerId) && _peerDownloadBuckets.TryGetValue(peerId, out var pb) && !pb.IsUnlimited)
+        {
+            maxBurst = Math.Min(maxBurst, pb.MaxBurstBytes);
+        }
+
+        return Math.Max(1, maxBurst);
+    }
+
+    public long GetEffectiveMaxBurst(string infoHash = null, string peerId = null)
+    {
+        return Math.Min(GetEffectiveUploadMaxBurst(infoHash, peerId), GetEffectiveDownloadMaxBurst(infoHash, peerId));
+    }
+
     public ITokenBucket GetTorrentUploadBucket(string infoHash)
     {
         if (string.IsNullOrWhiteSpace(infoHash))
@@ -300,10 +349,24 @@ public class BandwidthLimiter : IBandwidthLimiter
             return;
         }
 
-        while (!TryConsumeUpload(infoHash, peerId, bytes))
+        var remaining = bytes;
+        while (remaining > 0)
         {
-            var waitTicks = CalculateUploadWaitTicks(infoHash, peerId, bytes);
-            PaceWait(waitTicks);
+            var maxBurst = GetEffectiveUploadMaxBurst(infoHash, peerId);
+            var chunk = Math.Min(remaining, maxBurst);
+
+            while (!TryConsumeUpload(infoHash, peerId, chunk))
+            {
+                if (!HasUploadLimit(infoHash, peerId))
+                {
+                    return;
+                }
+
+                var waitTicks = CalculateUploadWaitTicks(infoHash, peerId, chunk);
+                PaceWait(waitTicks);
+            }
+
+            remaining -= chunk;
         }
     }
 
@@ -314,10 +377,24 @@ public class BandwidthLimiter : IBandwidthLimiter
             return;
         }
 
-        while (!TryConsumeDownload(infoHash, peerId, bytes))
+        var remaining = bytes;
+        while (remaining > 0)
         {
-            var waitTicks = CalculateDownloadWaitTicks(infoHash, peerId, bytes);
-            PaceWait(waitTicks);
+            var maxBurst = GetEffectiveDownloadMaxBurst(infoHash, peerId);
+            var chunk = Math.Min(remaining, maxBurst);
+
+            while (!TryConsumeDownload(infoHash, peerId, chunk))
+            {
+                if (!HasDownloadLimit(infoHash, peerId))
+                {
+                    return;
+                }
+
+                var waitTicks = CalculateDownloadWaitTicks(infoHash, peerId, chunk);
+                PaceWait(waitTicks);
+            }
+
+            remaining -= chunk;
         }
     }
 
@@ -328,20 +405,35 @@ public class BandwidthLimiter : IBandwidthLimiter
             return;
         }
 
-        while (!TryConsumeUpload(infoHash, peerId, bytes))
+        var remaining = bytes;
+        while (remaining > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var waitTicks = CalculateUploadWaitTicks(infoHash, peerId, bytes);
-            var waitMs = (int)Math.Ceiling((double)waitTicks * 1000.0 / Stopwatch.Frequency);
+            var maxBurst = GetEffectiveUploadMaxBurst(infoHash, peerId);
+            var chunk = Math.Min(remaining, maxBurst);
 
-            if (waitMs > 1)
+            while (!TryConsumeUpload(infoHash, peerId, chunk))
             {
-                await Task.Delay(waitMs, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!HasUploadLimit(infoHash, peerId))
+                {
+                    return;
+                }
+
+                var waitTicks = CalculateUploadWaitTicks(infoHash, peerId, chunk);
+                var waitMs = (int)Math.Ceiling((double)waitTicks * 1000.0 / Stopwatch.Frequency);
+
+                if (waitMs > 1)
+                {
+                    await Task.Delay(waitMs, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    PaceWait(waitTicks);
+                }
             }
-            else
-            {
-                PaceWait(waitTicks);
-            }
+
+            remaining -= chunk;
         }
     }
 
@@ -352,20 +444,35 @@ public class BandwidthLimiter : IBandwidthLimiter
             return;
         }
 
-        while (!TryConsumeDownload(infoHash, peerId, bytes))
+        var remaining = bytes;
+        while (remaining > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var waitTicks = CalculateDownloadWaitTicks(infoHash, peerId, bytes);
-            var waitMs = (int)Math.Ceiling((double)waitTicks * 1000.0 / Stopwatch.Frequency);
+            var maxBurst = GetEffectiveDownloadMaxBurst(infoHash, peerId);
+            var chunk = Math.Min(remaining, maxBurst);
 
-            if (waitMs > 1)
+            while (!TryConsumeDownload(infoHash, peerId, chunk))
             {
-                await Task.Delay(waitMs, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!HasDownloadLimit(infoHash, peerId))
+                {
+                    return;
+                }
+
+                var waitTicks = CalculateDownloadWaitTicks(infoHash, peerId, chunk);
+                var waitMs = (int)Math.Ceiling((double)waitTicks * 1000.0 / Stopwatch.Frequency);
+
+                if (waitMs > 1)
+                {
+                    await Task.Delay(waitMs, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    PaceWait(waitTicks);
+                }
             }
-            else
-            {
-                PaceWait(waitTicks);
-            }
+
+            remaining -= chunk;
         }
     }
 
