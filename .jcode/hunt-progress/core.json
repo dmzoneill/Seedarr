@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T22:10:00Z",
+  "updatedAt": "2026-10-06T22:15:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Blocklist",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/DownloadClients",
-    "completedAt": "2026-10-06T22:10:00Z",
-    "issuesFiled": [923, 924, 925, 931],
+    "subfolder": "src/NzbDrone.Core/Blocklist",
+    "completedAt": "2026-10-06T22:15:00Z",
+    "issuesFileed": [937, 938, 939],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "#931 Sync() empty result on 200ms lock timeout; #923-925 filed earlier same sweep; #884 MapClientStatus not re-filed."
+    "note": "Deduped open #904 (empty 200 clears tree) and #905 (BlocklistAutoUpdate); not re-filed."
   }
 }
