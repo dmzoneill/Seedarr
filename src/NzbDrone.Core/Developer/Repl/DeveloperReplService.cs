@@ -216,7 +216,6 @@ public class DeveloperReplService : IDeveloperReplService
             options.LimitMemory(MemoryLimitBytes);
             options.TimeoutInterval(TimeSpan.FromSeconds(timeoutSeconds));
             options.LimitRecursion(128);
-            options.AllowClr();
         });
 
         // 1. console.log -> captures into output buffer
