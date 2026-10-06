@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:45:40Z",
+  "updatedAt": "2026-10-06T23:47:34Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_de16e107"
+    "lastScheduleId": "sched_7ae5d666"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -32,7 +32,7 @@
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "mantis"
+      "worker": "jay"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -42,7 +42,7 @@
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "magpie"
+      "worker": "heron"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 366,
-  "lastMonitorNote": "366 open; 0 restarts; mole/gerbil/mantis/meerkat/magpie all active <90s idle (#1235-#1239)"
+  "githubOpenCount": 368,
+  "lastMonitorNote": "368 open; 2 restarts; mole on Core/Datastore active; gerbil/meerkat <90s idle"
 }
