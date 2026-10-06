@@ -174,6 +174,28 @@ public class Ipv6IntervalTree
             }
         }
 
+        // Handle PeerGuardian / labeled rules: e.g. "Spamhaus-DROP:2001:db8::1-2001:db8::10" or "Level-1:2001:db8::/32"
+        for (var colonIdx = trimmed.IndexOf(':'); colonIdx > 0; colonIdx = trimmed.IndexOf(':', colonIdx + 1))
+        {
+            var candidate = trimmed[(colonIdx + 1)..].Trim();
+            var candidateComma = candidate.IndexOf(',');
+            if (candidateComma > 0)
+            {
+                candidate = candidate[..candidateComma].Trim();
+            }
+
+            if (TryParseCleanIPv6(candidate, out range))
+            {
+                return true;
+            }
+
+            var prefix = trimmed[..colonIdx].Trim();
+            if (IPAddress.TryParse(prefix, out _))
+            {
+                break;
+            }
+        }
+
         return false;
     }
 
@@ -229,8 +251,7 @@ public class Ipv6IntervalTree
         }
 
         // Range notation: start-end
-        var dashIdx = trimmed.IndexOf('-');
-        if (dashIdx >= 0)
+        for (var dashIdx = trimmed.LastIndexOf('-'); dashIdx >= 0; dashIdx = dashIdx > 0 ? trimmed.LastIndexOf('-', dashIdx - 1) : -1)
         {
             var startPart = trimmed[..dashIdx].Trim();
             var endPart = trimmed[(dashIdx + 1)..].Trim();
@@ -248,8 +269,6 @@ public class Ipv6IntervalTree
                 range = new Ipv6Range(startVal, endVal);
                 return true;
             }
-
-            return false;
         }
 
         // Single IP notation
