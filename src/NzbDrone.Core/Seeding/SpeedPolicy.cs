@@ -377,8 +377,10 @@ public class SpeedPolicy : ISpeedPolicy,
                     var snapshot = new SwarmSnapshot
                     {
                         SeedCount = torrent.Seeders,
-                        LeechCount = Math.Max(1, torrent.Leechers),
-                        PieceAvailability = torrent.Availability > 0 ? torrent.Availability : (torrent.Progress >= 1.0 ? 1.0 : torrent.Progress),
+                        LeechCount = Math.Max(0, torrent.Leechers),
+                        PieceAvailability = double.IsFinite(torrent.Availability) && torrent.Availability > 0
+                            ? torrent.Availability
+                            : (double.IsFinite(torrent.Progress) && torrent.Progress >= 1.0 ? 1.0 : (double.IsFinite(torrent.Progress) && torrent.Progress > 0 ? torrent.Progress : 0.0)),
                         TorrentSizeBytes = torrent.TotalSize,
                         UploadRateBytesPerSec = torrent.UploadSpeed,
                         DownloadRateBytesPerSec = torrent.DownloadSpeed,
@@ -387,13 +389,17 @@ public class SpeedPolicy : ISpeedPolicy,
                     };
 
                     var rec = _swarmAnalyzer.Analyze(snapshot);
-                    switch (rec.Recommendation)
+                    var confidence = (rec != null && double.IsFinite(rec.Confidence))
+                        ? Math.Clamp(rec.Confidence, 0.0, 1.0)
+                        : 0.0;
+
+                    switch (rec?.Recommendation)
                     {
                         case SeedingRecommendation.Boost:
-                            bytesPerSecond = (long)(bytesPerSecond * (1.0 + (0.5 * rec.Confidence)));
+                            bytesPerSecond = (long)(bytesPerSecond * (1.0 + (0.5 * confidence)));
                             break;
                         case SeedingRecommendation.Reduce:
-                            bytesPerSecond = (long)(bytesPerSecond * Math.Max(0.1, 1.0 - (0.5 * rec.Confidence)));
+                            bytesPerSecond = (long)(bytesPerSecond * Math.Max(0.1, 1.0 - (0.5 * confidence)));
                             break;
                         case SeedingRecommendation.Pause:
                             bytesPerSecond = 0;
@@ -403,7 +409,7 @@ public class SpeedPolicy : ISpeedPolicy,
                             break;
                     }
 
-                    if (rec.Recommendation == SeedingRecommendation.Pause)
+                    if (rec?.Recommendation == SeedingRecommendation.Pause)
                     {
                         bytesPerSecond = 0;
                         isPausedOrZeroLeechers = true;

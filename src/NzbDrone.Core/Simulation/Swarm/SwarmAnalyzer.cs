@@ -51,7 +51,20 @@ public class SwarmAnalyzer : ISwarmAnalyzer
 
         // Apply swarmAdaptationRate to scale confidence toward neutral (1.0 = full confidence, 0.0 = no adaptation)
         var adaptationRate = _configService.SwarmAdaptationRate;
+        if (!double.IsFinite(adaptationRate) || adaptationRate < 0.0)
+        {
+            adaptationRate = 0.0;
+        }
+
         confidence *= adaptationRate;
+        if (!double.IsFinite(confidence))
+        {
+            confidence = 0.0;
+        }
+        else
+        {
+            confidence = Math.Clamp(confidence, 0.0, 1.0);
+        }
 
         _logger.Debug(
             "Swarm analysis: seeds={0}, leeches={1}, ratio={2:F2}, availabilityScore={3:F2}, saturation={4:F2} -> {5} (confidence={6:F2}, reason={7}, adaptationRate={8:F2})",
@@ -78,7 +91,9 @@ public class SwarmAnalyzer : ISwarmAnalyzer
     {
         var seedCount = Math.Max(snapshot.SeedCount, 0);
         var leechCount = Math.Max(snapshot.LeechCount, 0);
-        var availability = Math.Max(snapshot.PieceAvailability, 0.0);
+        var availability = double.IsFinite(snapshot.PieceAvailability)
+            ? Math.Max(snapshot.PieceAvailability, 0.0)
+            : 0.0;
 
         // Limit peer analysis depth: cap seed and leech counts used in analysis
         var analysisDepth = _configService.SwarmPeerAnalysisDepth;
@@ -89,8 +104,23 @@ public class SwarmAnalyzer : ISwarmAnalyzer
         }
 
         var seedLeechRatio = ComputeSeedLeechRatio(seedCount, leechCount);
+        if (!double.IsFinite(seedLeechRatio))
+        {
+            seedLeechRatio = 0.0;
+        }
+
         var availabilityScore = NormalizePieceAvailability(availability);
+        if (!double.IsFinite(availabilityScore))
+        {
+            availabilityScore = 0.0;
+        }
+
         var saturationScore = ComputeSwarmSaturation(seedLeechRatio, availability);
+        if (!double.IsFinite(saturationScore))
+        {
+            saturationScore = 0.0;
+        }
+
         var isRare = seedCount > 0
             && seedCount <= RareContentSeedThreshold
             && availability < RareContentAvailabilityThreshold
@@ -117,11 +147,21 @@ public class SwarmAnalyzer : ISwarmAnalyzer
 
     private static double NormalizePieceAvailability(double pieceAvailability)
     {
+        if (!double.IsFinite(pieceAvailability))
+        {
+            return 0.0;
+        }
+
         return Math.Clamp(pieceAvailability / AvailabilityNormalizationCeiling, 0.0, 1.0);
     }
 
     private static double ComputeSwarmSaturation(double seedLeechRatio, double pieceAvailability)
     {
+        if (!double.IsFinite(seedLeechRatio) || !double.IsFinite(pieceAvailability))
+        {
+            return 0.0;
+        }
+
         var ratioFactor = Math.Clamp(seedLeechRatio / RatioNormalizationCeiling, 0.0, 1.0);
         var availabilityFactor = Math.Clamp(pieceAvailability / SaturationAvailabilityCeiling, 0.0, 1.0);
         return ratioFactor * availabilityFactor;
@@ -136,22 +176,26 @@ public class SwarmAnalyzer : ISwarmAnalyzer
             return (SeedingRecommendation.Pause, "No active leeches requesting data; pausing upload allocation", 1.0);
         }
 
+        var safeAvailability = double.IsFinite(snapshot.PieceAvailability)
+            ? Math.Max(snapshot.PieceAvailability, 0.0)
+            : 0.0;
+
         if (metrics.IsRareContent)
         {
             var confidence = Math.Clamp(1.0 - (metrics.PieceAvailabilityScore * 0.5), 0.0, 1.0);
             return (SeedingRecommendation.Boost,
-                $"Rare content: only {snapshot.SeedCount} seed(s) with piece availability {snapshot.PieceAvailability:F1}; boosting preserves swarm health",
-                confidence);
+                $"Rare content: only {snapshot.SeedCount} seed(s) with piece availability {safeAvailability:F1}; boosting preserves swarm health",
+                double.IsFinite(confidence) ? confidence : 0.0);
         }
 
         if (metrics.SeedLeechRatio > HighRatioThreshold
             && snapshot.SeedCount > snapshot.LeechCount * 2
-            && snapshot.PieceAvailability >= HealthyAvailabilityThreshold)
+            && safeAvailability >= HealthyAvailabilityThreshold)
         {
             var confidence = Math.Clamp(0.6 + ((metrics.SeedLeechRatio - HighRatioThreshold) * 0.1), 0.0, 1.0);
             return (SeedingRecommendation.Reduce,
                 $"Oversaturated swarm: seed/leech ratio {metrics.SeedLeechRatio:F1} with {snapshot.SeedCount} seeds vs {snapshot.LeechCount} leeches; reducing frees bandwidth",
-                confidence);
+                double.IsFinite(confidence) ? confidence : 0.0);
         }
 
         var maintainConfidence = metrics.IsSwarmHealthy ? 0.8 : 0.5;

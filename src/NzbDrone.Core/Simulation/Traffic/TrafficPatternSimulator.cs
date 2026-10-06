@@ -123,7 +123,7 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
         // Apply behaviorVariation as a randomized scaling factor around 1.0
         var behaviorVariation = _configService.BehaviorVariation;
         var variationMultiplier = 1.0;
-        if (behaviorVariation > 0.0 && _configService.RealisticVariations)
+        if (double.IsFinite(behaviorVariation) && behaviorVariation > 0.0 && _configService.RealisticVariations)
         {
             double randomSample;
             lock (_lock)
@@ -132,10 +132,23 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
             }
 
             variationMultiplier = Math.Max(0.1, 1.0 + (((randomSample * 2.0) - 1.0) * behaviorVariation));
+            if (!double.IsFinite(variationMultiplier))
+            {
+                variationMultiplier = 1.0;
+            }
         }
 
         var result = baseMultiplier * timeMultiplier * stateMultiplier * congestionMultiplier * peerMultiplier * variationMultiplier;
+        if (!double.IsFinite(result))
+        {
+            result = baseMultiplier;
+        }
+
         result = Math.Clamp(result, 0.05, 5.0);
+        if (!double.IsFinite(result))
+        {
+            result = 1.0;
+        }
 
         _logger.Trace(
             "Speed multiplier: {0:F2} (profile={1}, hour={2}, state={3}, congestion={4:F2}, peers={5}, peerMult={6:F2}, variation={7:F2})",

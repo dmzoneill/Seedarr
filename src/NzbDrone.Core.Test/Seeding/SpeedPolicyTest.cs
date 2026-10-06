@@ -439,6 +439,143 @@ public class SpeedPolicyTest
     }
 
     [Test]
+    public void ProcessSeeding_passes_zero_leech_count_to_swarm_snapshot()
+    {
+        var swarmAnalyzer = Substitute.For<ISwarmAnalyzer>();
+        _configService.SwarmIntelligenceEnabled.Returns(true);
+
+        SwarmSnapshot capturedSnapshot = null;
+        swarmAnalyzer.Analyze(Arg.Do<SwarmSnapshot>(s => capturedSnapshot = s)).Returns(new SwarmRecommendation
+        {
+            Recommendation = SeedingRecommendation.Pause,
+            Confidence = 1.0,
+            Reason = "No active leeches"
+        });
+
+        var subject = new SpeedPolicy(
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventLogService,
+            _stateMachine,
+            _stopPolicy,
+            new RandomNumberGenerator(42),
+            swarmAnalyzer: swarmAnalyzer,
+            categoryService: _categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Seeders = 5,
+            Leechers = 0,
+            SeedingTime = 300
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(capturedSnapshot, Is.Not.Null);
+        Assert.That(capturedSnapshot.LeechCount, Is.EqualTo(0));
+        Assert.That(torrent.Uploaded, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessSeeding_with_real_swarm_analyzer_when_zero_leechers_pauses_and_allocates_zero_bytes()
+    {
+        _configService.SwarmIntelligenceEnabled.Returns(true);
+        _configService.SwarmAdaptationRate.Returns(1.0);
+        _configService.SwarmPeerAnalysisDepth.Returns(0);
+
+        var realAnalyzer = new SwarmAnalyzer(_configService);
+
+        var subject = new SpeedPolicy(
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventLogService,
+            _stateMachine,
+            _stopPolicy,
+            new RandomNumberGenerator(42),
+            swarmAnalyzer: realAnalyzer,
+            categoryService: _categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Seeders = 5,
+            Leechers = 0,
+            SeedingTime = 300
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessSeeding_handles_nan_confidence_from_swarm_analyzer_without_collapsing_bandwidth()
+    {
+        var swarmAnalyzer = Substitute.For<ISwarmAnalyzer>();
+        _configService.SwarmIntelligenceEnabled.Returns(true);
+
+        swarmAnalyzer.Analyze(Arg.Any<SwarmSnapshot>()).Returns(new SwarmRecommendation
+        {
+            Recommendation = SeedingRecommendation.Boost,
+            Confidence = double.NaN,
+            Reason = "Boost with corrupt confidence"
+        });
+
+        var subject = new SpeedPolicy(
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventLogService,
+            _stateMachine,
+            _stopPolicy,
+            new RandomNumberGenerator(42),
+            swarmAnalyzer: swarmAnalyzer,
+            categoryService: _categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Seeders = 5,
+            Leechers = 5,
+            SeedingTime = 300
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.GreaterThan(0));
+    }
+
+    [Test]
     public void GetUploadLimit_when_torrent_has_no_tags_and_no_category_returns_zero()
     {
         var torrent = new Torrent { Id = 1, UploadLimit = 0 };
