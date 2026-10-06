@@ -1,7 +1,7 @@
 {
   "updatedAt": "2026-10-06T21:58:30Z",
-  "lastValidationAt": "2026-10-06T21:45:28Z",
-  "lastValidationNote": "bh6 closed: swarm reports from seedling/evergreen/herb/ant; GitHub filed #876-883 (8 open) at 21:41Z mapping to http/signalr/api/core/host partitions; #876 cites prior #718/#638 (dedupe search, new issue). Reopen+comment path not yet observed.",
+  "lastValidationAt": "2026-10-06T22:03:00Z",
+  "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
   "mode": "bug-hunt",
   "monitor": {
