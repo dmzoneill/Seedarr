@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:34:19Z",
+  "updatedAt": "2026-10-06T23:35:30Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "pending"
+    "lastScheduleId": "sched_7335f571"
   },
   "policy": {
     "pushTarget": "origin/main",
