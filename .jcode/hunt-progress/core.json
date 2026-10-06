@@ -1,6 +1,6 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T23:28:00Z",
+  "updatedAt": "2026-10-06T23:35:00Z",
   "area": "src/NzbDrone.Core",
   "currentSubfolder": "src/NzbDrone.Core/Torrents",
   "rotation": [
@@ -12,10 +12,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Core/Blocklist",
-    "completedAt": "2026-10-06T23:28:00Z",
-    "issuesFiled": [1021, 1022, 1023, 1024],
+    "completedAt": "2026-10-06T23:35:00Z",
+    "issuesFiled": [1021, 1022, 1023, 1024, 1029, 1032],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Deduped #904-#939; filed IsBlocked whitespace (#1021), quota backoff (#1022), semicolon ingest (#1023), interval key shadow (#1024)."
+    "note": "Deduped open #904-#939 and #1021-#1024; filed local backoff LastCheckedUtc (#1029) and manual sync when disabled (#1032)."
   }
 }
