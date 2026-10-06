@@ -48,6 +48,24 @@ public class SecurityMiddlewareTest
     [TestCase("8.8.8.8:8096", false)]
     [TestCase("evil.attacker.com", false)]
     [TestCase("evil.attacker.com:8096", false)]
+    [TestCase("[localhost]", false)]
+    [TestCase("[localhost]:8096", false)]
+    [TestCase("[localhost].evil.com", false)]
+    [TestCase("[localhost].evil.com:8096", false)]
+    [TestCase("[127.0.0.1]", false)]
+    [TestCase("[127.0.0.1]:8096", false)]
+    [TestCase("[127.0.0.1].attacker.com", false)]
+    [TestCase("[::1].evil.com", false)]
+    [TestCase("[::1].evil.com:8096", false)]
+    [TestCase("[fe80::1].attacker.com", false)]
+    [TestCase("[::1]:", false)]
+    [TestCase("[::1]:abc", false)]
+    [TestCase("[::1]:65536", false)]
+    [TestCase("[::1]:-1", false)]
+    [TestCase("[::1", false)]
+    [TestCase("::1]", false)]
+    [TestCase("evil.com[::1]", false)]
+    [TestCase("evil[dot]com", false)]
     [TestCase("", false)]
     [TestCase("   ", false)]
     public void HostHeaderValidation_IsHostAllowed_ValidatesCorrectly(string host, bool expectedAllowed)
@@ -76,6 +94,13 @@ public class SecurityMiddlewareTest
     [TestCase("my.customdomain.org", "seedarr.local, *.customdomain.org", true)]
     [TestCase("customdomain.org", "seedarr.local, *.customdomain.org", true)]
     [TestCase("customdomain.org:8096", "seedarr.local, *.customdomain.org", true)]
+    [TestCase("[seedarr.local].evil.com", "seedarr.local, *.customdomain.org", false)]
+    [TestCase("[customdomain.org].attacker.com", "seedarr.local, *.customdomain.org", false)]
+    [TestCase("[2001:db8::1]", "[2001:db8::1]", true)]
+    [TestCase("[2001:db8::1]:8096", "[2001:db8::1]", true)]
+    [TestCase("[2001:db8::1]", "[2001:db8::1]:8096", true)]
+    [TestCase("[2001:db8::1]:8096", "2001:db8::1", true)]
+    [TestCase("[2001:db8::1]:8096", "[localhost].evil.com", false)]
     public void HostHeaderValidation_WildcardAllowedHosts(string host, string allowedHosts, bool expectedAllowed)
     {
         var allowed = HostHeaderValidationMiddleware.IsHostAllowed(host, allowedHosts);
@@ -121,15 +146,18 @@ public class SecurityMiddlewareTest
         Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
     }
 
-    [Test]
-    public async Task HostHeaderValidationMiddleware_BlocksDisallowedHostWhenEnabled()
+    [TestCase("malicious.dnsrebind.com")]
+    [TestCase("[localhost].evil.com")]
+    [TestCase("[127.0.0.1].attacker.com")]
+    [TestCase("[::1].evil.com:8096")]
+    public async Task HostHeaderValidationMiddleware_BlocksDisallowedHostWhenEnabled(string hostHeader)
     {
         var config = Substitute.For<IConfigService>();
         config.HostHeaderValidationEnabled.Returns(true);
         config.AllowedHosts.Returns(string.Empty);
 
         var context = new DefaultHttpContext();
-        context.Request.Host = new HostString("malicious.dnsrebind.com");
+        context.Request.Host = new HostString(hostHeader);
         context.Response.Body = new MemoryStream();
 
         var nextCalled = false;
