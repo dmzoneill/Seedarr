@@ -115,4 +115,33 @@ public class NzbDroneLoggerTest
         Assert.That(target.MaxArchiveFiles, Is.EqualTo(5));
         Assert.That(target.ArchiveAboveSize, Is.EqualTo(1_048_576));
     }
+
+    [Test]
+    public void Register_should_redact_sensitive_data_in_file_log()
+    {
+        var startupContext = new StartupContext("--data=" + _tempDir);
+        NzbDroneLogger.Register(startupContext);
+
+        var logger = LogManager.GetCurrentClassLogger();
+        logger.Info("Failed request Authorization: Bearer eyJhbGciOiJIUzI1NiJ9 payload {\"apiKey\": \"super-secret\"}");
+
+        LogManager.Flush();
+
+        var logFilePath = Path.Combine(_tempDir, "logs", "seedarr.txt");
+        var fileContent = File.ReadAllText(logFilePath);
+        Assert.That(fileContent, Does.Not.Contain("super-secret"));
+        Assert.That(fileContent, Does.Not.Contain("eyJhbGciOiJIUzI1NiJ9"));
+        Assert.That(fileContent, Does.Contain("Bearer [REDACTED]"));
+        Assert.That(fileContent, Does.Contain("[REDACTED]"));
+    }
+
+    [Test]
+    public void CreateFileTarget_should_use_sanitized_layout()
+    {
+        var target = NzbDroneLogger.CreateFileTarget("/tmp/test/logs/seedarr.txt");
+
+        Assert.That(target.Layout.ToString(), Does.Contain("sanitized-message"));
+        Assert.That(target.Layout.ToString(), Does.Contain("sanitized-exception"));
+        Assert.That(target.Layout.ToString(), Does.Not.Contain("${message}"));
+    }
 }

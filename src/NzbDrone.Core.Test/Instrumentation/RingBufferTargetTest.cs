@@ -427,6 +427,17 @@ public class RingBufferTargetTest
         Assert.That(
             RingBufferTarget.Sanitize("https://user:mypassword@example.com/api"),
             Is.EqualTo("https://user:[REDACTED]@example.com/api"));
+
+        Assert.That(
+            RingBufferTarget.Sanitize("body: {\"apiKey\": \"secret123\", \"passkey\": \"abc\"}"),
+            Does.Not.Contain("secret123"));
+        Assert.That(
+            RingBufferTarget.Sanitize("body: {\"apiKey\": \"secret123\", \"passkey\": \"abc\"}"),
+            Does.Contain("\"apiKey\": \"[REDACTED]\""));
+
+        Assert.That(
+            RingBufferTarget.Sanitize("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9"),
+            Is.EqualTo("Authorization: Bearer [REDACTED]"));
     }
 
     [Test]

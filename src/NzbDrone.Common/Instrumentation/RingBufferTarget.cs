@@ -30,6 +30,14 @@ public class RingBufferTarget : TargetWithLayout
         @"((?:^|[?&,\s""';])(?:api[_-]?key|bot[_-]?token|token|passkey|secret|password|access[_-]?token)=)[^&\s""';]+",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex SensitiveJsonRegex = new(
+        @"(""?(?:api[_-]?key|passkey|password|token|secret|access[_-]?token|bot[_-]?token)""?\s*[:=]\s*"?)[^""',\s&}]+("?)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex BearerTokenRegex = new(
+        @"\bBearer\s+[A-Za-z0-9_\-\.]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private static readonly Regex BasicAuthRegex = new(
         @"(https?://[^:/@\s]+:)([^@/\s]+)(@)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -60,6 +68,8 @@ public class RingBufferTarget : TargetWithLayout
         result = DiscordWebhookRegex.Replace(result, "/api/webhooks/${id}/[REDACTED]");
         result = SlackWebhookRegex.Replace(result, "/services/[REDACTED]");
         result = SensitiveParamRegex.Replace(result, "$1[REDACTED]");
+        result = SensitiveJsonRegex.Replace(result, "$1[REDACTED]$2");
+        result = BearerTokenRegex.Replace(result, "Bearer [REDACTED]");
         result = BasicAuthRegex.Replace(result, "$1[REDACTED]$3");
 
         return result;
