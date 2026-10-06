@@ -99,6 +99,111 @@ public class IndexerControllerTest
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
+    [TestCase("http://169.254.169.254/latest/meta-data")]
+    [TestCase("http://127.0.0.1:8080")]
+    [TestCase("http://localhost:9696")]
+    [TestCase("http://10.0.0.1:9696")]
+    [TestCase("http://192.168.1.1:9696")]
+    [TestCase("http://172.16.0.1:9696")]
+    public void Create_with_unsafe_url_returns_bad_request(string url)
+    {
+        var definition = new IndexerDefinition
+        {
+            Name = "Unsafe Probe",
+            IndexerType = "Prowlarr",
+            Url = url,
+            ApiKey = "testkey"
+        };
+
+        var result = _controller.Create(definition);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase(null)]
+    public void Create_with_empty_url_returns_bad_request(string url)
+    {
+        var definition = new IndexerDefinition
+        {
+            Name = "Empty URL",
+            IndexerType = "Prowlarr",
+            Url = url,
+            ApiKey = "testkey"
+        };
+
+        var result = _controller.Create(definition);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("URL cannot be empty."));
+    }
+
+    [TestCase("http://169.254.169.254/latest/meta-data")]
+    [TestCase("http://127.0.0.1:8080")]
+    [TestCase("http://localhost:9696")]
+    public void Update_with_unsafe_url_returns_bad_request(string url)
+    {
+        var existing = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Existing",
+            IndexerType = "Prowlarr",
+            Url = "https://safe-indexer.example.com",
+            ApiKey = "testkey"
+        };
+        _indexerFactory.Get(1).Returns(existing);
+
+        var updateDef = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Existing",
+            IndexerType = "Prowlarr",
+            Url = url,
+            ApiKey = "testkey"
+        };
+
+        var result = _controller.Update(1, updateDef);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase(null)]
+    public void Update_with_empty_url_returns_bad_request(string url)
+    {
+        var existing = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Existing",
+            IndexerType = "Prowlarr",
+            Url = "https://safe-indexer.example.com",
+            ApiKey = "testkey"
+        };
+        _indexerFactory.Get(1).Returns(existing);
+
+        var updateDef = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Existing",
+            IndexerType = "Prowlarr",
+            Url = url,
+            ApiKey = "testkey"
+        };
+
+        var result = _controller.Update(1, updateDef);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Is.EqualTo("URL cannot be empty."));
+    }
+
     [Test]
     public void TestDirect_with_null_body_returns_bad_request()
     {
