@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:54:20Z",
+  "updatedAt": "2026-10-06T22:55:29Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 276,
-  "lastMonitorNote": "276 open; 0 restarts; latest #1145-#1149 backup/signalr"
+  "githubOpenCount": 277,
+  "lastMonitorNote": "277 open; 0 restarts; latest #1146-#1150 auth/backup/signalr/host"
 }
