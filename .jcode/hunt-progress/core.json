@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T22:30:00Z",
+  "updatedAt": "2026-10-06T22:45:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Authentication",
+  "currentSubfolder": "src/NzbDrone.Core/Datastore",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents",
-    "completedAt": "2026-10-06T22:30:00Z",
-    "issuesFiled": [962, 963, 964],
+    "subfolder": "src/NzbDrone.Core/Authentication",
+    "completedAt": "2026-10-06T22:45:00Z",
+    "issuesFiled": [976, 978, 979],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Deduped open #912, #945-950, #948 AddTorrent, #949 piece hash cache; not re-filed."
+    "note": "Deduped open #917 IssuedUtc revocation (host), #893 SanitizeProviderId, closed #863/#563 session persist and secret encryption; not re-filed."
   }
 }
