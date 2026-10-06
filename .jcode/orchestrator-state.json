@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:01:30Z",
+  "updatedAt": "2026-10-06T22:01:35Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 30,
-  "lastMonitorNote": "30 open; per-slot hunt-progress/ (no shared JSON races); restarts cow->cricket chipmunk->dog; coord broadcast"
+  "githubOpenCount": 52,
+  "lastMonitorNote": "52 open; 5 hunters (cricket,crocodile,bug,chick,dog); chick still touched root manifest pre-broadcast; 0 restarts; nudged bug+chick"
 }
