@@ -1,14 +1,14 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:00:00Z",
+  "updatedAt": "2026-10-06T22:06:30Z",
   "area": "src/NzbDrone.SignalR",
   "currentSubfolder": "src/NzbDrone.SignalR",
   "lastPass": {
     "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-06T22:00:00Z",
-    "issuesFiled": [],
+    "completedAt": "2026-10-06T22:06:30Z",
+    "issuesFiled": [935, 936],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Pass completed by chipmunk; no new issues filed (deduped or none found)."
+    "note": "MessageHub, SignalRMessageBroadcaster, PieceStorage/Piece messages; cross-checked CommandExecutor + recheck/fastresume callers. hunt-progress slot only (not orchestrator-state)."
   }
 }
