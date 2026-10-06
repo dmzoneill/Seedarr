@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T00:55:00Z",
+  "updatedAt": "2026-10-07T00:30:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Torrents",
+  "currentSubfolder": "src/Seedarr.Api.V1/DownloadClients",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Indexers",
-    "completedAt": "2026-10-07T00:55:00Z",
-    "issuesFiled": [1204, 1205, 1206, 1207],
+    "subfolder": "src/Seedarr.Api.V1/Torrents",
+    "completedAt": "2026-10-07T00:30:00Z",
+    "issuesFiled": [1218, 1219, 1220, 1221, 1222],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed IndexerController, RssRuleController, RssRuleResource, RssGrabHistoryResource. GitHub dedupe: skipped open #927/#913/#1100-#1115/#1102/#1111/#1114/#929/#1103/#1113 (DELETE 200, proxy HttpClient leak, partial PUT/masked ApiKey, test loopback mismatch, caps empty on failure, rss sync/cooldown/partial PUT). Filed #1204 (category-only search empty), #1205 (multi-indexer search pagination), #1206 (prowlarr sync baseUrl SSRF), #1207 (TestDirect ApiKey null NRE). No dotnet build/test."
+    "notes": "Reviewed TorrentController, DownloadHistoryController, TorrentResourceMapper/Validator, DTOs. GitHub dedupe: skipped open #896/#898/#957/#958/#959/#941/#943/#960/#1121-#1127/#1186 and related torrent/core duplicates. Filed #1218 (private torrent duplicate POST merges trackers), #1219 (GetAll loads full DownloadHistory), #1220 (piecemap infohash GetAll scan), #1221 (downloadhistory page ignores limit), #1222 (upload 200 when all files empty). No dotnet build/test."
   }
 }
