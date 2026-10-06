@@ -25,6 +25,7 @@ public class SystemDatabaseController : Controller
     private static readonly Regex WritePattern = new(
         @"^\s*(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|VACUUM|ATTACH|DETACH|REINDEX)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly char[] SqlTokenizerSeparators = { ' ', '\t', '\r', '\n', '(', ')', ';' };
 
     private readonly IMainDatabase _mainDatabase;
     private readonly Logger _logger;
@@ -766,7 +767,7 @@ public class SystemDatabaseController : Controller
             return true;
         }
 
-        var tokens = clean.Split(new[] { ' ', '\t', '\r', '\n', '(', ')', ';' }, StringSplitOptions.RemoveEmptyEntries);
+        var tokens = clean.Split(SqlTokenizerSeparators, StringSplitOptions.RemoveEmptyEntries);
         var mutationKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "REPLACE",
