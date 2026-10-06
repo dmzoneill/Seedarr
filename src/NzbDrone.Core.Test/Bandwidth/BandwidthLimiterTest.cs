@@ -196,4 +196,110 @@ public class BandwidthLimiterTest
         Assert.That(_limiter.GetTorrentUploadBucket(infoHash), Is.Null);
         Assert.That(_limiter.GetPeerUploadBucket(peerId), Is.Null);
     }
+
+    [Test]
+    public void GetEffectiveUploadMaxBurst_and_GetEffectiveDownloadMaxBurst_should_return_minimum_burst_among_active_limiters()
+    {
+        const string infoHash = "1111111111111111111111111111111111111111";
+        const string peerId = "-SD0001-burstpeer123";
+
+        // When unlimited, effective max burst should be long.MaxValue
+        Assert.That(_limiter.GetEffectiveUploadMaxBurst(infoHash, peerId), Is.EqualTo(long.MaxValue));
+        Assert.That(_limiter.GetEffectiveDownloadMaxBurst(infoHash, peerId), Is.EqualTo(long.MaxValue));
+        Assert.That(_limiter.GetEffectiveMaxBurst(infoHash, peerId), Is.EqualTo(long.MaxValue));
+
+        // Global limits: upload burst 100_000, download burst 80_000
+        _limiter.GlobalUploadBucket.SetRate(1_000_000, maxBurstBytes: 100_000);
+        _limiter.GlobalDownloadBucket.SetRate(1_000_000, maxBurstBytes: 80_000);
+
+        Assert.That(_limiter.GetEffectiveUploadMaxBurst(infoHash, peerId), Is.EqualTo(100_000));
+        Assert.That(_limiter.GetEffectiveDownloadMaxBurst(infoHash, peerId), Is.EqualTo(80_000));
+        Assert.That(_limiter.GetEffectiveMaxBurst(infoHash, peerId), Is.EqualTo(80_000));
+
+        // Torrent limits: upload burst 50_000, download burst 60_000
+        _limiter.SetTorrentLimits(infoHash, 500_000, 500_000);
+        _limiter.GetTorrentUploadBucket(infoHash).SetRate(500_000, maxBurstBytes: 50_000);
+        _limiter.GetTorrentDownloadBucket(infoHash).SetRate(500_000, maxBurstBytes: 60_000);
+
+        Assert.That(_limiter.GetEffectiveUploadMaxBurst(infoHash, peerId), Is.EqualTo(50_000));
+        Assert.That(_limiter.GetEffectiveDownloadMaxBurst(infoHash, peerId), Is.EqualTo(60_000));
+        Assert.That(_limiter.GetEffectiveMaxBurst(infoHash, peerId), Is.EqualTo(50_000));
+
+        // Peer limits: upload burst 20_000, download burst 25_000
+        _limiter.SetPeerLimits(peerId, 200_000, 200_000);
+        _limiter.GetPeerUploadBucket(peerId).SetRate(200_000, maxBurstBytes: 20_000);
+        _limiter.GetPeerDownloadBucket(peerId).SetRate(200_000, maxBurstBytes: 25_000);
+
+        Assert.That(_limiter.GetEffectiveUploadMaxBurst(infoHash, peerId), Is.EqualTo(20_000));
+        Assert.That(_limiter.GetEffectiveDownloadMaxBurst(infoHash, peerId), Is.EqualTo(25_000));
+        Assert.That(_limiter.GetEffectiveMaxBurst(infoHash, peerId), Is.EqualTo(20_000));
+    }
+
+    [Test]
+    public void ConsumeUpload_when_request_exceeds_max_burst_should_chunk_and_complete()
+    {
+        _limiter.GlobalUploadBucket.SetRate(100_000_000, maxBurstBytes: 10_000);
+
+        var refillCount = 0;
+        BandwidthLimiter.PaceWaitHandler = (start, ticks) =>
+        {
+            refillCount++;
+            _limiter.GlobalUploadBucket.Refund(10_000);
+        };
+
+        _limiter.ConsumeUpload(null, null, 25_000);
+
+        Assert.That(refillCount, Is.GreaterThanOrEqualTo(2));
+    }
+
+    [Test]
+    public void ConsumeDownload_when_request_exceeds_max_burst_should_chunk_and_complete()
+    {
+        _limiter.GlobalDownloadBucket.SetRate(100_000_000, maxBurstBytes: 10_000);
+
+        var refillCount = 0;
+        BandwidthLimiter.PaceWaitHandler = (start, ticks) =>
+        {
+            refillCount++;
+            _limiter.GlobalDownloadBucket.Refund(10_000);
+        };
+
+        _limiter.ConsumeDownload(null, null, 25_000);
+
+        Assert.That(refillCount, Is.GreaterThanOrEqualTo(2));
+    }
+
+    [Test]
+    public async Task ConsumeUploadAsync_when_request_exceeds_max_burst_should_chunk_and_complete()
+    {
+        _limiter.GlobalUploadBucket.SetRate(100_000_000, maxBurstBytes: 10_000);
+
+        var refillCount = 0;
+        BandwidthLimiter.PaceWaitHandler = (start, ticks) =>
+        {
+            refillCount++;
+            _limiter.GlobalUploadBucket.Refund(10_000);
+        };
+
+        await _limiter.ConsumeUploadAsync(null, null, 25_000);
+
+        Assert.That(refillCount, Is.GreaterThanOrEqualTo(2));
+    }
+
+    [Test]
+    public async Task ConsumeDownloadAsync_when_request_exceeds_max_burst_should_chunk_and_complete()
+    {
+        _limiter.GlobalDownloadBucket.SetRate(100_000_000, maxBurstBytes: 10_000);
+
+        var refillCount = 0;
+        BandwidthLimiter.PaceWaitHandler = (start, ticks) =>
+        {
+            refillCount++;
+            _limiter.GlobalDownloadBucket.Refund(10_000);
+        };
+
+        await _limiter.ConsumeDownloadAsync(null, null, 25_000);
+
+        Assert.That(refillCount, Is.GreaterThanOrEqualTo(2));
+    }
 }

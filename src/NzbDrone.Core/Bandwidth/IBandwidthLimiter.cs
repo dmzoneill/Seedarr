@@ -18,6 +18,10 @@ public interface IBandwidthLimiter
     bool HasUploadLimit(string infoHash = null, string peerId = null);
     bool HasDownloadLimit(string infoHash = null, string peerId = null);
 
+    long GetEffectiveUploadMaxBurst(string infoHash = null, string peerId = null);
+    long GetEffectiveDownloadMaxBurst(string infoHash = null, string peerId = null);
+    long GetEffectiveMaxBurst(string infoHash = null, string peerId = null);
+
     ITokenBucket GetTorrentUploadBucket(string infoHash);
     ITokenBucket GetTorrentDownloadBucket(string infoHash);
     ITokenBucket GetPeerUploadBucket(string peerId);
