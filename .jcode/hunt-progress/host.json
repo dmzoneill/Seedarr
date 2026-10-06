@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:31:00Z",
+  "updatedAt": "2026-10-06T22:35:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Common/Instrumentation",
+  "currentSubfolder": "src/NzbDrone.Common/Composition",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Common/Disk",
-    "completedAt": "2026-10-06T22:31:00Z",
-    "issuesFiled": [1090],
+    "subfolder": "src/NzbDrone.Common/Instrumentation",
+    "completedAt": "2026-10-06T22:35:00Z",
+    "issuesFiled": [1099],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #968 #969 #977 #980 #1081; filed SanitizePath .. collapse mismatch (#1090)"
+    "note": "Deduped #992 #993 #994 #996; filed Authorization Basic/ApiKey header leak (#1099)"
   }
 }
