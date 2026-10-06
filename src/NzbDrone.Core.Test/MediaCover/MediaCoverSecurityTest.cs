@@ -103,6 +103,28 @@ public class MediaCoverSecurityTest
     }
 
     [Test]
+    public void MediaMetadataResourceMapper_ToResource_prepends_urlBase_when_provided()
+    {
+        var model = new TorrentMediaMetadata
+        {
+            Id = 42,
+            TorrentId = 100,
+            Title = "Top Gun",
+            Year = 2022,
+            PosterLocalPath = "/root/secret/MediaCover/100/poster.jpg",
+            BackdropLocalPath = "/root/secret/MediaCover/100/backdrop.jpg",
+            PosterUrl = "https://example.com/poster.jpg",
+            BackdropUrl = "https://example.com/backdrop.jpg"
+        };
+
+        var resource = MediaMetadataResourceMapper.ToResource(model, "/seedarr");
+
+        Assert.That(resource, Is.Not.Null);
+        Assert.That(resource.PosterUrl, Is.EqualTo("/seedarr/api/v1/mediacover/100/poster.jpg"));
+        Assert.That(resource.BackdropUrl, Is.EqualTo("/seedarr/api/v1/mediacover/100/backdrop.jpg"));
+    }
+
+    [Test]
     public void MediaCoverController_serves_valid_artwork_within_MediaCover_directory()
     {
         var coverDir = Path.Combine(_tempAppData, "MediaCover", "10");
