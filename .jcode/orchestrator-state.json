@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T21:59:00Z",
+  "updatedAt": "2026-10-06T21:58:30Z",
   "lastValidationAt": "2026-10-06T21:45:28Z",
   "lastValidationNote": "bh6 closed: swarm reports from seedling/evergreen/herb/ant; GitHub filed #876-883 (8 open) at 21:41Z mapping to http/signalr/api/core/host partitions; #876 cites prior #718/#638 (dedupe search, new issue). Reopen+comment path not yet observed.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_9ce2d66f"
+    "lastScheduleId": "sched_729c2ba2"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 30,
-  "lastMonitorNote": "30 open; fixed state split (hunt-progress); broadcast to hunters; 0 restarts"
+  "lastMonitorNote": "30 open; stopped stale cat; hunt-progress-only policy; 0 slot restarts"
 }
