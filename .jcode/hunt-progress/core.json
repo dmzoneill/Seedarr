@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T00:50:00Z",
+  "updatedAt": "2026-10-07T00:55:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Datastore",
+  "currentSubfolder": "src/NzbDrone.Core/DownloadClients",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Authentication",
-    "completedAt": "2026-10-07T00:50:00Z",
-    "issuesFiled": [1240, 1241],
+    "subfolder": "src/NzbDrone.Core/Datastore",
+    "completedAt": "2026-10-07T00:55:00Z",
+    "issuesFiled": [1247, 1248],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Authentication pass: static review of 16 files (IdentityProviderService/Repository, LoginRateLimiter, SessionRevocationService/Repository, cleanup task, policies/roles). Filed #1240 (client secret re-wrap after DP key ring change on Update), #1241 (RevokedSession Upsert unique-index race). Deduped open #979, #986, #987, #1058, #1059, #1062, #1063, #1064, #1079, #1080, #1144-#1146, #1161, #1193 and related. No dotnet build/test."
+    "note": "Datastore pass: static review of 90 files (BasicRepository, DbFactory, Database/MainDatabase, maintenance/WAL tasks, TableMapping/registration, migrations 001-070, Events). Filed #1247 (InsertMany leaves Id=0 vs Insert), #1248 (IsIncrementalAutoVacuumEnabled true when IMainDatabase null, skips vacuum). Deduped open #882, #915, #997, #998, #999, #1000, #1077-#1080, #1085-#1087, #1151-#1153, #1199, #1201 and related. No dotnet build/test."
   }
 }
