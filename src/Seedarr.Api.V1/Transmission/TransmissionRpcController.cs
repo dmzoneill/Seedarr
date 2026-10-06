@@ -1064,7 +1064,11 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
             if (existing == null)
             {
-                existing = _torrentService.GetAll()?.FirstOrDefault();
+                return Ok(new TransmissionRpcResponse
+                {
+                    Result = "duplicate torrent but matching torrent not found",
+                    Tag = tag,
+                });
             }
 
             return Ok(new TransmissionRpcResponse
@@ -1074,9 +1078,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 {
                     ["torrent-duplicate"] = new Dictionary<string, object>
                     {
-                        ["id"] = existing?.Id ?? 1,
-                        ["name"] = existing?.Name ?? "Torrent",
-                        ["hashString"] = (existing?.InfoHash ?? targetHash ?? string.Empty).ToLowerInvariant(),
+                        ["id"] = existing.Id,
+                        ["name"] = existing.Name ?? "Torrent",
+                        ["hashString"] = (existing.InfoHash ?? targetHash ?? string.Empty).ToLowerInvariant(),
                     }
                 },
                 Tag = tag,
