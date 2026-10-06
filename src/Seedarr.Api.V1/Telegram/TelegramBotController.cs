@@ -43,21 +43,29 @@ public class TelegramBotController : Controller
             return StatusCode(StatusCodes.Status403Forbidden);
         }
 
-        if (update != null)
+        try
         {
-            var result = await _telegramUpdateHandler.HandleUpdateAsync(update, cancellationToken).ConfigureAwait(false);
-            return Ok(result);
-        }
+            if (update != null)
+            {
+                var result = await _telegramUpdateHandler.HandleUpdateAsync(update, cancellationToken).ConfigureAwait(false);
+                return Ok(result);
+            }
 
-        using var reader = new StreamReader(Request.Body);
-        var body = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        if (!string.IsNullOrWhiteSpace(body))
+            using var reader = new StreamReader(Request.Body);
+            var body = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                var result = await _telegramUpdateHandler.HandleUpdateAsync(body, cancellationToken).ConfigureAwait(false);
+                return Ok(result);
+            }
+
+            return Ok();
+        }
+        catch (Exception ex)
         {
-            var result = await _telegramUpdateHandler.HandleUpdateAsync(body, cancellationToken).ConfigureAwait(false);
-            return Ok(result);
+            _logger.Error(ex, "Error processing Telegram webhook update");
+            return Ok();
         }
-
-        return Ok();
     }
 
     private bool IsSecretTokenValid()

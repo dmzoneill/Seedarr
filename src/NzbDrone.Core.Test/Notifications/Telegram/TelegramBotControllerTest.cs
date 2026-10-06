@@ -1,8 +1,10 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Notifications.Telegram;
@@ -117,5 +119,26 @@ public class TelegramBotControllerTest
         Assert.That(okResult.Value, Is.EqualTo(expectedResponse));
 
         await _updateHandler.Received(1).HandleUpdateAsync(update, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ReceiveWebhook_should_return_200_when_handler_throws_exception()
+    {
+        SetSecretTokenHeader("valid-secret-token-123");
+
+        var update = new TelegramUpdate
+        {
+            UpdateId = 42,
+            Message = new TelegramMessage { MessageId = 1, Text = "/status" }
+        };
+
+        _updateHandler.HandleUpdateAsync(update, Arg.Any<CancellationToken>())
+            .Throws(new Exception("Database connection failure"));
+
+        var result = await _controller.ReceiveWebhook(update);
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        var okResult = (OkResult)result;
+        Assert.That(okResult.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
     }
 }
