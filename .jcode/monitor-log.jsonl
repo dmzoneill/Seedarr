@@ -118,3 +118,4 @@
 {"ts":"2026-10-06T22:43:30Z","mode":"bug-hunt","openIssues":260,"restarts":0,"workers":["whale","turtle","turkey","rabbit","parrot"],"scheduleId":"sched_4920044c","note":"monitor tick; all healthy"}
 {"ts": "2026-10-06T22:44:03Z", "mode": "bug-hunt", "openIssues": 260, "restarts": 0, "workers": ["whale", "turtle", "turkey", "rabbit", "parrot"], "scheduleId": "sched_0a454cd8", "note": "monitor tick; all healthy; rabbit host ready<90s"}
 {"ts": "2026-10-06T22:45:05Z", "kind": "bug-hunt-monitor", "scheduleId": "sched_866f6564", "openIssues": 267, "restarts": [], "workers": ["whale", "turtle", "turkey", "rabbit", "parrot"], "note": "healthy; new filings #1136-#1140"}
+{"ts": "2026-10-06T22:46:31Z", "kind": "bug-hunt-monitor", "scheduleId": "sched_07de232c", "openIssues": 267, "restarts": ["parrot→hawk", "rabbit→iguana"], "workers": ["whale", "turtle", "turkey", "iguana", "hawk"], "note": "parrot completed; rabbit idle>90s"}
