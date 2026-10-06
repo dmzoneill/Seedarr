@@ -535,6 +535,31 @@ public class DelugeJsonRpcControllerTest
     }
 
     [Test]
+    public async Task HandleRpc_CoreRemoveTorrent_Preserves_Active_Seeding_Torrent_When_PreserveSeedingOnArrDelete_Is_True()
+    {
+        _configService.PreserveSeedingOnArrDelete.Returns(true);
+        var activeSeedingTorrent = new Torrent
+        {
+            Id = 42,
+            Name = "ActiveSeeder",
+            InfoHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            Ratio = 0.5,
+            RatioLimit = 2.0 // Goal not yet satisfied
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { activeSeedingTorrent });
+
+        var json = "{\"method\": \"core.remove_torrent\", \"params\": [\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", true], \"id\": 406}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+
+        _torrentService.DidNotReceive().Delete(42, Arg.Any<bool>());
+    }
+
+    [Test]
     public async Task HandleRpc_AddTorrentMagnet_With_Label_Uses_Category_SavePath()
     {
         var category = new Category { Id = 1, Name = "tv-sonarr", SavePath = "/data/media/tv" };
