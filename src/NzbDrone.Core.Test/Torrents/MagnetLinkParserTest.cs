@@ -95,6 +95,29 @@ public class MagnetLinkParserTest
         Assert.Throws<ArgumentException>(() => MagnetLinkParser.Parse("magnet:"));
     }
 
+    [TestCase("http://example.com/?xt=urn:btih:0123456789abcdef0123456789abcdef01234567")]
+    [TestCase("https://tracker.org/?xt=urn:btih:0123456789abcdef0123456789abcdef01234567")]
+    [TestCase("ftp://host/?xt=urn:btih:0123456789abcdef0123456789abcdef01234567")]
+    [TestCase("javascript:alert(1)")]
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase(null)]
+    public void Parse_should_throw_when_uri_scheme_is_not_magnet(string uri)
+    {
+        Assert.Throws<ArgumentException>(() => MagnetLinkParser.Parse(uri));
+    }
+
+    [Test]
+    public void Parse_should_succeed_when_magnet_uri_has_leading_whitespace()
+    {
+        var magnetUri = $"   magnet:?xt=urn:btih:{ValidInfoHash}&dn=LeadingSpaceTorrent";
+
+        var result = MagnetLinkParser.Parse(magnetUri);
+
+        Assert.That(result.InfoHash, Is.EqualTo(ValidInfoHash.ToLowerInvariant()));
+        Assert.That(result.Name, Is.EqualTo("LeadingSpaceTorrent"));
+    }
+
     [Test]
     public void Parse_should_throw_when_missing_btih()
     {

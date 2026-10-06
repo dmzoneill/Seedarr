@@ -1133,4 +1133,177 @@ public class TorrentControllerTest
         Assert.That(res.NextUpdate, Is.GreaterThan(0));
         Assert.That(res.Source, Is.EqualTo("Radarr"));
     }
+
+    [Test]
+    public void Create_returns_BadRequest_when_resource_is_null()
+    {
+        var result = _controller.Create(null);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void Create_magnet_returns_BadRequest_when_magnet_link_is_not_magnet_scheme()
+    {
+        _torrentImportService.ImportFromMagnet("http://example.com/?xt=urn:btih:1234567890abcdef1234567890abcdef12345678")
+            .Returns(x => throw new ArgumentException("Invalid magnet link: URI must start with 'magnet:?'"));
+
+        var resource = new TorrentResource
+        {
+            MagnetLink = "http://example.com/?xt=urn:btih:1234567890abcdef1234567890abcdef12345678"
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [TestCase("/downloads/../../etc")]
+    [TestCase("../../etc")]
+    [TestCase("/downloads/\0bad")]
+    public void Create_magnet_returns_BadRequest_when_save_path_is_invalid(string invalidPath)
+    {
+        var resource = new TorrentResource
+        {
+            MagnetLink = "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=Test",
+            SavePath = invalidPath
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _torrentImportService.DidNotReceive().ImportFromMagnet(Arg.Any<string>());
+    }
+
+    [TestCase("/downloads/../../etc")]
+    [TestCase("../../etc")]
+    [TestCase("/downloads/\0bad")]
+    public void Create_returns_BadRequest_when_save_path_is_invalid(string invalidPath)
+    {
+        var resource = new TorrentResource
+        {
+            Name = "Valid Name",
+            InfoHash = "1234567890abcdef1234567890abcdef12345678",
+            SavePath = invalidPath
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void Update_returns_BadRequest_when_resource_is_null()
+    {
+        var result = _controller.Update(1, null);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [TestCase("/downloads/../../etc")]
+    [TestCase("../../etc")]
+    public void Update_returns_BadRequest_when_save_path_is_invalid(string invalidPath)
+    {
+        var resource = new TorrentResource
+        {
+            Name = "Valid Name",
+            SavePath = invalidPath
+        };
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _torrentService.DidNotReceive().UpdateUserFields(Arg.Any<int>(), Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void Update_does_not_stop_active_torrent_when_status_is_omitted()
+    {
+        const int torrentId = 42;
+        var existing = new Torrent
+        {
+            Id = torrentId,
+            Name = "Active Torrent",
+            Status = TorrentStatus.Downloading,
+            Label = "old-label"
+        };
+
+        _torrentService.Get(torrentId).Returns(existing);
+        _trackerEntryService.GetByTorrentId(torrentId).Returns(new List<TrackerEntry>());
+        _torrentService.UpdateUserFields(torrentId, Arg.Any<Torrent>()).Returns(callInfo =>
+        {
+            var updates = callInfo.Arg<Torrent>();
+            existing.ApplyUserFields(updates);
+            return existing;
+        });
+
+        var resource = new TorrentResource
+        {
+            Name = "Active Torrent",
+            Label = "new-label",
+            Status = null
+        };
+
+        var result = _controller.Update(torrentId, resource);
+
+        var returned = result.Value;
+        Assert.That(returned, Is.Not.Null);
+        Assert.That(returned.Status, Is.EqualTo("Downloading"));
+        Assert.That(existing.Status, Is.EqualTo(TorrentStatus.Downloading));
+        _torrentService.Received(1).UpdateUserFields(torrentId, Arg.Is<Torrent>(t => t.Status == TorrentStatus.Downloading));
+    }
+
+    [Test]
+    public void Update_transitions_status_when_status_is_explicitly_provided()
+    {
+        const int torrentId = 42;
+        var existing = new Torrent
+        {
+            Id = torrentId,
+            Name = "Active Torrent",
+            Status = TorrentStatus.Downloading
+        };
+
+        _torrentService.Get(torrentId).Returns(existing);
+        _trackerEntryService.GetByTorrentId(torrentId).Returns(new List<TrackerEntry>());
+        _torrentService.UpdateUserFields(torrentId, Arg.Any<Torrent>()).Returns(callInfo =>
+        {
+            var updates = callInfo.Arg<Torrent>();
+            existing.ApplyUserFields(updates);
+            return existing;
+        });
+
+        var resource = new TorrentResource
+        {
+            Name = "Active Torrent",
+            Status = "Stopped"
+        };
+
+        var result = _controller.Update(torrentId, resource);
+
+        Assert.That(existing.Status, Is.EqualTo(TorrentStatus.Stopped));
+        _torrentService.Received(1).UpdateUserFields(torrentId, Arg.Is<Torrent>(t => t.Status == TorrentStatus.Stopped));
+    }
+
+    [Test]
+    public void ToModel_preserves_existing_status_when_resource_status_is_null_or_empty()
+    {
+        var existing = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding
+        };
+
+        var resource = new TorrentResource
+        {
+            Id = 1,
+            Name = "Test",
+            Status = null
+        };
+
+        var model = TorrentResourceMapper.ToModel(resource, existing);
+
+        Assert.That(model.Status, Is.EqualTo(TorrentStatus.Seeding));
+    }
 }
