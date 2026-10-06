@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Peers.Extensions;
@@ -446,19 +447,37 @@ public class PackageExportService : IPackageExportService
                     continue;
                 }
 
+                var safeTorrentName = PathSanitizer.SanitizeFileName(torrent.Name);
+                if (string.IsNullOrWhiteSpace(safeTorrentName))
+                {
+                    safeTorrentName = $"torrent_{torrent.Id}";
+                }
+
                 var rel = (tf.Path ?? string.Empty).Replace('\\', '/').TrimStart('/');
-                var entryPath = rel.StartsWith(torrent.Name + "/", StringComparison.OrdinalIgnoreCase)
-                    ? $"content/{rel}"
-                    : $"content/{torrent.Name}/{rel}";
+                var safeRel = PathSanitizer.SanitizeRelativePath(rel).Replace('\\', '/').TrimStart('/');
+                if (string.IsNullOrWhiteSpace(safeRel))
+                {
+                    continue;
+                }
+
+                var entryPath = safeRel.StartsWith(safeTorrentName + "/", StringComparison.OrdinalIgnoreCase)
+                    ? $"content/{safeRel}"
+                    : $"content/{safeTorrentName}/{safeRel}";
 
                 await StreamFileToTarAsync(tarWriter, diskPath, entryPath, cancellationToken);
             }
         }
         else if (!string.IsNullOrWhiteSpace(basePath))
         {
+            var safeTorrentName = PathSanitizer.SanitizeFileName(torrent.Name);
+            if (string.IsNullOrWhiteSpace(safeTorrentName))
+            {
+                safeTorrentName = $"torrent_{torrent.Id}";
+            }
+
             if (File.Exists(basePath))
             {
-                var entryPath = $"content/{torrent.Name}";
+                var entryPath = $"content/{safeTorrentName}";
                 await StreamFileToTarAsync(tarWriter, basePath, entryPath, cancellationToken);
             }
             else if (Directory.Exists(basePath))
@@ -473,7 +492,13 @@ public class PackageExportService : IPackageExportService
                     cancellationToken.ThrowIfCancellationRequested();
 
                     var rel = Path.GetRelativePath(rootDir, file).Replace('\\', '/').TrimStart('/');
-                    var entryPath = $"content/{torrent.Name}/{rel}";
+                    var safeRel = PathSanitizer.SanitizeRelativePath(rel).Replace('\\', '/').TrimStart('/');
+                    if (string.IsNullOrWhiteSpace(safeRel))
+                    {
+                        continue;
+                    }
+
+                    var entryPath = $"content/{safeTorrentName}/{safeRel}";
                     await StreamFileToTarAsync(tarWriter, file, entryPath, cancellationToken);
                 }
             }

@@ -350,4 +350,50 @@ public class PackageExportServiceTests
         Assert.That(httpContext.Response.Headers.ContentDisposition.ToString(), Does.Contain("Ubuntu 24.04 Desktop.seedarr"));
         Assert.That(responseStream.Length, Is.GreaterThan(0));
     }
+
+    [Test]
+    public async Task ExportPackageAsync_SanitizesTraversalSequencesInTorrentNameAndPath()
+    {
+        var maliciousTorrent = new Torrent
+        {
+            Id = 42,
+            Name = "../../etc/malicious",
+            InfoHash = "1234567890abcdef1234567890abcdef12345678",
+            SavePath = _tempDir,
+            SourcePath = _tempDir,
+        };
+
+        var filePath = Path.Combine(_tempDir, "file.txt");
+        await File.WriteAllTextAsync(filePath, "test content");
+
+        var maliciousFiles = new List<TorrentFile>
+        {
+            new TorrentFile
+            {
+                Id = 101,
+                TorrentId = 42,
+                Path = "../../sneaky/file.txt",
+                Size = 12
+            }
+        };
+
+        _torrentService.Get(42).Returns(maliciousTorrent);
+        _torrentFileService.GetByTorrentId(42).Returns(maliciousFiles);
+
+        using var outputStream = new MemoryStream();
+        await _service.ExportPackageAsync(outputStream, new[] { 42 }, includePayload: true);
+
+        outputStream.Position = 0;
+        await using var gzipStream = new GZipStream(outputStream, CompressionMode.Decompress);
+        await using var tarReader = new TarReader(gzipStream);
+
+        var entryNames = new List<string>();
+        while (await tarReader.GetNextEntryAsync() is { } entry)
+        {
+            entryNames.Add(entry.Name);
+        }
+
+        Assert.That(entryNames.Any(e => e.Contains("..")), Is.False, "Archive entries must never contain traversal sequence '..'");
+        Assert.That(entryNames.Any(e => e.StartsWith("/")), Is.False, "Archive entries must not start with '/'");
+    }
 }
