@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.MediaEnrichment;
 using Seedarr.Http;
 using Seedarr.Http.REST;
@@ -18,6 +19,7 @@ using Seedarr.Http.REST;
 namespace Seedarr.Api.V1.MediaCover;
 
 [V1ApiController("mediacover")]
+[Authorize(Policy = Policies.Reader)]
 [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S7039:Insecure Content-Security-Policy", Justification = "SVG placeholder rendering requires inline styles within a sandboxed origin")]
 [global::System.Diagnostics.CodeAnalysis.SuppressMessage("csharpsquid", "S7039", Justification = "SVG placeholder rendering requires inline styles within a sandboxed origin")]
 [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is resolved internally from server metadata storage")]
@@ -64,6 +66,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
     }
 
     [HttpDelete("{torrentId:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public IActionResult Delete(int torrentId)
     {
         _mediaEnrichmentService.DeleteMetadata(torrentId);
