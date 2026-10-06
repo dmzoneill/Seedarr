@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:12:00Z",
+  "updatedAt": "2026-10-06T22:18:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Seeding",
+  "currentSubfolder": "src/Seedarr.Api.V1/Backup",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/DownloadClients",
-    "completedAt": "2026-10-06T22:12:00Z",
-    "issuesFiled": [981, 982, 983, 984],
+    "subfolder": "src/Seedarr.Api.V1/Seeding",
+    "completedAt": "2026-10-06T22:18:00Z",
+    "issuesFiled": [989, 990],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed DownloadClientController, DownloadClientResource, DownloadClientSyncController. Deduped parallel filings #970-975, #972-974 (DELETE 404, TestDirect loopback, UrlValidator Create/Update, ClientType, import 404 vs 400). Filed API-layer gaps: Create/Update omit EnrichWithStatus (#981), Update skips ResetClientStatus (#982), TestConnection vs TestDirect status mismatch (#983), batch import null body (#984). RBAC #885 and core sync bugs #923-925, #931 left open. No dotnet build/test."
+    "notes": "Reviewed SeedingController, SpeedScheduleController, SpeedScheduleResource. Deduped existing open issues #914 (start/stop 404), #916 (history unknown torrent). Filed #989 (start-all omits ForceStart vs per-torrent start; queue demotion), #990 (start-all/stop-all silently toggle AutoStart). SpeedSchedule CRUD/validation/GetActiveLimits align with SpeedPolicy merge and existing closed fixes #690/#280. No dotnet build/test."
   }
 }
