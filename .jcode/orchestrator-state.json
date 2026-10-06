@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:51:39Z",
+  "updatedAt": "2026-10-06T23:52:55Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_4e238bc5"
+    "lastScheduleId": "sched_7447692c"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -27,12 +27,12 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "ibis"
+      "worker": "condor"
     },
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "jay"
+      "worker": "kingfisher"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -42,7 +42,7 @@
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "heron"
+      "worker": "finch"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 373,
-  "lastMonitorNote": "373 open; 0 restarts; anteater/ibis/jay/platypus/heron active"
+  "githubOpenCount": 375,
+  "lastMonitorNote": "375 open; 3 restarts jay\u2192kingfisher(Authentication), ibis\u2192condor(Automation), heron\u2192finch(REST); anteater/platypus active"
 }
