@@ -135,11 +135,13 @@ public class QBitTorrentClientTest
     [TestCase("queuedDL", "downloading")]
     [TestCase("pausedUP", "paused")]
     [TestCase("pausedDL", "paused")]
+    [TestCase("paused", "paused")]
+    [TestCase("stopped", "paused")]
     [TestCase("checkingUP", "checking")]
     [TestCase("checkingDL", "checking")]
     [TestCase("checkingResumeData", "checking")]
-    [TestCase("missingFiles", "unknown")]
-    [TestCase("error", "unknown")]
+    [TestCase("missingFiles", "error")]
+    [TestCase("error", "error")]
     [TestCase("", "unknown")]
     public void MapState_should_return_correct_value(string state, string expected)
     {

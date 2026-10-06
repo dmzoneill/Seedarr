@@ -828,8 +828,9 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         {
             "uploading" or "stalledUP" or "forcedUP" or "queuedUP" => "seeding",
             "downloading" or "stalledDL" or "forcedDL" or "queuedDL" => "downloading",
-            "pausedUP" or "pausedDL" => "paused",
+            "pausedUP" or "pausedDL" or "paused" or "stopped" => "paused",
             "checkingUP" or "checkingDL" or "checkingResumeData" => "checking",
+            "error" or "missingFiles" => "error",
             _ => "unknown",
         };
     }
