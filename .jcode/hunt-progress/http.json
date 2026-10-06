@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T23:28:00Z",
+  "updatedAt": "2026-10-07T00:05:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -12,10 +12,10 @@
   "currentSubfolder": "src/Seedarr.Http/Authentication",
   "lastPass": {
     "subfolder": "src/Seedarr.Http/Security",
-    "completedAt": "2026-10-06T23:28:00Z",
-    "issuesFiled": [1092],
-    "issuesReopened": [654],
+    "completedAt": "2026-10-07T00:05:00Z",
+    "issuesFiled": [1093],
+    "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 12: Security (7 files: CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). GitHub dedupe: existing open #876 UrlBase/CSRF, #908/#909 HostHeader allowlist bypass, #921 Cors loopback, #934 CSRF loopback alias — no duplicates filed. Reopened #654: InvalidateAll still never called after API key/password rotation despite closed fix. Filed #1092: DI RpcSessionStore vs SharedSessionStore static twin. Next: Authentication. No dotnet build/test."
+    "note": "Pass 12: Security (CsrfProtectionMiddleware, HostHeaderValidationMiddleware, SecurityHeadersMiddleware, CorsSecurityHelper, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore). Reviewed middleware pipeline order in Startup.cs. Many host/CSRF/CORS issues already open (#876, #908, #909, #921, #934). Filed #1093: POST /api/v1/auth/logout does not invalidate IRpcSessionStore or emulated client cookies (SID/_session_id/deluge-session); InvalidateAll has no production callers. Commented on #654 (shell mangled). Next: Authentication. No dotnet build/test."
   }
 }
