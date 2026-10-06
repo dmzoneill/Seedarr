@@ -1,11 +1,14 @@
 // Copyright (c) FeedItOut. All rights reserved.
 
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Datastore;
 using Seedarr.Api.V1.System;
 
@@ -184,5 +187,36 @@ public class SystemDatabaseControllerTest
         var okResult = response.Result as OkObjectResult;
 
         Assert.That(okResult, Is.Not.Null);
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_AdminOnly_attribute()
+    {
+        var type = typeof(SystemDatabaseController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
+    }
+
+    [TestCase("/* comment */ DELETE FROM Torrents")]
+    [TestCase("-- comment\nDELETE FROM Torrents")]
+    [TestCase("SELECT 1; DROP TABLE Torrents;")]
+    [TestCase("SELECT 1; DELETE FROM Torrents;")]
+    public async Task ExecuteQuery_should_reject_bypass_attempts_in_safe_mode(string query)
+    {
+        var request = new DatabaseQueryRequest
+        {
+            Query = query,
+            ReadOnly = true
+        };
+
+        var response = await _controller.ExecuteQuery(request);
+        var badRequest = response.Result as BadRequestObjectResult;
+
+        Assert.That(badRequest, Is.Not.Null);
+        var result = badRequest.Value as DatabaseQueryResult;
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.False);
     }
 }
