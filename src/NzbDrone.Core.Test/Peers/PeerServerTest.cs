@@ -1845,6 +1845,30 @@ public class PeerServerTest
     }
 
     [Test]
+    public void TorrentDeletedEvent_should_clear_piece_cache_for_deleted_torrent()
+    {
+        var mockPieceCache = Substitute.For<IPieceCache>();
+        _server.PieceCache = mockPieceCache;
+
+        var torrent = new Torrent { Id = 42, InfoHash = "0102030405060708091011121314151617181920" };
+        _server.Handle(new TorrentDeletedEvent(42, torrent));
+
+        mockPieceCache.Received(1).ClearTorrent(42);
+    }
+
+    [Test]
+    public void OnTorrentCompleted_should_clear_piece_cache_for_completed_torrent()
+    {
+        var mockPieceCache = Substitute.For<IPieceCache>();
+        _server.PieceCache = mockPieceCache;
+
+        var torrent = new Torrent { Id = 42, InfoHash = "0102030405060708091011121314151617181920" };
+        _server.OnTorrentCompleted(torrent);
+
+        mockPieceCache.Received(1).ClearTorrent(42);
+    }
+
+    [Test]
     public void Disconnecting_peer_evicts_ip_entry_from_connectionsPerIp_when_count_reaches_zero()
     {
         var dict = GetConnectionsPerIp();
