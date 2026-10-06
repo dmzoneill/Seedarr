@@ -317,4 +317,62 @@ public class EndgameManagerTest
         var reqPiece = BinaryPrimitives.ReadInt32BigEndian(msg.Payload.AsSpan(0, 4));
         Assert.That(reqPiece, Is.EqualTo(0));
     }
+
+    [Test]
+    public void OnBlockReceived_in_endgame_decrements_cancelled_peers_pending_requests_and_marks_block_completed()
+    {
+        var (client1, server1) = CreateTestPair();
+        var (client2, server2) = CreateTestPair();
+
+        server1.PeerChoking = false;
+        server1.PeerPieces = new[] { true, true };
+        server2.PeerChoking = false;
+        server2.PeerPieces = new[] { true, true };
+
+        var torrent = new Torrent
+        {
+            Id = 7,
+            InfoHash = "aabbccddeeff00112233445566778899aabbccdd",
+            Name = "Endgame Torrent",
+            PieceCount = 2,
+            PieceLength = 16384,
+            TotalSize = 32768,
+            Status = TorrentStatus.Downloading
+        };
+
+        server1.MatchedTorrent = torrent;
+        server2.MatchedTorrent = torrent;
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { server1, server2 });
+
+        var picker = _server.PiecePicker;
+        picker.AddActivePiece(0, 16384, 16384);
+
+        var block1 = _server.RequestBlock(server1, 0);
+        Assert.That(block1, Is.Not.Null);
+        Assert.That(server1.PendingRequestCount, Is.EqualTo(1));
+
+        var duplicated = _server.DuplicateEndgameRequests(torrent);
+        Assert.That(duplicated, Has.Count.EqualTo(1));
+        Assert.That(server2.PendingRequestCount, Is.EqualTo(1));
+
+        var piecePayload = new byte[8 + 16384];
+        BinaryPrimitives.WriteInt32BigEndian(piecePayload.AsSpan(0, 4), 0);
+        BinaryPrimitives.WriteInt32BigEndian(piecePayload.AsSpan(4, 4), 0);
+        var pieceMsg = new PeerMessage
+        {
+            Type = PeerMessageType.Piece,
+            Payload = piecePayload
+        };
+
+        InvokeHandleMessage(server1, pieceMsg, torrent);
+
+        Assert.That(server1.PendingRequestCount, Is.EqualTo(0));
+        Assert.That(server2.PendingRequestCount, Is.EqualTo(0));
+        Assert.That(picker.ActivePieces[0].GetBlock(0).IsCompleted, Is.True);
+        Assert.That(picker.ActivePieces[0].GetBlock(0).IsRequested, Is.False);
+
+        var cancelMsg = client2.ReceiveMessage();
+        Assert.That(cancelMsg, Is.Not.Null);
+        Assert.That(cancelMsg.Type, Is.EqualTo(PeerMessageType.Cancel));
+    }
 }

@@ -3240,6 +3240,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             case PeerMessageType.Piece:
                 connection.LastBlockReceived = DateTime.UtcNow;
                 connection.IsSnubbed = false;
+                connection.DecrementPendingRequests();
 
                 if (torrent != null && (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking))
                 {
@@ -3261,6 +3262,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 var pieceBegin = (int)(((uint)message.Payload[4] << 24) | ((uint)message.Payload[5] << 16) | ((uint)message.Payload[6] << 8) | message.Payload[7]);
                 var blockData = message.Payload[8..];
 
+                _piecePicker?.MarkBlockCompleted(pieceIndex, pieceBegin, blockData.Length);
+
                 if (_endgameManager != null)
                 {
                     var torrentId = torrent?.Id ?? 0;
@@ -3270,6 +3273,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                         foreach (var otherPeer in otherPeers)
                         {
                             SendCancel(otherPeer, pieceIndex, pieceBegin, blockData.Length);
+                            otherPeer.DecrementPendingRequests();
                         }
                     }
                 }
