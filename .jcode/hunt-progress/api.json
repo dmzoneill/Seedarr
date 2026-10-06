@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T00:35:00Z",
+  "updatedAt": "2026-10-07T00:45:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/ArrIntegration",
+  "currentSubfolder": "src/Seedarr.Api.V1/Indexers",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Notifications",
-    "completedAt": "2026-10-07T00:35:00Z",
-    "issuesFiled": [1191, 1192],
+    "subfolder": "src/Seedarr.Api.V1/ArrIntegration",
+    "completedAt": "2026-10-07T00:45:00Z",
+    "issuesFiled": [1197, 1198],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed NotificationController + NotificationResource. GitHub dedupe: skipped open #888/#1070-1076/#1071/#1073 (RBAC, partial PUT, clone masked secrets, CustomScript allowlist, FallbackNotificationId API). Filed #1191 (JsonValue.ToString breaks webhook URL masking in JSON settings), #1192 (DELETE leaves orphan FallbackNotificationId refs). No dotnet build/test."
+    "notes": "Reviewed ArrConnectionController, ArrSyncController, WebhookReceiverController. GitHub dedupe: skipped open #886/#1082-#1084/#1088-#1089/#1091 (RBAC, partial PUT, masked ApiKey clone/test, Implementation stale on ArrType change, webhook 200 on failure, image-proxy SSRF). Filed #1197 (image-proxy ignores disabled connections), #1198 (PUT skips webhook cleanup when only arrType changes). No dotnet build/test."
   }
 }
