@@ -140,4 +140,61 @@ public class TelegramPollingServiceTest
         Assert.That(processed, Is.EqualTo(0));
         Assert.That(_service.CurrentOffset, Is.EqualTo(0));
     }
+
+    [Test]
+    public void PollOnceAsync_should_throw_on_non_success_status_code()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.Conflict, "Conflict: webhook is active");
+
+        var ex = Assert.ThrowsAsync<HttpRequestException>(async () => await _service.PollOnceAsync());
+        Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+    }
+
+    [Test]
+    public async Task PollOnceAsync_should_synchronize_concurrent_calls()
+    {
+        var apiResponse1 = new TelegramApiResponse<List<TelegramUpdate>>
+        {
+            Ok = true,
+            Result = new List<TelegramUpdate>
+            {
+                new TelegramUpdate
+                {
+                    UpdateId = 1,
+                    Message = new TelegramMessage { MessageId = 1, Text = "one" }
+                }
+            }
+        };
+
+        var apiResponse2 = new TelegramApiResponse<List<TelegramUpdate>>
+        {
+            Ok = true,
+            Result = new List<TelegramUpdate>
+            {
+                new TelegramUpdate
+                {
+                    UpdateId = 2,
+                    Message = new TelegramMessage { MessageId = 2, Text = "two" }
+                }
+            }
+        };
+
+        _httpHandler.Enqueue(HttpStatusCode.OK, JsonSerializer.Serialize(apiResponse1));
+        _httpHandler.Enqueue(HttpStatusCode.OK, JsonSerializer.Serialize(apiResponse2));
+
+        var task1 = _service.PollOnceAsync();
+        var task2 = _service.PollOnceAsync();
+
+        var results = await Task.WhenAll(task1, task2);
+
+        Assert.That(results[0] + results[1], Is.EqualTo(2));
+        Assert.That(_service.CurrentOffset, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void CurrentOffset_should_get_and_set_thread_safely()
+    {
+        _service.CurrentOffset = 999;
+        Assert.That(_service.CurrentOffset, Is.EqualTo(999));
+    }
 }
