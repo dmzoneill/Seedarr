@@ -1,6 +1,6 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T23:45:00Z",
+  "updatedAt": "2026-10-06T23:55:00Z",
   "area": "src/NzbDrone.Core",
   "currentSubfolder": "src/NzbDrone.Core/Authentication",
   "rotation": [
@@ -12,10 +12,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Core/Torrents",
-    "completedAt": "2026-10-06T23:45:00Z",
-    "issuesFiled": [1037, 1038, 1039],
+    "completedAt": "2026-10-06T23:55:00Z",
+    "issuesFiled": [1043, 1044, 1045, 1046],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Deduped open recheck/cancel/fastresume/watch-folder duplicates (#912, #950, #946, #964, etc.); filed watch-folder debounce race (#1037), recheck path fallback (#1038), padding preallocation (#1039)."
+    "note": "Torrents pass: WatchFolder InfoHashV2 (#1043), magnet tr tiering (#1044), debounce CTS double-dispose (#1045), WaitForPieceAsync waiter bag (#1046). Deduped open #948 (AddTorrent v2-only)."
   }
 }
