@@ -155,4 +155,38 @@ public class ApiKeyAuthenticationHandlerTest
         Assert.That(result.Succeeded, Is.True);
         Assert.That(result.Principal?.Identity?.Name, Is.EqualTo("Anonymous"));
     }
+
+    [TestCase("apikey")]
+    [TestCase("api_key")]
+    [TestCase("access_token")]
+    [TestCase("token")]
+    public async Task HandleAuthenticateAsync_WhenValidApiKeyInQueryParameter_Succeeds(string queryParam)
+    {
+        _configFileProvider.ApiKey.Returns("configured-secret-key");
+
+        var context = new DefaultHttpContext();
+        context.Request.QueryString = new QueryString($"?{queryParam}=configured-secret-key");
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Principal?.Identity?.Name, Is.EqualTo("API"));
+    }
+
+    [TestCase("apikey")]
+    [TestCase("api_key")]
+    [TestCase("access_token")]
+    [TestCase("token")]
+    public async Task HandleAuthenticateAsync_WhenInvalidApiKeyInQueryParameter_Fails(string queryParam)
+    {
+        _configFileProvider.ApiKey.Returns("configured-secret-key");
+
+        var context = new DefaultHttpContext();
+        context.Request.QueryString = new QueryString($"?{queryParam}=wrong-secret-key");
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.Failure?.Message, Is.EqualTo("Invalid API Key"));
+    }
 }

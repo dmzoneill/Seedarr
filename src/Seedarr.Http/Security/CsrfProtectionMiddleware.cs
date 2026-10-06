@@ -21,6 +21,14 @@ public class CsrfProtectionMiddleware
         "deluge-session",
     };
 
+    private static readonly string[] QueryApiKeyParamNames = new[]
+    {
+        "apikey",
+        "api_key",
+        "access_token",
+        "token",
+    };
+
     private static readonly string[] DefaultAuthBypassPaths = new[]
     {
         "/auth/login",
@@ -137,19 +145,14 @@ public class CsrfProtectionMiddleware
         }
 
         // 4. Validated query parameter: only if the key is actually valid (mere presence NEVER bypasses)
-        if (context.Request.Query.TryGetValue("apikey", out var queryKey) && !string.IsNullOrWhiteSpace(queryKey))
+        foreach (var paramName in QueryApiKeyParamNames)
         {
-            if (RpcAuthenticationHelper.FixedTimeEquals(queryKey.ToString().Trim(), masterApiKey))
+            if (context.Request.Query.TryGetValue(paramName, out var queryVal) && !string.IsNullOrWhiteSpace(queryVal))
             {
-                return true;
-            }
-        }
-
-        if (context.Request.Query.TryGetValue("api_key", out var queryKey2) && !string.IsNullOrWhiteSpace(queryKey2))
-        {
-            if (RpcAuthenticationHelper.FixedTimeEquals(queryKey2.ToString().Trim(), masterApiKey))
-            {
-                return true;
+                if (RpcAuthenticationHelper.FixedTimeEquals(queryVal.ToString().Trim(), masterApiKey))
+                {
+                    return true;
+                }
             }
         }
 
@@ -240,6 +243,7 @@ public class CsrfProtectionMiddleware
                 var hasAuthCookie = HasAmbientAuthCookie(context.Request.Cookies);
                 var isAuthPath = IsAuthPath(path, context.Request.PathBase.Value);
                 var isRpcPath = IsRpcPath(path, context.Request.PathBase.Value);
+                configFileProvider ??= context.RequestServices?.GetService(typeof(IConfigFileProvider)) as IConfigFileProvider;
                 var hasVerifiedCredential = HasVerifiedNonAmbientCredential(context, configFileProvider);
 
                 // CSRF bypass rules:
@@ -265,22 +269,26 @@ public class CsrfProtectionMiddleware
 
                     // 2. Determine effective host and scheme (handling reverse proxies)
                     var effectiveScheme = context.Request.Scheme;
-                    if (context.Request.Headers.TryGetValue("X-Forwarded-Proto", out var fwdProto) && !string.IsNullOrWhiteSpace(fwdProto))
-                    {
-                        effectiveScheme = fwdProto.ToString().Split(',')[0].Trim();
-                    }
-
                     var effectiveHost = context.Request.Host;
-                    if (context.Request.Headers.TryGetValue("X-Forwarded-Host", out var fwdHost) && !string.IsNullOrWhiteSpace(fwdHost))
-                    {
-                        var rawFwdHost = fwdHost.ToString().Split(',')[0].Trim();
-                        effectiveHost = HostString.FromUriComponent(rawFwdHost);
-                    }
 
-                    if (context.Request.Headers.TryGetValue("X-Forwarded-Port", out var fwdPort) &&
-                        int.TryParse(fwdPort.ToString().Split(',')[0].Trim(), out var parsedPort))
+                    if (IpSecurityHelper.IsTrustedProxy(context.Connection.RemoteIpAddress, configFileProvider?.TrustedProxies))
                     {
-                        effectiveHost = new HostString(effectiveHost.Host, parsedPort);
+                        if (context.Request.Headers.TryGetValue("X-Forwarded-Proto", out var fwdProto) && !string.IsNullOrWhiteSpace(fwdProto))
+                        {
+                            effectiveScheme = fwdProto.ToString().Split(',')[0].Trim();
+                        }
+
+                        if (context.Request.Headers.TryGetValue("X-Forwarded-Host", out var fwdHost) && !string.IsNullOrWhiteSpace(fwdHost))
+                        {
+                            var rawFwdHost = fwdHost.ToString().Split(',')[0].Trim();
+                            effectiveHost = HostString.FromUriComponent(rawFwdHost);
+                        }
+
+                        if (context.Request.Headers.TryGetValue("X-Forwarded-Port", out var fwdPort) &&
+                            int.TryParse(fwdPort.ToString().Split(',')[0].Trim(), out var parsedPort))
+                        {
+                            effectiveHost = new HostString(effectiveHost.Host, parsedPort);
+                        }
                     }
 
                     // 3. Check Origin and Referer headers (for browser requests)
@@ -291,14 +299,11 @@ public class CsrfProtectionMiddleware
 
                     if (!hasOrigin && !hasReferer)
                     {
-                        if (hasAuthCookie)
-                        {
-                            _logger.Warn("CSRF blocked: missing both Origin and Referer headers on authenticated session {0} {1}", method, context.Request.Path);
-                            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                            context.Response.ContentType = "text/plain";
-                            await context.Response.WriteAsync("CSRF check failed: missing Origin and Referer.");
-                            return;
-                        }
+                        _logger.Warn("CSRF blocked: missing both Origin and Referer headers on {0} {1}", method, context.Request.Path);
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        context.Response.ContentType = "text/plain";
+                        await context.Response.WriteAsync("CSRF check failed: missing Origin and Referer.");
+                        return;
                     }
 
                     if (hasOrigin)
@@ -312,7 +317,8 @@ public class CsrfProtectionMiddleware
                             return;
                         }
                     }
-                    else if (hasReferer)
+
+                    if (hasReferer)
                     {
                         if (!IsOriginAllowed(refererHeader.ToString(), effectiveHost, effectiveScheme))
                         {
