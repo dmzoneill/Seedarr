@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T23:30:00Z",
-  "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Jobs",
+  "updatedAt": "2026-10-06T23:35:00Z",
+  "area": "src/NzbDrone.Core/Jobs",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-06T23:30:00Z",
+    "subfolder": "src/NzbDrone.Core/Jobs",
+    "completedAt": "2026-10-06T23:35:00Z",
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "NzbDrone.SignalR pass: reviewed MessageHub (auth handshake, channel/torrent groups, RequestStateSnapshot, TrackerSignalREventHandler), SignalRMessageBroadcaster (dedupe cache, named events, group routing), PieceStorage coalesce/flush, piece message DTOs, StateSnapshotResource. Deduped open #878, #887, #918, #919, #936, #940, #954, #961, #1016, #1019. Comment on #961 for receiveMessage envelope always Name=TrackerUpdated on announce path. No new issues filed. No dotnet build/test."
+    "note": "NzbDrone.Core/Jobs pass: reviewed Scheduler and ScheduledTaskCommandExecutor SignalR lifecycle (TaskStarted/TaskCompleted/TaskFailed), TaskManager state/history, TrackerScrapeJob and other IScheduledTask shells. Deduped open #903, #911, #952, #971, #985, #1026. Comment on #985 confirming command-queue failure/cancel emits TaskCompleted without TaskFailed (executor finally vs Scheduler gating). No new issues filed. No dotnet build/test."
   }
 }
