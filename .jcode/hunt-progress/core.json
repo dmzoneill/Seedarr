@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T00:45:00Z",
+  "updatedAt": "2026-10-07T00:22:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Datastore",
+  "currentSubfolder": "src/NzbDrone.Core/DownloadClients",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Authentication",
-    "completedAt": "2026-10-07T00:45:00Z",
-    "issuesFiled": [1193],
+    "subfolder": "src/NzbDrone.Core/Datastore",
+    "completedAt": "2026-10-07T00:22:00Z",
+    "issuesFiled": [1199, 1201],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Authentication pass: reviewed LoginRateLimiter, SessionRevocationService/Repository/CleanupTask, IdentityProviderService/Repository/definition. Filed #1193 (OIDC TestConnectionAsync ignores MetadataUrl when IssuerUrl set; runtime uses MetadataAddress). Deduped open #917, #987, #986, #1058, #1059, #1062, #1064, #978, #1144-#1146, #1160-#1161, #979, #976, #1063, #1079 and related. No dotnet build/test."
+    "note": "Datastore pass: reviewed BasicRepository, TableMapping/Registration, ConnectionStringFactory, DbFactory (migrations, snapshots, type handlers), Database/MainDatabase maintenance, WAL checkpoint/vacuum tasks, EmbeddedDocumentConverter, migrations 020-070 (focus 041/042/068/069). Filed #1199 (migrations 041/042 case-insensitive unique indexes fail without deduping legacy case-only duplicates) and #1201 (whitespace PostgresHost selects PostgreSQL). Deduped open #997, #999, #1000, #1077-#1080, #1085-#1087, #1151-#1153, #882, #915, #998, #1153 and related. No dotnet build/test."
   }
 }
