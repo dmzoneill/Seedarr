@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T23:45:00Z",
+  "updatedAt": "2026-10-06T22:50:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Jobs",
-    "completedAt": "2026-10-06T23:45:00Z",
-    "issuesFiled": [1125],
-    "issuesReopened": [821],
+    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+    "completedAt": "2026-10-06T22:50:00Z",
+    "issuesFiled": [],
+    "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Jobs partition pass: reviewed Scheduler (due checks, jitter, SignalR lifecycle), TaskManager (normalization, history, cancel/fail paths), ScheduledTaskCommandExecutor, ScheduledTask/CalculateNextExecution, TrackerScrapeJob, DatabaseVacuumTask, ScheduledTaskHistoryRepository. Traced tests in NzbDrone.Core.Test/Jobs. Deduped open #971 (TrackerScrapeJob swallows failures), #952/#985/#911 (SignalR task lifecycle), #1053 (API history limits). Reopened #821 with comment: IJob default Execute(CancellationToken) still drops token post-partial-fix. Commented #952 on DB Success/history for missing task instances. Filed #1125 Scheduler/GetNextScheduled naive AddMinutes vs CalculateNextExecution after missed intervals. No code fixes; no dotnet build/test."
+    "note": "TorrentRecheckService pass: traced QueueRecheck/ProcessQueueAsync/ExecuteRecheckCoreAsync SignalR lifecycle (TorrentUpdated + TorrentRecheckProgress throttling ~382-405), cancel paths (~470-489), sync Recheck/RecheckAsync entry points, tests TorrentRecheckServiceTest (SignalR mock only on happy path). GitHub dedupe: no new root causes vs open #951 (dual BroadcastMessage+BroadcastToTorrent), #912/#1036 (CancelRecheck status/SR gaps), #991 (RecheckAsync pre-core cancel), #988 (queued failure swallow), #936 (SetVerifiedPieces/pieceMap), #1048 (TorrentHashCheckCompletedEvent). Commented #1048 with SignalR/integration completion gap. Next subfolder: src/Seedarr.Http/REST. No code fixes; no dotnet build/test."
   }
 }
