@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T23:55:00Z",
+  "updatedAt": "2026-10-06T23:28:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Security",
+  "currentSubfolder": "src/Seedarr.Http/Authentication",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Ping",
-    "completedAt": "2026-10-06T23:55:00Z",
-    "issuesFiled": [1068],
-    "issuesReopened": [],
+    "subfolder": "src/Seedarr.Http/Security",
+    "completedAt": "2026-10-06T23:28:00Z",
+    "issuesFiled": [1092],
+    "issuesReopened": [654],
     "taskId": "http-hunter",
-    "note": "Pass 11: Ping (PingController.cs, PingResource). Compared Sonarr ping semantics: upstream probes config DB via cached repository read and returns 500/Error on failure; Seedarr always 200/OK so compose/Makefile liveness can pass with broken SQLite. GitHub dedupe: no open/closed matches for ping DB probe, PingController health, or docker healthcheck false positive. Filed #1068. Next: Security. No dotnet build/test."
+    "note": "Pass 12: Security (7 files: CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). GitHub dedupe: existing open #876 UrlBase/CSRF, #908/#909 HostHeader allowlist bypass, #921 Cors loopback, #934 CSRF loopback alias — no duplicates filed. Reopened #654: InvalidateAll still never called after API key/password rotation despite closed fix. Filed #1092: DI RpcSessionStore vs SharedSessionStore static twin. Next: Authentication. No dotnet build/test."
   }
 }
