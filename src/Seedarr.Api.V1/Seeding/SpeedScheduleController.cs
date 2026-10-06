@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Seeding.Scheduling;
@@ -11,6 +13,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.Seeding;
 
 [V1ApiController("speedschedule")]
+[Authorize(Policy = Policies.Reader)]
 public class SpeedScheduleController : Controller
 {
     private readonly ISpeedScheduler _speedScheduler;
@@ -65,6 +68,7 @@ public class SpeedScheduleController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<SpeedScheduleResource> Create([FromBody] SpeedScheduleResource resource)
     {
         var validation = ValidateResource(resource);
@@ -97,6 +101,7 @@ public class SpeedScheduleController : Controller
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<SpeedScheduleResource> Update(int id, [FromBody] SpeedScheduleResource resource)
     {
         var validation = ValidateResource(resource);
@@ -136,6 +141,7 @@ public class SpeedScheduleController : Controller
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Delete(int id)
     {
         var existing = _speedScheduler.Get(id);

@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Seeding;
@@ -9,6 +11,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.Seeding;
 
 [V1ApiController("seeding")]
+[Authorize(Policy = Policies.Reader)]
 public class SeedingController : Controller, IHandle<SeedingTickEvent>
 {
     private readonly ISeedingService _seedingService;
@@ -58,6 +61,7 @@ public class SeedingController : Controller, IHandle<SeedingTickEvent>
     }
 
     [HttpPost("start/{torrentId:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Start(int torrentId)
     {
         _seedingService.Start(torrentId);
@@ -65,6 +69,7 @@ public class SeedingController : Controller, IHandle<SeedingTickEvent>
     }
 
     [HttpPost("stop/{torrentId:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Stop(int torrentId)
     {
         _seedingService.Stop(torrentId);
@@ -72,6 +77,7 @@ public class SeedingController : Controller, IHandle<SeedingTickEvent>
     }
 
     [HttpPost("start-all")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult StartAll()
     {
         _seedingService.StartAll();
@@ -79,6 +85,7 @@ public class SeedingController : Controller, IHandle<SeedingTickEvent>
     }
 
     [HttpPost("stop-all")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult StopAll()
     {
         _seedingService.StopAll();
