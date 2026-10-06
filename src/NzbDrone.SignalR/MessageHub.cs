@@ -303,7 +303,20 @@ public class MessageHub : Hub
             Body = new { Version = BuildInfo.Version.ToString() },
         };
 
-        await Clients.Caller.SendAsync("receiveMessage", message);
+        try
+        {
+            await Clients.Caller.SendAsync("receiveMessage", message);
+        }
+        catch (Exception ex)
+        {
+            lock (Connections)
+            {
+                Connections.Remove(Context.ConnectionId);
+            }
+
+            _logger.Debug(ex, "Failed to send initial version message to SignalR client: {0}", Context.ConnectionId);
+            throw;
+        }
     }
 
     public override Task OnDisconnectedAsync(Exception exception)

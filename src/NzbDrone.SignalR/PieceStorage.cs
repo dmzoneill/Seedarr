@@ -450,13 +450,20 @@ public class PieceStorage : IPieceStorage, IDisposable
             return;
         }
 
-        if (indexesToBroadcast.Count == 1)
+        try
         {
-            _signalRBroadcaster.BroadcastMessage(new PieceCompletedMessage(infoHash, indexesToBroadcast[0], bytesToBroadcast));
+            if (indexesToBroadcast.Count == 1)
+            {
+                _signalRBroadcaster.BroadcastMessage(new PieceCompletedMessage(infoHash, indexesToBroadcast[0], bytesToBroadcast));
+            }
+            else
+            {
+                _signalRBroadcaster.BroadcastMessage(new PieceBatchCompletedMessage(infoHash, indexesToBroadcast, bytesToBroadcast));
+            }
         }
-        else
+        catch
         {
-            _signalRBroadcaster.BroadcastMessage(new PieceBatchCompletedMessage(infoHash, indexesToBroadcast, bytesToBroadcast));
+            // Defensive guard against unhandled timer callback exceptions
         }
     }
 
