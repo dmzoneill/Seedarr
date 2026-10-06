@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:15:00Z",
+  "updatedAt": "2026-10-06T22:20:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Backup",
+  "currentSubfolder": "src/Seedarr.Api.V1/Automation",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Seeding",
-    "completedAt": "2026-10-06T22:15:00Z",
-    "issuesFiled": [995],
+    "subfolder": "src/Seedarr.Api.V1/Backup",
+    "completedAt": "2026-10-06T22:20:00Z",
+    "issuesFiled": [1001],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed SeedingController, SpeedScheduleController, SpeedScheduleResource. Deduped open issues #914 (start/stop 404), #916 (per-torrent history empty), #989 (start-all ForceStart), #990 (start-all/stop-all AutoStart side effect). Filed #995: /seeding/stats vs /seeding/history disagree on activeTorrents and averageRatio (Seeding-only vs Seeding+Downloading). SpeedSchedule CRUD/RBAC/SignalR/GetActiveLimits align with tests; no new speedschedule API gaps filed. No dotnet build/test."
+    "notes": "Reviewed BackupController and BackupResource against BackupService and BackupControllerTest. Deduped open issues #926 (CreateBackup hardcodes Id=1), #928 (unstable list-index ids). Filed #1001: POST /backup/restore accepts any Backups/*.zip while GET lists only seedarr_backup_*.zip and DELETE fileName requires list membership, leaving orphan zips restorable but not deletable via API. RBAC (Reader list vs Admin mutate/download), path traversal checks, and restore exception mapping align with tests. No dotnet build/test."
   }
 }
