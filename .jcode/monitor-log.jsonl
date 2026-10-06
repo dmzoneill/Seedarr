@@ -57,3 +57,4 @@
   "note": "All prior hunters completed or idle>90s; full slot rotation restart"
 }
 {"ts":"2026-10-06T22:15:00Z","type":"bug-hunt-pass","worker":"host-hunter","partition":"NzbDrone.Host+NzbDrone.Common","subfolder":"src/NzbDrone.Host/AppLifetime.cs","issuesFiled":[944],"issuesReopened":[],"note":"watchdog shutdown race before persistence"}
+{"ts":"2026-10-06T22:05:30Z","kind":"bug-hunt-monitor","openIssues":73,"hunters":["dove","eagle","fish","fox","giraffe"],"restarts":0,"scheduleId":"sched_ec174081","note":"per-slot hunt-progress writes expected; cancelled sched_92072a36"}
