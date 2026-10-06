@@ -223,17 +223,41 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         {
             while (!ct.IsCancellationRequested)
             {
-                var client = await listener.AcceptTcpClientAsync(ct);
-                _ = Task.Run(() => HandleRequest(client), ct);
+                try
+                {
+                    var client = await listener.AcceptTcpClientAsync(ct);
+                    _ = Task.Run(() => HandleRequest(client), ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Debug("HTTP tracker accept loop canceled");
+                    break;
+                }
+                catch (ObjectDisposedException ex)
+                {
+                    _logger.Debug(ex, "HTTP tracker listener disposed during accept loop");
+                    break;
+                }
+                catch (SocketException ex)
+                {
+                    if (ct.IsCancellationRequested)
+                    {
+                        _logger.Debug(ex, "HTTP tracker listener socket closed during cancellation");
+                        break;
+                    }
+
+                    _logger.Debug(ex, "Transient HTTP tracker socket exception (error code: {0}); continuing accept loop", ex.SocketErrorCode);
+                }
+                catch (Exception ex)
+                {
+                    if (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    _logger.Debug(ex, "HTTP tracker accept error");
+                }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.Debug("HTTP tracker accept loop canceled");
-        }
-        catch (ObjectDisposedException ex)
-        {
-            _logger.Debug(ex, "HTTP tracker listener disposed during accept loop");
         }
         finally
         {
