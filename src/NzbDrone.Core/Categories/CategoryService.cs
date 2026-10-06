@@ -336,6 +336,7 @@ public class CategoryService : ICategoryService, IQueueService
         if (!string.IsNullOrWhiteSpace(cat.Name))
         {
             var torrents = GetTorrents();
+            var torrentsToUpdate = new List<Torrent>();
             foreach (var torrent in torrents)
             {
                 var changed = false;
@@ -356,8 +357,13 @@ public class CategoryService : ICategoryService, IQueueService
                 if (changed)
                 {
                     affectedTorrentIds.Add(torrent.Id);
-                    UpdateTorrent(torrent);
+                    torrentsToUpdate.Add(torrent);
                 }
+            }
+
+            if (torrentsToUpdate.Count > 0)
+            {
+                UpdateTorrents(torrentsToUpdate);
             }
 
             SyncAutomationScriptsOnCategoryDelete(cat.Name);
@@ -386,6 +392,7 @@ public class CategoryService : ICategoryService, IQueueService
     private void SyncTorrentsOnCategoryRename(string oldName, string newName)
     {
         var torrents = GetTorrents();
+        var torrentsToUpdate = new List<Torrent>();
         foreach (var torrent in torrents)
         {
             var changed = false;
@@ -405,8 +412,13 @@ public class CategoryService : ICategoryService, IQueueService
 
             if (changed)
             {
-                UpdateTorrent(torrent);
+                torrentsToUpdate.Add(torrent);
             }
+        }
+
+        if (torrentsToUpdate.Count > 0)
+        {
+            UpdateTorrents(torrentsToUpdate);
         }
     }
 
@@ -513,6 +525,29 @@ public class CategoryService : ICategoryService, IQueueService
         }
 
         return Enumerable.Empty<Torrent>();
+    }
+
+    private void UpdateTorrents(IEnumerable<Torrent> torrents)
+    {
+        var list = torrents?.ToList();
+        if (list == null || list.Count == 0)
+        {
+            return;
+        }
+
+        if (_torrentService?.Value != null)
+        {
+            _torrentService.Value.UpdateMany(list);
+        }
+        else if (_torrentRepository != null)
+        {
+            _torrentRepository.UpdateMany(list);
+            foreach (var t in list)
+            {
+                _eventAggregator?.PublishEvent(new ModelEvent<Torrent>(t, ModelAction.Updated));
+                _eventAggregator?.PublishEvent(new TorrentUpdatedEvent(t));
+            }
+        }
     }
 
     private void UpdateTorrent(Torrent torrent)

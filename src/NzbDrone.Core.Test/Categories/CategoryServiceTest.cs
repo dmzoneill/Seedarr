@@ -190,9 +190,7 @@ public class CategoryServiceTest
         Assert.That(torrent3.Category, Is.EqualTo("Unrelated"));
         Assert.That(torrent3.Label, Is.EqualTo("Comedy"));
 
-        _torrentRepository.Received(1).Update(torrent1);
-        _torrentRepository.Received(1).Update(torrent2);
-        _torrentRepository.DidNotReceive().Update(torrent3);
+        _torrentRepository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(l => l.Contains(torrent1) && l.Contains(torrent2) && !l.Contains(torrent3)));
         _eventAggregator.Received().PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent1));
         _eventAggregator.Received().PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent2));
         _eventAggregator.Received().PublishEvent(Arg.Is<ModelEvent<Torrent>>(e => e.Model == torrent1 && e.Action == ModelAction.Updated));
@@ -217,7 +215,7 @@ public class CategoryServiceTest
 
         Assert.That(torrent.Category, Is.EqualTo("NewName"));
         Assert.That(torrent.Label, Is.EqualTo("NewName"));
-        torrentService.Received(1).Update(torrent);
+        torrentService.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(l => l.Contains(torrent)));
     }
 
     [Test]
@@ -281,10 +279,7 @@ public class CategoryServiceTest
         Assert.That(torrent4.Category, Is.EqualTo("Movies"));
         Assert.That(torrent4.Label, Is.EqualTo("Unrelated"));
 
-        _torrentRepository.Received(1).Update(torrent1);
-        _torrentRepository.Received(1).Update(torrent2);
-        _torrentRepository.Received(1).Update(torrent3);
-        _torrentRepository.DidNotReceive().Update(torrent4);
+        _torrentRepository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(l => l.Contains(torrent1) && l.Contains(torrent2) && l.Contains(torrent3) && !l.Contains(torrent4)));
         _repository.Received(1).Delete(5);
 
         _eventAggregator.Received().PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent1));
