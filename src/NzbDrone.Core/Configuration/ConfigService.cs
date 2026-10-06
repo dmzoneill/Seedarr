@@ -35,6 +35,7 @@ public interface IConfigService
     bool HostHeaderValidationEnabled { get; }
     string AllowedHosts { get; }
     string WebhookBaseUrl { get; }
+    string UrlBase { get; }
 
     // Watch Folder
     bool WatchFolderEnabled { get; }
@@ -455,6 +456,7 @@ public class ConfigService : IConfigService
     public bool HostHeaderValidationEnabled => GetValueBoolean("HostHeaderValidationEnabled", false);
     public string AllowedHosts => GetValue("AllowedHosts", "");
     public string WebhookBaseUrl => GetValue("WebhookBaseUrl", "");
+    public string UrlBase => GetValue("UrlBase", string.Empty);
 
     // Watch Folder
     public bool WatchFolderEnabled => GetValueBoolean("WatchFolderEnabled", false);

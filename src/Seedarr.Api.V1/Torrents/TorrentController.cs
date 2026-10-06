@@ -46,6 +46,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly IConnectionManager _connectionManager;
     private readonly ITorrentEventLogService _eventLogService;
     private readonly IConfigService _configService;
+    private readonly IConfigFileProvider _configFileProvider;
     private readonly IDownloadHistoryRepository _downloadHistoryRepository;
     private readonly ITrackerBoostService _trackerBoostService;
     private readonly ITrackerAnnounceService _trackerAnnounceService;
@@ -92,7 +93,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         ITrackerScrapeService trackerScrapeService = null,
         IMainDatabase mainDatabase = null,
         ITorrentRecheckService torrentRecheckService = null,
-        ITorrentExporter torrentExporter = null)
+        ITorrentExporter torrentExporter = null,
+        IConfigFileProvider configFileProvider = null)
         : base(signalRBroadcaster, null, coalesceWindow)
     {
         _torrentService = torrentService;
@@ -102,6 +104,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _connectionManager = connectionManager;
         _eventLogService = eventLogService;
         _configService = configService;
+        _configFileProvider = configFileProvider;
         _downloadHistoryRepository = downloadHistoryRepository;
         _trackerBoostService = trackerBoostService;
         _trackerAnnounceService = trackerAnnounceService;
@@ -709,6 +712,14 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound("File not found in torrent.");
         }
 
+        var rawUrlBase = !string.IsNullOrWhiteSpace(_configFileProvider?.UrlBase)
+            ? _configFileProvider.UrlBase
+            : _configService?.UrlBase;
+        var trimmedBase = rawUrlBase?.Trim().Trim('/');
+        var cleanBase = string.IsNullOrWhiteSpace(trimmedBase)
+            ? string.Empty
+            : "/" + trimmedBase;
+
         var subtitles = _subtitleDiscoveryService.DiscoverSubtitles(targetFile, files);
         var resources = subtitles.Select(s => new SubtitleTrackResource
         {
@@ -723,7 +734,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             IsForced = s.IsForced,
             IsHearingImpaired = s.IsHearingImpaired,
             IsDefault = s.IsDefault,
-            Url = $"/api/v1/torrent/{torrentId}/files/{fileId}/subtitles/{s.TrackId}.vtt"
+            Url = $"{cleanBase}/api/v1/torrent/{torrentId}/files/{fileId}/subtitles/{s.TrackId}.vtt"
         }).ToList();
 
         return Ok(resources);
@@ -809,9 +820,44 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound("Subtitle file not found on disk.");
         }
 
+        string resolvedFullPath;
         try
         {
-            var rawBytes = global::System.IO.File.ReadAllBytes(fullPath);
+            var fileInfo = new FileInfo(fullPath);
+            var resolvedPath = fileInfo.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? fullPath;
+            resolvedFullPath = Path.GetFullPath(resolvedPath);
+        }
+        catch (IOException)
+        {
+            return BadRequest("Invalid subtitle file path: symlink target escapes base directory.");
+        }
+
+        var baseInfo = new DirectoryInfo(fullBasePath);
+        var resolvedBaseFullPath = Path.GetFullPath(baseInfo.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? fullBasePath);
+        var resolvedBaseDirWithSep = resolvedBaseFullPath.EndsWith(Path.DirectorySeparatorChar)
+            ? resolvedBaseFullPath
+            : resolvedBaseFullPath + Path.DirectorySeparatorChar;
+
+        var isContained = resolvedFullPath.StartsWith(baseDirWithSep, StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(resolvedFullPath, fullBasePath, StringComparison.OrdinalIgnoreCase) ||
+                          resolvedFullPath.StartsWith(resolvedBaseDirWithSep, StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(resolvedFullPath, resolvedBaseFullPath, StringComparison.OrdinalIgnoreCase);
+
+        if (!isContained)
+        {
+            return BadRequest("Invalid subtitle file path: symlink target escapes base directory.");
+        }
+
+        const long maxSubtitleFileSizeBytes = 10 * 1024 * 1024; // 10 MB
+        var resolvedFileInfo = new FileInfo(resolvedFullPath);
+        if (resolvedFileInfo.Length > maxSubtitleFileSizeBytes)
+        {
+            return BadRequest("Subtitle file exceeds maximum permitted size.");
+        }
+
+        try
+        {
+            var rawBytes = global::System.IO.File.ReadAllBytes(resolvedFullPath);
             var vtt = _subtitleConversionService.ConvertToWebVtt(rawBytes, matchedTrack.Format);
             return Content(vtt, "text/vtt; charset=utf-8");
         }
