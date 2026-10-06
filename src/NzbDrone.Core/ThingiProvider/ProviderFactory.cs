@@ -59,7 +59,7 @@ public abstract class ProviderFactory<TProvider, TProviderDefinition> : IProvide
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return _serviceFactory.BuildAll<TProvider>()
-            .Where(p => enabledImplementations.Contains(p.GetType().Name))
+            .Where(p => enabledImplementations.Contains(p.GetType().Name) || enabledImplementations.Contains(p.Name))
             .ToList();
     }
 

@@ -239,4 +239,22 @@ public class ProviderFactoryTest
         Assert.That(result[1].Name, Is.EqualTo("ConcreteTestProvider2"));
         _serviceFactory.Received(1).BuildAll<ITestProvider>();
     }
+
+    [Test]
+    public void GetAvailableProviders_should_match_when_implementation_matches_provider_name_instead_of_type_name()
+    {
+        _repository.All().Returns(new List<TestProviderDefinition>
+        {
+            new() { Id = 1, Name = "P1", Implementation = "CustomDisplayName", Enable = true }
+        });
+
+        var providerWithCustomName = Substitute.For<ITestProvider>();
+        providerWithCustomName.Name.Returns("CustomDisplayName");
+        _serviceFactory.BuildAll<ITestProvider>().Returns(new List<ITestProvider> { providerWithCustomName });
+
+        var result = _subject.GetAvailableProviders();
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("CustomDisplayName"));
+    }
 }
