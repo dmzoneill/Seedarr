@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T23:26:00Z",
+  "updatedAt": "2026-10-06T23:30:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.SignalR",
+  "currentSubfolder": "src/NzbDrone.Core/Jobs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/REST",
-    "completedAt": "2026-10-06T23:26:00Z",
+    "subfolder": "src/NzbDrone.SignalR",
+    "completedAt": "2026-10-06T23:30:00Z",
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "REST pass: reviewed RestControllerWithSignalR (coalesce timers, Handle/Flush/Dispose, BroadcastResourceChange), RestResource.ResourceName wire names, RestController/ResourceValidator/RestPutByIdAttribute (no SignalR). Traced integration to Torrent/Tag/Category/Automation controllers and SignalRMessageBroadcaster dedupe/named events. Deduped open #1002, #1003, #1047, #1049, #1060. Added comment on #1047 for timer/Flush/non-Updated throttle advance paths. No new issues filed. No dotnet build/test."
+    "note": "NzbDrone.SignalR pass: reviewed MessageHub (auth handshake, channel/torrent groups, RequestStateSnapshot, TrackerSignalREventHandler), SignalRMessageBroadcaster (dedupe cache, named events, group routing), PieceStorage coalesce/flush, piece message DTOs, StateSnapshotResource. Deduped open #878, #887, #918, #919, #936, #940, #954, #961, #1016, #1019. Comment on #961 for receiveMessage envelope always Name=TrackerUpdated on announce path. No new issues filed. No dotnet build/test."
   }
 }
