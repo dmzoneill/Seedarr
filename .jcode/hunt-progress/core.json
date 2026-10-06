@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T23:55:00Z",
+  "updatedAt": "2026-10-07T00:05:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Authentication",
+  "currentSubfolder": "src/NzbDrone.Core/Datastore",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents",
-    "completedAt": "2026-10-06T23:55:00Z",
-    "issuesFiled": [1043, 1044, 1045, 1046],
+    "subfolder": "src/NzbDrone.Core/Authentication",
+    "completedAt": "2026-10-07T00:05:00Z",
+    "issuesFiled": [1062, 1064],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Torrents pass: WatchFolder InfoHashV2 (#1043), magnet tr tiering (#1044), debounce CTS double-dispose (#1045), WaitForPieceAsync waiter bag (#1046). Deduped open #948 (AddTorrent v2-only)."
+    "note": "Authentication pass: filed #1062 (revocation retention vs sliding cookies), #1064 (EncryptClientSecret fail-open). Deduped open #917, #976, #978, #979, #986, #987 (not re-filed). Static review only; no dotnet build/test."
   }
 }
