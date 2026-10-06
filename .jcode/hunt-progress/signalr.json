@@ -2,19 +2,16 @@
   "slot": "signalr",
   "updatedAt": "2026-10-06T22:10:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Jobs",
+  "currentSubfolder": "src/NzbDrone.SignalR",
   "rotation": [
-    "src/NzbDrone.SignalR",
-    "src/NzbDrone.Core/Jobs",
-    "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
-    "src/Seedarr.Http/REST"
+    "src/NzbDrone.SignalR"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Jobs + TorrentRecheckService + Seedarr.Http/REST (callers)",
+    "subfolder": "src/NzbDrone.SignalR",
     "completedAt": "2026-10-06T22:10:00Z",
-    "issuesFiled": [951, 952, 954],
+    "issuesFiled": [961],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Scheduler/ScheduledTaskCommandExecutor, TorrentRecheckService dual broadcast, RestControllerWithSignalR, HealthCheck; cross-checked open issues #878-940. Slot file only."
+    "note": "Second pass: re-reviewed MessageHub (auth/subscribe/RequestStateSnapshot/TrackerSignalREventHandler), SignalRMessageBroadcaster dedup+GetNamedEvents, PieceStorage coalesce/Clear paths, DTOs; deduped #940 #919 #887 #954 #936 #918 #878; filed #961 quad tracker named-event fan-out."
   }
 }
