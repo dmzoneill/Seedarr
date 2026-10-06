@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T23:40:00Z",
+  "updatedAt": "2026-10-06T23:45:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Ping",
+  "currentSubfolder": "src/Seedarr.Http/Security",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/REST",
-    "completedAt": "2026-10-06T23:40:00Z",
-    "issuesFiled": [1230],
+    "subfolder": "src/Seedarr.Http/Ping",
+    "completedAt": "2026-10-06T23:45:00Z",
+    "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 25: REST (5 files: RestController, RestControllerWithSignalR, RestResource, ResourceValidator, Attributes/RestPutByIdAttribute). Static review only. GitHub dedupe: overlaps #1047 #1002 #1003 #1060 #1140 #1049 #1214 #1215 #1187 left open; no reopen. Filed #1230: coalesce window expiry drops newer _pendingUpdates in favor of stale incoming ModelEvent. Next: Ping. No dotnet build/test."
+    "note": "Pass 26: Ping (PingController.cs only). Static review only. Unconditional OK at lines 11-14; no DB/config probe, no HttpHead. GitHub dedupe: overlaps #1068 #1069 left open; commented on #1068. No new Ping-folder defects filed. Next: Security. No dotnet build/test."
   }
 }
