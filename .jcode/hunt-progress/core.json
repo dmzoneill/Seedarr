@@ -1,6 +1,6 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T22:25:00Z",
+  "updatedAt": "2026-10-06T22:30:00Z",
   "area": "src/NzbDrone.Core",
   "currentSubfolder": "src/NzbDrone.Core/Authentication",
   "rotation": [
@@ -12,10 +12,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Core/Torrents",
-    "completedAt": "2026-10-06T22:25:00Z",
-    "issuesFiled": [945, 946, 947, 948, 949, 950],
+    "completedAt": "2026-10-06T22:30:00Z",
+    "issuesFiled": [962, 963, 964],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Skipped re-filing #912 (CancelRecheck queue stuck); already open."
+    "note": "Deduped open #912, #945-950, #948 AddTorrent, #949 piece hash cache; not re-filed."
   }
 }
