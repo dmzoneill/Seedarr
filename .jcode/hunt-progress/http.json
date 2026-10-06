@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T22:35:00Z",
+  "updatedAt": "2026-10-07T22:38:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Terminal",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Authentication",
-    "completedAt": "2026-10-07T22:35:00Z",
-    "issuesFiled": [1105, 1109, 1116, 1117],
+    "subfolder": "src/Seedarr.Http/Terminal",
+    "completedAt": "2026-10-07T22:38:00Z",
+    "issuesFiled": [1131, 1132, 1133],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 13: Authentication (ApiKeyAuthenticationHandler, BasicAuthenticationHandler, ForwardAuthHandler, DynamicAuthSchemeManager, IDynamicAuthSchemeManager). Deduped existing: #877 Basic username API key, #893 SanitizeProviderId collision, #895 ForwardAuth User vs OIDC ReadOnly, #906 unsanitized OIDC challenge, #1105 SmartAuth cookie vs stale API key (same pass). Filed #1116: ScheduleRetry spawns duplicate OIDC retry loops per provider. Filed #1117: OIDC OnTokenValidated uses Guid.NewGuid when sub missing (unstable NameIdentifier). Prior same-area: #1109 loopback ForwardAuth impersonation. Next: Terminal. No dotnet build/test."
+    "note": "Pass 14: Terminal (TerminalHub, TerminalWebSocketHandler, PtyTerminalService, PtyProcessSession, LinuxPtySession, NativePty, FallbackProcessSession, TerminalEnvironmentSanitizer). Deduped existing open: #892 TerminalHub auth/RBAC gaps, #902 cwd confinement, #956/#965 LinuxPty env whitelist, #966 fork argv/env race claim, #967 exception echo, #1027 python-before-native PTY. Filed #1131: WebSocket UTF-8 decoder flush:false splits multibyte chars. Filed #1132: LinuxPtySession bash -i without --noprofile --norc. Filed #1133: JSON objects with missing/unknown type silently dropped. Next: REST. No dotnet build/test."
   }
 }
