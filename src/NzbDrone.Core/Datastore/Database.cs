@@ -20,16 +20,24 @@ public class Database : IDatabase
     public IDbConnection OpenConnection()
     {
         var connection = _connectionFactory();
-        connection.Open();
-
-        if (DatabaseType == DatabaseType.SQLite)
+        try
         {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "PRAGMA busy_timeout = 30000; PRAGMA cache_size = -64000; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY; PRAGMA mmap_size = 268435456;";
-            cmd.ExecuteNonQuery();
-        }
+            connection.Open();
 
-        return connection;
+            if (DatabaseType == DatabaseType.SQLite)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "PRAGMA busy_timeout = 30000; PRAGMA cache_size = -64000; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA temp_store = MEMORY; PRAGMA mmap_size = 268435456;";
+                cmd.ExecuteNonQuery();
+            }
+
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
     }
 
     public void Optimize()

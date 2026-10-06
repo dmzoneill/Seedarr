@@ -3,6 +3,7 @@ using System.Data;
 using System.IO;
 using Dapper;
 using Microsoft.Data.Sqlite;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Datastore;
 
@@ -83,5 +84,31 @@ public class DatabaseTest
         database.Optimize();
 
         Assert.That(factoryCalled, Is.False, "Optimize should not open connection for non-SQLite database");
+    }
+
+    [Test]
+    public void OpenConnection_should_dispose_connection_when_sqlite_pragma_fails()
+    {
+        var connection = Substitute.For<IDbConnection>();
+        var command = Substitute.For<IDbCommand>();
+        connection.CreateCommand().Returns(command);
+        command.When(cmd => cmd.ExecuteNonQuery()).Do(_ => throw new SqliteException("database is locked", 6));
+
+        var database = new Database(() => connection, DatabaseType.SQLite);
+
+        Assert.Throws<SqliteException>(() => database.OpenConnection());
+        connection.Received(1).Dispose();
+    }
+
+    [Test]
+    public void OpenConnection_should_dispose_connection_when_open_fails()
+    {
+        var connection = Substitute.For<IDbConnection>();
+        connection.When(conn => conn.Open()).Do(_ => throw new InvalidOperationException("Failed to open connection"));
+
+        var database = new Database(() => connection, DatabaseType.SQLite);
+
+        Assert.Throws<InvalidOperationException>(() => database.OpenConnection());
+        connection.Received(1).Dispose();
     }
 }
