@@ -1,6 +1,6 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:25:00Z",
+  "updatedAt": "2026-10-06T22:30:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
   "currentSubfolder": "src/NzbDrone.Common/Instrumentation",
   "rotation": [
@@ -13,10 +13,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Common/Disk",
-    "completedAt": "2026-10-06T22:25:00Z",
-    "issuesFiled": [968, 969],
+    "completedAt": "2026-10-06T22:30:00Z",
+    "issuesFiled": [977, 980],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #815 #814; filed IsValidPath vs IsBlockedPath gap + GetAvailableFreeSpace Linux root fallback when mount match fails"
+    "note": "Deduped #968 #969; filed free-space query failures return 0 + IsBlockedPath C:-only on Windows"
   }
 }
