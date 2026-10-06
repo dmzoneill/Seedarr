@@ -2816,6 +2816,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             UnregisterPeerPieces(connection, sessionInfoHash);
 
             connection.PendingRequestCount = 0;
+            connection.Dispose();
         }
     }
 
