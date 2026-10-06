@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T23:02:00Z",
+  "updatedAt": "2026-10-06T22:52:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.SignalR",
+  "currentSubfolder": "src/NzbDrone.Core/Jobs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/REST",
-    "completedAt": "2026-10-06T23:02:00Z",
-    "issuesFiled": [],
+    "subfolder": "src/NzbDrone.SignalR",
+    "completedAt": "2026-10-06T22:52:00Z",
+    "issuesFiled": [1147],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "REST pass: reviewed RestControllerWithSignalR.cs (coalesce Handle/Flush/Dispose/OnCoalesceTimerTick, IsConnected gating, DispatchBroadcast), RestController.cs, RestResource.cs (ResourceName ToLower), RestPutByIdAttribute.cs, RestControllerWithSignalRTest.cs. GitHub dedupe: open #1002/#1003/#1047/#1049/#1060 cover offline coalesce, throttle-before-success, culture ResourceName, shutdown flush gap. Commented #1002 with explicit Flush()+!IsConnected pending-loss path (lines 143-168). No new issues filed/reopened. Next subfolder: src/NzbDrone.SignalR. No code fixes; no dotnet build/test."
+    "note": "NzbDrone.SignalR pass: reviewed MessageHub.cs (OnConnectedAsync auth paths, IsConnected tracking, subscriptions, RequestStateSnapshot, TrackerSignalREventHandler), SignalRMessageBroadcaster.cs (dedup cache, GetNamedEvents, group routing), PieceStorage.cs (coalesce/flush), PieceCompleted/Batch messages, StateSnapshotResource. GitHub dedupe: existing open issues cover double snapshot (#940), Clients.All vs groups (#878), tracker quad-broadcast (#961/#919), dedup-before-send (#1016), Body=self JSON (#1019), coalesce bypass on MarkPiecesVerified (#1094), auth header leak (#1095), piece map gaps (#918/#936/#954/#887). Filed #1147 coalesced batch duplicate piece indexes + inflated BytesDownloaded. No issues reopened. Next: src/NzbDrone.Core/Jobs. No code fixes; no dotnet build/test."
   }
 }
