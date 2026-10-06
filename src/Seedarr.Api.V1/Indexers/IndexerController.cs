@@ -673,11 +673,27 @@ public class IndexerController : Controller
                 var addedTorrent = _torrentService.Add(torrent);
                 SaveReleaseMediaMetadata(addedTorrent.Id, addedTorrent.Name, request);
 
-                if (parsed.Files != null)
+                if (parsed.Files != null && parsed.Files.Count > 0)
                 {
+                    var pieceLength = parsed.PieceLength > 0 ? (long)parsed.PieceLength : 0L;
+                    var runningByteOffset = 0L;
                     foreach (var f in parsed.Files)
                     {
-                        _torrentFileService.Add(new TorrentFile { TorrentId = addedTorrent.Id, Path = f.Path, Size = f.Size, IsPaddingFile = f.IsPaddingFile });
+                        var (pieceOffset, pieceCount) = TorrentPieceCalculator.CalculateForFile(runningByteOffset, f.Size, pieceLength);
+                        if (pieceLength > 0)
+                        {
+                            runningByteOffset += f.Size;
+                        }
+
+                        _torrentFileService.Add(new TorrentFile
+                        {
+                            TorrentId = addedTorrent.Id,
+                            Path = f.Path,
+                            Size = f.Size,
+                            PieceOffset = pieceOffset,
+                            PieceCount = pieceCount,
+                            IsPaddingFile = f.IsPaddingFile
+                        });
                     }
                 }
 

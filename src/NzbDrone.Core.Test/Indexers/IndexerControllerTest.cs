@@ -401,6 +401,55 @@ public class IndexerControllerTest
     }
 
     [Test]
+    public void DownloadRelease_calculates_PieceOffset_and_PieceCount_for_torrent_files()
+    {
+        var handler = new FakeHttpMessageHandler();
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var parsedInfo = new ParsedTorrentInfo
+        {
+            Name = "MultiFileTorrent",
+            InfoHash = "1234567890abcdef1234567890abcdef12345678",
+            TotalSize = 3000,
+            PieceLength = 1000,
+            PieceCount = 3,
+            Files = new List<TorrentFileInfo>
+            {
+                new() { Path = "file1.dat", Size = 1500, IsPaddingFile = false },
+                new() { Path = "file2.dat", Size = 1500, IsPaddingFile = false },
+            }
+        };
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(parsedInfo);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 55, Name = "MultiFileTorrent" });
+
+        var request = new DownloadReleaseRequest
+        {
+            Title = "MultiFileTorrent",
+            DownloadUrl = "http://8.8.8.8:9696/download/1.torrent",
+            IndexerId = 1
+        };
+
+        controller.DownloadRelease(request);
+
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 55 && f.Path == "file1.dat" && f.PieceOffset == 0 && f.PieceCount == 2));
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 55 && f.Path == "file2.dat" && f.PieceOffset == 1 && f.PieceCount == 2));
+    }
+
+    [Test]
     public async Task Search_when_indexer_returns_401_records_failure_and_does_not_call_record_success()
     {
         var handler = new FakeHttpMessageHandler
