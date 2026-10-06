@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:43:00Z",
+  "updatedAt": "2026-10-06T22:50:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Host/Startup.cs",
+  "currentSubfolder": "src/NzbDrone.Host/Bootstrap.cs",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Common/Composition",
-    "completedAt": "2026-10-06T22:43:00Z",
-    "issuesFiled": [],
+    "subfolder": "src/NzbDrone.Host/Startup.cs",
+    "completedAt": "2026-10-06T22:50:00Z",
+    "issuesFiled": [1141],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Pass #3 Composition (6 files): AssemblyLoader/AutoAddServices/KnownTypes/lifecycle attributes reviewed; deduped open #1004 #1005 #1006 #1017 #1018 #1020; no new root causes"
+    "note": "Pass #4 Startup.cs: reviewed ConfigureServices/Configure pipeline (SmartAuth, static files, swagger gate, terminal WS, MapFallback); deduped open #876 #883 #894 #917 #920 #1028 #1030 #1031 #1040 #1062 #1092 #1105 #1109; filed #1141 Swagger OpenAPI AND security requirement"
   }
 }
