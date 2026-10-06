@@ -105,13 +105,15 @@ public class FFprobeMediaInspector : IFFprobeMediaInspector
 
         try
         {
+            var normalizedPath = Path.GetFullPath(filePath);
             var args = new[]
             {
                 "-v", "quiet",
                 "-print_format", "json",
                 "-show_format",
                 "-show_streams",
-                filePath
+                "--",
+                normalizedPath
             };
 
             var result = await _processExecutor(_ffprobePath, args, _timeout, cancellationToken).ConfigureAwait(false);
@@ -806,11 +808,11 @@ public class FFprobeMediaInspector : IFFprobeMediaInspector
         };
     }
 
-    private static async Task TerminateProcessTreeAsync(Process process, string name, Logger logger)
+    private static Task TerminateProcessTreeAsync(Process process, string name, Logger logger)
     {
         if (process == null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         try
@@ -838,58 +840,13 @@ public class FFprobeMediaInspector : IFFprobeMediaInspector
                 {
                     logger?.Warn(ex, "Failed to kill process tree for {0} (PID {1})", name, pid);
                 }
-
-                if (!OperatingSystem.IsWindows())
-                {
-                    try
-                    {
-                        using var killProc = Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "kill",
-                            Arguments = $"-9 -{pid}",
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                        });
-
-                        if (killProc != null)
-                        {
-                            using var killCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                            await killProc.WaitForExitAsync(killCts.Token).ConfigureAwait(false);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger?.Debug(ex, "Failed to send kill -9 to process group -{0}", pid);
-                    }
-                }
-                else
-                {
-                    try
-                    {
-                        using var taskkillProc = Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "taskkill",
-                            Arguments = $"/F /T /PID {pid}",
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                        });
-
-                        if (taskkillProc != null)
-                        {
-                            using var taskkillCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                            await taskkillProc.WaitForExitAsync(taskkillCts.Token).ConfigureAwait(false);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger?.Debug(ex, "Failed to taskkill /PID {0}", pid);
-                    }
-                }
             }
         }
         catch (Exception ex)
         {
             logger?.Warn(ex, "Failed to terminate process {0}", name);
         }
+
+        return Task.CompletedTask;
     }
 }
