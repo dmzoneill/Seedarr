@@ -217,7 +217,12 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         {
             task.LastStartTime = startTime;
             task.LastExecution = DateTime.UtcNow;
-            if (!isFailed)
+            if (isCanceled)
+            {
+                task.LastStatus = TaskExecutionStatus.Canceled;
+                task.LastErrorMessage ??= "Task execution was canceled or timed out";
+            }
+            else if (!isFailed)
             {
                 task.LastStatus = TaskExecutionStatus.Success;
                 task.LastErrorMessage = null;
