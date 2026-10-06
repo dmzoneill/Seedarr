@@ -460,6 +460,7 @@ public class FFprobeMediaInspectorTest
         Assert.That(capturedArgs, Does.Contain("json"));
         Assert.That(capturedArgs, Does.Contain("-show_format"));
         Assert.That(capturedArgs, Does.Contain("-show_streams"));
+        Assert.That(capturedArgs, Does.Contain("--"));
         Assert.That(capturedArgs, Does.Contain(_sampleFilePath));
 
         Assert.That(result.Resolution, Is.EqualTo("1080p"));
@@ -468,6 +469,111 @@ public class FFprobeMediaInspectorTest
         Assert.That(result.VideoCodec, Is.EqualTo("HEVC"));
         Assert.That(result.AudioCodec, Is.EqualTo("AC3"));
         Assert.That(result.AudioChannels, Is.EqualTo("5.1"));
+    }
+
+    [Test]
+    public void Inspect_WithLeadingDashFileName_PassesOptionTerminatorAndNormalizedPath()
+    {
+        var leadingDashFile = Path.Combine(_tempDirectory, "-report.mkv");
+        File.WriteAllText(leadingDashFile, "dummy media content");
+
+        IReadOnlyList<string> capturedArgs = null;
+
+        var sampleOutput = """
+        {
+            "streams": [
+                {
+                    "codec_name": "hevc",
+                    "codec_type": "video",
+                    "width": 1920,
+                    "height": 1080
+                }
+            ],
+            "format": {
+                "format_name": "matroska",
+                "duration": "100.0"
+            }
+        }
+        """;
+
+        var inspector = new FFprobeMediaInspector(
+            processExecutor: (bin, args, to, ct) =>
+            {
+                if (args.Count > 0 && args[0] == "-version")
+                {
+                    return Task.FromResult(new ProcessExecutionResult { ExitCode = 0 });
+                }
+
+                capturedArgs = args;
+                return Task.FromResult(new ProcessExecutionResult { ExitCode = 0, StandardOutput = sampleOutput });
+            });
+
+        var result = inspector.Inspect(leadingDashFile);
+
+        Assert.That(capturedArgs, Is.Not.Null);
+        var dashIndex = -1;
+        for (var i = 0; i < capturedArgs.Count; i++)
+        {
+            if (capturedArgs[i] == "--")
+            {
+                dashIndex = i;
+                break;
+            }
+        }
+
+        Assert.That(dashIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(dashIndex, Is.EqualTo(capturedArgs.Count - 2));
+        Assert.That(capturedArgs[dashIndex + 1], Is.EqualTo(Path.GetFullPath(leadingDashFile)));
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Resolution, Is.EqualTo("1080p"));
+    }
+
+    [Test]
+    public void Inspect_WithRelativePathLeadingDash_NormalizesToFullPathAndTerminatesOptions()
+    {
+        var leadingDashFile = Path.Combine(_tempDirectory, "-loglevel_debug.mkv");
+        File.WriteAllText(leadingDashFile, "dummy media content");
+
+        IReadOnlyList<string> capturedArgs = null;
+
+        var sampleOutput = """
+        {
+            "streams": [
+                {
+                    "codec_name": "h264",
+                    "codec_type": "video",
+                    "width": 1280,
+                    "height": 720
+                }
+            ],
+            "format": {
+                "format_name": "matroska",
+                "duration": "60.0"
+            }
+        }
+        """;
+
+        var inspector = new FFprobeMediaInspector(
+            processExecutor: (bin, args, to, ct) =>
+            {
+                if (args.Count > 0 && args[0] == "-version")
+                {
+                    return Task.FromResult(new ProcessExecutionResult { ExitCode = 0 });
+                }
+
+                capturedArgs = args;
+                return Task.FromResult(new ProcessExecutionResult { ExitCode = 0, StandardOutput = sampleOutput });
+            });
+
+        var relativePath = Path.GetRelativePath(Directory.GetCurrentDirectory(), leadingDashFile);
+        var result = inspector.Inspect(relativePath);
+
+        Assert.That(capturedArgs, Is.Not.Null);
+        Assert.That(capturedArgs, Does.Contain("--"));
+        Assert.That(capturedArgs[^1], Is.EqualTo(Path.GetFullPath(relativePath)));
+        Assert.That(Path.IsPathRooted(capturedArgs[^1]), Is.True);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Resolution, Is.EqualTo("720p"));
     }
 
     [Test]
