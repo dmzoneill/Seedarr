@@ -82,3 +82,4 @@
 {"ts":"2026-10-06T22:12:00Z","mode":"bug-hunt","openIssues":30,"restarts":["signalr:rat->rooster"],"workers":["ram","pig","lobster","ox","rooster"],"scheduleId":"sched_68e78213","note":"rat completed TorrentRecheck SignalR pass; deduped #912"}
 {"at":"2026-10-06T22:13:00Z","kind":"bug-hunt-monitor","openIssues":30,"restarts":["lobster->shrimp"],"hunters":["ram","pig","shrimp","ox","rooster"],"scheduleId":"sched_e38c6f7c"}
 {"ts": "2026-10-06T22:13:27Z", "kind": "bug-hunt-monitor", "openIssues": 30, "restarts": ["pig->sheep(api)", "ox->snail(host)"], "hunters": ["ram", "sheep", "shrimp", "snail", "rooster"], "scheduleId": "sched_d61663df", "note": "pig api.json and ox host.json writes expected per-slot"}
+{"ts": "2026-10-06T22:14:58Z", "kind": "bug-hunt-monitor", "openIssues": 30, "restarts": ["ram->buffalo(core)"], "hunters": ["buffalo", "sauropod", "shrimp", "blowfish", "rooster"], "scheduleId": "sched_6ee462d3", "note": "ram completed Datastore pass #999-1000"}
