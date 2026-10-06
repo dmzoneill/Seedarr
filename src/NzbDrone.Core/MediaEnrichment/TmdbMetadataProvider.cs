@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Net;
@@ -20,14 +21,14 @@ public class TokenBucketRateLimiter
     private readonly double _refillRatePerSecond;
     private readonly object _lock = new();
     private double _availableTokens;
-    private DateTime _lastRefillUtc;
+    private long _lastRefillTimestamp;
 
     public TokenBucketRateLimiter(double capacity = 40, double refillRatePerSecond = 4)
     {
         _capacity = capacity;
         _refillRatePerSecond = refillRatePerSecond;
         _availableTokens = capacity;
-        _lastRefillUtc = DateTime.UtcNow;
+        _lastRefillTimestamp = Stopwatch.GetTimestamp();
     }
 
     public async Task WaitForTokenAsync(CancellationToken cancellationToken = default)
@@ -60,12 +61,13 @@ public class TokenBucketRateLimiter
 
     private void Refill()
     {
-        var now = DateTime.UtcNow;
-        var elapsed = (now - _lastRefillUtc).TotalSeconds;
+        var now = Stopwatch.GetTimestamp();
+        var elapsedTicks = Math.Max(0, now - _lastRefillTimestamp);
+        var elapsed = (double)elapsedTicks / Stopwatch.Frequency;
         if (elapsed > 0)
         {
             _availableTokens = Math.Min(_capacity, _availableTokens + (elapsed * _refillRatePerSecond));
-            _lastRefillUtc = now;
+            _lastRefillTimestamp = now;
         }
     }
 }
@@ -706,12 +708,17 @@ public class TmdbMetadataProvider : ITmdbMetadataProvider
             {
                 response = await Client.SendAsync(request, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (attempt < maxRetries && ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.Warn(ex, "TMDb request to {0} failed on attempt {1}", url, attempt + 1);
-                var backoff = TimeSpan.FromSeconds(Math.Pow(2, attempt)) + TimeSpan.FromMilliseconds(Random.Shared.Next(50, 200));
-                await DelayAsync(backoff, cancellationToken).ConfigureAwait(false);
-                continue;
+                if (attempt < maxRetries)
+                {
+                    var backoff = TimeSpan.FromSeconds(Math.Pow(2, attempt)) + TimeSpan.FromMilliseconds(Random.Shared.Next(50, 200));
+                    await DelayAsync(backoff, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                return null;
             }
 
             if (response.StatusCode == HttpStatusCode.TooManyRequests)

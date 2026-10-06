@@ -377,76 +377,87 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             }
             else if (_tmdbProvider != null)
             {
-                var imdbId = ExtractImdbId(torrent.Name, filePath) ?? metadata.ImdbId;
-                var guessedArrType = GuessArrType(torrent.Label, torrent.Name);
-                var tmdbMetadata = await _tmdbProvider.LookupMediaAsync(
-                    cleanTitle,
-                    parsedYear > 0 ? parsedYear : null,
-                    imdbId,
-                    guessedArrType,
-                    cancellationToken).ConfigureAwait(false);
-
-                if (tmdbMetadata != null)
+                try
                 {
-                    if (!string.IsNullOrEmpty(tmdbMetadata.Title))
-                    {
-                        metadata.Title = tmdbMetadata.Title;
-                    }
+                    var imdbId = ExtractImdbId(torrent.Name, filePath) ?? metadata.ImdbId;
+                    var guessedArrType = GuessArrType(torrent.Label, torrent.Name);
+                    var tmdbMetadata = await _tmdbProvider.LookupMediaAsync(
+                        cleanTitle,
+                        parsedYear > 0 ? parsedYear : null,
+                        imdbId,
+                        guessedArrType,
+                        cancellationToken).ConfigureAwait(false);
 
-                    if (tmdbMetadata.Year > 0)
+                    if (tmdbMetadata != null)
                     {
-                        metadata.Year = tmdbMetadata.Year;
-                    }
+                        if (!string.IsNullOrEmpty(tmdbMetadata.Title))
+                        {
+                            metadata.Title = tmdbMetadata.Title;
+                        }
 
-                    if (!string.IsNullOrEmpty(tmdbMetadata.Overview))
-                    {
-                        metadata.Overview = tmdbMetadata.Overview;
-                    }
+                        if (tmdbMetadata.Year > 0)
+                        {
+                            metadata.Year = tmdbMetadata.Year;
+                        }
 
-                    if (!string.IsNullOrEmpty(tmdbMetadata.PosterUrl))
-                    {
-                        metadata.PosterUrl = tmdbMetadata.PosterUrl;
-                    }
+                        if (!string.IsNullOrEmpty(tmdbMetadata.Overview))
+                        {
+                            metadata.Overview = tmdbMetadata.Overview;
+                        }
 
-                    if (!string.IsNullOrEmpty(tmdbMetadata.BackdropUrl))
-                    {
-                        metadata.BackdropUrl = tmdbMetadata.BackdropUrl;
-                    }
+                        if (!string.IsNullOrEmpty(tmdbMetadata.PosterUrl))
+                        {
+                            metadata.PosterUrl = tmdbMetadata.PosterUrl;
+                        }
 
-                    if (!string.IsNullOrEmpty(tmdbMetadata.Genres))
-                    {
-                        metadata.Genres = tmdbMetadata.Genres;
-                    }
+                        if (!string.IsNullOrEmpty(tmdbMetadata.BackdropUrl))
+                        {
+                            metadata.BackdropUrl = tmdbMetadata.BackdropUrl;
+                        }
 
-                    if (tmdbMetadata.Rating > 0)
-                    {
-                        metadata.Rating = tmdbMetadata.Rating;
-                    }
+                        if (!string.IsNullOrEmpty(tmdbMetadata.Genres))
+                        {
+                            metadata.Genres = tmdbMetadata.Genres;
+                        }
 
-                    if (!string.IsNullOrEmpty(tmdbMetadata.ImdbId))
-                    {
-                        metadata.ImdbId = tmdbMetadata.ImdbId;
-                    }
+                        if (tmdbMetadata.Rating > 0)
+                        {
+                            metadata.Rating = tmdbMetadata.Rating;
+                        }
 
-                    if (!string.IsNullOrEmpty(tmdbMetadata.TmdbId))
-                    {
-                        metadata.TmdbId = tmdbMetadata.TmdbId;
-                    }
+                        if (!string.IsNullOrEmpty(tmdbMetadata.ImdbId))
+                        {
+                            metadata.ImdbId = tmdbMetadata.ImdbId;
+                        }
 
-                    if (!string.IsNullOrEmpty(tmdbMetadata.Cast))
-                    {
-                        metadata.Cast = tmdbMetadata.Cast;
-                    }
+                        if (!string.IsNullOrEmpty(tmdbMetadata.TmdbId))
+                        {
+                            metadata.TmdbId = tmdbMetadata.TmdbId;
+                        }
 
-                    if (!string.IsNullOrEmpty(tmdbMetadata.ArrType) && tmdbMetadata.ArrType != "Unknown")
-                    {
-                        metadata.ArrType = tmdbMetadata.ArrType;
-                    }
+                        if (!string.IsNullOrEmpty(tmdbMetadata.Cast))
+                        {
+                            metadata.Cast = tmdbMetadata.Cast;
+                        }
 
-                    if (tmdbMetadata.ReleaseDate.HasValue)
-                    {
-                        metadata.ReleaseDate = tmdbMetadata.ReleaseDate.Value;
+                        if (!string.IsNullOrEmpty(tmdbMetadata.ArrType) && tmdbMetadata.ArrType != "Unknown")
+                        {
+                            metadata.ArrType = tmdbMetadata.ArrType;
+                        }
+
+                        if (tmdbMetadata.ReleaseDate.HasValue)
+                        {
+                            metadata.ReleaseDate = tmdbMetadata.ReleaseDate.Value;
+                        }
                     }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to lookup TMDb metadata for {0}", torrent.Name);
                 }
             }
 

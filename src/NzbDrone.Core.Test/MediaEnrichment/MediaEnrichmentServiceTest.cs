@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.ArrIntegration;
@@ -503,6 +504,34 @@ public class MediaEnrichmentServiceTest
             "tt1375666",
             Arg.Any<string>(),
             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task EnrichTorrentAsync_WhenTmdbProviderThrowsException_FallsBackGracefully()
+    {
+        _arrRepository.All().Returns(new List<ArrConnectionDefinition>());
+
+        _tmdbProvider.LookupMediaAsync(
+            Arg.Any<string>(),
+            Arg.Any<int?>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>()).ThrowsAsync(new HttpRequestException("Network failure"));
+
+        var torrent = new Torrent
+        {
+            Id = 99,
+            Name = "Inception.2010.1080p.BluRay",
+            Label = "radarr-movies",
+        };
+
+        var result = await _service.EnrichTorrentAsync(torrent);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Title, Is.EqualTo("Inception.2010.1080p.BluRay"));
+        Assert.That(result.Year, Is.EqualTo(2010));
+        Assert.That(result.ArrType, Is.EqualTo("Radarr"));
+        _repository.Received(1).Upsert(Arg.Is<TorrentMediaMetadata>(m => m.Title == "Inception.2010.1080p.BluRay" && m.Year == 2010));
     }
 
     [Test]
