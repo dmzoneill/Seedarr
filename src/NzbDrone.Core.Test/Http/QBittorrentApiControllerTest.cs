@@ -1225,4 +1225,41 @@ public class QBittorrentApiControllerTest
         Assert.That(files[0]["priority"], Is.EqualTo(0));
         Assert.That(files[1]["priority"], Is.EqualTo(6));
     }
+
+    [Test]
+    public void SetPiecePriority_Binds_FromForm_Hash_And_Returns_Ok_When_Torrent_Exists()
+    {
+        var hash = "pieceprio123";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Status = TorrentStatus.Downloading
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.SetPiecePriority(hashForm: hash, pieceForm: "0", priorityForm: 1);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.Content, Is.EqualTo("Ok."));
+    }
+
+    [Test]
+    public void SetPiecePriority_Returns_NotFound_When_Torrent_Does_Not_Exist()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var result = _controller.SetPiecePriority(hash: "nonexistent", piece: "0", priority: 1);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void SetPiecePriority_Returns_BadRequest_When_Hash_Is_Empty()
+    {
+        var result = _controller.SetPiecePriority();
+
+        Assert.That(result, Is.InstanceOf<BadRequestResult>());
+    }
 }

@@ -2753,18 +2753,29 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     [HttpGet("torrents/setPiecePriority")]
     public ActionResult SetPiecePriority(
         [FromQuery] string hash = null,
-        [FromForm] string hashForm = null,
+        [FromForm(Name = "hash")] string hashForm = null,
         [FromQuery] string piece = null,
-        [FromForm] string pieceForm = null,
+        [FromForm(Name = "piece")] string pieceForm = null,
         [FromQuery] string pieces = null,
-        [FromForm] string piecesForm = null,
+        [FromForm(Name = "pieces")] string piecesForm = null,
         [FromQuery] int? priority = null,
-        [FromForm] int? priorityForm = null)
+        [FromForm(Name = "priority")] int? priorityForm = null)
     {
         var h = !string.IsNullOrWhiteSpace(hash) ? hash : hashForm;
+        if (string.IsNullOrWhiteSpace(h) && Request?.HasFormContentType == true && Request.Form.TryGetValue("hash", out var formHash))
+        {
+            h = formHash.ToString();
+        }
+
         if (string.IsNullOrWhiteSpace(h))
         {
             return BadRequest();
+        }
+
+        var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, h, StringComparison.OrdinalIgnoreCase));
+        if (torrent == null)
+        {
+            return NotFound();
         }
 
         return Content("Ok.", "text/plain");
