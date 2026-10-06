@@ -20,7 +20,7 @@ public class CaseInsensitiveInfoHashIndex : NzbDroneMigrationBase
                 Execute.Sql("DROP INDEX IF EXISTS \"IX_Torrents_InfoHash\";");
             }
 
-            Execute.Sql("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Torrents_InfoHash\" ON \"Torrents\" (\"InfoHash\" COLLATE NOCASE);");
+            Execute.Sql("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Torrents_InfoHash\" ON \"Torrents\" (LOWER(\"InfoHash\"));");
         }
     }
 

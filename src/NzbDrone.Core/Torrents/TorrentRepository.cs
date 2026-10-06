@@ -24,7 +24,7 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
 
         return QueryWithRetry(connection =>
             connection.QueryFirstOrDefault<int>(
-                $"SELECT COUNT(1) FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash COLLATE NOCASE",
+                $"SELECT COUNT(1) FROM \"{_table}\" WHERE LOWER(\"InfoHash\") = @InfoHash",
                 new { InfoHash = normalized }) > 0);
     }
 
@@ -39,7 +39,7 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
 
         return QueryWithRetry(connection =>
             connection.QueryFirstOrDefault<Torrent>(
-                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash COLLATE NOCASE",
+                $"SELECT * FROM \"{_table}\" WHERE LOWER(\"InfoHash\") = @InfoHash",
                 new { InfoHash = normalized }));
     }
 
@@ -68,7 +68,7 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             foreach (var batch in hashes.Chunk(500))
             {
                 var records = connection.Query<Torrent>(
-                    $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" COLLATE NOCASE IN @Hashes",
+                    $"SELECT * FROM \"{_table}\" WHERE LOWER(\"InfoHash\") IN @Hashes",
                     new { Hashes = batch });
 
                 result.AddRange(records);

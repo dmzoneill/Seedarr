@@ -19,7 +19,7 @@ public class CaseInsensitiveCategoryName : NzbDroneMigrationBase
             }
 
             Execute.Sql("DROP INDEX IF EXISTS \"UC_Categories_Name\";");
-            Execute.Sql("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Categories_Name\" ON \"Categories\" (\"Name\" COLLATE NOCASE);");
+            Execute.Sql("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Categories_Name\" ON \"Categories\" (LOWER(\"Name\"));");
         }
     }
 
