@@ -3422,15 +3422,22 @@ public class DhtServiceTest
 
     private static BDictionary BuildQueryMessage(string queryType, byte[] nodeId)
     {
+        var args = new BDictionary
+        {
+            ["id"] = new BString(nodeId)
+        };
+
+        if (queryType == "find_node")
+        {
+            args["target"] = new BString(nodeId);
+        }
+
         return new BDictionary
         {
             ["t"] = new BString(new byte[] { 0x01, 0x02 }),
             ["y"] = new BString("q"),
             ["q"] = new BString(queryType),
-            ["a"] = new BDictionary
-            {
-                ["id"] = new BString(nodeId)
-            }
+            ["a"] = args
         };
     }
 
@@ -3611,5 +3618,71 @@ public class DhtServiceTest
         service.Handle(new VpnKillSwitchTriggeredEvent("tun0"));
 
         Assert.That(pending.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleQuery_without_id_argument_should_reject_with_error()
+    {
+        SetUdpClient();
+        var query = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("ping"),
+            ["a"] = new BDictionary()
+        };
+
+        var sender = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881);
+        Assert.DoesNotThrow(() => InvokeHandleMessage(query.EncodeAsBytes(), sender));
+
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleQuery_find_node_without_target_should_reject_with_error()
+    {
+        SetUdpClient();
+        var nodeId = CreateNodeId(0x42);
+        var query = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("find_node"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(nodeId)
+            }
+        };
+
+        var sender = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881);
+        Assert.DoesNotThrow(() => InvokeHandleMessage(query.EncodeAsBytes(), sender));
+
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleResponse_with_malformed_r_or_values_does_not_throw()
+    {
+        SetUdpClient();
+        var txKey = "01020304";
+        var sender = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02, 0x03, 0x04 }, sender);
+
+        // r is a string instead of dictionary
+        var malformedResponse = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02, 0x03, 0x04 }),
+            ["y"] = new BString("r"),
+            ["r"] = new BString("malformed_r")
+        };
+
+        Assert.DoesNotThrow(() => InvokeHandleMessage(malformedResponse.EncodeAsBytes(), sender));
+    }
+
+    [Test]
+    public async Task SendGetPeersInternal_and_SendAnnouncePeer_with_null_target_does_not_throw()
+    {
+        SetUdpClient();
+        Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(null, new byte[20], 6881, new byte[4]));
     }
 }
