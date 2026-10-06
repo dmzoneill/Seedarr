@@ -202,4 +202,36 @@ public class StopPolicyTest
         Assert.That(subject.ShouldStop(torrentBelow), Is.False);
         Assert.That(subject.ShouldStop(torrentAbove), Is.True);
     }
+
+    [Test]
+    public void ShouldStop_returns_false_when_torrent_has_explicit_negative_ratio_limit_even_if_above_global_ratio()
+    {
+        _configService.GlobalSeedRatioLimit.Returns(2.0);
+        var subject = new StopPolicy(_configService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Ratio = 5.0,
+            RatioLimit = -1 // Explicitly unlimited
+        };
+
+        Assert.That(subject.ShouldStop(torrent), Is.False);
+    }
+
+    [Test]
+    public void ShouldStop_returns_false_when_torrent_has_explicit_negative_time_limit_even_if_above_global_time()
+    {
+        var subject = new StopPolicy(_configService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Ratio = 0.5,
+            SeedingTime = 100000,
+            SeedingTimeLimit = -1 // Explicitly unlimited
+        };
+
+        Assert.That(subject.ShouldStop(torrent, globalTimeLimitSeconds: 3600), Is.False);
+    }
 }

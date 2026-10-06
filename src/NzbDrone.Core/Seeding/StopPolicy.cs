@@ -129,15 +129,23 @@ public class StopPolicy : IStopPolicy
             return true;
         }
 
-        var effectiveGlobalRatio = globalRatioLimit ?? _configService?.GlobalSeedRatioLimit ?? 0;
-        if (effectiveGlobalRatio > 0 && torrent.Ratio >= effectiveGlobalRatio)
+        var isUnlimitedRatio = torrent.RatioLimit.HasValue && torrent.RatioLimit.Value < 0;
+        if (!isUnlimitedRatio)
         {
-            return true;
+            var effectiveGlobalRatio = globalRatioLimit ?? _configService?.GlobalSeedRatioLimit ?? 0;
+            if (effectiveGlobalRatio > 0 && torrent.Ratio >= effectiveGlobalRatio)
+            {
+                return true;
+            }
         }
 
-        if (globalTimeLimitSeconds.HasValue && globalTimeLimitSeconds.Value > 0 && torrent.SeedingTime >= globalTimeLimitSeconds.Value)
+        var isUnlimitedTime = torrent.SeedingTimeLimit.HasValue && torrent.SeedingTimeLimit.Value < 0;
+        if (!isUnlimitedTime)
         {
-            return true;
+            if (globalTimeLimitSeconds.HasValue && globalTimeLimitSeconds.Value > 0 && torrent.SeedingTime >= globalTimeLimitSeconds.Value)
+            {
+                return true;
+            }
         }
 
         return false;

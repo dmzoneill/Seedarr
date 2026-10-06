@@ -99,9 +99,12 @@ public class TorrentStateMachine : ITorrentStateMachine
             }
 
             double? effectiveRatioLimit = null;
-            if (torrent.RatioLimit.HasValue && torrent.RatioLimit.Value > 0)
+            if (torrent.RatioLimit.HasValue)
             {
-                effectiveRatioLimit = torrent.RatioLimit.Value;
+                if (torrent.RatioLimit.Value > 0)
+                {
+                    effectiveRatioLimit = torrent.RatioLimit.Value;
+                }
             }
             else if (category != null)
             {
@@ -123,9 +126,12 @@ public class TorrentStateMachine : ITorrentStateMachine
             }
 
             long? effectiveTimeLimitSeconds = null;
-            if (torrent.SeedingTimeLimit.HasValue && torrent.SeedingTimeLimit.Value > 0)
+            if (torrent.SeedingTimeLimit.HasValue)
             {
-                effectiveTimeLimitSeconds = torrent.SeedingTimeLimit.Value;
+                if (torrent.SeedingTimeLimit.Value > 0)
+                {
+                    effectiveTimeLimitSeconds = torrent.SeedingTimeLimit.Value;
+                }
             }
             else if (category != null && category.AutoStop && category.TargetSeedTimeMinutes > 0)
             {
