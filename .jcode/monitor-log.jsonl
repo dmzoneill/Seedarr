@@ -95,3 +95,4 @@
 {"at":"2026-10-06T22:21:28Z","event":"bug-hunt-monitor","openIssues":30,"restarts":["crab->horse","duck->lion","frog->wolf"],"hunters":["horse","goat","lion","deer","wolf"],"note":"#1031-#1035 latest; 3 slot restarts"}
 {"ts":"2026-10-06T22:21:57Z","mode":"bug-hunt","openIssues":30,"hunters":["horse","goat","lion","deer","wolf"],"restarts":0,"note":"healthy; frog/duck/crab hunt-progress writes expected"}
 {"ts":"2026-10-06T22:23:00Z","mode":"bug-hunt","openIssues":30,"restarts":1,"restartsDetail":["api:goat->koala"],"workers":["horse","koala","lion","deer","wolf"],"scheduleId":"sched_401469ef","note":"goat completed Config pass #1041/#1042"}
+{"ts":"2026-10-06T22:23:52Z","kind":"bug-hunt-monitor","openIssues":30,"restarts":3,"restarted":["horse->panda","deer->rabbit","wolf->snake"],"hunters":["panda","rabbit","snake","koala","lion"],"scheduleId":"sched_666caf6d","note":"30 open; horse/deer/wolf completed; core Auth next; host Bootstrap; signalr REST"}
