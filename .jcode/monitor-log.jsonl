@@ -23,3 +23,4 @@
 {"ts": "2026-10-06T21:52:42Z", "kind": "bug-hunt-monitor", "openIssues": 32, "restarts": 0, "nudged": ["evergreen", "herb", "ant"], "stopped": ["bird"], "hunters": {"seedling": "idle_1m", "evergreen": "idle_3m", "bug": "running", "herb": "idle_3m", "ant": "idle_3m"}, "scheduleId": "sched_2ee00680"}
 {"ts":"2026-10-06T21:54:01Z","type":"bug-hunt-monitor","openIssues":32,"restarts":["core:seedling->cat","api:evergreen->chicken","host:herb->chick","signalr:ant->chipmunk"],"scheduleId":"sched_51078d59","hunters":["cat","chicken","bug","chick","chipmunk"]}
 {"ts":"2026-10-06T21:55:34Z","type":"bug-hunt-monitor","openIssues":33,"restarts":0,"scheduleId":"sched_8c743019","hunters":["cat","chicken","bug","chick","chipmunk"],"note":"all slots healthy"}
+{"ts": "2026-10-06T21:55:54Z", "kind": "bug-hunt-monitor", "openIssues": 34, "restarts": 0, "hunters": ["cat", "chicken", "bug", "chick", "chipmunk"], "scheduleId": "sched_88561763", "note": "healthy"}
