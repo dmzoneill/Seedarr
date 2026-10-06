@@ -1,11 +1,14 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.MediaEnrichment;
 using Seedarr.Api.V1.MediaCover;
 
@@ -448,5 +451,26 @@ public class MediaCoverControllerTest
         Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
         var fileResult = (PhysicalFileResult)result;
         Assert.That(fileResult.FileName, Is.EqualTo(Path.GetFullPath(backdropFile)));
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_Reader_attribute()
+    {
+        var type = typeof(MediaCoverController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [Test]
+    public void Delete_should_have_Authorize_Operator_attribute()
+    {
+        var method = typeof(MediaCoverController).GetMethod(nameof(MediaCoverController.Delete));
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Operator));
     }
 }
