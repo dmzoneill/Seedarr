@@ -26,6 +26,11 @@ public static class DhtSecurity
     {
         ArgumentNullException.ThrowIfNull(address);
 
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
         var rBits = (byte)(r & 0x07);
 
         if (address.AddressFamily == AddressFamily.InterNetwork)
@@ -60,6 +65,11 @@ public static class DhtSecurity
     {
         ArgumentNullException.ThrowIfNull(address);
 
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
         var rand = r ?? RandomNumberGenerator.GetBytes(1)[0];
         var crc = ComputeCrc32c(address, rand);
 
@@ -81,6 +91,11 @@ public static class DhtSecurity
         if (nodeId == null || nodeId.Length != 20 || address == null)
         {
             return false;
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
         }
 
         if (address.AddressFamily != AddressFamily.InterNetwork &&
