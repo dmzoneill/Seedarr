@@ -15,6 +15,11 @@ public class ReleaseQualityParserTest
     [TestCase("Cyberpunk.Edgerunners.S01.1080p.NF.WEBRip.AV1.Opus.5.1", "1080p", "WEBRip", "AV1", "5.1", "Opus")]
     [TestCase("Big.Bang.Theory.S12E24.720p.HDTV.H.264.DD5.1", "720p", "HDTV", "AVC", "5.1", "AC3")]
     [TestCase("Classic.Movie.1960.BDRip.XviD.AC3-WAF", null, "BluRay", "XviD", null, "AC3")]
+    [TestCase("Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-GRP", "1080p", "WEB-DL", "AVC", "5.1", "EAC3")]
+    [TestCase("Show.S01E02.720p.WEBRip.x265.DDP2.0-GRP", "720p", "WEBRip", "HEVC", "2.0", "EAC3")]
+    [TestCase("Show.S01E03.1080p.WEB-DL.DDP.x264-GRP", "1080p", "WEB-DL", "AVC", null, "EAC3")]
+    [TestCase("Movie.2023.2160p.WEB-DL.Dolby.Digital.Plus.5.1.H.265", "2160p", "WEB-DL", "HEVC", "5.1", "EAC3")]
+    [TestCase("Movie.2023.1080p.WEB-DL.Dolby Digital Plus.5.1.x264", "1080p", "WEB-DL", "AVC", "5.1", "EAC3")]
     public void Parse_should_extract_quality_attributes_correctly(
         string title, string expectedRes, string expectedSource, string expectedCodec, string expectedChannels, string expectedAudio)
     {

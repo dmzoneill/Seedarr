@@ -45,7 +45,7 @@ public static class ReleaseQualityParser
     private static readonly Regex Audio10Regex = new(@"(?i)(?:\b|(?<=[a-z]))(1\.0|1ch|mono)\b", RegexOptions.Compiled, RegexTimeout);
 
     // Audio codec regex patterns
-    private static readonly Regex AudioCodecRegex = new(@"\b(dts-hd(?:\s+ma)?|truehd|atmos|dts|flac|eac3|dd\+?(?:\d\.\d)?|ac3|aac|mp3|opus)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+    private static readonly Regex AudioCodecRegex = new(@"\b(dts-hd(?:\s+ma)?|truehd|atmos|dts|flac|eac3|ddp\+?(?:\d\.\d)?|dd\+?(?:\d\.\d)?|dolby[\s.-]+digital[\s.-]+plus|ac3|aac|mp3|opus)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
 
     public static ParsedReleaseQuality Parse(string rawTitle)
     {
@@ -148,7 +148,7 @@ public static class ReleaseQualityParser
                 var s when s.Contains("ATMOS") => "Atmos",
                 var s when s.Contains("DTS-HD") || s.Contains("DTSHD") => "DTS-HD MA",
                 var s when s.Contains("DTS") => "DTS",
-                var s when s.Contains("EAC3") || s.Contains("DD+") => "EAC3",
+                var s when s.Contains("EAC3") || s.Contains("DD+") || s.Contains("DDP") || (s.Contains("DOLBY") && s.Contains("PLUS")) => "EAC3",
                 var s when s.Contains("AC3") || s.StartsWith("DD") => "AC3",
                 var s when s.Contains("FLAC") => "FLAC",
                 var s when s.Contains("AAC") => "AAC",
