@@ -33,3 +33,4 @@
 {"ts":"2026-10-06T21:59:47Z","kind":"bug-hunt-monitor","openIssues":43,"restarts":1,"restartedSlots":{"api":"chicken->crocodile"},"hunters":["cow","crocodile","bug","chick","chipmunk"],"scheduleId":"sched_67add969","note":"chicken completed Api.V1 pass"}
 {"ts":"2026-10-06T22:01:30Z","mode":"bug-hunt","openIssues":30,"restarts":["cow->cricket","chipmunk->dog"],"note":"per-slot hunt-progress; cancel dup schedule","scheduleId":"sched_dc4c6e44"}
 {"ts":"2026-10-06T22:01:35Z","mode":"bug-hunt","openIssues":52,"hunters":["cricket","crocodile","bug","chick","dog"],"restarts":0,"note":"healthy; nudged idle bug+chick; per-slot progress enforced"}
+{"ts":"2026-10-06T22:10:00Z","type":"bug-hunt-pass","worker":"host-hunter","partition":"NzbDrone.Host+NzbDrone.Common","subfolder":"src/NzbDrone.Host/Bootstrap.cs","issuesFiled":[932,933],"issuesReopened":[],"note":"per-slot host.json only"}

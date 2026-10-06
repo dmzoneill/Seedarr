@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-06T22:04:00Z",
+  "updatedAt": "2026-10-06T22:10:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Host/Bootstrap.cs",
+  "currentSubfolder": "src/NzbDrone.Host/AppLifetime.cs",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Host/Startup.cs",
-    "completedAt": "2026-10-06T22:04:00Z",
-    "issuesFiled": [920],
+    "subfolder": "src/NzbDrone.Host/Bootstrap.cs",
+    "completedAt": "2026-10-06T22:10:00Z",
+    "issuesFiled": [932, 933],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "UseHttpsRedirection after static/fixtures"
+    "note": "DB before logging reconfig; BindAddress :: IPv6-only Listen"
   }
 }
