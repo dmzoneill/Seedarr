@@ -2,9 +2,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Developer.Repl;
@@ -419,5 +422,30 @@ public class DeveloperReplServiceTest
 
         var resetResult = controller.ResetSession();
         Assert.That(resetResult, Is.InstanceOf<NoContentResult>());
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_AdminOnly_attribute()
+    {
+        var type = typeof(SystemDeveloperReplController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
+    }
+
+    [Test]
+    public void Should_not_allow_clr_access_in_sandbox()
+    {
+        var request = new ReplExecutionRequest
+        {
+            Code = "System.IO.File",
+            Language = "javascript",
+        };
+
+        var response = _replService.Execute(request);
+
+        Assert.That(response.Success, Is.False);
+        Assert.That(response.ErrorMessage, Does.Contain("System is not defined").Or.Contain("ReferenceError"));
     }
 }
