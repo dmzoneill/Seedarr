@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T23:55:00Z",
+  "updatedAt": "2026-10-06T23:58:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Automation",
+  "currentSubfolder": "src/Seedarr.Api.V1/Config",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Backup",
-    "completedAt": "2026-10-06T23:55:00Z",
-    "issuesFiled": [1148, 1149],
+    "subfolder": "src/Seedarr.Api.V1/Automation",
+    "completedAt": "2026-10-06T23:58:00Z",
+    "issuesFiled": [1154, 1155, 1156],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed BackupController, BackupResource. GitHub dedupe: skipped open #926/#928/#1001/#1007 (create id, unstable ids, restore list membership, restore case). Filed #1148 (tie CreationTimeUtc unstable sort shuffles ids), #1149 (DELETE id+fileName mismatch silently deletes by fileName). No dotnet build/test."
+    "notes": "Reviewed AutomationController, AutomationScriptResource. GitHub dedupe: skipped open #1014/#1015/#930/#1025 (truncated log PUT, DELETE 200, missing script 200, missing torrentId). Filed #1154 (run/execute ignores IsEnabled), #1155 (SignalR AutomationExecuted duplicates full OutputLog), #1156 (marketplace install 400 for unknown template). No dotnet build/test."
   }
 }
