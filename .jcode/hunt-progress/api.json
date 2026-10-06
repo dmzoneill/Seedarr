@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:35:00Z",
+  "updatedAt": "2026-10-06T22:45:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/System",
+  "currentSubfolder": "src/Seedarr.Api.V1/Notifications",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Config",
-    "completedAt": "2026-10-06T22:35:00Z",
-    "issuesFiled": [1041, 1042],
+    "subfolder": "src/Seedarr.Api.V1/System",
+    "completedAt": "2026-10-06T22:45:00Z",
+    "issuesFiled": [1050, 1051],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed ConfigControllerBase, GeneralConfig/Seeding/Network/BitTorrent/PeerProtocol/Protocols/Simulation/TrackerServer/Scheduler/Advanced controllers, AiConfigController, IdentityProviderConfigController, resources/mappers, and tests (ConfigControllerTests, IdentityProviderConfigControllerTest, Network/Seeding/BitTorrent/Scheduler config tests, ConfigApiTests). Searched GitHub issues+comments. Deduped open #1033 (AiConfig stub/contract), #1034 (IdP persist before scheme sync), #1035 (TmdbApiKey plaintext on GET). Filed #1041: IdentityProvider ProviderId rename leaves stale OIDC scheme. Filed #1042: GeneralConfig SaveConfig 202 echoes full ApiKey/SslCertPassword. RBAC: ConfigController GET Reader, Save AdminOnly; IdP CRUD AdminOnly/Reader; AiConfig uses fallback auth only (covered by #1033). No dotnet build/test."
+    "notes": "Reviewed System controllers/resources: SystemController (status/tasks/commands/restart/shutdown/vacuum), SetupController, SystemDatabaseController, LogController, LogFileController, TerminalController, SystemResourcesController, SystemDeveloperController (+ debugger/repl/testing partials), DTOs. Cross-checked tests: SetupControllerTest, SystemControllerTest, SystemControllerVacuumTest, SystemControllerTasksTest, SystemAndDiagnosticsControllersTests. Searched GitHub issues+comments. Deduped open #879 (developer/debugger/testing RBAC), #1026 (duplicate TaskStarted on command-queue manual run), #877/#637 (Basic/login ApiKey-only auth), #823 (setup complete lockdown when already completed), #915/#882 (vacuum/PerformMaintenance PostgreSQL), #993/#996 (ring buffer logs), #902/#892/#956 (terminal; API layer reviewed TerminalController gating). Filed #1050: setup AdminPassword persisted but never used by AuthController/BasicAuthenticationHandler (only ApiKey works). Filed #1051: UpdateTask PUT omits isEnabled defaults to false and disables task. RBAC: SystemDatabase/terminal/restart-shutdown Admin; setup status AllowAnonymous; developer surface largely unauthenticated (#879); LogController relies on global FallbackPolicy (no explicit Reader). No dotnet build/test."
   }
 }
