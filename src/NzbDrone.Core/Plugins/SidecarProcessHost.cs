@@ -97,6 +97,16 @@ public class SidecarProcessHost : ISidecarProcessHost
                     CreateNoWindow = true
                 };
 
+                if (_process != null)
+                {
+                    try
+                    {
+                        _process.Dispose();
+                    }
+                    catch { }
+                    _process = null;
+                }
+
                 _process = ProcessStarter(startInfo);
                 if (_process == null)
                 {
@@ -156,10 +166,17 @@ public class SidecarProcessHost : ISidecarProcessHost
 
         if (processToStop == null || processToStop.HasExited)
         {
+            try
+            {
+                processToStop?.Dispose();
+            }
+            catch { }
+
             lock (_stateLock)
             {
                 PluginInfo.State = PluginState.Stopped;
                 PluginInfo.ProcessId = null;
+                _process = null;
                 _isStopping = false;
             }
             return;
@@ -217,6 +234,12 @@ public class SidecarProcessHost : ISidecarProcessHost
 
             _ioCts?.Cancel();
 
+            try
+            {
+                processToStop?.Dispose();
+            }
+            catch { }
+
             lock (_stateLock)
             {
                 PluginInfo.State = PluginState.Stopped;
@@ -235,16 +258,25 @@ public class SidecarProcessHost : ISidecarProcessHost
             _isStopping = true;
             _restartCts?.Cancel();
 
-            if (_process != null && !_process.HasExited)
+            if (_process != null)
             {
                 try
                 {
-                    _process.Kill(entireProcessTree: true);
+                    if (!_process.HasExited)
+                    {
+                        _process.Kill(entireProcessTree: true);
+                    }
                 }
                 catch (Exception ex)
                 {
                     _logger.Debug(ex, "Failed to kill plugin process '{0}'", _manifest.Id);
                 }
+
+                try
+                {
+                    _process.Dispose();
+                }
+                catch { }
             }
 
             _ioCts?.Cancel();
@@ -453,6 +485,16 @@ public class SidecarProcessHost : ISidecarProcessHost
     {
         lock (_stateLock)
         {
+            if (_process != null)
+            {
+                try
+                {
+                    _process.Dispose();
+                }
+                catch { }
+                _process = null;
+            }
+
             if (_isStopping)
             {
                 PluginInfo.State = PluginState.Stopped;

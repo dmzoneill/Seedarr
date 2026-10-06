@@ -97,6 +97,14 @@ public class PluginManifest
             throw new SecurityException($"Plugin Entrypoint '{Entrypoint}' resolves to '{fullEntrypoint}', which is outside the plugin directory '{fullPluginDir}'.");
         }
 
+        var fileInfo = new FileInfo(fullEntrypoint);
+        var resolvedTarget = fileInfo.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? fullEntrypoint;
+        var resolvedTargetFullPath = Path.GetFullPath(resolvedTarget);
+        if (!resolvedTargetFullPath.StartsWith(fullPluginDir, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new SecurityException($"Plugin Entrypoint target '{resolvedTarget}' is outside the plugin directory '{fullPluginDir}'.");
+        }
+
         return fullEntrypoint;
     }
 }
