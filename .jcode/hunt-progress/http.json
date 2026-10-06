@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T23:50:00Z",
+  "updatedAt": "2026-10-07T22:52:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Security",
+  "currentSubfolder": "src/Seedarr.Http/Authentication",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Ping",
-    "completedAt": "2026-10-07T23:50:00Z",
+    "subfolder": "src/Seedarr.Http/Security",
+    "completedAt": "2026-10-07T22:52:00Z",
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 16: Ping (PingController.cs, PingResource). Unconditional 200 OK without DB/config probe and no HttpHead — deduped open #1068 and #1069; commented on #1068 with file:line and consumer pointers. No additional defects in Ping folder. Next: Security. No dotnet build/test."
+    "note": "Pass 17: Security (7 files: CorsSecurityHelper, CsrfProtectionMiddleware, HostHeaderValidationMiddleware, IpSecurityHelper, RpcAuthenticationHelper, RpcSessionStore, SecurityHeadersMiddleware). Static review only. GitHub dedupe: open #876 UrlBase/CSRF pipeline order; #908/#909 HostHeader allowlist bypass (LAN IP, *.local, seedarr); #921 Cors loopback bypass; #1092/#1093/#654 RpcSessionStore singleton/logout/eviction; #877 Rpc vs Basic auth parity; #1040/#1109 forwarded headers/loopback trust. No new root causes beyond existing issues. Next: Authentication. No dotnet build/test."
   }
 }
