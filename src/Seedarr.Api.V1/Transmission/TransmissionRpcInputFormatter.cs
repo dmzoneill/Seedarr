@@ -49,16 +49,56 @@ public class TransmissionRpcInputFormatter : TextInputFormatter
             request.Body.Position = 0;
         }
 
-        if (string.IsNullOrWhiteSpace(content) && request.HasFormContentType)
+        if (request.HasFormContentType && (string.IsNullOrWhiteSpace(content) || !content.TrimStart().StartsWith('{')))
         {
             try
             {
                 var form = await request.ReadFormAsync();
-                var parts = form.Select(kv => string.IsNullOrEmpty(kv.Value) ? kv.Key : $"{kv.Key}={kv.Value}");
-                var reconstructed = string.Join("&", parts);
-                if (!string.IsNullOrWhiteSpace(reconstructed) && reconstructed.TrimStart().StartsWith('{'))
+                if (form.TryGetValue("query", out var queryVal) && !string.IsNullOrWhiteSpace(queryVal))
                 {
-                    content = reconstructed;
+                    var qStr = queryVal.ToString();
+                    if (qStr.TrimStart().StartsWith('{'))
+                    {
+                        content = qStr;
+                    }
+                }
+                else if (form.TryGetValue("json", out var jsonVal) && !string.IsNullOrWhiteSpace(jsonVal))
+                {
+                    var jStr = jsonVal.ToString();
+                    if (jStr.TrimStart().StartsWith('{'))
+                    {
+                        content = jStr;
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(content) || !content.TrimStart().StartsWith('{'))
+                {
+                    foreach (var kv in form)
+                    {
+                        var val = kv.Value.ToString();
+                        if (!string.IsNullOrWhiteSpace(val) && val.TrimStart().StartsWith('{'))
+                        {
+                            content = val;
+                            break;
+                        }
+
+                        var key = kv.Key;
+                        if (!string.IsNullOrWhiteSpace(key) && key.TrimStart().StartsWith('{'))
+                        {
+                            content = key;
+                            break;
+                        }
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(content) || !content.TrimStart().StartsWith('{'))
+                {
+                    var parts = form.Select(kv => string.IsNullOrEmpty(kv.Value) ? kv.Key : $"{kv.Key}={kv.Value}");
+                    var reconstructed = string.Join("&", parts);
+                    if (!string.IsNullOrWhiteSpace(reconstructed) && reconstructed.TrimStart().StartsWith('{'))
+                    {
+                        content = reconstructed;
+                    }
                 }
             }
             catch
@@ -69,8 +109,43 @@ public class TransmissionRpcInputFormatter : TextInputFormatter
 
         if (string.IsNullOrWhiteSpace(content))
         {
-            using var reader = new StreamReader(request.Body, encoding);
+            if (request.Body.CanSeek)
+            {
+                request.Body.Position = 0;
+            }
+
+            using var reader = new StreamReader(request.Body, encoding, leaveOpen: true);
             content = await reader.ReadToEndAsync();
+
+            if (request.Body.CanSeek)
+            {
+                request.Body.Position = 0;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(content) && !content.TrimStart().StartsWith('{'))
+        {
+            var unescaped = Uri.UnescapeDataString(content).Trim();
+            if (unescaped.StartsWith('{'))
+            {
+                content = unescaped;
+            }
+            else if (unescaped.StartsWith("query=", StringComparison.OrdinalIgnoreCase) && unescaped.Length > 6)
+            {
+                var candidate = unescaped[6..].Trim();
+                if (candidate.StartsWith('{'))
+                {
+                    content = candidate;
+                }
+            }
+            else if (unescaped.StartsWith("json=", StringComparison.OrdinalIgnoreCase) && unescaped.Length > 5)
+            {
+                var candidate = unescaped[5..].Trim();
+                if (candidate.StartsWith('{'))
+                {
+                    content = candidate;
+                }
+            }
         }
 
         if (string.IsNullOrWhiteSpace(content))

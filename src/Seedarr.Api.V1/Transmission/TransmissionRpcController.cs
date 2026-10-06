@@ -412,14 +412,14 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 updates["WatchFolderPath"] = RemapRemoteToLocal(dlDir.GetString());
             }
 
-            if (request.Arguments.TryGetValue("speed-limit-down", out var dlLimit) && dlLimit.ValueKind == JsonValueKind.Number)
+            if (request.Arguments.TryGetValue("speed-limit-down", out var dlLimit) && TrySafeGetInt32(dlLimit, out var dlLimitVal, 0, int.MaxValue))
             {
-                updates["MaxDownloadSpeedKbps"] = dlLimit.GetInt32();
+                updates["MaxDownloadSpeedKbps"] = dlLimitVal;
             }
 
-            if (request.Arguments.TryGetValue("speed-limit-up", out var upLimit) && upLimit.ValueKind == JsonValueKind.Number)
+            if (request.Arguments.TryGetValue("speed-limit-up", out var upLimit) && TrySafeGetInt32(upLimit, out var upLimitVal, 0, int.MaxValue))
             {
-                updates["MaxUploadSpeedKbps"] = upLimit.GetInt32();
+                updates["MaxUploadSpeedKbps"] = upLimitVal;
             }
 
             if (request.Arguments.TryGetValue("speed-limit-down-enabled", out var dlLimitEnabled))
@@ -451,14 +451,14 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 updates["GlobalSeedRatioLimited"] = isLimited;
             }
 
-            if (request.Arguments.TryGetValue("alt-speed-down", out var altDl) && altDl.ValueKind == JsonValueKind.Number)
+            if (request.Arguments.TryGetValue("alt-speed-down", out var altDl) && TrySafeGetInt32(altDl, out var altDlVal, 0, int.MaxValue))
             {
-                updates["AltDownloadSpeedKbps"] = altDl.GetInt32();
+                updates["AltDownloadSpeedKbps"] = altDlVal;
             }
 
-            if (request.Arguments.TryGetValue("alt-speed-up", out var altUp) && altUp.ValueKind == JsonValueKind.Number)
+            if (request.Arguments.TryGetValue("alt-speed-up", out var altUp) && TrySafeGetInt32(altUp, out var altUpVal, 0, int.MaxValue))
             {
-                updates["AltUploadSpeedKbps"] = altUp.GetInt32();
+                updates["AltUploadSpeedKbps"] = altUpVal;
             }
 
             if (request.Arguments.TryGetValue("alt-speed-enabled", out var altEn))
@@ -466,9 +466,16 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 updates["AlternativeSpeedEnabled"] = SafeGetBoolean(altEn);
             }
 
-            if (request.Arguments.TryGetValue("peer-port", out var peerPort) && peerPort.ValueKind == JsonValueKind.Number)
+            if (request.Arguments.TryGetValue("peer-port", out var peerPort))
             {
-                updates["ListeningPort"] = peerPort.GetInt32();
+                if (TrySafeGetInt32(peerPort, out var port) && port is >= 1 and <= 65535)
+                {
+                    updates["ListeningPort"] = port;
+                }
+                else
+                {
+                    _logger.Warn("Ignored invalid peer-port: {0}", peerPort);
+                }
             }
 
             if (request.Arguments.TryGetValue("blocklist-enabled", out var blEnabled))
@@ -602,9 +609,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             var t = _torrentService.Get(id);
             if (t != null)
             {
-                if (request.Arguments.TryGetValue("bandwidthPriority", out var bpVal) && bpVal.ValueKind == JsonValueKind.Number)
+                if (request.Arguments.TryGetValue("bandwidthPriority", out var bpVal) && TrySafeGetInt32(bpVal, out var bp))
                 {
-                    t.Priority = bpVal.GetInt32();
+                    t.Priority = bp;
                 }
 
                 if (request.Arguments.TryGetValue("labels", out var lblVal) && lblVal.ValueKind == JsonValueKind.Array)
@@ -639,14 +646,14 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                     }
                 }
 
-                if (request.Arguments.TryGetValue("downloadLimit", out var dlLimitVal) && dlLimitVal.ValueKind == JsonValueKind.Number)
+                if (request.Arguments.TryGetValue("downloadLimit", out var dlLimitVal) && TrySafeGetInt32(dlLimitVal, out var dlLim, 0, int.MaxValue))
                 {
-                    t.DownloadLimit = dlLimitVal.GetInt32();
+                    t.DownloadLimit = dlLim;
                 }
 
-                if (request.Arguments.TryGetValue("uploadLimit", out var ulLimitVal) && ulLimitVal.ValueKind == JsonValueKind.Number)
+                if (request.Arguments.TryGetValue("uploadLimit", out var ulLimitVal) && TrySafeGetInt32(ulLimitVal, out var ulLim, 0, int.MaxValue))
                 {
-                    t.UploadLimit = ulLimitVal.GetInt32();
+                    t.UploadLimit = ulLim;
                 }
 
                 if (request.Arguments.TryGetValue("location", out var locVal) && locVal.ValueKind == JsonValueKind.String)
@@ -690,32 +697,30 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                     t.RatioLimit = srlVal.GetDouble();
                 }
 
-                if (request.Arguments.TryGetValue("seedRatioMode", out var srmVal) && srmVal.ValueKind == JsonValueKind.Number)
+                if (request.Arguments.TryGetValue("seedRatioMode", out var srmVal) && TrySafeGetInt32(srmVal, out var srmMode))
                 {
-                    var mode = srmVal.GetInt32();
-                    if (mode == 0)
+                    if (srmMode == 0)
                     {
                         t.RatioLimit = null;
                     }
-                    else if (mode == 2)
+                    else if (srmMode == 2)
                     {
                         t.RatioLimit = -1;
                     }
                 }
 
-                if (request.Arguments.TryGetValue("seedIdleLimit", out var silVal) && silVal.ValueKind == JsonValueKind.Number)
+                if (request.Arguments.TryGetValue("seedIdleLimit", out var silVal) && TrySafeGetInt32(silVal, out var sil, 0, int.MaxValue))
                 {
-                    t.SeedingTimeLimit = silVal.GetInt32();
+                    t.SeedingTimeLimit = sil;
                 }
 
-                if (request.Arguments.TryGetValue("seedIdleMode", out var simVal) && simVal.ValueKind == JsonValueKind.Number)
+                if (request.Arguments.TryGetValue("seedIdleMode", out var simVal) && TrySafeGetInt32(simVal, out var simMode))
                 {
-                    var mode = simVal.GetInt32();
-                    if (mode == 0)
+                    if (simMode == 0)
                     {
                         t.SeedingTimeLimit = null;
                     }
-                    else if (mode == 2)
+                    else if (simMode == 2)
                     {
                         t.SeedingTimeLimit = -1;
                     }
@@ -728,9 +733,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
                     if (request.Arguments.TryGetValue("files-wanted", out var fwVal) && fwVal.ValueKind == JsonValueKind.Array)
                     {
-                        foreach (var idx in fwVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        foreach (var item in fwVal.EnumerateArray())
                         {
-                            if (idx >= 0 && idx < files.Count)
+                            if (TrySafeGetInt32(item, out var idx) && idx >= 0 && idx < files.Count)
                             {
                                 files[idx].Wanted = true;
                                 modifiedFiles.Add(files[idx]);
@@ -740,9 +745,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
                     if (request.Arguments.TryGetValue("files-unwanted", out var fuVal) && fuVal.ValueKind == JsonValueKind.Array)
                     {
-                        foreach (var idx in fuVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        foreach (var item in fuVal.EnumerateArray())
                         {
-                            if (idx >= 0 && idx < files.Count)
+                            if (TrySafeGetInt32(item, out var idx) && idx >= 0 && idx < files.Count)
                             {
                                 files[idx].Wanted = false;
                                 modifiedFiles.Add(files[idx]);
@@ -752,9 +757,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
                     if (request.Arguments.TryGetValue("priority-high", out var phVal) && phVal.ValueKind == JsonValueKind.Array)
                     {
-                        foreach (var idx in phVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        foreach (var item in phVal.EnumerateArray())
                         {
-                            if (idx >= 0 && idx < files.Count)
+                            if (TrySafeGetInt32(item, out var idx) && idx >= 0 && idx < files.Count)
                             {
                                 files[idx].Priority = 1;
                                 modifiedFiles.Add(files[idx]);
@@ -764,9 +769,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
                     if (request.Arguments.TryGetValue("priority-low", out var plVal) && plVal.ValueKind == JsonValueKind.Array)
                     {
-                        foreach (var idx in plVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        foreach (var item in plVal.EnumerateArray())
                         {
-                            if (idx >= 0 && idx < files.Count)
+                            if (TrySafeGetInt32(item, out var idx) && idx >= 0 && idx < files.Count)
                             {
                                 files[idx].Priority = -1;
                                 modifiedFiles.Add(files[idx]);
@@ -776,9 +781,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
                     if (request.Arguments.TryGetValue("priority-normal", out var pnVal) && pnVal.ValueKind == JsonValueKind.Array)
                     {
-                        foreach (var idx in pnVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        foreach (var item in pnVal.EnumerateArray())
                         {
-                            if (idx >= 0 && idx < files.Count)
+                            if (TrySafeGetInt32(item, out var idx) && idx >= 0 && idx < files.Count)
                             {
                                 files[idx].Priority = 0;
                                 modifiedFiles.Add(files[idx]);
@@ -849,9 +854,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         }
 
         int? bandwidthPriority = null;
-        if (request.Arguments != null && request.Arguments.TryGetValue("bandwidthPriority", out var bpVal) && bpVal.ValueKind == JsonValueKind.Number)
+        if (request.Arguments != null && request.Arguments.TryGetValue("bandwidthPriority", out var bpVal) && TrySafeGetInt32(bpVal, out var bp))
         {
-            bandwidthPriority = bpVal.GetInt32();
+            bandwidthPriority = bp;
         }
 
         Torrent added = null;
@@ -1345,8 +1350,8 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 continue;
             }
 
-            RecordRemovedId(id);
             _torrentService.Delete(id, deleteData);
+            RecordRemovedId(id);
         }
 
         return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
@@ -1853,5 +1858,71 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             JsonValueKind.String => bool.TryParse(elem.GetString(), out var b) ? b : defaultValue,
             _ => defaultValue,
         };
+    }
+
+    private static bool TrySafeGetInt32(JsonElement elem, out int value, int? min = null, int? max = null)
+    {
+        value = 0;
+        long longVal;
+
+        if (elem.ValueKind == JsonValueKind.Number)
+        {
+            if (elem.TryGetInt64(out var n64))
+            {
+                longVal = n64;
+            }
+            else if (elem.TryGetDouble(out var d) && !double.IsNaN(d) && !double.IsInfinity(d))
+            {
+                if (d > long.MaxValue)
+                {
+                    longVal = long.MaxValue;
+                }
+                else if (d < long.MinValue)
+                {
+                    longVal = long.MinValue;
+                }
+                else
+                {
+                    longVal = (long)Math.Round(d);
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
+        else if (elem.ValueKind == JsonValueKind.String && long.TryParse(elem.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+        {
+            longVal = parsed;
+        }
+        else
+        {
+            return false;
+        }
+
+        if (min.HasValue && longVal < min.Value)
+        {
+            longVal = min.Value;
+        }
+
+        if (max.HasValue && longVal > max.Value)
+        {
+            longVal = max.Value;
+        }
+
+        if (longVal > int.MaxValue)
+        {
+            value = int.MaxValue;
+        }
+        else if (longVal < int.MinValue)
+        {
+            value = int.MinValue;
+        }
+        else
+        {
+            value = (int)longVal;
+        }
+
+        return true;
     }
 }

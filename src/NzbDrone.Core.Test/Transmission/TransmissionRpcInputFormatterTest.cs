@@ -217,6 +217,29 @@ public class TransmissionRpcInputFormatterTest
             readerFactory: (stream, encoding) => new StreamReader(stream, encoding));
     }
 
+    [Test]
+    public async Task ReadRequestBodyAsync_should_deserialize_form_with_query_field()
+    {
+        var json = "{\"method\":\"session-get\",\"tag\":123}";
+        var form = new FormCollection(new Dictionary<string, StringValues>
+        {
+            { "query", json }
+        });
+
+        var context = CreateContext(
+            new MemoryStream(Encoding.UTF8.GetBytes($"query={Uri.EscapeDataString(json)}")),
+            contentType: "application/x-www-form-urlencoded",
+            form: form);
+
+        var result = await _formatter.ReadRequestBodyAsync(context, Encoding.UTF8);
+
+        Assert.That(result.HasError, Is.False);
+        var req = result.Model as TransmissionRpcRequest;
+        Assert.That(req, Is.Not.Null);
+        Assert.That(req.Method, Is.EqualTo("session-get"));
+        Assert.That(req.Tag, Is.EqualTo(123));
+    }
+
     private class TestableTransmissionRpcInputFormatter : TransmissionRpcInputFormatter
     {
         public bool PublicCanReadType(Type type) => CanReadType(type);
