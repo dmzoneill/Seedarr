@@ -9,7 +9,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network;
+using NzbDrone.Core.Network.Vpn;
 
 namespace NzbDrone.Core.Transport;
 
@@ -20,31 +22,199 @@ public interface IUtpManager
     bool TcpFallbackEnabled { get; }
     int ActiveConnections { get; }
     event Action<IUtpConnection> OnConnectionAccepted;
+    void TeardownActiveConnections();
+    void StopListener();
 }
 
-public class UtpManager : BackgroundService, IUtpManager
+public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchTriggeredEvent>, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>
 {
     private readonly IConfigService _configService;
+    private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, IUtpConnection> _activeConnections = new();
+    private readonly object _listenerLock = new();
+    private readonly SemaphoreSlim _rebindSignal = new(0, 1);
+    private CancellationTokenSource _listenerCts;
     private UdpClient _listener;
+    private bool _isVpnDropped;
 
     public event Action<IUtpConnection> OnConnectionAccepted;
 
     public UdpClient Listener
     {
-        get => _listener;
-        set => _listener = value;
+        get
+        {
+            lock (_listenerLock)
+            {
+                return _listener;
+            }
+        }
+        set
+        {
+            lock (_listenerLock)
+            {
+                _listener = value;
+            }
+        }
     }
 
     public int ActiveConnections => _activeConnections.Values.Distinct().Count(c => c.IsConnected);
     public bool IsEnabled => _configService.UtpEnabled;
     public bool TcpFallbackEnabled => _configService.TcpFallback;
 
-    public UtpManager(IConfigService configService)
+    public UtpManager(
+        IConfigService configService,
+        IVpnKillSwitchService vpnKillSwitchService = null)
     {
         _configService = configService;
+        _vpnKillSwitchService = vpnKillSwitchService;
         _logger = LogManager.GetCurrentClassLogger();
+
+        if (_vpnKillSwitchService != null)
+        {
+            _vpnKillSwitchService.VpnDropped += OnVpnDropped;
+            _vpnKillSwitchService.VpnRestored += OnVpnRestored;
+        }
+    }
+
+    public bool IsVpnFailClosed()
+    {
+        if (_vpnKillSwitchService != null && _vpnKillSwitchService.IsFailClosedActive)
+        {
+            return true;
+        }
+
+        return _isVpnDropped;
+    }
+
+    public void Handle(VpnKillSwitchTriggeredEvent message)
+    {
+        OnVpnDropped(message?.InterfaceName);
+    }
+
+    public void Handle(VpnInterfaceRestoredEvent message)
+    {
+        OnVpnRestored(message?.InterfaceName);
+    }
+
+    public void Handle(VpnRestoredEvent message)
+    {
+        OnVpnRestored(message?.InterfaceName);
+    }
+
+    private void OnVpnDropped(string iface)
+    {
+        _logger.Warn("VPN kill switch engaged (interface '{0}' dropped). Stopping uTP listener and terminating active uTP streams.", iface);
+        _isVpnDropped = true;
+
+        TeardownActiveConnections();
+        StopListener();
+    }
+
+    private void OnVpnRestored(string iface)
+    {
+        if (!_isVpnDropped && (_vpnKillSwitchService == null || !_vpnKillSwitchService.IsFailClosedActive))
+        {
+            return;
+        }
+
+        _logger.Info("VPN interface '{0}' restored. Resuming uTP listener.", iface);
+        _isVpnDropped = false;
+        TriggerRebind();
+    }
+
+    public void TeardownActiveConnections()
+    {
+        _logger.Warn("Tearing down all active uTP streams.");
+        var connections = _activeConnections.Values.Distinct().ToList();
+        _activeConnections.Clear();
+        foreach (var conn in connections)
+        {
+            try
+            {
+                conn.Close();
+                conn.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error closing active uTP connection during VPN outage");
+            }
+        }
+    }
+
+    public void StopListener()
+    {
+        lock (_listenerLock)
+        {
+            if (_listenerCts != null && !_listenerCts.IsCancellationRequested)
+            {
+                try
+                {
+                    _listenerCts.Cancel();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Trace(ex, "Failed to cancel uTP listener CTS");
+                }
+            }
+
+            if (_listener != null)
+            {
+                try
+                {
+                    _listener.Close();
+                    _listener.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Trace(ex, "Failed to close uTP listener");
+                }
+
+                _listener = null;
+            }
+        }
+    }
+
+    private void TriggerRebind()
+    {
+        StopListener();
+
+        try
+        {
+            if (_rebindSignal.CurrentCount == 0)
+            {
+                _rebindSignal.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Trace(ex, "Failed to release uTP rebind signal");
+        }
+    }
+
+    private async Task WaitUntilRestoredOrCancelledAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await _rebindSignal.WaitAsync(TimeSpan.FromSeconds(2), stoppingToken);
+        }
+        catch (ObjectDisposedException)
+        {
+            stoppingToken.ThrowIfCancellationRequested();
+        }
+    }
+
+    public override void Dispose()
+    {
+        if (_vpnKillSwitchService != null)
+        {
+            _vpnKillSwitchService.VpnDropped -= OnVpnDropped;
+            _vpnKillSwitchService.VpnRestored -= OnVpnRestored;
+        }
+
+        StopListener();
+        _rebindSignal?.Dispose();
+        base.Dispose();
     }
 
     public IUtpConnection CreateConnection()
@@ -52,6 +222,11 @@ public class UtpManager : BackgroundService, IUtpManager
         if (!_configService.UtpEnabled)
         {
             throw new InvalidOperationException("uTP is disabled");
+        }
+
+        if (IsVpnFailClosed())
+        {
+            throw new InvalidOperationException("uTP connection creation blocked: VPN kill switch fail-closed state active");
         }
 
         var timeoutSeconds = _configService.TransportConnectionTimeoutSeconds;
@@ -125,59 +300,147 @@ public class UtpManager : BackgroundService, IUtpManager
             return;
         }
 
-        var listenPort = _configService.ListeningPort;
-        UdpClient listener;
-
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
-            listener = new UdpClient();
-            listener.Client.BindToNetworkInterface(_configService.BindInterface, IPAddress.Any, listenPort);
-        }
-        catch (SocketException ex)
-        {
-            _logger.Warn(ex, "uTP manager failed to bind port {0}, skipping", listenPort);
-
-            if (_configService.TcpFallback)
+            if (IsVpnFailClosed())
             {
-                _logger.Info("TCP fallback is enabled, continuing without uTP");
+                try
+                {
+                    await WaitUntilRestoredOrCancelledAsync(stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                continue;
             }
 
-            return;
-        }
+            var listenPort = _configService.ListeningPort;
+            UdpClient listener;
 
-        using (listener)
-        {
-            _listener = listener;
+            try
+            {
+                listener = new UdpClient();
+                listener.Client.BindToNetworkInterface(_configService.BindInterface, IPAddress.Any, listenPort);
+            }
+            catch (SocketException ex)
+            {
+                _logger.Warn(ex, "uTP manager failed to bind port {0}, skipping", listenPort);
+
+                if (_configService.TcpFallback)
+                {
+                    _logger.Info("TCP fallback is enabled, continuing without uTP");
+                }
+
+                try
+                {
+                    await WaitUntilRestoredOrCancelledAsync(stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                continue;
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "uTP manager failed to initialize listener on port {0}", listenPort);
+                try
+                {
+                    await WaitUntilRestoredOrCancelledAsync(stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            CancellationToken linkedToken;
+            lock (_listenerLock)
+            {
+                if (IsVpnFailClosed() || stoppingToken.IsCancellationRequested)
+                {
+                    try { listener.Dispose(); } catch { }
+                    continue;
+                }
+
+                _listener = listener;
+                _listenerCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                linkedToken = _listenerCts.Token;
+            }
+
             _logger.Info("uTP manager listening on port {0}", listenPort);
 
             try
             {
-                while (!stoppingToken.IsCancellationRequested)
+                while (!linkedToken.IsCancellationRequested)
                 {
                     try
                     {
-                        var result = await listener.ReceiveAsync(stoppingToken);
+                        var result = await listener.ReceiveAsync(linkedToken);
+
+                        if (IsVpnFailClosed())
+                        {
+                            break;
+                        }
+
                         HandleIncoming(result.Buffer, result.RemoteEndPoint);
                     }
                     catch (OperationCanceledException)
                     {
                         break;
                     }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
+                    catch (SocketException) when (linkedToken.IsCancellationRequested || IsVpnFailClosed())
+                    {
+                        break;
+                    }
                     catch (Exception ex)
                     {
+                        if (linkedToken.IsCancellationRequested || IsVpnFailClosed())
+                        {
+                            break;
+                        }
+
                         _logger.Debug(ex, "uTP receive error");
                     }
                 }
             }
             finally
             {
-                _listener = null;
+                lock (_listenerLock)
+                {
+                    if (ReferenceEquals(_listener, listener))
+                    {
+                        _listener = null;
+                    }
+
+                    try
+                    {
+                        listener.Dispose();
+                    }
+                    catch
+                    {
+                    }
+                }
             }
         }
     }
 
     private void HandleIncoming(byte[] data, IPEndPoint sender)
     {
+        if (IsVpnFailClosed())
+        {
+            return;
+        }
+
         if (data.Length < 20)
         {
             return;

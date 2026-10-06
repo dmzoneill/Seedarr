@@ -344,4 +344,29 @@ public class VpnKillSwitchServiceTest
         // Repeated dispose should be idempotent
         Assert.DoesNotThrow(() => _service.Dispose());
     }
+
+    [Test]
+    public void ResolveInterfaceIpDefault_WhenInterfaceIsIpAddress_AndNotConfiguredOnActiveInterface_ReturnsNull()
+    {
+        // 198.51.100.254 is reserved TEST-NET-2 and should not exist on any local interface
+        var result = _service.ResolveInterfaceIpDefault("198.51.100.254", AddressFamily.InterNetwork);
+
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ResolveInterfaceIpDefault_WhenInterfaceIsLoopbackIp_ReturnsNull()
+    {
+        var result = _service.ResolveInterfaceIpDefault("127.0.0.1", AddressFamily.InterNetwork);
+
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ResolveInterfaceIpDefault_WhenAddressFamilyMismatches_ReturnsNull()
+    {
+        var result = _service.ResolveInterfaceIpDefault("198.51.100.254", AddressFamily.InterNetworkV6);
+
+        Assert.That(result, Is.Null);
+    }
 }

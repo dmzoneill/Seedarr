@@ -357,7 +357,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
             {
                 var interfaces = NetworkInterface.GetAllNetworkInterfaces();
                 return interfaces.Any(nic =>
-                    nic.OperationalStatus == OperationalStatus.Up &&
+                    IsInterfaceOperational(nic) &&
                     nic.GetIPProperties()?.UnicastAddresses.Any(a => a.Address.Equals(targetIp)) == true);
             }
             catch (Exception ex)
@@ -373,21 +373,12 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
                 .FirstOrDefault(n => string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
 
-            if (nic == null || nic.OperationalStatus != OperationalStatus.Up)
+            if (nic == null || !IsInterfaceOperational(nic))
             {
                 return false;
             }
 
-            var unicast = nic.GetIPProperties()?.UnicastAddresses;
-            return unicast != null && unicast.Any(a =>
-                !IPAddress.IsLoopback(a.Address) &&
-                !a.Address.Equals(IPAddress.Any) &&
-                !a.Address.Equals(IPAddress.None) &&
-                !a.Address.Equals(IPAddress.IPv6Any) &&
-                !a.Address.Equals(IPAddress.IPv6None) &&
-                !a.Address.IsIPv6LinkLocal &&
-                !a.Address.IsIPv6SiteLocal &&
-                !a.Address.IsIPv6Multicast);
+            return HasValidUnicastAddresses(nic);
         }
         catch (Exception ex)
         {
@@ -402,17 +393,30 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
         {
             if (IPAddress.TryParse(interfaceName, out var parsedIp))
             {
-                if (parsedIp.AddressFamily == family)
+                if (parsedIp.AddressFamily == family &&
+                    !IPAddress.IsLoopback(parsedIp) &&
+                    !parsedIp.Equals(IPAddress.Any) &&
+                    !parsedIp.Equals(IPAddress.None) &&
+                    !parsedIp.Equals(IPAddress.IPv6Any) &&
+                    !parsedIp.Equals(IPAddress.IPv6None))
                 {
-                    return parsedIp;
+                    var interfaces = NetworkInterface.GetAllNetworkInterfaces();
+                    var isOwnedByActiveInterface = interfaces.Any(nic =>
+                        IsInterfaceOperational(nic) &&
+                        nic.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                        nic.GetIPProperties()?.UnicastAddresses.Any(a => a.Address.Equals(parsedIp)) == true);
+
+                    return isOwnedByActiveInterface ? parsedIp : null;
                 }
+
+                return null;
             }
 
             var nic = NetworkInterface.GetAllNetworkInterfaces()
                 .FirstOrDefault(n => string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
 
-            if (nic == null || nic.OperationalStatus != OperationalStatus.Up)
+            if (nic == null || !IsInterfaceOperational(nic))
             {
                 return null;
             }
@@ -466,7 +470,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
                 .FirstOrDefault(n => string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
 
-            if (nic != null && nic.OperationalStatus != OperationalStatus.Up)
+            if (nic != null && !IsInterfaceOperational(nic))
             {
                 _logger.Debug("Egress check failed: Interface '{0}' OperationalStatus is {1}", interfaceName, nic.OperationalStatus);
                 return false;
@@ -484,5 +488,41 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
             _logger.Warn(ex, "Failed egress health check for interface '{0}'", interfaceName);
             return false;
         }
+    }
+
+    private static bool IsInterfaceOperational(NetworkInterface nic)
+    {
+        if (nic == null)
+        {
+            return false;
+        }
+
+        if (nic.OperationalStatus == OperationalStatus.Up)
+        {
+            return true;
+        }
+
+        if (nic.OperationalStatus == OperationalStatus.Unknown &&
+            nic.NetworkInterfaceType == NetworkInterfaceType.Tunnel &&
+            HasValidUnicastAddresses(nic))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasValidUnicastAddresses(NetworkInterface nic)
+    {
+        var unicast = nic.GetIPProperties()?.UnicastAddresses;
+        return unicast != null && unicast.Any(a =>
+            !IPAddress.IsLoopback(a.Address) &&
+            !a.Address.Equals(IPAddress.Any) &&
+            !a.Address.Equals(IPAddress.None) &&
+            !a.Address.Equals(IPAddress.IPv6Any) &&
+            !a.Address.Equals(IPAddress.IPv6None) &&
+            !a.Address.IsIPv6LinkLocal &&
+            !a.Address.IsIPv6SiteLocal &&
+            !a.Address.IsIPv6Multicast);
     }
 }

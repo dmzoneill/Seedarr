@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Transport;
 
 namespace NzbDrone.Core.Test.Transport;
@@ -693,6 +694,63 @@ public class UtpManagerTest
         Assert.DoesNotThrow(() => InvokeHandleIncoming(statePacket, remoteEndpoint));
 
         conn.Dispose();
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void UtpManager_WhenVpnKillSwitchTriggered_TearsDownActiveConnections_AndBlocksConnectionCreation()
+    {
+        var conn = _subject.CreateConnection();
+        Assert.That(conn, Is.Not.Null);
+
+        _subject.Handle(new VpnKillSwitchTriggeredEvent("wg0"));
+
+        Assert.That(_subject.IsVpnFailClosed(), Is.True);
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+        Assert.Throws<InvalidOperationException>(() => _subject.CreateConnection());
+    }
+
+    [Test]
+    public void UtpManager_WhenVpnRestored_DisengagesFailClosed_AndAllowsConnectionCreation()
+    {
+        _subject.Handle(new VpnKillSwitchTriggeredEvent("wg0"));
+        Assert.That(_subject.IsVpnFailClosed(), Is.True);
+
+        _subject.Handle(new VpnRestoredEvent("wg0"));
+        Assert.That(_subject.IsVpnFailClosed(), Is.False);
+
+        Assert.DoesNotThrow(() =>
+        {
+            var conn = _subject.CreateConnection();
+            conn.Dispose();
+        });
+    }
+
+    [Test]
+    public void UtpManager_WhenVpnDroppedViaServiceEvent_TearsDownActiveConnections()
+    {
+        var vpnKillSwitch = Substitute.For<IVpnKillSwitchService>();
+        using var manager = new UtpManager(_configService, vpnKillSwitch);
+
+        vpnKillSwitch.VpnDropped += Raise.Event<Action<string>>("wg0");
+
+        Assert.That(manager.IsVpnFailClosed(), Is.True);
+        Assert.Throws<InvalidOperationException>(() => manager.CreateConnection());
+    }
+
+    [Test]
+    public void HandleIncoming_WhenVpnFailClosedActive_DropsPacketWithoutProcessing()
+    {
+        _subject.Handle(new VpnKillSwitchTriggeredEvent("wg0"));
+
+        var synData = new byte[20];
+        synData[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        synData[2] = 0x20;
+        synData[3] = 0x00;
+
+        var sender = new IPEndPoint(IPAddress.Loopback, 50001);
+        InvokeHandleIncoming(synData, sender);
+
         Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
     }
 }
