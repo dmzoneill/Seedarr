@@ -14,9 +14,9 @@
   "lastPass": {
     "subfolder": "src/NzbDrone.Common/Instrumentation",
     "completedAt": "2026-10-06T22:35:00Z",
-    "issuesFiled": [1099],
+    "issuesFiled": [1120],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #992 #993 #994 #996; filed Authorization Basic/ApiKey header leak (#1099)"
+    "note": "Deduped #992 #993 #994 #996 #1055 #1099; filed DebugMode file target minlevel gap (#1120)"
   }
 }
