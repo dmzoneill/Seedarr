@@ -7,6 +7,8 @@ public interface IFileHandlePool : IDisposable
 {
     SafeFileHandle GetOrCreateHandle(string filePath, bool writeAccess = false);
 
+    FileHandleLease AcquireHandle(string filePath, bool writeAccess = false);
+
     bool CloseHandle(string filePath);
 
     bool Contains(string filePath);

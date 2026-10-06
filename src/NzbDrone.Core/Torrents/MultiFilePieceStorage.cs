@@ -274,13 +274,13 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
 
                 try
                 {
-                    var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: true);
-                    RandomAccess.Write(handle, data.Slice(bufferOffset, sliceLength).Span, fileOffset);
+                    using var lease = _handlePool.AcquireHandle(filePath, writeAccess: true);
+                    RandomAccess.Write(lease.Handle, data.Slice(bufferOffset, sliceLength).Span, fileOffset);
                 }
                 catch (ObjectDisposedException)
                 {
-                    var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: true);
-                    RandomAccess.Write(handle, data.Slice(bufferOffset, sliceLength).Span, fileOffset);
+                    using var lease = _handlePool.AcquireHandle(filePath, writeAccess: true);
+                    RandomAccess.Write(lease.Handle, data.Slice(bufferOffset, sliceLength).Span, fileOffset);
                 }
             }
         }
@@ -388,16 +388,16 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
 
             try
             {
-                var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: false);
-                totalBytesRead += ReadSlice(handle, destinationBuffer, slice, sliceLen);
+                using var lease = _handlePool.AcquireHandle(filePath, writeAccess: false);
+                totalBytesRead += ReadSlice(lease.Handle, destinationBuffer, slice, sliceLen);
             }
             catch (ObjectDisposedException)
             {
                 // Handle may have been evicted and closed under high concurrency; retry once with a fresh handle
                 try
                 {
-                    var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: false);
-                    totalBytesRead += ReadSlice(handle, destinationBuffer, slice, sliceLen);
+                    using var lease = _handlePool.AcquireHandle(filePath, writeAccess: false);
+                    totalBytesRead += ReadSlice(lease.Handle, destinationBuffer, slice, sliceLen);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -474,14 +474,14 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
 
             try
             {
-                var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: true);
-                RandomAccess.Write(handle, sourceBuffer.Slice(slice.BufferOffset, sliceLen).Span, slice.FileOffset);
+                using var lease = _handlePool.AcquireHandle(filePath, writeAccess: true);
+                RandomAccess.Write(lease.Handle, sourceBuffer.Slice(slice.BufferOffset, sliceLen).Span, slice.FileOffset);
             }
             catch (ObjectDisposedException)
             {
                 // Handle may have been evicted and closed under high concurrency; retry once with a fresh handle
-                var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: true);
-                RandomAccess.Write(handle, sourceBuffer.Slice(slice.BufferOffset, sliceLen).Span, slice.FileOffset);
+                using var lease = _handlePool.AcquireHandle(filePath, writeAccess: true);
+                RandomAccess.Write(lease.Handle, sourceBuffer.Slice(slice.BufferOffset, sliceLen).Span, slice.FileOffset);
             }
         }
     }
@@ -612,15 +612,15 @@ public class MultiFilePieceStorage : IMultiFilePieceStorage, Storage.IMultiFileS
 
                 try
                 {
-                    var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: false);
-                    totalBytesRead += ReadSliceFromHandle(handle, destinationBuffer, bufferOffset, fileOffset, sliceLength);
+                    using var lease = _handlePool.AcquireHandle(filePath, writeAccess: false);
+                    totalBytesRead += ReadSliceFromHandle(lease.Handle, destinationBuffer, bufferOffset, fileOffset, sliceLength);
                 }
                 catch (ObjectDisposedException)
                 {
                     try
                     {
-                        var handle = _handlePool.GetOrCreateHandle(filePath, writeAccess: false);
-                        totalBytesRead += ReadSliceFromHandle(handle, destinationBuffer, bufferOffset, fileOffset, sliceLength);
+                        using var lease = _handlePool.AcquireHandle(filePath, writeAccess: false);
+                        totalBytesRead += ReadSliceFromHandle(lease.Handle, destinationBuffer, bufferOffset, fileOffset, sliceLength);
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {

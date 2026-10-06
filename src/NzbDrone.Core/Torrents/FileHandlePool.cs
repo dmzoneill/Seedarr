@@ -44,6 +44,17 @@ public class FileHandlePool : IFileHandlePool
 
     public SafeFileHandle GetOrCreateHandle(string filePath, bool writeAccess = false)
     {
+        return GetOrCreateHandleInternal(filePath, writeAccess, acquireLease: false).Handle;
+    }
+
+    public FileHandleLease AcquireHandle(string filePath, bool writeAccess = false)
+    {
+        var (handle, normalizedPath) = GetOrCreateHandleInternal(filePath, writeAccess, acquireLease: true);
+        return new FileHandleLease(this, normalizedPath, handle);
+    }
+
+    private (SafeFileHandle Handle, string NormalizedPath) GetOrCreateHandleInternal(string filePath, bool writeAccess, bool acquireLease)
+    {
         if (string.IsNullOrWhiteSpace(filePath))
         {
             throw new ArgumentException("File path cannot be null or whitespace.", nameof(filePath));
@@ -67,28 +78,59 @@ public class FileHandlePool : IFileHandlePool
                 {
                     _lruList.Remove(node);
                     _lruList.AddFirst(node);
-                    return node.Value.Handle;
+                    if (acquireLease)
+                    {
+                        node.Value.ActiveLeaseCount++;
+                    }
+
+                    return (node.Value.Handle, normalizedPath);
                 }
                 else
                 {
                     _cache.Remove(normalizedPath);
                     _lruList.Remove(node);
-                    node.Value.Handle.Dispose();
+                    if (node.Value.ActiveLeaseCount > 0)
+                    {
+                        node.Value.DeferredDispose = true;
+                    }
+                    else
+                    {
+                        node.Value.Handle.Dispose();
+                    }
                 }
             }
 
-            while (_cache.Count >= _maxCapacity && _lruList.Last != null)
+            while (_cache.Count >= _maxCapacity && _lruList.Count > 0)
             {
-                var lru = _lruList.Last;
-                _lruList.RemoveLast();
-                _cache.Remove(lru.Value.Path);
-                try
+                LinkedListNode<HandleEntry> targetNode = null;
+                for (var curr = _lruList.Last; curr != null; curr = curr.Previous)
                 {
-                    lru.Value.Handle.Dispose();
+                    if (curr.Value.ActiveLeaseCount == 0)
+                    {
+                        targetNode = curr;
+                        break;
+                    }
                 }
-                catch
+
+                if (targetNode != null)
                 {
-                    // Best effort cleanup
+                    _lruList.Remove(targetNode);
+                    _cache.Remove(targetNode.Value.Path);
+                    try
+                    {
+                        targetNode.Value.Handle.Dispose();
+                    }
+                    catch
+                    {
+                        // Best effort cleanup
+                    }
+                }
+                else
+                {
+                    var lru = _lruList.Last;
+                    _lruList.RemoveLast();
+                    _cache.Remove(lru.Value.Path);
+                    lru.Value.DeferredDispose = true;
                 }
             }
 
@@ -107,39 +149,88 @@ public class FileHandlePool : IFileHandlePool
                     normalizedPath,
                     FileMode.OpenOrCreate,
                     FileAccess.ReadWrite,
-                    FileShare.ReadWrite);
+                    FileShare.ReadWrite | FileShare.Delete);
 
                 canWrite = true;
             }
             else
             {
-                try
-                {
-                    handle = File.OpenHandle(
-                        normalizedPath,
-                        FileMode.Open,
-                        FileAccess.ReadWrite,
-                        FileShare.ReadWrite);
+                handle = File.OpenHandle(
+                    normalizedPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
 
-                    canWrite = true;
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    handle = File.OpenHandle(
-                        normalizedPath,
-                        FileMode.Open,
-                        FileAccess.Read,
-                        FileShare.ReadWrite);
-
-                    canWrite = false;
-                }
+                canWrite = false;
             }
 
             var entry = new HandleEntry(normalizedPath, handle, canWrite);
+            if (acquireLease)
+            {
+                entry.ActiveLeaseCount++;
+            }
+
             var newNode = _lruList.AddFirst(entry);
             _cache[normalizedPath] = newNode;
 
-            return handle;
+            return (handle, normalizedPath);
+        }
+    }
+
+    internal void ReleaseHandle(string normalizedPath, SafeFileHandle handle)
+    {
+        lock (_lock)
+        {
+            if (_cache.TryGetValue(normalizedPath, out var node) && ReferenceEquals(node.Value.Handle, handle))
+            {
+                node.Value.ActiveLeaseCount = Math.Max(0, node.Value.ActiveLeaseCount - 1);
+                if (node.Value.DeferredDispose && node.Value.ActiveLeaseCount == 0)
+                {
+                    _cache.Remove(normalizedPath);
+                    _lruList.Remove(node);
+                    try
+                    {
+                        node.Value.Handle.Dispose();
+                    }
+                    catch
+                    {
+                        // Best effort cleanup
+                    }
+                }
+
+                return;
+            }
+
+            for (var curr = _lruList.First; curr != null; curr = curr.Next)
+            {
+                if (ReferenceEquals(curr.Value.Handle, handle))
+                {
+                    curr.Value.ActiveLeaseCount = Math.Max(0, curr.Value.ActiveLeaseCount - 1);
+                    if (curr.Value.DeferredDispose && curr.Value.ActiveLeaseCount == 0)
+                    {
+                        _lruList.Remove(curr);
+                        try
+                        {
+                            curr.Value.Handle.Dispose();
+                        }
+                        catch
+                        {
+                            // Best effort cleanup
+                        }
+                    }
+
+                    return;
+                }
+            }
+
+            try
+            {
+                handle.Dispose();
+            }
+            catch
+            {
+                // Best effort cleanup
+            }
         }
     }
 
@@ -163,13 +254,20 @@ public class FileHandlePool : IFileHandlePool
             {
                 _cache.Remove(normalizedPath);
                 _lruList.Remove(node);
-                try
+                if (node.Value.ActiveLeaseCount > 0)
                 {
-                    node.Value.Handle.Dispose();
+                    node.Value.DeferredDispose = true;
                 }
-                catch
+                else
                 {
-                    // Best effort cleanup
+                    try
+                    {
+                        node.Value.Handle.Dispose();
+                    }
+                    catch
+                    {
+                        // Best effort cleanup
+                    }
                 }
 
                 return true;
@@ -277,6 +375,8 @@ public class FileHandlePool : IFileHandlePool
         public string Path { get; }
         public SafeFileHandle Handle { get; }
         public bool CanWrite { get; }
+        public int ActiveLeaseCount { get; set; }
+        public bool DeferredDispose { get; set; }
 
         public HandleEntry(string path, SafeFileHandle handle, bool canWrite)
         {
