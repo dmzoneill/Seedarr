@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T23:05:00Z",
-  "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+  "updatedAt": "2026-10-07T00:10:00Z",
+  "area": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Jobs",
-    "completedAt": "2026-10-06T23:05:00Z",
-    "issuesFiled": [1162],
+    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+    "completedAt": "2026-10-07T00:10:00Z",
+    "issuesFiled": [1172],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "NzbDrone.Core/Jobs pass: reviewed Scheduler.cs (due logic, jitter, SignalR TaskStarted/TaskCompleted/TaskFailed lifecycle, missing-instance path), ScheduledTaskCommandExecutor.cs (command-queue lifecycle vs Scheduler/SystemController), TaskManager.cs (normalization, history, startup registration), TrackerScrapeJob, DatabaseVacuumTask, ScheduledTaskHistoryRepository, models/commands. GitHub dedupe: existing open issues cover executor failure/cancel SignalR (#985, #911), missing instance TaskCompleted (#952), TrackerScrapeJob swallowed errors (#971), command-queue double TaskStarted (#1026), due vs CalculateNextExecution (#1125), cancellation tokens (#821), TaskFailed UI (#903). Filed #1162 Scheduler RecordTaskFailed drops exception stack from history (string overload vs executor exception overload). No issues reopened. Next: src/NzbDrone.Core/Torrents/TorrentRecheckService.cs. No code fixes; no dotnet build/test."
+    "note": "TorrentRecheckService.cs pass: reviewed QueueRecheck/ProcessQueueAsync queue drain + SignalR lifecycle (TorrentUpdated, TorrentRecheckProgress throttling), CancelRecheck vs ExecuteRecheckCoreAsync cancel paths, direct RecheckAsync vs queued failure handling, state machine transitions, broadcaster dedup keys. GitHub dedupe: existing open issues cover early RecheckAsync cancel without broadcast (#991), cancel during semaphore wait (#1036), queued cancel status (#912), swallowed queue failures (#988), double broadcast (#951), SetVerifiedPieces piece map (#936), HashCheckCompleted (#1048). Filed #1172 stranded queue when ProcessQueueAsync spawn races lock release. Commented on #988 with direct RecheckAsync failure path (same missing terminal broadcast). No issues reopened. Next: src/Seedarr.Http/REST. No code fixes; no dotnet build/test."
   }
 }
