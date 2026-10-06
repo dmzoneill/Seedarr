@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-06T23:35:00Z",
+  "updatedAt": "2026-10-06T23:55:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/Seedarr.Http/Ping",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Terminal",
-    "completedAt": "2026-10-06T23:35:00Z",
-    "issuesFiled": [1027],
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-06T23:55:00Z",
+    "issuesFiled": [1047],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 9: Terminal (10 files: TerminalHub, TerminalWebSocketHandler, PtyTerminalService, LinuxPtySession, PtyProcessSession, FallbackProcessSession, NativePty, TerminalEnvironmentSanitizer, interfaces). GitHub dedupe: open #892 TerminalHub HttpContext/auth, #902 cwd confinement, #956/#965 LinuxPty env, #966 fork argv UAF, #967 WebSocket ex.Message; closed #397/#396 terminal env/PTY. Filed #1027 PtyTerminalService python-before-native LinuxPty ordering. Next: REST. No dotnet build/test."
+    "note": "Pass 10: REST (5 files: RestController, RestControllerWithSignalR, RestResource, ResourceValidator, Attributes/RestPutByIdAttribute). GitHub dedupe: open #1002 coalesce timer drop when hub offline, #1003 pending coalesce resurrect deleted after reconnect; closed #628/#757 coalesce/reconnect. Filed #1047 leading-edge coalesce advances lastBroadcastTimes when DispatchBroadcast skips null mapping or logs exception. Next: Ping. No dotnet build/test."
   }
 }
