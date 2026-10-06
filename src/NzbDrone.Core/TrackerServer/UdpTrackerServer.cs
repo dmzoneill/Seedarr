@@ -218,30 +218,40 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private async Task ReceiveLoop(UdpClient client, CancellationToken ct)
     {
-        try
+        while (!ct.IsCancellationRequested)
         {
-            while (!ct.IsCancellationRequested)
+            try
             {
                 var result = await client.ReceiveAsync(ct);
                 _ = Task.Run(() => HandleDatagram(client, result), ct);
             }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.Debug("UDP tracker receive loop canceled");
-        }
-        catch (ObjectDisposedException ex)
-        {
-            _logger.Debug(ex, "UDP tracker client disposed during receive loop");
-        }
-        catch (SocketException ex) when (ct.IsCancellationRequested)
-        {
-            _logger.Debug(ex, "UDP tracker socket closed during cancellation");
-        }
-        catch (Exception ex)
-        {
-            if (!ct.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
+                _logger.Debug("UDP tracker receive loop canceled");
+                break;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.Debug(ex, "UDP tracker client disposed during receive loop");
+                break;
+            }
+            catch (SocketException ex)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    _logger.Debug(ex, "UDP tracker socket closed during cancellation");
+                    break;
+                }
+
+                _logger.Debug(ex, "Transient UDP tracker socket exception (error code: {0}); continuing receive loop", ex.SocketErrorCode);
+            }
+            catch (Exception ex)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 _logger.Debug(ex, "UDP tracker receive error");
             }
         }

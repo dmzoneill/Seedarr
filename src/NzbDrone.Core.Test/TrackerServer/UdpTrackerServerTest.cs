@@ -1581,4 +1581,11 @@ public class UdpTrackerServerTest
         _configService.TrackerUdpEnabled.Returns(false);
         _udpTrackerServer.Handle(new ConfigSavedEvent());
     }
+
+    [Test]
+    public void ReceiveLoop_method_exists_and_can_be_reflected()
+    {
+        var method = typeof(UdpTrackerServer).GetMethod("ReceiveLoop", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.That(method, Is.Not.Null);
+    }
 }
