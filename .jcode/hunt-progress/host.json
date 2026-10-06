@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-07T00:30:00Z",
+  "updatedAt": "2026-10-07T00:45:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Host/AppLifetime.cs",
+  "currentSubfolder": "src/NzbDrone.Common/Disk",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Host/Bootstrap.cs",
-    "completedAt": "2026-10-07T00:30:00Z",
-    "issuesFiled": [1208],
+    "subfolder": "src/NzbDrone.Host/AppLifetime.cs",
+    "completedAt": "2026-10-07T00:45:00Z",
+    "issuesFiled": [1216, 1217],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Pass #11 Bootstrap.cs: reviewed CreateApplication ordering (Configure vs RegisterTables/IMainDatabase/logging), Kestrel Listen/SSL cert selector, urls override, port-collision + misleading listen logs; deduped open #883 #901 #932 #933 #1056 #1061 #1150 #1004 #1005; filed #1208 urls override skips ICertificateManager HTTPS wiring for https:// endpoints"
+    "note": "Pass #12 AppLifetime.cs: reviewed StartAsync/StopAsync phased shutdown, watchdog (disk/stall/speed/UPnP); deduped open #910 #944 #953 #955 #994 #1065 #1066 #1067 #1157 #1158 #1159; filed #1216 UPnP watchdog ignores inactive peer mapping vs PortForwardCheck; #1217 stall watchdog uses DateAdded and ignores IsVpnPaused vs SeedingEngine"
   }
 }
