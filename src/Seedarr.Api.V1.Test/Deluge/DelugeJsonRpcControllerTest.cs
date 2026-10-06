@@ -15,6 +15,7 @@ using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Deluge;
+using Seedarr.Http.Security;
 
 namespace Seedarr.Api.V1.Test.Deluge;
 
@@ -31,6 +32,7 @@ public class DelugeJsonRpcControllerTest
     private IConfigFileProvider _configFileProvider;
     private ICategoryService _categoryService;
     private IDiskSpaceService _diskSpaceService;
+    private IRpcSessionStore _sessionStore;
     private DelugeJsonRpcController _controller;
 
     [SetUp]
@@ -46,6 +48,7 @@ public class DelugeJsonRpcControllerTest
         _configFileProvider = Substitute.For<IConfigFileProvider>();
         _categoryService = Substitute.For<ICategoryService>();
         _diskSpaceService = Substitute.For<IDiskSpaceService>();
+        _sessionStore = new RpcSessionStore();
 
         _configFileProvider.AuthenticationEnabled.Returns(false);
 
@@ -57,6 +60,7 @@ public class DelugeJsonRpcControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: _sessionStore,
             categoryService: _categoryService,
             trackerService: _trackerService,
             diskSpaceService: _diskSpaceService);
@@ -940,5 +944,173 @@ public class DelugeJsonRpcControllerTest
         var doc = JsonDocument.Parse(jsonString);
         Assert.That(doc.RootElement.TryGetProperty("error", out var err) && err.ValueKind != JsonValueKind.Null, Is.True);
         _torrentFileService.DidNotReceive().Update(Arg.Any<TorrentFile>());
+    }
+
+    [Test]
+    public async Task HandleRpc_SystemMulticall_ExecutesMultipleMethods_AndReturnsCollectedResults()
+    {
+        var json = "{\"method\": \"system.multicall\", \"params\": [[{\"methodName\": \"daemon.get_version\", \"params\": []}, {\"methodName\": \"system.listMethods\", \"params\": []}]], \"id\": 901}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(actionResult, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("id").GetInt64(), Is.EqualTo(901));
+        Assert.That(root.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+
+        var result = root.GetProperty("result");
+        Assert.That(result.ValueKind, Is.EqualTo(JsonValueKind.Array));
+        Assert.That(result.GetArrayLength(), Is.EqualTo(2));
+
+        var call0 = result[0];
+        Assert.That(call0.GetProperty("result").GetString(), Is.EqualTo("2.1.1"));
+        Assert.That(call0.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+
+        var call1 = result[1];
+        Assert.That(call1.GetProperty("result").ValueKind, Is.EqualTo(JsonValueKind.Array));
+        Assert.That(call1.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task HandleRpc_SystemMulticall_WithFlatParamsArray_ExecutesMethods()
+    {
+        var json = "{\"method\": \"system.multicall\", \"params\": [{\"methodName\": \"daemon.get_version\", \"params\": []}], \"id\": 902}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("id").GetInt64(), Is.EqualTo(902));
+        var result = root.GetProperty("result");
+        Assert.That(result.GetArrayLength(), Is.EqualTo(1));
+        Assert.That(result[0].GetProperty("result").GetString(), Is.EqualTo("2.1.1"));
+    }
+
+    [Test]
+    public async Task HandleRpc_SystemMulticall_WithChildErrors_PreservesChildErrorObjects()
+    {
+        var json = "{\"method\": \"system.multicall\", \"params\": [[{\"methodName\": \"daemon.get_version\", \"params\": []}, {\"methodName\": \"unknown.test_method\", \"params\": []}]], \"id\": 903}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        var result = root.GetProperty("result");
+        Assert.That(result.GetArrayLength(), Is.EqualTo(2));
+
+        Assert.That(result[0].GetProperty("result").GetString(), Is.EqualTo("2.1.1"));
+
+        var errorCall = result[1];
+        Assert.That(errorCall.GetProperty("result").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        var err = errorCall.GetProperty("error");
+        Assert.That(err.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        Assert.That(err.GetProperty("message").GetString(), Does.Contain("not implemented"));
+        Assert.That(err.GetProperty("code").GetInt32(), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task HandleRpc_WebConnected_WhenAuthEnabled_AllowsPreAuthDiscovery()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("configured-api-key");
+
+        var json = "{\"method\": \"web.connected\", \"params\": [], \"id\": 904}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").GetBoolean(), Is.True);
+        Assert.That(root.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(root.GetProperty("id").GetInt64(), Is.EqualTo(904));
+    }
+
+    [Test]
+    public async Task HandleRpc_ProtectedMethod_WhenAuthEnabledAndUnauthenticated_RejectsWithNotAuthenticated()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("configured-api-key");
+
+        var json = "{\"method\": \"core.get_version\", \"params\": [], \"id\": 905}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        var error = root.GetProperty("error");
+        Assert.That(error.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        Assert.That(error.GetProperty("message").GetString(), Is.EqualTo("Not authenticated"));
+        Assert.That(error.GetProperty("code").GetInt32(), Is.EqualTo(1));
+    }
+
+    [TestCase("X-Deluge-Session")]
+    [TestCase("X-Session-Id")]
+    [TestCase("deluge-session")]
+    public async Task HandleRpc_HeaderBasedSessionAuthentication_AcceptsValidSessionHeader(string headerName)
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("configured-api-key");
+
+        var sessionToken = Guid.NewGuid().ToString("N");
+        _sessionStore.SetSession(sessionToken, DateTime.UtcNow.AddHours(2));
+
+        _controller.HttpContext.Request.Headers[headerName] = sessionToken;
+
+        var json = "{\"method\": \"core.get_version\", \"params\": [], \"id\": 906}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").GetString(), Is.EqualTo("2.1.1"));
+        Assert.That(root.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task HandleRpc_HeaderBasedSessionAuthentication_RejectsInvalidSessionHeader()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("configured-api-key");
+
+        _controller.HttpContext.Request.Headers["X-Deluge-Session"] = "invalid-token";
+
+        var json = "{\"method\": \"core.get_version\", \"params\": [], \"id\": 907}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(root.GetProperty("error").GetProperty("message").GetString(), Is.EqualTo("Not authenticated"));
     }
 }

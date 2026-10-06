@@ -66,6 +66,7 @@ public class DelugeJsonRpcController : ControllerBase
         "system.listMethods",
         "system.list_methods",
         "system.get_methods",
+        "system.multicall",
         "core.get_config",
         "core.get_config_values",
         "core.get_config_value",
@@ -237,6 +238,24 @@ public class DelugeJsonRpcController : ControllerBase
             }
         }
 
+        if (Request?.Headers != null)
+        {
+            string[] sessionHeaderNames = ["X-Deluge-Session", "X-Session-Id", "deluge-session"];
+            foreach (var headerName in sessionHeaderNames)
+            {
+                if (Request.Headers.TryGetValue(headerName, out var headerValues))
+                {
+                    foreach (var headerVal in headerValues)
+                    {
+                        if (!string.IsNullOrWhiteSpace(headerVal) && _sessionStore.IsValid(headerVal))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
         return false;
     }
 
@@ -283,7 +302,9 @@ public class DelugeJsonRpcController : ControllerBase
             return DelugeResult(new { result = (object)null, error = CreateDelugeError("Invalid JSON-RPC format"), id = (object)null });
         }
 
-        var methodElem = root.TryGetProperty("method", out var m) ? m : default;
+        var methodElem = root.TryGetProperty("method", out var m)
+            ? m
+            : (root.TryGetProperty("methodName", out var mn) ? mn : default);
         var method = methodElem.ValueKind == JsonValueKind.String ? methodElem.GetString() : string.Empty;
 
         object id = null;
@@ -299,7 +320,9 @@ public class DelugeJsonRpcController : ControllerBase
             }
         }
 
-        var paramsElem = root.TryGetProperty("params", out var p) ? p : default;
+        var paramsElem = root.TryGetProperty("params", out var p)
+            ? p
+            : (root.TryGetProperty("args", out var a) ? a : default);
 
         try
         {
@@ -320,6 +343,11 @@ public class DelugeJsonRpcController : ControllerBase
                 return HandleAuthDeleteSession(id);
             }
 
+            if (lowerMethod == "web.connected")
+            {
+                return HandleWebConnected(id);
+            }
+
             if (!IsDelugeAuthenticated())
             {
                 return DelugeResult(new { result = (object)null, error = CreateDelugeError("Not authenticated"), id });
@@ -337,7 +365,7 @@ public class DelugeJsonRpcController : ControllerBase
 
             if (lowerMethod.StartsWith("daemon.") || lowerMethod.StartsWith("system."))
             {
-                return DispatchDaemonRpc(lowerMethod, paramsElem, id);
+                return await DispatchDaemonRpcAsync(lowerMethod, paramsElem, id);
             }
 
             if (lowerMethod.StartsWith("label."))
@@ -411,12 +439,13 @@ public class DelugeJsonRpcController : ControllerBase
         };
     }
 
-    private IActionResult DispatchDaemonRpc(string method, JsonElement args, object id)
+    private async Task<IActionResult> DispatchDaemonRpcAsync(string method, JsonElement args, object id)
     {
         return method switch
         {
             "system.listmethods" or "system.list_methods" or "daemon.get_method_list" or "system.get_methods" => HandleSystemListMethods(id),
             "daemon.get_version" or "daemon.info" => HandleGetVersion(id),
+            "system.multicall" => await HandleSystemMulticallAsync(args, id),
             _ => HandleUnknownMethod(method, id),
         };
     }
@@ -563,6 +592,61 @@ public class DelugeJsonRpcController : ControllerBase
     private static IActionResult HandleGetVersion(object id)
     {
         return DelugeResult(new { result = "2.1.1", error = (object)null, id });
+    }
+
+    private async Task<IActionResult> HandleSystemMulticallAsync(JsonElement paramsElem, object id)
+    {
+        var calls = new List<JsonElement>();
+        if (paramsElem.ValueKind == JsonValueKind.Array)
+        {
+            if (paramsElem.GetArrayLength() > 0 && paramsElem[0].ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in paramsElem[0].EnumerateArray())
+                {
+                    calls.Add(item);
+                }
+            }
+            else
+            {
+                foreach (var item in paramsElem.EnumerateArray())
+                {
+                    calls.Add(item);
+                }
+            }
+        }
+
+        var results = new List<object>();
+        foreach (var call in calls)
+        {
+            var callElement = call;
+            if (call.ValueKind == JsonValueKind.Array && call.GetArrayLength() > 0 && call[0].ValueKind == JsonValueKind.String)
+            {
+                var methodName = call[0].GetString();
+                var childParams = call.GetArrayLength() > 1 ? call[1] : default;
+                var dict = new Dictionary<string, object>
+                {
+                    ["method"] = methodName,
+                    ["params"] = childParams.ValueKind != JsonValueKind.Undefined ? childParams : Array.Empty<object>(),
+                };
+                callElement = JsonSerializer.SerializeToElement(dict, _delugeJsonOptions);
+            }
+
+            var singleResult = await ProcessSingleRpcAsync(callElement);
+            if (singleResult is JsonResult jsonResult)
+            {
+                results.Add(jsonResult.Value);
+            }
+            else if (singleResult is ObjectResult objectResult)
+            {
+                results.Add(objectResult.Value);
+            }
+            else
+            {
+                results.Add(new { result = (object)null, error = CreateDelugeError("Unknown RPC result"), id = (object)null });
+            }
+        }
+
+        return DelugeResult(new { result = results, error = (object)null, id });
     }
 
     private IActionResult HandleLabelGetLabels(object id)

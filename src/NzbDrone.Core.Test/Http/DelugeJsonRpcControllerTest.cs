@@ -981,4 +981,43 @@ public class DelugeJsonRpcControllerTest
         Assert.That(result.GetProperty("name").GetString(), Is.EqualTo("torrent"));
         Assert.That(result.GetProperty("size").GetInt64(), Is.EqualTo(0L));
     }
+
+    [Test]
+    public async Task HandleRpc_SystemMulticall_ExecutesBatchOfMethods()
+    {
+        var json = "{\"method\": \"system.multicall\", \"params\": [[{\"methodName\": \"daemon.get_version\", \"params\": []}, {\"methodName\": \"web.connected\", \"params\": []}]], \"id\": 840}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(actionResult, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("id").GetInt64(), Is.EqualTo(840));
+        var result = root.GetProperty("result");
+        Assert.That(result.GetArrayLength(), Is.EqualTo(2));
+        Assert.That(result[0].GetProperty("result").GetString(), Is.EqualTo("2.1.1"));
+        Assert.That(result[1].GetProperty("result").GetBoolean(), Is.True);
+    }
+
+    [Test]
+    public async Task HandleRpc_WebConnected_WhenAuthEnabled_AllowsPreAuth()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("secret-key");
+
+        var json = "{\"method\": \"web.connected\", \"params\": [], \"id\": 841}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").GetBoolean(), Is.True);
+        Assert.That(root.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
 }
