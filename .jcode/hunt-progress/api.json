@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T00:15:00Z",
+  "updatedAt": "2026-10-07T00:22:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/System",
+  "currentSubfolder": "src/Seedarr.Api.V1/Notifications",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Config",
-    "completedAt": "2026-10-07T00:15:00Z",
-    "issuesFiled": [1168, 1169, 1170, 1171],
+    "subfolder": "src/Seedarr.Api.V1/System",
+    "completedAt": "2026-10-07T00:22:00Z",
+    "issuesFiled": [1178, 1179, 1180, 1181, 1182, 1183],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed Config controllers/resources (General/Network/Seeding/BitTorrent/PeerProtocol/Protocols/Simulation/Tracker/Scheduler/Advanced, IdentityProvider, AiConfig stub). GitHub dedupe: skipped open #1033/#1035/#1042/#1034/#1041/#1140 and related auth issues. Filed #1168 (IdentityProvider DELETE deletes DB before scheme removal), #1169 (Config GET by id ignores route id), #1170 (GeneralConfig PUT wipes TmdbApiKey when omitted), #1171 (WatchFolderScanInterval GET 0 vs PUT validator >=1). No dotnet build/test."
+    "notes": "Reviewed System controllers (System/Setup/Database/Log/LogFile/Terminal/Developer*). GitHub dedupe: skipped open #879/#1050/#1051/#1052/#1053/#1055/#1057/#1054/#915 and related terminal/signalr issues. Filed #1178 (DatabaseVersion duplicates DatabaseType), #1179 (developer simulation hardcoded stub), #1180 (TerminalController REST drops PTY output), #1181 (developer testing run 200 when runner missing), #1182 (vacuum HTTP 200 on failure), #1183 (setup status HasAdminUser leaks partial config). No dotnet build/test."
   }
 }
