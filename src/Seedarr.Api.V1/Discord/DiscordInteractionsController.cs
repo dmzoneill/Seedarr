@@ -43,7 +43,7 @@ public class DiscordInteractionsController : Controller
 
     [HttpPost("interactions")]
     [AllowAnonymous]
-    public async Task<IActionResult> ReceiveInteraction([FromBody] DiscordInteraction interaction = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> ReceiveInteraction(CancellationToken cancellationToken = default)
     {
         var signature = Request?.Headers?[SignatureHeader].FirstOrDefault();
         var timestamp = Request?.Headers?[TimestampHeader].FirstOrDefault();
@@ -61,6 +61,11 @@ public class DiscordInteractionsController : Controller
         if (Request?.Body != null)
         {
             Request.EnableBuffering();
+            if (Request.Body.CanSeek && Request.Body.Position > 0)
+            {
+                Request.Body.Position = 0;
+            }
+
             using var ms = new MemoryStream();
             await Request.Body.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
             bodyBytes = ms.ToArray();
@@ -70,28 +75,26 @@ public class DiscordInteractionsController : Controller
             }
         }
 
-        if (bodyBytes.Length == 0 && interaction != null)
-        {
-            bodyBytes = JsonSerializer.SerializeToUtf8Bytes(interaction, JsonOptions);
-        }
-
         if (!_securityService.VerifySignature(signature, timestamp, bodyBytes, publicKey))
         {
             _logger.Warn("Discord interaction rejected: signature verification failed");
             return Unauthorized("Invalid request signature");
         }
 
-        if (interaction == null && bodyBytes.Length > 0)
+        if (bodyBytes.Length == 0)
         {
-            try
-            {
-                interaction = JsonSerializer.Deserialize<DiscordInteraction>(bodyBytes, JsonOptions);
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Failed to deserialize Discord interaction body");
-                return BadRequest("Invalid interaction JSON");
-            }
+            return BadRequest("Missing interaction payload");
+        }
+
+        DiscordInteraction interaction;
+        try
+        {
+            interaction = JsonSerializer.Deserialize<DiscordInteraction>(bodyBytes, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to deserialize Discord interaction body");
+            return BadRequest("Invalid interaction JSON");
         }
 
         if (interaction == null)
