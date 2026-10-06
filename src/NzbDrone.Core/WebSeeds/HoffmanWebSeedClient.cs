@@ -71,7 +71,8 @@ public class HoffmanWebSeedClient : IWebSeedClient
                 throw new ArgumentOutOfRangeException(nameof(length), "Length must be greater than zero.");
             }
 
-            url += $"&ranges={offset.Value}-{length.Value}";
+            var endOffset = offset.Value + length.Value - 1;
+            url += $"&ranges={offset.Value}-{endOffset}";
         }
 
         return url;
