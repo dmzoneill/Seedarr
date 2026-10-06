@@ -1,6 +1,6 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T22:08:00Z",
+  "updatedAt": "2026-10-06T22:10:00Z",
   "area": "src/NzbDrone.Core",
   "currentSubfolder": "src/NzbDrone.Core/Blocklist",
   "rotation": [
@@ -12,10 +12,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Core/DownloadClients",
-    "completedAt": "2026-10-06T22:08:00Z",
-    "issuesFiled": [923, 924, 925],
+    "completedAt": "2026-10-06T22:10:00Z",
+    "issuesFiled": [923, 924, 925, 931],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Open #884 already covers MapClientStatus/unknown state clobber; not re-filed."
+    "note": "#931 Sync() empty result on 200ms lock timeout; #923-925 filed earlier same sweep; #884 MapClientStatus not re-filed."
   }
 }
