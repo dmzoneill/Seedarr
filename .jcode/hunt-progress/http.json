@@ -13,9 +13,9 @@
   "lastPass": {
     "subfolder": "src/Seedarr.Http/Ping",
     "completedAt": "2026-10-06T23:55:00Z",
-    "issuesFiled": [1069],
+    "issuesFiled": [1068],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 11: Ping (1 file: PingController.cs + inline PingResource). Compared upstream Sonarr PingController (DB probe via cached config read, 500+Error on failure, HttpHead). GitHub dedupe: no open/closed match for HTTP /ping liveness (searches ping, PingController, ping database, HttpHead). Filed #1069 unconditional OK without DB probe or HEAD support. Next: Security. No dotnet build/test."
+    "note": "Pass 11: Ping (PingController.cs, PingResource). Compared Sonarr ping semantics: upstream probes config DB via cached repository read and returns 500/Error on failure; Seedarr always 200/OK so compose/Makefile liveness can pass with broken SQLite. GitHub dedupe: no open/closed matches for ping DB probe, PingController health, or docker healthcheck false positive. Filed #1068. Next: Security. No dotnet build/test."
   }
 }
