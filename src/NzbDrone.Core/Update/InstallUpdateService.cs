@@ -107,19 +107,9 @@ public class InstallUpdateService : IInstallUpdateService
 
         try
         {
-            // 1. Verify SHA-256
+            // 1. Verify SHA-256 (required)
             SetProgress(UpdateInstallStage.Verifying, 40, null, targetVersion);
-            if (!string.IsNullOrWhiteSpace(expectedChecksum))
-            {
-                var actualChecksum = ComputeSha256(packageFilePath);
-                if (!string.Equals(actualChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase))
-                {
-                    var mismatchMsg = $"SHA-256 verification failed for {Path.GetFileName(packageFilePath)}. Expected: {expectedChecksum}, got: {actualChecksum}.";
-                    _logger.Error(mismatchMsg);
-                    SetProgress(UpdateInstallStage.Failed, 40, mismatchMsg, targetVersion);
-                    throw new InvalidOperationException(mismatchMsg);
-                }
-            }
+            VerifyPackageChecksum(packageFilePath, expectedChecksum, Path.GetFileName(packageFilePath), targetVersion);
 
             SetProgress(UpdateInstallStage.Verifying, 50, null, targetVersion);
 
@@ -183,30 +173,22 @@ public class InstallUpdateService : IInstallUpdateService
             await DownloadFileAsync(package.DownloadUrl, packageFilePath, cancellationToken).ConfigureAwait(false);
             SetProgress(UpdateInstallStage.Downloading, 35, null, targetVersion);
 
-            // 3. Download checksum if available
-            string expectedChecksum = null;
-            if (!string.IsNullOrWhiteSpace(package.Sha256ChecksumUrl))
+            // 3. Download and parse checksum (required)
+            if (string.IsNullOrWhiteSpace(package.Sha256ChecksumUrl))
             {
-                _logger.Info("Downloading SHA-256 checksum from '{0}'...", package.Sha256ChecksumUrl);
-                var checksumContent = await _httpClient.GetStringAsync(package.Sha256ChecksumUrl, cancellationToken).ConfigureAwait(false);
-                expectedChecksum = ExtractChecksum(checksumContent, package.FileName);
+                var missingUrlMsg = $"No SHA-256 checksum URL provided for {package.FileName}. Update cannot proceed without integrity verification.";
+                _logger.Error(missingUrlMsg);
+                SetProgress(UpdateInstallStage.Failed, 35, missingUrlMsg, targetVersion);
+                throw new InvalidOperationException(missingUrlMsg);
             }
+
+            _logger.Info("Downloading SHA-256 checksum from '{0}'...", package.Sha256ChecksumUrl);
+            var checksumContent = await _httpClient.GetStringAsync(package.Sha256ChecksumUrl, cancellationToken).ConfigureAwait(false);
+            var expectedChecksum = ExtractChecksum(checksumContent, package.FileName);
 
             // 4. Verify SHA-256
             SetProgress(UpdateInstallStage.Verifying, 40, null, targetVersion);
-            if (!string.IsNullOrWhiteSpace(expectedChecksum))
-            {
-                var actualChecksum = ComputeSha256(packageFilePath);
-                if (!string.Equals(actualChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase))
-                {
-                    var errorMsg = $"SHA-256 verification failed for {package.FileName}. Expected: {expectedChecksum}, got: {actualChecksum}.";
-                    _logger.Error(errorMsg);
-                    SetProgress(UpdateInstallStage.Failed, 40, errorMsg, targetVersion);
-                    throw new InvalidOperationException(errorMsg);
-                }
-
-                _logger.Info("SHA-256 verification passed for {0}: {1}", package.FileName, actualChecksum);
-            }
+            VerifyPackageChecksum(packageFilePath, expectedChecksum, package.FileName, targetVersion);
 
             SetProgress(UpdateInstallStage.Verifying, 50, null, targetVersion);
 
@@ -474,16 +456,29 @@ public class InstallUpdateService : IInstallUpdateService
             }
         }
 
-        foreach (var line in lines)
+        return null;
+    }
+
+    private void VerifyPackageChecksum(string packageFilePath, string expectedChecksum, string packageLabel, string targetVersion)
+    {
+        if (string.IsNullOrWhiteSpace(expectedChecksum))
         {
-            var match = Regex.Match(line, @"\b[a-fA-F0-9]{64}\b");
-            if (match.Success)
-            {
-                return match.Value.ToLowerInvariant();
-            }
+            var missingChecksumMsg = $"SHA-256 checksum is required but was not available for {packageLabel}. Update cannot proceed without integrity verification.";
+            _logger.Error(missingChecksumMsg);
+            SetProgress(UpdateInstallStage.Failed, 40, missingChecksumMsg, targetVersion);
+            throw new InvalidOperationException(missingChecksumMsg);
         }
 
-        return null;
+        var actualChecksum = ComputeSha256(packageFilePath);
+        if (!string.Equals(actualChecksum, expectedChecksum, StringComparison.OrdinalIgnoreCase))
+        {
+            var errorMsg = $"SHA-256 verification failed for {packageLabel}. Expected: {expectedChecksum}, got: {actualChecksum}.";
+            _logger.Error(errorMsg);
+            SetProgress(UpdateInstallStage.Failed, 40, errorMsg, targetVersion);
+            throw new InvalidOperationException(errorMsg);
+        }
+
+        _logger.Info("SHA-256 verification passed for {0}: {1}", packageLabel, actualChecksum);
     }
 
     private bool CheckIsContainerized()
