@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 312,
-  "lastMonitorNote": "312 open; 1 restart zebra->poodle core idle>90s; latest #1181-#1185 api+instrumentation"
+  "lastMonitorNote": "312 open; 0 restarts; all hunters healthy <90s idle; latest #1181-#1185"
 }
