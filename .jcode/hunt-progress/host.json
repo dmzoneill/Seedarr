@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-07T00:52:00Z",
+  "updatedAt": "2026-10-07T01:05:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Common/Instrumentation",
+  "currentSubfolder": "src/NzbDrone.Common/Composition",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Common/Disk",
-    "completedAt": "2026-10-07T00:52:00Z",
-    "issuesFiled": [1229],
+    "subfolder": "src/NzbDrone.Common/Instrumentation",
+    "completedAt": "2026-10-07T01:05:00Z",
+    "issuesFiled": [1237],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Pass #13 Disk (DiskProvider, PathSanitizer, IDiskProvider): static review of free-space mount matching, path sanitization, writable probes, and call sites (relocation, package import/export, qBittorrent/Transmission/Deluge rename APIs). Deduped open #968 #969 #977 #980 #1081 #1090 #1165-#1167; filed #1229 ordinal mount prefix case mismatch causing root volume masking on Linux. No dotnet build/test."
+    "note": "Pass #14 Instrumentation (LogEntryRecord, NzbDroneLogger, RingBufferTarget, Sanitized*LayoutRenderer): static review of NLog registration, async ring buffer, layout redaction, and GetEntries filtering. Deduped open #992 #993 #994 #996 #1099 #1120 #1128 #1184 #1185 #1055; filed #1237 path-embedded private tracker passkeys in announce URLs not redacted by RingBufferTarget.Sanitize. No dotnet build/test."
   }
 }
