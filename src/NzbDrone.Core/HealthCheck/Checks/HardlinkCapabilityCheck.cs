@@ -28,7 +28,12 @@ public class HardlinkCapabilityCheck : IHealthCheck
     {
         try
         {
-            var targetDir = _configService?.TorrentSaveDirectory;
+            var targetDir = _configService?.DefaultSavePath;
+            if (string.IsNullOrWhiteSpace(targetDir))
+            {
+                targetDir = _configService?.TorrentSaveDirectory;
+            }
+
             if (string.IsNullOrWhiteSpace(targetDir))
             {
                 targetDir = _configService?.WatchFolderPath;
