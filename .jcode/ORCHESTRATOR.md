@@ -17,9 +17,10 @@ Coordinates swarm workers on **non-overlapping file slots** for [dmzoneill/Seeda
 
 State: `orchestrator-state.json`
 
-## Monitor (30s)
+## Monitor (30s, optional)
 
 - Coordinator wakes on `schedule` with `wake_at` ~30s ahead (`wake_in_minutes` minimum is 1).
 - Each cycle: `swarm list`, `gh issue list --state open`, reconcile `orchestrator-state.json`, dispatch idle slots, stop stale workers on closed issues.
-- Re-schedule the next cycle at the start of each wake.
+- Re-schedule the next cycle at the start of each wake **only while there are open issues or queued work**.
+- When GitHub has **0 open issues** and the queue is empty, cancel pending monitor schedules and set `status: stopped` in state.
 - Optional log: `.jcode/monitor-log.jsonl`.
