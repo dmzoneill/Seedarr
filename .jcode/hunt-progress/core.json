@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T01:10:00Z",
+  "updatedAt": "2026-10-07T01:45:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents",
+  "currentSubfolder": "src/NzbDrone.Core/Authentication",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Blocklist",
-    "completedAt": "2026-10-07T01:10:00Z",
-    "issuesFiled": [1129, 1130],
+    "subfolder": "src/NzbDrone.Core/Torrents",
+    "completedAt": "2026-10-07T01:45:00Z",
+    "issuesFiled": [1136, 1138, 1139],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Blocklist pass: filed #1129 (zip multi-entry only SelectPrimaryBlocklistEntry), #1130 (overlapping SyncAsync stale rules). Deduped open #904, #905, #937-#939, #1021-#1024, #1029, #1032 and related closed fixes. Static review only; no dotnet build/test."
+    "note": "Torrents pass: filed #1136 (ImportFromMagnet omits MagnetUrl), #1138 (TorrentExporter zero piece hashes), #1139 (FastResume compact bitfield misread). Comment on #1044 for DownloadHistoryService.ReAddFromHistory magnet tier++. Deduped open #945, #948, #1038, #1043-#1046, #950, #1048, #1121-#1123 and related. Static review only; no dotnet build/test."
   }
 }
