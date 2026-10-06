@@ -2,17 +2,21 @@
 #pragma warning disable IDE0007
 
 using System;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using NLog;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Terminal;
 
 namespace Seedarr.Http.Terminal;
 
+[Authorize(Policy = Policies.AdminOnly)]
 public class TerminalHub : Hub
 {
     private readonly ITerminalService _terminalService;
@@ -136,6 +140,13 @@ public class TerminalHub : Hub
                     return;
                 }
             }
+
+            if (Context.User?.Identity?.IsAuthenticated == true && !IsAdminUser(Context.User))
+            {
+                _logger.Warn("Rejecting non-admin Terminal SignalR connection: {0}", Context.ConnectionId);
+                Context.Abort();
+                return;
+            }
         }
 
         await base.OnConnectedAsync();
@@ -191,5 +202,10 @@ public class TerminalHub : Hub
         SHA256.HashData(Encoding.UTF8.GetBytes(left), hashA);
         SHA256.HashData(Encoding.UTF8.GetBytes(right), hashB);
         return CryptographicOperations.FixedTimeEquals(hashA, hashB);
+    }
+
+    private static bool IsAdminUser(ClaimsPrincipal user)
+    {
+        return user.IsInRole(Roles.Admin) || user.HasClaim(ClaimTypes.Role, Roles.Admin);
     }
 }
