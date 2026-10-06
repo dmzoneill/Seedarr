@@ -18,9 +18,9 @@
   "lastPass": {
     "subfolder": "src/Seedarr.Api.V1/Automation",
     "completedAt": "2026-10-06T22:25:00Z",
-    "issuesFiled": [1014, 1015],
+    "issuesFiled": [1025],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed AutomationController, AutomationScriptResource, AutomationService, AutomationControllerTest (Api.V1 + Core RBAC). Searched GitHub issues+comments. Deduped open #930 (run/execute 200 when script id missing). Filed #1014: PUT round-trip from GET list persists 500-char LastExecutionLog preview and corrupts full log. Filed #1015: DELETE returns 200 when script id missing (same pattern as #927 indexers). RBAC: class Reader; Create/Delete/Run/Test/marketplace install AdminOnly. No dotnet build/test."
+    "notes": "Reviewed AutomationController, AutomationScriptResource, NzbDrone.Core.Test/Automation/AutomationControllerTest, Seedarr.Api.V1.Test/Automation/AutomationControllerTest, AutomationService/TestScript+ExecuteScript torrent lookup. Searched GitHub issues+comments. Deduped open #930 (run missing script id), #1014 (PUT truncated LastExecutionLog from list), #1015 (DELETE missing id returns 200). Filed #1025: POST test uses simulated torrent and POST run ignores context when torrentId does not exist. RBAC: class Reader; Create/Update/Delete/Run/Test/Install AdminOnly. No dotnet build/test."
   }
 }
