@@ -61,3 +61,18 @@
 {"ts":"2026-10-06T22:06:20Z","kind":"bug-hunt-monitor","openIssues":77,"hunters":["dove","eagle","fish","fox","giraffe"],"restarts":0,"scheduleId":"sched_b6e91edc","note":"all healthy active"}
 {"ts":"2026-10-06T22:07:15Z","kind":"bug-hunt-monitor","openIssues":30,"hunters":["dove","eagle","fish","hamster","giraffe"],"restarts":1,"scheduleId":"sched_78a63829","note":"fox completed; host pass issuesFiled 953,955; hamster spawned"}
 {"at":"2026-10-06T22:06:58Z","type":"bug-hunt-monitor","openIssues":90,"restarts":4,"slots":{"core":"mosquito","api":"ladybug","http":"lobster","host":"hamster","signalr":"owl"},"stopped":["eagle","fish","dove","giraffe","fox"],"note":"Completed passes restarted; gh open count"}
+{
+  "ts": "2026-10-06T22:07:28Z",
+  "mode": "bug-hunt",
+  "openIssues": 30,
+  "scheduleId": "sched_86db0980",
+  "restarts": 0,
+  "workers": [
+    "hamster",
+    "ladybug",
+    "lobster",
+    "mosquito",
+    "owl"
+  ],
+  "note": "30 open gh; 5 hunters healthy hamster ladybug lobster mosquito owl; 0 restarts; per-slot hunt-progress writes expected"
+}
