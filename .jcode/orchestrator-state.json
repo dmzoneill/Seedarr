@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:18:16Z",
+  "updatedAt": "2026-10-06T23:19:30Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_afe606a3"
+    "lastScheduleId": "sched_c1cae016"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -22,17 +22,17 @@
     "core": {
       "area": "src/NzbDrone.Core",
       "status": "running",
-      "worker": "humpback"
+      "worker": "wyvern"
     },
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "vole"
+      "worker": "calf"
     },
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "nautilus"
+      "worker": "macaque"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 30,
-  "lastMonitorNote": "30 open (gh); 1 restart dragon->hatchling (Host/Startup); latest #1190-#1194"
+  "githubOpenCount": 322,
+  "lastMonitorNote": "322 open (gh); 3 restarts core/api/http; latest #1191-#1195"
 }
