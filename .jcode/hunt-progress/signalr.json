@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T00:40:00Z",
+  "updatedAt": "2026-10-07T00:52:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Jobs",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-07T00:40:00Z",
-    "issuesFiled": [1234, 1235],
+    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+    "completedAt": "2026-10-07T00:52:00Z",
+    "issuesFiled": [1242, 1243],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "SignalR pass: reviewed MessageHub (OnConnected auth fallbacks, IsConnected tracking, channel/torrent subscriptions, RequestStateSnapshot), SignalRMessageBroadcaster (dedup cache/prune, GetNamedEvents, group/channel routing), PieceStorage (coalesce/flush, piece messages), StateSnapshotResource, TrackerSignalREventHandler. Cross-checked open GH: #628 #757 #878 #887 #892 #918 #919 #936 #940 #954 #961 #1016 #1094 #1194 already cover disconnect/timer, Clients.All vs groups, piece map payloads, tracker announce misuse, Clear/corruption/set-verified silent, snapshot double-delivery/GetAll throw, dedup-before-send, coalesce bypass, etc. Filed #1234 PieceBatchCompleted dedup key order-sensitive; #1235 SubscribeToTorrent joins group when ITorrentService missing. No issues reopened. Next: src/NzbDrone.Core/Jobs. Static review only; no dotnet build/test."
+    "note": "TorrentRecheckService static pass: queue/ProcessQueueAsync/CancelRecheck races, ExecuteRecheckCoreAsync status+SignalR (TorrentUpdated, TorrentRecheckProgress throttle), state machine vs fallback paths, piece verification vs presence fallback, fast resume, sync Recheck blocking. Cross-checked open GH: #912 #951 #988 #991 #1036 #1038 #1048 #1172 #1188 #1209 #1210 #936 already cover cancel dequeue stuck, double broadcast, exception mid-recheck UI, early cancel SignalR, presence path gaps, missing TorrentHashCheckCompletedEvent, queue processor race, automation recheck wiring, SetVerifiedPieces pieceMapUpdated. Filed #1242 ignored in-memory PieceHashes when SourcePath missing (distinct from #1210); #1243 Progress vs Downloaded not reconciled after recheck. No issues reopened. Next: src/Seedarr.Http/REST. Static review only; no dotnet build/test."
   }
 }
