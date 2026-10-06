@@ -568,4 +568,56 @@ public class DynamicAuthSchemeManagerTest
 
         Assert.That(options.ClientSecret, Is.EqualTo("legacy-plaintext-secret"));
     }
+
+    [Test]
+    public async Task RegisterOrUpdateOidcProviderAsync_is_thread_safe_when_called_concurrently()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "concurrent_provider",
+            Name = "Concurrent Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "client-id",
+            IsEnabled = true,
+        };
+
+        var tasks = Enumerable.Range(0, 10).Select(_ => manager.RegisterOrUpdateOidcProviderAsync(provider));
+        Assert.DoesNotThrowAsync(async () => await Task.WhenAll(tasks));
+
+        var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
+        var scheme = await schemeProvider.GetSchemeAsync("Oidc_concurrent_provider");
+        Assert.That(scheme, Is.Not.Null);
+    }
+
+    [Test]
+    public void RegisterOrUpdateOidcProviderAsync_throws_when_provider_id_is_empty_or_whitespace()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "   ",
+            Name = "Bad ID Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "client-id",
+        };
+
+        Assert.ThrowsAsync<ArgumentException>(() => manager.RegisterOrUpdateOidcProviderAsync(provider));
+    }
 }

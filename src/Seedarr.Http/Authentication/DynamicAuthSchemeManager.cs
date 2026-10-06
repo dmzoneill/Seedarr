@@ -24,6 +24,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
     private readonly IIdentityProviderRepository _identityProviderRepository;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, IdentityProviderDefinition> _pendingRetryProviders = new();
+    private readonly SemaphoreSlim _schemeLock = new(1, 1);
 
     public DynamicAuthSchemeManager(
         IServiceProvider serviceProvider,
@@ -109,31 +110,36 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
 
     public async Task RegisterOrUpdateOidcProviderAsync(IdentityProviderDefinition provider)
     {
-        var schemeName = $"Oidc_{provider.ProviderId}";
-        var oidcOptionsCache = _serviceProvider.GetService<IOptionsMonitorCache<OpenIdConnectOptions>>();
-        var oidcPostConfigure = _serviceProvider.GetService<IPostConfigureOptions<OpenIdConnectOptions>>();
-        var schemeProvider = _serviceProvider.GetService<IAuthenticationSchemeProvider>();
-        var dataProtection = _serviceProvider.GetService<IDataProtectionProvider>();
+        ArgumentNullException.ThrowIfNull(provider);
 
-        if (oidcOptionsCache == null || schemeProvider == null)
+        var sanitizedId = SanitizeProviderId(provider.ProviderId);
+        var schemeName = $"Oidc_{sanitizedId}";
+
+        await _schemeLock.WaitAsync();
+        try
         {
-            return;
-        }
+            var oidcOptionsCache = _serviceProvider.GetService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+            var oidcPostConfigure = _serviceProvider.GetService<IPostConfigureOptions<OpenIdConnectOptions>>();
+            var schemeProvider = _serviceProvider.GetService<IAuthenticationSchemeProvider>();
+            var dataProtection = _serviceProvider.GetService<IDataProtectionProvider>();
 
-        oidcOptionsCache.TryRemove(schemeName);
+            if (oidcOptionsCache == null || schemeProvider == null)
+            {
+                return;
+            }
 
-        var existingScheme = await schemeProvider.GetSchemeAsync(schemeName);
-        if (existingScheme != null)
-        {
-            schemeProvider.RemoveScheme(schemeName);
-        }
+            oidcOptionsCache.TryRemove(schemeName);
 
-        InvalidateHandlerCache(schemeName);
+            var existingScheme = await schemeProvider.GetSchemeAsync(schemeName);
+            if (existingScheme != null)
+            {
+                schemeProvider.RemoveScheme(schemeName);
+            }
 
-        if (string.IsNullOrWhiteSpace(provider.IssuerUrl) || string.IsNullOrWhiteSpace(provider.ClientId))
-        {
-            throw new ArgumentException("IssuerUrl and ClientId are required to register an OIDC provider.");
-        }
+            if (string.IsNullOrWhiteSpace(provider.IssuerUrl) || string.IsNullOrWhiteSpace(provider.ClientId))
+            {
+                throw new ArgumentException("IssuerUrl and ClientId are required to register an OIDC provider.");
+            }
 
         var options = new OpenIdConnectOptions
         {
@@ -145,7 +151,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             ResponseMode = OpenIdConnectResponseMode.Query,
             GetClaimsFromUserInfoEndpoint = true,
             SaveTokens = true,
-            CallbackPath = $"/signin-oidc-{provider.ProviderId}",
+            CallbackPath = $"/signin-oidc-{sanitizedId}",
             RequireHttpsMetadata = provider.IssuerUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase),
             DataProtectionProvider = dataProtection,
             Events = new OpenIdConnectEvents
@@ -239,10 +245,20 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
 
         _logger.Info("Registered dynamic OIDC authentication scheme: {0} ({1})", schemeName, provider.Name);
     }
-
-    public async Task RemoveProviderSchemeAsync(string providerId)
+    finally
     {
-        var schemeName = $"Oidc_{providerId}";
+        _schemeLock.Release();
+    }
+}
+
+public async Task RemoveProviderSchemeAsync(string providerId)
+{
+    var sanitizedId = SanitizeProviderId(providerId);
+    var schemeName = $"Oidc_{sanitizedId}";
+
+    await _schemeLock.WaitAsync();
+    try
+    {
         var schemeProvider = _serviceProvider.GetService<IAuthenticationSchemeProvider>();
         var oidcOptionsCache = _serviceProvider.GetService<IOptionsMonitorCache<OpenIdConnectOptions>>();
 
@@ -258,34 +274,30 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             oidcOptionsCache.TryRemove(schemeName);
         }
 
-        InvalidateHandlerCache(schemeName);
-
         _logger.Info("Removed dynamic authentication scheme: {0}", schemeName);
         await Task.CompletedTask;
     }
-
-    private void InvalidateHandlerCache(string schemeName)
+    finally
     {
-        try
-        {
-            var handlerProvider = _serviceProvider.GetService<IAuthenticationHandlerProvider>();
-            if (handlerProvider != null)
-            {
-                var handlerMapField = handlerProvider.GetType().GetField("_handlerMap", BindingFlags.NonPublic | BindingFlags.Instance);
-                if (handlerMapField?.GetValue(handlerProvider) is System.Collections.IDictionary handlerMap)
-                {
-                    lock (handlerMap.SyncRoot)
-                    {
-                        handlerMap.Remove(schemeName);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Trace(ex, "Failed to invalidate handler cache for scheme {0}", schemeName);
-        }
+        _schemeLock.Release();
     }
+}
+
+private static string SanitizeProviderId(string providerId)
+{
+    if (string.IsNullOrWhiteSpace(providerId))
+    {
+        throw new ArgumentException("ProviderId cannot be null or empty.", nameof(providerId));
+    }
+
+    var cleaned = new string(providerId.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
+    if (string.IsNullOrWhiteSpace(cleaned))
+    {
+        throw new ArgumentException($"ProviderId '{providerId}' contains no valid characters.", nameof(providerId));
+    }
+
+    return cleaned;
+}
 
     private string DecryptClientSecret(string encryptedSecret, IDataProtectionProvider dataProtection)
     {
