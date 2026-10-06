@@ -10,6 +10,7 @@ using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network.Vpn;
+using NzbDrone.Core.Peers;
 
 namespace NzbDrone.Core.Torrents;
 
@@ -53,6 +54,7 @@ public class TorrentService : ITorrentService,
     private readonly ITorrentEventLogRepository _torrentEventLogRepository;
     private readonly ITorrentMediaMetadataRepository _torrentMediaMetadataRepository;
     private readonly ITorrentEventLogService _torrentEventLogService;
+    private readonly IConnectionManager _connectionManager;
     private readonly object _sortOrderLock = new();
     private readonly Logger _logger;
 
@@ -107,7 +109,8 @@ public class TorrentService : ITorrentService,
         IDiskAllocationService diskAllocationService = null,
         ITorrentEventLogRepository torrentEventLogRepository = null,
         ITorrentMediaMetadataRepository torrentMediaMetadataRepository = null,
-        ITorrentEventLogService torrentEventLogService = null)
+        ITorrentEventLogService torrentEventLogService = null,
+        IConnectionManager connectionManager = null)
     {
         _repository = repository;
         _torrentFileService = torrentFileService;
@@ -119,6 +122,7 @@ public class TorrentService : ITorrentService,
         _torrentEventLogRepository = torrentEventLogRepository;
         _torrentMediaMetadataRepository = torrentMediaMetadataRepository;
         _torrentEventLogService = torrentEventLogService;
+        _connectionManager = connectionManager;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -353,6 +357,16 @@ public class TorrentService : ITorrentService,
         {
             foreach (var torrent in torrents)
             {
+                PrepareTorrentForPayloadDeletion(torrent);
+            }
+        }
+
+        _repository.DeleteMany(ids, deleteFiles);
+
+        if (deleteFiles)
+        {
+            foreach (var torrent in torrents)
+            {
                 try
                 {
                     var files = _torrentFileService?.GetByTorrentId(torrent.Id);
@@ -369,18 +383,46 @@ public class TorrentService : ITorrentService,
         {
             torrentMap.TryGetValue(id, out var torrent);
             _eventAggregator.PublishEvent(new TorrentDeletedEvent(id, torrent));
-        }
-
-        _repository.DeleteMany(ids, deleteFiles);
-
-        foreach (var id in ids)
-        {
             _pieceHashesById.TryRemove(id, out _);
         }
 
         foreach (var torrent in torrents)
         {
             _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
+        }
+    }
+
+    private void PrepareTorrentForPayloadDeletion(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (torrent.Status == TorrentStatus.Downloading || torrent.Status == TorrentStatus.Seeding)
+            {
+                Pause(torrent.Id, "Paused for deletion");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to pause torrent {0} before payload deletion", torrent.Id);
+        }
+
+        if (string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            return;
+        }
+
+        try
+        {
+            _connectionManager?.DisconnectByInfoHash(torrent.InfoHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to disconnect peers for torrent {0} before payload deletion", torrent.Id);
         }
     }
 

@@ -311,6 +311,9 @@ public class TorrentControllerTest
     [Test]
     public void BulkAction_delete_calls_DeleteMany_on_TorrentService_and_returns_success()
     {
+        _torrentService.Get(1).Returns(new Torrent { Id = 1 });
+        _torrentService.Get(2).Returns(new Torrent { Id = 2 });
+
         var resource = new BulkTorrentActionResource
         {
             Action = "delete",
@@ -332,8 +335,56 @@ public class TorrentControllerTest
     }
 
     [Test]
+    public void BulkAction_delete_marks_missing_torrent_ids_as_failed()
+    {
+        _torrentService.Get(1).Returns(new Torrent { Id = 1 });
+        _torrentService.Get(2).Returns((Torrent)null);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "delete",
+            TorrentIds = new List<int> { 1, 2 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var bulkResult = (BulkActionResult)((OkObjectResult)result.Result).Value;
+
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(1));
+        Assert.That(bulkResult.FailedCount, Is.EqualTo(1));
+        Assert.That(bulkResult.SucceededIds, Does.Contain(1));
+        Assert.That(bulkResult.FailedIds, Does.ContainKey(2));
+        _torrentService.Received(1).DeleteMany(Arg.Is<List<int>>(l => l.Count == 1 && l.Contains(1)), false);
+        _eventLogService.Received(1).Info(1, "Bulk", Arg.Any<string>());
+        _eventLogService.DidNotReceive().Info(2, Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void BulkAction_delete_logs_before_DeleteMany()
+    {
+        _torrentService.Get(1).Returns(new Torrent { Id = 1 });
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "delete",
+            TorrentIds = new List<int> { 1 },
+        };
+
+        _controller.BulkAction(resource);
+
+        Received.InOrder(() =>
+        {
+            _eventLogService.Info(1, "Bulk", Arg.Any<string>());
+            _torrentService.DeleteMany(Arg.Is<List<int>>(l => l.Contains(1)), false);
+        });
+    }
+
+    [Test]
     public void BulkAction_delete_handles_exception_and_populates_failed_ids()
     {
+        _torrentService.Get(1).Returns(new Torrent { Id = 1 });
+        _torrentService.Get(2).Returns(new Torrent { Id = 2 });
         _torrentService.When(x => x.DeleteMany(Arg.Any<List<int>>(), Arg.Any<bool>()))
             .Do(x => throw new InvalidOperationException("DB error"));
 
