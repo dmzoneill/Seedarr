@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T00:48:00Z",
+  "updatedAt": "2026-10-07T00:36:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents",
+  "currentSubfolder": "src/NzbDrone.Core/Authentication",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Blocklist",
-    "completedAt": "2026-10-07T00:48:00Z",
-    "issuesFiled": [1224, 1225],
+    "subfolder": "src/NzbDrone.Core/Torrents",
+    "completedAt": "2026-10-07T00:36:00Z",
+    "issuesFiled": [1231, 1232, 1233],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Blocklist pass: static review of PeerBlocklistSyncService, Ipv4/Ipv6IntervalTree, BlocklistArchiveStreamProvider, BlocklistUpdateTask. Filed #1224 (ETag/Last-Modified not scoped to BlocklistUrl after URL change) and #1225 (Content-Encoding br not decompressed). Deduped open #904, #905, #937-#939, #1021-#1024, #1029, #1032, #1129-#1130, #1175-#1177 and related. No dotnet build/test."
+    "note": "Torrents pass: static review of 64 files (import, fastresume, piece cache/storage, recheck, magnet/parser, Merkle). Filed #1231 (InfoHashV2 [Ignore] never persisted), #1232 (FastResume fallback marks sequential pieces verified without hashing), #1233 (PieceCache exceeds MaxCacheSize when all entries unflushed). Deduped open #912, #948, #949, #1044, #1046, #1136, #1139, #1189, #1218-#1224 and related. No dotnet build/test."
   }
 }
