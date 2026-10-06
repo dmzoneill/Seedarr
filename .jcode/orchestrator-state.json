@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:07:28Z",
+  "updatedAt": "2026-10-06T22:09:30Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_86db0980"
+    "lastScheduleId": "sched_f396c98d"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -27,7 +27,7 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "ladybug"
+      "worker": "pig"
     },
     "http": {
       "area": "src/Seedarr.Http",
@@ -37,12 +37,12 @@
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "hamster"
+      "worker": "ox"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "owl"
+      "worker": "rat"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 30,
-  "lastMonitorNote": "30 open; 0 restarts; all 5 hunters active"
+  "lastMonitorNote": "30 open; 3 restarts (hamster→ox, ladybug→pig, owl→rat); lobster+mosquito still running"
 }
