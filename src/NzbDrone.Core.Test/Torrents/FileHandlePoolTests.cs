@@ -359,4 +359,50 @@ public class FileHandlePoolTests
 
         Assert.That(smallPool.Count, Is.LessThanOrEqualTo(5));
     }
+
+    [Test]
+    public void AcquireHandle_protects_active_handle_from_being_disposed_during_eviction()
+    {
+        using var smallPool = new FileHandlePool(maxCapacity: 2);
+        var fileA = Path.Combine(_tempDir, "lease_fileA.dat");
+        var fileB = Path.Combine(_tempDir, "lease_fileB.dat");
+        var fileC = Path.Combine(_tempDir, "lease_fileC.dat");
+
+        using (var leaseA = smallPool.AcquireHandle(fileA, writeAccess: true))
+        {
+            var handleB = smallPool.GetOrCreateHandle(fileB, writeAccess: true);
+
+            // Capacity is 2. Adding fileC should evict unleased fileB, protecting leased fileA
+            var handleC = smallPool.GetOrCreateHandle(fileC, writeAccess: true);
+
+            Assert.That(leaseA.Handle.IsClosed, Is.False);
+            Assert.That(handleB.IsClosed, Is.True);
+            Assert.That(handleC.IsClosed, Is.False);
+
+            // Writing to leased handle succeeds without ObjectDisposedException
+            Assert.DoesNotThrow(() => RandomAccess.Write(leaseA.Handle, new byte[] { 1, 2, 3 }, 0));
+        }
+    }
+
+    [Test]
+    public void AcquireHandle_defers_disposal_until_lease_is_disposed_when_evicted()
+    {
+        using var smallPool = new FileHandlePool(maxCapacity: 1);
+        var fileA = Path.Combine(_tempDir, "defer_fileA.dat");
+        var fileB = Path.Combine(_tempDir, "defer_fileB.dat");
+
+        var leaseA = smallPool.AcquireHandle(fileA, writeAccess: true);
+
+        // Capacity is 1. Adding fileB evicts fileA from cache table, but defers disposal
+        var leaseB = smallPool.AcquireHandle(fileB, writeAccess: true);
+
+        Assert.That(leaseA.Handle.IsClosed, Is.False);
+        Assert.That(leaseB.Handle.IsClosed, Is.False);
+
+        leaseA.Dispose();
+        Assert.That(leaseA.Handle.IsClosed, Is.True);
+
+        leaseB.Dispose();
+        Assert.That(leaseB.Handle.IsClosed, Is.False); // Still in cache until evicted or pool disposed
+    }
 }
