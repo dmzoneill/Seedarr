@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T00:55:00Z",
+  "updatedAt": "2026-10-07T01:00:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/DownloadClients",
+  "currentSubfolder": "src/NzbDrone.Core/Blocklist",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Datastore",
-    "completedAt": "2026-10-07T00:55:00Z",
-    "issuesFiled": [1247, 1248],
+    "subfolder": "src/NzbDrone.Core/DownloadClients",
+    "completedAt": "2026-10-07T01:00:00Z",
+    "issuesFiled": [1252, 1253, 1254],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Datastore pass: static review of 90 files (BasicRepository, DbFactory, Database/MainDatabase, maintenance/WAL tasks, TableMapping/registration, migrations 001-070, Events). Filed #1247 (InsertMany leaves Id=0 vs Insert), #1248 (IsIncrementalAutoVacuumEnabled true when IMainDatabase null, skips vacuum). Deduped open #882, #915, #997, #998, #999, #1000, #1077-#1080, #1085-#1087, #1151-#1153, #1199, #1201 and related. No dotnet build/test."
+    "note": "DownloadClients pass: static review of 9 files (Factory, models, repository, Sync/DownloadClientSyncService, Deluge/QBitTorrent/Transmission clients). Filed #1252 (QBit MapState metaDL/allocating/moving), #1253 (Deluge AddTrackers per-URL tier), #1254 (DownloadId never populated). Deduped open #884, #923, #925, #931, #1008-#1013, #1097-#1099, #1118-#1119, #1163-#1164, #1212-#1213, #1226-#1228 and related API issues. No dotnet build/test."
   }
 }
