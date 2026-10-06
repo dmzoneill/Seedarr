@@ -6,8 +6,10 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Blocklist;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Test.TestHelpers;
 
 namespace NzbDrone.Core.Test.Blocklist;
@@ -96,6 +98,91 @@ public class PeerBlocklistSyncServiceTests
         Assert.That(secondRequest.Headers.Contains("If-None-Match"), Is.True);
         Assert.That(secondRequest.Headers.GetValues("If-None-Match").First(), Is.EqualTo("\"etag-v1\""));
         Assert.That(secondRequest.Headers.IfModifiedSince, Is.EqualTo(lastMod));
+    }
+
+    [Test]
+    public async Task SyncAsync_when_etag_and_last_modified_cached_in_config_but_tree_empty_should_not_send_conditional_headers()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.BlocklistETag.Returns("\"persisted-etag\"");
+        configService.BlocklistLastModified.Returns("Sat, 19 Sep 2026 08:00:00 GMT");
+
+        using var handler = new MockHttpMessageHandler();
+        using var client = new HttpClient(handler);
+        var service = new PeerBlocklistSyncService(
+            client,
+            configService: configService,
+            nowProvider: () => _currentTime);
+
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("192.168.1.1\n")
+        };
+        handler.EnqueueResponse(response);
+
+        var result = await service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RuleCount, Is.EqualTo(1));
+        Assert.That(service.IsBlocked("192.168.1.1"), Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(1));
+
+        var request = handler.Requests[0];
+        Assert.That(request.Headers.Contains("If-None-Match"), Is.False);
+        Assert.That(request.Headers.IfModifiedSince, Is.Null);
+    }
+
+    [Test]
+    public async Task SyncAsync_when_server_returns_304_and_tree_is_empty_should_fallback_to_unconditional_request()
+    {
+        var response304 = new HttpResponseMessage(HttpStatusCode.NotModified);
+        var responseOk = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("10.0.0.1\n")
+        };
+        _mockHandler.EnqueueResponse(response304);
+        _mockHandler.EnqueueResponse(responseOk);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.IsNotModified, Is.False);
+        Assert.That(result.RuleCount, Is.EqualTo(1));
+        Assert.That(_service.IsBlocked("10.0.0.1"), Is.True);
+        Assert.That(_mockHandler.Requests.Count, Is.EqualTo(2));
+
+        var fallbackRequest = _mockHandler.Requests[1];
+        Assert.That(fallbackRequest.Headers.Contains("If-None-Match"), Is.False);
+        Assert.That(fallbackRequest.Headers.IfModifiedSince, Is.Null);
+    }
+
+    [Test]
+    public async Task SyncAsync_force_true_should_not_send_conditional_headers_even_when_tree_is_populated()
+    {
+        var response1 = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("192.168.1.1\n")
+        };
+        response1.Headers.ETag = new EntityTagHeaderValue("\"etag-v1\"");
+        response1.Content.Headers.LastModified = new DateTimeOffset(2026, 9, 19, 8, 0, 0, TimeSpan.Zero);
+        _mockHandler.EnqueueResponse(response1);
+
+        await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        var responseForced = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("192.168.1.1\n10.0.0.1\n")
+        };
+        _mockHandler.EnqueueResponse(responseForced);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt", force: true);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(_mockHandler.Requests.Count, Is.EqualTo(2));
+
+        var forcedRequest = _mockHandler.Requests[1];
+        Assert.That(forcedRequest.Headers.Contains("If-None-Match"), Is.False);
+        Assert.That(forcedRequest.Headers.IfModifiedSince, Is.Null);
     }
 
     [Test]

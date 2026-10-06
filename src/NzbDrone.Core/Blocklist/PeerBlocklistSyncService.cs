@@ -260,14 +260,18 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
 
         lock (_syncLock)
         {
-            if (!string.IsNullOrWhiteSpace(_metadata.BlocklistETag))
+            var shouldSendConditional = !force && _tree != null && _rules.Count > 0;
+            if (shouldSendConditional)
             {
-                request.Headers.TryAddWithoutValidation("If-None-Match", _metadata.BlocklistETag);
-            }
+                if (!string.IsNullOrWhiteSpace(_metadata.BlocklistETag))
+                {
+                    request.Headers.TryAddWithoutValidation("If-None-Match", _metadata.BlocklistETag);
+                }
 
-            if (_metadata.BlocklistLastModified.HasValue)
-            {
-                request.Headers.IfModifiedSince = _metadata.BlocklistLastModified;
+                if (_metadata.BlocklistLastModified.HasValue)
+                {
+                    request.Headers.IfModifiedSince = _metadata.BlocklistLastModified;
+                }
             }
         }
 
@@ -295,6 +299,46 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
                 Message = ex.Message,
                 RuleCount = RuleCount
             };
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotModified)
+        {
+            bool hasLoadedTree;
+            lock (_syncLock)
+            {
+                hasLoadedTree = _tree != null && _rules.Count > 0;
+            }
+
+            if (!hasLoadedTree)
+            {
+                _logger.Warn("Blocklist at {0} returned 304 Not Modified but in-memory tree is empty. Retrying with unconditional request.", effectiveUrl);
+                response.Dispose();
+                var fallbackRequest = new HttpRequestMessage(HttpMethod.Get, effectiveUrl);
+                try
+                {
+                    response = await _httpClient.SendAsync(fallbackRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    now = _nowProvider();
+                    lock (_syncLock)
+                    {
+                        _metadata.ConsecutiveFailures++;
+                        _metadata.LastCheckedUtc = now;
+                        _metadata.LastSyncStatus = $"Failed: {ex.Message}";
+                        _metadata.LastFailureMessage = ex.Message;
+                    }
+
+                    _logger.Error(ex, "Failed to download blocklist fallback from {0}", effectiveUrl);
+                    return new BlocklistSyncResult
+                    {
+                        Success = false,
+                        Status = $"Failed: {ex.Message}",
+                        Message = ex.Message,
+                        RuleCount = RuleCount
+                    };
+                }
+            }
         }
 
         now = _nowProvider();
