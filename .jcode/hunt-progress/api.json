@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T22:45:00Z",
+  "updatedAt": "2026-10-06T23:05:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Notifications",
+  "currentSubfolder": "src/Seedarr.Api.V1/ArrIntegration",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/System",
-    "completedAt": "2026-10-06T22:45:00Z",
-    "issuesFiled": [1052, 1053, 1054, 1055, 1057],
+    "subfolder": "src/Seedarr.Api.V1/Notifications",
+    "completedAt": "2026-10-06T23:05:00Z",
+    "issuesFiled": [1070, 1073, 1075, 1076],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed System controllers/resources: SystemController (status/tasks/commands/restart/shutdown/vacuum), SetupController, LogController, LogFileController, SystemDatabaseController/models, SystemDeveloperController (+ debugger/testing/repl), TerminalController, SystemResourcesController, DTOs. Searched GitHub issues+comments. Deduped open #879 (developer RBAC), #993 (RingBuffer level throw), #1026 (duplicate TaskStarted), #915 (PostgreSQL vacuum success). Filed #1052 PUT /system/task partial JSON defaults disable tasks; #1053 unbounded task history limit; #1054 LogFileController arbitrary logs dir read; #1055 invalid log level query falls back to Trace; #1057 developer events/publish store-only. RBAC: global FallbackPolicy auth except Setup status/complete AllowAnonymous; SystemDatabase/Terminal AdminOnly; developer surface ReadOnly escalation tracked in #879. No dotnet build/test."
+    "notes": "Reviewed NotificationController and NotificationResource (CRUD, schema, test/test-direct, masking/RestoreSecrets, CustomScript allowlist). Searched GitHub issues+comments. Deduped open #888 (NotificationController RBAC), closed #715/#716/#790 (partial overlap on TestDirect masking/SSRF). Filed #1070 PUT partial JSON resets trigger toggles to NotificationResource defaults; #1073 FallbackNotificationId not mapped in API; #1075 CustomScript save and POST {id}/test skip authorized-directory enforcement vs TestDirect; #1076 POST create persists masked secrets when cloning GET payloads. No dotnet build/test."
   }
 }
