@@ -1,22 +1,21 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T23:25:00Z",
+  "updatedAt": "2026-10-06T23:45:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/ArrIntegration",
+  "currentSubfolder": "src/NzbDrone.Core/DownloadClients",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
     "src/NzbDrone.Core/Torrents",
     "src/NzbDrone.Core/Authentication",
-    "src/NzbDrone.Core/Datastore",
-    "src/NzbDrone.Core/ArrIntegration"
+    "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Core/Datastore",
-    "completedAt": "2026-10-06T23:25:00Z",
-    "issuesFiled": [997, 998],
+    "completedAt": "2026-10-06T23:45:00Z",
+    "issuesFiled": [999, 1000],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Deduped open #882 (DatabaseVacuumTask skips PostgreSQL), #915 (PerformMaintenance no-op VACUUM on PostgreSQL); not re-filed."
+    "note": "Deduped open #882/#915 PostgreSQL maintenance; not re-filed."
   }
 }
