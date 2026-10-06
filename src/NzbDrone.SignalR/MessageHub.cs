@@ -5,9 +5,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
@@ -16,8 +18,32 @@ using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.SignalR;
 
+[Authorize(Policy = Policies.Reader)]
 public class MessageHub : Hub
 {
+    public const int MaxChannelLength = 64;
+
+    public static readonly HashSet<string> AllowedChannels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "torrents",
+        "torrent",
+        "system",
+        "systemstats",
+        "health",
+        "speeds",
+        "speed",
+        "alerts",
+        "activity",
+        "logs",
+        "tasks",
+        "updates",
+        "trackers",
+        "tracker",
+        "metrics",
+        "peers",
+        "queue"
+    };
+
     private static readonly HashSet<string> Connections = new();
     private readonly IConfigFileProvider _configFileProvider;
     private readonly ITorrentService _torrentService;
@@ -305,26 +331,58 @@ public class MessageHub : Hub
         return CryptographicOperations.FixedTimeEquals(hashA, hashB);
     }
 
+    [Authorize(Policy = Policies.Reader)]
     public Task TrackerUpdated(object payload)
     {
         return Clients.All.SendAsync("trackerUpdated", payload);
     }
 
+    [Authorize(Policy = Policies.Reader)]
     public Task TrackerAnnounced(object payload)
     {
         return Clients.All.SendAsync("trackerAnnounced", payload);
     }
 
+    [Authorize(Policy = Policies.Reader)]
     public async Task SubscribeToTorrent(int torrentId)
     {
+        if (torrentId <= 0)
+        {
+            return;
+        }
+
+        var httpContext = Context?.GetHttpContext();
+        var torrentService = _torrentService ?? (httpContext?.RequestServices?.GetService(typeof(ITorrentService)) as ITorrentService);
+        if (torrentService != null)
+        {
+            try
+            {
+                if (torrentService.Get(torrentId) == null)
+                {
+                    return;
+                }
+            }
+            catch
+            {
+                return;
+            }
+        }
+
         await Groups.AddToGroupAsync(Context.ConnectionId, $"torrent-{torrentId}");
     }
 
+    [Authorize(Policy = Policies.Reader)]
     public async Task UnsubscribeFromTorrent(int torrentId)
     {
+        if (torrentId <= 0)
+        {
+            return;
+        }
+
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"torrent-{torrentId}");
     }
 
+    [Authorize(Policy = Policies.Reader)]
     public async Task SubscribeToChannel(string channel)
     {
         if (string.IsNullOrWhiteSpace(channel))
@@ -332,9 +390,16 @@ public class MessageHub : Hub
             return;
         }
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"channel-{channel.ToLowerInvariant()}");
+        var trimmed = channel.Trim();
+        if (trimmed.Length > MaxChannelLength || !AllowedChannels.Contains(trimmed))
+        {
+            return;
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"channel-{trimmed.ToLowerInvariant()}");
     }
 
+    [Authorize(Policy = Policies.Reader)]
     public async Task UnsubscribeFromChannel(string channel)
     {
         if (string.IsNullOrWhiteSpace(channel))
@@ -342,9 +407,16 @@ public class MessageHub : Hub
             return;
         }
 
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"channel-{channel.ToLowerInvariant()}");
+        var trimmed = channel.Trim();
+        if (trimmed.Length > MaxChannelLength || !AllowedChannels.Contains(trimmed))
+        {
+            return;
+        }
+
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"channel-{trimmed.ToLowerInvariant()}");
     }
 
+    [Authorize(Policy = Policies.Reader)]
     public virtual async Task<StateSnapshotResource> RequestStateSnapshot()
     {
         var httpContext = Context.GetHttpContext();

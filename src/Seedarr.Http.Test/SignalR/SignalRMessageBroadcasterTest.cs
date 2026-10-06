@@ -399,6 +399,70 @@ public class SignalRMessageBroadcasterTest
     }
 
     [Test]
+    public async Task MessageHub_SubscribeToTorrent_ignores_zero_or_negative_torrent_id()
+    {
+        var hub = new MessageHub();
+        var callerContext = Substitute.For<HubCallerContext>();
+        var groupManager = Substitute.For<IGroupManager>();
+
+        callerContext.ConnectionId.Returns("conn-42");
+        hub.Context = callerContext;
+        hub.Groups = groupManager;
+
+        await hub.SubscribeToTorrent(0);
+        await hub.SubscribeToTorrent(-1);
+        await hub.SubscribeToTorrent(-999);
+        await hub.UnsubscribeFromTorrent(0);
+        await hub.UnsubscribeFromTorrent(-1);
+        await hub.UnsubscribeFromTorrent(-999);
+
+        await groupManager.DidNotReceive().AddToGroupAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await groupManager.DidNotReceive().RemoveFromGroupAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MessageHub_SubscribeToTorrent_verifies_existence_when_torrent_service_is_available()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.Get(10).Returns(new Torrent { Id = 10, Name = "Existing" });
+        torrentService.Get(20).Returns((Torrent)null);
+
+        var hub = new MessageHub(torrentService: torrentService);
+        var callerContext = Substitute.For<HubCallerContext>();
+        var groupManager = Substitute.For<IGroupManager>();
+
+        callerContext.ConnectionId.Returns("conn-42");
+        hub.Context = callerContext;
+        hub.Groups = groupManager;
+
+        await hub.SubscribeToTorrent(10);
+        await groupManager.Received(1).AddToGroupAsync("conn-42", "torrent-10", Arg.Any<CancellationToken>());
+
+        await hub.SubscribeToTorrent(20);
+        await groupManager.DidNotReceive().AddToGroupAsync("conn-42", "torrent-20", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MessageHub_SubscribeToChannel_ignores_non_whitelisted_or_overlength_channel()
+    {
+        var hub = new MessageHub();
+        var callerContext = Substitute.For<HubCallerContext>();
+        var groupManager = Substitute.For<IGroupManager>();
+
+        callerContext.ConnectionId.Returns("conn-42");
+        hub.Context = callerContext;
+        hub.Groups = groupManager;
+
+        await hub.SubscribeToChannel("arbitrary_unknown_channel");
+        await hub.SubscribeToChannel(new string('a', 100));
+        await hub.UnsubscribeFromChannel("arbitrary_unknown_channel");
+        await hub.UnsubscribeFromChannel(new string('a', 100));
+
+        await groupManager.DidNotReceive().AddToGroupAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await groupManager.DidNotReceive().RemoveFromGroupAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public void BroadcastMessage_broadcasts_SeedingStatsUpdated_for_seeding_telemetry()
     {
         var seedingMsg = new SignalRMessage
