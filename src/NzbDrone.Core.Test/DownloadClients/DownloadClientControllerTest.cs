@@ -724,6 +724,16 @@ public class DownloadClientControllerTest
     }
 
     [Test]
+    public void Delete_should_reset_sync_service_client_status()
+    {
+        var result = _controller.Delete(42);
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        _downloadClientFactory.Received(1).Delete(42);
+        _syncService.Received(1).ResetClientStatus(42);
+    }
+
+    [Test]
     public void DeleteTorrent_returns_bad_request_when_client_delete_fails()
     {
         var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };

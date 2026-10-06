@@ -37,6 +37,9 @@ public interface IDownloadClientSyncService
 
 public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 {
+    private const int SyncSweepLockWaitMs = 200;
+    private const int ImportLockWaitMs = 30_000;
+
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly IIndexerFactory _indexerFactory;
     private readonly ITorrentService _torrentService;
@@ -111,7 +114,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     public SyncResult Sync()
     {
-        if (!_syncLock.Wait(200))
+        if (!_syncLock.Wait(SyncSweepLockWaitMs))
         {
             return new SyncResult();
         }
@@ -160,6 +163,12 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                         var hash = item.InfoHash.ToLowerInvariant();
                         if (existingTorrents.TryGetValue(hash, out var torrent))
                         {
+                            if (torrent.DownloadClientId.HasValue && torrent.DownloadClientId.Value != definition.Id)
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+
                             var total = item.TotalSize > 0 ? item.TotalSize : torrent.TotalSize;
                             var remaining = item.RemainingSize;
                             var downloaded = Math.Max(0, total - remaining);
@@ -460,10 +469,49 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new ArgumentException($"Could not create provider for client type {definition.ClientType}.");
         }
 
-        _syncLock.Wait();
+        var normalizedHash = infoHash.ToLowerInvariant();
+
+        if (!WaitForImportLock())
+        {
+            throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
+        }
+
         try
         {
-            var normalizedHash = infoHash.ToLowerInvariant();
+            var existing = _torrentService.GetAll()
+                .FirstOrDefault(t => string.Equals(t.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                return existing;
+            }
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
+
+        DownloadClientItem matchingItem = null;
+        try
+        {
+            var items = provider.GetItems();
+            RecordSuccess(clientId);
+            matchingItem = items?.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            RecordFailure(clientId, ex);
+            _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
+        }
+
+        var torrentBytes = FetchTorrentBytesFromClientAndIndexers(provider, normalizedHash);
+
+        if (!WaitForImportLock())
+        {
+            throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
+        }
+
+        try
+        {
             var existing = _torrentService.GetAll()
                 .FirstOrDefault(t => string.Equals(t.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
             if (existing != null)
@@ -471,20 +519,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 return existing;
             }
 
-            DownloadClientItem matchingItem = null;
-            try
-            {
-                var items = provider.GetItems();
-                RecordSuccess(clientId);
-                matchingItem = items?.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
-            }
-            catch (Exception ex)
-            {
-                RecordFailure(clientId, ex);
-                _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
-            }
-
-            return ImportTorrentInternal(definition, provider, normalizedHash, matchingItem);
+            return ImportTorrentInternal(definition, provider, normalizedHash, matchingItem, torrentBytes);
         }
         finally
         {
@@ -496,21 +531,12 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         DownloadClientDefinition definition,
         IDownloadClient provider,
         string normalizedHash,
-        DownloadClientItem matchingItem)
+        DownloadClientItem matchingItem,
+        byte[] torrentBytes = null)
     {
-        byte[] torrentBytes = null;
-        try
-        {
-            torrentBytes = provider.GetTorrentFile(normalizedHash);
-        }
-        catch (Exception ex)
-        {
-            _logger.Debug(ex, "Failed to get torrent file from client for {0}", normalizedHash);
-        }
-
         if (torrentBytes == null || torrentBytes.Length == 0)
         {
-            torrentBytes = SearchIndexersForTorrent(normalizedHash);
+            torrentBytes = FetchTorrentBytesFromClientAndIndexers(provider, normalizedHash);
         }
 
         var remappedPath = RemapRemotePath(definition?.Host, matchingItem?.OutputPath);
@@ -775,62 +801,109 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new ArgumentException($"Could not create provider for client type {definition.ClientType}.");
         }
 
-        _syncLock.Wait();
+        var clientItems = new Dictionary<string, DownloadClientItem>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            var existingHashes = _torrentService.GetAll()
+            var items = provider.GetItems();
+            RecordSuccess(clientId);
+            if (items != null)
+            {
+                foreach (var item in items)
+                {
+                    if (!string.IsNullOrEmpty(item.InfoHash))
+                    {
+                        clientItems.TryAdd(item.InfoHash.ToLowerInvariant(), item);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            RecordFailure(clientId, ex);
+            _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
+        }
+
+        if (!WaitForImportLock())
+        {
+            throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
+        }
+
+        HashSet<string> existingHashes;
+        try
+        {
+            existingHashes = _torrentService.GetAll()
+                .Where(t => !string.IsNullOrEmpty(t.InfoHash))
+                .Select(t => t.InfoHash.ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
+
+        var pendingImports = new List<(string Hash, DownloadClientItem MatchingItem, string Title, byte[] TorrentBytes)>();
+        foreach (var rawHash in infoHashes)
+        {
+            if (string.IsNullOrWhiteSpace(rawHash))
+            {
+                result.Failed++;
+                result.Items.Add(new BatchImportItemResult
+                {
+                    InfoHash = rawHash ?? string.Empty,
+                    Title = string.Empty,
+                    Success = false,
+                    ErrorMessage = "InfoHash cannot be empty."
+                });
+                continue;
+            }
+
+            var hash = rawHash.Trim().ToLowerInvariant();
+            clientItems.TryGetValue(hash, out var matchingItem);
+            var title = matchingItem?.Title ?? hash;
+
+            if (existingHashes.Contains(hash))
+            {
+                result.Skipped++;
+                result.Items.Add(new BatchImportItemResult
+                {
+                    InfoHash = hash,
+                    Title = title,
+                    Success = true,
+                    ErrorMessage = null
+                });
+                continue;
+            }
+
+            var torrentBytes = FetchTorrentBytesFromClientAndIndexers(provider, hash);
+            pendingImports.Add((hash, matchingItem, title, torrentBytes));
+        }
+
+        if (pendingImports.Count == 0)
+        {
+            return result;
+        }
+
+        if (!WaitForImportLock())
+        {
+            throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
+        }
+
+        try
+        {
+            existingHashes = _torrentService.GetAll()
                 .Where(t => !string.IsNullOrEmpty(t.InfoHash))
                 .Select(t => t.InfoHash.ToLowerInvariant())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var clientItems = new Dictionary<string, DownloadClientItem>(StringComparer.OrdinalIgnoreCase);
-            try
+            foreach (var pending in pendingImports)
             {
-                var items = provider.GetItems();
-                RecordSuccess(clientId);
-                if (items != null)
-                {
-                    foreach (var item in items)
-                    {
-                        if (!string.IsNullOrEmpty(item.InfoHash))
-                        {
-                            clientItems.TryAdd(item.InfoHash.ToLowerInvariant(), item);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                RecordFailure(clientId, ex);
-                _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
-            }
-
-            foreach (var rawHash in infoHashes)
-            {
-                if (string.IsNullOrWhiteSpace(rawHash))
-                {
-                    result.Failed++;
-                    result.Items.Add(new BatchImportItemResult
-                    {
-                        InfoHash = rawHash ?? string.Empty,
-                        Title = string.Empty,
-                        Success = false,
-                        ErrorMessage = "InfoHash cannot be empty."
-                    });
-                    continue;
-                }
-
-                var hash = rawHash.Trim().ToLowerInvariant();
-                clientItems.TryGetValue(hash, out var matchingItem);
-                var title = matchingItem?.Title ?? hash;
-
-                if (existingHashes.Contains(hash))
+                if (existingHashes.Contains(pending.Hash))
                 {
                     result.Skipped++;
                     result.Items.Add(new BatchImportItemResult
                     {
-                        InfoHash = hash,
-                        Title = title,
+                        InfoHash = pending.Hash,
+                        Title = pending.Title,
                         Success = true,
                         ErrorMessage = null
                     });
@@ -839,25 +912,25 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
                 try
                 {
-                    ImportTorrentInternal(definition, provider, hash, matchingItem);
-                    existingHashes.Add(hash);
+                    ImportTorrentInternal(definition, provider, pending.Hash, pending.MatchingItem, pending.TorrentBytes);
+                    existingHashes.Add(pending.Hash);
                     result.Added++;
                     result.Items.Add(new BatchImportItemResult
                     {
-                        InfoHash = hash,
-                        Title = title,
+                        InfoHash = pending.Hash,
+                        Title = pending.Title,
                         Success = true,
                         ErrorMessage = null
                     });
                 }
                 catch (Exception ex)
                 {
-                    _logger.Warn(ex, "Failed to import torrent {0} from client {1}", hash, clientId);
+                    _logger.Warn(ex, "Failed to import torrent {0} from client {1}", pending.Hash, clientId);
                     result.Failed++;
                     result.Items.Add(new BatchImportItemResult
                     {
-                        InfoHash = hash,
-                        Title = title,
+                        InfoHash = pending.Hash,
+                        Title = pending.Title,
                         Success = false,
                         ErrorMessage = ex.Message
                     });
@@ -870,6 +943,31 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         {
             _syncLock.Release();
         }
+    }
+
+    private bool WaitForImportLock()
+    {
+        return _syncLock.Wait(ImportLockWaitMs);
+    }
+
+    private byte[] FetchTorrentBytesFromClientAndIndexers(IDownloadClient provider, string normalizedHash)
+    {
+        byte[] torrentBytes = null;
+        try
+        {
+            torrentBytes = provider.GetTorrentFile(normalizedHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to get torrent file from client for {0}", normalizedHash);
+        }
+
+        if (torrentBytes == null || torrentBytes.Length == 0)
+        {
+            torrentBytes = SearchIndexersForTorrent(normalizedHash);
+        }
+
+        return torrentBytes;
     }
 
     private byte[] SearchIndexersForTorrent(string infoHash)

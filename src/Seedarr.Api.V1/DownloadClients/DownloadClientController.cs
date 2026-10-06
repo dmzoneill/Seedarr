@@ -128,6 +128,7 @@ public class DownloadClientController : Controller
     public ActionResult Delete(int id)
     {
         _downloadClientFactory.Delete(id);
+        _syncService.ResetClientStatus(id);
         return Ok();
     }
 

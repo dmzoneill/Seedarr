@@ -1668,4 +1668,118 @@ public class DownloadClientSyncServiceTest
         Assert.That(torrent.SavePath, Is.EqualTo("/downloads"));
         Assert.That(torrent.SourcePath, Is.EqualTo("/downloads"));
     }
+
+    [Test]
+    public void Sync_should_not_update_existing_torrent_when_owned_by_different_download_client()
+    {
+        var hash = "feed111122223333444455556666777788889999";
+        var existingTorrent = new Torrent
+        {
+            Id = 50,
+            InfoHash = hash,
+            Name = "Owned Torrent",
+            TotalSize = 10000,
+            Downloaded = 5000,
+            Progress = 0.5,
+            Status = TorrentStatus.Downloading,
+            DownloadSpeed = 1000,
+            UploadSpeed = 200,
+            DownloadClientId = 1
+        };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Owned Torrent",
+                InfoHash = hash,
+                TotalSize = 10000,
+                RemainingSize = 0,
+                Status = "seeding",
+                DownloadSpeed = 0,
+                UploadSpeed = 99999
+            }
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 2, Name = "Other Client", ClientType = "Deluge", Enable = true }
+        });
+
+        var result = _service.Sync();
+
+        Assert.That(result.Updated, Is.EqualTo(0));
+        Assert.That(result.Skipped, Is.EqualTo(1));
+        Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+        Assert.That(existingTorrent.Progress, Is.EqualTo(0.5));
+        Assert.That(existingTorrent.DownloadSpeed, Is.EqualTo(1000));
+        Assert.That(existingTorrent.UploadSpeed, Is.EqualTo(200));
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ImportTorrent_should_release_sync_lock_while_querying_indexers()
+    {
+        var hash = "dead111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+        var indexerFetchStarted = new ManualResetEventSlim(false);
+        var allowIndexerFetchToComplete = new ManualResetEventSlim(false);
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns((byte[])null);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { Title = "Indexer Import", InfoHash = hash, TotalSize = 1000, RemainingSize = 0 }
+        });
+
+        var mockIndexer = Substitute.For<IIndexer>();
+        mockIndexer.FetchTorrentByHash(Arg.Any<IndexerDefinition>(), hash).Returns(_ =>
+        {
+            indexerFetchStarted.Set();
+            Assert.That(allowIndexerFetchToComplete.Wait(5000), Is.True);
+            return rawBytes;
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Indexer Import",
+            TotalSize = 1000,
+            PieceCount = 10,
+            PieceLength = 100
+        });
+
+        _indexerFactory.All().Returns(new List<IndexerDefinition>
+        {
+            new() { Id = 1, Name = "Prowlarr", IndexerType = "Prowlarr", Enable = true, Url = "http://localhost:9696", ApiKey = "key" }
+        });
+
+        _service.InjectedClient = mockClient;
+        _service.InjectedIndexer = mockIndexer;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        var importTask = System.Threading.Tasks.Task.Run(() => _service.ImportTorrent(1, hash));
+        Assert.That(indexerFetchStarted.Wait(5000), Is.True);
+
+        var syncResult = _service.Sync();
+        Assert.That(syncResult, Is.Not.Null);
+
+        allowIndexerFetchToComplete.Set();
+        importTask.GetAwaiter().GetResult();
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == hash));
+    }
 }
