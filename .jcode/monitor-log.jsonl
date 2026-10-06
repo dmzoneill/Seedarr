@@ -143,3 +143,4 @@
 {"ts":"2026-10-06T23:11:28Z","scheduleId":"sched_895ec208","openIssues":312,"restarts":[],"workers":{"core":"poodle","api":"stallion","http":"kitten","host":"dromedary","signalr":"hog"},"note":"healthy 0 restarts"}
 {"ts":"2026-10-06T23:12:50Z","scheduleId":"sched_41dc3567","mode":"bug-hunt","openIssues":314,"restarts":3,"hunters":["poodle","vole","hare","dragon","hog"],"note":"314 open; 3 restarts"}
 {"ts": "2026-10-06T23:13:49Z", "scheduleId": "sched_5e2fa12b", "mode": "bug-hunt", "openIssues": 316, "restarts": 1, "hunters": ["humpback", "vole", "hare", "dragon", "hog"], "note": "316 open; 1 restart poodle->humpback (Core/Authentication); latest #1188-#1189"}
+{"ts":"2026-10-06T23:14:51Z","scheduleId":"sched_5c1f2c06","openIssues":30,"restarts":[{"slot":"signalr","from":"hog","to":"guppy","reason":"idle>90s after REST pass (#1186)"}],"workers":{"core":"humpback","api":"vole","http":"hare","host":"dragon","signalr":"guppy"},"commit":"0df8da15"}
