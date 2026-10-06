@@ -89,3 +89,4 @@
 {"ts":"2026-10-06T22:16:36Z","mode":"bug-hunt","openIssues":136,"restarts":["sauropod->bear(api)"],"stops":["ram"],"scheduleId":"sched_02506df6"}
 {"at":"2026-10-06T22:17:45Z","kind":"bug-hunt-monitor","scheduleId":"sched_05d0d3a7","openIssues":30,"restarts":[{"slot":"core","from":"buffalo","to":"crab","reason":"completed DownloadClients #1012/#1013"}],"hunters":["crab","bear","butterfly","blowfish","badger"]}
 {"ts": "2026-10-06T22:18:30Z", "mode": "bug-hunt", "openIssues": 30, "restarts": 0, "workers": ["crab", "bear", "butterfly", "blowfish", "badger"], "scheduleId": "sched_a9ab8b1b", "note": "healthy; cancelled sched_05d0d3a7 duplicate"}
+{"ts":"2026-10-06T22:18:51Z","mode":"bug-hunt","openIssues":30,"restarts":["host:blowfish->deer","http:butterfly->duck","signalr:badger->frog"],"scheduleId":"sched_fb935bb1","hunters":["crab","bear","duck","deer","frog"]}
