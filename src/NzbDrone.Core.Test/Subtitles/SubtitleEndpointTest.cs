@@ -145,4 +145,169 @@ public class SubtitleEndpointTest
         var actionResult = _controller.GetSubtitleTrack(10, 101, "1");
         Assert.That(actionResult, Is.InstanceOf<NotFoundObjectResult>());
     }
+
+    [Test]
+    public void GetFileSubtitles_PrependsUrlBase_WhenUrlBaseIsConfigured()
+    {
+        var torrent = new Torrent { Id = 10, Name = "Test Movie", SavePath = _tempDir };
+        var videoFile = new TorrentFile { Id = 101, TorrentId = 10, Path = "Movie.mkv" };
+        var subFile = new TorrentFile { Id = 102, TorrentId = 10, Path = "Movie.en.srt" };
+
+        _configService.UrlBase.Returns("/seedarr");
+        _torrentService.Get(10).Returns(torrent);
+        _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { videoFile, subFile });
+
+        var actionResult = _controller.GetFileSubtitles(10, 101);
+        var okResult = actionResult.Result as OkObjectResult;
+
+        Assert.That(okResult, Is.Not.Null);
+        var list = okResult.Value as List<SubtitleTrackResource>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list[0].Url, Is.EqualTo("/seedarr/api/v1/torrent/10/files/101/subtitles/1.vtt"));
+    }
+
+    [Test]
+    public void GetFileSubtitles_NormalizesUrlBase_WithTrailingSlash()
+    {
+        var torrent = new Torrent { Id = 10, Name = "Test Movie", SavePath = _tempDir };
+        var videoFile = new TorrentFile { Id = 101, TorrentId = 10, Path = "Movie.mkv" };
+        var subFile = new TorrentFile { Id = 102, TorrentId = 10, Path = "Movie.en.srt" };
+
+        _configService.UrlBase.Returns("/seedarr/");
+        _torrentService.Get(10).Returns(torrent);
+        _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { videoFile, subFile });
+
+        var actionResult = _controller.GetFileSubtitles(10, 101);
+        var okResult = actionResult.Result as OkObjectResult;
+
+        Assert.That(okResult, Is.Not.Null);
+        var list = okResult.Value as List<SubtitleTrackResource>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list[0].Url, Is.EqualTo("/seedarr/api/v1/torrent/10/files/101/subtitles/1.vtt"));
+    }
+
+    [Test]
+    public void GetFileSubtitles_PrependsUrlBase_FromConfigFileProvider()
+    {
+        var configFileProvider = Substitute.For<IConfigFileProvider>();
+        configFileProvider.UrlBase.Returns("/proxybase");
+
+        var controllerWithConfig = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            _validator,
+            subtitleDiscoveryService: _subtitleDiscoveryService,
+            subtitleConversionService: _subtitleConversionService,
+            configFileProvider: configFileProvider);
+
+        var torrent = new Torrent { Id = 10, Name = "Test Movie", SavePath = _tempDir };
+        var videoFile = new TorrentFile { Id = 101, TorrentId = 10, Path = "Movie.mkv" };
+        var subFile = new TorrentFile { Id = 102, TorrentId = 10, Path = "Movie.en.srt" };
+
+        _torrentService.Get(10).Returns(torrent);
+        _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { videoFile, subFile });
+
+        var actionResult = controllerWithConfig.GetFileSubtitles(10, 101);
+        var okResult = actionResult.Result as OkObjectResult;
+
+        Assert.That(okResult, Is.Not.Null);
+        var list = okResult.Value as List<SubtitleTrackResource>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list[0].Url, Is.EqualTo("/proxybase/api/v1/torrent/10/files/101/subtitles/1.vtt"));
+    }
+
+    [Test]
+    public void GetSubtitleTrack_ReturnsBadRequest_WhenSymlinkEscapesBaseDirectory()
+    {
+        var torrent = new Torrent { Id = 10, Name = "Test Movie", SavePath = _tempDir };
+        var videoFile = new TorrentFile { Id = 101, TorrentId = 10, Path = "Movie.mkv" };
+        var subFile = new TorrentFile { Id = 102, TorrentId = 10, Path = "Movie.en.srt" };
+
+        var externalDir = Path.Combine(Path.GetTempPath(), "seedarr_sub_ext_" + Path.GetRandomFileName());
+        Directory.CreateDirectory(externalDir);
+        var externalFile = Path.Combine(externalDir, "secret.srt");
+        File.WriteAllText(externalFile, "1\n00:00:01,000 --> 00:00:03,000\nExternal secret\n", Encoding.UTF8);
+
+        try
+        {
+            var symlinkPath = Path.Combine(_tempDir, "Movie.en.srt");
+            File.CreateSymbolicLink(symlinkPath, externalFile);
+
+            _torrentService.Get(10).Returns(torrent);
+            _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { videoFile, subFile });
+
+            var actionResult = _controller.GetSubtitleTrack(10, 101, "1");
+            var badRequestResult = actionResult as BadRequestObjectResult;
+
+            Assert.That(badRequestResult, Is.Not.Null);
+            Assert.That(badRequestResult.Value, Is.EqualTo("Invalid subtitle file path: symlink target escapes base directory."));
+        }
+        finally
+        {
+            if (Directory.Exists(externalDir))
+            {
+                try
+                {
+                    Directory.Delete(externalDir, true);
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+
+    [Test]
+    public void GetSubtitleTrack_AllowsIntraDirectorySymlink()
+    {
+        var torrent = new Torrent { Id = 10, Name = "Test Movie", SavePath = _tempDir };
+        var videoFile = new TorrentFile { Id = 101, TorrentId = 10, Path = "Movie.mkv" };
+        var subFile = new TorrentFile { Id = 102, TorrentId = 10, Path = "Movie.en.srt" };
+
+        var subDir = Path.Combine(_tempDir, "subs");
+        Directory.CreateDirectory(subDir);
+        var targetFile = Path.Combine(subDir, "actual.srt");
+        File.WriteAllText(targetFile, "1\n00:00:01,000 --> 00:00:03,000\nInternal symlink content\n", Encoding.UTF8);
+
+        var symlinkPath = Path.Combine(_tempDir, "Movie.en.srt");
+        File.CreateSymbolicLink(symlinkPath, targetFile);
+
+        _torrentService.Get(10).Returns(torrent);
+        _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { videoFile, subFile });
+
+        var actionResult = _controller.GetSubtitleTrack(10, 101, "1");
+        var contentResult = actionResult as ContentResult;
+
+        Assert.That(contentResult, Is.Not.Null);
+        Assert.That(contentResult.Content, Does.Contain("Internal symlink content"));
+    }
+
+    [Test]
+    public void GetSubtitleTrack_ReturnsBadRequest_WhenFileSizeExceedsLimit()
+    {
+        var torrent = new Torrent { Id = 10, Name = "Test Movie", SavePath = _tempDir };
+        var videoFile = new TorrentFile { Id = 101, TorrentId = 10, Path = "Movie.mkv" };
+        var subFile = new TorrentFile { Id = 102, TorrentId = 10, Path = "Movie.en.srt" };
+
+        var filePath = Path.Combine(_tempDir, "Movie.en.srt");
+        using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            fs.SetLength(10L * 1024 * 1024 + 1024);
+        }
+
+        _torrentService.Get(10).Returns(torrent);
+        _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { videoFile, subFile });
+
+        var actionResult = _controller.GetSubtitleTrack(10, 101, "1");
+        var badRequestResult = actionResult as BadRequestObjectResult;
+
+        Assert.That(badRequestResult, Is.Not.Null);
+        Assert.That(badRequestResult.Value, Is.EqualTo("Subtitle file exceeds maximum permitted size."));
+    }
 }
