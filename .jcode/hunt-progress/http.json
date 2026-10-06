@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T00:33:15Z",
+  "updatedAt": "2026-10-06T23:33:16Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Terminal",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Authentication",
-    "completedAt": "2026-10-07T00:33:15Z",
-    "issuesFiled": [1211],
+    "subfolder": "src/Seedarr.Http/Terminal",
+    "completedAt": "2026-10-06T23:33:16Z",
+    "issuesFiled": [1223],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 23: Authentication (5 files: ApiKeyAuthenticationHandler, BasicAuthenticationHandler, DynamicAuthSchemeManager, ForwardAuthHandler, IDynamicAuthSchemeManager). Static review only. GitHub dedupe: commented #1109 (ForwardAuth loopback/header trust), #895 (ForwardAuth User vs OIDC ReadOnly); overlaps #893/#906/#877/#1105/#1116/#1117/#922/#1160 left open, no reopen. Filed #1211: ExtractCandidateClaimValues does not parse Keycloak resource_access client roles for RoleMappingRules. Next: Terminal. No dotnet build/test."
+    "note": "Pass 24: Terminal (10 files: FallbackProcessSession, IPtyTerminalService, ITerminalSession, LinuxPtySession, NativePty, PtyProcessSession, PtyTerminalService, TerminalEnvironmentSanitizer, TerminalHub, TerminalWebSocketHandler). Static review only. GitHub dedupe: commented #892 (TerminalHub/WebSocket Admin RBAC + Context.User); overlaps #902 #967 #1027 #1132 #1173 #1174 #956 #965 #966 left open, no reopen. Filed #1223: WebSocket/SignalR PTY cols/rows missing upper-bound clamp vs PtyTerminalService. Next: REST. No dotnet build/test."
   }
 }
