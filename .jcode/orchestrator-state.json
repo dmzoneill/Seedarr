@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T21:43:47Z",
+  "updatedAt": "2026-10-06T21:44:23Z",
   "lastValidationAt": "2026-10-06T21:42:30Z",
   "lastValidationNote": "Gap: sched_73917708 missing at runtime (schedule list empty). Restored sched_81cc8e4e. Hunters active on partitions; 0 hunter reports and 0 new issues yet (<3m since spawn).",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_1c304304"
+    "lastScheduleId": "sched_34a99055"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -19,11 +19,31 @@
     "dedupeGitHubIssues": true
   },
   "huntSlots": {
-    "core": { "area": "src/NzbDrone.Core", "status": "running", "worker": "seedling" },
-    "api": { "area": "src/Seedarr.Api.V1", "status": "running", "worker": "evergreen" },
-    "http": { "area": "src/Seedarr.Http", "status": "running", "worker": "bat" },
-    "host": { "area": "src/NzbDrone.Host,src/NzbDrone.Common", "status": "running", "worker": "herb" },
-    "signalr": { "area": "src/NzbDrone.SignalR", "status": "running", "worker": "ant" }
+    "core": {
+      "area": "src/NzbDrone.Core",
+      "status": "running",
+      "worker": "seedling"
+    },
+    "api": {
+      "area": "src/Seedarr.Api.V1",
+      "status": "running",
+      "worker": "evergreen"
+    },
+    "http": {
+      "area": "src/Seedarr.Http",
+      "status": "running",
+      "worker": "bat"
+    },
+    "host": {
+      "area": "src/NzbDrone.Host,src/NzbDrone.Common",
+      "status": "running",
+      "worker": "herb"
+    },
+    "signalr": {
+      "area": "src/NzbDrone.SignalR",
+      "status": "running",
+      "worker": "ant"
+    }
   },
   "rotation": [
     "src/NzbDrone.Core/Torrents",
@@ -32,7 +52,21 @@
     "src/NzbDrone.Core/Blocklist",
     "src/Seedarr.Api.V1/Controllers"
   ],
-  "completedFixIssues": [811, 814, 815, 863, 869, 841, 755, 725, 492, 411, 186, 397, 189],
+  "completedFixIssues": [
+    811,
+    814,
+    815,
+    863,
+    869,
+    841,
+    755,
+    725,
+    492,
+    411,
+    186,
+    397,
+    189
+  ],
   "githubOpenCount": 8,
-  "lastMonitorNote": "8 open (#876-883); restarted palmtree->bat (>90s idle); broadcast nudge"
+  "lastMonitorNote": "8 open (#879-883); all 5 hunters active (<90s); 0 restarts"
 }
