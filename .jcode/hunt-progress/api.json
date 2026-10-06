@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-06T23:30:00Z",
+  "updatedAt": "2026-10-06T22:32:30Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -17,10 +17,10 @@
   "currentSubfolder": "src/Seedarr.Api.V1/Indexers",
   "lastPass": {
     "subfolder": "src/Seedarr.Api.V1/ArrIntegration",
-    "completedAt": "2026-10-06T23:30:00Z",
-    "issuesFiled": [1082, 1083, 1084],
+    "completedAt": "2026-10-06T22:32:30Z",
+    "issuesFiled": [1082, 1083, 1084, 1088, 1089, 1091],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed ArrConnectionController (CRUD, test/test-direct, sync, image-proxy), ArrSyncController, WebhookReceiverController (arr webhook auth). Searched GitHub issues+comments. Deduped closed #185/#721/#567 (webhook auth aliases, webhook unregister, cover proxy feature). Filed #1082 PUT partial JSON resets enable/webhook/sync flags and clears tags/category/savePath; #1083 POST create persists masked ApiKey (PUT restores); #1084 image-proxy allows arbitrary Arr paths with stored API key (not MediaCover-only). No dotnet build/test."
+    "notes": "Reviewed ArrConnectionController (CRUD, test/test-direct, sync, image-proxy), ArrSyncController, WebhookReceiverController. Searched GitHub issues+comments. Deduped open #886 (RBAC), closed #185/#721/#567. Pass issues: #1082 PUT partial JSON resets flags/clears tags; #1083 POST create masked ApiKey; #1084 image-proxy arbitrary paths; #1088 POST test-direct omits ApiKey restore when id set; #1089 PUT stale Implementation on ArrType change; #1091 webhooks/arr HTTP 200 on processing failure. No dotnet build/test."
   }
 }
