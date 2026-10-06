@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T00:22:00Z",
+  "updatedAt": "2026-10-07T00:35:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Notifications",
+  "currentSubfolder": "src/Seedarr.Api.V1/ArrIntegration",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/System",
-    "completedAt": "2026-10-07T00:22:00Z",
-    "issuesFiled": [1178, 1179, 1180, 1181, 1182, 1183],
+    "subfolder": "src/Seedarr.Api.V1/Notifications",
+    "completedAt": "2026-10-07T00:35:00Z",
+    "issuesFiled": [1191, 1192],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Reviewed System controllers (System/Setup/Database/Log/LogFile/Terminal/Developer*). GitHub dedupe: skipped open #879/#1050/#1051/#1052/#1053/#1055/#1057/#1054/#915 and related terminal/signalr issues. Filed #1178 (DatabaseVersion duplicates DatabaseType), #1179 (developer simulation hardcoded stub), #1180 (TerminalController REST drops PTY output), #1181 (developer testing run 200 when runner missing), #1182 (vacuum HTTP 200 on failure), #1183 (setup status HasAdminUser leaks partial config). No dotnet build/test."
+    "notes": "Reviewed NotificationController + NotificationResource. GitHub dedupe: skipped open #888/#1070-1076/#1071/#1073 (RBAC, partial PUT, clone masked secrets, CustomScript allowlist, FallbackNotificationId API). Filed #1191 (JsonValue.ToString breaks webhook URL masking in JSON settings), #1192 (DELETE leaves orphan FallbackNotificationId refs). No dotnet build/test."
   }
 }
