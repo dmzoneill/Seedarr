@@ -1,12 +1,15 @@
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.RemotePathMappings;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.RemotePathMappings;
 
 [V1ApiController("remotepathmapping")]
+[Authorize(Policy = Policies.Reader)]
 public class RemotePathMappingController : Controller
 {
     private readonly IRemotePathMappingService _remotePathMappingService;
@@ -36,6 +39,7 @@ public class RemotePathMappingController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<RemotePathMappingResource> Create([FromBody] RemotePathMappingResource resource)
     {
         if (resource == null)
@@ -65,6 +69,7 @@ public class RemotePathMappingController : Controller
 
     [HttpPut("{id:int}")]
     [HttpPut]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<RemotePathMappingResource> Update(int? id, [FromBody] RemotePathMappingResource resource)
     {
         if (resource == null)
@@ -108,6 +113,7 @@ public class RemotePathMappingController : Controller
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Delete(int id)
     {
         _remotePathMappingService.Delete(id);
@@ -115,6 +121,7 @@ public class RemotePathMappingController : Controller
     }
 
     [HttpPost("test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<RemotePathMappingTestResult> Test([FromBody] RemotePathMappingTestRequest request)
     {
         if (request == null)

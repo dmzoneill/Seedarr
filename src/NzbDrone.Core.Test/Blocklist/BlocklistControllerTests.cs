@@ -243,4 +243,38 @@ public class BlocklistControllerTests
         // Assert
         _syncService.Received(1).IsBlocked(Arg.Is<IPAddress>(ip => ip.ToString() == "192.168.1.50"));
     }
+
+    [TestCase("http://127.0.0.1/blocklist.txt")]
+    [TestCase("http://localhost:5000/blocklist.txt")]
+    [TestCase("http://169.254.169.254/latest/meta-data")]
+    [TestCase("file:///etc/passwd")]
+    [TestCase("ftp://example.com/blocklist.txt")]
+    public void UpdateBlocklist_with_unsafe_url_should_return_bad_request(string unsafeUrl)
+    {
+        var request = new BlocklistConfigRequest
+        {
+            Url = unsafeUrl
+        };
+
+        var result = _controller.UpdateBlocklist(request);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _configService.DidNotReceive().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
+    }
+
+    [Test]
+    public void BlocklistController_should_have_proper_authorization_policies()
+    {
+        var classAttr = typeof(BlocklistController).GetCustomAttribute<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>();
+        Assert.That(classAttr.Policy, Is.EqualTo(NzbDrone.Core.Authentication.Policies.Reader));
+
+        var updateAttr = typeof(BlocklistController).GetMethod("UpdateBlocklist")!.GetCustomAttribute<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>();
+        Assert.That(updateAttr.Policy, Is.EqualTo(NzbDrone.Core.Authentication.Policies.AdminOnly));
+
+        var syncAttr = typeof(BlocklistController).GetMethod("SyncBlocklistAsync")!.GetCustomAttribute<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>();
+        Assert.That(syncAttr.Policy, Is.EqualTo(NzbDrone.Core.Authentication.Policies.AdminOnly));
+
+        var testAttr = typeof(BlocklistController).GetMethod("TestIp")!.GetCustomAttribute<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>();
+        Assert.That(testAttr.Policy, Is.EqualTo(NzbDrone.Core.Authentication.Policies.AdminOnly));
+    }
 }

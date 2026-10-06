@@ -4,14 +4,18 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Blocklist;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Validation;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Blocklist;
 
 [V1ApiController("blocklist")]
+[Authorize(Policy = Policies.Reader)]
 public class BlocklistController : Controller
 {
     private readonly IConfigService _configService;
@@ -30,6 +34,7 @@ public class BlocklistController : Controller
     }
 
     [HttpPut]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<BlocklistResource> UpdateBlocklist([FromBody] BlocklistConfigRequest request)
     {
         if (request == null)
@@ -46,7 +51,13 @@ public class BlocklistController : Controller
 
         if (request.Url != null)
         {
-            updates["BlocklistUrl"] = request.Url.Trim();
+            var trimmedUrl = request.Url.Trim();
+            if (!string.IsNullOrEmpty(trimmedUrl) && !UrlValidator.IsSafeUrl(trimmedUrl))
+            {
+                return BadRequest("Blocklist URL must be a valid public HTTP or HTTPS URL.");
+            }
+
+            updates["BlocklistUrl"] = trimmedUrl;
         }
 
         if (request.AutoUpdateEnabled.HasValue)
@@ -68,6 +79,7 @@ public class BlocklistController : Controller
     }
 
     [HttpPost("sync")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<BlocklistSyncResponse>> SyncBlocklistAsync(CancellationToken cancellationToken = default)
     {
         var result = await _syncService.SyncBlocklistAsync(force: true, cancellationToken: cancellationToken);
@@ -89,6 +101,7 @@ public class BlocklistController : Controller
     }
 
     [HttpPost("test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<BlocklistTestResponse> TestIp([FromBody] BlocklistTestRequest request)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Ip))
