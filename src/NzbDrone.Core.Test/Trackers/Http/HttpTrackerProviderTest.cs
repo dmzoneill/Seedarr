@@ -796,6 +796,59 @@ public class HttpTrackerProviderTest
         Assert.That(result.Peers, Is.Empty);
     }
 
+    [Test]
+    public void Announce_should_parse_compact_peers6_from_response()
+    {
+        var ip = IPAddress.Parse("2001:db8::1");
+        var ipBytes = ip.GetAddressBytes();
+        var port = 6881;
+
+        var peer6Bytes = new byte[18];
+        Array.Copy(ipBytes, 0, peer6Bytes, 0, 16);
+        peer6Bytes[16] = (byte)(port >> 8);
+        peer6Bytes[17] = (byte)(port & 0xFF);
+
+        var responseBytes = BencodeBytes(new BDictionary
+        {
+            ["peers6"] = new BString(peer6Bytes)
+        });
+        var provider = CreateProviderWithResponse(responseBytes);
+
+        var result = provider.Announce(CreateRequest());
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Peers.Count, Is.EqualTo(1));
+        Assert.That(result.Peers[0].Ip, Is.EqualTo(ip.ToString()));
+        Assert.That(result.Peers[0].Port, Is.EqualTo(6881));
+    }
+
+    [Test]
+    public void Announce_should_gracefully_handle_malformed_dictionary_peers()
+    {
+        var malformedDict = new BDictionary
+        {
+            ["invalid_key"] = new BString("missing_ip_and_port")
+        };
+        var validDict = new BDictionary
+        {
+            ["ip"] = new BString("1.2.3.4"),
+            ["port"] = new BNumber(8080)
+        };
+
+        var responseBytes = BencodeBytes(new BDictionary
+        {
+            ["peers"] = new BList { new BString("not_a_dictionary"), malformedDict, validDict }
+        });
+        var provider = CreateProviderWithResponse(responseBytes);
+
+        var result = provider.Announce(CreateRequest());
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Peers.Count, Is.EqualTo(1));
+        Assert.That(result.Peers[0].Ip, Is.EqualTo("1.2.3.4"));
+        Assert.That(result.Peers[0].Port, Is.EqualTo(8080));
+    }
+
     // ---- Scrape response-parsing tests ----
 
     [Test]
