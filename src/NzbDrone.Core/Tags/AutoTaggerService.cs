@@ -18,17 +18,20 @@ public class AutoTaggerService : IAutoTaggerService,
     private readonly IAutoTaggerRuleRepository _ruleRepository;
     private readonly ITorrentService _torrentService;
     private readonly ITagService _tagService;
+    private readonly ITagRepository _tagRepository;
     private readonly Logger _logger;
 
     public AutoTaggerService(
         IAutoTaggerRuleRepository ruleRepository,
         ITorrentService torrentService,
         ITagService tagService = null,
-        Logger logger = null)
+        Logger logger = null,
+        ITagRepository tagRepository = null)
     {
         _ruleRepository = ruleRepository;
         _torrentService = torrentService;
         _tagService = tagService;
+        _tagRepository = tagRepository;
         _logger = logger ?? LogManager.GetCurrentClassLogger();
     }
 
@@ -56,6 +59,11 @@ public class AutoTaggerService : IAutoTaggerService,
             throw new ArgumentException("Rule pattern cannot be empty.", nameof(rule));
         }
 
+        if (!ValidateTagExists(rule.TagId))
+        {
+            throw new ArgumentException($"Tag with ID {rule.TagId} does not exist.", nameof(rule));
+        }
+
         _logger.Info("Adding auto-tagger rule '{0}' (Type: {1}, TagId: {2})", rule.Name, rule.RuleType, rule.TagId);
         return _ruleRepository.Insert(rule);
     }
@@ -72,6 +80,11 @@ public class AutoTaggerService : IAutoTaggerService,
         if (string.IsNullOrWhiteSpace(rule.Pattern))
         {
             throw new ArgumentException("Rule pattern cannot be empty.", nameof(rule));
+        }
+
+        if (!ValidateTagExists(rule.TagId))
+        {
+            throw new ArgumentException($"Tag with ID {rule.TagId} does not exist.", nameof(rule));
         }
 
         _logger.Info("Updating auto-tagger rule '{0}' (Id: {1})", rule.Name, rule.Id);
@@ -106,6 +119,11 @@ public class AutoTaggerService : IAutoTaggerService,
 
         foreach (var rule in rules)
         {
+            if (!ValidateTagExists(rule.TagId))
+            {
+                continue;
+            }
+
             if (!torrent.TagIds.Contains(rule.TagId) && MatchesRule(torrent, rule))
             {
                 _logger.Info(
@@ -124,6 +142,26 @@ public class AutoTaggerService : IAutoTaggerService,
         {
             _torrentService?.Update(torrent);
         }
+    }
+
+    private bool ValidateTagExists(int tagId)
+    {
+        if (tagId <= 0)
+        {
+            return false;
+        }
+
+        if (_tagService != null)
+        {
+            return _tagService.Get(tagId) != null;
+        }
+
+        if (_tagRepository != null)
+        {
+            return _tagRepository.Get(tagId) != null;
+        }
+
+        return true;
     }
 
     public void EvaluateAll()

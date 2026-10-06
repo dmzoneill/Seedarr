@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
@@ -21,6 +22,11 @@ public class AutoTaggerServiceTest
         _ruleRepository = Substitute.For<IAutoTaggerRuleRepository>();
         _torrentService = Substitute.For<ITorrentService>();
         _tagService = Substitute.For<ITagService>();
+        _tagService.Get(Arg.Any<int>()).Returns(ci =>
+        {
+            var id = ci.Arg<int>();
+            return id > 0 ? new Tag { Id = id, Label = $"Tag-{id}" } : null;
+        });
         _subject = new AutoTaggerService(_ruleRepository, _torrentService, _tagService);
     }
 
@@ -323,5 +329,107 @@ public class AutoTaggerServiceTest
         _torrentService.Received(1).Update(t1);
         _torrentService.Received(1).Update(t3);
         _torrentService.DidNotReceive().Update(t2);
+    }
+
+    [Test]
+    public void AddRule_throws_ArgumentException_when_tag_does_not_exist()
+    {
+        _tagService.Get(999).Returns((Tag)null);
+
+        var rule = new AutoTaggerRule
+        {
+            Name = "Orphan Rule",
+            TagId = 999,
+            RuleType = AutoTaggerRuleType.Regex,
+            Pattern = "Test"
+        };
+
+        var ex = Assert.Throws<ArgumentException>(() => _subject.AddRule(rule));
+        Assert.That(ex.Message, Does.Contain("999"));
+        _ruleRepository.DidNotReceive().Insert(Arg.Any<AutoTaggerRule>());
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    [TestCase(-42)]
+    public void AddRule_throws_ArgumentException_when_tag_id_is_zero_or_negative(int tagId)
+    {
+        var rule = new AutoTaggerRule
+        {
+            Name = "Invalid Tag ID Rule",
+            TagId = tagId,
+            RuleType = AutoTaggerRuleType.Regex,
+            Pattern = "Test"
+        };
+
+        Assert.Throws<ArgumentException>(() => _subject.AddRule(rule));
+        _ruleRepository.DidNotReceive().Insert(Arg.Any<AutoTaggerRule>());
+    }
+
+    [Test]
+    public void UpdateRule_throws_ArgumentException_when_tag_does_not_exist()
+    {
+        _tagService.Get(999).Returns((Tag)null);
+
+        var rule = new AutoTaggerRule
+        {
+            Id = 1,
+            Name = "Orphan Update Rule",
+            TagId = 999,
+            RuleType = AutoTaggerRuleType.Regex,
+            Pattern = "Test"
+        };
+
+        var ex = Assert.Throws<ArgumentException>(() => _subject.UpdateRule(rule));
+        Assert.That(ex.Message, Does.Contain("999"));
+        _ruleRepository.DidNotReceive().Update(Arg.Any<AutoTaggerRule>());
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void UpdateRule_throws_ArgumentException_when_tag_id_is_zero_or_negative(int tagId)
+    {
+        var rule = new AutoTaggerRule
+        {
+            Id = 1,
+            Name = "Invalid Tag ID Rule",
+            TagId = tagId,
+            RuleType = AutoTaggerRuleType.Regex,
+            Pattern = "Test"
+        };
+
+        Assert.Throws<ArgumentException>(() => _subject.UpdateRule(rule));
+        _ruleRepository.DidNotReceive().Update(Arg.Any<AutoTaggerRule>());
+    }
+
+    [Test]
+    public void EvaluateTorrent_skips_rules_with_non_existent_tag_id()
+    {
+        _tagService.Get(999).Returns((Tag)null);
+
+        var rule = new AutoTaggerRule
+        {
+            Id = 1,
+            Name = "Deleted Tag Rule",
+            TagId = 999,
+            RuleType = AutoTaggerRuleType.Regex,
+            Pattern = "Test",
+            IsEnabled = true,
+            Priority = 1
+        };
+
+        _ruleRepository.All().Returns(new List<AutoTaggerRule> { rule });
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test.Movie.Release",
+            TagIds = new List<int>()
+        };
+
+        _subject.EvaluateTorrent(torrent);
+
+        Assert.That(torrent.TagIds, Does.Not.Contain(999));
+        _torrentService.DidNotReceive().Update(torrent);
     }
 }

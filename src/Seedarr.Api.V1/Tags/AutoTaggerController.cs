@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
@@ -52,15 +53,27 @@ public class AutoTaggerController : ControllerBase
         }
 
         var model = AutoTaggerRuleResourceMapper.ToModel(resource);
-        AutoTaggerRule saved;
 
-        if (model.Id > 0)
+        if (model.TagId <= 0 || (_tagService != null && _tagService.Get(model.TagId) == null))
         {
-            saved = _autoTaggerService.UpdateRule(model);
+            return BadRequest("Referenced tag does not exist.");
         }
-        else
+
+        AutoTaggerRule saved;
+        try
         {
-            saved = _autoTaggerService.AddRule(model);
+            if (model.Id > 0)
+            {
+                saved = _autoTaggerService.UpdateRule(model);
+            }
+            else
+            {
+                saved = _autoTaggerService.AddRule(model);
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
         }
 
         var tagLabel = _tagService?.Get(saved.TagId)?.Label;
