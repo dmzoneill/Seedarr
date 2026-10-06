@@ -1,6 +1,6 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:30:00Z",
+  "updatedAt": "2026-10-06T23:26:00Z",
   "area": "src/NzbDrone.SignalR",
   "currentSubfolder": "src/NzbDrone.SignalR",
   "rotation": [
@@ -11,10 +11,10 @@
   ],
   "lastPass": {
     "subfolder": "src/Seedarr.Http/REST",
-    "completedAt": "2026-10-06T22:30:00Z",
-    "issuesFiled": [1060],
+    "completedAt": "2026-10-06T23:26:00Z",
+    "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "REST pass: reviewed RestControllerWithSignalR, RestController, RestResource, ResourceValidator, RestPutByIdAttribute. Deduped open #1002 (timer flush while hub offline), #1003 (deleted entity resurrected after reconnect), #1047 (coalesce window advanced on skipped leading-edge broadcast). Filed #1060 Dispose discards pending coalesced updates; Flush() only used in tests, not AppLifetime shutdown. No dotnet build/test."
+    "note": "REST pass: reviewed RestControllerWithSignalR (coalesce timers, Handle/Flush/Dispose, BroadcastResourceChange), RestResource.ResourceName wire names, RestController/ResourceValidator/RestPutByIdAttribute (no SignalR). Traced integration to Torrent/Tag/Category/Automation controllers and SignalRMessageBroadcaster dedupe/named events. Deduped open #1002, #1003, #1047, #1049, #1060. Added comment on #1047 for timer/Flush/non-Updated throttle advance paths. No new issues filed. No dotnet build/test."
   }
 }
