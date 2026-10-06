@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:59:58Z",
+  "updatedAt": "2026-10-06T23:01:31Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_c92d8e5d"
+    "lastScheduleId": "sched_f4720e48"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -27,7 +27,7 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "unicorn"
+      "worker": "flamingo"
     },
     "http": {
       "area": "src/Seedarr.Http",
@@ -37,7 +37,7 @@
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "skunk"
+      "worker": "dolphin"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 289,
-  "lastMonitorNote": "289 open; 0 restarts; raccoon active; unicorn/kangaroo/skunk/hedgehog <90s; latest #1158-#1162"
+  "lastMonitorNote": "289 open; 2 restarts unicorn\u2192flamingo skunk\u2192dolphin; raccoon/kangaroo/hedgehog <90s; latest #1158-#1162"
 }
