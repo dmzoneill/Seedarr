@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-06T22:50:00Z",
+  "updatedAt": "2026-10-06T23:02:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/NzbDrone.SignalR",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
-    "completedAt": "2026-10-06T22:50:00Z",
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-06T23:02:00Z",
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "TorrentRecheckService pass: traced QueueRecheck/ProcessQueueAsync/ExecuteRecheckCoreAsync SignalR lifecycle (TorrentUpdated + TorrentRecheckProgress throttling ~382-405), cancel paths (~470-489), sync Recheck/RecheckAsync entry points, tests TorrentRecheckServiceTest (SignalR mock only on happy path). GitHub dedupe: no new root causes vs open #951 (dual BroadcastMessage+BroadcastToTorrent), #912/#1036 (CancelRecheck status/SR gaps), #991 (RecheckAsync pre-core cancel), #988 (queued failure swallow), #936 (SetVerifiedPieces/pieceMap), #1048 (TorrentHashCheckCompletedEvent). Commented #1048 with SignalR/integration completion gap. Next subfolder: src/Seedarr.Http/REST. No code fixes; no dotnet build/test."
+    "note": "REST pass: reviewed RestControllerWithSignalR.cs (coalesce Handle/Flush/Dispose/OnCoalesceTimerTick, IsConnected gating, DispatchBroadcast), RestController.cs, RestResource.cs (ResourceName ToLower), RestPutByIdAttribute.cs, RestControllerWithSignalRTest.cs. GitHub dedupe: open #1002/#1003/#1047/#1049/#1060 cover offline coalesce, throttle-before-success, culture ResourceName, shutdown flush gap. Commented #1002 with explicit Flush()+!IsConnected pending-loss path (lines 143-168). No new issues filed/reopened. Next subfolder: src/NzbDrone.SignalR. No code fixes; no dotnet build/test."
   }
 }
