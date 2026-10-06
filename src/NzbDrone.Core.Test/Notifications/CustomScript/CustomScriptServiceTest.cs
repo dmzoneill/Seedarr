@@ -1063,6 +1063,18 @@ public class CustomScriptServiceTest
     }
 
     [Test]
+    public async Task ReadBoundedAsync_should_drain_entire_underlying_stream_to_eof()
+    {
+        var input = new string('z', CustomScriptService.MaxStreamCaptureBytes * 3);
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(input));
+        using var reader = new StreamReader(stream);
+
+        await CustomScriptService.ReadBoundedAsync(reader, CustomScriptService.MaxStreamCaptureBytes, CancellationToken.None);
+
+        Assert.That(reader.EndOfStream, Is.True, "Stream must be fully drained to EOF to prevent pipe deadlock");
+    }
+
+    [Test]
     public async Task TestScriptAsync_should_cancel_stream_reader_and_not_escape_ObjectDisposedException_when_stream_drain_times_out()
     {
         if (OperatingSystem.IsWindows())
