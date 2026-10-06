@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using NLog;
@@ -53,19 +54,25 @@ public class HostHeaderValidationMiddleware
         // Strip port and extract inner host / IP
         if (cleanHost.StartsWith('['))
         {
-            var closeBracket = cleanHost.IndexOf(']');
-            if (closeBracket > 0)
+            if (!TryExtractBracketedHost(cleanHost, out var extractedHost))
             {
-                cleanHost = cleanHost.Substring(1, closeBracket - 1).Trim();
+                return false;
             }
+
+            cleanHost = extractedHost;
         }
         else
         {
+            if (cleanHost.Contains('[') || cleanHost.Contains(']'))
+            {
+                return false;
+            }
+
             var colonIndex = cleanHost.IndexOf(':');
             if (colonIndex >= 0 && colonIndex == cleanHost.LastIndexOf(':'))
             {
                 var portPart = cleanHost.Substring(colonIndex + 1);
-                if (int.TryParse(portPart, out var port) && port >= 0 && port <= 65535)
+                if (TryParsePort(portPart, out _))
                 {
                     cleanHost = cleanHost.Substring(0, colonIndex).Trim();
                 }
@@ -103,10 +110,9 @@ public class HostHeaderValidationMiddleware
                 var patternHost = trimmedPattern;
                 if (patternHost.StartsWith('['))
                 {
-                    var closeBracket = patternHost.IndexOf(']');
-                    if (closeBracket > 0)
+                    if (TryExtractBracketedHost(patternHost, out var extractedPatternHost))
                     {
-                        patternHost = patternHost.Substring(1, closeBracket - 1).Trim();
+                        patternHost = extractedPatternHost;
                     }
                 }
                 else
@@ -115,7 +121,7 @@ public class HostHeaderValidationMiddleware
                     if (colonIndex >= 0 && colonIndex == patternHost.LastIndexOf(':'))
                     {
                         var portPart = patternHost.Substring(colonIndex + 1);
-                        if (int.TryParse(portPart, out var p) && p >= 0 && p <= 65535)
+                        if (TryParsePort(portPart, out _))
                         {
                             patternHost = patternHost.Substring(0, colonIndex).Trim();
                         }
@@ -212,5 +218,67 @@ public class HostHeaderValidationMiddleware
         }
 
         return false;
+    }
+
+    private static bool TryExtractBracketedHost(string host, out string extractedHost)
+    {
+        extractedHost = null;
+
+        if (string.IsNullOrWhiteSpace(host) || !host.StartsWith('['))
+        {
+            return false;
+        }
+
+        var closeBracket = host.IndexOf(']');
+        if (closeBracket <= 1)
+        {
+            return false;
+        }
+
+        if (closeBracket == host.Length - 1)
+        {
+            // Valid end of bracketed host with no port
+        }
+        else if (host[closeBracket + 1] == ':')
+        {
+            var portPart = host.Substring(closeBracket + 2);
+            if (!TryParsePort(portPart, out _))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            // Characters follow ']' that are not a port delimiter (e.g. [localhost].evil.com)
+            return false;
+        }
+
+        var inner = host.Substring(1, closeBracket - 1).Trim();
+        if (!IPAddress.TryParse(inner, out var ip) || ip.AddressFamily != AddressFamily.InterNetworkV6)
+        {
+            return false;
+        }
+
+        extractedHost = inner;
+        return true;
+    }
+
+    private static bool TryParsePort(string portPart, out int port)
+    {
+        port = -1;
+        if (string.IsNullOrEmpty(portPart))
+        {
+            return false;
+        }
+
+        foreach (var c in portPart)
+        {
+            if (c < '0' || c > '9')
+            {
+                return false;
+            }
+        }
+
+        return int.TryParse(portPart, out port) && port >= 0 && port <= 65535;
     }
 }
