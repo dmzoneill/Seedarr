@@ -35,6 +35,12 @@ public class SignalRMessageBroadcasterTest
         _broadcaster = new SignalRMessageBroadcaster(_hubContext, TimeSpan.FromMilliseconds(500));
     }
 
+    [TearDown]
+    public void TearDown()
+    {
+        _broadcaster?.Dispose();
+    }
+
     [Test]
     public void BroadcastMessage_deduplicates_identical_payloads_within_window()
     {
@@ -543,5 +549,49 @@ public class SignalRMessageBroadcasterTest
 
         await Task.Delay(50);
         Assert.Pass("Faulted tracker continuation completed safely");
+    }
+
+    [Test]
+    public void BroadcastMessage_bounds_deduplication_cache_to_max_limit()
+    {
+        const int totalMessages = 1050;
+
+        for (var i = 0; i < totalMessages; i++)
+        {
+            var msg = new PieceCompletedMessage("testhash", i, 16384);
+            _broadcaster.BroadcastMessage(msg);
+        }
+
+        Assert.That(_broadcaster.RecentPayloadCount, Is.LessThanOrEqualTo(SignalRMessageBroadcaster.MaxCacheSize));
+    }
+
+    [Test]
+    public void PruneStalePayloads_removes_entries_older_than_stale_threshold()
+    {
+        var msg = new PieceCompletedMessage("testhash", 1, 16384);
+        _broadcaster.BroadcastMessage(msg);
+
+        Assert.That(_broadcaster.RecentPayloadCount, Is.EqualTo(1));
+
+        var future = DateTime.UtcNow.AddMinutes(3);
+        _broadcaster.PruneStalePayloads(future);
+
+        Assert.That(_broadcaster.RecentPayloadCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void PruneStalePayloads_evicts_oldest_entries_when_exceeding_max_cache_size()
+    {
+        const int totalMessages = 1050;
+
+        for (var i = 0; i < totalMessages; i++)
+        {
+            var msg = new PieceCompletedMessage("testhash", i, 16384);
+            _broadcaster.BroadcastMessage(msg);
+        }
+
+        _broadcaster.PruneStalePayloads();
+
+        Assert.That(_broadcaster.RecentPayloadCount, Is.LessThanOrEqualTo(SignalRMessageBroadcaster.MaxCacheSize));
     }
 }

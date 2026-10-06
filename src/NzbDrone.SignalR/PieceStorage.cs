@@ -17,6 +17,8 @@ public class PieceStorage : IPieceStorage, IDisposable
     private readonly object _stateLock = new();
     private bool _disposed;
 
+    public int PendingBatchCount => _pendingBatches.Count;
+
     public PieceStorage(IBroadcastSignalRMessage signalRBroadcaster = null, TimeSpan? coalesceWindow = null)
     {
         _signalRBroadcaster = signalRBroadcaster;
@@ -376,15 +378,30 @@ public class PieceStorage : IPieceStorage, IDisposable
 
     private void QueueCoalescedPiece(string infoHash, int pieceIndex, long bytesDownloaded)
     {
-        var batch = _pendingBatches.GetOrAdd(infoHash, h => new PendingBatch(h));
-        lock (batch.SyncLock)
+        while (true)
         {
-            batch.PieceIndexes.Add(pieceIndex);
-            batch.BytesDownloaded += bytesDownloaded;
-
-            if (batch.Timer == null)
+            if (_disposed)
             {
-                batch.Timer = new Timer(_ => FlushBatch(infoHash), null, _coalesceWindow, Timeout.InfiniteTimeSpan);
+                return;
+            }
+
+            var batch = _pendingBatches.GetOrAdd(infoHash, h => new PendingBatch(h));
+            lock (batch.SyncLock)
+            {
+                if (batch.IsDisposed)
+                {
+                    continue;
+                }
+
+                batch.PieceIndexes.Add(pieceIndex);
+                batch.BytesDownloaded += bytesDownloaded;
+
+                if (batch.Timer == null)
+                {
+                    batch.Timer = new Timer(_ => FlushBatch(infoHash), null, _coalesceWindow, Timeout.InfiniteTimeSpan);
+                }
+
+                break;
             }
         }
     }
@@ -409,6 +426,11 @@ public class PieceStorage : IPieceStorage, IDisposable
 
             if (batch.PieceIndexes.Count == 0)
             {
+                if (_pendingBatches.TryRemove(new KeyValuePair<string, PendingBatch>(infoHash, batch)))
+                {
+                    batch.Dispose();
+                }
+
                 return;
             }
 
@@ -416,6 +438,11 @@ public class PieceStorage : IPieceStorage, IDisposable
             bytesToBroadcast = batch.BytesDownloaded;
             batch.PieceIndexes.Clear();
             batch.BytesDownloaded = 0;
+
+            if (_pendingBatches.TryRemove(new KeyValuePair<string, PendingBatch>(infoHash, batch)))
+            {
+                batch.Dispose();
+            }
         }
 
         if (_signalRBroadcaster == null || indexesToBroadcast.Count == 0)
@@ -445,6 +472,8 @@ public class PieceStorage : IPieceStorage, IDisposable
 
         public object SyncLock { get; } = new();
 
+        public bool IsDisposed { get; private set; }
+
         public PendingBatch(string infoHash)
         {
             InfoHash = infoHash;
@@ -454,6 +483,7 @@ public class PieceStorage : IPieceStorage, IDisposable
         {
             lock (SyncLock)
             {
+                IsDisposed = true;
                 Timer?.Dispose();
                 Timer = null;
                 PieceIndexes.Clear();
