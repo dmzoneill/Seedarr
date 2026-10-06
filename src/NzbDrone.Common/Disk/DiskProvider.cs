@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Linq;
 
 namespace NzbDrone.Common.Disk;
 
@@ -9,6 +11,11 @@ public class DiskProvider : IDiskProvider
     private static readonly Func<string, bool> DirExists = (Func<string, bool>)Delegate.CreateDelegate(
         typeof(Func<string, bool>),
         typeof(Directory).GetMethod(nameof(Directory.Exists), new[] { typeof(string) })!);
+
+    /// <summary>
+    /// Optional drive enumerator for testing. When null, <see cref="DriveInfo.GetDrives"/> is used.
+    /// </summary>
+    public Func<DriveInfo[]> DrivesProvider { get; set; }
 
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is used to query filesystem drive space")]
     public long GetAvailableFreeSpace(string path)
@@ -21,6 +28,17 @@ public class DiskProvider : IDiskProvider
             }
 
             var fullPath = Path.GetFullPath(path);
+
+            if (!OperatingSystem.IsWindows())
+            {
+                var drives = DrivesProvider?.Invoke() ?? DriveInfo.GetDrives();
+                var bestMatch = SelectLongestMatchingDrive(fullPath, drives);
+                if (bestMatch != null)
+                {
+                    return bestMatch.AvailableFreeSpace;
+                }
+            }
+
             var root = Path.GetPathRoot(fullPath);
             if (string.IsNullOrEmpty(root))
             {
@@ -88,5 +106,96 @@ public class DiskProvider : IDiskProvider
     public bool ContainsPathTraversal(string path)
     {
         return PathSanitizer.ContainsPathTraversal(path);
+    }
+
+    /// <summary>
+    /// Finds the longest mount point prefix for a filesystem path.
+    /// </summary>
+    public static string GetLongestMatchingMountPoint(string fullPath, IEnumerable<string> mountPoints)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath) || mountPoints == null)
+        {
+            return null;
+        }
+
+        var normalizedFullPath = fullPath.Replace('\\', '/');
+        if (!normalizedFullPath.EndsWith('/') && normalizedFullPath != "/")
+        {
+            normalizedFullPath += '/';
+        }
+
+        string bestMatch = null;
+        var longestMatchLength = -1;
+
+        foreach (var mountPoint in mountPoints)
+        {
+            if (string.IsNullOrWhiteSpace(mountPoint))
+            {
+                continue;
+            }
+
+            var mountPath = mountPoint.Replace('\\', '/').TrimEnd('/');
+            if (string.IsNullOrEmpty(mountPath))
+            {
+                mountPath = "/";
+            }
+
+            var normalizedMountPath = mountPath == "/" ? "/" : mountPath + "/";
+            if (normalizedFullPath.StartsWith(normalizedMountPath, StringComparison.Ordinal) ||
+                fullPath.Equals(mountPath, StringComparison.Ordinal) ||
+                fullPath.Equals(mountPoint, StringComparison.Ordinal))
+            {
+                if (mountPath.Length > longestMatchLength)
+                {
+                    longestMatchLength = mountPath.Length;
+                    bestMatch = mountPath;
+                }
+            }
+        }
+
+        return bestMatch;
+    }
+
+    internal static DriveInfo SelectLongestMatchingDrive(string fullPath, DriveInfo[] drives)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath) || drives == null || drives.Length == 0)
+        {
+            return null;
+        }
+
+        var mountPoints = drives.Where(d => d != null).Select(d => d.Name).ToArray();
+        var bestMount = GetLongestMatchingMountPoint(fullPath, mountPoints);
+        if (bestMount == null)
+        {
+            return null;
+        }
+
+        foreach (var drive in drives)
+        {
+            if (drive == null)
+            {
+                continue;
+            }
+
+            try
+            {
+                var mountPath = drive.Name.Replace('\\', '/').TrimEnd('/');
+                if (string.IsNullOrEmpty(mountPath))
+                {
+                    mountPath = "/";
+                }
+
+                if (string.Equals(mountPath, bestMount, StringComparison.Ordinal))
+                {
+                    return drive;
+                }
+            }
+            catch
+            {
+                // Ignore inaccessible virtual filesystem mounts.
+            }
+        }
+
+        return null;
     }
 }
