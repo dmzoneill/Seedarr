@@ -138,6 +138,30 @@ public class InstallUpdateServiceTest
     }
 
     [Test]
+    public void StageAndInstallAsync_should_fail_when_sha256_checksum_not_provided()
+    {
+        var service = new InstallUpdateService(
+            _updateService,
+            _updatePackageProvider,
+            _postUpdateVerificationService,
+            _appFolderInfo,
+            installDirectory: _targetDir,
+            isContainerizedOverride: false);
+
+        var pkgPath = Path.Combine(_tempDir, "update_package.zip");
+        File.WriteAllText(pkgPath, "some payload bytes for update");
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await service.StageAndInstallAsync(pkgPath, expectedChecksum: null, "2.0.0");
+        });
+
+        Assert.That(ex.Message, Does.Contain("SHA-256 checksum is required"));
+        var progress = service.GetProgress();
+        Assert.That(progress.Stage, Is.EqualTo(UpdateInstallStage.Failed));
+    }
+
+    [Test]
     public void StageAndInstallAsync_should_fail_when_sha256_verification_mismatches()
     {
         var service = new InstallUpdateService(
@@ -229,12 +253,29 @@ public class InstallUpdateServiceTest
         Assert.That(File.ReadAllText(destFile), Is.EqualTo("running-binary-v2"));
     }
 
-    [TestCase("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "pkg.tar.gz", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")]
     [TestCase("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  pkg.tar.gz", "pkg.tar.gz", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")]
     [TestCase("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 *pkg.tar.gz", "pkg.tar.gz", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")]
     public void ExtractChecksum_should_parse_various_checksum_file_formats(string content, string fileName, string expected)
     {
         var parsed = InstallUpdateService.ExtractChecksum(content, fileName);
         Assert.That(parsed, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void ExtractChecksum_should_return_null_when_hash_only_line_does_not_reference_package_filename()
+    {
+        const string hashOnly = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        Assert.That(InstallUpdateService.ExtractChecksum(hashOnly, "pkg.tar.gz"), Is.Null);
+    }
+
+    [Test]
+    public void ExtractChecksum_should_not_use_unrelated_entry_from_multi_file_manifest()
+    {
+        const string linuxHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string windowsHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var manifest = $"{linuxHash}  seedarr-linux-x64.tar.gz\n{windowsHash}  seedarr-win-x64.zip";
+
+        Assert.That(InstallUpdateService.ExtractChecksum(manifest, "seedarr-linux-x64.tar.gz"), Is.EqualTo(linuxHash));
+        Assert.That(InstallUpdateService.ExtractChecksum(manifest, "seedarr-macos-arm64.tar.gz"), Is.Null);
     }
 }
