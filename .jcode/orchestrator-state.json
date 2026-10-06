@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T23:57:16Z",
+  "updatedAt": "2026-10-06T23:58:25Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_ea34c0b3"
+    "lastScheduleId": "sched_e04f73f9"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -27,12 +27,12 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "condor"
+      "worker": "pheasant"
     },
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "kingfisher"
+      "worker": "robin"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -42,7 +42,7 @@
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "finch"
+      "worker": "starling"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 380,
-  "lastMonitorNote": "380 open; 0 restarts; all hunters active (crow,condor,kingfisher,owl,finch)"
+  "githubOpenCount": 381,
+  "lastMonitorNote": "381 open; 3 restarts condor->pheasant Config, kingfisher->robin Terminal, finch->starling hub"
 }
