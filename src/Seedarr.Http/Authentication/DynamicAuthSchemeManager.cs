@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -141,163 +142,163 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
                 throw new ArgumentException("IssuerUrl and ClientId are required to register an OIDC provider.");
             }
 
-        var options = new OpenIdConnectOptions
-        {
-            SignInScheme = "Cookies",
-            Authority = provider.IssuerUrl.TrimEnd('/'),
-            ClientId = provider.ClientId,
-            ClientSecret = DecryptClientSecret(provider.ClientSecretEncrypted, dataProtection),
-            ResponseType = OpenIdConnectResponseType.Code,
-            ResponseMode = OpenIdConnectResponseMode.Query,
-            GetClaimsFromUserInfoEndpoint = true,
-            SaveTokens = true,
-            CallbackPath = $"/signin-oidc-{sanitizedId}",
-            RequireHttpsMetadata = provider.IssuerUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase),
-            DataProtectionProvider = dataProtection,
-            Events = new OpenIdConnectEvents
+            var options = new OpenIdConnectOptions
             {
-                OnRedirectToIdentityProvider = context =>
+                SignInScheme = "Cookies",
+                Authority = provider.IssuerUrl.TrimEnd('/'),
+                ClientId = provider.ClientId,
+                ClientSecret = DecryptClientSecret(provider.ClientSecretEncrypted, dataProtection),
+                ResponseType = OpenIdConnectResponseType.Code,
+                ResponseMode = OpenIdConnectResponseMode.Query,
+                GetClaimsFromUserInfoEndpoint = true,
+                SaveTokens = true,
+                CallbackPath = $"/signin-oidc-{sanitizedId}",
+                RequireHttpsMetadata = provider.IssuerUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase),
+                DataProtectionProvider = dataProtection,
+                Events = new OpenIdConnectEvents
                 {
-                    if (context.Request.IsHttps ||
-                        string.Equals(context.Request.Headers["X-Forwarded-Proto"], "https", StringComparison.OrdinalIgnoreCase))
+                    OnRedirectToIdentityProvider = context =>
                     {
-                        if (!string.IsNullOrEmpty(context.ProtocolMessage.RedirectUri) &&
-                            context.ProtocolMessage.RedirectUri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                        if (context.Request.IsHttps ||
+                            string.Equals(context.Request.Headers["X-Forwarded-Proto"], "https", StringComparison.OrdinalIgnoreCase))
                         {
-                            context.ProtocolMessage.RedirectUri = "https://" + context.ProtocolMessage.RedirectUri["http://".Length..];
+                            if (!string.IsNullOrEmpty(context.ProtocolMessage.RedirectUri) &&
+                                context.ProtocolMessage.RedirectUri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                            {
+                                context.ProtocolMessage.RedirectUri = "https://" + context.ProtocolMessage.RedirectUri["http://".Length..];
+                            }
                         }
-                    }
 
-                    return Task.CompletedTask;
-                },
-                OnTokenValidated = context =>
-                {
-                    var claims = context.Principal?.Claims.ToList() ?? new List<Claim>();
-                    var sub = claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub")?.Value
-                                ?? Guid.NewGuid().ToString();
-                    var username = claims.FirstOrDefault(c => c.Type == ClaimTypes.Name || c.Type == "preferred_username" || c.Type == "nickname")?.Value
-                                    ?? sub;
-                    var email = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email || c.Type == "email")?.Value;
-                    var displayName = claims.FirstOrDefault(c => c.Type == "name")?.Value ?? username;
-
-                    var userClaims = new List<Claim>
+                        return Task.CompletedTask;
+                    },
+                    OnTokenValidated = context =>
                     {
+                        var claims = context.Principal?.Claims.ToList() ?? new List<Claim>();
+                        var sub = claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub")?.Value
+                                    ?? Guid.NewGuid().ToString();
+                        var username = claims.FirstOrDefault(c => c.Type == ClaimTypes.Name || c.Type == "preferred_username" || c.Type == "nickname")?.Value
+                                        ?? sub;
+                        var email = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email || c.Type == "email")?.Value;
+                        var displayName = claims.FirstOrDefault(c => c.Type == "name")?.Value ?? username;
+
+                        var userClaims = new List<Claim>
+                        {
                         new(ClaimTypes.NameIdentifier, sub),
                         new(ClaimTypes.Name, username),
                         new("DisplayName", displayName),
-                    };
+                        };
 
-                    var assignedRoles = ResolveRoles(claims, provider.RoleMappingRules);
-                    foreach (var role in assignedRoles)
-                    {
-                        userClaims.Add(new Claim(ClaimTypes.Role, role));
-                    }
+                        var assignedRoles = ResolveRoles(claims, provider.RoleMappingRules);
+                        foreach (var role in assignedRoles)
+                        {
+                            userClaims.Add(new Claim(ClaimTypes.Role, role));
+                        }
 
-                    if (!string.IsNullOrEmpty(email))
-                    {
-                        userClaims.Add(new Claim(ClaimTypes.Email, email));
-                    }
+                        if (!string.IsNullOrEmpty(email))
+                        {
+                            userClaims.Add(new Claim(ClaimTypes.Email, email));
+                        }
 
-                    var identity = new ClaimsIdentity(userClaims, "Cookies");
-                    context.Principal = new ClaimsPrincipal(identity);
+                        var identity = new ClaimsIdentity(userClaims, "Cookies");
+                        context.Principal = new ClaimsPrincipal(identity);
 
-                    return Task.CompletedTask;
+                        return Task.CompletedTask;
+                    },
                 },
-            },
-        };
+            };
 
-        options.Scope.Clear();
-        var scopes = (provider.Scopes ?? "openid profile email").Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var scope in scopes)
-        {
-            options.Scope.Add(scope);
+            options.Scope.Clear();
+            var scopes = (provider.Scopes ?? "openid profile email").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var scope in scopes)
+            {
+                options.Scope.Add(scope);
+            }
+
+            if (!string.IsNullOrWhiteSpace(provider.MetadataUrl))
+            {
+                options.MetadataAddress = provider.MetadataUrl;
+            }
+
+            var hadPostConfigureError = false;
+            try
+            {
+                if (oidcPostConfigure != null)
+                {
+                    oidcPostConfigure.PostConfigure(schemeName, options);
+                }
+            }
+            catch (Exception ex)
+            {
+                hadPostConfigureError = true;
+                _logger.Warn(ex, "Post-configuration for OIDC provider '{0}' ({1}) encountered an error. Proceeding with deferred metadata discovery.", provider.Name, provider.ProviderId);
+                ScheduleRetry(provider);
+            }
+
+            oidcOptionsCache.TryAdd(schemeName, options);
+
+            var newScheme = new AuthenticationScheme(schemeName, provider.Name, typeof(OpenIdConnectHandler));
+            schemeProvider.AddScheme(newScheme);
+
+            if (!hadPostConfigureError)
+            {
+                _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+            }
+
+            _logger.Info("Registered dynamic OIDC authentication scheme: {0} ({1})", schemeName, provider.Name);
         }
-
-        if (!string.IsNullOrWhiteSpace(provider.MetadataUrl))
+        finally
         {
-            options.MetadataAddress = provider.MetadataUrl;
+            _schemeLock.Release();
         }
+    }
 
-        var hadPostConfigureError = false;
+    public async Task RemoveProviderSchemeAsync(string providerId)
+    {
+        var sanitizedId = SanitizeProviderId(providerId);
+        var schemeName = $"Oidc_{sanitizedId}";
+
+        await _schemeLock.WaitAsync();
         try
         {
-            if (oidcPostConfigure != null)
+            var schemeProvider = _serviceProvider.GetService<IAuthenticationSchemeProvider>();
+            var oidcOptionsCache = _serviceProvider.GetService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+
+            _pendingRetryProviders.TryRemove(providerId, out _);
+
+            if (schemeProvider != null)
             {
-                oidcPostConfigure.PostConfigure(schemeName, options);
+                schemeProvider.RemoveScheme(schemeName);
             }
+
+            if (oidcOptionsCache != null)
+            {
+                oidcOptionsCache.TryRemove(schemeName);
+            }
+
+            _logger.Info("Removed dynamic authentication scheme: {0}", schemeName);
+            await Task.CompletedTask;
         }
-        catch (Exception ex)
+        finally
         {
-            hadPostConfigureError = true;
-            _logger.Warn(ex, "Post-configuration for OIDC provider '{0}' ({1}) encountered an error. Proceeding with deferred metadata discovery.", provider.Name, provider.ProviderId);
-            ScheduleRetry(provider);
+            _schemeLock.Release();
         }
+    }
 
-        oidcOptionsCache.TryAdd(schemeName, options);
-
-        var newScheme = new AuthenticationScheme(schemeName, provider.Name, typeof(OpenIdConnectHandler));
-        schemeProvider.AddScheme(newScheme);
-
-        if (!hadPostConfigureError)
+    private static string SanitizeProviderId(string providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
         {
-            _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+            throw new ArgumentException("ProviderId cannot be null or empty.", nameof(providerId));
         }
 
-        _logger.Info("Registered dynamic OIDC authentication scheme: {0} ({1})", schemeName, provider.Name);
-    }
-    finally
-    {
-        _schemeLock.Release();
-    }
-}
-
-public async Task RemoveProviderSchemeAsync(string providerId)
-{
-    var sanitizedId = SanitizeProviderId(providerId);
-    var schemeName = $"Oidc_{sanitizedId}";
-
-    await _schemeLock.WaitAsync();
-    try
-    {
-        var schemeProvider = _serviceProvider.GetService<IAuthenticationSchemeProvider>();
-        var oidcOptionsCache = _serviceProvider.GetService<IOptionsMonitorCache<OpenIdConnectOptions>>();
-
-        _pendingRetryProviders.TryRemove(providerId, out _);
-
-        if (schemeProvider != null)
+        var cleaned = new string(providerId.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
+        if (string.IsNullOrWhiteSpace(cleaned))
         {
-            schemeProvider.RemoveScheme(schemeName);
+            throw new ArgumentException($"ProviderId '{providerId}' contains no valid characters.", nameof(providerId));
         }
 
-        if (oidcOptionsCache != null)
-        {
-            oidcOptionsCache.TryRemove(schemeName);
-        }
-
-        _logger.Info("Removed dynamic authentication scheme: {0}", schemeName);
-        await Task.CompletedTask;
+        return cleaned;
     }
-    finally
-    {
-        _schemeLock.Release();
-    }
-}
-
-private static string SanitizeProviderId(string providerId)
-{
-    if (string.IsNullOrWhiteSpace(providerId))
-    {
-        throw new ArgumentException("ProviderId cannot be null or empty.", nameof(providerId));
-    }
-
-    var cleaned = new string(providerId.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
-    if (string.IsNullOrWhiteSpace(cleaned))
-    {
-        throw new ArgumentException($"ProviderId '{providerId}' contains no valid characters.", nameof(providerId));
-    }
-
-    return cleaned;
-}
 
     private string DecryptClientSecret(string encryptedSecret, IDataProtectionProvider dataProtection)
     {
