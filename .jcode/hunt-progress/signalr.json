@@ -12,9 +12,9 @@
   "lastPass": {
     "subfolder": "src/Seedarr.Http/REST",
     "completedAt": "2026-10-06T22:35:00Z",
-    "issuesFiled": [1002],
+    "issuesFiled": [1003],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "REST pass: RestControllerWithSignalR coalesce/Flush/Dispose/DispatchBroadcast paths; RestController, RestResource, ResourceValidator, RestPutByIdAttribute (no direct SignalR). Deduped #628 #757 #878. Filed #1002 coalesce timer drops pending when IsConnected false at dispatch. No dotnet build/test."
+    "note": "REST pass: reviewed RestControllerWithSignalR + RestResource/validator/attributes; deduped open #1002 (coalesce timer flush while disconnected); filed #1003 pending coalesce timer can broadcast stale Updated after reconnect when Deleted dropped offline. No dotnet build/test."
   }
 }
