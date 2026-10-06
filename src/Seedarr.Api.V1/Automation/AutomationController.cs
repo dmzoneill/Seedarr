@@ -2,7 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Automation;
 using NzbDrone.SignalR;
 using Seedarr.Http;
@@ -11,6 +13,7 @@ using Seedarr.Http.REST;
 namespace Seedarr.Api.V1.Automation;
 
 [V1ApiController("automation")]
+[Authorize(Policy = Policies.Reader)]
 public class AutomationController : RestControllerWithSignalR<AutomationScriptResource, AutomationScript>
 {
     private readonly IAutomationService _automationService;
@@ -49,6 +52,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationScriptResource> Create([FromBody] AutomationScriptResource resource)
     {
         if (resource == null)
@@ -68,6 +72,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
 
     [HttpPut("{id:int}")]
     [HttpPut]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationScriptResource> Update([FromBody] AutomationScriptResource resource, int? id = null)
     {
         if (resource == null)
@@ -107,6 +112,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
     public ActionResult<AutomationScriptResource> Update(int id, AutomationScriptResource resource) => Update(resource, id);
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Delete(int id)
     {
         _automationService.Delete(id);
@@ -115,6 +121,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
 
     [HttpPost("{id:int}/run")]
     [HttpPost("{id:int}/execute")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationExecutionResult> Run(int id, [FromQuery] int? torrentId = null)
     {
         var result = _automationService.ExecuteScript(id, torrentId);
@@ -137,6 +144,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
     }
 
     [HttpPost("test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationExecutionResult> Test([FromBody] AutomationTestRequestResource request)
     {
         if (request?.Script == null)
@@ -173,6 +181,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
     }
 
     [HttpPost("marketplace/install")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationScriptResource> InstallMarketplaceTemplate([FromBody] InstallMarketplaceTemplateRequest request)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.TemplateId))
