@@ -8,14 +8,17 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Datastore;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.System;
 
 [V1ApiController("system/database")]
+[Authorize(Policy = Policies.AdminOnly)]
 [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA3001:Review SQL queries for security vulnerabilities", Justification = "Admin SQL explorer intentionally executes user-supplied and schema introspection SQL queries.")]
 public class SystemDatabaseController : Controller
 {
@@ -513,14 +516,28 @@ public class SystemDatabaseController : Controller
         var sw = Stopwatch.StartNew();
 
         // Enforce safe mode if readOnly is true
-        if (request.ReadOnly && WritePattern.IsMatch(trimmedQuery))
+        if (request.ReadOnly)
         {
-            return BadRequest(new DatabaseQueryResult
+            var clean = StripSqlComments(trimmedQuery);
+            if (clean.TrimEnd(';').Contains(';'))
             {
-                Success = false,
-                ErrorMessage = "Query contains write/mutation statements (INSERT, UPDATE, DELETE, DROP, etc.) but Safe Mode (Read-Only) is enabled.",
-                ExecutionTimeMs = 0
-            });
+                return BadRequest(new DatabaseQueryResult
+                {
+                    Success = false,
+                    ErrorMessage = "Multi-statement queries are not allowed in Safe Mode (Read-Only).",
+                    ExecutionTimeMs = 0
+                });
+            }
+
+            if (IsMutationQuery(trimmedQuery))
+            {
+                return BadRequest(new DatabaseQueryResult
+                {
+                    Success = false,
+                    ErrorMessage = "Query contains write/mutation statements (INSERT, UPDATE, DELETE, DROP, etc.) but Safe Mode (Read-Only) is enabled.",
+                    ExecutionTimeMs = 0
+                });
+            }
         }
 
         using var connection = _mainDatabase.OpenConnection();
@@ -531,7 +548,7 @@ public class SystemDatabaseController : Controller
             SetCommandQuery(cmd, trimmedQuery);
             cmd.CommandTimeout = 30;
 
-            var isWrite = WritePattern.IsMatch(trimmedQuery);
+            var isWrite = IsMutationQuery(trimmedQuery);
 
             if (isWrite && !request.ReadOnly)
             {
@@ -727,5 +744,35 @@ public class SystemDatabaseController : Controller
     private static void SetCommandQuery(global::System.Data.IDbCommand command, string query)
     {
         typeof(global::System.Data.IDbCommand).GetProperty(nameof(global::System.Data.IDbCommand.CommandText))?.SetValue(command, query);
+    }
+
+    private static string StripSqlComments(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return string.Empty;
+        }
+
+        var withoutBlockComments = Regex.Replace(sql, @"/\*.*?\*/", " ", RegexOptions.Singleline);
+        var withoutLineComments = Regex.Replace(withoutBlockComments, @"--.*?(\r?\n|$)", " ");
+        return withoutLineComments.Trim();
+    }
+
+    private static bool IsMutationQuery(string query)
+    {
+        var clean = StripSqlComments(query);
+        if (WritePattern.IsMatch(clean))
+        {
+            return true;
+        }
+
+        var tokens = clean.Split(new[] { ' ', '\t', '\r', '\n', '(', ')', ';' }, StringSplitOptions.RemoveEmptyEntries);
+        var mutationKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "REPLACE",
+            "VACUUM", "ATTACH", "DETACH", "REINDEX", "TRUNCATE"
+        };
+
+        return tokens.Any(t => mutationKeywords.Contains(t));
     }
 }
