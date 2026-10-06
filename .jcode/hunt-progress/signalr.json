@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T00:52:00Z",
+  "updatedAt": "2026-10-07T00:58:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/NzbDrone.SignalR",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
-    "completedAt": "2026-10-07T00:52:00Z",
-    "issuesFiled": [1242, 1243],
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-07T00:58:00Z",
+    "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "TorrentRecheckService static pass: queue/ProcessQueueAsync/CancelRecheck races, ExecuteRecheckCoreAsync status+SignalR (TorrentUpdated, TorrentRecheckProgress throttle), state machine vs fallback paths, piece verification vs presence fallback, fast resume, sync Recheck blocking. Cross-checked open GH: #912 #951 #988 #991 #1036 #1038 #1048 #1172 #1188 #1209 #1210 #936 already cover cancel dequeue stuck, double broadcast, exception mid-recheck UI, early cancel SignalR, presence path gaps, missing TorrentHashCheckCompletedEvent, queue processor race, automation recheck wiring, SetVerifiedPieces pieceMapUpdated. Filed #1242 ignored in-memory PieceHashes when SourcePath missing (distinct from #1210); #1243 Progress vs Downloaded not reconciled after recheck. No issues reopened. Next: src/Seedarr.Http/REST. Static review only; no dotnet build/test."
+    "note": "Static review of RestController.cs, RestControllerWithSignalR.cs (coalesce timers, PruneStaleBroadcastTimes, Dispose/Flush, IsConnected ingress, DispatchBroadcast/GetResourceById), RestResource.cs (ResourceName), ResourceValidator.cs, Attributes/RestPutByIdAttribute.cs; cross-checked consumers (Torrent/Tag/Category/Automation controllers). Cross-checked open GH: #628 #757 #878 #887 #936 #1002 #1003 #1047 #1049 #1060 #1140 #1186 #1187 #1214 #1215 #1230. No new root causes beyond existing issues; commented on #1047 that OnCoalesceTimerTick and Flush also advance _lastBroadcastTimes before successful broadcast (trailing-edge/flush parity with leading-edge). No issues filed/reopened. Next: src/NzbDrone.SignalR. Static review only; no dotnet build/test."
   }
 }
