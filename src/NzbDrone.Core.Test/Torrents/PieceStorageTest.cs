@@ -145,4 +145,30 @@ public class PieceStorageTest
         storage.CloseHandles(hash);
         Assert.That(storage.PendingBatchCount, Is.EqualTo(0));
     }
+
+    [Test]
+    public void MultiFilePieceStorage_ResolveFilePath_should_throw_SecurityException_on_path_traversal()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "test_base");
+        Assert.Throws<System.Security.SecurityException>(() =>
+            MultiFilePieceStorage.ResolveFilePath(baseDir, "../../../evil.sh"));
+    }
+
+    [Test]
+    public void MultiFilePieceStorage_ResolveFilePath_should_throw_SecurityException_on_rooted_path()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "test_base");
+        var rooted = OperatingSystem.IsWindows() ? "C:\\Windows\\System32\\calc.exe" : "/etc/shadow";
+        Assert.Throws<System.Security.SecurityException>(() =>
+            MultiFilePieceStorage.ResolveFilePath(baseDir, rooted));
+    }
+
+    [Test]
+    public void MultiFilePieceStorage_ResolveFilePath_should_resolve_safe_subpath()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "test_base");
+        var resolved = MultiFilePieceStorage.ResolveFilePath(baseDir, "movies/video.mkv");
+        var expected = Path.GetFullPath(Path.Combine(baseDir, "movies", "video.mkv"));
+        Assert.That(resolved, Is.EqualTo(expected));
+    }
 }
