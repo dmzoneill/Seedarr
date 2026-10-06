@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T00:35:00Z",
-  "area": "src/Seedarr.Http/REST",
-  "currentSubfolder": "src/NzbDrone.SignalR",
+  "updatedAt": "2026-10-07T00:40:00Z",
+  "area": "src/NzbDrone.SignalR",
+  "currentSubfolder": "src/NzbDrone.Core/Jobs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/REST",
-    "completedAt": "2026-10-07T00:35:00Z",
-    "issuesFiled": [1214, 1215],
+    "subfolder": "src/NzbDrone.SignalR",
+    "completedAt": "2026-10-07T00:40:00Z",
+    "issuesFiled": [1234, 1235],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "REST pass: reviewed RestControllerWithSignalR (coalesce Handle/Flush/timer/dispose, IsConnected gating, PruneStaleBroadcastTimes), RestController, RestResource.ResourceName, ResourceValidator, RestPutByIdAttribute. Cross-checked open GH: #628 #757 #878 #1002 #1003 #1047 #1049 #1060 #1140 #1186 #1187 already cover disconnect/timer/resurrect, throttle advance before broadcast, shutdown Flush, ResourceName culture, optional PUT id route, TorrentController broadcast caches, reconnect coalesce window. Filed #1214 _lastBroadcastTimes prune only on Updated coalesce path (unbounded growth on Created-only catalogs); #1215 Created stamps coalesce window delaying first Updated after import. No issues reopened. Next: src/NzbDrone.SignalR. No code fixes; no dotnet build/test."
+    "note": "SignalR pass: reviewed MessageHub (OnConnected auth fallbacks, IsConnected tracking, channel/torrent subscriptions, RequestStateSnapshot), SignalRMessageBroadcaster (dedup cache/prune, GetNamedEvents, group/channel routing), PieceStorage (coalesce/flush, piece messages), StateSnapshotResource, TrackerSignalREventHandler. Cross-checked open GH: #628 #757 #878 #887 #892 #918 #919 #936 #940 #954 #961 #1016 #1094 #1194 already cover disconnect/timer, Clients.All vs groups, piece map payloads, tracker announce misuse, Clear/corruption/set-verified silent, snapshot double-delivery/GetAll throw, dedup-before-send, coalesce bypass, etc. Filed #1234 PieceBatchCompleted dedup key order-sensitive; #1235 SubscribeToTorrent joins group when ITorrentService missing. No issues reopened. Next: src/NzbDrone.Core/Jobs. Static review only; no dotnet build/test."
   }
 }
