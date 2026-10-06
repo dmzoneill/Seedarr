@@ -417,14 +417,14 @@ public class IndexerControllerTest
             _rssRuleRepository,
             client);
 
-        var parsedInfo = new ParsedTorrentInfo
+        var parsedInfo = new ParsedTorrent
         {
             Name = "MultiFileTorrent",
             InfoHash = "1234567890abcdef1234567890abcdef12345678",
             TotalSize = 3000,
             PieceLength = 1000,
             PieceCount = 3,
-            Files = new List<TorrentFileInfo>
+            Files = new List<ParsedTorrentFile>
             {
                 new() { Path = "file1.dat", Size = 1500, IsPaddingFile = false },
                 new() { Path = "file2.dat", Size = 1500, IsPaddingFile = false },

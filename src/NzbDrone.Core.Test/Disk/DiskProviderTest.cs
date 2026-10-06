@@ -55,5 +55,4 @@ public class DiskProviderTest
         Assert.That(subject.GetAvailableFreeSpace("   "), Is.EqualTo(0));
         Assert.That(subject.GetAvailableFreeSpace(null), Is.EqualTo(0));
     }
-
 }

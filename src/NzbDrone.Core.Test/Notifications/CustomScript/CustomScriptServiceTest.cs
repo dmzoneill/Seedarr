@@ -1071,7 +1071,7 @@ public class CustomScriptServiceTest
 
         await CustomScriptService.ReadBoundedAsync(reader, CustomScriptService.MaxStreamCaptureBytes, CancellationToken.None);
 
-        Assert.That(reader.EndOfStream, Is.True, "Stream must be fully drained to EOF to prevent pipe deadlock");
+        Assert.That(stream.Position, Is.EqualTo(stream.Length), "Stream must be fully drained to EOF to prevent pipe deadlock");
     }
 
     [Test]
