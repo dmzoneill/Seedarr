@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_TBD"
+    "lastScheduleId": "sched_3210765f"
   },
   "policy": {
     "pushTarget": "origin/main",
