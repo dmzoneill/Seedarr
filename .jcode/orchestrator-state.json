@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:30:25Z",
+  "updatedAt": "2026-10-06T22:32:00Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_f9b903c6"
+    "lastScheduleId": "sched_3bec1ef7"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -22,7 +22,7 @@
     "core": {
       "area": "src/NzbDrone.Core",
       "status": "running",
-      "worker": "shark"
+      "worker": "spider"
     },
     "api": {
       "area": "src/Seedarr.Api.V1",
@@ -32,7 +32,7 @@
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "sheep"
+      "worker": "squid"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 30,
-  "lastMonitorNote": "30 open; 0 restarts; shark/snail/sheep/sloth/snake all active; latest #1080-#1084"
+  "lastMonitorNote": "30 open; 2 restarts: shark->spider (Core/DownloadClients), sheep->squid (Http/Authentication); sheep reopened #654 + #1092; latest #1085-#1087"
 }
