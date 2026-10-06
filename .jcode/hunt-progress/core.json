@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T00:15:00Z",
+  "updatedAt": "2026-10-07T00:35:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents",
+  "currentSubfolder": "src/NzbDrone.Core/Authentication",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Blocklist",
-    "completedAt": "2026-10-07T00:15:00Z",
-    "issuesFiled": [1175, 1176, 1177],
+    "subfolder": "src/NzbDrone.Core/Torrents",
+    "completedAt": "2026-10-07T00:35:00Z",
+    "issuesFiled": [1188, 1189],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Blocklist pass: PeerBlocklistSyncService, Ipv4/Ipv6IntervalTree, BlocklistArchiveStreamProvider, BlocklistUpdateTask. Filed #1175 (IPv6 space-separated label parsing gap), #1176 (Content-Encoding deflate not decoded), #1177 (scheduled Execute ignores SyncAsync Success=false). Deduped open #904, #905, #937-#939, #1021-#1024, #1029, #1032, #1129, #1130 and related. No dotnet build/test."
+    "note": "Torrents pass: reviewed import/watch/recheck/storage/fastresume/merkle/package. Filed #1188 (VerifyPiecePresenceFallback treats missing padding files as piece failure), #1189 (DiskAllocationService preallocates padding files). Deduped open #948, #950, #1043, #1044, #1046, #1038, #1138, #1139, #946 and related. No dotnet build/test."
   }
 }
