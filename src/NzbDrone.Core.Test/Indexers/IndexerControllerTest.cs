@@ -1064,6 +1064,64 @@ public class IndexerControllerTest
         _proxySettingsProvider.Received(1).CreateHandler();
     }
 
+    [Test]
+    public void Update_when_successful_updates_indexer_and_resets_indexer_status()
+    {
+        var existing = new IndexerDefinition
+        {
+            Id = 5,
+            Name = "Existing Indexer",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "old_api_key"
+        };
+        _indexerFactory.Get(5).Returns(existing);
+
+        var updated = new IndexerDefinition
+        {
+            Id = 5,
+            Name = "Updated Indexer",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "new_api_key"
+        };
+
+        var result = _controller.Update(5, updated);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _indexerFactory.Received(1).Update(Arg.Is<IndexerDefinition>(d => d.Id == 5 && d.ApiKey == "new_api_key"));
+        _indexerStatusService.Received(1).Reset(5);
+    }
+
+    [Test]
+    public void Update_when_indexer_not_found_returns_not_found_and_does_not_reset_status()
+    {
+        _indexerFactory.Get(99).Returns((IndexerDefinition)null);
+
+        var updated = new IndexerDefinition
+        {
+            Id = 99,
+            Name = "Missing Indexer",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key"
+        };
+
+        var result = _controller.Update(99, updated);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _indexerStatusService.DidNotReceive().Reset(Arg.Any<int>());
+    }
+
+    [Test]
+    public void Update_when_body_is_null_returns_bad_request_and_does_not_reset_status()
+    {
+        var result = _controller.Update(1, null);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        _indexerStatusService.DidNotReceive().Reset(Arg.Any<int>());
+    }
+
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
         public HttpRequestMessage SentRequest { get; private set; }

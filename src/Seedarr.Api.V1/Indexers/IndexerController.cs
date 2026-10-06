@@ -146,6 +146,7 @@ public class IndexerController : Controller
         }
 
         _indexerFactory.Update(definition);
+        _indexerStatusService?.Reset(id);
         return Ok(MaskApiKey(definition));
     }
 
