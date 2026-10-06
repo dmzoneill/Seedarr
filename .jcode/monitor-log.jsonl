@@ -25,3 +25,4 @@
 {"ts":"2026-10-06T21:55:34Z","type":"bug-hunt-monitor","openIssues":33,"restarts":0,"scheduleId":"sched_8c743019","hunters":["cat","chicken","bug","chick","chipmunk"],"note":"all slots healthy"}
 {"ts": "2026-10-06T21:55:54Z", "kind": "bug-hunt-monitor", "openIssues": 34, "restarts": 0, "hunters": ["cat", "chicken", "bug", "chick", "chipmunk"], "scheduleId": "sched_88561763", "note": "healthy"}
 {"ts":"2026-10-06T21:56:30Z","type":"bug-hunt-pass","worker":"host-hunter","partition":"NzbDrone.Host+NzbDrone.Common","issuesFiled":[910],"issuesReopened":[],"note":"AppLifetime ApplicationStarted before FastResume LoadAll"}
+{"ts":"2026-10-06T21:58:10Z","type":"bug-hunt-monitor","openIssues":30,"restarts":[{"slot":"core","from":"cat","to":"cow","reason":"completed"}],"workers":["cow","chicken","bug","chick","chipmunk"],"scheduleId":"sched_2438f215"}
