@@ -70,6 +70,11 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
             apiKey = qToken.FirstOrDefault();
         }
 
+        if (string.IsNullOrWhiteSpace(apiKey) && Request.Query.TryGetValue("token", out var qToken2))
+        {
+            apiKey = qToken2.FirstOrDefault();
+        }
+
         if (string.IsNullOrWhiteSpace(apiKey) &&
             Request.Headers.TryGetValue("Authorization", out var authHeader) &&
             authHeader.ToString().StartsWith("Bearer ", System.StringComparison.OrdinalIgnoreCase))

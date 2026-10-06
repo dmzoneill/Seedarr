@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using NSubstitute;
@@ -330,6 +331,7 @@ public class CsrfProtectionMiddlewareTest
     public async Task ReverseProxy_WithXForwardedHeaders_MatchesOriginWithoutPortMismatchRejection()
     {
         var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Loopback;
         context.Request.Method = "POST";
         context.Request.Path = "/api/v1/settings";
         context.Request.Scheme = "http";
@@ -349,6 +351,208 @@ public class CsrfProtectionMiddlewareTest
         await middleware.InvokeAsync(context, _config, _configFileProvider);
 
         Assert.That(nextCalled, Is.True);
+    }
+
+    [Test]
+    public async Task BothOriginAndRefererPresent_BothLegitimate_IsAllowed()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/torrents/pause";
+        context.Request.Host = new HostString("seedarr.local:9898");
+        context.Request.Headers["Cookie"] = "Seedarr_Auth=legitimate_session";
+        context.Request.Headers["Origin"] = "http://seedarr.local:9898";
+        context.Request.Headers["Referer"] = "http://seedarr.local:9898/torrents";
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.True);
+    }
+
+    [Test]
+    public async Task BothOriginAndRefererPresent_LegitimateOrigin_MaliciousReferer_IsBlocked403Forbidden()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/torrents/pause";
+        context.Request.Host = new HostString("seedarr.local:9898");
+        context.Request.Headers["Cookie"] = "Seedarr_Auth=legitimate_session";
+        context.Request.Headers["Origin"] = "http://seedarr.local:9898";
+        context.Request.Headers["Referer"] = "http://evil-attacker.com/exploit";
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
+    }
+
+    [Test]
+    public async Task BothOriginAndRefererPresent_MaliciousOrigin_LegitimateReferer_IsBlocked403Forbidden()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/torrents/pause";
+        context.Request.Host = new HostString("seedarr.local:9898");
+        context.Request.Headers["Cookie"] = "Seedarr_Auth=legitimate_session";
+        context.Request.Headers["Origin"] = "http://evil-attacker.com";
+        context.Request.Headers["Referer"] = "http://seedarr.local:9898/torrents";
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
+    }
+
+    [Test]
+    public async Task StateChangingRequest_MissingBothOriginAndReferer_WithoutAmbientCookie_IsBlocked403Forbidden()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/torrents/pause";
+        context.Request.Host = new HostString("seedarr.local:9898");
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
+    }
+
+    [Test]
+    public async Task ReverseProxy_WithXForwardedHeaders_FromUntrustedRemoteIp_IgnoresForwardedHeadersAndRejectsUntrustedOrigin()
+    {
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("198.51.100.1");
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/settings";
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("seedarr.internal:80");
+        context.Request.Headers["X-Forwarded-Proto"] = "https";
+        context.Request.Headers["X-Forwarded-Host"] = "seedarr.example.com";
+        context.Request.Headers["Cookie"] = "Seedarr_Auth=valid_session";
+        context.Request.Headers["Origin"] = "https://seedarr.example.com";
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
+    }
+
+    [Test]
+    public async Task ReverseProxy_WithXForwardedHeaders_FromConfiguredTrustedProxy_MatchesForwardedHost()
+    {
+        _configFileProvider.TrustedProxies.Returns("198.51.100.0/24");
+
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("198.51.100.1");
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/settings";
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("seedarr.internal:80");
+        context.Request.Headers["X-Forwarded-Proto"] = "https";
+        context.Request.Headers["X-Forwarded-Host"] = "seedarr.example.com";
+        context.Request.Headers["Cookie"] = "Seedarr_Auth=valid_session";
+        context.Request.Headers["Origin"] = "https://seedarr.example.com";
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.True);
+    }
+
+    [TestCase("apikey")]
+    [TestCase("api_key")]
+    [TestCase("access_token")]
+    [TestCase("token")]
+    public async Task QueryParameterApiKey_WithValidAliases_BypassesCsrf(string paramName)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/torrents/delete";
+        context.Request.QueryString = new QueryString($"?{paramName}=valid_master_api_key_123");
+        context.Request.Host = new HostString("seedarr.local:9898");
+        context.Request.Headers["Origin"] = "http://external-site.com";
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.True);
+    }
+
+    [TestCase("access_token")]
+    [TestCase("token")]
+    public async Task QueryParameterApiKey_WithInvalidAliases_DoesNotBypassCsrf(string paramName)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/torrents/delete";
+        context.Request.QueryString = new QueryString($"?{paramName}=invalid_key");
+        context.Request.Host = new HostString("seedarr.local:9898");
+        context.Request.Headers["Origin"] = "http://evil-attacker.com";
+        context.Request.Headers["Cookie"] = "Seedarr_Auth=session_value";
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
     }
 
     [Test]
