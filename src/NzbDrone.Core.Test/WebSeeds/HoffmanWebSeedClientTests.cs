@@ -36,7 +36,7 @@ public class HoffmanWebSeedClientTests
         var url = HoffmanWebSeedClient.BuildUrl(baseUrl, SampleInfoHash, 5, offset: 16384, length: 16384);
 
         var expectedEscapedHash = "%12%34%56%78%9A%BC%DE%F0%11%22%33%44%55%66%77%88%99%AA%BB%CC";
-        Assert.That(url, Is.EqualTo($"https://seed.example.com/download?info_hash={expectedEscapedHash}&piece=5&ranges=16384-16384"));
+        Assert.That(url, Is.EqualTo($"https://seed.example.com/download?info_hash={expectedEscapedHash}&piece=5&ranges=16384-32767"));
     }
 
     [Test]
@@ -142,7 +142,7 @@ public class HoffmanWebSeedClientTests
         Assert.That(requests.Count, Is.EqualTo(1));
         Assert.That(requests[0].Method, Is.EqualTo(HttpMethod.Get));
         Assert.That(requests[0].RequestUri.ToString(), Does.Contain("piece=2"));
-        Assert.That(requests[0].RequestUri.ToString(), Does.Contain("ranges=0-16384"));
+        Assert.That(requests[0].RequestUri.ToString(), Does.Contain("ranges=0-16383"));
     }
 
     [Test]
