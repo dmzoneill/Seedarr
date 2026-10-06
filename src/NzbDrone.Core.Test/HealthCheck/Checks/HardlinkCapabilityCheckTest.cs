@@ -117,4 +117,18 @@ public class HardlinkCapabilityCheckTest
         Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
         _hardlinkProvider.Received(1).TryCreateHardLink(Arg.Any<string>(), Arg.Any<string>(), out Arg.Any<string>());
     }
+
+    [Test]
+    public void Check_should_use_DefaultSavePath_when_configured()
+    {
+        _configService.DefaultSavePath.Returns(_tempDir);
+        _configService.TorrentSaveDirectory.Returns(string.Empty);
+        _hardlinkProvider.TryCreateHardLink(Arg.Any<string>(), Arg.Any<string>(), out Arg.Any<string>())
+            .Returns(true);
+
+        var result = _subject.Check();
+
+        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
+        _hardlinkProvider.Received(1).TryCreateHardLink(Arg.Is<string>(s => s.StartsWith(_tempDir)), Arg.Any<string>(), out Arg.Any<string>());
+    }
 }
