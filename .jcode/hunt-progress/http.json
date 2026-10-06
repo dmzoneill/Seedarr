@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T22:38:00Z",
+  "updatedAt": "2026-10-07T22:45:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/Seedarr.Http/Ping",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Terminal",
-    "completedAt": "2026-10-07T22:38:00Z",
-    "issuesFiled": [1131, 1132, 1133],
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-07T22:45:00Z",
+    "issuesFiled": [1140],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 14: Terminal (TerminalHub, TerminalWebSocketHandler, PtyTerminalService, PtyProcessSession, LinuxPtySession, NativePty, FallbackProcessSession, TerminalEnvironmentSanitizer). Deduped existing open: #892 TerminalHub auth/RBAC gaps, #902 cwd confinement, #956/#965 LinuxPty env whitelist, #966 fork argv/env race claim, #967 exception echo, #1027 python-before-native PTY. Filed #1131: WebSocket UTF-8 decoder flush:false splits multibyte chars. Filed #1132: LinuxPtySession bash -i without --noprofile --norc. Filed #1133: JSON objects with missing/unknown type silently dropped. Next: REST. No dotnet build/test."
+    "note": "Pass 15: REST (RestController, RestControllerWithSignalR, RestResource, ResourceValidator, RestPutByIdAttribute). Deduped open: #1002/#1003 coalesce+disconnect, #1047/#1049 leading-edge throttle+ResourceName ToLower, #1060 Dispose drops pending. Comment on #1047 for OnCoalesceTimerTick+Flush paths. Filed #1140: RestPutById optional route id not bound in ConfigController.SaveConfig. Next: Ping. No dotnet build/test."
   }
 }
