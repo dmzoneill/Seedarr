@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T22:42:09Z",
+  "updatedAt": "2026-10-06T22:43:30Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_2d5f9de0"
+    "lastScheduleId": "sched_4920044c"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 260,
-  "lastMonitorNote": "260 open; 4 restarts (tiger->whale, t-rex->turtle, swan->rabbit, snake->parrot); turkey nudged; latest #1129-#1133"
+  "lastMonitorNote": "260 open; 0 restarts; whale/turtle/turkey/rabbit/parrot active; latest #1129-#1133"
 }
