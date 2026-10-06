@@ -14,9 +14,9 @@
   "lastPass": {
     "subfolder": "src/NzbDrone.Host/AppLifetime.cs",
     "completedAt": "2026-10-06T22:30:00Z",
-    "issuesFiled": [1065, 1066],
+    "issuesFiled": [1067],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Deduped #944 #953 #955 #910; filed duplicate stall/speed automation with SeedingEngine (#1065) and inactive torrent speed totals (#1066)"
+    "note": "Deduped #910 #944 #953 #955 #1065; filed alt-speed watchdog threshold mismatch (#1067)"
   }
 }
