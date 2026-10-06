@@ -51,6 +51,7 @@ public class TagService : ITagService
     private readonly IDownloadClientRepository _downloadClientRepository;
     private readonly IArrConnectionRepository _arrConnectionRepository;
     private readonly IAutomationScriptRepository _automationScriptRepository;
+    private readonly IAutoTaggerRuleRepository _autoTaggerRuleRepository;
     private readonly ITorrentService _torrentService;
     private readonly IDatabase _database;
     private readonly Logger _logger;
@@ -66,7 +67,8 @@ public class TagService : ITagService
         IAutomationScriptRepository automationScriptRepository = null,
         IDatabase database = null,
         ITorrentService torrentService = null,
-        IMainDatabase mainDatabase = null)
+        IMainDatabase mainDatabase = null,
+        IAutoTaggerRuleRepository autoTaggerRuleRepository = null)
     {
         _repo = repo;
         _eventAggregator = eventAggregator;
@@ -76,6 +78,7 @@ public class TagService : ITagService
         _downloadClientRepository = downloadClientRepository;
         _arrConnectionRepository = arrConnectionRepository;
         _automationScriptRepository = automationScriptRepository;
+        _autoTaggerRuleRepository = autoTaggerRuleRepository;
         _torrentService = torrentService;
         _database = mainDatabase
             ?? database
@@ -85,7 +88,8 @@ public class TagService : ITagService
             ?? (indexerRepository as BasicRepository<IndexerDefinition>)?.Database
             ?? (downloadClientRepository as BasicRepository<DownloadClientDefinition>)?.Database
             ?? (arrConnectionRepository as BasicRepository<ArrConnectionDefinition>)?.Database
-            ?? (automationScriptRepository as BasicRepository<AutomationScript>)?.Database;
+            ?? (automationScriptRepository as BasicRepository<AutomationScript>)?.Database
+            ?? (autoTaggerRuleRepository as BasicRepository<AutoTaggerRule>)?.Database;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -280,6 +284,11 @@ public class TagService : ITagService
         {
             _logger.Warn("Automation script repository is null; cascading tag deletion for automation scripts cannot be executed via repository.");
         }
+
+        if (_autoTaggerRuleRepository == null)
+        {
+            _logger.Warn("Auto-tagger rule repository is null; cascading tag deletion for auto-tagger rules cannot be executed via repository.");
+        }
     }
 
     private void DeleteCascadingTransactional(int id, string tagLabel)
@@ -340,6 +349,14 @@ public class TagService : ITagService
 
                         connection.Execute(sql, new { TagId = id }, transaction);
                     }
+                }
+
+                if (TableExists(connection, transaction, "AutoTaggerRules", dbType))
+                {
+                    connection.Execute(
+                        "DELETE FROM \"AutoTaggerRules\" WHERE \"TagId\" = @TagId",
+                        new { TagId = id },
+                        transaction);
                 }
 
                 if (!string.IsNullOrWhiteSpace(tagLabel) &&
@@ -564,6 +581,18 @@ public class TagService : ITagService
                 }
 
                 _automationScriptRepository.UpdateMany(scripts);
+            }
+        }
+
+        if (_autoTaggerRuleRepository != null)
+        {
+            var rules = _autoTaggerRuleRepository.All()?.Where(r => r.TagId == id).ToList() ?? new List<AutoTaggerRule>();
+            if (rules.Count > 0)
+            {
+                foreach (var rule in rules)
+                {
+                    _autoTaggerRuleRepository.Delete(rule.Id);
+                }
             }
         }
     }

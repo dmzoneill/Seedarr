@@ -319,6 +319,32 @@ public class TagServiceTest
     }
 
     [Test]
+    public void Delete_should_delete_orphaned_autotagger_rules_using_rule_repository()
+    {
+        var ruleRepo = Substitute.For<IAutoTaggerRuleRepository>();
+        _repo.Get(15).Returns(new Tag { Id = 15, Label = "Anime" });
+
+        var rule1 = new AutoTaggerRule { Id = 1, TagId = 15, Name = "Anime Rule 1" };
+        var rule2 = new AutoTaggerRule { Id = 2, TagId = 15, Name = "Anime Rule 2" };
+        var rule3 = new AutoTaggerRule { Id = 3, TagId = 30, Name = "Other Rule" };
+
+        ruleRepo.All().Returns(new List<AutoTaggerRule> { rule1, rule2, rule3 });
+
+        var subject = new TagService(
+            _repo,
+            _eventAggregator,
+            autoTaggerRuleRepository: ruleRepo,
+            database: null);
+
+        subject.Delete(15);
+
+        ruleRepo.Received(1).Delete(1);
+        ruleRepo.Received(1).Delete(2);
+        ruleRepo.DidNotReceive().Delete(3);
+        _repo.Received(1).Delete(15);
+    }
+
+    [Test]
     public void Delete_should_remove_tag_id_and_scrub_label_using_torrent_service()
     {
         var torrentService = Substitute.For<ITorrentService>();
@@ -354,6 +380,7 @@ public class TagServiceTest
         var dlClientRepo = Substitute.For<IDownloadClientRepository>();
         var arrRepo = Substitute.For<IArrConnectionRepository>();
         var scriptRepo = Substitute.For<IAutomationScriptRepository>();
+        var ruleRepo = Substitute.For<IAutoTaggerRuleRepository>();
 
         torrentRepo.All().Returns(new List<Torrent> { new() { Id = 1, TagIds = new List<int> { 10 }, Label = "Anime" } });
         notifRepo.All().Returns(new List<NotificationDefinition> { new() { Id = 1, Tags = new List<int> { 20 } } });
@@ -361,6 +388,7 @@ public class TagServiceTest
         dlClientRepo.All().Returns(new List<DownloadClientDefinition> { new() { Id = 1, Tags = new List<int> { 40 } } });
         arrRepo.All().Returns(new List<ArrConnectionDefinition> { new() { Id = 1, Tags = new List<int> { 50 } } });
         scriptRepo.All().Returns(new List<AutomationScript> { new() { Id = 1, TargetTagIds = new List<int> { 60 } } });
+        ruleRepo.All().Returns(new List<AutoTaggerRule> { new() { Id = 1, TagId = 70 } });
 
         var subject = new TagService(
             _repo,
@@ -371,6 +399,7 @@ public class TagServiceTest
             dlClientRepo,
             arrRepo,
             scriptRepo,
+            autoTaggerRuleRepository: ruleRepo,
             database: null);
 
         subject.Delete(5);
@@ -381,6 +410,7 @@ public class TagServiceTest
         dlClientRepo.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<DownloadClientDefinition>>());
         arrRepo.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<ArrConnectionDefinition>>());
         scriptRepo.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<AutomationScript>>());
+        ruleRepo.DidNotReceive().Delete(Arg.Any<int>());
         _repo.Received(1).Delete(5);
     }
 
@@ -416,6 +446,7 @@ public class TagServiceTest
                 CREATE TABLE ""DownloadClientDefinitions"" (""Id"" INTEGER PRIMARY KEY, ""Tags"" TEXT);
                 CREATE TABLE ""ArrConnectionDefinitions"" (""Id"" INTEGER PRIMARY KEY, ""Tags"" TEXT);
                 CREATE TABLE ""AutomationScripts"" (""Id"" INTEGER PRIMARY KEY, ""TargetTagIds"" TEXT);
+                CREATE TABLE ""AutoTaggerRules"" (""Id"" INTEGER PRIMARY KEY, ""TagId"" INTEGER, ""Name"" TEXT);
 
                 INSERT INTO ""Tags"" (""Id"", ""Label"") VALUES (42, 'VPN');
                 INSERT INTO ""Tags"" (""Id"", ""Label"") VALUES (99, 'Keep');
@@ -429,6 +460,8 @@ public class TagServiceTest
                 INSERT INTO ""DownloadClientDefinitions"" (""Id"", ""Tags"") VALUES (1, '[42,20]');
                 INSERT INTO ""ArrConnectionDefinitions"" (""Id"", ""Tags"") VALUES (1, '[42]');
                 INSERT INTO ""AutomationScripts"" (""Id"", ""TargetTagIds"") VALUES (1, '[42,30]');
+                INSERT INTO ""AutoTaggerRules"" (""Id"", ""TagId"", ""Name"") VALUES (1, 42, 'Rule 42');
+                INSERT INTO ""AutoTaggerRules"" (""Id"", ""TagId"", ""Name"") VALUES (2, 99, 'Rule 99');
             ";
             cmd.ExecuteNonQuery();
         }
@@ -452,6 +485,12 @@ public class TagServiceTest
 
             var keepTagCount = verifyConn.ExecuteScalar<int>("SELECT COUNT(1) FROM \"Tags\" WHERE \"Id\" = 99");
             Assert.That(keepTagCount, Is.EqualTo(1));
+
+            var rule1Count = verifyConn.ExecuteScalar<int>("SELECT COUNT(1) FROM \"AutoTaggerRules\" WHERE \"Id\" = 1");
+            Assert.That(rule1Count, Is.EqualTo(0));
+
+            var rule2Count = verifyConn.ExecuteScalar<int>("SELECT COUNT(1) FROM \"AutoTaggerRules\" WHERE \"Id\" = 2");
+            Assert.That(rule2Count, Is.EqualTo(1));
 
             var torrent1Tags = verifyConn.ExecuteScalar<string>("SELECT \"TagIds\" FROM \"Torrents\" WHERE \"Id\" = 1");
             Assert.That(torrent1Tags, Is.EqualTo("[99]"));
