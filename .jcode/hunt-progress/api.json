@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T00:45:00Z",
+  "updatedAt": "2026-10-07T00:55:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Seeding",
+  "currentSubfolder": "src/Seedarr.Api.V1/Backup",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/DownloadClients",
-    "completedAt": "2026-10-07T00:45:00Z",
-    "issuesFiled": [1226, 1227, 1228],
+    "subfolder": "src/Seedarr.Api.V1/Seeding",
+    "completedAt": "2026-10-07T00:55:00Z",
+    "issuesFiled": [1238, 1239],
     "issuesReopened": [],
     "taskId": "api-hunter",
-    "notes": "Static review: DownloadClientController, DownloadClientSyncController, DownloadClientResource. GitHub dedupe: skipped existing open issues #885/#923/#970-#984/#1010-#1013/#1012/#1134-#1137/#1213 and related core duplicates. Filed #1226 (batch vs single import HTTP status on sync lock busy), #1227 (pause/resume/delete/test bypass backoff beyond #1012), #1228 (per-client items polls disabled clients). No dotnet build/test."
+    "notes": "Static review: SeedingController, SpeedScheduleController, SpeedScheduleResource. GitHub dedupe: skipped existing open issues #914/#916/#989/#990/#995/#1142/#1143 and related core duplicates. Filed #1238 (idempotent POST /seeding/stop re-publishes SeedingStoppedEvent and duplicate tracker stopped announces), #1239 (SpeedSchedule negative Priority accepted by API). No dotnet build/test."
   }
 }
