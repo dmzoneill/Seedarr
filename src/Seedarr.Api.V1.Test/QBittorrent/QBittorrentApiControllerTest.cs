@@ -906,7 +906,7 @@ public class QBittorrentApiControllerTest
     }
 
     [Test]
-    public void GetMainData_Returns_Torrent_Category_And_Falls_Back_To_Label()
+    public void GetMainData_Returns_Torrent_Category_Without_Fallback_To_Label()
     {
         var torrentWithCategory = new Torrent
         {
@@ -946,11 +946,11 @@ public class QBittorrentApiControllerTest
 
         var t2Obj = torrentsDict["2222222222222222222222222222222222222222"];
         var t2Category = t2Obj.GetType().GetProperty("category")?.GetValue(t2Obj) as string;
-        Assert.That(t2Category, Is.EqualTo("tv"));
+        Assert.That(t2Category, Is.EqualTo(string.Empty));
     }
 
     [Test]
-    public void QBitTorrentSnapshot_FromTorrent_Sets_Category_With_Fallback_To_Label()
+    public void QBitTorrentSnapshot_FromTorrent_Does_Not_Fall_Back_To_Label()
     {
         var torrentWithCat = new Torrent
         {
@@ -971,11 +971,11 @@ public class QBittorrentApiControllerTest
             DateAdded = DateTime.UtcNow
         };
         var snapshot2 = QBitTorrentSnapshot.FromTorrent(torrentWithLabel);
-        Assert.That(snapshot2.Category, Is.EqualTo("audiobooks"));
+        Assert.That(snapshot2.Category, Is.EqualTo(string.Empty));
     }
 
     [Test]
-    public void GetTorrentsInfo_Sets_Category_With_Fallback_To_Label()
+    public void GetTorrentsInfo_Does_Not_Fall_Back_To_Label()
     {
         var torrentWithCat = new Torrent
         {
@@ -1002,7 +1002,7 @@ public class QBittorrentApiControllerTest
         var list = okResult.Value as List<Dictionary<string, object>>;
         Assert.That(list, Is.Not.Null);
         Assert.That(list[0]["category"], Is.EqualTo("movies"));
-        Assert.That(list[1]["category"], Is.EqualTo("series"));
+        Assert.That(list[1]["category"], Is.EqualTo(string.Empty));
     }
 
     [Test]
@@ -1028,6 +1028,181 @@ public class QBittorrentApiControllerTest
         _torrentService.Received().Update(Arg.Is<Torrent>(t =>
             t.Category == "radarr" &&
             t.Label == "tagA, tagB"));
+    }
+
+    [Test]
+    public void SetCategory_Clears_Category_And_Does_Not_Revert_To_Label()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "aabbccddeeff00112233aabbccddeeff00112233",
+            Name = "Torrent 1",
+            Category = "movies",
+            Label = "action, 4k",
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var setResult = _controller.SetCategory(torrent.InfoHash, "");
+        Assert.That(setResult, Is.InstanceOf<ContentResult>());
+        Assert.That(torrent.Category, Is.EqualTo(string.Empty));
+
+        var infoResult = _controller.GetTorrentsInfo();
+        var okResult = infoResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var list = okResult.Value as List<Dictionary<string, object>>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list[0]["category"], Is.EqualTo(string.Empty));
+        Assert.That(list[0]["tags"], Is.EqualTo("action, 4k"));
+    }
+
+    [Test]
+    public async Task AddTorrents_With_Comma_Separated_Tags_Splits_And_Syncs_Individual_Tags()
+    {
+        var magnet = "magnet:?xt=urn:btih:3333333333333333333333333333333333333333&dn=TagTest";
+        var torrent = new Torrent
+        {
+            Id = 20,
+            Name = "TagTest",
+            InfoHash = "3333333333333333333333333333333333333333"
+        };
+        _torrentImportService.ImportFromMagnet(Arg.Any<string>()).Returns(torrent);
+
+        await _controller.AddTorrents(new QBitAddTorrentsRequest
+        {
+            Urls = magnet,
+            Tags = "tag1, tag2, tag3"
+        });
+
+        _tagService.Received(1).SyncTagsFromLabels(Arg.Is<IEnumerable<string>>(labels =>
+            labels.SequenceEqual(new[] { "tag1", "tag2", "tag3" })));
+        Assert.That(torrent.Label, Is.EqualTo("tag1, tag2, tag3"));
+        Assert.That(torrent.Category, Is.Null.Or.Empty);
+    }
+
+    [Test]
+    public void GetMainData_Isolates_Sessions_By_User_Agent_When_SID_Is_Missing()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1111111111111111111111111111111111111111",
+            Name = "SessionTorrent",
+            Category = "movies"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var httpContext1 = new DefaultHttpContext();
+        httpContext1.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
+        httpContext1.Request.Headers["User-Agent"] = "Radarr/5.0";
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext1 };
+
+        var radarrRes1 = _controller.GetMainData(rid: 0);
+        var radarrOk1 = (OkObjectResult)radarrRes1.Result;
+        var radarrDict1 = (Dictionary<string, object>)radarrOk1.Value;
+        Assert.That(radarrDict1["rid"], Is.EqualTo(1));
+
+        var httpContext2 = new DefaultHttpContext();
+        httpContext2.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
+        httpContext2.Request.Headers["User-Agent"] = "Sonarr/4.0";
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext2 };
+
+        var sonarrRes1 = _controller.GetMainData(rid: 0);
+        var sonarrOk1 = (OkObjectResult)sonarrRes1.Result;
+        var sonarrDict1 = (Dictionary<string, object>)sonarrOk1.Value;
+        Assert.That(sonarrDict1["rid"], Is.EqualTo(1));
+
+        // Advance Radarr to rid 2
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext1 };
+        var radarrRes2 = _controller.GetMainData(rid: 1);
+        var radarrOk2 = (OkObjectResult)radarrRes2.Result;
+        var radarrDict2 = (Dictionary<string, object>)radarrOk2.Value;
+        Assert.That(radarrDict2["rid"], Is.EqualTo(2));
+
+        // Sonarr re-requesting rid 0 should not reset Radarr's session
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext2 };
+        _controller.GetMainData(rid: 0);
+
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext1 };
+        var radarrRes3 = _controller.GetMainData(rid: 2);
+        var radarrOk3 = (OkObjectResult)radarrRes3.Result;
+        var radarrDict3 = (Dictionary<string, object>)radarrOk3.Value;
+        Assert.That(radarrDict3["rid"], Is.EqualTo(3));
+    }
+
+    [Test]
+    public void GetPieceStates_For_Completed_Torrent_Returns_All_Complete_Regardless_Of_PieceStorage()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            PieceCount = 5,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var pieceStorage = Substitute.For<IPieceStorage>();
+        pieceStorage.GetVerifiedPieces(hash).Returns(new[] { true, false });
+
+        var controller = new QBittorrentApiController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _tagService,
+            _configFileProvider,
+            categoryService: _categoryService,
+            pieceStorage: pieceStorage);
+
+        var result = controller.GetPieceStates(hash);
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var states = okResult.Value as List<int>;
+
+        Assert.That(states, Is.EqualTo(new List<int> { 2, 2, 2, 2, 2 }));
+    }
+
+    [Test]
+    public void GetPieceStates_Progress_Approximation_Preserves_Completed_Count_Over_Active_Pieces()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            PieceCount = 4,
+            Progress = 0.5
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var piecePicker = Substitute.For<IPiecePicker>();
+        piecePicker.GetActivePieces(hash).Returns(new HashSet<int> { 0, 1, 2 });
+
+        var controller = new QBittorrentApiController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _tagService,
+            _configFileProvider,
+            categoryService: _categoryService,
+            piecePicker: piecePicker);
+
+        var result = controller.GetPieceStates(hash);
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var states = okResult.Value as List<int>;
+
+        // Indices 0 and 1 are completed (2), index 2 is active (1), index 3 is un-downloaded (0)
+        Assert.That(states, Is.EqualTo(new List<int> { 2, 2, 1, 0 }));
     }
 }
 
