@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-06T21:42:30Z",
+  "updatedAt": "2026-10-06T21:41:47Z",
   "lastValidationAt": "2026-10-06T21:42:30Z",
   "lastValidationNote": "Gap: sched_73917708 missing at runtime (schedule list empty). Restored sched_81cc8e4e. Hunters active on partitions; 0 hunter reports and 0 new issues yet (<3m since spawn).",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_81cc8e4e"
+    "lastScheduleId": "sched_4947e4e9"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -33,5 +33,6 @@
     "src/Seedarr.Api.V1/Controllers"
   ],
   "completedFixIssues": [811, 814, 815, 863, 869, 841, 755, 725, 492, 411, 186, 397, 189],
-  "githubOpenCount": 0
+  "githubOpenCount": 7,
+  "lastMonitorNote": "Hunters filing issues; 7 open; no restarts (all <90s idle)"
 }
