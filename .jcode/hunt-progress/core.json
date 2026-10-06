@@ -1,6 +1,6 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-06T23:52:00Z",
+  "updatedAt": "2026-10-06T23:20:00Z",
   "area": "src/NzbDrone.Core",
   "currentSubfolder": "src/NzbDrone.Core/Blocklist",
   "rotation": [
@@ -12,10 +12,10 @@
   ],
   "lastPass": {
     "subfolder": "src/NzbDrone.Core/DownloadClients",
-    "completedAt": "2026-10-06T23:52:00Z",
-    "issuesFiled": [1008, 1009, 1010, 1011],
+    "completedAt": "2026-10-06T23:20:00Z",
+    "issuesFiled": [1012, 1013],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Deduped open #884/#923/#924/#925/#931 and related downloadclients API issues; not re-filed."
+    "note": "Deduped open issues #923-#1011; filed backoff bypass (#1012) and QBit test false positive (#1013)."
   }
 }
