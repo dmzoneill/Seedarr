@@ -266,6 +266,11 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
             return BadRequest("Template ID is required.");
         }
 
+        if (_marketplaceService.GetTemplate(request.TemplateId) == null)
+        {
+            return NotFound($"Template with ID '{request.TemplateId}' was not found.");
+        }
+
         try
         {
             var script = _marketplaceService.InstallTemplate(request.TemplateId, request.CustomName, request.CustomInputs);

@@ -218,6 +218,45 @@ public class AutomationControllerTest
         Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
     }
 
+    [Test]
+    public void Install_marketplace_template_with_unknown_id_returns_not_found()
+    {
+        _marketplaceService.GetTemplate("does-not-exist").Returns((AutomationMarketplaceTemplate)null);
+
+        var result = _controller.InstallMarketplaceTemplate(new InstallMarketplaceTemplateRequest
+        {
+            TemplateId = "does-not-exist"
+        });
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
+        var notFound = (NotFoundObjectResult)result.Result;
+        Assert.That(notFound.StatusCode, Is.EqualTo(404));
+        Assert.That(notFound.Value, Is.EqualTo("Template with ID 'does-not-exist' was not found."));
+        _marketplaceService.DidNotReceive().InstallTemplate(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Dictionary<string, string>>());
+        _automationService.DidNotReceive().Add(Arg.Any<AutomationScript>());
+    }
+
+    [Test]
+    public void Install_marketplace_template_with_integrity_failure_returns_bad_request()
+    {
+        var template = new AutomationMarketplaceTemplate { Id = "broken-template" };
+        _marketplaceService.GetTemplate("broken-template").Returns(template);
+        _marketplaceService
+            .When(x => x.InstallTemplate("broken-template", null, null))
+            .Throw(new InvalidOperationException("Template integrity check failed for 'broken-template'. Content hash mismatch."));
+
+        var result = _controller.InstallMarketplaceTemplate(new InstallMarketplaceTemplateRequest
+        {
+            TemplateId = "broken-template"
+        });
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.StatusCode, Is.EqualTo(400));
+        Assert.That(badRequest.Value, Does.Contain("integrity check failed"));
+        _automationService.DidNotReceive().Add(Arg.Any<AutomationScript>());
+    }
+
     [TestCase(nameof(AutomationController.Create))]
     [TestCase(nameof(AutomationController.Delete))]
     [TestCase(nameof(AutomationController.Run))]
