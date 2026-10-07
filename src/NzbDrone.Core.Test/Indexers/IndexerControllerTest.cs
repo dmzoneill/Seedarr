@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -202,6 +203,50 @@ public class IndexerControllerTest
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result;
         Assert.That(badRequest.Value, Is.EqualTo("URL cannot be empty."));
+    }
+
+    [Test]
+    public void Update_with_partial_json_body_preserves_omitted_flags_tags_and_priority()
+    {
+        var existing = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Original",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9117",
+            ApiKey = "secret-key",
+            Enable = true,
+            EnableRss = false,
+            EnableSearch = true,
+            Priority = 10,
+            Tags = new List<int> { 2 },
+            Categories = "2000",
+            ApiPath = "/custom",
+            DownloadClientId = 3,
+            Settings = "{\"key\":\"value\"}"
+        };
+        _indexerFactory.Get(1).Returns(existing);
+
+        using var doc = JsonDocument.Parse(
+            "{\"name\":\"renamed\",\"url\":\"http://8.8.8.8:9117\",\"indexerType\":\"Torznab\"}");
+        var result = _controller.Update(1, doc.RootElement);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _indexerFactory.Received(1).Update(Arg.Is<IndexerDefinition>(d =>
+            d.Name == "renamed"
+            && d.Url == "http://8.8.8.8:9117"
+            && d.IndexerType == "Torznab"
+            && d.Enable
+            && d.EnableRss == false
+            && d.EnableSearch
+            && d.Priority == 10
+            && d.Tags.Count == 1
+            && d.Tags[0] == 2
+            && d.Categories == "2000"
+            && d.ApiPath == "/custom"
+            && d.DownloadClientId == 3
+            && d.Settings == "{\"key\":\"value\"}"
+            && d.ApiKey == "secret-key"));
     }
 
     [Test]
