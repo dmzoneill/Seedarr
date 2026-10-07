@@ -197,7 +197,7 @@ public class PeerBlocklistSyncServiceTests
     {
         var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent("# Comment line\n1.2.3.0/24\n// Another comment\n5.6.7.8-5.6.7.9\n\n10.0.0.1\n")
+            Content = new StringContent("# Comment line\n1.2.3.0/24\n// Another comment\n; eMule header\n5.6.7.8-5.6.7.9\n\n10.0.0.1\n")
         };
         response.Headers.ETag = new EntityTagHeaderValue("\"abc123etag\"");
         var lastMod = new DateTimeOffset(2026, 9, 19, 10, 0, 0, TimeSpan.Zero);

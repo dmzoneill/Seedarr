@@ -25,9 +25,21 @@ public class BlocklistArchiveStreamProviderTests
     }
 
     [Test]
+    public async Task ExtractRulesAsync_should_skip_semicolon_prefixed_comment_lines()
+    {
+        var text = "; eMule DAT header\n192.168.1.0/24\n";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text));
+
+        var rules = await _provider.ExtractRulesAsync(stream, url: "http://example.com/rules.txt");
+
+        Assert.That(rules.Count, Is.EqualTo(1));
+        Assert.That(rules[0], Is.EqualTo("192.168.1.0/24"));
+    }
+
+    [Test]
     public async Task ExtractRulesAsync_should_stream_and_decompress_gzip_archive()
     {
-        var text = "# Bluetack comment\n1.2.3.4-1.2.3.5\n\n// Another comment\n8.8.8.8\n";
+        var text = "# Bluetack comment\n1.2.3.4-1.2.3.5\n\n// Another comment\n; eMule comment\n8.8.8.8\n";
         var gzipBytes = CreateGzipBytes(text);
         using var stream = new MemoryStream(gzipBytes);
 
