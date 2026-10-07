@@ -240,6 +240,55 @@ public class DownloadClientControllerTest
     }
 
     [TestCase("169.254.169.254", 80)]
+    public void Create_with_unsafe_host_returns_bad_request(string host, int port)
+    {
+        var def = new DownloadClientDefinition
+        {
+            Name = "SSRF Probe",
+            ClientType = "QBitTorrent",
+            Host = host,
+            Port = port,
+        };
+
+        var result = _controller.Create(def);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
+        _downloadClientFactory.DidNotReceive().Create(Arg.Any<DownloadClientDefinition>());
+    }
+
+    [TestCase("169.254.169.254", 80)]
+    public void Update_with_unsafe_host_returns_bad_request(string host, int port)
+    {
+        var existing = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Existing Client",
+            ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
+        };
+        _downloadClientFactory.Get(1).Returns(existing);
+
+        var updated = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Existing Client",
+            ClientType = "QBitTorrent",
+            Host = host,
+            Port = port,
+        };
+
+        var result = _controller.Update(1, updated);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
+        _downloadClientFactory.DidNotReceive().Update(Arg.Any<DownloadClientDefinition>());
+    }
+
+    [TestCase("169.254.169.254", 80)]
     public void TestDirect_with_unsafe_host_returns_bad_request(string host, int port)
     {
         var definition = new DownloadClientDefinition
