@@ -45,16 +45,24 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
 
         if (_configService != null)
         {
-            var etag = _configService.BlocklistETag;
-            if (!string.IsNullOrWhiteSpace(etag))
+            var validatorUrl = _configService.BlocklistValidatorUrl;
+            var configuredUrl = _configService.BlocklistUrl;
+            if (!string.IsNullOrWhiteSpace(validatorUrl)
+                && string.Equals(validatorUrl, configuredUrl, StringComparison.Ordinal))
             {
-                _metadata.BlocklistETag = etag;
-            }
+                _metadata.BlocklistValidatorUrl = validatorUrl;
 
-            var lastMod = _configService.BlocklistLastModified;
-            if (!string.IsNullOrWhiteSpace(lastMod) && DateTimeOffset.TryParse(lastMod, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
-            {
-                _metadata.BlocklistLastModified = dto;
+                var etag = _configService.BlocklistETag;
+                if (!string.IsNullOrWhiteSpace(etag))
+                {
+                    _metadata.BlocklistETag = etag;
+                }
+
+                var lastMod = _configService.BlocklistLastModified;
+                if (!string.IsNullOrWhiteSpace(lastMod) && DateTimeOffset.TryParse(lastMod, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
+                {
+                    _metadata.BlocklistLastModified = dto;
+                }
             }
         }
     }
@@ -69,6 +77,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
                 {
                     BlocklistETag = _metadata.BlocklistETag,
                     BlocklistLastModified = _metadata.BlocklistLastModified,
+                    BlocklistValidatorUrl = _metadata.BlocklistValidatorUrl,
                     LastCheckedUtc = _metadata.LastCheckedUtc,
                     LastSyncStatus = _metadata.LastSyncStatus,
                     LastSyncHttpStatus = _metadata.LastSyncHttpStatus,
@@ -260,7 +269,9 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
 
         lock (_syncLock)
         {
-            var shouldSendConditional = !force && _tree != null && _rules.Count > 0;
+            var validatorsApplyToUrl = !string.IsNullOrWhiteSpace(_metadata.BlocklistValidatorUrl)
+                && string.Equals(_metadata.BlocklistValidatorUrl, effectiveUrl, StringComparison.Ordinal);
+            var shouldSendConditional = !force && _tree != null && _rules.Count > 0 && validatorsApplyToUrl;
             if (shouldSendConditional)
             {
                 if (!string.IsNullOrWhiteSpace(_metadata.BlocklistETag))
@@ -540,6 +551,12 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             _rules = parsedRules;
             _metadata.RuleCount = _rules.Count;
             Interlocked.Exchange(ref _tree, newTree);
+
+            _metadata.BlocklistValidatorUrl = effectiveUrl;
+            if (_configService != null)
+            {
+                _configService.BlocklistValidatorUrl = effectiveUrl;
+            }
 
             if (!string.IsNullOrWhiteSpace(newETag))
             {

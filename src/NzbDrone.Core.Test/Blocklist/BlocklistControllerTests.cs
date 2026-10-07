@@ -68,6 +68,29 @@ public class BlocklistControllerTests
     }
 
     [Test]
+    public void UpdateBlocklist_when_url_changes_should_clear_conditional_validator_fields()
+    {
+        _configService.BlocklistUrl.Returns("https://example.com/old.txt");
+        Dictionary<string, object> savedDict = null;
+        _configService.When(x => x.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>(), Arg.Any<bool>()))
+            .Do(call => savedDict = call.Arg<Dictionary<string, object>>());
+
+        var request = new BlocklistConfigRequest
+        {
+            Url = "https://example.com/new.txt"
+        };
+
+        var actionResult = _controller.UpdateBlocklist(request);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(savedDict, Is.Not.Null);
+        Assert.That(savedDict["BlocklistUrl"], Is.EqualTo("https://example.com/new.txt"));
+        Assert.That(savedDict["BlocklistETag"], Is.EqualTo(string.Empty));
+        Assert.That(savedDict["BlocklistLastModified"], Is.EqualTo(string.Empty));
+        Assert.That(savedDict["BlocklistValidatorUrl"], Is.EqualTo(string.Empty));
+    }
+
+    [Test]
     public void UpdateBlocklist_should_save_configuration()
     {
         // Arrange
