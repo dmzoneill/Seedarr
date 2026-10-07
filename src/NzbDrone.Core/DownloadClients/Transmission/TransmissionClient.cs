@@ -574,7 +574,7 @@ public class TransmissionClient : IDownloadClient, IDisposable
         var result = new DownloadClientSpeedLimits();
         try
         {
-            using var sessionDoc = await SendRequestAsync("session-get", null, cancellationToken);
+            using var sessionDoc = await SendRequestAsync("session-get", new { }, cancellationToken);
             if (sessionDoc.RootElement.TryGetProperty("arguments", out var sessionArgs))
             {
                 if (sessionArgs.TryGetProperty("speed-limit-down-enabled", out var downEnabled) &&
@@ -594,7 +594,7 @@ public class TransmissionClient : IDownloadClient, IDisposable
                 }
             }
 
-            using var statsDoc = await SendRequestAsync("session-stats", null, cancellationToken);
+            using var statsDoc = await SendRequestAsync("session-stats", new { }, cancellationToken);
             if (statsDoc.RootElement.TryGetProperty("arguments", out var statsArgs))
             {
                 if (statsArgs.TryGetProperty("downloadSpeed", out var dlSpeed) && dlSpeed.TryGetInt64(out var dlSpeedVal))
