@@ -55,6 +55,23 @@ public class SwaggerIntegrationTest : IntegrationTestBase
         Assert.That(headerScheme.GetProperty("name").GetString(), Is.EqualTo("X-Api-Key"));
         Assert.That(secSchemesProp.TryGetProperty("ApiKeyQuery", out var queryScheme), Is.True, "Missing ApiKeyQuery security scheme");
         Assert.That(queryScheme.GetProperty("name").GetString(), Is.EqualTo("apikey"));
+
+        // Global security must OR header vs query (separate requirement objects), not AND both in one object.
+        Assert.That(root.TryGetProperty("security", out var securityProp), Is.True, "Missing top-level 'security' field");
+        Assert.That(securityProp.GetArrayLength(), Is.EqualTo(2), "Expected two alternative API key security requirements");
+
+        var requirement0 = securityProp[0];
+        var requirement1 = securityProp[1];
+        Assert.That(requirement0.EnumerateObject().Count(), Is.EqualTo(1), "Each security requirement should reference a single scheme");
+        Assert.That(requirement1.EnumerateObject().Count(), Is.EqualTo(1), "Each security requirement should reference a single scheme");
+
+        var schemeNames = new[]
+        {
+            requirement0.EnumerateObject().First().Name,
+            requirement1.EnumerateObject().First().Name,
+        };
+        Assert.That(schemeNames, Does.Contain("ApiKeyHeader"));
+        Assert.That(schemeNames, Does.Contain("ApiKeyQuery"));
     }
 
     [Test]
