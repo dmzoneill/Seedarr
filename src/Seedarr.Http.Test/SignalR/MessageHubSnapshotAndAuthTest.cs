@@ -134,7 +134,7 @@ public class MessageHubSnapshotAndAuthTest
         Assert.That(first.TotalSize, Is.EqualTo(5000000000));
         Assert.That(first.Active, Is.True);
 
-        await _callerProxy.Received(1).SendCoreAsync("stateSnapshot", Arg.Is<object[]>(args => args.Length == 1 && args[0] == snapshot), Arg.Any<CancellationToken>());
+        await _callerProxy.DidNotReceive().SendCoreAsync("stateSnapshot", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -179,7 +179,7 @@ public class MessageHubSnapshotAndAuthTest
         Assert.That(snapshot.TotalCount, Is.EqualTo(0));
         Assert.That(snapshot.TimestampUtc, Is.GreaterThan(DateTime.UtcNow.AddMinutes(-1)));
 
-        await _callerProxy.Received(1).SendCoreAsync("stateSnapshot", Arg.Is<object[]>(args => args.Length == 1 && args[0] == snapshot), Arg.Any<CancellationToken>());
+        await _callerProxy.DidNotReceive().SendCoreAsync("stateSnapshot", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

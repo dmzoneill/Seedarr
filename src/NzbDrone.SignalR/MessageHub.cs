@@ -439,7 +439,7 @@ public class MessageHub : Hub
     }
 
     [Authorize(Policy = Policies.Reader)]
-    public virtual async Task<StateSnapshotResource> RequestStateSnapshot()
+    public virtual Task<StateSnapshotResource> RequestStateSnapshot()
     {
         var httpContext = Context.GetHttpContext();
         var torrentService = _torrentService ?? (httpContext?.RequestServices?.GetService(typeof(ITorrentService)) as ITorrentService);
@@ -479,7 +479,7 @@ public class MessageHub : Hub
             });
         }
 
-        var snapshot = new StateSnapshotResource
+        return Task.FromResult(new StateSnapshotResource
         {
             Torrents = summaries,
             DownloadSpeed = totalDownloadSpeed,
@@ -487,21 +487,7 @@ public class MessageHub : Hub
             ActiveCount = torrents.FindAll(t => t.Active).Count,
             TotalCount = torrents.Count,
             TimestampUtc = DateTime.UtcNow
-        };
-
-        if (Clients?.Caller != null)
-        {
-            try
-            {
-                await Clients.Caller.SendAsync("stateSnapshot", snapshot);
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Failed to send stateSnapshot event to caller");
-            }
-        }
-
-        return snapshot;
+        });
     }
 }
 
