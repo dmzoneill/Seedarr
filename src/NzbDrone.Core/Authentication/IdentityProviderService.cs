@@ -231,11 +231,13 @@ public class IdentityProviderService : IIdentityProviderService
 
             var rawUrl = provider.ProviderType switch
             {
-                IdentityProviderType.Oidc or IdentityProviderType.Social => !string.IsNullOrWhiteSpace(provider.IssuerUrl)
-                    ? (provider.IssuerUrl.Trim().TrimEnd('/').EndsWith(".well-known/openid-configuration", StringComparison.OrdinalIgnoreCase)
-                        ? provider.IssuerUrl.Trim()
-                        : (provider.IssuerUrl.Trim().EndsWith('/') ? provider.IssuerUrl.Trim() + ".well-known/openid-configuration" : provider.IssuerUrl.Trim() + "/.well-known/openid-configuration"))
-                    : provider.MetadataUrl,
+                IdentityProviderType.Oidc or IdentityProviderType.Social => !string.IsNullOrWhiteSpace(provider.MetadataUrl)
+                    ? provider.MetadataUrl
+                    : !string.IsNullOrWhiteSpace(provider.IssuerUrl)
+                        ? (provider.IssuerUrl.Trim().TrimEnd('/').EndsWith(".well-known/openid-configuration", StringComparison.OrdinalIgnoreCase)
+                            ? provider.IssuerUrl.Trim()
+                            : (provider.IssuerUrl.Trim().EndsWith('/') ? provider.IssuerUrl.Trim() + ".well-known/openid-configuration" : provider.IssuerUrl.Trim() + "/.well-known/openid-configuration"))
+                        : null,
                 IdentityProviderType.Saml => provider.MetadataUrl,
                 _ => provider.IssuerUrl,
             };
