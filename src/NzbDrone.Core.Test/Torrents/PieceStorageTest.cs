@@ -93,6 +93,26 @@ public class PieceStorageTest
     }
 
     [Test]
+    public void Coalescing_deduplicates_repeated_piece_index_before_flush()
+    {
+        const string hash = "duplicate-index-coalesce-hash";
+        const int pieceIndex = 5;
+        const long bytesPerCall = 1000;
+        using var coalescingStorage = new PieceStorage(_signalRBroadcaster, TimeSpan.FromMilliseconds(500));
+
+        coalescingStorage.MarkPieceVerified(hash, pieceIndex, bytesPerCall);
+        coalescingStorage.MarkPieceVerified(hash, pieceIndex, bytesPerCall);
+        coalescingStorage.MarkPieceVerified(hash, pieceIndex, bytesPerCall);
+
+        coalescingStorage.Flush();
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceCompletedMessage>(m =>
+            m.InfoHash == hash &&
+            m.PieceIndex == pieceIndex &&
+            m.BytesDownloaded == bytesPerCall));
+    }
+
+    [Test]
     public void Coalescing_batches_rapid_pieces_when_window_is_set()
     {
         const string hash = "batch-test-hash";

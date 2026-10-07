@@ -397,6 +397,11 @@ public class PieceStorage : IPieceStorage, IDisposable
                     continue;
                 }
 
+                if (batch.PieceIndexes.Contains(pieceIndex))
+                {
+                    break;
+                }
+
                 batch.PieceIndexes.Add(pieceIndex);
                 batch.BytesDownloaded += bytesDownloaded;
 
