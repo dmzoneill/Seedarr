@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:41:35Z",
+  "updatedAt": "2026-10-07T00:42:11Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,15 +14,15 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_7fe654ae",
+    "lastScheduleId": "sched_61f7ec02",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "fox",
-      "issue": 1294,
-      "worktree": "../seedarr_worktrees/issue-1294",
+      "worker": "rabbit",
+      "issue": 1269,
+      "worktree": "../seedarr_worktrees/issue-1269",
       "area": "authentication"
     },
     "host": {
@@ -68,10 +68,9 @@
       1277,
       1286,
       1274,
-      1272,
-      1269
+      1272
     ]
   },
-  "githubOpen": 421,
-  "lastMonitorNote": "auto-poke: fix-mode; 5 agents active (fox/otter/hawk/beaver/owl); monitor sched_7fe654ae pending"
+  "githubOpen": 416,
+  "lastMonitorNote": "fox completed #1294 (closed); dispatched rabbit on #1269; stopped otter"
 }
