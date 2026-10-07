@@ -26,6 +26,11 @@ public class ScheduledTaskCommandExecutorTest
         }
     }
 
+    private static string GetBodyTypeName(object body)
+    {
+        return body?.GetType().GetProperty("TypeName")?.GetValue(body) as string;
+    }
+
     [SetUp]
     public void SetUp()
     {
@@ -96,5 +101,21 @@ public class ScheduledTaskCommandExecutorTest
         broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Name == "TaskCompleted" &&
             m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
+    }
+
+    [Test]
+    public void Execute_should_broadcast_full_type_name_when_command_uses_short_name()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var subject = new ScheduledTaskCommandExecutor(new[] { _fakeTask }, _taskManager, broadcaster);
+        var command = new ScheduledTaskCommand { TaskName = nameof(SampleTask) };
+
+        subject.Execute(command);
+
+        var expectedTypeName = typeof(SampleTask).FullName;
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TaskStarted" && GetBodyTypeName(m.Body) == expectedTypeName));
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TaskCompleted" && GetBodyTypeName(m.Body) == expectedTypeName));
     }
 }
