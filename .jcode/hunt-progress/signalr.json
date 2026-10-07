@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T01:05:00Z",
+  "updatedAt": "2026-10-07T01:10:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Jobs",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-07T01:05:00Z",
-    "issuesFiled": [1260],
+    "subfolder": "src/NzbDrone.Core/Jobs",
+    "completedAt": "2026-10-07T01:10:00Z",
+    "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Static review of MessageHub.cs (OnConnectedAsync auth paths, SubscribeToTorrent/Channel, RequestStateSnapshot, TrackerSignalREventHandler/BroadcastTrackerPayload), SignalRMessageBroadcaster.cs (dedup cache, GetNamedEvents, group/torrent/channel routing), PieceCompletedMessage.cs, PieceBatchCompletedMessage.cs, StateSnapshotResource.cs, PieceStorage.cs (coalesce/Flush/Dispose), Seedarr.SignalR.csproj. Cross-checked open GH: #878 #887 #919 #936 #940 #954 #961 #1016 #1019 #1094 #1095 #1147 #1194 #1195 #1234 #1235. Filed #1260 (PieceStorage.Flush snapshot race during concurrent coalesce). No issues reopened. Next: src/NzbDrone.Core/Jobs. Static review only; no dotnet build/test."
+    "note": "Static review of all 12 files under Jobs: Scheduler.cs (SignalR TaskStarted/TaskFailed/TaskCompleted lifecycle, jitter, missing-instance path), ScheduledTaskCommandExecutor.cs (queue path SignalR + finally TaskCompleted), TaskManager.cs (normalization, history, cancel/fail state), ScheduledTask/History/Repository, DatabaseVacuumTask, TrackerScrapeJob, IScheduledTask. Cross-checked open GH: #821 #903 #911 #952 #971 #985 #1026 #1162 #1202 #1203 #1236. No new root causes; existing issues cover cancel/timeout terminal events (#911/#1236), missing task instance success (#952), manual failure TaskCompleted (#985), TaskFailed delivery (#903), type name payloads (#1203), TrackerScrapeJob swallowed failures (#971), history/stack gaps (#1162/#1202). Next: src/NzbDrone.Core/Torrents/TorrentRecheckService.cs. Static only; no dotnet build/test."
   }
 }
