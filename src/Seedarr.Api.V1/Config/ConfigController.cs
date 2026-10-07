@@ -212,11 +212,13 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
 
         try
         {
-            _configService.SaveConfigDictionary(dbDictionary);
+            _configService.SaveConfigDictionary(dbDictionary, publishEvent: false);
             if (_configFileProvider != null)
             {
                 _configFileProvider.SaveConfigDictionary(xmlValues);
             }
+
+            _configService.SaveConfigDictionary(new Dictionary<string, object>());
         }
         catch (ArgumentException ex)
         {
