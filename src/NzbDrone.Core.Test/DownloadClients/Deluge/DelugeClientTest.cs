@@ -139,6 +139,21 @@ public class DelugeClientTest
     }
 
     [Test]
+    public void JsonUrl_should_include_url_base_when_configured()
+    {
+        _client.UseSsl = false;
+        _client.Host = "myhost";
+        _client.Port = 8112;
+        _client.UrlBase = "deluge";
+
+        var prop = typeof(DelugeClient).GetProperty("JsonUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)prop.GetValue(_client);
+
+        Assert.That(result, Is.EqualTo("http://myhost:8112/deluge/json"));
+    }
+
+    [Test]
     public void Host_should_be_settable()
     {
         _client.Host = "deluge.local";

@@ -28,6 +28,7 @@ public class TransmissionClient : IDownloadClient, IDisposable
     public string Username { get; set; } = "";
     public string Password { get; set; } = "";
     public string Category { get; set; } = "";
+    public string UrlBase { get; set; } = "";
     public IRemotePathMappingService RemotePathMappingService { get; set; }
     public string LocalTorrentDirectory { get; set; }
 
@@ -53,7 +54,7 @@ public class TransmissionClient : IDownloadClient, IDisposable
         }
     }
 
-    private string RpcUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}/transmission/rpc";
+    private string RpcUrl => $"{DownloadClientUrl.BuildRootUrl(UseSsl, Host, Port, UrlBase)}/transmission/rpc";
 
     private HttpRequestMessage CreateRequest(string method, object arguments)
     {

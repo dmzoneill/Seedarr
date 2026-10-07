@@ -27,6 +27,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
     [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2068:Hardcoded credentials", Justification = "Standard factory default qBittorrent WebUI credential")]
     private string _password = "adminadmin";
     private string _category = "";
+    private string _urlBase = "";
 
     public string Name => "qBittorrent";
     public string ClientType => "QBitTorrent";
@@ -102,6 +103,19 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         set => _category = value;
     }
 
+    public string UrlBase
+    {
+        get => _urlBase;
+        set
+        {
+            if (_urlBase != value)
+            {
+                _urlBase = value;
+                _isAuthenticated = false;
+            }
+        }
+    }
+
     public QBitTorrentClient(HttpClient client = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
@@ -124,7 +138,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         }
     }
 
-    private string BaseUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}";
+    private string BaseUrl => DownloadClientUrl.BuildRootUrl(UseSsl, Host, Port, UrlBase);
 
     private bool Authenticate(bool force = false)
     {

@@ -110,6 +110,21 @@ public class QBitTorrentClientTest
     }
 
     [Test]
+    public void BaseUrl_should_include_url_base_when_configured()
+    {
+        _client.UseSsl = false;
+        _client.Host = "myhost";
+        _client.Port = 8080;
+        _client.UrlBase = "/qbittorrent";
+
+        var prop = typeof(QBitTorrentClient).GetProperty("BaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)prop.GetValue(_client);
+
+        Assert.That(result, Is.EqualTo("http://myhost:8080/qbittorrent"));
+    }
+
+    [Test]
     public void Host_should_be_settable()
     {
         _client.Host = "qbt.local";
