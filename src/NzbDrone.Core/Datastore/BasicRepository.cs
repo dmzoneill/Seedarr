@@ -185,6 +185,11 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
 
     public void UpdateMany(IEnumerable<TModel> models)
     {
+        if (models == null)
+        {
+            return;
+        }
+
         var list = models as IList<TModel> ?? models.ToList();
         if (list.Count == 0)
         {

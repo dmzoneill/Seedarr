@@ -232,6 +232,13 @@ public class BasicRepositoryTest
     }
 
     [Test]
+    public void UpdateMany_handles_null_collection_gracefully()
+    {
+        Assert.DoesNotThrow(() => _subject.UpdateMany((IEnumerable<Tag>)null));
+        Assert.DoesNotThrow(() => _subject.UpdateMany((IList<Tag>)null));
+    }
+
+    [Test]
     public void InsertMany_inserts_all_items_atomically_in_a_single_transaction()
     {
         var tags = new[]
