@@ -281,6 +281,32 @@ public class DownloadClientSyncServiceTest
     }
 
     [Test]
+    public void Sync_should_record_failure_when_factory_cannot_build_provider()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        var clientDef = new DownloadClientDefinition
+        {
+            Id = 7,
+            Name = "Unsupported Client",
+            ClientType = "NotARealClient",
+            Enable = true
+        };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+        _downloadClientFactory.CreateClient(clientDef).Returns((IDownloadClient)null);
+        _service.InjectedClient = null;
+
+        var result = _service.Sync();
+
+        Assert.That(result.Failed, Is.EqualTo(1));
+        Assert.That(result.Added, Is.EqualTo(0));
+        var status = _service.GetClientStatus(7);
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.IsOnline, Is.False);
+        Assert.That(status.LastErrorMessage, Does.Contain("NotARealClient"));
+        Assert.That(status.ConsecutiveFailures, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Sync_should_handle_client_get_items_exception_gracefully()
     {
         var mockClient = Substitute.For<IDownloadClient>();
