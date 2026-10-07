@@ -1416,6 +1416,23 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var existing = _torrentService.GetByInfoHash(resource.InfoHash);
         if (existing != null)
         {
+            if (existing.IsPrivate)
+            {
+                var existingTrackerUrls = _trackerEntryService.GetByTorrentId(existing.Id)
+                    .Select(t => t.Url)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var wouldAddTracker = (resource.Trackers != null && resource.Trackers.Count > 0
+                    && resource.Trackers.Any(url => !string.IsNullOrWhiteSpace(url) && existingTrackerUrls.Add(url.Trim())))
+                    || (!string.IsNullOrWhiteSpace(resource.TrackerUrl)
+                        && existingTrackerUrls.Add(resource.TrackerUrl.Trim()));
+
+                if (wouldAddTracker)
+                {
+                    return BadRequest(new { message = "Cannot add external trackers to a private torrent (BEP 27)." });
+                }
+            }
+
             if (resource.Trackers != null && resource.Trackers.Count > 0)
             {
                 var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
