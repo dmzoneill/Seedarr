@@ -276,7 +276,7 @@ public class DelugeClientTest
     }
 
     [Test]
-    public void GetItems_should_return_empty_when_no_result_property()
+    public void GetItems_should_throw_when_no_result_property()
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
@@ -284,10 +284,23 @@ public class DelugeClientTest
         handler.Enqueue(HttpStatusCode.OK, @"{""id"":2}");
         InjectMockClient(handler);
 
-        var result = _client.GetItems();
+        var ex = Assert.Throws<DownloadClientUnavailableException>(() => _client.GetItems());
+        Assert.That(ex.Message, Does.Contain("web.update_ui"));
+    }
 
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+    [Test]
+    public void GetItems_should_throw_when_update_ui_returns_json_rpc_error()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
+        handler.Enqueue(HttpStatusCode.OK,
+            @"{""error"":{""message"":""Daemon not connected"",""code"":1},""id"":2}");
+        InjectMockClient(handler);
+
+        var ex = Assert.Throws<DownloadClientUnavailableException>(() => _client.GetItems());
+        Assert.That(ex.Message, Does.Contain("Daemon not connected"));
+        Assert.That(ex.Message, Does.Contain("web.update_ui"));
     }
 
     [Test]

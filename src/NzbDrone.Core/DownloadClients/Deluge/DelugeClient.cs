@@ -99,7 +99,9 @@ public class DelugeClient : IDownloadClient, IDisposable
             }
 
             using var stream = response.Content.ReadAsStream();
-            return JsonDocument.Parse(stream);
+            var doc = JsonDocument.Parse(stream);
+            EnsureNoJsonRpcError(doc.RootElement, method);
+            return doc;
         }
     }
 
@@ -142,8 +144,49 @@ public class DelugeClient : IDownloadClient, IDisposable
             }
 
             using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            EnsureNoJsonRpcError(doc.RootElement, method);
+            return doc;
         }
+    }
+
+    private static void EnsureNoJsonRpcError(JsonElement root, string method)
+    {
+        if (!root.TryGetProperty("error", out var error) || error.ValueKind == JsonValueKind.Null)
+        {
+            return;
+        }
+
+        throw new DownloadClientUnavailableException(
+            $"Deluge JSON-RPC call '{method}' failed: {FormatJsonRpcError(error)}");
+    }
+
+    private static string FormatJsonRpcError(JsonElement error)
+    {
+        if (error.ValueKind == JsonValueKind.String)
+        {
+            return error.GetString() ?? "unknown error";
+        }
+
+        if (error.ValueKind == JsonValueKind.Object)
+        {
+            var message = error.TryGetProperty("message", out var messageProp) ? messageProp.GetString() : null;
+            if (error.TryGetProperty("code", out var codeProp))
+            {
+                var code = codeProp.ToString();
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    return $"{message} (code {code})";
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                return message;
+            }
+        }
+
+        return error.GetRawText();
     }
 
     private bool Authenticate()
@@ -330,7 +373,7 @@ public class DelugeClient : IDownloadClient, IDisposable
 
         if (!doc.RootElement.TryGetProperty("result", out var result))
         {
-            return items;
+            throw new DownloadClientUnavailableException("Deluge web.update_ui returned no result.");
         }
 
         if (!result.TryGetProperty("torrents", out var torrents))
