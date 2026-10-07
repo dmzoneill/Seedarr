@@ -63,7 +63,32 @@ public class SessionRevocationService : ISessionRevocationService
             return issuedUtc <= revokedAtUtc;
         }
 
-        return false;
+        if (_repository == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var entry = _repository.GetActiveBySessionKey(key, DateTime.UtcNow);
+            if (entry == null || string.IsNullOrWhiteSpace(entry.SessionKey))
+            {
+                return false;
+            }
+
+            var revokedFromStore = entry.RevokedAtUtc;
+            _revokedSessions.AddOrUpdate(
+                key,
+                revokedFromStore,
+                (_, existing) => revokedFromStore > existing ? revokedFromStore : existing);
+
+            return issuedUtc <= revokedFromStore;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to check revoked session {0} in database", key);
+            return false;
+        }
     }
 
     public void ClearExpired(TimeSpan? maxAge = null)

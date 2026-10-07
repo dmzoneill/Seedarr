@@ -365,6 +365,45 @@ public class AuthControllerTest
     }
 
     [Test]
+    public void SessionRevocationService_IsSessionRevoked_ConsultsRepositoryOnCacheMiss()
+    {
+        var repository = Substitute.For<IRevokedSessionRepository>();
+        var revokedAt = DateTime.UtcNow.AddHours(-1);
+        repository.GetActive(Arg.Any<DateTime>()).Returns(Array.Empty<RevokedSession>());
+        repository.GetActiveBySessionKey("peer-revoked", Arg.Any<DateTime>()).Returns(new RevokedSession
+        {
+            SessionKey = "peer-revoked",
+            RevokedAtUtc = revokedAt,
+            ExpiresAtUtc = revokedAt.AddDays(30),
+        });
+
+        var service = new SessionRevocationService(repository);
+
+        Assert.That(service.IsSessionRevoked("peer-revoked", revokedAt.AddMinutes(-5)), Is.True);
+        repository.Received(1).GetActiveBySessionKey("peer-revoked", Arg.Any<DateTime>());
+        Assert.That(service.IsSessionRevoked("peer-revoked", revokedAt.AddMinutes(-5)), Is.True);
+        repository.Received(1).GetActiveBySessionKey("peer-revoked", Arg.Any<DateTime>());
+    }
+
+    [Test]
+    public void SessionRevocationService_IsSessionRevoked_ChecksRepositoryWhenHydrationFailed()
+    {
+        var repository = Substitute.For<IRevokedSessionRepository>();
+        var revokedAt = DateTime.UtcNow.AddHours(-2);
+        repository.GetActive(Arg.Any<DateTime>()).Returns(_ => throw new InvalidOperationException("db down at startup"));
+        repository.GetActiveBySessionKey("recovered-session", Arg.Any<DateTime>()).Returns(new RevokedSession
+        {
+            SessionKey = "recovered-session",
+            RevokedAtUtc = revokedAt,
+            ExpiresAtUtc = revokedAt.AddDays(30),
+        });
+
+        var service = new SessionRevocationService(repository);
+
+        Assert.That(service.IsSessionRevoked("recovered-session", revokedAt.AddMinutes(-10)), Is.True);
+    }
+
+    [Test]
     public void SessionRevocationService_ClearExpired_DeletesFromRepository()
     {
         var repository = Substitute.For<IRevokedSessionRepository>();
