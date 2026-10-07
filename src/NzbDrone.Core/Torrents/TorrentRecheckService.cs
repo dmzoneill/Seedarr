@@ -328,36 +328,37 @@ public class TorrentRecheckService : ITorrentRecheckService
         _logger.Info("Starting hash verification for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
         try
         {
-        // 1. Suspend active transfer speeds and active flags before hash verification
-        torrent.Active = false;
-        torrent.UploadSpeed = 0;
-        torrent.DownloadSpeed = 0;
+            // 1. Suspend active transfer speeds and active flags before hash verification
+            torrent.Active = false;
+            torrent.UploadSpeed = 0;
+            torrent.DownloadSpeed = 0;
 
-        // 2. Coordinate with TorrentStateMachine / SeedingEngine to enter Checking status
-        var oldStatus = torrent.Status;
-        if (_stateMachine != null)
-        {
-            _stateMachine.TransitionToChecking(torrent);
-        }
-        else
-        {
-            torrent.Status = TorrentStatus.Checking;
-            _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Checking));
-        }
-
-        _torrentRepository?.Update(torrent);
-        _eventAggregator?.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
-
-        if (_signalRBroadcaster != null)
-        {
-            var updateMsg = new SignalRMessage
+            // 2. Coordinate with TorrentStateMachine / SeedingEngine to enter Checking status
+            var oldStatus = torrent.Status;
+            if (_stateMachine != null)
             {
-                Name = "TorrentUpdated",
-                Action = ModelAction.Updated,
-                Body = torrent
-            };
-            _signalRBroadcaster.BroadcastMessage(updateMsg);
-        }
+                _stateMachine.TransitionToChecking(torrent);
+            }
+            else
+            {
+                torrent.Status = TorrentStatus.Checking;
+                _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Checking));
+            }
+
+            _torrentRepository?.Update(torrent);
+            _eventAggregator?.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+
+            if (_signalRBroadcaster != null)
+            {
+                var updateMsg = new SignalRMessage
+                {
+                    Name = "TorrentUpdated",
+                    Action = ModelAction.Updated,
+                    Body = torrent
+                };
+                _signalRBroadcaster.BroadcastMessage(updateMsg);
+                _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
+            }
 
             // 3. Resolve files and expected piece hashes
             var files = _torrentFileService?.GetByTorrentId(torrent.Id) ?? torrent.Files;
