@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T04:08:42Z",
+  "updatedAt": "2026-10-07T04:09:03Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_8631c26e",
+    "lastScheduleId": "sched_99d17693",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -76,5 +76,5 @@
     ]
   },
   "githubOpen": 30,
-  "lastMonitorNote": "fix monitor: #879 #1007 #884 #1014 #951 closed; unicorn #880 kangaroo #1001 hedgehog #931 skunk #1025 raccoon #940; rabbit #1007 ack"
+  "lastMonitorNote": "fix monitor heartbeat: 30 open; all slots active on #880 #1001 #931 #1025 #940; hippo/rhino/boar/orangutan acks already rotated"
 }
