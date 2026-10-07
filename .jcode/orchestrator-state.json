@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T04:32:21Z",
+  "updatedAt": "2026-10-07T04:33:10Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_72329401",
+    "lastScheduleId": "sched_76525b42",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -37,11 +37,9 @@
       "area": "packages"
     },
     "core-torrents": {
-      "status": "running",
+      "status": "idle",
       "worker": "elk",
-      "session": "kikazaru",
-      "issue": 654,
-      "worktree": "../seedarr_worktrees/issue-654",
+      "issue": null,
       "area": "rpc"
     },
     "http": {
@@ -62,6 +60,6 @@
     ],
     "nextCandidates": []
   },
-  "githubOpen": 1,
-  "lastMonitorNote": "fix monitor: #899 closed on GitHub; host idle; kikazaru on #654; 4 slots idle queue empty"
+  "githubOpen": 0,
+  "lastMonitorNote": "fix monitor: #654 closed on GitHub; all 5 slots idle; queue empty; 0 open issues"
 }
