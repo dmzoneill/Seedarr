@@ -292,3 +292,26 @@
 {"ts": "2026-10-07T02:02:06Z", "mode": "fix", "scheduleId": "sched_f04c16eb", "githubOpen": 244, "restarts": 0, "dispatches": [{"slot": "host", "worker": "panther", "issue": 993, "reason": "closed_1017"}, {"slot": "core-torrents", "worker": "elk", "issue": 1037, "reason": "closed_1127"}], "closed": [1017, 1127], "active": {"badger": 1146, "panther": 993, "hawk": 1119, "elk": 1037, "sparrow": 877}}
 {"ts": "2026-10-07T02:04:21Z", "mode": "fix", "scheduleId": "sched_30406395", "githubOpen": 243, "restarts": 0, "dispatches": [{"slot": "core-auth", "worker": "badger", "issue": 1116, "reason": "closed_1146"}, {"slot": "api", "worker": "hawk", "issue": 1008, "reason": "closed_1119"}, {"slot": "http", "worker": "sparrow", "issue": 1132, "reason": "closed_877"}], "closed": [1146, 1119, 877], "active": {"badger": 1116, "panther": 993, "hawk": 1008, "elk": 1037, "sparrow": 1132}}
 {"ts":"2026-10-07T02:03:51Z","mode":"fix","event":"monitor","open":243,"restarts":0,"dispatches":0,"scheduleId":"sched_3a2eba92","note":"all 5 active <90s idle; issues open"}
+{
+  "ts": "2026-10-07T02:04:14Z",
+  "mode": "fix",
+  "githubOpen": 243,
+  "restarts": 0,
+  "dispatches": 0,
+  "openIssues": [
+    1116,
+    993,
+    1008,
+    1037,
+    1132
+  ],
+  "workers": {
+    "badger": "active",
+    "panther": "active",
+    "hawk": "active",
+    "elk": "active",
+    "sparrow": "active"
+  },
+  "scheduleId": "sched_c02fc3b3",
+  "note": "all slots active <90s idle"
+}
