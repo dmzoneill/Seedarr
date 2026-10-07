@@ -74,6 +74,8 @@ public class AppLifetime : IHostedService, IDisposable
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (_dynamicAuthManager != null)
         {
             try
@@ -85,6 +87,8 @@ public class AppLifetime : IHostedService, IDisposable
                 _logger.Warn(ex, "Error initializing dynamic authentication providers on startup");
             }
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         _logger.Info("Seedarr application started");
         _eventAggregator.PublishEvent(new ApplicationStartedEvent());
@@ -100,6 +104,8 @@ public class AppLifetime : IHostedService, IDisposable
                 _logger.Warn(ex, "Error loading/reconciling FastResume data on startup");
             }
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         _cts = new CancellationTokenSource();
         _watchdogLoopTask = Task.Run(() => RunWatchdogLoopAsync(_cts.Token), _cts.Token);

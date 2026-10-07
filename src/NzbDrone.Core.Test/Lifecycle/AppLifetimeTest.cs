@@ -14,6 +14,7 @@ using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Host;
+using Seedarr.Http.Authentication;
 
 namespace NzbDrone.Core.Test.Lifecycle;
 
@@ -375,6 +376,61 @@ public class AppLifetimeTest
         await _subject.StartAsync(CancellationToken.None);
 
         _fastResumeService.Received(1).LoadAll();
+    }
+
+    [Test]
+    public void StartAsync_should_honor_cancelled_startup_token_before_side_effects()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () => await _subject.StartAsync(cts.Token));
+
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<ApplicationStartedEvent>());
+        _fastResumeService.DidNotReceive().LoadAll();
+    }
+
+    [Test]
+    public async Task StartAsync_should_honor_cancelled_startup_token_after_auth_init()
+    {
+        var authManager = Substitute.For<IDynamicAuthSchemeManager>();
+        authManager.InitializeConfiguredProvidersAsync().Returns(async callInfo =>
+        {
+            await Task.Yield();
+        });
+
+        using var cts = new CancellationTokenSource();
+        var subject = new AppLifetime(
+            _eventAggregator,
+            authManager,
+            _torrentService,
+            _configService,
+            _diskSpaceService,
+            _upnpService,
+            _fastResumeService,
+            _trackerAnnounceService,
+            _connectionManager,
+            _pieceStorage,
+            _mainDatabase,
+            _peerServer);
+
+        cts.Cancel();
+
+        try
+        {
+            await subject.StartAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            subject.Dispose();
+        }
+
+        await authManager.Received(1).InitializeConfiguredProvidersAsync();
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<ApplicationStartedEvent>());
+        _fastResumeService.DidNotReceive().LoadAll();
     }
 
     [Test]
