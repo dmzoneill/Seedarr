@@ -111,6 +111,19 @@ public class SignalRMessageBroadcasterTest
     }
 
     [Test]
+    public void BroadcastMessage_deduplicates_PieceBatchCompleted_with_same_indexes_in_different_order()
+    {
+        var msg1 = new PieceBatchCompletedMessage("abc123", new[] { 1, 2, 3 });
+        var msg2 = new PieceBatchCompletedMessage("abc123", new[] { 3, 2, 1 });
+
+        _broadcaster.BroadcastMessage(msg1);
+        _broadcaster.BroadcastMessage(msg2);
+
+        _clientProxy.Received(1).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        _clientProxy.Received(1).SendCoreAsync("pieceMapUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public void BroadcastMessage_deduplicates_identical_payloads_within_window()
     {
         var msg1 = new SignalRMessage
