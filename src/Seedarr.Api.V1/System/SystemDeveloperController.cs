@@ -28,6 +28,9 @@ namespace Seedarr.Api.V1.System;
 [V1ApiController("system/developer")]
 public class SystemDeveloperController : Controller
 {
+    private const int MinRecentLimit = 1;
+    private const int MaxRecentLimit = 5000;
+
     private static readonly JsonSerializerOptions IndentedJsonOptions = new() { WriteIndented = true };
 
     private static readonly HashSet<string> BaseCommandProperties = new(StringComparer.OrdinalIgnoreCase)
@@ -100,6 +103,7 @@ public class SystemDeveloperController : Controller
             return new DeveloperEventsResponse();
         }
 
+        limit = NormalizeRecentLimit(limit);
         var list = _eventStore.GetRecentEvents(limit, search);
         return new DeveloperEventsResponse
         {
@@ -299,6 +303,7 @@ public class SystemDeveloperController : Controller
             return new DeveloperHttpTrafficResponse();
         }
 
+        limit = NormalizeRecentLimit(limit);
         var items = _httpTrafficStore.GetRecent(limit, search);
         return new DeveloperHttpTrafficResponse
         {
@@ -383,6 +388,7 @@ public class SystemDeveloperController : Controller
             return new List<DeveloperWebhookHistoryItem>();
         }
 
+        limit = NormalizeRecentLimit(limit);
         var items = _webhookStore.GetRecent(limit);
         return items.Select(w => new DeveloperWebhookHistoryItem
         {
@@ -578,6 +584,21 @@ public class SystemDeveloperController : Controller
             McpEnabled = _mcpService != null,
             McpTools = mcpTools,
         };
+    }
+
+    private static int NormalizeRecentLimit(int limit)
+    {
+        if (limit < MinRecentLimit)
+        {
+            return MinRecentLimit;
+        }
+
+        if (limit > MaxRecentLimit)
+        {
+            return MaxRecentLimit;
+        }
+
+        return limit;
     }
 
     private static string FormatCommandDescription(string name)
