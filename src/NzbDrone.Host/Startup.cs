@@ -292,20 +292,11 @@ public class Startup
         var isAuth = context.User?.Identity?.IsAuthenticated == true;
         if (!isAuth)
         {
-            var authResult = await context.AuthenticateAsync("Cookies");
+            var authResult = await context.AuthenticateAsync();
             if (authResult.Succeeded)
             {
                 isAuth = true;
                 context.User = authResult.Principal;
-            }
-            else
-            {
-                var apiKeyResult = await context.AuthenticateAsync(ApiKeyAuthenticationOptions.DefaultScheme);
-                if (apiKeyResult.Succeeded)
-                {
-                    isAuth = true;
-                    context.User = apiKeyResult.Principal;
-                }
             }
         }
 
