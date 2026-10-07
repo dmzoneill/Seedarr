@@ -326,6 +326,26 @@ public class DbFactoryTest
     }
 
     [Test]
+    public void SqliteDoubleTypeHandler_Parse_returns_zero_for_dbnull()
+    {
+        var handler = new SqliteDoubleTypeHandler();
+
+        var result = handler.Parse(DBNull.Value);
+
+        Assert.That(result, Is.EqualTo(0.0));
+    }
+
+    [Test]
+    public void SqliteDoubleTypeHandler_Parse_returns_zero_for_null()
+    {
+        var handler = new SqliteDoubleTypeHandler();
+
+        var result = handler.Parse(null);
+
+        Assert.That(result, Is.EqualTo(0.0));
+    }
+
+    [Test]
     public void Create_creates_pre_migration_snapshot_when_database_file_exists()
     {
         using (var conn = new SqliteConnection($"Data Source={_tempDbPath}"))
