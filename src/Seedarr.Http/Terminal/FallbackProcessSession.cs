@@ -37,7 +37,7 @@ public sealed class FallbackProcessSession : ITerminalSession
         this._inputStream = process.StandardInput.BaseStream;
         this._outputChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(500)
         {
-            FullMode = BoundedChannelFullMode.Wait,
+            FullMode = BoundedChannelFullMode.DropOldest,
             SingleWriter = false,
             SingleReader = true,
         });
@@ -209,7 +209,10 @@ public sealed class FallbackProcessSession : ITerminalSession
 
                 var chunk = new byte[bytesRead];
                 Buffer.BlockCopy(buffer, 0, chunk, 0, bytesRead);
-                await this._outputChannel.Writer.WriteAsync(chunk, cancellationToken).ConfigureAwait(false);
+                if (!this._outputChannel.Writer.TryWrite(chunk))
+                {
+                    // Channel completed or saturated: discard so redirected pipes keep draining.
+                }
             }
         }
         catch
