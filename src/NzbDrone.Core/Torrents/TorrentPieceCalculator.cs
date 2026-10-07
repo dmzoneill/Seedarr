@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace NzbDrone.Core.Torrents;
@@ -52,5 +53,40 @@ public static class TorrentPieceCalculator
                 runningByteOffset += file.Size;
             }
         }
+    }
+
+    /// <summary>
+    /// Sums byte length of verified pieces (last piece uses remaining torrent size).
+    /// </summary>
+    public static long SumVerifiedBytes(bool[] verifiedPieces, long totalSize, int pieceLength)
+    {
+        if (verifiedPieces == null || verifiedPieces.Length == 0 || totalSize <= 0)
+        {
+            return 0;
+        }
+
+        var pieceCount = verifiedPieces.Length;
+        var effectivePieceLength = pieceLength > 0
+            ? pieceLength
+            : (int)Math.Max(1, totalSize / pieceCount);
+
+        long downloaded = 0;
+        for (var i = 0; i < pieceCount; i++)
+        {
+            if (!verifiedPieces[i])
+            {
+                continue;
+            }
+
+            var pieceStart = (long)i * effectivePieceLength;
+            if (pieceStart >= totalSize)
+            {
+                continue;
+            }
+
+            downloaded += Math.Min((long)effectivePieceLength, totalSize - pieceStart);
+        }
+
+        return downloaded;
     }
 }

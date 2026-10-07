@@ -87,4 +87,20 @@ public class TorrentPieceCalculatorTest
         Assert.That(files[3].PieceOffset, Is.EqualTo(2));
         Assert.That(files[3].PieceCount, Is.EqualTo(2));
     }
+
+    [Test]
+    public void SumVerifiedBytes_sums_full_pieces_and_adjusts_last_piece()
+    {
+        var verified = new[] { true, true, false, true };
+        var bytes = TorrentPieceCalculator.SumVerifiedBytes(verified, 3500, 1000);
+        Assert.That(bytes, Is.EqualTo(2500));
+    }
+
+    [Test]
+    public void SumVerifiedBytes_returns_total_size_when_all_pieces_verified()
+    {
+        var verified = new[] { true, true, true, true };
+        var bytes = TorrentPieceCalculator.SumVerifiedBytes(verified, 4000, 1000);
+        Assert.That(bytes, Is.EqualTo(4000));
+    }
 }

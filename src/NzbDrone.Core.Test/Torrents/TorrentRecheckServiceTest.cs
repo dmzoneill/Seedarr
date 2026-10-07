@@ -103,7 +103,8 @@ public class TorrentRecheckServiceTest
             Status = TorrentStatus.Downloading,
             PieceCount = 3,
             PieceLength = 1000,
-            TotalSize = 3000
+            TotalSize = 3000,
+            Downloaded = 9999
         };
 
         var pieceHashes = new byte[3 * 20];
@@ -129,6 +130,7 @@ public class TorrentRecheckServiceTest
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Progress, Is.EqualTo(1.0));
+        Assert.That(result.Downloaded, Is.EqualTo(3000));
         Assert.That(result.Status, Is.EqualTo(TorrentStatus.Seeding));
         _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 3 && b.All(x => x)));
         _stateMachine.Received(1).TransitionFromChecking(torrent);
@@ -147,7 +149,8 @@ public class TorrentRecheckServiceTest
             Status = TorrentStatus.Checking,
             PieceCount = 4,
             PieceLength = 1000,
-            TotalSize = 4000
+            TotalSize = 4000,
+            Downloaded = 4000
         };
 
         var pieceHashes = new byte[4 * 20];
@@ -180,6 +183,7 @@ public class TorrentRecheckServiceTest
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Progress, Is.EqualTo(0.5));
+        Assert.That(result.Downloaded, Is.EqualTo(2000));
         Assert.That(result.Status, Is.EqualTo(TorrentStatus.Downloading));
         _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b[0] && b[1] && !b[2] && !b[3]));
     }

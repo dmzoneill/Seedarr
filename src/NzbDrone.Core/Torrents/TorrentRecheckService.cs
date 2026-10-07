@@ -419,6 +419,9 @@ public class TorrentRecheckService : ITorrentRecheckService
                 torrent.Progress = 1.0;
             }
 
+            torrent.Downloaded = TorrentPieceCalculator.SumVerifiedBytes(bitfield, torrent.TotalSize, torrent.PieceLength);
+            torrent.UpdateRatio();
+
             // 6. Transition state back to appropriate status unless the user paused during recheck
             var persistedStatus = _torrentRepository?.Get(torrent.Id)?.Status;
             if (persistedStatus == TorrentStatus.Paused)
