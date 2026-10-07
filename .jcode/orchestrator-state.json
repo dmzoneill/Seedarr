@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:38:30Z",
+  "updatedAt": "2026-10-07T01:38:59Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_32414a8b",
+    "lastScheduleId": "sched_7e8a3426",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -49,8 +49,8 @@
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "issue": 1174,
-      "worktree": "../seedarr_worktrees/issue-1174",
+      "issue": 1140,
+      "worktree": "../seedarr_worktrees/issue-1140",
       "area": "http"
     }
   },
@@ -64,6 +64,7 @@
       "signalr"
     ],
     "nextCandidates": [
+      1133,
       1215,
       1210,
       1248,
@@ -71,6 +72,6 @@
       1005
     ]
   },
-  "githubOpen": 298,
-  "lastMonitorNote": "fix monitor: #907/#1118/#1048 closed; panther#1028 hawk#1227 elk#1242; open 298"
+  "githubOpen": 297,
+  "lastMonitorNote": "fix monitor: #1174 closed; sparrow#1140; open 297"
 }
