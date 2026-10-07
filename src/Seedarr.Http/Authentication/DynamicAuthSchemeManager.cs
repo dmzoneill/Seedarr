@@ -638,6 +638,32 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         return true;
     }
 
+    internal static string NormalizeMappedRoleName(string roleMappingKey)
+    {
+        if (string.IsNullOrWhiteSpace(roleMappingKey))
+        {
+            return roleMappingKey;
+        }
+
+        if (roleMappingKey.Equals(Roles.Admin, StringComparison.OrdinalIgnoreCase))
+        {
+            return Roles.Admin;
+        }
+
+        if (roleMappingKey.Equals(Roles.User, StringComparison.OrdinalIgnoreCase) ||
+            roleMappingKey.Equals("Operator", StringComparison.OrdinalIgnoreCase))
+        {
+            return Roles.User;
+        }
+
+        if (roleMappingKey.Equals(Roles.ReadOnly, StringComparison.OrdinalIgnoreCase))
+        {
+            return Roles.ReadOnly;
+        }
+
+        return roleMappingKey.Trim();
+    }
+
     public static List<string> ResolveRoles(IEnumerable<Claim> claims, string roleMappingRulesJson)
     {
         var assignedRoles = new List<string>();
@@ -700,9 +726,13 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
                             }
                         }
 
-                        if (matched && !assignedRoles.Contains(roleName, StringComparer.OrdinalIgnoreCase))
+                        if (matched)
                         {
-                            assignedRoles.Add(roleName);
+                            var normalizedRole = NormalizeMappedRoleName(roleName);
+                            if (!assignedRoles.Contains(normalizedRole, StringComparer.OrdinalIgnoreCase))
+                            {
+                                assignedRoles.Add(normalizedRole);
+                            }
                         }
                     }
                 }
