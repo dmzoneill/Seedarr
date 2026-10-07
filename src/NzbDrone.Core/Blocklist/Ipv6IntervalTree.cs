@@ -282,6 +282,54 @@ public class Ipv6IntervalTree
         return false;
     }
 
+    public static bool IsEnforceableRule(string rule)
+    {
+        if (string.IsNullOrWhiteSpace(rule))
+        {
+            return false;
+        }
+
+        var trimmed = rule.Trim();
+        if (trimmed.StartsWith('#') ||
+            trimmed.StartsWith("//", StringComparison.Ordinal) ||
+            trimmed.StartsWith(';'))
+        {
+            return false;
+        }
+
+        var isProbableIpv6 = trimmed.Contains(':') && !trimmed.StartsWith("::ffff:", StringComparison.OrdinalIgnoreCase);
+        if (isProbableIpv6 && TryParse(trimmed, out _))
+        {
+            return true;
+        }
+
+        if (Ipv4IntervalTree.TryParse(trimmed, out _))
+        {
+            return true;
+        }
+
+        return TryParse(trimmed, out _);
+    }
+
+    public static List<string> SelectEnforceableRules(IEnumerable<string> rules)
+    {
+        var list = new List<string>();
+        if (rules == null)
+        {
+            return list;
+        }
+
+        foreach (var rule in rules)
+        {
+            if (IsEnforceableRule(rule))
+            {
+                list.Add(rule.Trim());
+            }
+        }
+
+        return list;
+    }
+
     public static Ipv6IntervalTree Parse(IEnumerable<string> rules)
     {
         var v6Ranges = new List<Ipv6Range>();

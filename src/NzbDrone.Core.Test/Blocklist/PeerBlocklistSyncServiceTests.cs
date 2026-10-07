@@ -74,6 +74,33 @@ public class PeerBlocklistSyncServiceTests
     }
 
     [Test]
+    public async Task SyncAsync_should_drop_unparsable_banner_lines_from_active_rules_and_rule_count()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("Bluetack Level 1 Blocklist\n192.168.1.0/24\n")
+        };
+        _mockHandler.EnqueueResponse(response);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RuleCount, Is.EqualTo(1));
+        Assert.That(_service.ActiveRules.Count, Is.EqualTo(1));
+        Assert.That(_service.ActiveRules[0], Is.EqualTo("192.168.1.0/24"));
+        Assert.That(_service.IsBlocked("192.168.1.50"), Is.True);
+    }
+
+    [Test]
+    public void SetActiveRules_should_drop_unparsable_lines_from_active_rules_and_rule_count()
+    {
+        _service.SetActiveRules(new[] { "Bluetack Level 1 Blocklist", "192.168.1.0/24" });
+
+        Assert.That(_service.RuleCount, Is.EqualTo(1));
+        Assert.That(_service.ActiveRules, Is.EqualTo(new[] { "192.168.1.0/24" }));
+    }
+
+    [Test]
     public async Task SyncAsync_should_transmit_conditional_headers_on_subsequent_request()
     {
         var response1 = new HttpResponseMessage(HttpStatusCode.OK)
