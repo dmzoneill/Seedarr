@@ -283,8 +283,7 @@ public class TorrentRecheckService : ITorrentRecheckService
         catch (OperationCanceledException)
         {
             _logger.Info("Recheck canceled for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
-            torrent.Status = TorrentStatus.Paused;
-            _torrentRepository?.Update(torrent);
+            PublishRecheckCancellation(torrent, torrent.Status);
             throw;
         }
     }
@@ -562,28 +561,31 @@ public class TorrentRecheckService : ITorrentRecheckService
         catch (OperationCanceledException)
         {
             _logger.Info("Hash verification cancelled for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
-            var statusBeforeCancel = torrent.Status;
-            torrent.Status = TorrentStatus.Paused;
-            _torrentRepository?.Update(torrent);
-            _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, statusBeforeCancel, TorrentStatus.Paused));
-            _eventAggregator?.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
-
-            if (_signalRBroadcaster != null)
-            {
-                var cancelMsg = new SignalRMessage
-                {
-                    Name = "TorrentUpdated",
-                    Action = ModelAction.Updated,
-                    Body = torrent
-                };
-                _signalRBroadcaster.BroadcastMessage(cancelMsg);
-                _signalRBroadcaster.BroadcastToTorrent(torrent.Id, cancelMsg);
-            }
-
-            _eventAggregator?.PublishEvent(new TorrentHashCheckCompletedEvent(torrent, false));
-
+            PublishRecheckCancellation(torrent, torrent.Status);
             throw;
         }
+    }
+
+    private void PublishRecheckCancellation(Torrent torrent, TorrentStatus statusBeforeCancel)
+    {
+        torrent.Status = TorrentStatus.Paused;
+        _torrentRepository?.Update(torrent);
+        _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, statusBeforeCancel, TorrentStatus.Paused));
+        _eventAggregator?.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+
+        if (_signalRBroadcaster != null)
+        {
+            var cancelMsg = new SignalRMessage
+            {
+                Name = "TorrentUpdated",
+                Action = ModelAction.Updated,
+                Body = torrent
+            };
+            _signalRBroadcaster.BroadcastMessage(cancelMsg);
+            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, cancelMsg);
+        }
+
+        _eventAggregator?.PublishEvent(new TorrentHashCheckCompletedEvent(torrent, false));
     }
 
     private static bool VerifyPiecePresenceFallback(Torrent torrent, IList<TorrentFile> files, int pieceIndex, int pieceCount)
