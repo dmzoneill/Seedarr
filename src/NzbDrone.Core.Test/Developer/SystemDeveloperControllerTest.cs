@@ -32,6 +32,7 @@ public class SystemDeveloperControllerTest
     private IManageCommandQueue _commandQueue;
     private IMainDatabase _mainDatabase;
     private ISystemResourceService _resourceService;
+    private IEventAggregator _eventAggregator;
     private SystemDeveloperController _controller;
 
     [SetUp]
@@ -46,6 +47,7 @@ public class SystemDeveloperControllerTest
         _commandQueue = Substitute.For<IManageCommandQueue>();
         _mainDatabase = Substitute.For<IMainDatabase>();
         _resourceService = Substitute.For<ISystemResourceService>();
+        _eventAggregator = Substitute.For<IEventAggregator>();
         _resourceService.GetTorrentEngineMetrics().Returns(new TorrentEngineMetrics
         {
             IsRunning = true,
@@ -62,6 +64,7 @@ public class SystemDeveloperControllerTest
             webhookStore: _webhookStore,
             commandQueue: _commandQueue,
             mainDatabase: _mainDatabase,
+            eventAggregator: _eventAggregator,
             umlService: _umlService,
             gitHubService: _gitHubService,
             qualityService: _qualityService,
@@ -226,20 +229,28 @@ public class SystemDeveloperControllerTest
     }
 
     [Test]
-    public void PublishSyntheticEvent_should_record_and_return_created_event()
+    public void PublishSyntheticEvent_should_publish_to_event_aggregator_and_return_created_event()
     {
         var request = new DeveloperPublishEventRequest
         {
-            EventName = "CustomTestEvent",
-            PayloadJson = "{\"test\": true}",
+            EventName = "ConfigSavedEvent",
+            PayloadJson = "{}",
         };
 
         var response = _controller.PublishSyntheticEvent(request);
         var okResult = response.Result as OkObjectResult;
         Assert.That(okResult, Is.Not.Null);
+        Assert.That(((DeveloperEventItem)okResult.Value).EventName, Is.EqualTo("ConfigSavedEvent"));
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<NzbDrone.Core.Configuration.ConfigSavedEvent>());
 
         var badResp = _controller.PublishSyntheticEvent(new DeveloperPublishEventRequest { EventName = "" });
         Assert.That(badResp.Result, Is.InstanceOf<BadRequestObjectResult>());
+
+        var blockedResp = _controller.PublishSyntheticEvent(new DeveloperPublishEventRequest { EventName = "ApplicationStartedEvent" });
+        Assert.That(blockedResp.Result, Is.InstanceOf<BadRequestObjectResult>());
+
+        var unknownResp = _controller.PublishSyntheticEvent(new DeveloperPublishEventRequest { EventName = "CustomTestEvent" });
+        Assert.That(unknownResp.Result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
     [Test]
