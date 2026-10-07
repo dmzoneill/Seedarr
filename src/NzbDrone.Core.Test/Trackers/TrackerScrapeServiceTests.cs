@@ -229,6 +229,18 @@ public class TrackerScrapeServiceTests
     }
 
     [Test]
+    public void TrackerScrapeJob_propagates_scrape_failures()
+    {
+        var scrapeService = Substitute.For<ITrackerScrapeService>();
+        scrapeService.ScrapeAllTorrentsAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<int>(new InvalidOperationException("scrape failed")));
+
+        var job = new TrackerScrapeJob(scrapeService);
+
+        Assert.Throws<InvalidOperationException>(() => job.Execute());
+    }
+
+    [Test]
     public async Task Controller_Scrape_endpoint_returns_Ok_with_result_when_torrent_exists()
     {
         const int torrentId = 12;
