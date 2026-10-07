@@ -109,6 +109,14 @@ public class DatabaseMaintenanceServiceTest
     }
 
     [Test]
+    public void IsIncrementalAutoVacuumEnabled_should_return_false_when_mainDatabase_is_null()
+    {
+        var subject = new DatabaseMaintenanceService(null);
+
+        Assert.That(subject.IsIncrementalAutoVacuumEnabled(), Is.False);
+    }
+
+    [Test]
     public void IsIncrementalAutoVacuumEnabled_should_return_true_only_when_auto_vacuum_is_2()
     {
         _mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);
