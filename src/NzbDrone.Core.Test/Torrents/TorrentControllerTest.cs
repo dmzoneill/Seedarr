@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -1447,5 +1448,30 @@ public class TorrentControllerTest
         var model = TorrentResourceMapper.ToModel(resource, existing);
 
         Assert.That(model.Status, Is.EqualTo(TorrentStatus.Seeding));
+    }
+
+    [Test]
+    public void Upload_returns_BadRequest_when_all_files_are_zero_length()
+    {
+        using var ms = new MemoryStream();
+        var formFile = new FormFile(ms, 0, 0, "file", "empty.torrent");
+
+        var result = _controller.Upload([formFile]);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Is.EqualTo("No torrent file provided"));
+        _torrentImportService.DidNotReceive().ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void Upload_returns_BadRequest_when_every_file_entry_is_null()
+    {
+        var result = _controller.Upload([null, null]);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Is.EqualTo("No torrent file provided"));
+        _torrentImportService.DidNotReceive().ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>());
     }
 }

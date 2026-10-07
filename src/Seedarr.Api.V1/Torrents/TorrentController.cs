@@ -1593,6 +1593,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             }
         }
 
+        if (added.Count == 0 && failed.Count == 0)
+        {
+            return BadRequest("No torrent file provided");
+        }
+
         return Ok(new TorrentUploadResult(added, failed));
     }
 
