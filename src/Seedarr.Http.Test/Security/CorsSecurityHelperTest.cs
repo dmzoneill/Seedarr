@@ -37,11 +37,22 @@ public class CorsSecurityHelperTest
     [TestCase("http://127.0.0.2:9898")]
     [TestCase("http://[::1]")]
     [TestCase("http://[::1]:9898")]
-    public void IsOriginAllowed_WhenOriginIsLocalhostOrLoopback_ReturnsTrue(string origin)
+    public void IsOriginAllowed_WhenOriginIsLocalhostOrLoopback_AndNoAllowlistConfigured_ReturnsTrue(string origin)
     {
         Assert.That(CorsSecurityHelper.IsOriginAllowed(origin, (string)null), Is.True);
         Assert.That(CorsSecurityHelper.IsOriginAllowed(origin, string.Empty), Is.True);
-        Assert.That(CorsSecurityHelper.IsOriginAllowed(origin, "https://other.com"), Is.True);
+        Assert.That(CorsSecurityHelper.IsOriginAllowed(origin, "   "), Is.True);
+    }
+
+    [TestCase("http://localhost:8989")]
+    [TestCase("http://127.0.0.2:9999")]
+    [TestCase("http://[::1]:8080")]
+    public void IsOriginAllowed_WhenOriginIsLoopback_AndAllowlistIsRestrictive_ReturnsFalseUnlessListed(string origin)
+    {
+        Assert.That(CorsSecurityHelper.IsOriginAllowed(origin, "https://dashboard.example.com"), Is.False);
+        Assert.That(
+            CorsSecurityHelper.IsOriginAllowed(origin, "https://dashboard.example.com, http://127.0.0.2:9999"),
+            Is.EqualTo(origin.Equals("http://127.0.0.2:9999", StringComparison.Ordinal)));
     }
 
     [TestCase("https://evil.com")]
@@ -86,7 +97,7 @@ public class CorsSecurityHelperTest
 
         Assert.That(CorsSecurityHelper.IsOriginAllowed("https://dashboard.example.com", config), Is.True);
         Assert.That(CorsSecurityHelper.IsOriginAllowed("https://portal.example.com", config), Is.True);
-        Assert.That(CorsSecurityHelper.IsOriginAllowed("http://localhost:3000", config), Is.True);
+        Assert.That(CorsSecurityHelper.IsOriginAllowed("http://localhost:3000", config), Is.False);
         Assert.That(CorsSecurityHelper.IsOriginAllowed("https://evil.com", config), Is.False);
     }
 
