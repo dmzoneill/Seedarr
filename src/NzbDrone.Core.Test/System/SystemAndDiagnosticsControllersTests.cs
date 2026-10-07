@@ -513,6 +513,16 @@ public class SystemAndDiagnosticsControllersTests
     }
 
     [Test]
+    public void LogController_GetLogs_WhenLevelIsInvalid_ReturnsBadRequest()
+    {
+        var actionResult = _logController.GetLogs(level: "NotARealLevel", count: 100);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)actionResult.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Invalid log level 'NotARealLevel'."));
+    }
+
+    [Test]
     public void LogController_GetLogs_FiltersByMinimumLevel()
     {
         _testLogger.Trace("Trace entry");
