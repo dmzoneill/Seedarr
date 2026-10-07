@@ -34,6 +34,7 @@ public class AppLifetime : IHostedService, IDisposable
     private readonly Logger _logger;
     private bool _speedThresholdExceededState;
     private bool _portForwardingFailureEmitted;
+    private volatile bool _shuttingDown;
     private CancellationTokenSource _cts;
     private Task _watchdogLoopTask;
 
@@ -95,6 +96,7 @@ public class AppLifetime : IHostedService, IDisposable
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.Info("Seedarr application stopping");
+        _shuttingDown = true;
 
         try
         {
@@ -116,7 +118,16 @@ public class AppLifetime : IHostedService, IDisposable
         {
             try
             {
-                await Task.WhenAny(_watchdogLoopTask, Task.Delay(2000, cancellationToken));
+                // Use CancellationToken.None so a pre-cancelled host stop token does not skip watchdog drain (#944).
+                var watchdogJoin = Task.WhenAny(_watchdogLoopTask, Task.Delay(2000, CancellationToken.None));
+                var completed = await watchdogJoin;
+                if (completed != _watchdogLoopTask && !_watchdogLoopTask.IsCompleted)
+                {
+                    _logger.Debug(
+                        "Watchdog loop exceeded {0}ms bounded wait; awaiting completion before later shutdown phases",
+                        2000);
+                    await _watchdogLoopTask;
+                }
             }
             catch (Exception ex)
             {
@@ -351,6 +362,11 @@ public class AppLifetime : IHostedService, IDisposable
 
     internal void EvaluateWatchdogMetrics()
     {
+        if (_shuttingDown)
+        {
+            return;
+        }
+
         // 1. Evaluate Disk Space
         if (_diskSpaceService != null)
         {
