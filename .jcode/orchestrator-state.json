@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:32:40Z",
+  "updatedAt": "2026-10-07T01:33:37Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_94bc8720",
+    "lastScheduleId": "sched_dbb50c87",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -35,15 +35,15 @@
     "api": {
       "status": "running",
       "worker": "hawk",
-      "issue": 1084,
-      "worktree": "../seedarr_worktrees/issue-1084",
-      "area": "api"
+      "issue": 972,
+      "worktree": "../seedarr_worktrees/issue-972",
+      "area": "downloadclients"
     },
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "issue": 1126,
-      "worktree": "../seedarr_worktrees/issue-1126",
+      "issue": 1122,
+      "worktree": "../seedarr_worktrees/issue-1122",
       "area": "torrents"
     },
     "http": {
@@ -67,10 +67,10 @@
       1235,
       1214,
       907,
-      972,
-      1118
+      1118,
+      1048
     ]
   },
-  "githubOpen": 310,
-  "lastMonitorNote": "fix monitor: #939/#944/#902 closed; 3 dispatches badger#1021 panther#1066 sparrow#909; open 310"
+  "githubOpen": 307,
+  "lastMonitorNote": "fix monitor: #1084/#1126 closed; hawk#972 elk#1122; open 307"
 }
