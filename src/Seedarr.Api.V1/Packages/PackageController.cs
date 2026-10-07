@@ -5,10 +5,12 @@ using System.Linq;
 using System.Security;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Primitives;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Packages;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Torrents.Package;
@@ -55,6 +57,7 @@ public class PackageController : ControllerBase
 
     [HttpGet("export")]
     [HttpGet("/api/v1/package/export")]
+    [Authorize(Policy = Policies.Reader)]
     public async Task<IActionResult> Export(
         [FromQuery] string torrentIds = null,
         [FromQuery] bool includePayload = false)
@@ -65,6 +68,7 @@ public class PackageController : ControllerBase
 
     [HttpPost("export")]
     [HttpPost("/api/v1/package/export")]
+    [Authorize(Policy = Policies.Reader)]
     public async Task<IActionResult> ExportPost(
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] PackageExportRequest request = null,
         [FromQuery] string torrentIds = null,
@@ -87,6 +91,11 @@ public class PackageController : ControllerBase
 
     private async Task<IActionResult> ExecuteExportAsync(List<int> idList, bool includePayload)
     {
+        if (includePayload && !UserHasOperatorAccess())
+        {
+            return Forbid();
+        }
+
         if (idList.Count == 0)
         {
             return BadRequest(new { message = "At least one valid torrent ID must be provided." });
@@ -147,6 +156,7 @@ public class PackageController : ControllerBase
 
     [HttpPost("import")]
     [HttpPost("/api/v1/package/import")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> Import(
         IFormFile file = null,
         [FromQuery] string destinationPath = null,
@@ -216,6 +226,11 @@ public class PackageController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    private bool UserHasOperatorAccess()
+    {
+        return User?.IsInRole(Roles.Admin) == true || User?.IsInRole(Roles.User) == true;
     }
 
     public static List<int> ParseTorrentIds(string torrentIdsParam, StringValues queryValues)
