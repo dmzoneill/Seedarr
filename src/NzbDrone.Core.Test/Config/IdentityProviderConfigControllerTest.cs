@@ -325,6 +325,34 @@ public class IdentityProviderConfigControllerTest
     }
 
     [Test]
+    public async Task Update_WhenProviderIdRenamedAndEnabled_RemovesOldSchemeAndRegistersNew()
+    {
+        var existing = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "acme",
+            Name = "Acme OIDC",
+            IsEnabled = true,
+        };
+
+        _providerService.GetById(1).Returns(existing);
+        _providerService.Update(Arg.Any<IdentityProviderDefinition>()).Returns(x => x.Arg<IdentityProviderDefinition>());
+
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "acme2",
+            Name = "Acme OIDC",
+            IsEnabled = true,
+        };
+
+        var result = await _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        await _dynamicAuthManager.Received(1).RemoveProviderSchemeAsync("acme");
+        await _dynamicAuthManager.Received(1).RegisterOrUpdateOidcProviderAsync(Arg.Is<IdentityProviderDefinition>(p => p.ProviderId == "acme2"));
+    }
+
+    [Test]
     public async Task Update_WhenDisabled_RemovesProviderScheme()
     {
         var existing = new IdentityProviderDefinition

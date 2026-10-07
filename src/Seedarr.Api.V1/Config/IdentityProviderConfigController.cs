@@ -190,6 +190,20 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         }
 
         var updated = _providerService.Update(model);
+        var providerIdRenamed = !string.Equals(existing.ProviderId, updated.ProviderId, StringComparison.OrdinalIgnoreCase);
+
+        if (providerIdRenamed)
+        {
+            try
+            {
+                await _dynamicAuthManager.RemoveProviderSchemeAsync(existing.ProviderId);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to remove dynamic authentication scheme for previous provider id: {0}", existing.ProviderId);
+                return BadRequest(new { message = $"Failed to remove previous authentication scheme: {ex.Message}" });
+            }
+        }
 
         if (updated.IsEnabled)
         {
@@ -203,7 +217,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
                 return BadRequest(new { message = $"Failed to update authentication scheme: {ex.Message}" });
             }
         }
-        else
+        else if (!providerIdRenamed)
         {
             try
             {
