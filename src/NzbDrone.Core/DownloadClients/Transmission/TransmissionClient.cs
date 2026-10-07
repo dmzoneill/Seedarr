@@ -237,7 +237,8 @@ public class TransmissionClient : IDownloadClient, IDisposable
                 }
             }
 
-            if (!string.IsNullOrEmpty(Category) && !labels.Contains(Category))
+            if (!string.IsNullOrEmpty(Category) &&
+                !labels.Exists(l => string.Equals(l, Category, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
