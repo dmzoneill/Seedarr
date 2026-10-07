@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T01:30:00Z",
+  "updatedAt": "2026-10-07T01:45:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/Seedarr.Http/Ping",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Terminal",
-    "completedAt": "2026-10-07T01:30:00Z",
-    "issuesFiled": [1282],
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-07T01:45:00Z",
+    "issuesFiled": [1289],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 34 (Terminal): Static review of 10 files — FallbackProcessSession.cs, IPtyTerminalService.cs, ITerminalSession.cs, LinuxPtySession.cs, NativePty.cs, PtyProcessSession.cs, PtyTerminalService.cs, TerminalEnvironmentSanitizer.cs, TerminalHub.cs, TerminalWebSocketHandler.cs. Cross-checked Seedarr.Http.Test/SignalR/TerminalHubAuthTest.cs, NzbDrone.Host/Startup.cs terminal WS wiring (~508-568), and existing GitHub terminal issues (#892 Admin RBAC/API-key paths, #902 cwd confinement, #956/#965 Linux env sanitization, #967 exception echo, #1027 python vs forkpty order, #1131 UTF-8 decoder, #1132 bash -i profile, #1173/#1174 forkpty errno/backpressure, #1223 cols/rows clamp, #1257/#1258 fallback geometry and cwd, #966 argv lifetime). Filed #1282: TerminalHub StartSession/WriteInput/Resize bypass TerminalAccessEnabled after OnConnectedAsync (TerminalController gates session start). No issues reopened. Next: REST. No dotnet build/test."
+    "note": "Pass 35 (REST): Static review of 5 files — RestController.cs, RestControllerWithSignalR.cs, RestResource.cs, ResourceValidator.cs, Attributes/RestPutByIdAttribute.cs. Cross-checked Seedarr.Http.Test/REST/RestControllerWithSignalRTest.cs and API consumers (TorrentController, ConfigControllerBase). Cross-checked existing GitHub REST/SignalR issues (#1047 leading-edge throttle advance, #1230 stale expiry broadcast, #1002/#1003/#1060 offline/dispose coalesce, #1187 reconnect window, #1049 ResourceName ToLower, #1140 RestPutById optional id, #1214/#1215 prune/Created window). Filed #1289: OnCoalesceTimerTick can broadcast Updated after Deleted while hub connected (thread-pool timer vs synchronous Delete). No issues reopened. Next: Ping. No dotnet build/test."
   }
 }
