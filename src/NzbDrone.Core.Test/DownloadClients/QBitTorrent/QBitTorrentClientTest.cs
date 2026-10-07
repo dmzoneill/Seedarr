@@ -735,4 +735,19 @@ public class QBitTorrentClientTest
         var result = _client.DeleteTorrent("");
         Assert.That(result, Is.False);
     }
+
+    [Test]
+    public void GetTrackers_should_skip_qbittorrent_placeholder_rows()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(HttpStatusCode.OK,
+            @"[{""url"":""*"",""status"":2},{""url"":""[DHT]"",""status"":2},{""url"":""http://tracker.example/announce"",""status"":2}]");
+        InjectMockClient(handler);
+
+        var trackers = _client.GetTrackers("abc123hash");
+
+        Assert.That(trackers, Has.Count.EqualTo(1));
+        Assert.That(trackers[0], Is.EqualTo("http://tracker.example/announce"));
+    }
 }
