@@ -68,7 +68,7 @@ public class AppLifetimeTest
     }
 
     [Test]
-    public void StalledTorrents_should_publish_TorrentStalledEvent_once_when_entering_stall()
+    public void Watchdog_should_not_publish_stall_events_for_zero_speed_downloads()
     {
         var torrent = new Torrent
         {
@@ -82,12 +82,14 @@ public class AppLifetimeTest
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
         _subject.EvaluateWatchdogMetrics();
+        _subject.EvaluateWatchdogMetrics();
 
-        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStalledEvent>(e => e.Torrent.Id == 1 && e.StalledMinutes >= 5));
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentStalledEvent>());
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentStallResolvedEvent>());
     }
 
     [Test]
-    public void StalledTorrents_should_not_publish_duplicate_TorrentStalledEvent_on_consecutive_ticks()
+    public void Watchdog_should_not_publish_stall_events_when_torrent_is_VpnPaused()
     {
         var torrent = new Torrent
         {
@@ -95,86 +97,16 @@ public class AppLifetimeTest
             Status = TorrentStatus.Downloading,
             DownloadSpeed = 0,
             Progress = 0.5,
+            IsVpnPaused = true,
             DateAdded = DateTime.UtcNow.AddMinutes(-10)
         };
 
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
         _subject.EvaluateWatchdogMetrics();
-        _subject.EvaluateWatchdogMetrics();
 
-        _eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentStalledEvent>());
-    }
-
-    [Test]
-    public void StalledTorrents_should_publish_TorrentStallResolvedEvent_when_download_speed_resumes()
-    {
-        var torrent = new Torrent
-        {
-            Id = 1,
-            Status = TorrentStatus.Downloading,
-            DownloadSpeed = 0,
-            Progress = 0.5,
-            DateAdded = DateTime.UtcNow.AddMinutes(-10)
-        };
-
-        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
-        _subject.EvaluateWatchdogMetrics();
-
-        // Speed resumes
-        torrent.DownloadSpeed = 50000;
-        _subject.EvaluateWatchdogMetrics();
-
-        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStallResolvedEvent>(e => e.Torrent.Id == 1));
-
-        // Subsequent tick with active speed should not re-emit resolved
-        _subject.EvaluateWatchdogMetrics();
-        _eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentStallResolvedEvent>());
-    }
-
-    [Test]
-    public void StalledTorrents_should_publish_TorrentStallResolvedEvent_when_torrent_finishes()
-    {
-        var torrent = new Torrent
-        {
-            Id = 1,
-            Status = TorrentStatus.Downloading,
-            DownloadSpeed = 0,
-            Progress = 0.5,
-            DateAdded = DateTime.UtcNow.AddMinutes(-10)
-        };
-
-        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
-        _subject.EvaluateWatchdogMetrics();
-
-        // Torrent completes
-        torrent.Progress = 1.0;
-        torrent.Status = TorrentStatus.Seeding;
-        _subject.EvaluateWatchdogMetrics();
-
-        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStallResolvedEvent>(e => e.Torrent.Id == 1));
-    }
-
-    [Test]
-    public void StalledTorrents_should_publish_TorrentStallResolvedEvent_when_torrent_is_removed()
-    {
-        var torrent = new Torrent
-        {
-            Id = 1,
-            Status = TorrentStatus.Downloading,
-            DownloadSpeed = 0,
-            Progress = 0.5,
-            DateAdded = DateTime.UtcNow.AddMinutes(-10)
-        };
-
-        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
-        _subject.EvaluateWatchdogMetrics();
-
-        // Torrent deleted / removed
-        _torrentService.GetAll().Returns(new List<Torrent>());
-        _subject.EvaluateWatchdogMetrics();
-
-        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStallResolvedEvent>(e => e.Torrent.Id == 1));
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentStalledEvent>());
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentStallResolvedEvent>());
     }
 
     [Test]
