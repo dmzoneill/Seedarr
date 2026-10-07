@@ -34,23 +34,23 @@ public class PtyTerminalService : IPtyTerminalService
         // 3. Clamp dimensions to safe bounds
         var (clampedCols, clampedRows) = TerminalGeometry.Clamp(cols, rows);
 
-        if (File.Exists("/usr/bin/python3") || File.Exists("/bin/python3") || File.Exists("/usr/local/bin/python3"))
-        {
-            try
-            {
-                return PtyProcessSession.Start(sanitizedCwd, clampedCols, clampedRows);
-            }
-            catch
-            {
-                // Fall back to standard process session
-            }
-        }
-
         if (OperatingSystem.IsLinux())
         {
             try
             {
                 return LinuxPtySession.Start(sanitizedCwd, clampedCols, clampedRows);
+            }
+            catch
+            {
+                // Fall back to python PTY or standard process session
+            }
+        }
+
+        if (File.Exists("/usr/bin/python3") || File.Exists("/bin/python3") || File.Exists("/usr/local/bin/python3"))
+        {
+            try
+            {
+                return PtyProcessSession.Start(sanitizedCwd, clampedCols, clampedRows);
             }
             catch
             {
