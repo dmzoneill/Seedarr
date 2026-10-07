@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -780,5 +781,102 @@ public class DownloadClientControllerTest
         var result = _controller.DeleteTorrent(1, "hash123", deleteData: false);
 
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void Update_partial_json_preserves_enable_port_tags_and_metadata_when_omitted()
+    {
+        var existing = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = "QBitTorrent",
+            Implementation = "QBitTorrentClient",
+            ConfigContract = "QBitTorrentSettings",
+            Enable = true,
+            Priority = 5,
+            Tags = new List<int> { 1, 2 },
+            Password = "stored",
+        };
+        _downloadClientFactory.Get(1).Returns(existing);
+
+        var body = JsonSerializer.SerializeToElement(new
+        {
+            name = "Renamed",
+            host = "10.0.0.5",
+            port = 8080,
+            clientType = "QBitTorrent",
+        });
+
+        var result = _controller.Update(1, body);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _downloadClientFactory.Received(1).Update(Arg.Is<DownloadClientDefinition>(d =>
+            d.Enable
+            && d.Priority == 5
+            && d.Tags.Count == 2
+            && d.Tags[0] == 1
+            && d.Implementation == "QBitTorrentClient"
+            && d.Password == "stored"
+            && d.Name == "Renamed"
+            && d.Host == "10.0.0.5"));
+    }
+
+    [Test]
+    public void Update_partial_json_allows_explicit_disable_when_enable_present()
+    {
+        var existing = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = "QBitTorrent",
+            Enable = true,
+        };
+        _downloadClientFactory.Get(1).Returns(existing);
+
+        var body = JsonSerializer.SerializeToElement(new
+        {
+            name = "Client",
+            host = "localhost",
+            port = 8080,
+            clientType = "QBitTorrent",
+            enable = false,
+        });
+
+        var result = _controller.Update(1, body);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _downloadClientFactory.Received(1).Update(Arg.Is<DownloadClientDefinition>(d => !d.Enable));
+    }
+
+    [Test]
+    public void Update_partial_json_preserves_port_when_omitted()
+    {
+        var existing = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Client",
+            Host = "localhost",
+            Port = 9091,
+            ClientType = "QBitTorrent",
+            Enable = true,
+        };
+        _downloadClientFactory.Get(1).Returns(existing);
+
+        var body = JsonSerializer.SerializeToElement(new
+        {
+            name = "Renamed",
+            host = "10.0.0.5",
+            clientType = "QBitTorrent",
+        });
+
+        var result = _controller.Update(1, body);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _downloadClientFactory.Received(1).Update(Arg.Is<DownloadClientDefinition>(d => d.Port == 9091));
     }
 }

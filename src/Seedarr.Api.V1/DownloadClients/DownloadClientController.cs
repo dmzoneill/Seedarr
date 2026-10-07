@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Common.Serializer;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
@@ -78,17 +80,39 @@ public class DownloadClientController : Controller
     }
 
     [HttpPut("{id}")]
-    public ActionResult Update(int id, [FromBody] DownloadClientDefinition definition)
+    public ActionResult Update(int id, [FromBody] JsonElement body)
     {
-        if (definition == null)
+        if (body.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
         {
             return BadRequest("Request body cannot be null");
         }
 
-        var validationError = ValidateDefinition(definition);
-        if (validationError != null)
+        if (body.ValueKind != JsonValueKind.Object)
         {
-            return BadRequest(validationError);
+            return BadRequest("Request body must be a JSON object");
+        }
+
+        var presentPropertyKeys = body.EnumerateObject()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var incoming = JsonSerializer.Deserialize<DownloadClientDefinition>(body, STJson.GetSerializerSettings());
+        if (incoming == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        return UpdateDefinition(id, incoming, presentPropertyKeys);
+    }
+
+    [NonAction]
+    public ActionResult Update(int id, DownloadClientDefinition definition) => UpdateDefinition(id, definition, null);
+
+    private ActionResult UpdateDefinition(int id, DownloadClientDefinition incoming, IReadOnlySet<string> presentPropertyKeys)
+    {
+        if (incoming == null)
+        {
+            return BadRequest("Request body cannot be null");
         }
 
         var existing = _downloadClientFactory.Get(id);
@@ -97,7 +121,17 @@ public class DownloadClientController : Controller
             return NotFound(new { message = $"Download client {id} not found" });
         }
 
+        var definition = presentPropertyKeys == null
+            ? incoming
+            : DownloadClientUpdateMerger.Merge(existing, incoming, presentPropertyKeys);
+
         definition.Id = id;
+
+        var validationError = ValidateDefinition(definition);
+        if (validationError != null)
+        {
+            return BadRequest(validationError);
+        }
 
         if (!string.IsNullOrWhiteSpace(definition.ClientType))
         {
@@ -114,8 +148,8 @@ public class DownloadClientController : Controller
             definition.ConfigContract = $"{definition.ClientType}Settings";
         }
 
-        // If password is omitted, empty, or masked, preserve the existing value
-        if (string.IsNullOrWhiteSpace(definition.Password) || definition.Password == PasswordMask)
+        if (presentPropertyKeys == null &&
+            (string.IsNullOrWhiteSpace(definition.Password) || definition.Password == PasswordMask))
         {
             definition.Password = existing.Password;
         }
