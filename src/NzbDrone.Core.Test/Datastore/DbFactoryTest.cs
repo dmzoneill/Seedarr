@@ -346,6 +346,39 @@ public class DbFactoryTest
     }
 
     [Test]
+    public void CreatePreMigrationSnapshot_skips_snapshot_when_wal_checkpoint_is_busy()
+    {
+        var connectionString = $"Data Source={_tempDbPath}";
+        using (var setup = new SqliteConnection(connectionString))
+        {
+            setup.Open();
+            using var cmd = setup.CreateCommand();
+            cmd.CommandText = "PRAGMA journal_mode=WAL; CREATE TABLE WalBusyTest (Id INTEGER PRIMARY KEY);";
+            cmd.ExecuteNonQuery();
+        }
+
+        using var blockingConn = new SqliteConnection(connectionString);
+        blockingConn.Open();
+        using var tx = blockingConn.BeginTransaction();
+        using (var insert = blockingConn.CreateCommand())
+        {
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT INTO WalBusyTest VALUES (1);";
+            insert.ExecuteNonQuery();
+        }
+
+        var factory = new DbFactory();
+        var snapshotPath = factory.CreatePreMigrationSnapshot(connectionString);
+
+        Assert.That(snapshotPath, Is.Null);
+
+        var dir = Path.GetDirectoryName(_tempDbPath);
+        var fileName = Path.GetFileName(_tempDbPath);
+        var snapshots = Directory.GetFiles(dir, $"{fileName}.pre-migration-*.bak");
+        Assert.That(snapshots, Is.Empty);
+    }
+
+    [Test]
     public void Create_creates_pre_migration_snapshot_when_database_file_exists()
     {
         using (var conn = new SqliteConnection($"Data Source={_tempDbPath}"))
