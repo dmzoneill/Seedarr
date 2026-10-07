@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:41:50Z",
+  "updatedAt": "2026-10-07T03:47:30Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,48 +14,48 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_c4a2ca4f",
+    "lastScheduleId": "sched_a5b01813",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "session": "shark",
-      "issue": 1063,
-      "worktree": "../seedarr_worktrees/issue-1063",
-      "area": "authentication"
+      "session": "otter",
+      "issue": 984,
+      "worktree": "../seedarr_worktrees/issue-984",
+      "area": "downloadclients"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "session": "peacock",
-      "issue": 1152,
-      "worktree": "../seedarr_worktrees/issue-1152",
-      "area": "datastore"
+      "session": "panda",
+      "issue": 980,
+      "worktree": "../seedarr_worktrees/issue-980",
+      "area": "disk"
     },
     "api": {
       "status": "running",
       "worker": "hawk",
-      "session": "penguin",
-      "issue": 1169,
-      "worktree": "../seedarr_worktrees/issue-1169",
-      "area": "api"
+      "session": "peacock",
+      "issue": 928,
+      "worktree": "../seedarr_worktrees/issue-928",
+      "area": "backup"
     },
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "session": "sheep",
-      "issue": 945,
-      "worktree": "../seedarr_worktrees/issue-945",
-      "area": "torrents"
+      "session": "penguin",
+      "issue": 1114,
+      "worktree": "../seedarr_worktrees/issue-1114",
+      "area": "rssrules"
     },
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "session": "sloth",
-      "issue": 1172,
-      "worktree": "../seedarr_worktrees/issue-1172",
+      "session": "shark",
+      "issue": 991,
+      "worktree": "../seedarr_worktrees/issue-991",
       "area": "signalr"
     }
   },
@@ -69,11 +69,12 @@
       "signalr"
     ],
     "nextCandidates": [
-      1238,
-      1237,
-      1236
+      1015,
+      1014,
+      983,
+      1113
     ]
   },
-  "githubOpen": 175,
-  "lastMonitorNote": "fix monitor: #1109/#912/#1186 closed; 3 dispatches"
+  "githubOpen": 58,
+  "lastMonitorNote": "fix monitor: 58 open; batch closed #1096 #892 #990 #1003 #1103; 5 dispatches"
 }
