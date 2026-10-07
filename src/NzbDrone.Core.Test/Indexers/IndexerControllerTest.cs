@@ -1017,6 +1017,71 @@ public class IndexerControllerTest
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
+    [TestCase("http://169.254.169.254/latest/meta-data")]
+    [TestCase("http://127.0.0.1:8080")]
+    [TestCase("http://localhost:9696")]
+    [TestCase("http://10.0.0.1:9696")]
+    public void SyncProwlarr_with_unsafe_baseUrl_returns_bad_request(string url)
+    {
+        var syncService = Substitute.For<IProwlarrIndexerSyncService>();
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            null,
+            syncService);
+
+        var request = new ProwlarrSyncRequest { BaseUrl = url, ApiKey = "api-123" };
+        var result = controller.SyncProwlarr(request);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
+        syncService.DidNotReceive().Sync(Arg.Any<int?>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [TestCase("http://169.254.169.254/")]
+    [TestCase("http://127.0.0.1:9696")]
+    public void SyncProwlarr_with_unsafe_configured_indexer_url_returns_bad_request(string url)
+    {
+        var syncService = Substitute.For<IProwlarrIndexerSyncService>();
+        _indexerFactory.Get(7).Returns(new IndexerDefinition
+        {
+            Id = 7,
+            Name = "Prowlarr",
+            IndexerType = "Prowlarr",
+            Url = url,
+            ApiKey = "key"
+        });
+
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            null,
+            syncService);
+
+        var request = new ProwlarrSyncRequest { ProwlarrIndexerId = 7 };
+        var result = controller.SyncProwlarr(request);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
+        syncService.DidNotReceive().Sync(Arg.Any<int?>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
     [Test]
     public void SyncProwlarr_should_delegate_to_service_and_return_ok()
     {
@@ -1044,14 +1109,22 @@ public class IndexerControllerTest
             null,
             syncService);
 
-        var request = new ProwlarrSyncRequest { ProwlarrIndexerId = 5, BaseUrl = "http://localhost:9696", ApiKey = "api-123" };
+        var request = new ProwlarrSyncRequest { ProwlarrIndexerId = 5, ApiKey = "api-123" };
+        _indexerFactory.Get(5).Returns(new IndexerDefinition
+        {
+            Id = 5,
+            Name = "Prowlarr",
+            IndexerType = "Prowlarr",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "api-123"
+        });
         var actionResult = controller.SyncProwlarr(request);
 
         Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
         var okResult = (OkObjectResult)actionResult.Result;
         Assert.That(okResult.Value, Is.EqualTo(expectedResult));
 
-        syncService.Received(1).Sync(5, "http://localhost:9696", "api-123");
+        syncService.Received(1).Sync(5, null, "api-123");
     }
 
     [Test]

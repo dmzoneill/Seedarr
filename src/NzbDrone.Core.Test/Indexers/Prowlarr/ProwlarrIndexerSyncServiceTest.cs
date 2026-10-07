@@ -34,13 +34,36 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
                 Id = 1,
                 Name = "Prowlarr",
                 IndexerType = "Prowlarr",
-                Url = "http://prowlarr:9696",
+                Url = "http://8.8.8.8:9696",
                 ApiKey = "prowlarr-api-key",
                 Enable = true
             };
 
             _indexerRepository.All().Returns(new List<IndexerDefinition> { _prowlarrDefinition });
             _indexerRepository.Get(1).Returns(_prowlarrDefinition);
+        }
+
+        [Test]
+        public void Sync_should_reject_unsafe_prowlarr_url_without_outbound_http()
+        {
+            _prowlarrDefinition.Url = "http://169.254.169.254/";
+            _indexerRepository.All().Returns(new List<IndexerDefinition> { _prowlarrDefinition });
+
+            var result = _subject.Sync();
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Errors, Has.Some.Contains("not permitted"));
+            Assert.That(_httpHandler.SentRequests, Is.Empty);
+        }
+
+        [Test]
+        public void Sync_with_ephemeral_baseUrl_should_reject_unsafe_url_without_outbound_http()
+        {
+            var result = _subject.Sync(null, "http://127.0.0.1:9696", "key");
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Errors, Has.Some.Contains("not permitted"));
+            Assert.That(_httpHandler.SentRequests, Is.Empty);
         }
 
         [Test]
@@ -318,15 +341,18 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
 
         private class ProwlarrTestHttpMessageHandler : HttpMessageHandler
         {
+            public List<HttpRequestMessage> SentRequests { get; } = new();
             public Func<HttpRequestMessage, HttpResponseMessage> Handler { get; set; }
 
             protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                SentRequests.Add(request);
                 return Handler?.Invoke(request) ?? new HttpResponseMessage(HttpStatusCode.NotFound);
             }
 
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
+                SentRequests.Add(request);
                 return Task.FromResult(Handler?.Invoke(request) ?? new HttpResponseMessage(HttpStatusCode.NotFound));
             }
         }
