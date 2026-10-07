@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T01:15:00Z",
+  "updatedAt": "2026-10-07T01:30:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents",
+  "currentSubfolder": "src/NzbDrone.Core/Authentication",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Blocklist",
-    "completedAt": "2026-10-07T01:15:00Z",
-    "issuesFiled": [1261, 1262],
+    "subfolder": "src/NzbDrone.Core/Torrents",
+    "completedAt": "2026-10-07T01:30:00Z",
+    "issuesFiled": [1265, 1267, 1268],
     "issuesReopened": [],
-    "taskId": "core-hunter-wren",
-    "note": "Blocklist pass: static review of 14 files (PeerBlocklistSyncService, Ipv4/Ipv6 interval trees, BlocklistArchiveStreamProvider, update task/command, metadata). Filed #1261 (transport failure leaves stale LastSyncHttpStatus), #1262 (unparsable feed lines inflate ActiveRules). Deduped open #904, #905, #937-#939, #1021-#1024, #1029, #1032, #1129-#1130, #1175-#1177, #1224-#1225 and related semicolon issue #1023. No dotnet build/test."
+    "taskId": "core-hunter",
+    "note": "Torrents pass: static review of 64 files across root + Merkle/ + Package/. Filed #1265 (DiskSpaceRestored resumes without re-validating free space), #1267 (WatchFolder hot-loop on non-parse add failures), #1268 (MerkleTree FromLeafHashes FileLength overcount). Deduped open #945, #947, #949-#950, #963, #964, #1044, #1046, #1138-#1139, #1232-#1233, #1243 and related VPN/fastresume/recheck issues. No dotnet build/test."
   }
 }
