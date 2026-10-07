@@ -318,6 +318,39 @@ public class DownloadClientControllerTest
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         _downloadClientFactory.Received(1).Update(Arg.Is<DownloadClientDefinition>(d => d.Password == "existingPassword" && d.Name == "New Client"));
+        _syncService.Received(1).ResetClientStatus(1);
+    }
+
+    [Test]
+    public void Update_should_reset_sync_service_client_status()
+    {
+        var existing = new DownloadClientDefinition
+        {
+            Id = 42,
+            Name = "Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = "QBitTorrent",
+            Password = "secret"
+        };
+
+        var updated = new DownloadClientDefinition
+        {
+            Id = 42,
+            Name = "Client",
+            Host = "newhost",
+            Port = 9090,
+            ClientType = "QBitTorrent",
+            Password = "secret"
+        };
+
+        _downloadClientFactory.Get(42).Returns(existing);
+
+        var result = _controller.Update(42, updated);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _downloadClientFactory.Received(1).Update(Arg.Any<DownloadClientDefinition>());
+        _syncService.Received(1).ResetClientStatus(42);
     }
 
     [TestCase("169.254.169.254", 80)]
