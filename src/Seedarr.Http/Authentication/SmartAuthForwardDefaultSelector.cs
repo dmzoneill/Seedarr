@@ -29,18 +29,11 @@ public static class SmartAuthForwardDefaultSelector
             return ApiKeyAuthenticationOptions.DefaultScheme;
         }
 
-        // 1. API Key present in header, query parameter, or Bearer token
-        var hasApiKeyHeader = (req.Headers.TryGetValue("X-Api-Key", out var headerKey) && !string.IsNullOrWhiteSpace(headerKey)) ||
-            (req.Headers.TryGetValue("ApiKey", out var headerKey2) && !string.IsNullOrWhiteSpace(headerKey2));
-        var hasApiKeyQuery = (req.Query.TryGetValue("apikey", out var qKey) && !string.IsNullOrWhiteSpace(qKey)) ||
-            (req.Query.TryGetValue("access_token", out var qToken) && !string.IsNullOrWhiteSpace(qToken)) ||
-            (req.Query.TryGetValue("api_key", out var qApiKey) && !string.IsNullOrWhiteSpace(qApiKey)) ||
-            (req.Query.TryGetValue("token", out var qToken2) && !string.IsNullOrWhiteSpace(qToken2));
-        var hasBearerToken = req.Headers.TryGetValue("Authorization", out var authHeader) &&
-            authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(authHeader.ToString()["Bearer ".Length..].Trim());
-
-        if (hasApiKeyHeader || hasApiKeyQuery || hasBearerToken)
+        // 1. API Key only when the provided credential matches the configured key (invalid keys fall through to cookie/basic/etc.)
+        var providedApiKey = ApiKeyAuthenticationHandler.GetProvidedApiKey(req);
+        if (!string.IsNullOrWhiteSpace(providedApiKey) &&
+            configFileProvider != null &&
+            ApiKeyAuthenticationHandler.IsValidApiKey(providedApiKey, configFileProvider.ApiKey))
         {
             return ApiKeyAuthenticationOptions.DefaultScheme;
         }

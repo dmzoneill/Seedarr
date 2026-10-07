@@ -48,48 +48,14 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
                     ApiKeyAuthenticationOptions.DefaultScheme)));
         }
 
-        var apiKey = Request.Headers[Options.HeaderName].FirstOrDefault();
-
-        if (string.IsNullOrWhiteSpace(apiKey) && Request.Headers.TryGetValue("ApiKey", out var altHeader))
-        {
-            apiKey = altHeader.FirstOrDefault();
-        }
-
-        if (string.IsNullOrWhiteSpace(apiKey) && Request.Query.TryGetValue("apikey", out var qKey))
-        {
-            apiKey = qKey.FirstOrDefault();
-        }
-
-        if (string.IsNullOrWhiteSpace(apiKey) && Request.Query.TryGetValue("api_key", out var qKey2))
-        {
-            apiKey = qKey2.FirstOrDefault();
-        }
-
-        if (string.IsNullOrWhiteSpace(apiKey) && Request.Query.TryGetValue("access_token", out var qToken))
-        {
-            apiKey = qToken.FirstOrDefault();
-        }
-
-        if (string.IsNullOrWhiteSpace(apiKey) && Request.Query.TryGetValue("token", out var qToken2))
-        {
-            apiKey = qToken2.FirstOrDefault();
-        }
-
-        if (string.IsNullOrWhiteSpace(apiKey) &&
-            Request.Headers.TryGetValue("Authorization", out var authHeader) &&
-            authHeader.ToString().StartsWith("Bearer ", System.StringComparison.OrdinalIgnoreCase))
-        {
-            apiKey = authHeader.ToString()["Bearer ".Length..].Trim();
-        }
+        var apiKey = GetProvidedApiKey(Request);
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        var configuredApiKey = _configFileProvider.ApiKey;
-        if (string.IsNullOrWhiteSpace(configuredApiKey) ||
-            !FixedTimeEquals(apiKey, configuredApiKey))
+        if (!IsValidApiKey(apiKey, _configFileProvider.ApiKey))
         {
             return Task.FromResult(AuthenticateResult.Fail("Invalid API Key"));
         }
@@ -104,6 +70,51 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
         var ticket = new AuthenticationTicket(principal, ApiKeyAuthenticationOptions.DefaultScheme);
 
         return Task.FromResult(AuthenticateResult.Success(ticket));
+    }
+
+    public static string GetProvidedApiKey(HttpRequest request)
+    {
+        var apiKey = request.Headers["X-Api-Key"].FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(apiKey) && request.Headers.TryGetValue("ApiKey", out var altHeader))
+        {
+            apiKey = altHeader.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey) && request.Query.TryGetValue("apikey", out var qKey))
+        {
+            apiKey = qKey.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey) && request.Query.TryGetValue("api_key", out var qKey2))
+        {
+            apiKey = qKey2.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey) && request.Query.TryGetValue("access_token", out var qToken))
+        {
+            apiKey = qToken.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey) && request.Query.TryGetValue("token", out var qToken2))
+        {
+            apiKey = qToken2.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey) &&
+            request.Headers.TryGetValue("Authorization", out var authHeader) &&
+            authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            apiKey = authHeader.ToString()["Bearer ".Length..].Trim();
+        }
+
+        return apiKey;
+    }
+
+    public static bool IsValidApiKey(string providedApiKey, string configuredApiKey)
+    {
+        return !string.IsNullOrWhiteSpace(configuredApiKey) &&
+               FixedTimeEquals(providedApiKey, configuredApiKey);
     }
 
     private static bool FixedTimeEquals(string a, string b)
