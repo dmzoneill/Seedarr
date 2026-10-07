@@ -71,7 +71,7 @@ public class PieceStorageTest
         var torrentService = Substitute.For<ITorrentService>();
         torrentService.GetByInfoHash(hash).Returns(new Torrent { Id = 77, InfoHash = hash });
 
-        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, torrentService);
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, new Lazy<ITorrentService>(() => torrentService));
         storage.MarkPieceVerified(hash, 2, 16384);
 
         _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceCompletedMessage>(m => m.TorrentId == 77));
@@ -87,7 +87,7 @@ public class PieceStorageTest
         torrentService.GetByInfoHash(hash).Returns(new Torrent { Id = 88, InfoHash = hash });
         var bitfield = new[] { true, false, true };
 
-        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, torrentService);
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, new Lazy<ITorrentService>(() => torrentService));
         storage.SetVerifiedPieces(hash, bitfield);
 
         Assert.That(storage.GetVerifiedPieces(hash), Is.EqualTo(bitfield));
@@ -105,7 +105,7 @@ public class PieceStorageTest
         var torrentService = Substitute.For<ITorrentService>();
         torrentService.GetByInfoHash(hash).Returns(new Torrent { Id = 89, InfoHash = hash });
 
-        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, torrentService);
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, new Lazy<ITorrentService>(() => torrentService));
         storage.SetVerifiedPieces(hash, new[] { true });
         storage.SetVerifiedPieces(hash, null);
 
@@ -124,7 +124,7 @@ public class PieceStorageTest
         var torrentService = Substitute.For<ITorrentService>();
         torrentService.GetByInfoHash(hash).Returns(new Torrent { Id = 55, InfoHash = hash });
 
-        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, torrentService);
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, new Lazy<ITorrentService>(() => torrentService));
         storage.MarkPieceVerified(hash, 3, 16384);
         storage.Clear(hash);
 
@@ -162,7 +162,7 @@ public class PieceStorageTest
         var torrentService = Substitute.For<ITorrentService>();
         torrentService.GetByInfoHash(hash).Returns(new Torrent { Id = 91, InfoHash = hash });
 
-        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, torrentService);
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, new Lazy<ITorrentService>(() => torrentService));
         storage.MarkPieceCorrupted(hash, 6);
 
         _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceCorruptedMessage>(m => m.TorrentId == 91));
