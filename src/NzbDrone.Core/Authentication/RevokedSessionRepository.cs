@@ -62,5 +62,4 @@ ON CONFLICT(""SessionKey"") DO UPDATE SET
                 $"DELETE FROM \"{_table}\" WHERE \"ExpiresAtUtc\" <= @UtcNow",
                 new { UtcNow = utcNow }));
     }
-
 }
