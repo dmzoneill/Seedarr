@@ -64,12 +64,24 @@ public class DiskProvider : IDiskProvider
                 return false;
             }
 
-            if (!DirExists(path))
+            if (PathSanitizer.ContainsPathTraversal(path) || !PathSanitizer.IsValidPath(path))
             {
-                Directory.CreateDirectory(path);
+                return false;
             }
 
-            var sentinel = Path.Combine(path, $".seedarr_perm_check_{Guid.NewGuid():N}.tmp");
+            var fullPath = Path.GetFullPath(path);
+
+            if (PathSanitizer.IsBlockedPath(fullPath))
+            {
+                return false;
+            }
+
+            if (!DirExists(fullPath))
+            {
+                Directory.CreateDirectory(fullPath);
+            }
+
+            var sentinel = Path.Combine(fullPath, $".seedarr_perm_check_{Guid.NewGuid():N}.tmp");
             using (var fs = new FileStream(sentinel, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 fs.WriteByte(0x42);
