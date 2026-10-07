@@ -61,7 +61,7 @@ public class DiskAllocationService : IDiskAllocationService
             {
                 var requiredSpace = torrent.TotalSize > 0
                     ? (torrent.Downloaded > 0 ? Math.Max(0L, torrent.TotalSize - torrent.Downloaded) : torrent.TotalSize)
-                    : (fileList != null ? fileList.Where(f => f != null).Sum(f => f.Size) : 0L);
+                    : (fileList != null ? fileList.Where(f => f != null && !MultiFilePieceStorage.IsPadding(f)).Sum(f => f.Size) : 0L);
 
                 if (diskInfo.FreeSpace < requiredSpace)
                 {
@@ -84,7 +84,7 @@ public class DiskAllocationService : IDiskAllocationService
 
         foreach (var file in fileList)
         {
-            if (file == null || string.IsNullOrWhiteSpace(file.Path))
+            if (file == null || string.IsNullOrWhiteSpace(file.Path) || MultiFilePieceStorage.IsPadding(file))
             {
                 continue;
             }
