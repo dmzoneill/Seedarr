@@ -179,6 +179,21 @@ public class StreamingPiecePickerTests
     }
 
     [Test]
+    public async Task WaitForPieceAsync_keeps_other_waiters_when_one_times_out()
+    {
+        var streamService = new TorrentStreamService();
+
+        var shortWait = streamService.WaitForPieceAsync(torrentId: 10, pieceIndex: 7, timeout: TimeSpan.FromMilliseconds(50));
+        var longWait = streamService.WaitForPieceAsync(torrentId: 10, pieceIndex: 7, timeout: TimeSpan.FromSeconds(2));
+
+        Assert.That(await shortWait, Is.False);
+
+        streamService.NotifyPieceCompleted(torrentId: 10, pieceIndex: 7);
+
+        Assert.That(await longWait, Is.True);
+    }
+
+    [Test]
     public async Task WaitForPieceAsync_returns_false_when_cancellation_is_requested()
     {
         var streamService = new TorrentStreamService();
