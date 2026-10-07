@@ -126,12 +126,12 @@ public class Startup
             options.Cookie.SecurePolicy = configFileProvider.EnableSsl
                 ? Microsoft.AspNetCore.Http.CookieSecurePolicy.Always
                 : Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
-            var urlBase = configFileProvider?.UrlBase?.Trim();
-            options.Cookie.Path = string.IsNullOrWhiteSpace(urlBase) ? "/" : (urlBase.StartsWith('/') ? urlBase : "/" + urlBase);
+            var urlBase = configFileProvider?.UrlBase;
+            options.Cookie.Path = GetCookiePathFromUrlBase(urlBase);
             options.ExpireTimeSpan = AuthenticationDefaults.CookieExpireTimeSpan;
             options.SlidingExpiration = true;
-            options.LoginPath = "/login";
-            options.AccessDeniedPath = "/login?accessDenied=true";
+            options.LoginPath = GetAuthRedirectPathFromUrlBase(urlBase, "/login");
+            options.AccessDeniedPath = GetAuthRedirectPathFromUrlBase(urlBase, "/login?accessDenied=true");
             options.Events = new CookieAuthenticationEvents
             {
                 OnValidatePrincipal = async context =>
@@ -265,6 +265,24 @@ public class Startup
     public static bool IsOriginAllowed(string origin, string allowedOrigins)
     {
         return CorsSecurityHelper.IsOriginAllowed(origin, allowedOrigins);
+    }
+
+    public static string GetCookiePathFromUrlBase(string urlBase)
+    {
+        urlBase = urlBase?.Trim();
+        return string.IsNullOrWhiteSpace(urlBase) ? "/" : (urlBase.StartsWith('/') ? urlBase : "/" + urlBase);
+    }
+
+    public static string GetAuthRedirectPathFromUrlBase(string urlBase, string pathAndQuery)
+    {
+        if (string.IsNullOrEmpty(pathAndQuery) || pathAndQuery[0] != '/')
+        {
+            throw new ArgumentException("Path must start with /.", nameof(pathAndQuery));
+        }
+
+        var cookiePath = GetCookiePathFromUrlBase(urlBase);
+        var prefix = cookiePath == "/" ? string.Empty : cookiePath.TrimEnd('/');
+        return prefix + pathAndQuery;
     }
 
     internal static void PrepareWwwrootStaticFileResponse(StaticFileResponseContext ctx)
