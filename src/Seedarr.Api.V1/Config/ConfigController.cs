@@ -280,6 +280,7 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             EmulatedClientSessionRevocation.RevokeAll(_rpcSessionStore, Response);
         }
 
+        GeneralConfigResourceMapper.MaskSecretsForResponse(resource);
         return Accepted(resource);
     }
 

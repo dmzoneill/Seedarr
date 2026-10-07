@@ -223,7 +223,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.SslCertPassword, Is.EqualTo("P@ssw*rd#2026"));
+        Assert.That(resource.SslCertPassword, Is.EqualTo(GeneralConfigResourceMapper.SecretMask));
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             (string)d["SslCertPassword"] == "P@ssw*rd#2026"));
     }
@@ -245,7 +245,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.SslCertPassword, Is.EqualTo("ExistingSecret123"));
+        Assert.That(resource.SslCertPassword, Is.EqualTo(GeneralConfigResourceMapper.SecretMask));
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             (string)d["SslCertPassword"] == "ExistingSecret123"));
     }
@@ -267,7 +267,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.SslCertPassword, Is.EqualTo("ExistingSecret123"));
+        Assert.That(resource.SslCertPassword, Is.EqualTo(GeneralConfigResourceMapper.SecretMask));
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             (string)d["SslCertPassword"] == "ExistingSecret123"));
     }
@@ -289,7 +289,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.SslCertPassword, Is.EqualTo("ExistingSecret123"));
+        Assert.That(resource.SslCertPassword, Is.EqualTo(GeneralConfigResourceMapper.SecretMask));
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             (string)d["SslCertPassword"] == "ExistingSecret123"));
     }
@@ -333,7 +333,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.ApiKey, Is.EqualTo("my*custom*api*key*2026"));
+        Assert.That(resource.ApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey("my*custom*api*key*2026")));
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             (string)d["ApiKey"] == "my*custom*api*key*2026"));
     }
@@ -378,7 +378,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.ApiKey, Is.EqualTo("1234567890abcdef"));
+        Assert.That(resource.ApiKey, Is.EqualTo(masked));
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             (string)d["ApiKey"] == "1234567890abcdef"));
     }
@@ -400,7 +400,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.ApiKey, Is.EqualTo("1234567890abcdef"));
+        Assert.That(resource.ApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey("1234567890abcdef")));
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             (string)d["ApiKey"] == "1234567890abcdef"));
     }
@@ -464,7 +464,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.TmdbApiKey, Is.EqualTo("my*tmdb*key*2026"));
+        Assert.That(resource.TmdbApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey("my*tmdb*key*2026")));
         _configService.Received(1).SaveConfigDictionary(
             Arg.Is<Dictionary<string, object>>(d => (string)d["TmdbApiKey"] == "my*tmdb*key*2026"),
             false);
@@ -489,7 +489,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.TmdbApiKey, Is.EqualTo(existing));
+        Assert.That(resource.TmdbApiKey, Is.EqualTo(masked));
         _configService.Received(1).SaveConfigDictionary(
             Arg.Is<Dictionary<string, object>>(d => (string)d["TmdbApiKey"] == existing),
             false);
@@ -513,7 +513,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.TmdbApiKey, Is.EqualTo(existing));
+        Assert.That(resource.TmdbApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey(existing)));
         _configService.Received(1).SaveConfigDictionary(
             Arg.Is<Dictionary<string, object>>(d => (string)d["TmdbApiKey"] == existing),
             false);
@@ -537,7 +537,7 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.TmdbApiKey, Is.EqualTo(existing));
+        Assert.That(resource.TmdbApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey(existing)));
         _configService.Received(1).SaveConfigDictionary(
             Arg.Is<Dictionary<string, object>>(d => (string)d["TmdbApiKey"] == existing),
             false);
@@ -561,10 +561,34 @@ public class ConfigControllerTests
         var result = _controller.SaveConfig(resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
-        Assert.That(resource.TmdbApiKey, Is.EqualTo(existing));
+        Assert.That(resource.TmdbApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey(existing)));
         _configService.Received(1).SaveConfigDictionary(
             Arg.Is<Dictionary<string, object>>(d => (string)d["TmdbApiKey"] == existing),
             false);
+    }
+
+    [Test]
+    public void SaveConfig_response_does_not_echo_plaintext_secrets_after_round_trip_from_get()
+    {
+        const string apiKey = "1234567890abcdef";
+        const string tmdbKey = "custom_tmdb_key_abc123";
+        _configFileProvider.ApiKey.Returns(apiKey);
+        _configService.TmdbApiKey.Returns(tmdbKey);
+        _configFileProvider.SslCertPassword.Returns("SslSecretPass");
+        _configFileProvider.Port.Returns(8080);
+        _configFileProvider.SslPort.Returns(8443);
+        _configFileProvider.BindAddress.Returns("*");
+
+        var resource = GeneralConfigResourceMapper.ToResource(_configService, _configFileProvider);
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.ApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey(apiKey)));
+        Assert.That(resource.TmdbApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey(tmdbKey)));
+        Assert.That(resource.SslCertPassword, Is.EqualTo(GeneralConfigResourceMapper.SecretMask));
+        Assert.That(resource.ApiKey, Does.Not.EqualTo(apiKey));
+        Assert.That(resource.SslCertPassword, Does.Not.EqualTo("SslSecretPass"));
     }
 
     [Test]
