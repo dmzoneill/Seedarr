@@ -190,6 +190,33 @@ public class AppLifetimeTest
     }
 
     [Test]
+    public void SpeedThreshold_should_ignore_stale_speeds_on_stopped_or_paused_torrents()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(100);
+        var activeTorrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            DownloadSpeed = 50 * 1024,
+            Progress = 0.2
+        };
+        var inactiveTorrent = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Paused,
+            DownloadSpeed = 200 * 1024,
+            Progress = 1.0
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { activeTorrent, inactiveTorrent });
+
+        _subject.EvaluateWatchdogMetrics();
+        _subject.EvaluateWatchdogMetrics();
+
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SpeedThresholdExceededEvent>());
+    }
+
+    [Test]
     public void SpeedThreshold_should_use_alt_limits_when_AlternativeSpeedEnabled()
     {
         _configService.MaxDownloadSpeedKbps.Returns(1250);

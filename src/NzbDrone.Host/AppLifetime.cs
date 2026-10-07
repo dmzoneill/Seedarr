@@ -391,7 +391,7 @@ public class AppLifetime : IHostedService, IDisposable
                 long totalDownloadSpeed = 0;
                 long totalUploadSpeed = 0;
 
-                foreach (var torrent in torrents)
+                foreach (var torrent in activeTorrents)
                 {
                     totalDownloadSpeed += torrent.DownloadSpeed;
                     totalUploadSpeed += torrent.UploadSpeed;
