@@ -14,6 +14,7 @@ using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers.MultiTracker;
+using NzbDrone.SignalR;
 
 namespace NzbDrone.Core.Test.Torrents;
 
@@ -1018,5 +1019,97 @@ public class TorrentRecheckServiceTest
         await serviceWithSignalR.RecheckAsync(torrent);
 
         signalR.Received().BroadcastMessage(Arg.Is<NzbDrone.SignalR.SignalRMessage>(m => m.Name == "TorrentRecheckProgress"));
+    }
+
+    [Test]
+    public void RecheckAsync_restores_prior_status_and_broadcasts_when_recheck_fails_after_checking()
+    {
+        var signalR = Substitute.For<IBroadcastSignalRMessage>();
+        var serviceWithSignalR = new TorrentRecheckService(
+            _torrentRepository,
+            _torrentFileService,
+            _pieceStorage,
+            _pieceVerificationService,
+            _multiFilePieceStorage,
+            _stateMachine,
+            _eventAggregator,
+            null,
+            _fastResumeService,
+            signalR);
+
+        var torrent = new Torrent
+        {
+            Id = 30,
+            InfoHash = "hash-fail-recheck",
+            Name = "Failing Recheck",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 2,
+            TotalSize = 2000
+        };
+
+        _torrentRepository.Get(30).Returns(torrent);
+        _stateMachine.When(sm => sm.TransitionToChecking(Arg.Any<Torrent>()))
+            .Do(ci => ci.Arg<Torrent>().Status = TorrentStatus.Checking);
+        _pieceStorage
+            .When(ps => ps.SetVerifiedPieces(Arg.Any<string>(), Arg.Any<bool[]>()))
+            .Do(_ => throw new InvalidOperationException("simulated storage failure"));
+
+        Assert.Throws<InvalidOperationException>(() => serviceWithSignalR.Recheck(torrent));
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
+            e.Torrent.Id == 30 && e.OldStatus == TorrentStatus.Checking && e.NewStatus == TorrentStatus.Downloading));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentHashCheckCompletedEvent>(e => e.Torrent == torrent && !e.IsSuccessful));
+        signalR.Received().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TorrentUpdated" && m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
+        signalR.Received().BroadcastToTorrent(30, Arg.Is<SignalRMessage>(m => m.Name == "TorrentUpdated"));
+        signalR.Received().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TorrentRecheckProgress"));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task QueueRecheck_restores_status_and_broadcasts_when_recheck_fails_in_queue()
+    {
+        var signalR = Substitute.For<IBroadcastSignalRMessage>();
+        var serviceWithSignalR = new TorrentRecheckService(
+            _torrentRepository,
+            _torrentFileService,
+            _pieceStorage,
+            _pieceVerificationService,
+            _multiFilePieceStorage,
+            _stateMachine,
+            _eventAggregator,
+            null,
+            _fastResumeService,
+            signalR);
+
+        var torrent = new Torrent
+        {
+            Id = 31,
+            InfoHash = "hash-queue-fail",
+            Name = "Queued Failing Recheck",
+            Status = TorrentStatus.Seeding,
+            PieceCount = 1,
+            TotalSize = 1000
+        };
+
+        _torrentRepository.Get(31).Returns(torrent);
+        _stateMachine.When(sm => sm.TransitionToChecking(Arg.Any<Torrent>()))
+            .Do(ci => ci.Arg<Torrent>().Status = TorrentStatus.Checking);
+        _pieceStorage
+            .When(ps => ps.SetVerifiedPieces(Arg.Any<string>(), Arg.Any<bool[]>()))
+            .Do(_ => throw new InvalidOperationException("simulated storage failure"));
+
+        serviceWithSignalR.QueueRecheck(31);
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline && torrent.Status == TorrentStatus.Checking)
+        {
+            await System.Threading.Tasks.Task.Delay(10);
+        }
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        signalR.Received().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TorrentUpdated" && m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
+        signalR.Received().BroadcastToTorrent(31, Arg.Is<SignalRMessage>(m => m.Name == "TorrentUpdated"));
     }
 }
