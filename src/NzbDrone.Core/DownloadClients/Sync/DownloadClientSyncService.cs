@@ -1066,7 +1066,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     private byte[] SearchIndexersForTorrent(string infoHash)
     {
-        var indexers = _indexerFactory.All().Where(i => i.Enable).ToList();
+        var indexers = _indexerFactory.All().Where(i => i.Enable && i.EnableSearch).ToList();
         foreach (var indexerDef in indexers)
         {
             try
