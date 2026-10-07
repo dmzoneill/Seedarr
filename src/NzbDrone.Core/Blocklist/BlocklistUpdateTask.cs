@@ -47,6 +47,12 @@ public class BlocklistUpdateTask : IScheduledTask, IExecute<BlocklistUpdateComma
             return;
         }
 
+        if (_configService != null && !_configService.BlocklistAutoUpdate)
+        {
+            _logger.Debug("Blocklist update skipped: automatic updates are disabled");
+            return;
+        }
+
         _logger.Info("Executing scheduled blocklist update");
         RunBlocklistSync(force: false, failureLogMessage: "Scheduled blocklist update failed");
     }
@@ -57,6 +63,12 @@ public class BlocklistUpdateTask : IScheduledTask, IExecute<BlocklistUpdateComma
         if (!force && _configService != null && !_configService.BlocklistEnabled)
         {
             _logger.Debug("Blocklist update command skipped: blocklist is disabled");
+            return;
+        }
+
+        if (!force && _configService != null && !_configService.BlocklistAutoUpdate)
+        {
+            _logger.Debug("Blocklist update command skipped: automatic updates are disabled");
             return;
         }
 
