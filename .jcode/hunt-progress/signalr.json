@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T01:10:00Z",
+  "updatedAt": "2026-10-07T01:12:30Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Jobs",
-    "completedAt": "2026-10-07T01:10:00Z",
+    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+    "completedAt": "2026-10-07T01:12:30Z",
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Static review of all 12 files under Jobs: Scheduler.cs (SignalR TaskStarted/TaskFailed/TaskCompleted lifecycle, jitter, missing-instance path), ScheduledTaskCommandExecutor.cs (queue path SignalR + finally TaskCompleted), TaskManager.cs (normalization, history, cancel/fail state), ScheduledTask/History/Repository, DatabaseVacuumTask, TrackerScrapeJob, IScheduledTask. Cross-checked open GH: #821 #903 #911 #952 #971 #985 #1026 #1162 #1202 #1203 #1236. No new root causes; existing issues cover cancel/timeout terminal events (#911/#1236), missing task instance success (#952), manual failure TaskCompleted (#985), TaskFailed delivery (#903), type name payloads (#1203), TrackerScrapeJob swallowed failures (#971), history/stack gaps (#1162/#1202). Next: src/NzbDrone.Core/Torrents/TorrentRecheckService.cs. Static only; no dotnet build/test."
+    "note": "Static review of TorrentRecheckService.cs (queue + direct Recheck/RecheckAsync paths, SignalR TorrentUpdated/TorrentRecheckProgress, cancel/failure terminals, ExecuteRecheckCore lifecycle). Findings deduped to open GH: #912 #936 #951 #988 #991 #1036 #1048 #1172 #1209 #1210 #1242 #1243. Added comment on #988 documenting direct-path failure terminal gap (same root cause as queued swallow). No new issues filed. Next: src/Seedarr.Http/REST. Static only; no dotnet build/test."
   }
 }
