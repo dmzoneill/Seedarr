@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T00:15:00Z",
+  "updatedAt": "2026-10-07T00:35:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Security",
+  "currentSubfolder": "src/Seedarr.Http/Authentication",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Ping",
-    "completedAt": "2026-10-07T00:15:00Z",
+    "subfolder": "src/Seedarr.Http/Security",
+    "completedAt": "2026-10-07T00:35:00Z",
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 31 (Ping): Static review of PingController.cs (lines 6-21). Single [HttpGet] returns unconditional Ok(PingResource Status=OK); no DB/config probe; [AllowAnonymous] overrides Startup FallbackPolicy (lines 241-243). GitHub dedupe: #1068 and #1069 (DB probe, HEAD, *arr parity). Cross-checked podman-compose/Makefile healthchecks (localhost:7889/ping), PathBase/UrlBase in Startup.cs (362-366), CSRF/host-header middleware (no Ping-specific routing defects). No additional Ping-folder defects; no issues filed or reopened. Next: Security. No dotnet build/test."
+    "note": "Pass 32 (Security): Static review of 7 files — CorsSecurityHelper.cs, CsrfProtectionMiddleware.cs, HostHeaderValidationMiddleware.cs, IpSecurityHelper.cs, RpcAuthenticationHelper.cs, RpcSessionStore.cs, SecurityHeadersMiddleware.cs. Cross-checked Startup.cs middleware order (SecurityHeaders/HostHeader/CSRF before UsePathBase ~358-366), CORS wiring (~315-327), tests in Seedarr.Http.Test/Security and NzbDrone.Core.Test/Http/SecurityMiddlewareTest.cs. GitHub dedupe: existing open issues cover root causes (#876 UrlBase vs PathBase CSRF bypass paths; #1200 loopback trusted proxy X-Forwarded-Host CSRF; #1244 HostHeader ignores X-Forwarded-Host; #908/#909 Host allowlist bypass via private LAN/*.local/seedarr; #921 Cors loopback AllowedOrigins bypass; #934 CSRF loopback origin alias; #654 RpcSessionStore capacity/eviction). No additional Security-folder defects beyond tracked issues; no issues filed or reopened. Next: Authentication. No dotnet build/test."
   }
 }
