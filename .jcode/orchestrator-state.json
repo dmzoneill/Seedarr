@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:25:31Z",
+  "updatedAt": "2026-10-07T01:26:28Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_7e06f29a",
+    "lastScheduleId": "sched_7732eddf",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -28,8 +28,8 @@
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1159,
-      "worktree": "../seedarr_worktrees/issue-1159",
+      "issue": 1150,
+      "worktree": "../seedarr_worktrees/issue-1150",
       "area": "host"
     },
     "api": {
@@ -68,10 +68,9 @@
       1214,
       1084,
       1010,
-      939,
-      1150
+      939
     ]
   },
-  "githubOpen": 325,
-  "lastMonitorNote": "fix monitor: 5 closed; 5 dispatches; open 325"
+  "githubOpen": 321,
+  "lastMonitorNote": "fix monitor: #1159 closed; dispatch #1150 host; open 321"
 }
