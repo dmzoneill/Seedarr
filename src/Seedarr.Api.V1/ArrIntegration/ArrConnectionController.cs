@@ -238,15 +238,12 @@ public class ArrConnectionController : Controller
             return NotFound("Arr connection not found");
         }
 
-        if (!path.StartsWith('/'))
+        if (!ArrConnectionResources.TryValidateImageProxyPath(path, out var normalizedPath, out var pathError))
         {
-            path = "/" + path;
+            return BadRequest(pathError ?? "Invalid path");
         }
 
-        if (path.Contains(".."))
-        {
-            return BadRequest("Invalid path");
-        }
+        path = normalizedPath;
 
         var targetUrl = $"{definition.Url.TrimEnd('/')}{path}";
         var client = _explicitHttpClient ?? ArrConnectionResources.GetClient(definition.AcceptInvalidCertificates);

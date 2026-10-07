@@ -225,6 +225,38 @@ public class ArrConnectionControllerTest
     }
 
     [Test]
+    public async Task GetImageProxy_returns_bad_request_when_path_is_not_allowlisted()
+    {
+        _connectionFactory.Get(1).Returns(new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "my-key"
+        });
+
+        var result = await _controller.GetImageProxy(1, "/api/v3/system/status");
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public async Task GetImageProxy_returns_bad_request_when_path_contains_encoded_traversal()
+    {
+        _connectionFactory.Get(1).Returns(new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "my-key"
+        });
+
+        var result = await _controller.GetImageProxy(1, "/MediaCover/%2e%2e/api/v3/system/status");
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
     public async Task GetImageProxy_returns_not_found_when_connection_not_found()
     {
         _connectionFactory.Get(99).Returns((ArrConnectionDefinition)null);
