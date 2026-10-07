@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T00:28:00Z",
+  "updatedAt": "2026-10-07T00:35:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Torrents",
+  "currentSubfolder": "src/Seedarr.Api.V1/DownloadClients",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Indexers",
-    "completedAt": "2026-10-07T00:28:00Z",
-    "issuesFiled": [1278],
+    "subfolder": "src/Seedarr.Api.V1/Torrents",
+    "completedAt": "2026-10-07T00:35:00Z",
+    "issuesFiled": [1283, 1284],
     "issuesReopened": [],
-    "taskId": "api-hunter-albatross",
-    "notes": "Static review: 4 files (IndexerController.cs, RssRuleController.cs, RssRuleResource.cs, RssGrabHistoryResource.cs). Deduped against open indexer/rss issues (#913–#1207, #927–#1115, #958, etc.). Filed #1278 (GET /rssrules/history limit<=0 unbounded read). No dotnet build/test."
+    "taskId": "api-hunter-hawk",
+    "notes": "Static review: 14 files (TorrentController, DownloadHistoryController, mappers/resources). Deduped vs open torrent API issues (#958, #1124-#1126, #1218-#1222, #941, #960, etc.). Filed #1283 (event logs count before level filter), #1284 (history offset ignored when SQL LIMIT omitted). No dotnet build/test."
   }
 }
