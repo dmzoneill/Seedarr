@@ -177,6 +177,41 @@ public class SystemDeveloperControllerTest
         Assert.That(response.Value.TotalRecorded, Is.EqualTo(1));
     }
 
+    [TestCase(0, 1)]
+    [TestCase(-100, 1)]
+    [TestCase(5001, 5000)]
+    [TestCase(int.MaxValue, 5000)]
+    public void GetEvents_should_clamp_limit_before_querying_store(int requested, int expected)
+    {
+        _eventStore.GetRecentEvents(expected, null).Returns(new List<DeveloperEventEntry>());
+
+        _controller.GetEvents(requested, null);
+
+        _eventStore.Received(1).GetRecentEvents(expected, null);
+    }
+
+    [TestCase(0, 1)]
+    [TestCase(int.MaxValue, 5000)]
+    public void GetHttpTraffic_should_clamp_limit_before_querying_store(int requested, int expected)
+    {
+        _httpTrafficStore.GetRecent(expected, null).Returns(new List<DeveloperHttpTrafficEntry>());
+
+        _controller.GetHttpTraffic(requested, null);
+
+        _httpTrafficStore.Received(1).GetRecent(expected, null);
+    }
+
+    [TestCase(0, 1)]
+    [TestCase(int.MaxValue, 5000)]
+    public void GetWebhookHistory_should_clamp_limit_before_querying_store(int requested, int expected)
+    {
+        _webhookStore.GetRecent(expected).Returns(new List<DeveloperWebhookEntry>());
+
+        _controller.GetWebhookHistory(requested);
+
+        _webhookStore.Received(1).GetRecent(expected);
+    }
+
     [Test]
     public void PublishSyntheticEvent_should_record_and_return_created_event()
     {
