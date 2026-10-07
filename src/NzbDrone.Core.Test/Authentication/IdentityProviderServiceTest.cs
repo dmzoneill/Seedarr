@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -559,5 +561,63 @@ public class IdentityProviderServiceTest
 
         Assert.That(service.EncryptClientSecret(secret), Is.EqualTo(secret));
         Assert.That(service.DecryptClientSecret(secret), Is.EqualTo(secret));
+    }
+
+    [Test]
+    public void EncryptClientSecret_WhenProtectFails_ThrowsAndDoesNotReturnPlaintext()
+    {
+        var dataProtection = Substitute.For<IDataProtectionProvider>();
+        var protector = Substitute.For<IDataProtector>();
+        dataProtection.CreateProtector(IdentityProviderService.DataProtectionPurpose).Returns(protector);
+        protector.Protect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("key ring unavailable"));
+        protector.Unprotect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("not encrypted"));
+
+        var service = new IdentityProviderService(_repository, null, dataProtection);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => service.EncryptClientSecret("plaintext-secret"));
+        Assert.That(ex!.InnerException, Is.TypeOf<CryptographicException>());
+    }
+
+    [Test]
+    public void Add_WhenProtectFails_DoesNotPersistPlaintextSecret()
+    {
+        var dataProtection = Substitute.For<IDataProtectionProvider>();
+        var protector = Substitute.For<IDataProtector>();
+        dataProtection.CreateProtector(IdentityProviderService.DataProtectionPurpose).Returns(protector);
+        protector.Protect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("key ring unavailable"));
+        protector.Unprotect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("not encrypted"));
+
+        var service = new IdentityProviderService(_repository, null, dataProtection);
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "test_encrypt_fail",
+            Name = "Test Encrypt Fail",
+            ClientSecretEncrypted = "raw-super-secret-123",
+        };
+
+        Assert.Throws<InvalidOperationException>(() => service.Add(provider));
+        _repository.DidNotReceive().Insert(Arg.Any<IdentityProviderDefinition>());
+    }
+
+    [Test]
+    public void Update_WhenProtectFails_DoesNotPersistPlaintextSecret()
+    {
+        var dataProtection = Substitute.For<IDataProtectionProvider>();
+        var protector = Substitute.For<IDataProtector>();
+        dataProtection.CreateProtector(IdentityProviderService.DataProtectionPurpose).Returns(protector);
+        protector.Protect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("key ring unavailable"));
+        protector.Unprotect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("not encrypted"));
+
+        var service = new IdentityProviderService(_repository, null, dataProtection);
+        var provider = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test_encrypt_fail",
+            Name = "Test Encrypt Fail",
+            ClientSecretEncrypted = "updated-raw-secret-456",
+        };
+
+        Assert.Throws<InvalidOperationException>(() => service.Update(provider));
+        _repository.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());
     }
 }
