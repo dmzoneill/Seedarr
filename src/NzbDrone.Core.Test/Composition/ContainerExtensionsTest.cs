@@ -61,6 +61,12 @@ public class ContainerExtensionsTest
     {
     }
 
+    [Singleton]
+    [Transient]
+    public class ConflictingLifetimeService : ICustomService
+    {
+    }
+
     public interface IGenericCustomService<T>
     {
     }
@@ -174,5 +180,17 @@ public class ContainerExtensionsTest
         using var scope2 = container.OpenScope();
         var instance2 = scope2.Resolve<ICustomService>();
         Assert.That(instance1, Is.Not.SameAs(instance2));
+    }
+
+    [Test]
+    public void AutoAddServices_throws_when_multiple_lifetime_attributes_are_present()
+    {
+        var container = new Container(rules => rules.WithNzbDroneRules());
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            container.AutoAddServices(new[] { typeof(ConflictingLifetimeService) }));
+
+        Assert.That(ex.Message, Does.Contain(nameof(ConflictingLifetimeService)));
+        Assert.That(ex.Message, Does.Contain("multiple lifetime attributes"));
     }
 }

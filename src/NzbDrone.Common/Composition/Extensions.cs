@@ -88,6 +88,8 @@ public static class ContainerExtensions
 
     private static IReuse DetermineReuse(Type type, bool hasInterfaces)
     {
+        EnsureSingleLifetimeAttribute(type);
+
         if (type.IsDefined(typeof(TransientAttribute), false))
         {
             return Reuse.Transient;
@@ -104,5 +106,31 @@ public static class ContainerExtensions
         }
 
         return hasInterfaces ? Reuse.Singleton : Reuse.Transient;
+    }
+
+    private static void EnsureSingleLifetimeAttribute(Type type)
+    {
+        var attributeCount = 0;
+
+        if (type.IsDefined(typeof(TransientAttribute), false))
+        {
+            attributeCount++;
+        }
+
+        if (type.IsDefined(typeof(ScopedAttribute), false))
+        {
+            attributeCount++;
+        }
+
+        if (type.IsDefined(typeof(SingletonAttribute), false))
+        {
+            attributeCount++;
+        }
+
+        if (attributeCount > 1)
+        {
+            throw new InvalidOperationException(
+                $"Type '{type.FullName}' has multiple lifetime attributes ([Transient], [Scoped], [Singleton]). Only one may be specified.");
+        }
     }
 }
