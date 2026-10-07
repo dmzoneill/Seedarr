@@ -158,7 +158,7 @@ public class DynamicAuthSchemeManagerTest
     }
 
     [Test]
-    public void ResolveRoles_should_assign_Operator_when_roles_claim_matches_regex()
+    public void ResolveRoles_should_assign_User_when_Operator_mapping_rule_matches()
     {
         var claims = new List<Claim>
         {
@@ -168,7 +168,7 @@ public class DynamicAuthSchemeManagerTest
         var rules = "{\"Admin\":\"^(admin)$\",\"Operator\":\"^(operators|media-managers)$\"}";
         var roles = DynamicAuthSchemeManager.ResolveRoles(claims, rules);
 
-        Assert.That(roles, Is.EquivalentTo(new[] { "Operator" }));
+        Assert.That(roles, Is.EquivalentTo(new[] { Roles.User }));
     }
 
     [Test]
@@ -183,7 +183,7 @@ public class DynamicAuthSchemeManagerTest
         var rules = "{\"Admin\":\"^admin$\",\"Operator\":\"^operators$\"}";
         var roles = DynamicAuthSchemeManager.ResolveRoles(claims, rules);
 
-        Assert.That(roles, Is.EquivalentTo(new[] { "Admin", "Operator" }));
+        Assert.That(roles, Is.EquivalentTo(new[] { Roles.Admin, Roles.User }));
     }
 
     [Test]

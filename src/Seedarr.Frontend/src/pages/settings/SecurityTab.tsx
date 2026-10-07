@@ -43,7 +43,7 @@ const PROVIDER_TEMPLATES: Record<
     scopes: "openid profile email groups",
     buttonText: "Sign in with Authentik",
     roleMappingRules:
-      '{"Admin":"^(admin|authentik Admins|infrastructure)$","Operator":"^(operators|media-managers)$"}',
+      '{"Admin":"^(admin|authentik Admins|infrastructure)$","User":"^(operators|media-managers)$"}',
   },
   keycloak: {
     providerId: "keycloak",
@@ -53,7 +53,7 @@ const PROVIDER_TEMPLATES: Record<
     scopes: "openid profile email roles",
     buttonText: "Sign in with Keycloak",
     roleMappingRules:
-      '{"Admin":"^(realm-admin|seedarr-admin)$","Operator":"^(seedarr-operator)$"}',
+      '{"Admin":"^(realm-admin|seedarr-admin)$","User":"^(seedarr-operator)$"}',
   },
   authelia: {
     providerId: "authelia",
