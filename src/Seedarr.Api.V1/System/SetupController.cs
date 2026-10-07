@@ -9,6 +9,7 @@ using NLog;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http;
+using Seedarr.Http.Security;
 
 namespace Seedarr.Api.V1.System;
 
@@ -19,15 +20,18 @@ public class SetupController : Controller
     private readonly IConfigService _configService;
     private readonly IConfigFileProvider _configFileProvider;
     private readonly ILocalAdminCredentialService _localAdminCredentialService;
+    private readonly IRpcSessionStore _rpcSessionStore;
 
     public SetupController(
         IConfigService configService,
         IConfigFileProvider configFileProvider = null,
-        ILocalAdminCredentialService localAdminCredentialService = null)
+        ILocalAdminCredentialService localAdminCredentialService = null,
+        IRpcSessionStore rpcSessionStore = null)
     {
         _configService = configService ?? throw new ArgumentNullException(nameof(configService));
         _configFileProvider = configFileProvider;
         _localAdminCredentialService = localAdminCredentialService ?? new LocalAdminCredentialService();
+        _rpcSessionStore = rpcSessionStore;
     }
 
     [HttpGet("status")]
@@ -110,6 +114,8 @@ public class SetupController : Controller
             });
             _configFileProvider.SetIsSetupCompleted(true);
         }
+
+        EmulatedClientSessionRevocation.RevokeAll(_rpcSessionStore, Response);
 
         return Ok(new
         {

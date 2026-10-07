@@ -361,6 +361,29 @@ public class ConfigControllerTests
     }
 
     [Test]
+    public void SaveConfig_when_authentication_toggled_invalidates_emulated_client_rpc_sessions()
+    {
+        _configFileProvider.ApiKey.Returns("1234567890abcdef");
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _rpcSessionStore.SetSession("deluge-session", TimeSpan.FromDays(7));
+        Assert.That(_rpcSessionStore.IsValid("deluge-session"), Is.True);
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            AuthenticationEnabled = false,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(_rpcSessionStore.IsValid("deluge-session"), Is.False);
+    }
+
+    [Test]
     public void SaveConfig_with_masked_api_key_preserves_existing_api_key()
     {
         _configFileProvider.ApiKey.Returns("1234567890abcdef");
