@@ -135,6 +135,40 @@ public class ArrConnectionControllerTest
     }
 
     [Test]
+    public void Update_when_arr_type_changed_triggers_unregister_webhook_with_existing_and_registers_new()
+    {
+        var existing = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            ArrType = "Sonarr",
+            Url = "http://arr:8989",
+            ApiKey = "api-key",
+            Enable = true,
+            WebhookEnabled = true
+        };
+        _connectionFactory.Get(1).Returns(existing);
+
+        var updated = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            ArrType = "Lidarr",
+            Url = "http://arr:8989",
+            ApiKey = "api-key",
+            Enable = true,
+            WebhookEnabled = true
+        };
+
+        var result = _controller.Update(1, updated);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _webhookRegistration.Received(1).UnregisterWebhook(existing);
+        _webhookRegistration.Received(1).RegisterWebhook(Arg.Is<ArrConnectionDefinition>(d => d.ArrType == "Lidarr"));
+        _connectionFactory.Received(1).Update(updated);
+    }
+
+    [Test]
     public void Update_when_url_has_matching_trimmed_slashes_does_not_unregister()
     {
         var existing = new ArrConnectionDefinition
