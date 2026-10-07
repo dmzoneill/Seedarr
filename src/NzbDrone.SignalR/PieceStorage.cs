@@ -235,6 +235,11 @@ public class PieceStorage : IPieceStorage, IDisposable
             return;
         }
 
+        if (_pendingBatches.TryRemove(infoHash, out var pendingBatch))
+        {
+            pendingBatch.Dispose();
+        }
+
         lock (_stateLock)
         {
             if (pieces == null)
@@ -246,6 +251,8 @@ public class PieceStorage : IPieceStorage, IDisposable
                 _verifiedPieces[infoHash] = (bool[])pieces.Clone();
             }
         }
+
+        PublishPieceMapUpdatedSignalR(infoHash, pieces == null);
     }
 
     public int[] GetPieceStates(string infoHash, int pieceCount, double progress = 0.0, HashSet<int> activePieces = null)
@@ -532,12 +539,17 @@ public class PieceStorage : IPieceStorage, IDisposable
 
     private void PublishPieceMapClearedSignalR(string infoHash)
     {
+        PublishPieceMapUpdatedSignalR(infoHash, cleared: true);
+    }
+
+    private void PublishPieceMapUpdatedSignalR(string infoHash, bool cleared)
+    {
         if (_signalRBroadcaster == null)
         {
             return;
         }
 
-        PublishPieceSignalR(infoHash, new PieceMapUpdatedMessage(infoHash));
+        PublishPieceSignalR(infoHash, new PieceMapUpdatedMessage(infoHash, cleared));
     }
 
     private int? ResolveTorrentId(string infoHash)
