@@ -33,6 +33,7 @@ describe("SignalRProvider: isHandledByNamedEvent", () => {
     assert.equal(isHandledByNamedEvent("Task"), true);
     assert.equal(isHandledByNamedEvent("TaskStarted"), true);
     assert.equal(isHandledByNamedEvent("TaskCompleted"), true);
+    assert.equal(isHandledByNamedEvent("TaskFailed"), true);
 
     // Automation events
     assert.equal(isHandledByNamedEvent("Automation"), true);
@@ -64,6 +65,13 @@ describe("SignalRProvider: configuration maps", () => {
     assert.ok(EVENT_INVALIDATION_MAP.HealthCheckCompleted);
     assert.ok(EVENT_INVALIDATION_MAP.TrackerUpdated);
     assert.ok(EVENT_INVALIDATION_MAP.TrackerAnnounced);
+    assert.ok(EVENT_INVALIDATION_MAP.TaskFailed);
+
+    const taskFailedKeys = EVENT_INVALIDATION_MAP.TaskFailed.map((k) =>
+      k.join("/"),
+    );
+    assert.ok(taskFailedKeys.includes("system/tasks"));
+    assert.ok(taskFailedKeys.includes("system/status"));
 
     // Ensure torrent events invalidate torrents and trackerboost
     const torrentUpdatedKeys = EVENT_INVALIDATION_MAP.TorrentUpdated.map((k) =>

@@ -100,6 +100,18 @@ export const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
     ["system", "tasks"],
     ["system", "status"],
   ],
+  TaskFailed: [
+    ["system", "tasks"],
+    ["system", "status"],
+  ],
+  task_failed: [
+    ["system", "tasks"],
+    ["system", "status"],
+  ],
+  taskFailed: [
+    ["system", "tasks"],
+    ["system", "status"],
+  ],
   task_progress: [
     ["system", "tasks"],
     ["system", "status"],
