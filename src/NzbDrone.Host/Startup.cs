@@ -337,21 +337,17 @@ public class Startup
     {
         app.UseExceptionHandler();
 
+        var configFileProvider = app.Services.GetRequiredService<IConfigFileProvider>();
+
         var forwardedHeadersOptions = new ForwardedHeadersOptions
         {
             ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
             ForwardLimit = null,
         };
-#pragma warning disable ASPDEPR005
-        forwardedHeadersOptions.KnownNetworks.Clear();
-#pragma warning restore ASPDEPR005
-        forwardedHeadersOptions.KnownIPNetworks.Clear();
-        forwardedHeadersOptions.KnownProxies.Clear();
+        ForwardedHeadersSecurityHelper.ApplyTrustedProxyConfiguration(forwardedHeadersOptions, configFileProvider.TrustedProxies);
         app.UseForwardedHeaders(forwardedHeadersOptions);
 
         app.UseResponseCompression();
-
-        var configFileProvider = app.Services.GetRequiredService<IConfigFileProvider>();
 
         app.UseCors();
 
