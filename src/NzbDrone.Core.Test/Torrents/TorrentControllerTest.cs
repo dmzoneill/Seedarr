@@ -212,6 +212,7 @@ public class TorrentControllerTest
             Id = 50,
             Name = "Existing",
             InfoHash = infoHash,
+            IsPrivate = false,
         };
 
         _torrentService.GetByInfoHash(infoHash).Returns(existing);
@@ -232,6 +233,68 @@ public class TorrentControllerTest
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
         _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 50 && t.Url == "http://new-tracker.com/announce"));
+    }
+
+    [Test]
+    public void Create_with_existing_private_torrent_rejects_new_trackers()
+    {
+        const string infoHash = "abcdef0123456789abcdef0123456789abcdef01";
+        var existing = new Torrent
+        {
+            Id = 51,
+            Name = "Private Existing",
+            InfoHash = infoHash,
+            IsPrivate = true,
+        };
+
+        _torrentService.GetByInfoHash(infoHash).Returns(existing);
+        _trackerEntryService.GetByTorrentId(51).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 51, Url = "http://private-tracker.com/announce", Tier = 0 }
+        });
+
+        var resource = new TorrentResource
+        {
+            Name = "Private Existing",
+            InfoHash = infoHash,
+            Trackers = new List<string> { "http://evil.example/announce" }
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _trackerEntryService.DidNotReceive().Add(Arg.Any<TrackerEntry>());
+    }
+
+    [Test]
+    public void Create_with_existing_private_torrent_allows_duplicate_infohash_without_new_trackers()
+    {
+        const string infoHash = "fedcba0987654321fedcba0987654321fedcba09";
+        var existing = new Torrent
+        {
+            Id = 52,
+            Name = "Private Existing",
+            InfoHash = infoHash,
+            IsPrivate = true,
+        };
+
+        _torrentService.GetByInfoHash(infoHash).Returns(existing);
+        _trackerEntryService.GetByTorrentId(52).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 52, Url = "http://private-tracker.com/announce", Tier = 0 }
+        });
+
+        var resource = new TorrentResource
+        {
+            Name = "Private Existing",
+            InfoHash = infoHash,
+            Trackers = new List<string> { "http://private-tracker.com/announce" }
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _trackerEntryService.DidNotReceive().Add(Arg.Any<TrackerEntry>());
     }
 
     [TestCase("ftp://tracker.example.com/announce")]
