@@ -58,10 +58,7 @@ public class DownloadClientController : Controller
             return BadRequest(validationError);
         }
 
-        if (!string.IsNullOrWhiteSpace(definition.ClientType))
-        {
-            definition.ClientType = NormalizeClientType(definition.ClientType);
-        }
+        definition.ClientType = NormalizeClientType(definition.ClientType);
 
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
@@ -99,10 +96,7 @@ public class DownloadClientController : Controller
 
         definition.Id = id;
 
-        if (!string.IsNullOrWhiteSpace(definition.ClientType))
-        {
-            definition.ClientType = NormalizeClientType(definition.ClientType);
-        }
+        definition.ClientType = NormalizeClientType(definition.ClientType);
 
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
@@ -500,6 +494,17 @@ public class DownloadClientController : Controller
         if (definition.Port < 1 || definition.Port > 65535)
         {
             return "Port must be between 1 and 65535";
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.ClientType))
+        {
+            return "ClientType is required";
+        }
+
+        var normalizedClientType = NormalizeClientType(definition.ClientType);
+        if (normalizedClientType != "QBitTorrent" && normalizedClientType != "Transmission" && normalizedClientType != "Deluge")
+        {
+            return "ClientType must be QBitTorrent, Transmission, or Deluge";
         }
 
         return null;
