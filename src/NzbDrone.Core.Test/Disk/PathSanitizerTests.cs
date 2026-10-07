@@ -115,6 +115,20 @@ public class PathSanitizerTests
         Assert.That(PathSanitizer.SanitizeRelativePath(input), Is.EqualTo(expected));
     }
 
+    [TestCase("Season 1/../Season 2/Episode.mkv", "Season 2", "Episode.mkv")]
+    [TestCase("/downloads/foo/../bar", "downloads", "bar")]
+    [TestCase("foo/bar/../baz/qux", "foo", "baz", "qux")]
+    public void SanitizePath_collapses_parent_segments(string input, params string[] expectedSegments)
+    {
+        var sep = System.IO.Path.DirectorySeparatorChar;
+        var rooted = input.StartsWith('/') || input.StartsWith('\\');
+        var expected = rooted
+            ? sep + string.Join(sep, expectedSegments)
+            : string.Join(sep, expectedSegments);
+
+        Assert.That(PathSanitizer.SanitizePath(input), Is.EqualTo(expected));
+    }
+
     [Test]
     public void IsPathUnderRoot_allows_paths_inside_root()
     {

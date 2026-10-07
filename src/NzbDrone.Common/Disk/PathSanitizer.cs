@@ -220,12 +220,24 @@ public static class PathSanitizer
                 continue;
             }
 
-            if (segment == "." || segment == "..")
+            var trimmed = segment.Trim();
+            if (string.IsNullOrEmpty(trimmed) || trimmed == ".")
             {
                 continue;
             }
 
-            var sanitized = SanitizeFileName(segment);
+            if (trimmed == "..")
+            {
+                var minCount = isWindowsRooted ? 1 : 0;
+                if (sanitizedSegments.Count > minCount)
+                {
+                    sanitizedSegments.RemoveAt(sanitizedSegments.Count - 1);
+                }
+
+                continue;
+            }
+
+            var sanitized = SanitizeFileName(trimmed);
             if (!string.IsNullOrEmpty(sanitized))
             {
                 sanitizedSegments.Add(sanitized);
