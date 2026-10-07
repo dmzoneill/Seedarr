@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Torrents;
@@ -9,9 +10,9 @@ namespace NzbDrone.Core.Indexers;
 
 public interface IRssSyncService
 {
-    int Sync(bool isManual = false);
+    int Sync(bool isManual = false, CancellationToken cancellationToken = default);
 
-    Task<int> SyncAsync(bool isManual = false);
+    Task<int> SyncAsync(bool isManual = false, CancellationToken cancellationToken = default);
 
     bool MatchesRule(RssRule rule, ReleaseInfo release, DateTime? now = null);
 
@@ -309,10 +310,11 @@ public class RssSyncService : IRssSyncService
         return indexers.Where(i => ShouldSyncIndexer(i, isManual, now)).ToList();
     }
 
-    public int Sync(bool isManual = false)
+    public int Sync(bool isManual = false, CancellationToken cancellationToken = default)
     {
         lock (_syncLock)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             _logger.Info("Starting RSS sync cycle (manual: {0})", isManual);
 
             var indexers = (_indexerFactory?.All() ?? _indexerRepository?.All())?.ToList();
@@ -341,6 +343,7 @@ public class RssSyncService : IRssSyncService
 
             foreach (var indexerDef in eligibleIndexers)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     var indexer = GetIndexerInstance(indexerDef);
@@ -388,6 +391,7 @@ public class RssSyncService : IRssSyncService
 
                     foreach (var release in newReleases)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (release == null)
                         {
                             continue;
@@ -470,9 +474,9 @@ public class RssSyncService : IRssSyncService
         }
     }
 
-    public Task<int> SyncAsync(bool isManual = false)
+    public Task<int> SyncAsync(bool isManual = false, CancellationToken cancellationToken = default)
     {
-        return Task.Run(() => Sync(isManual));
+        return Task.Run(() => Sync(isManual, cancellationToken), cancellationToken);
     }
 
     private IIndexer GetIndexerInstance(IndexerDefinition definition)

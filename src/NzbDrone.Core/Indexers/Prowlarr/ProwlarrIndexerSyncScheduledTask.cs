@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Lifecycle;
@@ -20,11 +21,13 @@ public class ProwlarrIndexerSyncScheduledTask : IScheduledTask, IExecute<SyncPro
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.Info("Starting scheduled Prowlarr indexer synchronization");
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var result = _syncService.Sync();
             if (result != null)
             {

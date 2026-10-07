@@ -1,3 +1,4 @@
+using System.Threading;
 using NzbDrone.Core.Jobs;
 
 namespace NzbDrone.Core.Authentication;
@@ -13,8 +14,9 @@ public class LoginRateLimiterCleanupTask : IScheduledTask
         _loginRateLimiter = loginRateLimiter;
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _loginRateLimiter.ClearExpired();
     }
 }

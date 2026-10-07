@@ -4,9 +4,12 @@ namespace NzbDrone.Core.Jobs;
 
 public interface IJob
 {
-    void Execute();
+    void Execute(CancellationToken cancellationToken);
 
-    void Execute(CancellationToken cancellationToken) => Execute();
+    void Execute()
+    {
+        Execute(CancellationToken.None);
+    }
 }
 
 public interface IScheduledTask : IJob

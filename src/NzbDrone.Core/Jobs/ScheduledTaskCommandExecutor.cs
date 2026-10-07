@@ -49,7 +49,7 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
 
         _logger.Info("Executing scheduled task via command queue: {0}", command.TaskName);
         var startTime = DateTime.UtcNow;
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         _taskManager.RecordTaskStarted(command.TaskName, cts, null, command.TriggerSource);
 
         var signalRTypeName = ScheduledTaskTypeNameResolver.ResolveForSignalR(command.TaskName, taskInstance, _scheduledTasks);

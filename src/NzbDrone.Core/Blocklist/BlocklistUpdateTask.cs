@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Jobs;
@@ -37,8 +38,9 @@ public class BlocklistUpdateTask : IScheduledTask, IExecute<BlocklistUpdateComma
         _logger = logger ?? LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_configService != null && !_configService.BlocklistEnabled)
         {
             _logger.Debug("Blocklist update skipped: blocklist is disabled");
@@ -52,7 +54,7 @@ public class BlocklistUpdateTask : IScheduledTask, IExecute<BlocklistUpdateComma
         }
 
         _logger.Info("Executing scheduled blocklist update");
-        RunBlocklistSync(force: false, failureLogMessage: "Scheduled blocklist update failed");
+        RunBlocklistSync(force: false, failureLogMessage: "Scheduled blocklist update failed", cancellationToken);
     }
 
     public void Execute(BlocklistUpdateCommand command)
@@ -71,14 +73,15 @@ public class BlocklistUpdateTask : IScheduledTask, IExecute<BlocklistUpdateComma
         }
 
         _logger.Info("Executing blocklist update via command queue (force: {0})", force);
-        RunBlocklistSync(force: force, failureLogMessage: "Blocklist update command failed");
+        RunBlocklistSync(force: force, failureLogMessage: "Blocklist update command failed", CancellationToken.None);
     }
 
-    private void RunBlocklistSync(bool force, string failureLogMessage)
+    private void RunBlocklistSync(bool force, string failureLogMessage, CancellationToken cancellationToken)
     {
         try
         {
-            var result = _syncService.SyncAsync(force: force).GetAwaiter().GetResult();
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = _syncService.SyncAsync(force: force, cancellationToken: cancellationToken).GetAwaiter().GetResult();
             if (result != null && !result.Success)
             {
                 _logger.Warn(

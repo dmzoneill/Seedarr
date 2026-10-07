@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Jobs;
@@ -27,8 +28,9 @@ public class DownloadHistoryCleanupTask : IScheduledTask
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             var retentionDays = _configService.HistoryRetentionDays;
@@ -41,6 +43,7 @@ public class DownloadHistoryCleanupTask : IScheduledTask
                 }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             _taskHistoryRepository?.PurgeOldHistory(100);
         }
         catch (Exception ex)

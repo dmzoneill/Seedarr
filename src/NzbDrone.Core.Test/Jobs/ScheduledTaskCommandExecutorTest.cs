@@ -20,8 +20,9 @@ public class ScheduledTaskCommandExecutorTest
         public int DefaultInterval => 15;
         public bool Executed { get; set; }
 
-        public void Execute()
+        public void Execute(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Executed = true;
         }
     }

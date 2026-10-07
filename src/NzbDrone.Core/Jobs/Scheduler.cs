@@ -133,7 +133,7 @@ public class Scheduler : BackgroundService
 
                         _logger.Debug("Executing scheduled task: {0}", next.TypeName);
                         var startTime = DateTime.UtcNow;
-                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                        var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                         cts.CancelAfter(TimeSpan.FromMinutes(10));
                         _taskManager.RecordTaskStarted(next.TypeName, cts, null, ScheduledTaskTriggerSource.Scheduler);
 

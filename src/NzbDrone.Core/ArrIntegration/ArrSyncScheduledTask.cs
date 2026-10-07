@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Jobs;
 
@@ -22,8 +23,9 @@ public class ArrSyncScheduledTask : IScheduledTask
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var connections = (_connectionFactory.All() ?? Enumerable.Empty<ArrConnectionDefinition>())
             .Where(c => c.Enable && c.SyncEnabled)
             .ToList();
@@ -38,6 +40,7 @@ public class ArrSyncScheduledTask : IScheduledTask
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var result = _arrSyncService.Sync();
             if (result != null)
             {

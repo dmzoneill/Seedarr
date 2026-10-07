@@ -17,11 +17,6 @@ public class TrackerScrapeJob : IScheduledTask
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
-    {
-        Execute(CancellationToken.None);
-    }
-
     public void Execute(CancellationToken cancellationToken)
     {
         _logger.Info("Executing scheduled tracker scrape task");

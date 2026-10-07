@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Jobs;
@@ -39,12 +40,13 @@ public class ArrWebhookMaintenanceTask : IScheduledTask, IHandle<ApplicationStar
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
-        var failed = RegisterAllWebhooks();
+        cancellationToken.ThrowIfCancellationRequested();
+        var failed = RegisterAllWebhooks(cancellationToken);
         if (failed.Count > 0)
         {
-            _ = Task.Run(async () => await RetryFailedConnectionsAsync(failed));
+            RetryFailedConnectionsAsync(failed, cancellationToken).GetAwaiter().GetResult();
         }
     }
 
@@ -60,7 +62,7 @@ public class ArrWebhookMaintenanceTask : IScheduledTask, IHandle<ApplicationStar
         });
     }
 
-    private List<ArrConnectionDefinition> RegisterAllWebhooks()
+    private List<ArrConnectionDefinition> RegisterAllWebhooks(CancellationToken cancellationToken = default)
     {
         var connections = _connectionFactory.All()
             .Where(c => c.Enable && c.WebhookEnabled)
@@ -79,6 +81,7 @@ public class ArrWebhookMaintenanceTask : IScheduledTask, IHandle<ApplicationStar
 
         foreach (var connection in connections)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 if (_webhookRegistration.RegisterWebhook(connection))
@@ -104,11 +107,12 @@ public class ArrWebhookMaintenanceTask : IScheduledTask, IHandle<ApplicationStar
         return failedList;
     }
 
-    private async Task RetryFailedConnectionsAsync(List<ArrConnectionDefinition> failedConnections)
+    private async Task RetryFailedConnectionsAsync(List<ArrConnectionDefinition> failedConnections, CancellationToken cancellationToken = default)
     {
         var currentFailed = failedConnections;
         foreach (var delay in RetryDelays)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 await DelayAsync(delay);
@@ -124,6 +128,7 @@ public class ArrWebhookMaintenanceTask : IScheduledTask, IHandle<ApplicationStar
             var nextFailed = new List<ArrConnectionDefinition>();
             foreach (var connection in currentFailed)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     if (_webhookRegistration.RegisterWebhook(connection))
