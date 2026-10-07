@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.Serializer;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Notifications;
 using Seedarr.Http;
 
@@ -29,17 +30,20 @@ public class NotificationController : Controller
     private readonly IWebhookDispatcher _webhookDispatcher;
     private readonly ICustomScriptService _customScriptService;
     private readonly INotificationFactory _notificationFactory;
+    private readonly IConfigService _configService;
 
     public NotificationController(
         INotificationRepository notificationRepository,
         IWebhookDispatcher webhookDispatcher,
         ICustomScriptService customScriptService,
-        INotificationFactory notificationFactory = null)
+        INotificationFactory notificationFactory = null,
+        IConfigService configService = null)
     {
         _notificationRepository = notificationRepository;
         _webhookDispatcher = webhookDispatcher;
         _customScriptService = customScriptService;
         _notificationFactory = notificationFactory;
+        _configService = configService;
     }
 
     /// <summary>
@@ -124,6 +128,12 @@ public class NotificationController : Controller
             return BadRequest(fallbackError);
         }
 
+        var customScriptError = ValidateCustomScriptSettings(resource.Implementation, resource.Settings);
+        if (customScriptError != null)
+        {
+            return BadRequest(customScriptError);
+        }
+
         var model = ToModel(resource);
         var created = _notificationRepository.Insert(model);
         return Ok(ToResource(created));
@@ -204,6 +214,12 @@ public class NotificationController : Controller
             existing.Settings,
             model.Implementation ?? existing.Implementation);
 
+        var customScriptError = ValidateCustomScriptSettings(model.Implementation, model.Settings);
+        if (customScriptError != null)
+        {
+            return BadRequest(customScriptError);
+        }
+
         _notificationRepository.Update(model);
         return Ok(ToResource(model));
     }
@@ -247,33 +263,15 @@ public class NotificationController : Controller
         return await TestInternal(item);
     }
 
-    private static readonly string[] AllowedScriptDirectories = OperatingSystem.IsWindows()
-        ? new[] { @"C:\Program Files\Seedarr\Scripts", @"C:\ProgramData\Seedarr\Scripts" }
-        : new[] { "/usr/local/bin", "/usr/bin", "/opt/seedarr/scripts", "/var/lib/seedarr/scripts", "/etc/seedarr/scripts" };
-
-    private static bool IsInAllowedDirectory(string fullPath)
+    private string ValidateCustomScriptSettings(string implementation, string settings)
     {
-        if (string.IsNullOrWhiteSpace(fullPath))
+        if (!string.Equals(implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
         {
-            return false;
+            return null;
         }
 
-        foreach (var dir in AllowedScriptDirectories)
-        {
-            var fullDir = Path.GetFullPath(dir);
-            if (!fullDir.EndsWith(Path.DirectorySeparatorChar.ToString()))
-            {
-                fullDir += Path.DirectorySeparatorChar;
-            }
-
-            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-            if (fullPath.StartsWith(fullDir, comparison) || string.Equals(fullPath, Path.GetFullPath(dir), comparison))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        var (scriptPath, _) = CustomScriptService.ParseSettings(settings);
+        return CustomScriptPathPolicy.ValidateAbsoluteScriptPath(scriptPath, _configService?.CustomScriptsDirectory);
     }
 
     /// <summary>
@@ -298,59 +296,18 @@ public class NotificationController : Controller
 
         if (string.Equals(resource.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
         {
+            var validationError = ValidateCustomScriptSettings(resource.Implementation, resource.Settings);
+            if (validationError != null)
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = validationError,
+                });
+            }
+
             var (scriptPath, _) = CustomScriptService.ParseSettings(resource.Settings);
-            if (string.IsNullOrWhiteSpace(scriptPath))
-            {
-                return Ok(new NotificationTestResult
-                {
-                    Success = false,
-                    Message = "Script path is required.",
-                });
-            }
-
-            if (scriptPath.Contains('\0') || scriptPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-            {
-                return Ok(new NotificationTestResult
-                {
-                    Success = false,
-                    Message = "Script path contains invalid characters.",
-                });
-            }
-
-            if (!Path.IsPathRooted(scriptPath))
-            {
-                return Ok(new NotificationTestResult
-                {
-                    Success = false,
-                    Message = "Script path must be an absolute path.",
-                });
-            }
-
             var fullPath = Path.GetFullPath(scriptPath);
-
-            var isSavedScript = false;
-            if (resource.Id > 0)
-            {
-                var existing = _notificationRepository.Get(resource.Id);
-                if (existing != null && string.Equals(existing.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
-                {
-                    var (savedPath, _) = CustomScriptService.ParseSettings(existing.Settings);
-                    if (string.Equals(savedPath, scriptPath, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                    {
-                        isSavedScript = true;
-                    }
-                }
-            }
-
-            if (!isSavedScript && !IsInAllowedDirectory(fullPath))
-            {
-                return Ok(new NotificationTestResult
-                {
-                    Success = false,
-                    Message = $"Custom script path '{fullPath}' is not permitted. Transient scripts must be located within authorized directories ({string.Join(", ", AllowedScriptDirectories)}).",
-                });
-            }
-
             if (!global::System.IO.File.Exists(fullPath))
             {
                 return Ok(new NotificationTestResult
@@ -462,30 +419,13 @@ public class NotificationController : Controller
         if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
         {
             var (scriptPath, scriptArgs) = CustomScriptService.ParseSettings(notif.Settings);
-            if (string.IsNullOrWhiteSpace(scriptPath))
+            var validationError = ValidateCustomScriptSettings(notif.Implementation, notif.Settings);
+            if (validationError != null)
             {
                 return Ok(new NotificationTestResult
                 {
                     Success = false,
-                    Message = "Script path is required.",
-                });
-            }
-
-            if (scriptPath.Contains('\0') || scriptPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-            {
-                return Ok(new NotificationTestResult
-                {
-                    Success = false,
-                    Message = "Script path contains invalid characters.",
-                });
-            }
-
-            if (!Path.IsPathRooted(scriptPath))
-            {
-                return Ok(new NotificationTestResult
-                {
-                    Success = false,
-                    Message = "Script path must be an absolute path.",
+                    Message = validationError,
                 });
             }
 

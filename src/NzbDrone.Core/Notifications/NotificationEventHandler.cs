@@ -321,6 +321,17 @@ public class NotificationEventHandler :
         if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
         {
             var (scriptPath, scriptArgs) = CustomScriptService.ParseSettings(notif.Settings);
+            var pathError = CustomScriptPathPolicy.ValidateAbsoluteScriptPath(scriptPath, _configService?.CustomScriptsDirectory);
+            if (pathError != null)
+            {
+                _logger.Warn(
+                    "Skipping CustomScript notification {0} (id {1}): {2}",
+                    notif.Name ?? notif.Implementation,
+                    notif.Id,
+                    pathError);
+                return false;
+            }
+
             return await _customScriptService.ExecuteScriptAsync(scriptPath, torrent, eventType, scriptArgs).ConfigureAwait(false);
         }
 

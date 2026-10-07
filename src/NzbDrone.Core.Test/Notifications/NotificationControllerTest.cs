@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Notifications;
 
 namespace NzbDrone.Core.Test.Notifications;
@@ -950,6 +951,47 @@ public class NotificationControllerTest
         Assert.That(testResult, Is.Not.Null);
         Assert.That(testResult.Success, Is.False);
         Assert.That(testResult.Message, Does.Contain("not permitted"));
+    }
+
+    [Test]
+    public void Create_CustomScript_should_reject_path_outside_authorized_directories()
+    {
+        var resource = new NotificationResource
+        {
+            Name = "Evil Script",
+            Implementation = "CustomScript",
+            OnGrab = true,
+            Settings = "{\"path\":\"/tmp/evil.sh\"}",
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value as string, Does.Contain("not permitted"));
+        _repository.DidNotReceive().Insert(Arg.Any<NotificationDefinition>());
+    }
+
+    [Test]
+    public async Task Test_by_id_CustomScript_should_fail_when_path_is_outside_authorized_directories()
+    {
+        _repository.Get(7).Returns(new NotificationDefinition
+        {
+            Id = 7,
+            Name = "Evil Script",
+            Implementation = "CustomScript",
+            Settings = "{\"path\":\"/tmp/evil.sh\"}",
+        });
+
+        var actionResult = await _controller.Test(7);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("not permitted"));
+        await _scriptService.DidNotReceive().ExecuteScriptAsync(Arg.Any<string>(), Arg.Any<Torrent>(), Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Test]
