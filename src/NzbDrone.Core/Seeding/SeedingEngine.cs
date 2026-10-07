@@ -789,8 +789,8 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             }
         }
 
-        var configuredMaxDl = _configService.MaxDownloadSpeedKbps > 0 ? _configService.MaxDownloadSpeedKbps * 1024L : 0;
-        var configuredMaxUl = _configService.MaxUploadSpeedKbps > 0 ? _configService.MaxUploadSpeedKbps * 1024L : 0;
+        var configuredMaxDl = SpeedLimitThresholds.EffectiveDownloadThresholdBps(_configService);
+        var configuredMaxUl = SpeedLimitThresholds.EffectiveUploadThresholdBps(_configService);
         var isSpeedExceeded = (configuredMaxDl > 0 && totalDlSpeed >= configuredMaxDl) || (configuredMaxUl > 0 && totalUlSpeed >= configuredMaxUl);
         if (isSpeedExceeded && !_speedThresholdExceededState)
         {

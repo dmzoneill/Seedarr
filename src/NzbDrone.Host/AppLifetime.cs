@@ -382,8 +382,8 @@ public class AppLifetime : IHostedService, IDisposable
 
                 if (_configService != null)
                 {
-                    var maxDl = _configService.MaxDownloadSpeedKbps > 0 ? _configService.MaxDownloadSpeedKbps * 1024L : 0;
-                    var maxUl = _configService.MaxUploadSpeedKbps > 0 ? _configService.MaxUploadSpeedKbps * 1024L : 0;
+                    var maxDl = SpeedLimitThresholds.EffectiveDownloadThresholdBps(_configService);
+                    var maxUl = SpeedLimitThresholds.EffectiveUploadThresholdBps(_configService);
                     var isExceeded = (maxDl > 0 && totalDownloadSpeed >= maxDl) || (maxUl > 0 && totalUploadSpeed >= maxUl);
 
                     if (isExceeded && !_speedThresholdExceededState)
