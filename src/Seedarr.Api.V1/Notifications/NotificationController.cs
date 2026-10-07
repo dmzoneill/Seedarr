@@ -725,7 +725,7 @@ public class NotificationController : Controller
 
                 if (IsSensitiveKey(key, isPushover))
                 {
-                    if (strValue == PasswordMask || strValue.Contains('*'))
+                    if (strValue == PasswordMask)
                     {
                         return true;
                     }
@@ -998,7 +998,7 @@ public class NotificationController : Controller
                         continue;
                     }
 
-                    if (string.IsNullOrWhiteSpace(incomingStr) || incomingStr == PasswordMask || incomingStr.Contains('*'))
+                    if (string.IsNullOrWhiteSpace(incomingStr) || incomingStr == PasswordMask)
                     {
                         incomingObj[key] = existingVal.DeepClone();
                     }

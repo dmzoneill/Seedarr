@@ -761,6 +761,42 @@ public class NotificationControllerTest
     }
 
     [Test]
+    public void Update_stores_password_containing_asterisk_when_explicitly_submitted()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Mail",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"server\":\"smtp.mail.com\",\"username\":\"user\",\"password\":\"plain\"}"
+        };
+        _repository.Get(1).Returns(existing);
+
+        var updateResource = new NotificationResource
+        {
+            Id = 1,
+            Name = "Mail",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"server\":\"smtp.mail.com\",\"username\":\"user\",\"password\":\"p*ssw0rd\"}"
+        };
+
+        var result = _controller.Update(1, updateResource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("p*ssw0rd") && !d.Settings.Contains("\"password\":\"plain\"")));
+    }
+
+    [Test]
+    public void SettingsContainMaskedSecrets_ignores_literal_asterisk_in_sensitive_password()
+    {
+        var settings = "{\"password\":\"p*ssw0rd\",\"server\":\"smtp.mail.com\"}";
+        Assert.That(NotificationController.SettingsContainMaskedSecrets(settings, "Email"), Is.False);
+    }
+
+    [Test]
     public void Update_preserves_existing_telegram_token_when_masked()
     {
         var existing = new NotificationDefinition
