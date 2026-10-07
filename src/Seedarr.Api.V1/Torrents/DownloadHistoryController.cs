@@ -144,20 +144,22 @@ public class DownloadHistoryController : Controller
     [HttpPost("enrich-all")]
     public ActionResult EnrichAll()
     {
-        if (_metadataEnricherService != null)
+        if (_metadataEnricherService == null)
         {
-            Task.Run(() =>
-            {
-                try
-                {
-                    _metadataEnricherService.EnrichAll();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Background history enrichment failed");
-                }
-            });
+            return BadRequest(new { message = "Metadata enricher service not available" });
         }
+
+        Task.Run(() =>
+        {
+            try
+            {
+                _metadataEnricherService.EnrichAll();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Background history enrichment failed");
+            }
+        });
 
         return Ok(new { message = "Enrichment started" });
     }
