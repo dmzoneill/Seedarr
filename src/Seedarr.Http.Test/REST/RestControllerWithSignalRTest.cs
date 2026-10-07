@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Datastore;
@@ -25,6 +26,8 @@ public class TestControllerWithSignalR : RestControllerWithSignalR<TestResource,
 {
     public int GetResourceByIdCallCount { get; private set; }
 
+    public ManualResetEventSlim BlockGetResourceById { get; set; }
+
     public TestControllerWithSignalR(IBroadcastSignalRMessage broadcaster, TimeSpan? coalesceWindow = null)
         : base(broadcaster, null, coalesceWindow)
     {
@@ -32,6 +35,11 @@ public class TestControllerWithSignalR : RestControllerWithSignalR<TestResource,
 
     protected override TestResource GetResourceById(TestModel model)
     {
+        if (BlockGetResourceById != null && model.Value == 2)
+        {
+            BlockGetResourceById.Wait();
+        }
+
         GetResourceByIdCallCount++;
         return new TestResource
         {
@@ -136,6 +144,37 @@ public class RestControllerWithSignalRTest
         _broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Action == ModelAction.Updated &&
             ((TestResource)m.Body).Id == 50));
+    }
+
+    [Test]
+    public void Coalesce_timer_does_not_emit_updated_after_deleted_while_broadcast_is_in_flight()
+    {
+        using var blockBroadcast = new ManualResetEventSlim(false);
+        _controller.BlockGetResourceById = blockBroadcast;
+
+        var first = new TestModel { Id = 50, Name = "Item", Value = 1 };
+        var second = new TestModel { Id = 50, Name = "Item", Value = 2 };
+        _controller.Handle(new ModelEvent<TestModel>(first, ModelAction.Updated));
+        _controller.Handle(new ModelEvent<TestModel>(second, ModelAction.Updated));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+
+        Thread.Sleep(250);
+
+        var deleteModel = new TestModel { Id = 50, Name = "DeletedItem", Value = 2 };
+        _controller.Handle(new ModelEvent<TestModel>(deleteModel, ModelAction.Deleted));
+
+        blockBroadcast.Set();
+        Thread.Sleep(100);
+
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 1));
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Deleted &&
+            ((TestResource)m.Body).Id == 50));
+        _broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 2));
     }
 
     [Test]

@@ -22,6 +22,8 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
     private readonly Dictionary<int, TModel> _pendingUpdates = new();
     private readonly Dictionary<int, DateTime> _lastBroadcastTimes = new();
     private readonly Dictionary<int, Timer> _pendingTimers = new();
+    private readonly Dictionary<int, ulong> _entityGenerations = new();
+    private readonly Dictionary<int, ulong> _pendingUpdateGenerations = new();
     private bool _disposed;
 
     protected RestControllerWithSignalR(IBroadcastSignalRMessage signalRBroadcaster)
@@ -77,16 +79,20 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         {
             lock (_syncLock)
             {
+                BumpEntityGeneration(entityId);
+
                 if (_pendingTimers.Remove(entityId, out var timer))
                 {
                     timer.Dispose();
                 }
 
                 _pendingUpdates.Remove(entityId);
+                _pendingUpdateGenerations.Remove(entityId);
 
                 if (message.Action == ModelAction.Deleted)
                 {
                     _lastBroadcastTimes.Remove(entityId);
+                    _entityGenerations.Remove(entityId);
                 }
                 else
                 {
@@ -119,6 +125,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
             else
             {
                 _pendingUpdates[entityId] = model;
+                _pendingUpdateGenerations[entityId] = GetEntityGeneration(entityId);
 
                 if (!_pendingTimers.ContainsKey(entityId))
                 {
@@ -142,7 +149,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
     [Microsoft.AspNetCore.Mvc.NonAction]
     public void Flush()
     {
-        List<TModel> toFlush;
+        List<(TModel Model, ulong Generation)> toFlush;
         lock (_syncLock)
         {
             foreach (var timer in _pendingTimers.Values)
@@ -152,19 +159,28 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
             _pendingTimers.Clear();
 
-            toFlush = new List<TModel>(_pendingUpdates.Values);
+            toFlush = new List<(TModel, ulong)>(_pendingUpdates.Count);
+            foreach (var kvp in _pendingUpdates)
+            {
+                var generation = _pendingUpdateGenerations.TryGetValue(kvp.Key, out var gen)
+                    ? gen
+                    : GetEntityGeneration(kvp.Key);
+                toFlush.Add((kvp.Value, generation));
+            }
+
             _pendingUpdates.Clear();
+            _pendingUpdateGenerations.Clear();
 
             var now = DateTime.UtcNow;
-            foreach (var item in toFlush)
+            foreach (var (item, _) in toFlush)
             {
                 _lastBroadcastTimes[item.Id] = now;
             }
         }
 
-        foreach (var model in toFlush)
+        foreach (var (model, generation) in toFlush)
         {
-            DispatchBroadcast(ModelAction.Updated, model);
+            DispatchBroadcast(ModelAction.Updated, model, generation);
         }
     }
 
@@ -187,6 +203,8 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
                 _pendingTimers.Clear();
                 _pendingUpdates.Clear();
                 _lastBroadcastTimes.Clear();
+                _pendingUpdateGenerations.Clear();
+                _entityGenerations.Clear();
             }
         }
 
@@ -216,6 +234,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         }
 
         TModel modelToBroadcast = null;
+        ulong generationAtQueue = 0;
         lock (_syncLock)
         {
             if (_pendingTimers.Remove(entityId, out var timer))
@@ -225,6 +244,10 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
             if (_pendingUpdates.Remove(entityId, out var model))
             {
+                generationAtQueue = _pendingUpdateGenerations.TryGetValue(entityId, out var gen)
+                    ? gen
+                    : GetEntityGeneration(entityId);
+                _pendingUpdateGenerations.Remove(entityId);
                 _lastBroadcastTimes[entityId] = DateTime.UtcNow;
                 modelToBroadcast = model;
             }
@@ -232,13 +255,37 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
         if (modelToBroadcast != null)
         {
-            DispatchBroadcast(ModelAction.Updated, modelToBroadcast);
+            DispatchBroadcast(ModelAction.Updated, modelToBroadcast, generationAtQueue);
         }
     }
 
-    private void DispatchBroadcast(ModelAction action, TModel model)
+    private ulong GetEntityGeneration(int entityId)
+    {
+        return _entityGenerations.TryGetValue(entityId, out var generation) ? generation : 0UL;
+    }
+
+    private void BumpEntityGeneration(int entityId)
+    {
+        _entityGenerations.TryGetValue(entityId, out var generation);
+        _entityGenerations[entityId] = generation + 1;
+    }
+
+    private bool IsPendingGenerationCurrent(int entityId, ulong generationAtQueue)
+    {
+        lock (_syncLock)
+        {
+            return GetEntityGeneration(entityId) == generationAtQueue;
+        }
+    }
+
+    private void DispatchBroadcast(ModelAction action, TModel model, ulong? pendingGeneration = null)
     {
         if (!_signalRBroadcaster.IsConnected)
+        {
+            return;
+        }
+
+        if (pendingGeneration.HasValue && !IsPendingGenerationCurrent(model.Id, pendingGeneration.Value))
         {
             return;
         }
@@ -246,6 +293,11 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         try
         {
             var resource = GetResourceById(model);
+            if (pendingGeneration.HasValue && !IsPendingGenerationCurrent(model.Id, pendingGeneration.Value))
+            {
+                return;
+            }
+
             if (resource != null)
             {
                 BroadcastResourceChange(action, resource);
