@@ -279,10 +279,10 @@ public class BackupServiceTest
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var filePath = Path.Combine(backupDir, "test.zip");
+        var filePath = Path.Combine(backupDir, "seedarr_backup_test.zip");
         File.WriteAllText(filePath, "content");
 
-        _subject.DeleteBackup("test.zip");
+        _subject.DeleteBackup("seedarr_backup_test.zip");
 
         Assert.That(File.Exists(filePath), Is.False);
     }
@@ -300,12 +300,46 @@ public class BackupServiceTest
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        File.WriteAllText(Path.Combine(backupDir, "test.zip"), "content");
+        File.WriteAllText(Path.Combine(backupDir, "seedarr_backup_test.zip"), "content");
 
-        using var result = _subject.GetBackupStream("test.zip");
+        using var result = _subject.GetBackupStream("seedarr_backup_test.zip");
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.CanRead, Is.True);
+    }
+
+
+    [Test]
+    public void RestoreBackup_should_reject_unmanaged_backup_file_name()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        File.WriteAllText(Path.Combine(backupDir, "manual_import.zip"), "content");
+
+        Assert.Throws<FileNotFoundException>(() => _subject.RestoreBackup("manual_import.zip"));
+    }
+
+    [Test]
+    public void GetBackupStream_should_return_null_for_unmanaged_backup_file_name()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        File.WriteAllText(Path.Combine(backupDir, "manual_import.zip"), "content");
+
+        Assert.That(_subject.GetBackupStream("manual_import.zip"), Is.Null);
+    }
+
+    [Test]
+    public void DeleteBackup_should_ignore_unmanaged_backup_file_name()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var orphanPath = Path.Combine(backupDir, "manual_import.zip");
+        File.WriteAllText(orphanPath, "content");
+
+        _subject.DeleteBackup("manual_import.zip");
+
+        Assert.That(File.Exists(orphanPath), Is.True);
     }
 
     [Test]
@@ -319,7 +353,7 @@ public class BackupServiceTest
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var backupPath = Path.Combine(backupDir, "restore_test.zip");
+        var backupPath = Path.Combine(backupDir, "seedarr_backup_seedarr_backup_restore_test.zip");
 
         var dbBytes = CreateValidSqliteDatabaseBytes();
 
@@ -330,7 +364,7 @@ public class BackupServiceTest
             stream.Write(dbBytes, 0, dbBytes.Length);
         }
 
-        _subject.RestoreBackup("restore_test.zip");
+        _subject.RestoreBackup("seedarr_backup_seedarr_backup_restore_test.zip");
 
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
         Assert.That(File.Exists(dbRestorePath), Is.True);
@@ -342,7 +376,7 @@ public class BackupServiceTest
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var backupPath = Path.Combine(backupDir, "restore_small.zip");
+        var backupPath = Path.Combine(backupDir, "seedarr_backup_seedarr_backup_restore_small.zip");
 
         using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
         {
@@ -351,7 +385,7 @@ public class BackupServiceTest
             stream.Write(new byte[50]);
         }
 
-        Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("restore_small.zip"));
+        Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("seedarr_backup_seedarr_backup_restore_small.zip"));
 
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
         Assert.That(File.Exists(dbRestorePath), Is.False);
@@ -362,7 +396,7 @@ public class BackupServiceTest
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var backupPath = Path.Combine(backupDir, "restore_corrupt_header.zip");
+        var backupPath = Path.Combine(backupDir, "seedarr_backup_seedarr_backup_restore_corrupt_header.zip");
 
         var corruptBytes = new byte[512];
         var invalidHeader = System.Text.Encoding.ASCII.GetBytes("Corrupt format 1\0");
@@ -375,7 +409,7 @@ public class BackupServiceTest
             stream.Write(corruptBytes, 0, corruptBytes.Length);
         }
 
-        Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("restore_corrupt_header.zip"));
+        Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("seedarr_backup_seedarr_backup_restore_corrupt_header.zip"));
 
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
         Assert.That(File.Exists(dbRestorePath), Is.False);
@@ -387,7 +421,7 @@ public class BackupServiceTest
         _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var backupPath = Path.Combine(backupDir, "restore_postgres_test.zip");
+        var backupPath = Path.Combine(backupDir, "seedarr_backup_seedarr_backup_restore_postgres_test.zip");
 
         using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
         {
@@ -396,7 +430,7 @@ public class BackupServiceTest
             writer.Write("<Config><Port>8989</Port></Config>");
         }
 
-        _subject.RestoreBackup("restore_postgres_test.zip");
+        _subject.RestoreBackup("seedarr_backup_seedarr_backup_restore_postgres_test.zip");
 
         var configPath = Path.Combine(_tempDir, "config.xml");
         var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
@@ -414,7 +448,7 @@ public class BackupServiceTest
         _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var backupPath = Path.Combine(backupDir, "restore_config_stage_test.zip");
+        var backupPath = Path.Combine(backupDir, "seedarr_backup_seedarr_backup_restore_config_stage_test.zip");
 
         var configPath = Path.Combine(_tempDir, "config.xml");
         File.WriteAllText(configPath, "<Config><Port>8080</Port></Config>");
@@ -426,7 +460,7 @@ public class BackupServiceTest
             writer.Write("<Config><Port>9090</Port></Config>");
         }
 
-        _subject.RestoreBackup("restore_config_stage_test.zip");
+        _subject.RestoreBackup("seedarr_backup_seedarr_backup_restore_config_stage_test.zip");
 
         var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
 
@@ -441,7 +475,7 @@ public class BackupServiceTest
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var backupPath = Path.Combine(backupDir, "restore_both_test.zip");
+        var backupPath = Path.Combine(backupDir, "seedarr_backup_seedarr_backup_restore_both_test.zip");
 
         var dbBytes = CreateValidSqliteDatabaseBytes();
 
@@ -463,7 +497,7 @@ public class BackupServiceTest
         var configPath = Path.Combine(_tempDir, "config.xml");
         File.WriteAllText(configPath, "<Config><ApiKey>original-key</ApiKey></Config>");
 
-        _subject.RestoreBackup("restore_both_test.zip");
+        _subject.RestoreBackup("seedarr_backup_seedarr_backup_restore_both_test.zip");
 
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
         var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
@@ -736,7 +770,7 @@ public class BackupServiceTest
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var backupPath = Path.Combine(backupDir, "restore_missing_db.zip");
+        var backupPath = Path.Combine(backupDir, "seedarr_backup_seedarr_backup_restore_missing_db.zip");
 
         using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
         {
@@ -745,7 +779,7 @@ public class BackupServiceTest
             writer.Write("<Config />");
         }
 
-        var ex = Assert.Throws<InvalidOperationException>(() => _subject.RestoreBackup("restore_missing_db.zip"));
+        var ex = Assert.Throws<InvalidOperationException>(() => _subject.RestoreBackup("seedarr_backup_seedarr_backup_restore_missing_db.zip"));
         Assert.That(ex.Message, Is.EqualTo("Database file not found in backup archive"));
 
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
@@ -757,7 +791,7 @@ public class BackupServiceTest
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var backupPath = Path.Combine(backupDir, "restore_bad_header.zip");
+        var backupPath = Path.Combine(backupDir, "seedarr_backup_seedarr_backup_restore_bad_header.zip");
 
         var badHeaderBytes = new byte[512];
         var badHeader = System.Text.Encoding.ASCII.GetBytes("SQLite format 3\xFF");
@@ -770,7 +804,7 @@ public class BackupServiceTest
             stream.Write(badHeaderBytes, 0, badHeaderBytes.Length);
         }
 
-        var ex = Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("restore_bad_header.zip"));
+        var ex = Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("seedarr_backup_seedarr_backup_restore_bad_header.zip"));
         Assert.That(ex.Message, Does.Contain("does not contain a valid SQLite database header"));
 
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
@@ -782,7 +816,7 @@ public class BackupServiceTest
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
-        var backupPath = Path.Combine(backupDir, "restore_corrupted_integrity.zip");
+        var backupPath = Path.Combine(backupDir, "seedarr_backup_seedarr_backup_restore_corrupted_integrity.zip");
 
         var validDbBytes = CreateValidSqliteDatabaseBytes();
         for (var i = 100; i < 200 && i < validDbBytes.Length; i++)
@@ -797,7 +831,7 @@ public class BackupServiceTest
             stream.Write(validDbBytes, 0, validDbBytes.Length);
         }
 
-        var ex = Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("restore_corrupted_integrity.zip"));
+        var ex = Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("seedarr_backup_seedarr_backup_restore_corrupted_integrity.zip"));
         Assert.That(ex.Message, Does.Contain("SQLite integrity check failed"));
 
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
