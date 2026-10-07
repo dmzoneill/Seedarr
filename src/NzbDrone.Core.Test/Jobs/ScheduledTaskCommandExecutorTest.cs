@@ -37,6 +37,17 @@ public class ScheduledTaskCommandExecutorTest
         }
     }
 
+    private class FailingTask : IScheduledTask
+    {
+        public int DefaultInterval => 15;
+        public const string FailureMessage = "simulated task fault";
+
+        public void Execute(CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException(FailureMessage);
+        }
+    }
+
     private static string GetBodyTypeName(object body)
     {
         return body?.GetType().GetProperty("TypeName")?.GetValue(body) as string;
@@ -158,6 +169,39 @@ public class ScheduledTaskCommandExecutorTest
 
         broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskStarted"));
         broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskFailed"));
+        broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskCompleted"));
+    }
+
+    [Test]
+    public void Execute_should_rethrow_and_record_failure_when_task_throws()
+    {
+        var failingTask = new FailingTask();
+        var subject = new ScheduledTaskCommandExecutor(new[] { failingTask }, _taskManager);
+        var command = new ScheduledTaskCommand { TaskName = typeof(FailingTask).FullName };
+
+        Assert.Throws<InvalidOperationException>(() => subject.Execute(command));
+
+        _taskManager.Received(1).RecordTaskFailed(
+            typeof(FailingTask).FullName,
+            Arg.Any<DateTime>(),
+            Arg.Any<InvalidOperationException>(),
+            Arg.Any<ScheduledTaskTriggerSource?>());
+    }
+
+    [Test]
+    public void Execute_should_broadcast_TaskFailed_not_TaskCompleted_when_task_throws()
+    {
+        var failingTask = new FailingTask();
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var subject = new ScheduledTaskCommandExecutor(new[] { failingTask }, _taskManager, broadcaster);
+        var command = new ScheduledTaskCommand { TaskName = typeof(FailingTask).FullName };
+
+        Assert.Throws<InvalidOperationException>(() => subject.Execute(command));
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskStarted"));
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TaskFailed" &&
+            m.Body.GetType().GetProperty("Error")?.GetValue(m.Body) as string == FailingTask.FailureMessage));
         broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskCompleted"));
     }
 }
