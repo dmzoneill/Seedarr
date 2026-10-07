@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading;
 using NSubstitute;
 using NUnit.Framework;
@@ -94,6 +95,44 @@ public class RestControllerWithSignalRTest
         _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Action == ModelAction.Updated &&
             ((TestResource)m.Body).Value == 9));
+    }
+
+    [Test]
+    public void Window_expiry_broadcasts_pending_coalesce_instead_of_stale_incoming_update()
+    {
+        const int entityId = 7;
+        var leading = new TestModel { Id = entityId, Name = "Item", Value = 1 };
+        _controller.Handle(new ModelEvent<TestModel>(leading, ModelAction.Updated));
+
+        var newerPending = new TestModel { Id = entityId, Name = "Item", Value = 2 };
+        _controller.Handle(new ModelEvent<TestModel>(newerPending, ModelAction.Updated));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+
+        ForceCoalesceWindowExpired(entityId);
+
+        var stale = new TestModel { Id = entityId, Name = "Item", Value = 1 };
+        _controller.Handle(new ModelEvent<TestModel>(stale, ModelAction.Updated));
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _broadcaster.Received(2).BroadcastMessage(Arg.Any<SignalRMessage>());
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 2));
+    }
+
+    private void ForceCoalesceWindowExpired(int entityId)
+    {
+        var controllerType = typeof(RestControllerWithSignalR<TestResource, TestModel>);
+        var syncLock = controllerType.GetField("_syncLock", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(_controller);
+        var lastBroadcastTimes = (Dictionary<int, DateTime>)controllerType
+            .GetField("_lastBroadcastTimes", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(_controller);
+
+        lock (syncLock)
+        {
+            lastBroadcastTimes[entityId] = DateTime.UtcNow - TimeSpan.FromHours(1);
+        }
     }
 
     [Test]
