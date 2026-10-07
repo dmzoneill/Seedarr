@@ -31,8 +31,10 @@ export interface PieceMapData {
 export interface PieceMapUpdatePayload {
   ranges?: number[][];
   pieceIndices?: number[];
+  pieceIndexes?: number[];
   pieceIndex?: number;
   bitfield?: string | Uint8Array;
+  cleared?: boolean;
   [key: string]: unknown;
 }
 
@@ -88,8 +90,23 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
     set((state) => {
       const prevData = state.pieceMaps[torrentId];
       const prevVersion = prevData?.version ?? 0;
+      const pieceIndices =
+        data?.pieceIndices ??
+        data?.pieceIndexes ??
+        (Array.isArray(data?.PieceIndexes)
+          ? (data.PieceIndexes as number[])
+          : undefined);
+      const pieceIndex =
+        typeof data?.pieceIndex === "number"
+          ? data.pieceIndex
+          : typeof data?.PieceIndex === "number"
+            ? (data.PieceIndex as number)
+            : undefined;
+      const cleared =
+        data?.cleared === true ||
+        (data as { Cleared?: boolean })?.Cleared === true;
 
-      if (data?.cleared === true) {
+      if (cleared) {
         return {
           pieceMaps: {
             ...state.pieceMaps,
@@ -114,16 +131,16 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
           }
         }
       }
-      if (Array.isArray(data?.pieceIndices)) {
-        for (let i = 0; i < data.pieceIndices.length; i++) {
-          const idx = data.pieceIndices[i];
+      if (Array.isArray(pieceIndices)) {
+        for (let i = 0; i < pieceIndices.length; i++) {
+          const idx = pieceIndices[i];
           if (typeof idx === "number" && idx > maxIdx) {
             maxIdx = idx;
           }
         }
       }
-      if (typeof data?.pieceIndex === "number" && data.pieceIndex > maxIdx) {
-        maxIdx = data.pieceIndex;
+      if (typeof pieceIndex === "number" && pieceIndex > maxIdx) {
+        maxIdx = pieceIndex;
       }
 
       const requiredBytes = maxIdx >= 0 ? (maxIdx >> 3) + 1 : 0;
@@ -165,11 +182,11 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
       if (Array.isArray(data?.ranges) && data.ranges.length > 0) {
         setPieceRangesInPlace(bitfield, data.ranges);
       }
-      if (Array.isArray(data?.pieceIndices) && data.pieceIndices.length > 0) {
-        setPieceBitsInPlace(bitfield, data.pieceIndices);
+      if (Array.isArray(pieceIndices) && pieceIndices.length > 0) {
+        setPieceBitsInPlace(bitfield, pieceIndices);
       }
-      if (typeof data?.pieceIndex === "number" && data.pieceIndex >= 0) {
-        setPieceBitInPlace(bitfield, data.pieceIndex);
+      if (typeof pieceIndex === "number" && pieceIndex >= 0) {
+        setPieceBitInPlace(bitfield, pieceIndex);
       }
 
       return {

@@ -47,6 +47,7 @@ public class PieceBatchCompletedMessage : SignalRMessage
             InfoHash,
             TorrentId = _torrentId,
             PieceIndexes,
+            PieceIndices = PieceIndexes,
             BytesDownloaded
         };
     }

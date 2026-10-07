@@ -812,6 +812,9 @@ public class SignalRMessageBroadcasterTest
 
         Assert.DoesNotThrow(() => JsonSerializer.Serialize(msg));
         Assert.DoesNotThrow(() => JsonSerializer.Serialize(msg.Body));
+
+        var bodyJson = JsonSerializer.Serialize(msg.Body);
+        Assert.That(bodyJson, Does.Contain("pieceIndices").Or.Contain("PieceIndices"));
     }
 
     [Test]
