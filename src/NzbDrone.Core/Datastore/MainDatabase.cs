@@ -271,7 +271,6 @@ public class MainDatabase : IMainDatabase
                 _logger.Info("SQLite auto_vacuum is not INCREMENTAL ({0}); converting database...", autoVacuum);
                 cmd.CommandText = "PRAGMA auto_vacuum = INCREMENTAL; VACUUM;";
                 cmd.ExecuteNonQuery();
-                return;
             }
 
             if (maxPages > 0)
