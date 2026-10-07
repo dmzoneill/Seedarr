@@ -87,6 +87,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         {
             lock (_syncLock)
             {
+                PruneStaleBroadcastTimes(DateTime.UtcNow);
                 BumpEntityGeneration(entityId);
 
                 if (_pendingTimers.Remove(entityId, out var timer))
