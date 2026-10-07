@@ -23,14 +23,17 @@ public sealed class FallbackProcessSession : ITerminalSession
     private byte[] _pendingChunk;
     private int _pendingOffset;
     private int _disposed;
+    private int _cols;
+    private int _rows;
 
     public int ProcessId => this._process.Id;
 
     public bool IsActive => this._disposed == 0 && !this._process.HasExited;
 
-    private FallbackProcessSession(Process process)
+    private FallbackProcessSession(Process process, int cols, int rows)
     {
         this._process = process;
+        (this._cols, this._rows) = FallbackTerminalGeometry.Clamp(cols, rows);
         this._inputStream = process.StandardInput.BaseStream;
         this._outputChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(500)
         {
@@ -66,11 +69,14 @@ public sealed class FallbackProcessSession : ITerminalSession
         }
 
         TerminalEnvironmentSanitizer.Sanitize(startInfo);
+        FallbackTerminalGeometry.ApplyToEnvironment(startInfo, cols, rows);
 
         var proc = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to launch fallback terminal process");
 
-        return new FallbackProcessSession(proc);
+        var session = new FallbackProcessSession(proc, cols, rows);
+        session.ApplyGeometryBestEffort();
+        return session;
     }
 
     public async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
@@ -128,7 +134,32 @@ public sealed class FallbackProcessSession : ITerminalSession
 
     public void Resize(int cols, int rows)
     {
-        // Standard process streams do not support TIOCSWINSZ
+        if (this._disposed != 0 || this._process.HasExited)
+        {
+            return;
+        }
+
+        (this._cols, this._rows) = FallbackTerminalGeometry.Clamp(cols, rows);
+        this.ApplyGeometryBestEffort();
+    }
+
+    private void ApplyGeometryBestEffort()
+    {
+        if (this._disposed != 0 || this._process.HasExited)
+        {
+            return;
+        }
+
+        try
+        {
+            var payload = FallbackTerminalGeometry.BuildResizePayload(this._cols, this._rows);
+            this._inputStream.Write(payload, 0, payload.Length);
+            this._inputStream.Flush();
+        }
+        catch
+        {
+            // Pipe broken or shell not ready
+        }
     }
 
     public void Kill()
