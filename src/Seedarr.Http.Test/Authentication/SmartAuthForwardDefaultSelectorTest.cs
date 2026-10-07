@@ -112,4 +112,25 @@ public class SmartAuthForwardDefaultSelectorTest
 
         Assert.That(scheme, Is.EqualTo(ForwardAuthOptions.DefaultScheme));
     }
+
+    [Test]
+    public void SelectScheme_WhenLoopbackForwardAuthHeadersWithoutTrustedProxies_DoesNotSelectForwardAuthScheme()
+    {
+        var forwardAuthIdp = new IdentityProviderDefinition
+        {
+            ProviderType = IdentityProviderType.ForwardAuth,
+            IsEnabled = true,
+            TrustedProxies = string.Empty,
+        };
+        _identityProviderRepository.GetEnabled().Returns(new[] { forwardAuthIdp });
+
+        var context = CreateContext();
+        context.Connection.RemoteIpAddress = IPAddress.Loopback;
+        context.Request.Headers["Remote-User"] = "attacker";
+        context.Request.Headers["Remote-Groups"] = "admin";
+
+        var scheme = SmartAuthForwardDefaultSelector.SelectScheme(context);
+
+        Assert.That(scheme, Is.EqualTo(ApiKeyAuthenticationOptions.DefaultScheme));
+    }
 }

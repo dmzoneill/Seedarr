@@ -41,6 +41,19 @@ public class ForwardAuthHandlerTest
         _loggerFactory = Substitute.For<ILoggerFactory>();
         _loggerFactory.CreateLogger(Arg.Any<string>()).Returns(Substitute.For<ILogger>());
         _encoder = UrlEncoder.Default;
+
+        EnableForwardAuthIdp("127.0.0.1,::1");
+    }
+
+    private void EnableForwardAuthIdp(string trustedProxies)
+    {
+        var idp = new IdentityProviderDefinition
+        {
+            ProviderType = IdentityProviderType.ForwardAuth,
+            IsEnabled = true,
+            TrustedProxies = trustedProxies,
+        };
+        _identityProviderRepository.GetEnabled().Returns(new[] { idp });
     }
 
     private async Task<AuthenticateResult> AuthenticateAsync(HttpContext context)
@@ -57,6 +70,38 @@ public class ForwardAuthHandlerTest
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = null;
         context.Request.Headers["X-Forwarded-User"] = "attacker";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.None, Is.True);
+        Assert.That(result.Succeeded, Is.False);
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenLoopbackWithForgedHeadersButNoTrustedProxies_ReturnsNoResult()
+    {
+        EnableForwardAuthIdp(string.Empty);
+
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
+        context.Request.Headers["Remote-User"] = "attacker";
+        context.Request.Headers["Remote-Groups"] = "admin";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.None, Is.True);
+        Assert.That(result.Succeeded, Is.False);
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenNoEnabledForwardAuthProvider_ReturnsNoResult()
+    {
+        _identityProviderRepository.GetEnabled().Returns(System.Array.Empty<IdentityProviderDefinition>());
+
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("10.0.0.2");
+        context.Request.Headers["X-Forwarded-User"] = "proxyuser";
+        _options.TrustedProxies = "10.0.0.2";
 
         var result = await AuthenticateAsync(context);
 
@@ -139,6 +184,7 @@ public class ForwardAuthHandlerTest
     [Test]
     public async Task HandleAuthenticateAsync_WhenRemoteIpMatchesOptionsTrustedProxies_Succeeds()
     {
+        EnableForwardAuthIdp("10.0.0.2");
         _options.TrustedProxies = "10.0.0.2";
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.Parse("10.0.0.2");
@@ -153,6 +199,7 @@ public class ForwardAuthHandlerTest
     [Test]
     public async Task HandleAuthenticateAsync_WhenRemoteIpMatchesConfigFileTrustedProxiesCidr_Succeeds()
     {
+        EnableForwardAuthIdp("172.16.0.0/12");
         _configFileProvider.TrustedProxies.Returns("172.16.0.0/12");
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.Parse("172.16.5.10");
@@ -167,6 +214,7 @@ public class ForwardAuthHandlerTest
     [Test]
     public async Task HandleAuthenticateAsync_WhenRemoteIpOutsideConfigFileTrustedProxiesCidr_ReturnsNoResult()
     {
+        EnableForwardAuthIdp("172.16.0.0/12");
         _configFileProvider.TrustedProxies.Returns("172.16.0.0/12");
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.Parse("172.32.1.1");
