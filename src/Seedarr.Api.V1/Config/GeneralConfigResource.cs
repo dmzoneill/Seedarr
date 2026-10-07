@@ -85,6 +85,7 @@ public static class GeneralConfigResourceMapper
     {
         var apiKey = fileProvider?.ApiKey;
         var maskedApiKey = GetMaskedApiKey(apiKey);
+        var maskedTmdbApiKey = GetMaskedApiKey(config?.TmdbApiKey);
 
         return new GeneralConfigResource
         {
@@ -117,7 +118,7 @@ public static class GeneralConfigResourceMapper
             AllowedOrigins = fileProvider?.AllowedOrigins ?? string.Empty,
             TrustedProxies = fileProvider?.TrustedProxies ?? string.Empty,
             TerminalAccessEnabled = fileProvider?.TerminalAccessEnabled ?? true,
-            TmdbApiKey = config?.TmdbApiKey,
+            TmdbApiKey = maskedTmdbApiKey,
         };
     }
 }
