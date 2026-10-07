@@ -414,6 +414,104 @@ public class NotificationControllerTest
     }
 
     [Test]
+    public void Create_with_masked_discord_webhook_and_id_zero_returns_bad_request()
+    {
+        var resource = new NotificationResource
+        {
+            Id = 0,
+            Name = "Discord Clone",
+            Implementation = "Discord",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://discord.com/api/webhooks/12345/********\",\"username\":\"Seedarr\"}"
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _repository.DidNotReceive().Insert(Arg.Any<NotificationDefinition>());
+    }
+
+    [Test]
+    public void Create_with_masked_password_and_id_zero_returns_bad_request()
+    {
+        var resource = new NotificationResource
+        {
+            Name = "Email Clone",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"server\":\"smtp.mail.com\",\"password\":\"********\"}"
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _repository.DidNotReceive().Insert(Arg.Any<NotificationDefinition>());
+    }
+
+    [Test]
+    public void Create_with_masked_settings_and_unknown_source_id_returns_bad_request()
+    {
+        _repository.Get(99).Returns((NotificationDefinition)null);
+
+        var resource = new NotificationResource
+        {
+            Id = 99,
+            Name = "Discord Copy",
+            Implementation = "Discord",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://discord.com/api/webhooks/12345/********\"}"
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _repository.DidNotReceive().Insert(Arg.Any<NotificationDefinition>());
+    }
+
+    [Test]
+    public void Create_with_masked_settings_and_valid_source_id_restores_secrets_and_inserts()
+    {
+        var source = new NotificationDefinition
+        {
+            Id = 3,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://discord.com/api/webhooks/12345/REAL_DISCORD_TOKEN\",\"username\":\"Seedarr\"}"
+        };
+        _repository.Get(3).Returns(source);
+        _repository.Insert(Arg.Any<NotificationDefinition>()).Returns(callInfo =>
+        {
+            var def = callInfo.Arg<NotificationDefinition>();
+            def.Id = 50;
+            return def;
+        });
+
+        var resource = new NotificationResource
+        {
+            Id = 3,
+            Name = "Discord Copy",
+            Implementation = "Discord",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://discord.com/api/webhooks/12345/********\",\"username\":\"Seedarr\"}"
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Insert(Arg.Is<NotificationDefinition>(d =>
+            d.Id == 0 && d.Name == "Discord Copy" && d.Settings.Contains("REAL_DISCORD_TOKEN")));
+    }
+
+    [Test]
+    public void SettingsContainMaskedSecrets_detects_password_mask_in_json()
+    {
+        var settings = "{\"token\":\"********\",\"chat_id\":\"123\"}";
+        Assert.That(NotificationController.SettingsContainMaskedSecrets(settings, "Telegram"), Is.True);
+        Assert.That(NotificationController.SettingsContainMaskedSecrets("{\"chat_id\":\"123\"}", "Telegram"), Is.False);
+    }
+
+    [Test]
     public void Create_saves_definition_and_returns_masked_resource()
     {
         var inputResource = new NotificationResource

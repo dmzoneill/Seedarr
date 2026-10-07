@@ -99,6 +99,24 @@ public class NotificationController : Controller
             return BadRequest("At least one notification trigger must be enabled");
         }
 
+        if (SettingsContainMaskedSecrets(resource.Settings, resource.Implementation))
+        {
+            if (resource.Id <= 0)
+            {
+                return BadRequest("Settings contain masked secrets; provide full credentials when creating a new notification.");
+            }
+
+            var source = _notificationRepository.Get(resource.Id);
+            if (source == null)
+            {
+                return BadRequest("Settings contain masked secrets; provide full credentials or a valid existing notification id to copy credentials from.");
+            }
+
+            resource.Settings = RestoreSecrets(resource.Settings, source.Settings, resource.Implementation ?? source.Implementation);
+        }
+
+        resource.Id = 0;
+
         var fallbackError = ValidateFallbackNotificationId(resource);
         if (fallbackError != null)
         {
@@ -627,6 +645,97 @@ public class NotificationController : Controller
         result = QueryParamPasswordRegex.Replace(result, $"${{1}}{PasswordMask}");
         result = UrlBasicAuthRegex.Replace(result, $"${{1}}{PasswordMask}${{3}}");
         return result;
+    }
+
+    public static bool SettingsContainMaskedSecrets(string settings, string implementation = null)
+    {
+        if (string.IsNullOrWhiteSpace(settings))
+        {
+            return false;
+        }
+
+        var trimmed = settings.Trim();
+        if (trimmed == PasswordMask)
+        {
+            return true;
+        }
+
+        if (trimmed.StartsWith('{'))
+        {
+            try
+            {
+                var node = JsonNode.Parse(trimmed);
+                if (node is JsonObject obj)
+                {
+                    return JsonObjectContainsMaskedSecrets(obj, implementation);
+                }
+            }
+            catch
+            {
+                // Fallback to string scan
+            }
+        }
+
+        return trimmed.Contains(PasswordMask, StringComparison.Ordinal) || trimmed.Contains('*');
+    }
+
+    private static bool JsonObjectContainsMaskedSecrets(JsonObject obj, string implementation)
+    {
+        var isPushover = string.Equals(implementation, "Pushover", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var (key, valueNode) in obj)
+        {
+            if (valueNode == null)
+            {
+                continue;
+            }
+
+            if (valueNode is JsonObject childObj)
+            {
+                if (JsonObjectContainsMaskedSecrets(childObj, implementation))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (valueNode is JsonArray childArr)
+            {
+                foreach (var element in childArr)
+                {
+                    if (element is JsonObject elementObj && JsonObjectContainsMaskedSecrets(elementObj, implementation))
+                    {
+                        return true;
+                    }
+                }
+
+                continue;
+            }
+
+            if (valueNode is JsonValue)
+            {
+                var strValue = valueNode.ToString();
+                if (string.IsNullOrEmpty(strValue))
+                {
+                    continue;
+                }
+
+                if (IsSensitiveKey(key, isPushover))
+                {
+                    if (strValue == PasswordMask || strValue.Contains('*'))
+                    {
+                        return true;
+                    }
+                }
+                else if (strValue.Contains('*'))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public static string RestoreSecrets(string incomingSettings, string existingSettings, string implementation = null)
