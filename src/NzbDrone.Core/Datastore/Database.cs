@@ -3,7 +3,7 @@ using System.Data;
 
 namespace NzbDrone.Core.Datastore;
 
-public class Database : IDatabase
+internal class Database : IDatabase
 {
     private readonly Func<IDbConnection> _connectionFactory;
 
