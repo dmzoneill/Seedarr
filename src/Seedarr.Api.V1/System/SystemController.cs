@@ -125,7 +125,7 @@ public class SystemController : ControllerBase
             AppDataPath = _appFolderInfo.AppDataFolder,
             IsDocker = isDocker,
             IsDebug = isDebug,
-            DatabaseVersion = dbType,
+            DatabaseVersion = GetDatabaseEngineVersion(),
             DatabaseType = dbType,
             DatabaseMigration = GetDatabaseMigrationVersion(),
             UptimeSeconds = (DateTime.UtcNow - StartTime).TotalSeconds,
@@ -148,6 +148,44 @@ public class SystemController : ControllerBase
             ContainerMemoryLimitBytes = containerMemoryLimitBytes,
             MemoryUsagePercentage = memoryUsagePercentage,
         });
+    }
+
+    private string GetDatabaseEngineVersion()
+    {
+        if (_mainDatabase == null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var conn = _mainDatabase.OpenConnection();
+            if (conn != null)
+            {
+                using var cmd = conn.CreateCommand();
+                if (cmd != null)
+                {
+                    cmd.CommandText = _mainDatabase.DatabaseType == DatabaseType.PostgreSQL
+                        ? "SHOW server_version"
+                        : "SELECT sqlite_version()";
+                    var result = cmd.ExecuteScalar();
+                    if (result != null && result != DBNull.Value)
+                    {
+                        var versionStr = result.ToString();
+                        if (!string.IsNullOrWhiteSpace(versionStr))
+                        {
+                            return versionStr.Trim();
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Uninitialized or unreachable database
+        }
+
+        return string.Empty;
     }
 
     private string GetDatabaseMigrationVersion()
