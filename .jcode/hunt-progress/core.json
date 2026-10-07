@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T00:45:00Z",
+  "updatedAt": "2026-10-07T01:00:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Authentication",
+  "currentSubfolder": "src/NzbDrone.Core/Datastore",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,14 +11,13 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents",
-    "completedAt": "2026-10-07T00:45:00Z",
+    "subfolder": "src/NzbDrone.Core/Authentication",
+    "completedAt": "2026-10-07T01:00:00Z",
     "issuesFiled": [
-      1287,
-      1288
+      1294
     ],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Torrents pass: static review of 64 files under Torrents/ (services, Merkle, Package, fastresume, import/watch folder, piece I/O). Filed #1287 (DownloadHistoryRepository case-sensitive InfoHash vs TorrentRepository), #1288 (TorrentEventLogService.FlushAsync races processor in-memory batch). Comment on #1043 for WatchFolder ProcessTorrentFile v1-only duplicate lookup. Deduped existing open issues including #948, #949, #962-#964, #1043-#1048, #1136-#1138, #1218-#1222, #1231-#1233, #1242-#1243, #1265, #1268. No dotnet build/test."
+    "note": "Authentication pass: static review of 16 files (IdentityProviderService/Repository, LoginRateLimiter, SessionRevocationService/Repository, cleanup task, models). Filed #1294 (RevokeSession in-memory update before repository Upsert). Deduped existing open issues including #976, #978-#979, #986-#987, #1058-#1064, #1144-#1146, #1160-#1161, #1193, #1240-#1241, #1269-#1270, #917, #1062. No dotnet build/test."
   }
 }
