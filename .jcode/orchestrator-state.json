@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:51:31Z",
+  "updatedAt": "2026-10-07T00:53:30Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,63 +14,62 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_d5125676",
+    "lastScheduleId": "sched_1dd9813e",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "walrus",
-      "issue": 1281,
-      "worktree": "../seedarr_worktrees/issue-1281",
+      "worker": "moose",
+      "issue": 1280,
+      "worktree": "../seedarr_worktrees/issue-1280",
       "area": "blocklist"
     },
     "host": {
       "status": "running",
-      "worker": "panther",
-      "issue": 1279,
-      "worktree": "../seedarr_worktrees/issue-1279",
-      "area": "common"
+      "worker": "koala",
+      "issue": 1275,
+      "worktree": "../seedarr_worktrees/issue-1275",
+      "area": "instrumentation"
     },
     "api": {
       "status": "running",
-      "worker": "eagle",
-      "issue": 1276,
-      "worktree": "../seedarr_worktrees/issue-1276",
-      "area": "downloadclients"
+      "worker": "crane",
+      "issue": 1271,
+      "worktree": "../seedarr_worktrees/issue-1271",
+      "area": "notifications"
     },
     "core-torrents": {
       "status": "running",
-      "worker": "bison",
-      "issue": 1283,
-      "worktree": "../seedarr_worktrees/issue-1283",
-      "area": "torrents"
+      "worker": "wolf",
+      "issue": 1270,
+      "worktree": "../seedarr_worktrees/issue-1270",
+      "area": "authentication"
     },
     "http": {
       "status": "running",
-      "worker": "sparrow",
-      "issue": 1286,
-      "worktree": "../seedarr_worktrees/issue-1286",
-      "area": "jobs"
+      "worker": "trout",
+      "issue": 1273,
+      "worktree": "../seedarr_worktrees/issue-1273",
+      "area": "datastore"
     }
   },
   "issueQueue": {
     "reservedComponents": [
       "blocklist",
-      "common",
-      "downloadclients",
-      "torrents",
-      "jobs"
+      "instrumentation",
+      "notifications",
+      "authentication",
+      "datastore"
     ],
     "nextCandidates": [
-      1280,
-      1275,
-      1274,
-      1273,
-      1271,
-      1270
+      1269,
+      1268,
+      1267,
+      1266,
+      1265
     ]
   },
-  "githubOpen": 400,
-  "lastMonitorNote": "fix monitor: batch #1145,#955,#1135,#1284,#1277 closed; rotated to #1281,#1279,#1276,#1283,#1286"
+  "githubOpen": 396,
+  "lastMonitorNote": "fix monitor: batch #1281,#1279,#1276,#1286,#1283 closed; rotated to #1280,#1275,#1271,#1270,#1273"
 }
