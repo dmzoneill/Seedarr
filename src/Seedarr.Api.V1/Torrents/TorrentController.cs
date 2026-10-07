@@ -527,6 +527,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
     [HttpPost("{torrentId:int}/files/{fileId:int}/priority")]
     [HttpPut("{torrentId:int}/files/{fileId:int}/priority")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult SetFilePriority(int torrentId, int fileId, [FromBody] SetFilePriorityRequest request = null, [FromQuery] int? priority = null)
     {
         var prio = request?.Priority ?? priority;
@@ -546,6 +547,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
     [HttpPost("{torrentId:int}/files/priorities")]
     [HttpPut("{torrentId:int}/files/priorities")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult SetFilePriorities(int torrentId, [FromBody] SetFilePrioritiesRequest request)
     {
         if (request?.Files == null || request.Files.Count == 0)
