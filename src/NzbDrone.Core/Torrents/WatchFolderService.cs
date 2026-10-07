@@ -495,6 +495,10 @@ public class WatchFolderService : BackgroundService
         catch (Exception ex)
         {
             _logger.Error(ex, "Error processing torrent file: {0}", fileName);
+            if (ShouldQuarantineProcessingFailure(ex))
+            {
+                MarkFileFailed(filePath);
+            }
         }
     }
 
@@ -615,7 +619,16 @@ public class WatchFolderService : BackgroundService
         catch (Exception ex)
         {
             _logger.Error(ex, "Error processing magnet file: {0}", fileName);
+            if (ShouldQuarantineProcessingFailure(ex))
+            {
+                MarkFileFailed(filePath);
+            }
         }
+    }
+
+    private static bool ShouldQuarantineProcessingFailure(Exception ex)
+    {
+        return ex is not IOException and not UnauthorizedAccessException;
     }
 
     private void HandlePostImport(string filePath, bool deleteAfterAdd)

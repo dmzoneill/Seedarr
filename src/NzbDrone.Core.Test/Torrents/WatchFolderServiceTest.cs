@@ -803,6 +803,53 @@ public class WatchFolderServiceTest
     }
 
     [Test]
+    public void ProcessTorrentFile_when_add_fails_should_rename_file_to_failed()
+    {
+        var torrentPath = Path.Combine(_tempDir, "add-fails.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "AddFails",
+            InfoHash = "addfail123",
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            Files = new List<ParsedTorrentFile>()
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.GetByInfoHash("addfail123").Returns((Torrent)null);
+        _torrentService.ExistsByInfoHash("addfail123").Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(_ => throw new InvalidOperationException("Simulated add failure"));
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, _tempDir });
+
+        Assert.That(File.Exists(torrentPath), Is.False);
+        Assert.That(File.Exists(torrentPath + ".failed"), Is.True);
+    }
+
+    [Test]
+    public void ProcessMagnetFile_when_add_fails_should_rename_file_to_failed()
+    {
+        var magnetPath = Path.Combine(_tempDir, "add-fails.magnet");
+        var magnetUri = "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&dn=AddFails";
+        File.WriteAllText(magnetPath, magnetUri);
+
+        _torrentService.GetByInfoHash("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").Returns((Torrent)null);
+        _torrentService.ExistsByInfoHash("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(_ => throw new InvalidOperationException("Simulated add failure"));
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessMagnetFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { magnetPath, _tempDir });
+
+        Assert.That(File.Exists(magnetPath), Is.False);
+        Assert.That(File.Exists(magnetPath + ".failed"), Is.True);
+    }
+
+    [Test]
     public void PeriodicScan_should_skip_imported_and_failed_files()
     {
         var watchDir = Path.Combine(_tempDir, "scan-watch");
