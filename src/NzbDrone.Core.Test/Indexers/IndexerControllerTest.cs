@@ -379,6 +379,31 @@ public class IndexerControllerTest
     }
 
     [Test]
+    public void Update_when_indexer_type_changes_with_stale_implementation_recomputes_implementation()
+    {
+        var existing = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "MyIndexer",
+            IndexerType = "Torznab",
+            Implementation = "TorznabIndexer",
+            Url = "http://8.8.8.8:9117",
+            ApiKey = "secret-key",
+        };
+        _indexerFactory.Get(1).Returns(existing);
+
+        using var doc = JsonDocument.Parse(
+            "{\"indexerType\":\"Newznab\",\"implementation\":\"TorznabIndexer\",\"url\":\"http://8.8.8.8:9117\"}");
+        var result = _controller.Update(1, doc.RootElement);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _indexerFactory.Received(1).Update(Arg.Is<IndexerDefinition>(d =>
+            d.IndexerType == "Newznab"
+            && d.Implementation == "NewznabIndexer"
+            && d.ApiKey == "secret-key"));
+    }
+
+    [Test]
     public void TestDirect_with_null_body_returns_bad_request()
     {
         var result = _controller.TestDirect(null);
