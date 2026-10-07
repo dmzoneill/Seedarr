@@ -28,7 +28,7 @@ public class FixTagIdsDefaultAndDownloadedBigint : NzbDroneMigrationBase
                     ALTER TABLE ""Torrents"" ALTER COLUMN ""TagIds"" TYPE text USING (
                         CASE
                             WHEN ""TagIds"" IS NULL OR ""TagIds""::text = '0' OR ""TagIds""::text = '' THEN '[]'
-                            ELSE ""TagIds""::text
+                            ELSE json_build_array(""TagIds"")::text
                         END
                     );
                 END IF;
@@ -39,7 +39,19 @@ public class FixTagIdsDefaultAndDownloadedBigint : NzbDroneMigrationBase
         IfDatabase("Postgres", "PostgreSQL")
             .Alter.Table("Torrents").AlterColumn("TagIds").AsString(int.MaxValue).Nullable().WithDefaultValue("[]");
 
-        // 4. On PostgreSQL, alter TrackerEntries.Downloaded from 32-bit integer to 64-bit bigint
+        // 4. Rewrite legacy scalar numeric TagIds (e.g. '5') to JSON arrays ('[5]')
+        if (Schema.Table("Torrents").Exists())
+        {
+            Execute.Sql("""
+                UPDATE "Torrents" SET "TagIds" = '[' || "TagIds" || ']'
+                WHERE "TagIds" IS NOT NULL
+                  AND "TagIds" != ''
+                  AND "TagIds" != '[]'
+                  AND "TagIds" NOT LIKE '[%';
+                """);
+        }
+
+        // 5. On PostgreSQL, alter TrackerEntries.Downloaded from 32-bit integer to 64-bit bigint
         IfDatabase("Postgres", "PostgreSQL")
             .Alter.Table("TrackerEntries").AlterColumn("Downloaded").AsInt64().NotNullable().WithDefaultValue(0);
     }

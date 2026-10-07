@@ -122,6 +122,32 @@ public class Migration69Test
     }
 
     [Test]
+    public void Migration_69_wraps_scalar_tag_ids_as_json_arrays()
+    {
+        var factory = new DbFactory();
+        var db = factory.Create(DatabaseType.SQLite, $"Data Source={_tempDbPath}");
+
+        using var conn = db.OpenConnection();
+
+        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\", \"TagIds\", \"DateAdded\") VALUES ('Tagged', 'hash_scalar_5', '5', '2026-01-01 00:00:00');");
+        conn.Execute("INSERT INTO \"Torrents\" (\"Name\", \"InfoHash\", \"TagIds\", \"DateAdded\") VALUES ('AlreadyJson', 'hash_json', '[10,20]', '2026-01-01 00:00:00');");
+
+        conn.Execute("""
+            UPDATE "Torrents" SET "TagIds" = '[' || "TagIds" || ']'
+            WHERE "TagIds" IS NOT NULL
+              AND "TagIds" != ''
+              AND "TagIds" != '[]'
+              AND "TagIds" NOT LIKE '[%';
+            """);
+
+        var scalar = conn.QuerySingle<Torrent>("SELECT * FROM \"Torrents\" WHERE \"InfoHash\" = 'hash_scalar_5'");
+        var json = conn.QuerySingle<Torrent>("SELECT * FROM \"Torrents\" WHERE \"InfoHash\" = 'hash_json'");
+
+        Assert.That(scalar.TagIds, Is.EqualTo(new[] { 5 }));
+        Assert.That(json.TagIds, Is.EqualTo(new[] { 10, 20 }));
+    }
+
+    [Test]
     public void TrackerEntry_downloaded_handles_values_exceeding_32bit_int_range()
     {
         var factory = new DbFactory();
