@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:23:50Z",
+  "updatedAt": "2026-10-07T01:25:31Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,43 +14,43 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_8aebb0b6",
+    "lastScheduleId": "sched_7e06f29a",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "hedgehog",
-      "issue": 1130,
-      "worktree": "../seedarr_worktrees/issue-1130",
+      "worker": "badger",
+      "issue": 1129,
+      "worktree": "../seedarr_worktrees/issue-1129",
       "area": "blocklist"
     },
     "host": {
       "status": "running",
-      "worker": "koala",
-      "issue": 1031,
-      "worktree": "../seedarr_worktrees/issue-1031",
+      "worker": "panther",
+      "issue": 1159,
+      "worktree": "../seedarr_worktrees/issue-1159",
       "area": "host"
     },
     "api": {
       "status": "running",
       "worker": "hawk",
-      "issue": 1134,
-      "worktree": "../seedarr_worktrees/issue-1134",
+      "issue": 1228,
+      "worktree": "../seedarr_worktrees/issue-1228",
       "area": "downloadclients"
     },
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "issue": 1189,
-      "worktree": "../seedarr_worktrees/issue-1189",
+      "issue": 1045,
+      "worktree": "../seedarr_worktrees/issue-1045",
       "area": "torrents"
     },
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "issue": 967,
-      "worktree": "../seedarr_worktrees/issue-967",
+      "issue": 965,
+      "worktree": "../seedarr_worktrees/issue-965",
       "area": "http"
     }
   },
@@ -66,12 +66,12 @@
     "nextCandidates": [
       1235,
       1214,
-      1045,
-      1228,
       1084,
-      1010
+      1010,
+      939,
+      1150
     ]
   },
-  "githubOpen": 330,
-  "lastMonitorNote": "fix monitor: all slots active; open 330; 0 restarts"
+  "githubOpen": 325,
+  "lastMonitorNote": "fix monitor: 5 closed; 5 dispatches; open 325"
 }
