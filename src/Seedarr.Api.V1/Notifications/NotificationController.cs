@@ -244,6 +244,20 @@ public class NotificationController : Controller
     [HttpDelete("{id:int}")]
     public ActionResult Delete(int id)
     {
+        var referencing = _notificationRepository.All()
+            ?.Where(n => n.FallbackNotificationId == id)
+            .ToList() ?? new List<NotificationDefinition>();
+
+        if (referencing.Count > 0)
+        {
+            foreach (var notification in referencing)
+            {
+                notification.FallbackNotificationId = null;
+            }
+
+            _notificationRepository.UpdateMany(referencing);
+        }
+
         _notificationRepository.Delete(id);
         return Ok();
     }
