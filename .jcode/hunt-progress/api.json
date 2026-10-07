@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T00:55:00Z",
+  "updatedAt": "2026-10-07T01:02:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Config",
+  "currentSubfolder": "src/Seedarr.Api.V1/System",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Automation",
-    "completedAt": "2026-10-07T00:55:00Z",
-    "issuesFiled": [1250],
+    "subfolder": "src/Seedarr.Api.V1/Config",
+    "completedAt": "2026-10-07T01:02:00Z",
+    "issuesFiled": [1255, 1256],
     "issuesReopened": [],
-    "taskId": "api-hunter",
-    "notes": "Static review: AutomationController.cs, AutomationScriptResource.cs (+ IAutomationService/AutomationMarketplaceService contracts). GitHub dedupe: existing open issues #930, #1014, #1015, #1025, #1154, #1155, #1156 cover run 404, list log truncation on PUT, DELETE idempotency, test/run torrent context, IsEnabled bypass, SignalR duplicate logs, marketplace 400 vs 404. Filed #1250 (partial PUT clears Code/resets defaults). No dotnet build/test."
+    "taskId": "api-hunter-pheasant",
+    "notes": "Static review: 16 files under Config (ConfigController.cs/base, AiConfigController, IdentityProviderConfigController, *ConfigResource mappers, ApiKeyResource, SslTestRequest). GitHub dedupe: existing open issues #1033, #1034, #1035, #1041, #1042, #1168, #1170, #1171, #1140, etc. cover Ai stub, identity provider scheme/secret/masking, GeneralConfig TmdbApiKey/masking/WatchFolder interval, RestPutById id segment. Filed #1255 (PeerProtocol missing timeout validation) and #1256 (GeneralConfig ConfigSavedEvent before config.xml save). No dotnet build/test."
   }
 }
