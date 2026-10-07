@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:02:25Z",
+  "updatedAt": "2026-10-07T01:02:55Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_52a7f70b",
+    "lastScheduleId": "sched_14113bd2",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -73,5 +73,5 @@
     ]
   },
   "githubOpen": 376,
-  "lastMonitorNote": "fix monitor: batch #1032,#953,#1256,#1265,#1258 closed; rotated to #904,#1006,#1255,#948,#1257"
+  "lastMonitorNote": "fix monitor: health check; 5 agents active on #904,#1006,#1255,#948,#1257; 0 restarts"
 }
