@@ -16,6 +16,7 @@ public static class AssemblyLoader
 
         var assemblies = new List<Assembly>();
         var failed = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
 
         foreach (var name in names)
@@ -25,6 +26,11 @@ public static class AssemblyLoader
                 var label = DescribeInvalidAssemblyName(name);
                 Logger.Error("Assembly name must not be null, empty, or whitespace (got {0})", label);
                 failed.Add(label);
+                continue;
+            }
+
+            if (!seen.Add(name))
+            {
                 continue;
             }
 
