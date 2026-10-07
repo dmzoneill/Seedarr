@@ -159,6 +159,30 @@ public class MessageHubSnapshotAndAuthTest
     }
 
     [Test]
+    public async Task RequestStateSnapshot_returns_empty_snapshot_when_GetAll_throws()
+    {
+        _torrentService.GetAll().Returns(_ => throw new InvalidOperationException("simulated datastore failure"));
+
+        var hub = new MessageHub(_configFileProvider, _torrentService)
+        {
+            Context = _callerContext,
+            Clients = _callerClients
+        };
+
+        var snapshot = await hub.RequestStateSnapshot();
+
+        Assert.That(snapshot, Is.Not.Null);
+        Assert.That(snapshot.Torrents, Is.Empty);
+        Assert.That(snapshot.DownloadSpeed, Is.EqualTo(0));
+        Assert.That(snapshot.UploadSpeed, Is.EqualTo(0));
+        Assert.That(snapshot.ActiveCount, Is.EqualTo(0));
+        Assert.That(snapshot.TotalCount, Is.EqualTo(0));
+        Assert.That(snapshot.TimestampUtc, Is.GreaterThan(DateTime.UtcNow.AddMinutes(-1)));
+
+        await _callerProxy.Received(1).SendCoreAsync("stateSnapshot", Arg.Is<object[]>(args => args.Length == 1 && args[0] == snapshot), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task OnConnectedAsync_allows_connection_when_authentication_disabled()
     {
         _configFileProvider.AuthenticationEnabled.Returns(false);
