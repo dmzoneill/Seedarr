@@ -5,9 +5,11 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Mcp;
 using Seedarr.Http;
 
@@ -15,6 +17,7 @@ namespace Seedarr.Api.V1.Mcp;
 
 [V1ApiController("mcp")]
 [Route("api/v1/mcp")]
+[Authorize(Policy = Policies.AdminOnly)]
 public class McpController : ControllerBase
 {
     private readonly IMcpService _mcpService;
