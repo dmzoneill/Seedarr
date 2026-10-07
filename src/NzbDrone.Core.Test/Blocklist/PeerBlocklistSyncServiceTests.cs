@@ -42,6 +42,30 @@ public class PeerBlocklistSyncServiceTests
     }
 
     [Test]
+    public async Task SyncAsync_transport_failure_after_success_should_clear_LastSyncHttpStatus()
+    {
+        var responseOk = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("192.168.1.1\n")
+        };
+        _mockHandler.EnqueueResponse(responseOk);
+
+        var firstResult = await _service.SyncAsync("http://blocklist.test/rules.txt");
+        Assert.That(firstResult.Success, Is.True);
+        Assert.That(_service.Metadata.LastSyncHttpStatus, Is.EqualTo(HttpStatusCode.OK));
+
+        _mockHandler.ResponseFactory = _ => throw new HttpRequestException("Connection reset");
+
+        var secondResult = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(secondResult.Success, Is.False);
+        Assert.That(_service.Metadata.LastSyncHttpStatus, Is.Null);
+        Assert.That(_service.Metadata.LastSyncStatus, Does.StartWith("Failed:"));
+        Assert.That(_service.Metadata.ConsecutiveFailures, Is.EqualTo(1));
+        Assert.That(_service.RuleCount, Is.EqualTo(1));
+    }
+
+    [Test]
     public async Task SyncAsync_200_OK_should_parse_rules_and_cache_etag_and_last_modified()
     {
         var response = new HttpResponseMessage(HttpStatusCode.OK)
