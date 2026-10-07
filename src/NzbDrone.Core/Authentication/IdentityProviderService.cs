@@ -79,6 +79,11 @@ public class IdentityProviderService : IIdentityProviderService
         provider.UpdatedAt = DateTime.UtcNow;
 
         var existing = _repository.Get(provider.Id);
+        if (existing != null)
+        {
+            provider.CreatedAt = existing.CreatedAt;
+        }
+
         if (existing != null && ShouldPreserveClientSecret(provider.ClientSecretEncrypted))
         {
             provider.ClientSecretEncrypted = existing.ClientSecretEncrypted;
