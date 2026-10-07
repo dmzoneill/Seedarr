@@ -174,7 +174,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
 
     public void SetActiveRules(IEnumerable<string> rules)
     {
-        var ruleList = rules?.ToList() ?? new List<string>();
+        var ruleList = Ipv6IntervalTree.SelectEnforceableRules(rules);
         var newTree = ruleList.Count > 0 ? Ipv6IntervalTree.Parse(ruleList) : null;
 
         lock (_syncLock)
@@ -494,6 +494,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             };
         }
 
+        parsedRules = Ipv6IntervalTree.SelectEnforceableRules(parsedRules);
         var newTree = parsedRules.Count > 0 ? Ipv6IntervalTree.Parse(parsedRules) : null;
 
         lock (_syncLock)
