@@ -37,8 +37,9 @@ public interface IDownloadClientSyncService
 
 public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 {
-    private const int SyncSweepLockWaitMs = 200;
     private const int ImportLockWaitMs = 30_000;
+
+    protected virtual int SyncLockWaitMs => ImportLockWaitMs;
 
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly IIndexerFactory _indexerFactory;
@@ -141,9 +142,10 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     public SyncResult Sync()
     {
-        if (!_syncLock.Wait(SyncSweepLockWaitMs))
+        if (!WaitForSyncLock())
         {
-            return new SyncResult();
+            _logger.Warn("Download client sync sweep could not acquire lock within {0}ms; another sync or import is in progress.", SyncLockWaitMs);
+            throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
         }
 
         try
@@ -1018,7 +1020,12 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     private bool WaitForImportLock()
     {
-        return _syncLock.Wait(ImportLockWaitMs);
+        return WaitForSyncLock();
+    }
+
+    private bool WaitForSyncLock()
+    {
+        return _syncLock.Wait(SyncLockWaitMs);
     }
 
     private byte[] FetchTorrentBytesFromClientAndIndexers(IDownloadClient provider, string normalizedHash)
