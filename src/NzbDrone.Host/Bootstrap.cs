@@ -155,7 +155,7 @@ public static class Bootstrap
 
         return cleanAddress switch
         {
-            "*" or "0.0.0.0" => IPAddress.Any,
+            "*" or "+" or "0.0.0.0" => IPAddress.Any,
             "localhost" or "127.0.0.1" => IPAddress.Loopback,
             "::1" => IPAddress.IPv6Loopback,
             _ when IPAddress.TryParse(cleanAddress, out var parsed) => parsed,
@@ -196,7 +196,7 @@ public static class Bootstrap
         var bindAddress = configProvider?.BindAddress?.Trim() ?? "*";
         var cleanAddress = bindAddress.Trim().Trim('[', ']');
 
-        if (cleanAddress is "*" or "0.0.0.0" or "")
+        if (cleanAddress is "*" or "+" or "0.0.0.0" or "")
         {
             if (!isPortCollision)
             {

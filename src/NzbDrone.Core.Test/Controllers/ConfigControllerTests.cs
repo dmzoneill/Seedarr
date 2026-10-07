@@ -168,6 +168,7 @@ public class ConfigControllerTests
     public void IsValidBindAddress_validates_correctly()
     {
         Assert.That(GeneralConfigController.IsValidBindAddress("*"), Is.True);
+        Assert.That(GeneralConfigController.IsValidBindAddress("+"), Is.True);
         Assert.That(GeneralConfigController.IsValidBindAddress("0.0.0.0"), Is.True);
         Assert.That(GeneralConfigController.IsValidBindAddress("::"), Is.True);
         Assert.That(GeneralConfigController.IsValidBindAddress("localhost"), Is.True);
