@@ -124,7 +124,14 @@ public class ArrConnectionController : Controller
 
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
-            definition.Implementation = existing.Implementation ?? $"{definition.ArrType ?? "Sonarr"}Connection";
+            if (!string.Equals(existing.ArrType, definition.ArrType, StringComparison.OrdinalIgnoreCase))
+            {
+                definition.Implementation = $"{definition.ArrType ?? "Sonarr"}Connection";
+            }
+            else
+            {
+                definition.Implementation = existing.Implementation ?? $"{definition.ArrType ?? "Sonarr"}Connection";
+            }
         }
 
         if (string.IsNullOrWhiteSpace(definition.ConfigContract))

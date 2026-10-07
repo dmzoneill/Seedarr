@@ -169,6 +169,74 @@ public class ArrConnectionControllerTest
     }
 
     [Test]
+    public void Update_when_arr_type_changed_and_implementation_omitted_recomputes_implementation_from_new_type()
+    {
+        var existing = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            ArrType = "Sonarr",
+            Implementation = "SonarrConnection",
+            Url = "http://sonarr:8989",
+            ApiKey = "api-key",
+            Enable = true,
+            WebhookEnabled = false
+        };
+        _connectionFactory.Get(1).Returns(existing);
+
+        var updated = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Radarr",
+            ArrType = "Radarr",
+            Url = "http://radarr:7878",
+            ApiKey = "api-key",
+            Enable = true,
+            WebhookEnabled = false
+        };
+
+        var result = _controller.Update(1, updated);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _connectionFactory.Received(1).Update(Arg.Is<ArrConnectionDefinition>(d =>
+            d.ArrType == "Radarr" && d.Implementation == "RadarrConnection"));
+    }
+
+    [Test]
+    public void Update_when_arr_type_unchanged_and_implementation_omitted_preserves_existing_implementation()
+    {
+        var existing = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            ArrType = "Sonarr",
+            Implementation = "SonarrConnection",
+            Url = "http://sonarr:8989",
+            ApiKey = "api-key",
+            Enable = true,
+            WebhookEnabled = false
+        };
+        _connectionFactory.Get(1).Returns(existing);
+
+        var updated = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            ArrType = "Sonarr",
+            Url = "http://new-sonarr:8989",
+            ApiKey = "api-key",
+            Enable = true,
+            WebhookEnabled = false
+        };
+
+        var result = _controller.Update(1, updated);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _connectionFactory.Received(1).Update(Arg.Is<ArrConnectionDefinition>(d =>
+            d.Implementation == "SonarrConnection"));
+    }
+
+    [Test]
     public void Update_when_url_has_matching_trimmed_slashes_does_not_unregister()
     {
         var existing = new ArrConnectionDefinition
