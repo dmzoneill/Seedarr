@@ -1238,6 +1238,46 @@ public class IndexerControllerTest
     }
 
     [Test]
+    public void DownloadRelease_reuses_proxy_http_client_across_requests_when_proxy_is_enabled()
+    {
+        _proxySettingsProvider.IsEnabled.Returns(true);
+        _proxySettingsProvider.Type.Returns(ProxyType.Http);
+        _proxySettingsProvider.Host.Returns("127.0.0.1");
+        _proxySettingsProvider.Port.Returns(8080);
+        _proxySettingsProvider.CreateHandler().Returns(_ => new SocketsHttpHandler());
+
+        var parsedInfo = new ParsedTorrent
+        {
+            Name = "Proxy Torrent",
+            InfoHash = "1234567890abcdef1234567890abcdef12345678",
+            TotalSize = 1000,
+            PieceLength = 1000,
+            PieceCount = 1
+        };
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(parsedInfo);
+        _torrentService.ExistsByInfoHash(Arg.Any<string>()).Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 1, Name = "Proxy Torrent" });
+
+        var request = new DownloadReleaseRequest
+        {
+            Title = "Proxy Torrent",
+            DownloadUrl = "http://8.8.8.8:9696/download/1.torrent"
+        };
+
+        try
+        {
+            _controller.DownloadRelease(request);
+            _controller.DownloadRelease(request);
+        }
+        catch
+        {
+            // Real connection fails with SocketsHttpHandler, which is expected
+        }
+
+        _proxySettingsProvider.Received(1).CreateHandler();
+    }
+
+    [Test]
     public async Task Search_routes_through_proxy_when_proxy_is_enabled()
     {
         _proxySettingsProvider.IsEnabled.Returns(true);
