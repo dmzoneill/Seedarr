@@ -13,6 +13,7 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Authentication;
+using NzbDrone.Core.Configuration;
 using Seedarr.Http.Authentication;
 
 namespace NzbDrone.Core.Test.Authentication;
@@ -20,6 +21,47 @@ namespace NzbDrone.Core.Test.Authentication;
 [TestFixture]
 public class DynamicAuthSchemeManagerTest
 {
+    [TestCase(null, "/signin-oidc-myid")]
+    [TestCase("", "/signin-oidc-myid")]
+    [TestCase("/seedarr", "/seedarr/signin-oidc-myid")]
+    [TestCase("seedarr", "/seedarr/signin-oidc-myid")]
+    [TestCase("/seedarr/", "/seedarr/signin-oidc-myid")]
+    public void BuildOidcCallbackPath_prefixes_UrlBase_when_configured(string urlBase, string expected)
+    {
+        Assert.That(DynamicAuthSchemeManager.BuildOidcCallbackPath("myid", urlBase), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task RegisterOrUpdateOidcProviderAsync_sets_CallbackPath_with_UrlBase_prefix()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var configFileProvider = Substitute.For<IConfigFileProvider>();
+        configFileProvider.UrlBase.Returns("/seedarr");
+        services.AddSingleton(configFileProvider);
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "subpath_test",
+            Name = "Subpath Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "client-id",
+        };
+
+        await manager.RegisterOrUpdateOidcProviderAsync(provider);
+
+        var cache = sp.GetRequiredService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+        var options = cache.GetOrAdd("Oidc_subpath_test", () => new OpenIdConnectOptions());
+
+        Assert.That(options.CallbackPath.Value, Is.EqualTo("/seedarr/signin-oidc-subpath_test"));
+    }
+
     [Test]
     public async Task RegisterOrUpdateOidcProviderAsync_configures_OnRedirectToIdentityProvider_to_enforce_https()
     {

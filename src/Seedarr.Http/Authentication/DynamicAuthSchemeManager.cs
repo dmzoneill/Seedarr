@@ -16,6 +16,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using NLog;
 using NzbDrone.Core.Authentication;
+using NzbDrone.Core.Configuration;
 
 namespace Seedarr.Http.Authentication;
 
@@ -142,6 +143,9 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
                 throw new ArgumentException("IssuerUrl and ClientId are required to register an OIDC provider.");
             }
 
+            var configFileProvider = _serviceProvider.GetService<IConfigFileProvider>();
+            var callbackPath = BuildOidcCallbackPath(sanitizedId, configFileProvider?.UrlBase);
+
             var options = new OpenIdConnectOptions
             {
                 SignInScheme = "Cookies",
@@ -152,7 +156,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
                 ResponseMode = OpenIdConnectResponseMode.Query,
                 GetClaimsFromUserInfoEndpoint = true,
                 SaveTokens = true,
-                CallbackPath = $"/signin-oidc-{sanitizedId}",
+                CallbackPath = callbackPath,
                 RequireHttpsMetadata = provider.IssuerUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase),
                 DataProtectionProvider = dataProtection,
                 Events = new OpenIdConnectEvents
@@ -282,6 +286,33 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         {
             _schemeLock.Release();
         }
+    }
+
+    public static string BuildOidcCallbackPath(string sanitizedProviderId, string urlBase)
+    {
+        if (string.IsNullOrWhiteSpace(sanitizedProviderId))
+        {
+            throw new ArgumentException("Provider id cannot be null or empty.", nameof(sanitizedProviderId));
+        }
+
+        var callbackSuffix = $"/signin-oidc-{sanitizedProviderId}";
+        if (string.IsNullOrWhiteSpace(urlBase))
+        {
+            return callbackSuffix;
+        }
+
+        var trimmed = urlBase.Trim().TrimEnd('/');
+        if (string.IsNullOrEmpty(trimmed) || trimmed == "/")
+        {
+            return callbackSuffix;
+        }
+
+        if (!trimmed.StartsWith('/'))
+        {
+            trimmed = "/" + trimmed;
+        }
+
+        return trimmed + callbackSuffix;
     }
 
     private static string SanitizeProviderId(string providerId)
