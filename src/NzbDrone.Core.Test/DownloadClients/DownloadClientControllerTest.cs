@@ -817,9 +817,36 @@ public class DownloadClientControllerTest
     [Test]
     public void GetItems_returns_not_found_when_client_does_not_exist()
     {
+        var def = new DownloadClientDefinition { Id = 99, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(99).Returns(def);
         _syncService.GetClientItems(99).Returns(x => throw new System.ArgumentException("Download client with id 99 not found."));
 
         var result = _controller.GetItems(99);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public void ImportTorrent_returns_not_found_when_sync_service_reports_client_missing()
+    {
+        var def = new DownloadClientDefinition { Id = 99, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(99).Returns(def);
+        _syncService.ImportTorrent(99, "hash123").Returns(x => throw new System.ArgumentException("Download client with id 99 not found."));
+
+        var result = _controller.ImportTorrent(99, "hash123");
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public void ImportTorrents_returns_not_found_when_sync_service_reports_client_missing()
+    {
+        var def = new DownloadClientDefinition { Id = 99, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(99).Returns(def);
+        _syncService.ImportTorrents(99, Arg.Any<List<string>>())
+            .Returns(x => throw new System.ArgumentException("Download client with id 99 not found."));
+
+        var result = _controller.ImportTorrents(99, new DownloadClientImportRequest { InfoHashes = new List<string> { "hash123" } });
 
         Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
     }
