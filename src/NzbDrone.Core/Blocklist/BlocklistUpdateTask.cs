@@ -21,9 +21,7 @@ public class BlocklistUpdateTask : IScheduledTask, IExecute<BlocklistUpdateComma
                 return 1440;
             }
 
-            var days = _configService.BlocklistAutoUpdateIntervalDays > 0
-                ? _configService.BlocklistAutoUpdateIntervalDays
-                : _configService.BlocklistUpdateIntervalDays;
+            var days = _configService.BlocklistUpdateIntervalDays;
 
             return days > 0 ? days * 1440 : 1440;
         }

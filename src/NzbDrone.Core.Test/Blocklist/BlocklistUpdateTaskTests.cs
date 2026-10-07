@@ -28,7 +28,7 @@ public class BlocklistUpdateTaskTests
     [Test]
     public void DefaultInterval_should_default_to_1440_minutes_when_interval_is_one_day()
     {
-        _configService.BlocklistAutoUpdateIntervalDays.Returns(1);
+        _configService.BlocklistUpdateIntervalDays.Returns(1);
 
         Assert.That(_task.DefaultInterval, Is.EqualTo(1440));
     }
@@ -36,18 +36,26 @@ public class BlocklistUpdateTaskTests
     [Test]
     public void DefaultInterval_should_scale_with_configured_days()
     {
-        _configService.BlocklistAutoUpdateIntervalDays.Returns(7);
+        _configService.BlocklistUpdateIntervalDays.Returns(7);
 
         Assert.That(_task.DefaultInterval, Is.EqualTo(10080));
     }
 
     [Test]
-    public void DefaultInterval_should_fallback_to_BlocklistUpdateIntervalDays_if_AutoUpdateIntervalDays_is_zero()
+    public void DefaultInterval_should_ignore_stale_BlocklistAutoUpdateIntervalDays()
     {
-        _configService.BlocklistAutoUpdateIntervalDays.Returns(0);
+        _configService.BlocklistAutoUpdateIntervalDays.Returns(7);
         _configService.BlocklistUpdateIntervalDays.Returns(3);
 
         Assert.That(_task.DefaultInterval, Is.EqualTo(4320));
+    }
+
+    [Test]
+    public void DefaultInterval_should_fallback_to_1440_when_BlocklistUpdateIntervalDays_is_zero()
+    {
+        _configService.BlocklistUpdateIntervalDays.Returns(0);
+
+        Assert.That(_task.DefaultInterval, Is.EqualTo(1440));
     }
 
     [Test]

@@ -75,7 +75,9 @@ public class BlocklistController : Controller
 
         if (request.AutoUpdateIntervalDays.HasValue && request.AutoUpdateIntervalDays.Value > 0)
         {
-            updates["BlocklistUpdateIntervalDays"] = request.AutoUpdateIntervalDays.Value;
+            var intervalDays = request.AutoUpdateIntervalDays.Value;
+            updates["BlocklistUpdateIntervalDays"] = intervalDays;
+            updates["BlocklistAutoUpdateIntervalDays"] = intervalDays;
         }
 
         if (updates.Count > 0)
