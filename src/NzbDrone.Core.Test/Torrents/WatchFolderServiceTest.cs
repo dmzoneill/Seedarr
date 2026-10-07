@@ -432,6 +432,38 @@ public class WatchFolderServiceTest
     }
 
     [Test]
+    public async Task HandleTorrentFileCreatedAsync_rapid_events_for_same_path_should_not_double_dispose_token()
+    {
+        var torrentPath = Path.Combine(_tempDir, "rapid-debounce.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "RapidDebounce",
+            InfoHash = "rapiddebounce123",
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            Files = new List<ParsedTorrentFile>()
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 1 });
+
+        var method = typeof(WatchFolderService).GetMethod("HandleTorrentFileCreatedAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var tasks = new List<Task>();
+        for (var i = 0; i < 12; i++)
+        {
+            tasks.Add((Task)method.Invoke(_subject, new object[] { torrentPath }));
+        }
+
+        await Task.WhenAll(tasks);
+
+        _torrentService.Received(1).Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
     public void OnTorrentFileCreated_should_process_torrent_file()
     {
         var torrentPath = Path.Combine(_tempDir, "oncreated.torrent");
