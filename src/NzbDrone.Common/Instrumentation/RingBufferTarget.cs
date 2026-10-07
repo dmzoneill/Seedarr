@@ -144,7 +144,7 @@ public class RingBufferTarget : TargetWithLayout
                 continue;
             }
 
-            if (minimumLevel != null && LogLevel.FromString(entry.Level) < minimumLevel)
+            if (!MeetsMinimumLevel(entry.Level, minimumLevel))
             {
                 continue;
             }
@@ -159,6 +159,28 @@ public class RingBufferTarget : TargetWithLayout
         }
 
         return result;
+    }
+
+    private static bool MeetsMinimumLevel(string level, LogLevel minimumLevel)
+    {
+        if (minimumLevel == null)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(level))
+        {
+            return LogLevel.Trace >= minimumLevel;
+        }
+
+        try
+        {
+            return LogLevel.FromString(level) >= minimumLevel;
+        }
+        catch (ArgumentException)
+        {
+            return LogLevel.Trace >= minimumLevel;
+        }
     }
 
     public static RingBufferTarget Instance { get; set; }

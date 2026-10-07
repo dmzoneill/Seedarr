@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
@@ -452,6 +453,48 @@ public class RingBufferTargetTest
     {
         Assert.That(RingBufferTarget.Sanitize(null), Is.Null);
         Assert.That(RingBufferTarget.Sanitize(string.Empty), Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void GetEntries_should_not_throw_when_buffered_level_is_unrecognized()
+    {
+        var target = new RingBufferTarget();
+        var logger = ConfigureAndGetLogger(target);
+
+        logger.Info("valid entry");
+        SetBufferedLevel(target, 0, "INFORMATION");
+
+        var filtered = target.GetEntries(10, LogLevel.Info);
+        Assert.That(filtered, Is.Empty);
+
+        var traceFiltered = target.GetEntries(10, LogLevel.Trace);
+        Assert.That(traceFiltered, Has.Count.EqualTo(1));
+        Assert.That(traceFiltered[0].Message, Is.EqualTo("valid entry"));
+    }
+
+    [Test]
+    public void GetEntries_should_skip_empty_level_when_filtering_above_trace()
+    {
+        var target = new RingBufferTarget();
+        var logger = ConfigureAndGetLogger(target);
+
+        logger.Warn("warn entry");
+        SetBufferedLevel(target, 0, string.Empty);
+
+        var warnAndHigher = target.GetEntries(10, LogLevel.Warn);
+        Assert.That(warnAndHigher, Is.Empty);
+
+        var allAtTrace = target.GetEntries(10, LogLevel.Trace);
+        Assert.That(allAtTrace, Has.Count.EqualTo(1));
+    }
+
+    private static void SetBufferedLevel(RingBufferTarget target, int bufferIndex, string level)
+    {
+        var buffer = (LogEntryRecord[])typeof(RingBufferTarget)
+            .GetField("_buffer", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(target);
+
+        buffer[bufferIndex].Level = level;
     }
 
     [Test]
