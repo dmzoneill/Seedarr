@@ -5,9 +5,19 @@ namespace NzbDrone.SignalR;
 
 public class PieceBatchCompletedMessage : SignalRMessage
 {
+    private int _torrentId;
+
     public string InfoHash { get; set; }
 
-    public int TorrentId { get; set; }
+    public int TorrentId
+    {
+        get => _torrentId;
+        set
+        {
+            _torrentId = value;
+            UpdateBody();
+        }
+    }
 
     public List<int> PieceIndexes { get; set; } = new();
 
@@ -17,7 +27,7 @@ public class PieceBatchCompletedMessage : SignalRMessage
     {
         Name = "PieceBatchCompleted";
         Action = ModelAction.Updated;
-        Body = this;
+        UpdateBody();
     }
 
     public PieceBatchCompletedMessage(string infoHash, IEnumerable<int> pieceIndexes, long bytesDownloaded = 0)
@@ -27,6 +37,17 @@ public class PieceBatchCompletedMessage : SignalRMessage
         BytesDownloaded = bytesDownloaded;
         Name = "PieceBatchCompleted";
         Action = ModelAction.Updated;
-        Body = this;
+        UpdateBody();
+    }
+
+    private void UpdateBody()
+    {
+        Body = new
+        {
+            InfoHash,
+            TorrentId = _torrentId,
+            PieceIndexes,
+            BytesDownloaded
+        };
     }
 }
