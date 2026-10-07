@@ -95,7 +95,8 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
             var trimmed = line.Trim();
             if (string.IsNullOrEmpty(trimmed) ||
                 trimmed.StartsWith('#') ||
-                trimmed.StartsWith("//", StringComparison.Ordinal))
+                trimmed.StartsWith("//", StringComparison.Ordinal) ||
+                trimmed.StartsWith(';'))
             {
                 continue;
             }

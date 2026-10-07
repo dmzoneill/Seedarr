@@ -788,7 +788,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         while ((line = reader.ReadLine()) != null)
         {
             var trimmed = line.Trim();
-            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#') || trimmed.StartsWith("//", StringComparison.Ordinal))
+            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith('#') || trimmed.StartsWith("//", StringComparison.Ordinal) || trimmed.StartsWith(';'))
             {
                 continue;
             }
