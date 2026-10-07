@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T08:53:04Z",
+  "updatedAt": "2026-10-07T08:53:40Z",
   "status": "stopped",
   "mode": "fix",
   "policy": {
@@ -63,5 +63,5 @@
     "nextCandidates": []
   },
   "githubOpen": 0,
-  "lastMonitorNote": "fix monitor stopped by user (2026-10-07T08:53:04Z)"
+  "lastMonitorNote": "skipped wake (stopped); no reschedule"
 }
