@@ -103,7 +103,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                 Body = torrent
             };
             _signalRBroadcaster.BroadcastMessage(updateMsg);
-            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
         }
 
         _queuedPreviousStatus[id] = oldStatus;
@@ -179,7 +178,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                 Body = torrent
             };
             _signalRBroadcaster.BroadcastMessage(updateMsg);
-            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
         }
     }
 
@@ -359,7 +357,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                 Body = torrent
             };
             _signalRBroadcaster.BroadcastMessage(updateMsg);
-            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
         }
 
             // 3. Resolve files and expected piece hashes
@@ -477,7 +474,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                             }
                         };
                         _signalRBroadcaster.BroadcastMessage(progressMsg);
-                        _signalRBroadcaster.BroadcastToTorrent(torrent.Id, progressMsg);
                     }
                 }
             }
@@ -536,7 +532,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                     Body = torrent
                 };
                 _signalRBroadcaster.BroadcastMessage(finalMsg);
-                _signalRBroadcaster.BroadcastToTorrent(torrent.Id, finalMsg);
             }
 
             var hashCheckSuccessful = pieceCount == 0 || verifiedCount == pieceCount;
@@ -590,7 +585,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                 Body = torrent
             };
             _signalRBroadcaster.BroadcastMessage(cancelMsg);
-            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, cancelMsg);
         }
 
         _eventAggregator?.PublishEvent(new TorrentHashCheckCompletedEvent(torrent, false));
@@ -627,7 +621,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                 Body = torrent
             };
             _signalRBroadcaster.BroadcastMessage(updateMsg);
-            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
 
             var progressMsg = new SignalRMessage
             {
@@ -642,7 +635,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                 }
             };
             _signalRBroadcaster.BroadcastMessage(progressMsg);
-            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, progressMsg);
         }
 
         _eventAggregator?.PublishEvent(new TorrentHashCheckCompletedEvent(torrent, false));
