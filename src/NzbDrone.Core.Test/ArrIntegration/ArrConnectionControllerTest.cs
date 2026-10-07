@@ -291,6 +291,65 @@ public class ArrConnectionControllerTest
     }
 
     [Test]
+    public void TestDirect_with_existing_id_and_omitted_api_key_restores_stored_key_before_test()
+    {
+        var existing = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "stored-secret-key"
+        };
+        _connectionFactory.Get(1).Returns(existing);
+        _arrSyncService.TestConnectionDetailedDirect(Arg.Any<ArrConnectionDefinition>())
+            .Returns(ArrTestResult.Ok("Connected"));
+
+        var definition = new ArrConnectionDefinition
+        {
+            Id = 1,
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989"
+        };
+
+        var result = _controller.TestDirect(definition);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _arrSyncService.Received(1).TestConnectionDetailedDirect(Arg.Is<ArrConnectionDefinition>(d =>
+            d.ApiKey == "stored-secret-key"));
+    }
+
+    [Test]
+    public void TestDirect_with_existing_id_and_masked_api_key_restores_stored_key_before_test()
+    {
+        var existing = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "stored-secret-key"
+        };
+        _connectionFactory.Get(1).Returns(existing);
+        _arrSyncService.TestConnectionDetailedDirect(Arg.Any<ArrConnectionDefinition>())
+            .Returns(ArrTestResult.Ok("Connected"));
+
+        var definition = new ArrConnectionDefinition
+        {
+            Id = 1,
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "********key"
+        };
+
+        var result = _controller.TestDirect(definition);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _arrSyncService.Received(1).TestConnectionDetailedDirect(Arg.Is<ArrConnectionDefinition>(d =>
+            d.ApiKey == "stored-secret-key"));
+    }
+
+    [Test]
     public void Delete_triggers_unregister_webhook_and_deletes_connection()
     {
         var existing = new ArrConnectionDefinition

@@ -204,7 +204,7 @@ public class ArrConnectionController : Controller
             return Ok(ArrTestResult.Fail("Request body cannot be null"));
         }
 
-        if (definition.Id > 0 && definition.ApiKey != null && definition.ApiKey.Contains('*'))
+        if (definition.Id > 0 && (string.IsNullOrWhiteSpace(definition.ApiKey) || definition.ApiKey.Contains('*')))
         {
             var existing = _connectionFactory.Get(definition.Id);
             if (existing != null)
