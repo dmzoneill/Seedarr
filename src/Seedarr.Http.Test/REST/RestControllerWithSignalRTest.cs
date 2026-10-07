@@ -6,6 +6,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
+using NzbDrone.Core.Lifecycle;
 using NzbDrone.SignalR;
 using Seedarr.Http.REST;
 
@@ -403,5 +404,49 @@ public class RestControllerWithSignalRTest
 
         Assert.That(unthrottled.PendingUpdatesCount, Is.EqualTo(0));
         _broadcaster.Received(5).BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void Dispose_flushes_pending_coalesced_updates()
+    {
+        var controller = new TestControllerWithSignalR(_broadcaster, TimeSpan.FromMilliseconds(500));
+
+        var leading = new TestModel { Id = 1, Name = "Item", Value = 1 };
+        controller.Handle(new ModelEvent<TestModel>(leading, ModelAction.Updated));
+
+        var trailing = new TestModel { Id = 1, Name = "Item", Value = 9 };
+        controller.Handle(new ModelEvent<TestModel>(trailing, ModelAction.Updated));
+        Assert.That(controller.PendingUpdatesCount, Is.EqualTo(1));
+        _broadcaster.Received(1).BroadcastMessage(Arg.Any<SignalRMessage>());
+
+        controller.Dispose();
+
+        _broadcaster.Received(2).BroadcastMessage(Arg.Any<SignalRMessage>());
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 9));
+    }
+
+    [Test]
+    public void ApplicationShutdownRequested_flushes_all_rest_signalr_coalesce_controllers()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        broadcaster.IsConnected.Returns(true);
+        var controller = new TestControllerWithSignalR(broadcaster, TimeSpan.FromMilliseconds(500));
+
+        var leading = new TestModel { Id = 2, Name = "Item", Value = 1 };
+        controller.Handle(new ModelEvent<TestModel>(leading, ModelAction.Updated));
+        var trailing = new TestModel { Id = 2, Name = "Item", Value = 5 };
+        controller.Handle(new ModelEvent<TestModel>(trailing, ModelAction.Updated));
+        Assert.That(controller.PendingUpdatesCount, Is.EqualTo(1));
+
+        var handler = new RestSignalRCoalesceShutdownHandler(new IRestSignalRCoalesceController[] { controller });
+        handler.Handle(new ApplicationShutdownRequested());
+
+        Assert.That(controller.PendingUpdatesCount, Is.EqualTo(0));
+        broadcaster.Received(2).BroadcastMessage(Arg.Any<SignalRMessage>());
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 5));
     }
 }

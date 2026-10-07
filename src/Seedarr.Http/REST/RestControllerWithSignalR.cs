@@ -9,7 +9,7 @@ using NzbDrone.SignalR;
 
 namespace Seedarr.Http.REST;
 
-public abstract class RestControllerWithSignalR<TResource, TModel> : RestController<TResource>, IHandle<ModelEvent<TModel>>
+public abstract class RestControllerWithSignalR<TResource, TModel> : RestController<TResource>, IHandle<ModelEvent<TModel>>, IRestSignalRCoalesceController
     where TResource : RestResource, new()
     where TModel : ModelBase, new()
 {
@@ -204,6 +204,8 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
         if (disposing)
         {
+            Flush();
+
             lock (_syncLock)
             {
                 foreach (var timer in _pendingTimers.Values)
