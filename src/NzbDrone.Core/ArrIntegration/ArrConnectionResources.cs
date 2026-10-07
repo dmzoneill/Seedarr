@@ -85,6 +85,66 @@ public static class ArrConnectionResources
         return true;
     }
 
+    public static bool TryValidateImageProxyPath(string path, out string normalizedPath, out string errorMessage)
+    {
+        normalizedPath = null;
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            errorMessage = "Invalid path";
+            return false;
+        }
+
+        var decoded = path.Trim();
+        for (var i = 0; i < 3; i++)
+        {
+            var next = Uri.UnescapeDataString(decoded);
+            if (next == decoded)
+            {
+                break;
+            }
+
+            decoded = next;
+        }
+
+        if (!decoded.StartsWith('/'))
+        {
+            decoded = "/" + decoded;
+        }
+
+        if (decoded.Contains('\\', StringComparison.Ordinal))
+        {
+            errorMessage = "Invalid path";
+            return false;
+        }
+
+        foreach (var segment in decoded.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".." || segment == ".")
+            {
+                errorMessage = "Invalid path";
+                return false;
+            }
+        }
+
+        if (decoded.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMessage = "Invalid path";
+            return false;
+        }
+
+        if (!decoded.StartsWith("/MediaCover/", StringComparison.OrdinalIgnoreCase) &&
+            !decoded.StartsWith("/Content/Images/", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMessage = "Invalid path";
+            return false;
+        }
+
+        normalizedPath = decoded;
+        return true;
+    }
+
     public static string NormalizeCoverUrl(string url, int connectionId = 0)
     {
         if (string.IsNullOrWhiteSpace(url))

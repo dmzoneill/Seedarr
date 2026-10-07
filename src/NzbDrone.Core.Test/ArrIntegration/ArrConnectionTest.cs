@@ -165,6 +165,29 @@ public class ArrConnectionTest
         Assert.That(def.AcceptInvalidCertificates, Is.False);
     }
 
+    [TestCase("/MediaCover/1/poster.jpg", true)]
+    [TestCase("MediaCover/1/poster.jpg", true)]
+    [TestCase("/Content/Images/sonarr-poster.png", true)]
+    [TestCase("/api/v3/system/status", false)]
+    [TestCase("/MediaCover/1/../../../api/v3/queue", false)]
+    [TestCase("/MediaCover/%2e%2e/foo", false)]
+    public void TryValidateImageProxyPath_should_enforce_allowlist_and_reject_traversal(string path, bool expectedValid)
+    {
+        var valid = ArrConnectionResources.TryValidateImageProxyPath(path, out var normalized, out var errorMessage);
+
+        Assert.That(valid, Is.EqualTo(expectedValid));
+        if (expectedValid)
+        {
+            Assert.That(normalized, Does.StartWith("/"));
+            Assert.That(errorMessage, Is.Null);
+        }
+        else
+        {
+            Assert.That(normalized, Is.Null);
+            Assert.That(errorMessage, Is.EqualTo("Invalid path"));
+        }
+    }
+
     [Test]
     public void ArrConnectionDefinition_Clone_should_preserve_properties()
     {
