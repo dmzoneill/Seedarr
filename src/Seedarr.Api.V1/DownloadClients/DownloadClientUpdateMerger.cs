@@ -14,15 +14,8 @@ internal static class DownloadClientUpdateMerger
         DownloadClientDefinition incoming,
         IReadOnlySet<string> presentPropertyKeys)
     {
-        if (existing == null)
-        {
-            throw new ArgumentNullException(nameof(existing));
-        }
-
-        if (incoming == null)
-        {
-            throw new ArgumentNullException(nameof(incoming));
-        }
+        ArgumentNullException.ThrowIfNull(existing);
+        ArgumentNullException.ThrowIfNull(incoming);
 
         var merged = new DownloadClientDefinition
         {

@@ -52,7 +52,7 @@ public class SmartAuthForwardDefaultSelectorTest
 
         var context = CreateContext();
         context.Request.Headers["X-Api-Key"] = "wrong-key";
-        context.Request.Cookies.Append(SmartAuthForwardDefaultSelector.SessionCookieName, "session-value");
+        context.Request.Headers.Cookie = $"{SmartAuthForwardDefaultSelector.SessionCookieName}=session-value";
 
         var scheme = SmartAuthForwardDefaultSelector.SelectScheme(context);
 
@@ -86,7 +86,7 @@ public class SmartAuthForwardDefaultSelectorTest
         var context = CreateContext();
         context.Connection.RemoteIpAddress = IPAddress.Parse("10.0.0.2");
         context.Request.Headers["X-Forwarded-User"] = "proxy-user";
-        context.Request.Cookies.Append(SmartAuthForwardDefaultSelector.SessionCookieName, "session-value");
+        context.Request.Headers.Cookie = $"{SmartAuthForwardDefaultSelector.SessionCookieName}=session-value";
 
         var scheme = SmartAuthForwardDefaultSelector.SelectScheme(context);
 

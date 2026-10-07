@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using NzbDrone.Core.Datastore;
+using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.MediaEnrichment;
-using NzbDrone.Core.Trackers;
+using NzbDrone.Core.Torrents;
 
 namespace Seedarr.Api.V1.Torrents;
 

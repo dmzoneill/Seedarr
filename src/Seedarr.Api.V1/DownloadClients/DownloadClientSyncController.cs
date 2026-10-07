@@ -1,8 +1,8 @@
 using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using NzbDrone.Core.Authentication;
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.DownloadClients.Sync;
 using Seedarr.Http;
 

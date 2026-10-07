@@ -12,15 +12,8 @@ internal static class AutomationScriptUpdateMerger
         AutomationScriptResource resource,
         IReadOnlySet<string> presentPropertyKeys)
     {
-        if (existing == null)
-        {
-            throw new ArgumentNullException(nameof(existing));
-        }
-
-        if (resource == null)
-        {
-            throw new ArgumentNullException(nameof(resource));
-        }
+        ArgumentNullException.ThrowIfNull(existing);
+        ArgumentNullException.ThrowIfNull(resource);
 
         return new AutomationScript
         {

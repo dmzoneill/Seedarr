@@ -44,9 +44,11 @@ public class DynamicAuthSchemeManagerResilienceTest
             IsEnabled = true,
         };
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await manager.RegisterOrUpdateOidcProviderAsync(provider));
-        Assert.That(ex!.Message, Does.Contain("data protection key ring"));
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await manager.RegisterOrUpdateOidcProviderAsync(provider);
+        });
+        Assert.That(ex.Message, Does.Contain("data protection key ring"));
 
         var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
         var scheme = await schemeProvider.GetSchemeAsync("Oidc_bad_secret_idp");

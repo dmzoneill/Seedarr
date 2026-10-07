@@ -1,5 +1,6 @@
 // Copyright (c) FeedItOut. All rights reserved.
 
+using System;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;

@@ -47,23 +47,7 @@ public class TerminalWebSocketJsonFallbackTest
         session.IsActive.Returns(true);
         session.DisposeAsync().Returns(ValueTask.CompletedTask);
         session.ReadAsync(Arg.Any<Memory<byte>>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo =>
-            {
-                var ct = callInfo.Arg<CancellationToken>();
-                return new ValueTask<int>(Task.Run(async () =>
-                {
-                    try
-                    {
-                        await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // Expected when the handler shuts down.
-                    }
-
-                    return 0;
-                }, ct));
-            });
+            .Returns(_ => ValueTask.FromResult(0));
         session.WriteAsync(Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>())
             .Returns(callInfo =>
             {
@@ -103,7 +87,9 @@ public class TerminalWebSocketJsonFallbackTest
 
         public QueuedWebSocket Socket { get; private set; }
 
-        public Task<WebSocket> AcceptWebSocketAsync(WebSocketAcceptContext acceptContext)
+        public Task<WebSocket> AcceptWebSocketAsync(WebSocketAcceptContext acceptContext) => AcceptAsync(acceptContext);
+
+        public Task<WebSocket> AcceptAsync(WebSocketAcceptContext acceptContext)
         {
             Socket = new QueuedWebSocket(_inboundFrame);
             return Task.FromResult<WebSocket>(Socket);
@@ -122,18 +108,22 @@ public class TerminalWebSocketJsonFallbackTest
 
         public override WebSocketCloseStatus? CloseStatus { get; }
 
+        public override string CloseStatusDescription => null;
+
         public override string SubProtocol => null;
 
-        public override WebSocketState State { get; private set; } = WebSocketState.Open;
+        private WebSocketState _state = WebSocketState.Open;
+
+        public override WebSocketState State => _state;
 
         public override void Abort()
         {
-            State = WebSocketState.Aborted;
+            _state = WebSocketState.Aborted;
         }
 
         public override Task CloseAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
         {
-            State = WebSocketState.Closed;
+            _state = WebSocketState.Closed;
             return Task.CompletedTask;
         }
 
@@ -162,7 +152,7 @@ public class TerminalWebSocketJsonFallbackTest
                 return Task.FromResult(new WebSocketReceiveResult(0, WebSocketMessageType.Close, true));
             }
 
-            State = WebSocketState.Closed;
+            _state = WebSocketState.Closed;
             return Task.FromResult(new WebSocketReceiveResult(0, WebSocketMessageType.Close, true));
         }
 

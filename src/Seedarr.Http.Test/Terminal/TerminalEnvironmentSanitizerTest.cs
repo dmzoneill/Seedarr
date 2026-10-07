@@ -1,5 +1,6 @@
 // Copyright (c) FeedItOut. All rights reserved.
 
+using System;
 using NUnit.Framework;
 using Seedarr.Http.Terminal;
 

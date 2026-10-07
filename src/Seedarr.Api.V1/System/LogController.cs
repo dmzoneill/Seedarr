@@ -38,13 +38,12 @@ public class LogController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(level))
         {
-            var parsedLevel = ParseLogLevel(level);
-            if (parsedLevel == null)
+            if (!TryParseLogLevel(level, out var parsedLevel))
             {
                 return BadRequest($"Invalid log level '{level.Trim()}'.");
             }
 
-            minimumLevel = parsedLevel.Value;
+            minimumLevel = parsedLevel;
         }
 
         var target = RingBufferTarget.Instance;
@@ -69,20 +68,22 @@ public class LogController : ControllerBase
         return Ok(resources);
     }
 
-    private static LogLevel ParseLogLevel(string level)
+    private static bool TryParseLogLevel(string level, out LogLevel parsedLevel)
     {
+        parsedLevel = LogLevel.Trace;
         if (string.IsNullOrWhiteSpace(level))
         {
-            return null;
+            return false;
         }
 
         try
         {
-            return LogLevel.FromString(level.Trim());
+            parsedLevel = LogLevel.FromString(level.Trim());
+            return true;
         }
         catch (ArgumentException)
         {
-            return null;
+            return false;
         }
     }
 }

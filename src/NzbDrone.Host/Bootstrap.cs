@@ -3,12 +3,13 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
-using Microsoft.AspNetCore.Server.Kestrel.Https;
+using System.Threading.Tasks;
 using DryIoc;
 using DryIoc.Microsoft.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using NzbDrone.Common.Composition;

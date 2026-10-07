@@ -14,7 +14,7 @@ namespace Seedarr.Http.Test.Terminal;
 public class FallbackProcessSessionBackpressureTest
 {
     [Test]
-    [Timeout(15000)]
+    [CancelAfter(15000)]
     public async Task Slow_consumer_does_not_block_child_when_stderr_floods()
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

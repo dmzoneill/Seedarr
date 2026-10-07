@@ -57,7 +57,9 @@ public class TerminalWebSocketCreateSessionErrorTest
 
         public RecordingWebSocket Socket { get; private set; }
 
-        public Task<WebSocket> AcceptWebSocketAsync(WebSocketAcceptContext acceptContext)
+        public Task<WebSocket> AcceptWebSocketAsync(WebSocketAcceptContext acceptContext) => AcceptAsync(acceptContext);
+
+        public Task<WebSocket> AcceptAsync(WebSocketAcceptContext acceptContext)
         {
             Socket = new RecordingWebSocket();
             return Task.FromResult<WebSocket>(Socket);
@@ -74,19 +76,23 @@ public class TerminalWebSocketCreateSessionErrorTest
 
         public override WebSocketCloseStatus? CloseStatus { get; }
 
+        public override string CloseStatusDescription => CloseDescription;
+
         public override string SubProtocol => null;
 
-        public override WebSocketState State { get; private set; } = WebSocketState.Open;
+        private WebSocketState _state = WebSocketState.Open;
+
+        public override WebSocketState State => _state;
 
         public override void Abort()
         {
-            State = WebSocketState.Aborted;
+            _state = WebSocketState.Aborted;
         }
 
         public override Task CloseAsync(WebSocketCloseStatus closeStatus, string statusDescription, CancellationToken cancellationToken)
         {
             CloseDescription = statusDescription;
-            State = WebSocketState.Closed;
+            _state = WebSocketState.Closed;
             return Task.CompletedTask;
         }
 
