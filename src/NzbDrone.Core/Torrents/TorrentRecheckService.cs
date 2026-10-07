@@ -463,6 +463,9 @@ public class TorrentRecheckService : ITorrentRecheckService
                 _signalRBroadcaster.BroadcastToTorrent(torrent.Id, finalMsg);
             }
 
+            var hashCheckSuccessful = pieceCount == 0 || verifiedCount == pieceCount;
+            _eventAggregator?.PublishEvent(new TorrentHashCheckCompletedEvent(torrent, hashCheckSuccessful));
+
             try
             {
                 _fastResumeService?.SaveFastResume(torrent);
@@ -502,6 +505,8 @@ public class TorrentRecheckService : ITorrentRecheckService
                 _signalRBroadcaster.BroadcastMessage(cancelMsg);
                 _signalRBroadcaster.BroadcastToTorrent(torrent.Id, cancelMsg);
             }
+
+            _eventAggregator?.PublishEvent(new TorrentHashCheckCompletedEvent(torrent, false));
 
             throw;
         }
