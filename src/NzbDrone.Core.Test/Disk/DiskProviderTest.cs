@@ -53,6 +53,36 @@ public class DiskProviderTest
     }
 
     [Test]
+    public void GetLongestMatchingMountPoint_prefers_windows_volume_mount_over_drive_letter()
+    {
+        var mounts = new[] { "C:\\", "C:\\Media\\Torrents" };
+
+        Assert.That(
+            DiskProvider.GetLongestMatchingMountPoint(@"C:\Media\Torrents\file.part", mounts),
+            Is.EqualTo(@"C:\Media\Torrents"));
+        Assert.That(
+            DiskProvider.GetLongestMatchingMountPoint(@"C:\Users\file.part", mounts),
+            Is.EqualTo("C:"));
+    }
+
+    [Test]
+    public void GetAvailableFreeSpace_uses_longest_drive_prefix_from_drives_provider()
+    {
+        var rootDrive = new DriveInfo("/");
+        var mediaDrive = new DriveInfo("/mnt/media");
+        var subject = new DiskProvider
+        {
+            DrivesProvider = () => new[] { rootDrive, mediaDrive },
+        };
+
+        var nestedPathFree = subject.GetAvailableFreeSpace("/mnt/media/shows/season1/file.mkv");
+        var rootPathFree = subject.GetAvailableFreeSpace("/var/tmp/seedarr_free_space_test");
+
+        Assert.That(nestedPathFree, Is.EqualTo(mediaDrive.AvailableFreeSpace));
+        Assert.That(rootPathFree, Is.EqualTo(rootDrive.AvailableFreeSpace));
+    }
+
+    [Test]
     public void GetAvailableFreeSpace_returns_non_negative_for_temp_path()
     {
         var subject = new DiskProvider();

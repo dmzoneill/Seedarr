@@ -29,14 +29,21 @@ public class DiskProvider : IDiskProvider
 
             var fullPath = Path.GetFullPath(path);
 
-            if (!OperatingSystem.IsWindows())
+            if (OperatingSystem.IsWindows())
             {
-                var drives = DrivesProvider?.Invoke() ?? DriveInfo.GetDrives();
-                var bestMatch = SelectLongestMatchingDrive(fullPath, drives);
-                if (bestMatch != null)
+                var volumePath = WindowsVolumeHelper.GetVolumePathForFile(fullPath);
+                if (!string.IsNullOrEmpty(volumePath))
                 {
-                    return bestMatch.AvailableFreeSpace;
+                    var volumeDrive = new DriveInfo(volumePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                    return volumeDrive.AvailableFreeSpace;
                 }
+            }
+
+            var drives = DrivesProvider?.Invoke() ?? DriveInfo.GetDrives();
+            var bestMatch = SelectLongestMatchingDrive(fullPath, drives);
+            if (bestMatch != null)
+            {
+                return bestMatch.AvailableFreeSpace;
             }
 
             var root = Path.GetPathRoot(fullPath);
