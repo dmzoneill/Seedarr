@@ -16,6 +16,7 @@ namespace Seedarr.Api.V1.Torrents;
 public class DownloadHistoryController : Controller
 {
     private const int DefaultOffsetLimit = 500;
+    private const int MaxPageSize = 500;
     private const int DefaultPageSize = 50;
 
     private static readonly JsonSerializerOptions CaseInsensitiveJsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -56,6 +57,16 @@ public class DownloadHistoryController : Controller
         if (effectiveOffset > 0 && effectiveLimit <= 0)
         {
             return BadRequest(new { message = "A positive limit is required when offset is specified." });
+        }
+
+        if (effectiveLimit <= 0)
+        {
+            effectiveLimit = DefaultOffsetLimit;
+        }
+
+        if (effectiveLimit > MaxPageSize)
+        {
+            effectiveLimit = MaxPageSize;
         }
 
         var totalCount = _historyService.GetCount(query, status);
