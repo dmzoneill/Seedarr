@@ -1,8 +1,11 @@
+using System.Security.Claims;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Host;
 
 namespace NzbDrone.Core.Test.Host;
@@ -36,5 +39,36 @@ public class StartupStaticFileResponseTest
         Startup.PrepareWwwrootStaticFileResponse(ctx);
 
         Assert.That(context.Response.Headers.CacheControl.ToString(), Is.EqualTo("public, max-age=31536000, immutable"));
+    }
+
+    [Test]
+    public async Task TryEnsureAuthenticatedWhenRequiredAsync_skips_check_when_authentication_disabled()
+    {
+        var config = Substitute.For<IConfigFileProvider>();
+        config.AuthenticationEnabled.Returns(false);
+        var context = new DefaultHttpContext();
+
+        var result = await Startup.TryEnsureAuthenticatedWhenRequiredAsync(context, config);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task TryEnsureAuthenticatedWhenRequiredAsync_succeeds_when_user_already_authenticated()
+    {
+        var config = Substitute.For<IConfigFileProvider>();
+        config.AuthenticationEnabled.Returns(true);
+        var context = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                new[] { new Claim(ClaimTypes.Name, "tester") },
+                authenticationType: "Cookies",
+                nameType: ClaimTypes.Name,
+                roleType: ClaimTypes.Role)),
+        };
+
+        var result = await Startup.TryEnsureAuthenticatedWhenRequiredAsync(context, config);
+
+        Assert.That(result, Is.True);
     }
 }
