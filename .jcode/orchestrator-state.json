@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T06:22:00Z",
+  "updatedAt": "2026-10-07T06:22:08Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_2657fd0d",
+    "lastScheduleId": "sched_3a654914",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
