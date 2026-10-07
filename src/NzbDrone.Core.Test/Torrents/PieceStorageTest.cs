@@ -147,6 +147,46 @@ public class PieceStorageTest
     }
 
     [Test]
+    public void Flush_drains_batches_queued_during_flush_broadcast()
+    {
+        const string hash = "flush-drain-during-broadcast-hash";
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        using var storage = new PieceStorage(broadcaster, TimeSpan.FromMilliseconds(500));
+        var chainedPieceQueued = false;
+
+        broadcaster.When(b => b.BroadcastMessage(Arg.Any<SignalRMessage>())).Do(_ =>
+        {
+            if (chainedPieceQueued)
+            {
+                return;
+            }
+
+            chainedPieceQueued = true;
+            storage.MarkPieceVerified(hash, 2, 2000);
+        });
+
+        storage.MarkPieceVerified(hash, 1, 1000);
+        storage.Flush();
+
+        Assert.That(storage.PendingBatchCount, Is.EqualTo(0));
+        broadcaster.Received(2).BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void Dispose_flushes_pending_coalesced_batches()
+    {
+        const string hash = "dispose-flush-hash";
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var storage = new PieceStorage(broadcaster, TimeSpan.FromMilliseconds(500));
+
+        storage.MarkPieceVerified(hash, 1, 1000);
+        storage.Dispose();
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<PieceCompletedMessage>(m =>
+            m.InfoHash == hash && m.PieceIndex == 1 && m.BytesDownloaded == 1000));
+    }
+
+    [Test]
     public void MultiFilePieceStorage_ResolveFilePath_should_throw_SecurityException_on_path_traversal()
     {
         var baseDir = Path.Combine(Path.GetTempPath(), "test_base");

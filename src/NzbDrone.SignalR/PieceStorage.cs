@@ -346,9 +346,12 @@ public class PieceStorage : IPieceStorage, IDisposable
 
     public void Flush()
     {
-        foreach (var key in _pendingBatches.Keys)
+        while (_pendingBatches.Count > 0)
         {
-            FlushBatch(key);
+            foreach (var key in _pendingBatches.Keys.ToArray())
+            {
+                FlushBatch(key);
+            }
         }
     }
 
@@ -367,6 +370,7 @@ public class PieceStorage : IPieceStorage, IDisposable
             return;
         }
 
+        Flush();
         _disposed = true;
         foreach (var batch in _pendingBatches.Values)
         {
