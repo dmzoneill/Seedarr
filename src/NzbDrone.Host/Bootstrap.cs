@@ -235,7 +235,7 @@ public static class Bootstrap
         var bindAddress = configProvider?.BindAddress?.Trim() ?? "*";
         var cleanAddress = bindAddress.Trim().Trim('[', ']');
 
-        if (cleanAddress is "*" or "+" or "0.0.0.0" or "")
+        if (cleanAddress is "*" or "+" or "0.0.0.0" or "::" or "")
         {
             if (!isPortCollision)
             {

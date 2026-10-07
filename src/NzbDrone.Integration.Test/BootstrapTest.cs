@@ -155,6 +155,24 @@ public class BootstrapTest
         Assert.DoesNotThrow(() => Bootstrap.ConfigureKestrel(serverOptions, configProvider, certManager));
     }
 
+    [TestCase("::")]
+    [TestCase("[::]")]
+    [TestCase(" :: ")]
+    public void ConfigureKestrel_should_use_dual_stack_listen_for_ipv6_any_bind_address(string bindAddress)
+    {
+        var configProvider = Substitute.For<IConfigFileProvider>();
+        var certManager = Substitute.For<ICertificateManager>();
+
+        configProvider.BindAddress.Returns(bindAddress);
+        configProvider.Port.Returns(8989);
+        configProvider.SslPort.Returns(9899);
+        configProvider.EnableSsl.Returns(false);
+
+        var serverOptions = new KestrelServerOptions();
+
+        Assert.DoesNotThrow(() => Bootstrap.ConfigureKestrel(serverOptions, configProvider, certManager));
+    }
+
     [Test]
     public void ConfigureKestrel_should_configure_http_listener_when_urls_provided()
     {
