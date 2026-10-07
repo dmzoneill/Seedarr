@@ -420,6 +420,22 @@ public class RssRuleControllerTest
     }
 
     [Test]
+    public void SyncRss_returns_bad_request_when_sync_service_unavailable()
+    {
+        RssRuleController.ResetSyncCooldown();
+        var controller = new RssRuleController(
+            _rssRuleRepository,
+            _indexerRepository,
+            _categoryService,
+            _grabHistoryRepository,
+            rssSyncService: null);
+
+        var response = controller.SyncRss();
+
+        Assert.That(response.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
     public void Controller_should_have_Authorize_Reader_attribute()
     {
         var type = typeof(RssRuleController);
