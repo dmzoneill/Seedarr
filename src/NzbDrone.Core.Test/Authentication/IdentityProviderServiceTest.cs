@@ -354,6 +354,92 @@ public class IdentityProviderServiceTest
         Assert.That(result, Is.False);
     }
 
+    [TestCase(HttpStatusCode.MovedPermanently)]
+    [TestCase(HttpStatusCode.Found)]
+    [TestCase(HttpStatusCode.TemporaryRedirect)]
+    [TestCase(HttpStatusCode.PermanentRedirect)]
+    public async Task TestConnectionAsync_WhenRedirectToSafeHttpsEndpoint_ReturnsTrue(HttpStatusCode redirectStatus)
+    {
+        var discoveryUrl = "https://8.8.8.8/.well-known/openid-configuration";
+        var canonicalUrl = "https://8.8.8.8/.well-known/openid-configuration/";
+        _httpHandler.EnqueueWithHeaders(redirectStatus, string.Empty, new Dictionary<string, string> { { "Location", canonicalUrl } });
+        _httpHandler.Enqueue(HttpStatusCode.OK, "{\"issuer\":\"https://8.8.8.8\"}");
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "valid-oidc",
+            Name = "Valid OIDC",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://8.8.8.8/.well-known/openid-configuration",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.Requests.Count, Is.EqualTo(2));
+        Assert.That(_httpHandler.Requests[0].RequestUri.ToString(), Is.EqualTo(discoveryUrl));
+        Assert.That(_httpHandler.Requests[1].RequestUri.ToString(), Is.EqualTo(canonicalUrl));
+    }
+
+    [Test]
+    public async Task TestConnectionAsync_WhenRedirectUsesRelativeLocation_ResolvesAgainstRequestUrlAndReturnsTrue()
+    {
+        _httpHandler.EnqueueWithHeaders(HttpStatusCode.MovedPermanently, string.Empty, new Dictionary<string, string> { { "Location", "metadata.xml" } });
+        _httpHandler.Enqueue(HttpStatusCode.OK, "<EntityDescriptor></EntityDescriptor>");
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "valid-saml",
+            Name = "Valid SAML",
+            ProviderType = IdentityProviderType.Saml,
+            MetadataUrl = "https://8.8.8.8/saml/",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.Requests.Count, Is.EqualTo(2));
+        Assert.That(_httpHandler.Requests[1].RequestUri.ToString(), Is.EqualTo("https://8.8.8.8/saml/metadata.xml"));
+    }
+
+    [Test]
+    public async Task TestConnectionAsync_WhenRedirectLocationIsUnsafe_ReturnsFalseWithoutFollowUpRequest()
+    {
+        _httpHandler.EnqueueWithHeaders(HttpStatusCode.Found, string.Empty, new Dictionary<string, string> { { "Location", "https://127.0.0.1/metadata" } });
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "valid-oidc",
+            Name = "Valid OIDC",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://8.8.8.8",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.False);
+        Assert.That(_httpHandler.Requests.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task TestConnectionAsync_WhenRedirectMissingLocation_ReturnsFalse()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.MovedPermanently, string.Empty);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "valid-oidc",
+            Name = "Valid OIDC",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://8.8.8.8",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.False);
+        Assert.That(_httpHandler.Requests.Count, Is.EqualTo(1));
+    }
+
     [Test]
     public void Add_WhenClientSecretProvided_EncryptsSecretAtRest()
     {
