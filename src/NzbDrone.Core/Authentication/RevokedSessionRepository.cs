@@ -28,24 +28,16 @@ public class RevokedSessionRepository : BasicRepository<RevokedSession>, IRevoke
         }
 
         var key = sessionKey.Trim();
-        var existing = FindByKey(key);
-        if (existing == null)
-        {
-            Insert(new RevokedSession
-            {
-                SessionKey = key,
-                RevokedAtUtc = revokedAtUtc,
-                ExpiresAtUtc = expiresAtUtc,
-            });
-            return;
-        }
 
-        if (revokedAtUtc > existing.RevokedAtUtc)
-        {
-            existing.RevokedAtUtc = revokedAtUtc;
-            existing.ExpiresAtUtc = expiresAtUtc;
-            Update(existing);
-        }
+        ExecuteWithRetry(connection =>
+            connection.Execute(
+                $@"
+INSERT INTO ""{_table}"" (""SessionKey"", ""RevokedAtUtc"", ""ExpiresAtUtc"")
+VALUES (@SessionKey, @RevokedAtUtc, @ExpiresAtUtc)
+ON CONFLICT(""SessionKey"") DO UPDATE SET
+    ""RevokedAtUtc"" = CASE WHEN excluded.""RevokedAtUtc"" > ""{_table}"".""RevokedAtUtc"" THEN excluded.""RevokedAtUtc"" ELSE ""{_table}"".""RevokedAtUtc"" END,
+    ""ExpiresAtUtc"" = CASE WHEN excluded.""RevokedAtUtc"" > ""{_table}"".""RevokedAtUtc"" THEN excluded.""ExpiresAtUtc"" ELSE ""{_table}"".""ExpiresAtUtc"" END",
+                new { SessionKey = key, RevokedAtUtc = revokedAtUtc, ExpiresAtUtc = expiresAtUtc }));
     }
 
     public void DeleteExpired(DateTime revokedBeforeUtc)
@@ -56,11 +48,4 @@ public class RevokedSessionRepository : BasicRepository<RevokedSession>, IRevoke
                 new { Cutoff = revokedBeforeUtc }));
     }
 
-    private RevokedSession FindByKey(string sessionKey)
-    {
-        return QueryWithRetry(connection =>
-            connection.QueryFirstOrDefault<RevokedSession>(
-                $"SELECT * FROM \"{_table}\" WHERE \"SessionKey\" = @SessionKey COLLATE NOCASE",
-                new { SessionKey = sessionKey }));
-    }
 }
