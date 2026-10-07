@@ -344,7 +344,12 @@ public class DownloadClientController : Controller
         }
         catch (ArgumentException ex)
         {
-            return NotFound(new { message = ex.Message });
+            if (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(new { message = ex.Message });
+            }
+
+            return BadRequest(new { message = ex.Message });
         }
         catch (DownloadClientAuthenticationException ex)
         {

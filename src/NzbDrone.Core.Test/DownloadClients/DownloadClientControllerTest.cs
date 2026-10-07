@@ -482,11 +482,21 @@ public class DownloadClientControllerTest
     [Test]
     public void GetItems_returns_not_found_when_client_does_not_exist()
     {
-        _syncService.GetClientItems(99).Returns(x => throw new System.ArgumentException("Client not found"));
+        _syncService.GetClientItems(99).Returns(x => throw new System.ArgumentException("Download client with id 99 not found."));
 
         var result = _controller.GetItems(99);
 
         Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public void GetItems_returns_bad_request_when_provider_cannot_be_created()
+    {
+        _syncService.GetClientItems(1).Returns(x => throw new System.ArgumentException("Could not create provider for client type BrokenType."));
+
+        var result = _controller.GetItems(1);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
     [Test]
