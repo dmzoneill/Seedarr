@@ -432,7 +432,7 @@ public class WatchFolderServiceTest
     }
 
     [Test]
-    public async Task HandleTorrentFileCreatedAsync_rapid_events_for_same_path_should_not_double_dispose_token()
+    public async Task HandleTorrentFileCreatedAsync_rapid_events_for_same_path_should_process_once()
     {
         var torrentPath = Path.Combine(_tempDir, "rapid-debounce.torrent");
         CreateDummyTorrentFile(torrentPath);
