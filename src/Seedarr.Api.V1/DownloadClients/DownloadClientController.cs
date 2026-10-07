@@ -357,12 +357,7 @@ public class DownloadClientController : Controller
         }
         catch (ArgumentException ex)
         {
-            if (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
-            {
-                return NotFound(new { message = ex.Message });
-            }
-
-            return BadRequest(new { message = ex.Message });
+            return FromSyncArgumentException(ex);
         }
         catch (DownloadClientAuthenticationException ex)
         {
@@ -404,7 +399,7 @@ public class DownloadClientController : Controller
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return FromSyncArgumentException(ex);
         }
         catch (InvalidOperationException ex)
         {
@@ -449,12 +444,22 @@ public class DownloadClientController : Controller
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return FromSyncArgumentException(ex);
         }
         catch (Exception ex)
         {
             return StatusCode(500, new { message = $"Failed to import torrents: {ex.Message}" });
         }
+    }
+
+    private static ActionResult FromSyncArgumentException(ArgumentException ex)
+    {
+        if (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        {
+            return new NotFoundObjectResult(new { message = ex.Message });
+        }
+
+        return new BadRequestObjectResult(new { message = ex.Message });
     }
 
     private DownloadClientDefinition EnrichWithStatus(DownloadClientDefinition definition)
