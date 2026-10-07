@@ -30,6 +30,7 @@ public class DelugeClient : IDownloadClient, IDisposable
     public string Username { get; set; } = "";
     public string Password { get; set; } = "deluge";
     public string Category { get; set; } = "";
+    public string UrlBase { get; set; } = "";
     public IRemotePathMappingService RemotePathMappingService { get; set; }
     public string LocalTorrentDirectory { get; set; }
 
@@ -56,7 +57,7 @@ public class DelugeClient : IDownloadClient, IDisposable
         }
     }
 
-    private string JsonUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}/json";
+    private string JsonUrl => $"{DownloadClientUrl.BuildRootUrl(UseSsl, Host, Port, UrlBase)}/json";
 
     private int NextRequestId() => Interlocked.Increment(ref _requestId) - 1;
 

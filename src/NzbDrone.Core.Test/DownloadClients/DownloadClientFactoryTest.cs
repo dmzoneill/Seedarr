@@ -288,4 +288,41 @@ public class DownloadClientFactoryTest
         Assert.That(client1, Is.Not.Null);
         Assert.That(client2, Is.SameAs(client1));
     }
+
+    [Test]
+    public void CreateClient_should_pass_url_base_to_qbittorrent_client()
+    {
+        var def = new DownloadClientDefinition
+        {
+            Id = 1,
+            ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
+            UrlBase = "/qbittorrent",
+        };
+
+        var client = _factory.CreateClient(def) as QBitTorrentClient;
+
+        Assert.That(client, Is.Not.Null);
+        Assert.That(client.UrlBase, Is.EqualTo("/qbittorrent"));
+    }
+
+    [Test]
+    public void CreateClient_should_recreate_instance_when_url_base_changes()
+    {
+        var def = new DownloadClientDefinition
+        {
+            Id = 1,
+            ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
+        };
+
+        var client1 = _factory.CreateClient(def);
+
+        def.UrlBase = "/qbittorrent";
+        var client2 = _factory.CreateClient(def);
+
+        Assert.That(client2, Is.Not.SameAs(client1));
+    }
 }

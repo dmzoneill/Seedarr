@@ -118,6 +118,21 @@ public class TransmissionClientTest
     }
 
     [Test]
+    public void RpcUrl_should_include_url_base_when_configured()
+    {
+        _client.UseSsl = false;
+        _client.Host = "myhost";
+        _client.Port = 9091;
+        _client.UrlBase = "/transmission-proxy";
+
+        var prop = typeof(TransmissionClient).GetProperty("RpcUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)prop.GetValue(_client);
+
+        Assert.That(result, Is.EqualTo("http://myhost:9091/transmission-proxy/transmission/rpc"));
+    }
+
+    [Test]
     public void Host_should_be_settable()
     {
         _client.Host = "transmission.local";
