@@ -1163,6 +1163,95 @@ public class TorrentControllerTest
     }
 
     [Test]
+    public void Announce_returns_503_when_tracker_announce_service_unavailable()
+    {
+        using var controllerWithoutAnnounce = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            _validator,
+            trackerAnnounceService: null,
+            categoryService: _categoryService);
+
+        const int torrentId = 17;
+        _torrentService.Get(torrentId).Returns(new Torrent { Id = torrentId, Name = "NoAnnounceService" });
+
+        var result = controllerWithoutAnnounce.Announce(torrentId);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(StatusCodes.Status503ServiceUnavailable));
+        Assert.That(objResult.Value, Is.EqualTo("Tracker announce service is not available"));
+    }
+
+    [Test]
+    public void Announce_returns_success_false_when_no_results_for_enabled_trackers()
+    {
+        const int torrentId = 18;
+        var torrent = new Torrent
+        {
+            Id = torrentId,
+            Name = "EmptyAnnounceResults",
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd"
+        };
+        _torrentService.Get(torrentId).Returns(torrent);
+        _trackerAnnounceService.AnnounceTorrent(torrent, force: true).Returns(new List<TrackerAnnounceResult>());
+        _trackerEntryService.GetByTorrentId(torrentId).Returns(new List<TrackerEntry>
+        {
+            new()
+            {
+                Id = 1,
+                TorrentId = torrentId,
+                Url = "http://tracker.example.com/announce",
+                Enabled = true
+            }
+        });
+
+        var result = _controller.Announce(torrentId);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        var success = okResult.Value.GetType().GetProperty("success")?.GetValue(okResult.Value);
+        Assert.That(success, Is.EqualTo(false));
+    }
+
+    [Test]
+    public void AnnounceTracker_returns_503_when_tracker_announce_service_unavailable()
+    {
+        using var controllerWithoutAnnounce = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            _validator,
+            trackerAnnounceService: null,
+            categoryService: _categoryService);
+
+        const int torrentId = 19;
+        const int trackerId = 3;
+        _torrentService.Get(torrentId).Returns(new Torrent { Id = torrentId, Name = "NoAnnounceService" });
+        _trackerEntryService.GetByTorrentId(torrentId).Returns(new List<TrackerEntry>
+        {
+            new() { Id = trackerId, TorrentId = torrentId, Url = "http://tracker.example.com/announce", Enabled = true }
+        });
+
+        var result = controllerWithoutAnnounce.AnnounceTracker(torrentId, trackerId);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        var objResult = (ObjectResult)result;
+        Assert.That(objResult.StatusCode, Is.EqualTo(StatusCodes.Status503ServiceUnavailable));
+    }
+
+    [Test]
     public void Recheck_queues_recheck_and_returns_Ok_with_status()
     {
         const int torrentId = 15;
