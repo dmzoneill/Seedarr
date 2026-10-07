@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Data.Sqlite;
+using NLog;
+using NLog.Config;
+using NLog.Targets;
 using NUnit.Framework;
 using NzbDrone.Core.Datastore;
 
@@ -17,6 +21,12 @@ public class EmbeddedDocumentConverterTest
     {
         _intListConverter = new EmbeddedDocumentConverter<List<int>>();
         _stringListConverter = new EmbeddedDocumentConverter<List<string>>();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        LogManager.Configuration = null;
     }
 
     [Test]
@@ -84,10 +94,36 @@ public class EmbeddedDocumentConverterTest
     [TestCase("true")]
     public void Parse_should_return_empty_list_when_value_is_invalid_non_json_or_mismatched(string invalidJson)
     {
+        var memoryTarget = ConfigureMemoryTarget();
+
         var result = _intListConverter.Parse(invalidJson);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.Empty);
+        Assert.That(memoryTarget.Logs.Any(log => log.Contains("Failed to deserialize embedded")), Is.True);
+        Assert.That(memoryTarget.Logs.Any(log => log.Contains(invalidJson)), Is.True);
+    }
+
+    [Test]
+    public void Parse_should_not_log_when_value_is_null_or_whitespace()
+    {
+        var memoryTarget = ConfigureMemoryTarget();
+
+        _ = _intListConverter.Parse(null);
+        _ = _intListConverter.Parse("");
+        _ = _intListConverter.Parse("   ");
+
+        Assert.That(memoryTarget.Logs, Is.Empty);
+    }
+
+    private static MemoryTarget ConfigureMemoryTarget()
+    {
+        var memoryTarget = new MemoryTarget { Layout = "${message}" };
+        var config = new LoggingConfiguration();
+        config.AddTarget("memory", memoryTarget);
+        config.AddRule(LogLevel.Trace, LogLevel.Fatal, memoryTarget);
+        LogManager.Configuration = config;
+        return memoryTarget;
     }
 
     [Test]

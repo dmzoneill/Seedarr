@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Data;
 using System.Text.Json;
 using Dapper;
+using NLog;
 
 namespace NzbDrone.Core.Datastore;
 
 public class EmbeddedDocumentConverter<T> : SqlMapper.TypeHandler<T>
 {
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = true
@@ -40,12 +42,9 @@ public class EmbeddedDocumentConverter<T> : SqlMapper.TypeHandler<T>
             var result = JsonSerializer.Deserialize<T>(json, Options);
             return result ?? CreateFallback();
         }
-        catch (JsonException)
+        catch (Exception ex)
         {
-            return CreateFallback();
-        }
-        catch (Exception)
-        {
+            Logger.Warn(ex, "Failed to deserialize embedded {0} document from database value: {1}", typeof(T).Name, json);
             return CreateFallback();
         }
     }
