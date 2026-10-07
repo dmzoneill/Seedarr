@@ -513,6 +513,7 @@ public class Startup
 
         app.MapGet("/swagger-custom.css", () => Microsoft.AspNetCore.Http.Results.Content(SwaggerTheme.Css, "text/css")).AllowAnonymous();
 
-        app.MapFallbackToFile($"{{*path:nonfile:regex({SpaFallbackExcludePathRegex})}}", "index.html");
+        app.MapFallbackToFile($"{{*path:nonfile:regex({SpaFallbackExcludePathRegex})}}", "index.html")
+            .AllowAnonymous();
     }
 }
