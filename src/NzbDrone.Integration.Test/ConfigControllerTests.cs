@@ -32,6 +32,24 @@ public class ConfigControllerTests : IntegrationTestBase
         Assert.That(resource["id"].ToString(), Is.EqualTo("1"));
     }
 
+    [TestCase("seeding", 999)]
+    [TestCase("advanced", 2)]
+    public async Task GetConfigById_with_unknown_id_returns_404(string section, int id)
+    {
+        var response = await GetAsync($"/api/v1/config/{section}/{id}");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [TestCase("seeding")]
+    [TestCase("advanced")]
+    public async Task GetConfigById_with_singleton_id_returns_200(string section)
+    {
+        var response = await GetAsync($"/api/v1/config/{section}/1");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
     [Test]
     public async Task PutAdvancedConfig_returns_202()
     {
