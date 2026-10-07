@@ -644,6 +644,15 @@ public class PeerProtocolConfigController : ConfigController<PeerProtocolConfigR
 
         SharedValidator.RuleFor(c => c.ConnectionRotationPercentage)
             .InclusiveBetween(0.0, 1.0);
+
+        SharedValidator.RuleFor(c => c.PeerContactIntervalSeconds)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.UdpTrackerTimeoutSeconds)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.HttpTrackerTimeoutSeconds)
+            .GreaterThanOrEqualTo(1);
     }
 
     protected override PeerProtocolConfigResource ToResource(IConfigService model)
