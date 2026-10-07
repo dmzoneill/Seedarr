@@ -469,6 +469,35 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
                         }
                     }
 
+                    if (string.Equals(type, "resource_access", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (var clientEntry in root.EnumerateObject())
+                        {
+                            if (clientEntry.Value.ValueKind != JsonValueKind.Object)
+                            {
+                                continue;
+                            }
+
+                            if (!clientEntry.Value.TryGetProperty("roles", out var clientRolesElem) ||
+                                clientRolesElem.ValueKind != JsonValueKind.Array)
+                            {
+                                continue;
+                            }
+
+                            foreach (var elem in clientRolesElem.EnumerateArray())
+                            {
+                                if (elem.ValueKind == JsonValueKind.String)
+                                {
+                                    var s = elem.GetString()?.Trim();
+                                    if (!string.IsNullOrEmpty(s))
+                                    {
+                                        values.Add(s);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     continue;
                 }
                 catch

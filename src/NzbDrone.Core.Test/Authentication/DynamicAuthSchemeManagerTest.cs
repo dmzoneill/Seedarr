@@ -215,6 +215,20 @@ public class DynamicAuthSchemeManagerTest
     }
 
     [Test]
+    public void ResolveRoles_should_parse_keycloak_resource_access_client_roles()
+    {
+        var claims = new List<Claim>
+        {
+            new("resource_access", "{\"seedarr-app\":{\"roles\":[\"seedarr-admin\"]}}"),
+        };
+
+        var rules = "{\"Admin\":\"^seedarr-admin$\"}";
+        var roles = DynamicAuthSchemeManager.ResolveRoles(claims, rules);
+
+        Assert.That(roles, Is.EquivalentTo(new[] { "Admin" }));
+    }
+
+    [Test]
     public void ResolveRoles_should_parse_comma_separated_claims()
     {
         var claims = new List<Claim>
