@@ -7,6 +7,7 @@ using NUnit.Framework;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Api.V1.System;
+using Seedarr.Http.Security;
 
 namespace Seedarr.Api.V1.Test.System;
 
@@ -15,6 +16,7 @@ public class SetupControllerTest
 {
     private IConfigService _configService;
     private IConfigFileProvider _configFileProvider;
+    private IRpcSessionStore _rpcSessionStore;
     private SetupController _controller;
 
     [SetUp]
@@ -22,7 +24,12 @@ public class SetupControllerTest
     {
         _configService = Substitute.For<IConfigService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
-        _controller = new SetupController(_configService, _configFileProvider);
+        _rpcSessionStore = new RpcSessionStore();
+        _controller = new SetupController(_configService, _configFileProvider, rpcSessionStore: _rpcSessionStore);
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext(),
+        };
     }
 
     [Test]
@@ -195,5 +202,24 @@ public class SetupControllerTest
         var result = _controller.Complete(request);
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
+    }
+
+    [Test]
+    public void Complete_should_invalidate_emulated_client_rpc_sessions()
+    {
+        _configService.IsSetupCompleted.Returns(false);
+        _rpcSessionStore.SetSession("qbittorrent-sid", TimeSpan.FromDays(7));
+        Assert.That(_rpcSessionStore.IsValid("qbittorrent-sid"), Is.True);
+
+        var request = new SetupCompleteRequest
+        {
+            Username = "admin",
+            Password = "StrongPassword123!",
+        };
+
+        var result = _controller.Complete(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(_rpcSessionStore.IsValid("qbittorrent-sid"), Is.False);
     }
 }
