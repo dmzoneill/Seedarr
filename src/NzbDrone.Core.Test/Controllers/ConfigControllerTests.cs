@@ -377,7 +377,7 @@ public class ConfigControllerTests
             AuthenticationEnabled = false,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(_rpcSessionStore.IsValid("deluge-session"), Is.False);
