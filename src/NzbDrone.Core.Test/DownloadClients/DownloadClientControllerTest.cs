@@ -94,6 +94,47 @@ public class DownloadClientControllerTest
         Assert.That(badRequest.Value, Is.EqualTo("Port must be between 1 and 65535"));
     }
 
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase(null)]
+    public void Create_with_empty_client_type_returns_bad_request(string clientType)
+    {
+        var def = new DownloadClientDefinition
+        {
+            Name = "Valid Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = clientType
+        };
+
+        var result = _controller.Create(def);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("ClientType is required"));
+        _downloadClientFactory.DidNotReceive().Create(Arg.Any<DownloadClientDefinition>());
+    }
+
+    [TestCase("UnknownClient")]
+    [TestCase("utorrent")]
+    public void Create_with_unsupported_client_type_returns_bad_request(string clientType)
+    {
+        var def = new DownloadClientDefinition
+        {
+            Name = "Valid Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = clientType
+        };
+
+        var result = _controller.Create(def);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("ClientType must be QBitTorrent, Transmission, or Deluge"));
+        _downloadClientFactory.DidNotReceive().Create(Arg.Any<DownloadClientDefinition>());
+    }
+
     [Test]
     public void Create_with_valid_definition_returns_ok()
     {
@@ -188,6 +229,46 @@ public class DownloadClientControllerTest
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result;
         Assert.That(badRequest.Value, Is.EqualTo("Port must be between 1 and 65535"));
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase(null)]
+    public void Update_with_empty_client_type_returns_bad_request(string clientType)
+    {
+        var def = new DownloadClientDefinition
+        {
+            Name = "Valid Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = clientType
+        };
+
+        var result = _controller.Update(1, def);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Is.EqualTo("ClientType is required"));
+        _downloadClientFactory.DidNotReceive().Update(Arg.Any<DownloadClientDefinition>());
+    }
+
+    [TestCase("UnknownClient")]
+    public void Update_with_unsupported_client_type_returns_bad_request(string clientType)
+    {
+        var def = new DownloadClientDefinition
+        {
+            Name = "Valid Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = clientType
+        };
+
+        var result = _controller.Update(1, def);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Is.EqualTo("ClientType must be QBitTorrent, Transmission, or Deluge"));
+        _downloadClientFactory.DidNotReceive().Update(Arg.Any<DownloadClientDefinition>());
     }
 
     [Test]
