@@ -12,5 +12,5 @@ public interface IRevokedSessionRepository : IBasicRepository<RevokedSession>
 
     void Upsert(string sessionKey, DateTime revokedAtUtc, DateTime expiresAtUtc);
 
-    void DeleteExpired(DateTime revokedBeforeUtc);
+    void DeleteExpired(DateTime utcNow);
 }

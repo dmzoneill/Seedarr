@@ -117,6 +117,19 @@ public class RevokedSessionRepositoryTest
     }
 
     [Test]
+    public void DeleteExpired_removes_rows_past_expires_at()
+    {
+        var revokedAt = DateTime.UtcNow.AddDays(-10);
+        _subject.Upsert("session-expired", revokedAt, DateTime.UtcNow.AddMinutes(-1));
+        _subject.Upsert("session-active", revokedAt, DateTime.UtcNow.AddDays(1));
+
+        _subject.DeleteExpired(DateTime.UtcNow);
+
+        Assert.That(_subject.GetActiveBySessionKey("session-expired", DateTime.UtcNow), Is.Null);
+        Assert.That(_subject.GetActiveBySessionKey("session-active", DateTime.UtcNow), Is.Not.Null);
+    }
+
+    [Test]
     public void GetActiveBySessionKey_returns_active_row_only()
     {
         var revokedAt = DateTime.UtcNow.AddHours(-1);
