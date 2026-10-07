@@ -66,6 +66,54 @@ public class PeerBlocklistSyncServiceTests
     }
 
     [Test]
+    public async Task SyncAsync_should_dispose_http_response_on_success()
+    {
+        var response = new TrackDisposeHttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("192.168.1.1\n")
+        };
+        _mockHandler.EnqueueResponse(response);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(response.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public async Task SyncAsync_should_dispose_http_response_on_304_not_modified()
+    {
+        var responseOk = new TrackDisposeHttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("1.1.1.1\n")
+        };
+        responseOk.Headers.ETag = new EntityTagHeaderValue("\"etag-v1\"");
+        _mockHandler.EnqueueResponse(responseOk);
+        await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        var response304 = new TrackDisposeHttpResponseMessage(HttpStatusCode.NotModified);
+        _mockHandler.EnqueueResponse(response304);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(response304.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public async Task SyncAsync_should_dispose_http_response_on_rate_limit()
+    {
+        var response = new TrackDisposeHttpResponseMessage(HttpStatusCode.TooManyRequests);
+        response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(60));
+        _mockHandler.EnqueueResponse(response);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(response.IsDisposed, Is.True);
+    }
+
+    [Test]
     public async Task SyncAsync_200_OK_should_parse_rules_and_cache_etag_and_last_modified()
     {
         var response = new HttpResponseMessage(HttpStatusCode.OK)
@@ -607,5 +655,25 @@ public class PeerBlocklistSyncServiceTests
         Assert.That(_service.IntervalTree, Is.Not.Null);
         Assert.That(_service.IntervalTree.IntervalCount, Is.GreaterThan(0));
         Assert.That(readCount, Is.GreaterThan(0));
+    }
+
+    private sealed class TrackDisposeHttpResponseMessage : HttpResponseMessage
+    {
+        public bool IsDisposed { get; private set; }
+
+        public TrackDisposeHttpResponseMessage(HttpStatusCode statusCode)
+            : base(statusCode)
+        {
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                IsDisposed = true;
+            }
+
+            base.Dispose(disposing);
+        }
     }
 }

@@ -302,6 +302,8 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             };
         }
 
+        try
+        {
         if (response.StatusCode == HttpStatusCode.NotModified)
         {
             bool hasLoadedTree;
@@ -573,6 +575,11 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             RuleCount = parsedRules.Count,
             Message = "Blocklist updated successfully"
         };
+        }
+        finally
+        {
+            response?.Dispose();
+        }
     }
 
     private static bool HasEnforceableIntervals(Ipv6IntervalTree tree)
