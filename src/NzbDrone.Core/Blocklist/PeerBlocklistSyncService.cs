@@ -492,21 +492,39 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         catch (Exception ex)
         {
             now = _nowProvider();
+            DateTime? nextAllowedSyncUtc = null;
+            string status;
             lock (_syncLock)
             {
                 _metadata.ConsecutiveFailures++;
                 _metadata.LastCheckedUtc = now;
-                _metadata.LastSyncStatus = $"Failed: {ex.Message}";
                 _metadata.LastFailureMessage = ex.Message;
+
+                if (ex is BlocklistQuotaExceededException)
+                {
+                    var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
+                    var retrySpan = CalculateExponentialBackoff(retryCount);
+                    _metadata.NextAllowedSyncUtc = now.Add(retrySpan);
+                    nextAllowedSyncUtc = _metadata.NextAllowedSyncUtc;
+                    _metadata.LastSyncStatus = $"Quota Exceeded (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
+                    status = _metadata.LastSyncStatus;
+                }
+                else
+                {
+                    _metadata.LastSyncStatus = $"Failed: {ex.Message}";
+                    status = _metadata.LastSyncStatus;
+                }
             }
 
             _logger.Warn(ex, "Failed to decompress or parse blocklist from {0}: {1}", effectiveUrl, ex.Message);
             return new BlocklistSyncResult
             {
                 Success = false,
-                Status = $"Failed: {ex.Message}",
+                Status = status,
                 Message = ex.Message,
-                RuleCount = RuleCount
+                RuleCount = RuleCount,
+                NextAllowedSyncUtc = nextAllowedSyncUtc,
+                IsRateLimited = nextAllowedSyncUtc.HasValue
             };
         }
 

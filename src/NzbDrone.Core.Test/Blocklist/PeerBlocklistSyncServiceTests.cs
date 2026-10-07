@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -374,6 +375,50 @@ public class PeerBlocklistSyncServiceTests
         Assert.That(_service.LastSyncHttpStatus, Is.EqualTo(HttpStatusCode.NotModified));
         Assert.That(_service.LastCheckedUtc, Is.EqualTo(_currentTime));
         Assert.That(_service.Metadata.ConsecutiveFailures, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task SyncAsync_quota_exceeded_should_apply_exponential_backoff_and_defer_next_sync()
+    {
+        var streamProvider = Substitute.For<IBlocklistArchiveStreamProvider>();
+        streamProvider
+            .ExtractRulesAsync(
+                Arg.Any<Stream>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<List<string>>>(_ => throw new BlocklistQuotaExceededException("Blocklist exceeds size quota"));
+
+        using var handler = new MockHttpMessageHandler();
+        using var client = new HttpClient(handler);
+        var service = new PeerBlocklistSyncService(
+            client,
+            configService: null,
+            nowProvider: () => _currentTime,
+            streamProvider: streamProvider);
+
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("ignored")
+        };
+        handler.EnqueueResponse(response);
+
+        var firstResult = await service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(firstResult.Success, Is.False);
+        Assert.That(firstResult.IsRateLimited, Is.True);
+        Assert.That(service.NextAllowedSyncUtc, Is.EqualTo(_currentTime.AddMinutes(5)));
+        Assert.That(service.IsSyncAllowed(), Is.False);
+        Assert.That(service.Metadata.LastSyncStatus, Does.Contain("Quota Exceeded"));
+        Assert.That(handler.Requests.Count, Is.EqualTo(1));
+
+        var secondResult = await service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(secondResult.Success, Is.False);
+        Assert.That(secondResult.IsRateLimited, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(1));
     }
 
     [Test]
