@@ -26,6 +26,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
     private readonly IIdentityProviderRepository _identityProviderRepository;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, IdentityProviderDefinition> _pendingRetryProviders = new();
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingRetryCancellation = new();
     private readonly SemaphoreSlim _schemeLock = new(1, 1);
 
     public DynamicAuthSchemeManager(
@@ -80,34 +81,82 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             return;
         }
 
-        _pendingRetryProviders[provider.ProviderId] = provider;
+        var providerId = provider.ProviderId;
+        _pendingRetryProviders[providerId] = provider;
+
+        if (_pendingRetryCancellation.TryRemove(providerId, out var existingCts))
+        {
+            try
+            {
+                existingCts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            existingCts.Dispose();
+        }
+
+        var retryCts = new CancellationTokenSource();
+        _pendingRetryCancellation[providerId] = retryCts;
+        var cancellationToken = retryCts.Token;
 
         _ = Task.Run(async () =>
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
-                if (_pendingRetryProviders.TryGetValue(provider.ProviderId, out var pending))
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    var current = _identityProviderRepository.FindByProviderId(provider.ProviderId);
+                    return;
+                }
+
+                if (_pendingRetryProviders.TryGetValue(providerId, out _))
+                {
+                    var current = _identityProviderRepository.FindByProviderId(providerId);
                     if (current != null && current.IsEnabled)
                     {
                         await RegisterOrUpdateOidcProviderAsync(current);
-                        _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+                        ClearPendingRetry(providerId);
                         _logger.Info("Successfully registered dynamic OIDC authentication scheme on retry: Oidc_{0} ({1})", current.ProviderId, current.Name);
                     }
                     else
                     {
-                        _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+                        ClearPendingRetry(providerId);
                     }
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+            }
             catch (Exception ex)
             {
-                _logger.Warn(ex, "Retry registration failed for OIDC provider {0} ({1}), will retry again", provider.ProviderId, provider.Name);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                _logger.Warn(ex, "Retry registration failed for OIDC provider {0} ({1}), will retry again", providerId, provider.Name);
                 ScheduleRetry(provider, Math.Min(delaySeconds * 2, 300));
             }
-        });
+        }, cancellationToken);
+    }
+
+    private void ClearPendingRetry(string providerId)
+    {
+        _pendingRetryProviders.TryRemove(providerId, out _);
+        if (_pendingRetryCancellation.TryRemove(providerId, out var cts))
+        {
+            try
+            {
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            cts.Dispose();
+        }
     }
 
     public async Task RegisterOrUpdateOidcProviderAsync(IdentityProviderDefinition provider)
@@ -245,7 +294,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
 
             if (!hadPostConfigureError)
             {
-                _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+                ClearPendingRetry(provider.ProviderId);
             }
 
             _logger.Info("Registered dynamic OIDC authentication scheme: {0} ({1})", schemeName, provider.Name);
@@ -267,7 +316,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             var schemeProvider = _serviceProvider.GetService<IAuthenticationSchemeProvider>();
             var oidcOptionsCache = _serviceProvider.GetService<IOptionsMonitorCache<OpenIdConnectOptions>>();
 
-            _pendingRetryProviders.TryRemove(providerId, out _);
+            ClearPendingRetry(providerId);
 
             if (schemeProvider != null)
             {

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -65,6 +66,43 @@ public class DynamicAuthSchemeManagerResilienceTest
 
         // Offline provider scheduled for retry
         Assert.That(manager.HasPendingRetry("unreachable_idp"), Is.True);
+    }
+
+    [Test]
+    public async Task ScheduleRetry_should_cancel_previous_loop_when_called_again_for_same_provider()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "dup_retry_idp",
+            Name = "Duplicate Retry Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "seedarr-client",
+            IsEnabled = true,
+        };
+
+        var retryLookups = 0;
+        repo.FindByProviderId("dup_retry_idp").Returns(_ =>
+        {
+            Interlocked.Increment(ref retryLookups);
+            return provider;
+        });
+
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        manager.ScheduleRetry(provider, 1);
+        manager.ScheduleRetry(provider, 1);
+
+        await Task.Delay(TimeSpan.FromSeconds(2.5));
+
+        Assert.That(retryLookups, Is.EqualTo(1));
+        Assert.That(manager.HasPendingRetry("dup_retry_idp"), Is.False);
     }
 
     [Test]
