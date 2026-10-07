@@ -405,10 +405,13 @@ public class WatchFolderService : BackgroundService
                 return;
             }
 
+            var primaryHash = parsed.InfoHash ?? parsed.InfoHashV2;
+
             var torrent = new Torrent
             {
                 Name = parsed.Name,
-                InfoHash = parsed.InfoHash,
+                InfoHash = parsed.InfoHash ?? parsed.InfoHashV2,
+                InfoHashV2 = parsed.InfoHashV2,
                 TotalSize = parsed.TotalSize,
                 PieceCount = parsed.PieceCount,
                 PieceLength = parsed.PieceLength,
@@ -457,10 +460,10 @@ public class WatchFolderService : BackgroundService
 
             torrent.Status = initialStatus;
 
-            var existing = _torrentService.GetByInfoHash(parsed.InfoHash);
+            var existing = _torrentService.GetByInfoHash(primaryHash);
             if (existing != null)
             {
-                _logger.Info("Torrent already exists with info hash {0}, merging trackers: {1}", parsed.InfoHash, fileName);
+                _logger.Info("Torrent already exists with info hash {0}, merging trackers: {1}", primaryHash, fileName);
                 MergeTrackerEntries(existing.Id, parsed);
                 if (string.IsNullOrWhiteSpace(existing.TrackerUrl) && !string.IsNullOrWhiteSpace(parsed.AnnounceUrl))
                 {
@@ -471,7 +474,7 @@ public class WatchFolderService : BackgroundService
                 return;
             }
 
-            if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
+            if (_torrentService.ExistsByInfoHash(primaryHash))
             {
                 _logger.Debug("Torrent already exists, skipping: {0}", fileName);
                 HandlePostImport(filePath, deleteAfterAdd);

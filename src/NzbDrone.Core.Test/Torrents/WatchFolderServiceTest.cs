@@ -926,6 +926,70 @@ public class WatchFolderServiceTest
     }
 
     [Test]
+    public void ProcessTorrentFile_should_persist_InfoHashV2_and_use_v2_as_primary_when_v1_absent()
+    {
+        var torrentPath = Path.Combine(_tempDir, "v2primary.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        const string v2Hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var parsed = new ParsedTorrent
+        {
+            Name = "V2Torrent",
+            InfoHash = null,
+            InfoHashV2 = v2Hash,
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            Files = new List<ParsedTorrentFile>()
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.GetByInfoHash(v2Hash).Returns((Torrent)null);
+        _torrentService.ExistsByInfoHash(v2Hash).Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 5 });
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, _tempDir });
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == v2Hash && t.InfoHashV2 == v2Hash));
+        _torrentService.Received(1).GetByInfoHash(v2Hash);
+    }
+
+    [Test]
+    public void ProcessTorrentFile_when_existing_matched_by_InfoHashV2_should_merge_not_add()
+    {
+        var torrentPath = Path.Combine(_tempDir, "v2duplicate.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        const string v2Hash = "cccccccccccccccccccccccccccccccccccccccc";
+        var parsed = new ParsedTorrent
+        {
+            Name = "V2Duplicate",
+            InfoHash = null,
+            InfoHashV2 = v2Hash,
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            AnnounceUrl = "http://tracker-new.example.com/announce",
+            Files = new List<ParsedTorrentFile>()
+        };
+
+        var existingTorrent = new Torrent { Id = 99, Name = "V2Duplicate", InfoHash = v2Hash, InfoHashV2 = v2Hash };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.GetByInfoHash(v2Hash).Returns(existingTorrent);
+        _trackerEntryService.GetByTorrentId(99).Returns(new List<TrackerEntry>());
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, _tempDir });
+
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t =>
+            t.TorrentId == 99 && t.Url == "http://tracker-new.example.com/announce"));
+    }
+
+    [Test]
     public void ProcessTorrentFile_when_torrent_exists_and_delete_after_add_true_merges_trackers_and_deletes_file()
     {
         _configService.WatchFolderDeleteAddedTorrents.Returns(true);
