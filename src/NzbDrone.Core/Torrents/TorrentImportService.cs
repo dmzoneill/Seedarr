@@ -247,7 +247,6 @@ public class TorrentImportService : ITorrentImportService
             if (parsed.Trackers != null && parsed.Trackers.Length > 0)
             {
                 var trackersToMerge = new List<TrackerEntry>();
-                var tier = 0;
                 foreach (var url in parsed.Trackers)
                 {
                     if (!string.IsNullOrWhiteSpace(url) && existingUrls.Add(url))
@@ -256,12 +255,10 @@ public class TorrentImportService : ITorrentImportService
                         {
                             TorrentId = existing.Id,
                             Url = url,
-                            Tier = tier,
+                            Tier = 0,
                             Enabled = true
                         });
                     }
-
-                    tier++;
                 }
 
                 if (trackersToMerge.Count > 0)
@@ -294,7 +291,6 @@ public class TorrentImportService : ITorrentImportService
         var trackersToAddForNewTorrent = new List<TrackerEntry>();
         if (parsed.Trackers != null && parsed.Trackers.Length > 0)
         {
-            var tier = 0;
             var addedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var url in parsed.Trackers)
             {
@@ -303,12 +299,10 @@ public class TorrentImportService : ITorrentImportService
                     trackersToAddForNewTorrent.Add(new TrackerEntry
                     {
                         Url = url,
-                        Tier = tier,
+                        Tier = 0,
                         Enabled = true
                     });
                 }
-
-                tier++;
             }
         }
 

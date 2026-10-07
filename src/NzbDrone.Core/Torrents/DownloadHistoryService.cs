@@ -539,7 +539,6 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
 
         if (trackersFromMagnet != null)
         {
-            var tier = 1;
             foreach (var tr in trackersFromMagnet)
             {
                 if (string.Equals(tr, primaryTracker, StringComparison.OrdinalIgnoreCase))
@@ -551,7 +550,7 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
                 {
                     TorrentId = added.Id,
                     Url = tr,
-                    Tier = tier++,
+                    Tier = 0,
                     Enabled = true
                 });
             }

@@ -777,6 +777,25 @@ public class WatchFolderServiceTest
     }
 
     [Test]
+    public void ProcessMagnetFile_should_assign_same_tier_to_all_tr_trackers()
+    {
+        var magnetPath = Path.Combine(_tempDir, "multi-tr.magnet");
+        var magnetUri = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Ubuntu+Linux&tr=http%3A%2F%2Ftracker1.example.com%2Fannounce&tr=http%3A%2F%2Ftracker2.example.com%2Fannounce";
+        File.WriteAllText(magnetPath, magnetUri);
+
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 102, Name = "Ubuntu Linux" });
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessMagnetFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { magnetPath, _tempDir });
+
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(te =>
+            te.TorrentId == 102 && te.Url == "http://tracker1.example.com/announce" && te.Tier == 0));
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(te =>
+            te.TorrentId == 102 && te.Url == "http://tracker2.example.com/announce" && te.Tier == 0));
+    }
+
+    [Test]
     public void ProcessTorrentFile_when_delete_after_add_is_false_should_rename_file_to_imported()
     {
         _configService.WatchFolderDeleteAddedTorrents.Returns(false);
