@@ -160,7 +160,11 @@ public class SchedulerTest
 
         _taskManager.Received().RecordTaskFinished(typeof(ThrowingScheduledTask).FullName, Arg.Any<DateTime>(), ScheduledTaskTriggerSource.Scheduler);
         _taskManager.DidNotReceive().UpdateLastExecution(Arg.Any<string>());
-        _taskManager.Received().RecordTaskFailed(typeof(ThrowingScheduledTask).FullName, Arg.Any<DateTime>(), "Task failed");
+        _taskManager.Received().RecordTaskFailed(
+            typeof(ThrowingScheduledTask).FullName,
+            Arg.Any<DateTime>(),
+            Arg.Is<Exception>(ex => ex.Message == "Task failed"),
+            ScheduledTaskTriggerSource.Scheduler);
     }
 
     [Test]

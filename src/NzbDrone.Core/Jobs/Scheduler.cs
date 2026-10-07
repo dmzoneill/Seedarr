@@ -199,7 +199,7 @@ public class Scheduler : BackgroundService
                         {
                             failed = true;
                             _logger.Error(ex, "Scheduled task failed: {0}", next.TypeName);
-                            _taskManager.RecordTaskFailed(next.TypeName, startTime, ex.Message);
+                            _taskManager.RecordTaskFailed(next.TypeName, startTime, ex, ScheduledTaskTriggerSource.Scheduler);
                             _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
                             {
                                 Name = "TaskFailed",
