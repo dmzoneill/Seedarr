@@ -433,6 +433,10 @@ public class RingBufferTargetTest
             Is.EqualTo("api_key=[REDACTED]&passkey=[REDACTED]&token=[REDACTED]&apikey=[REDACTED]"));
 
         Assert.That(
+            RingBufferTarget.Sanitize("GET failed https://indexer.example/api?auth=supersecret&key=indexer-key-99"),
+            Is.EqualTo("GET failed https://indexer.example/api?auth=[REDACTED]&key=[REDACTED]"));
+
+        Assert.That(
             RingBufferTarget.Sanitize("https://user:mypassword@example.com/api"),
             Is.EqualTo("https://user:[REDACTED]@example.com/api"));
 
