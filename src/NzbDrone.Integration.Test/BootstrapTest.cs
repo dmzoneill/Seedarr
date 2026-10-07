@@ -172,9 +172,7 @@ public class BootstrapTest
     {
         var configProvider = Substitute.For<IConfigFileProvider>();
         var certManager = Substitute.For<ICertificateManager>();
-        var certificate = Substitute.For<X509Certificate2>();
-
-        certManager.GetOrCreateCertificate(configProvider).Returns(certificate);
+        certManager.GetOrCreateCertificate(configProvider).Returns((X509Certificate2)null);
         certManager.GetCertificateChain().Returns(new X509Certificate2Collection());
 
         var serverOptions = new KestrelServerOptions();
