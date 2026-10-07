@@ -11,12 +11,22 @@ public static class AssemblyLoader
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     public static List<Assembly> Load(List<string> names)
     {
+        ArgumentNullException.ThrowIfNull(names);
+
         var assemblies = new List<Assembly>();
         var failed = new List<string>();
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
 
         foreach (var name in names)
         {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                var label = DescribeInvalidAssemblyName(name);
+                Logger.Error("Assembly name must not be null, empty, or whitespace (got {0})", label);
+                failed.Add(label);
+                continue;
+            }
+
             var path = Path.Combine(baseDir, $"{name}.dll");
             if (File.Exists(path))
             {
@@ -51,5 +61,20 @@ public static class AssemblyLoader
         }
 
         return assemblies;
+    }
+
+    private static string DescribeInvalidAssemblyName(string name)
+    {
+        if (name == null)
+        {
+            return "<null>";
+        }
+
+        if (name.Length == 0)
+        {
+            return "<empty>";
+        }
+
+        return "<whitespace>";
     }
 }
