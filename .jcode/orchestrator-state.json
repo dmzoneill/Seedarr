@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:46:30Z",
+  "updatedAt": "2026-10-07T01:48:17Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,29 +14,29 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_b637a7a0",
+    "lastScheduleId": "sched_2b317bfa",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "issue": 1211,
-      "worktree": "../seedarr_worktrees/issue-1211",
+      "issue": 1240,
+      "worktree": "../seedarr_worktrees/issue-1240",
       "area": "authentication"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1141,
-      "worktree": "../seedarr_worktrees/issue-1141",
+      "issue": 1065,
+      "worktree": "../seedarr_worktrees/issue-1065",
       "area": "host"
     },
     "api": {
       "status": "running",
       "worker": "hawk",
-      "issue": 1097,
-      "worktree": "../seedarr_worktrees/issue-1097",
+      "issue": 1226,
+      "worktree": "../seedarr_worktrees/issue-1226",
       "area": "downloadclients"
     },
     "core-torrents": {
@@ -72,6 +72,6 @@
       1093
     ]
   },
-  "githubOpen": 279,
-  "lastMonitorNote": "fix monitor: 279 open; closed #987/#1196/#1233/#1137/#1047; 5 dispatches; stopped spider/t-rex/tiger/whale/turtle"
+  "githubOpen": 277,
+  "lastMonitorNote": "fix monitor: 277 open; closed #1211/#1141/#1097; 3 dispatches; stopped parrot/lizard/rabbit"
 }
