@@ -10,8 +10,8 @@ namespace NzbDrone.Core.Seeding;
 
 public interface ISeedingService
 {
-    void Start(int torrentId);
-    void Stop(int torrentId);
+    bool Start(int torrentId);
+    bool Stop(int torrentId);
     void StartAll();
     void StopAll();
     SeedingStats GetStats();
@@ -40,13 +40,13 @@ public class SeedingService : ISeedingService
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Start(int torrentId)
+    public bool Start(int torrentId)
     {
         var torrent = _torrentService.Get(torrentId);
         if (torrent == null)
         {
             _logger.Warn("Cannot start seeding: torrent {0} not found", torrentId);
-            return;
+            return false;
         }
 
         torrent.Resume();
@@ -57,19 +57,20 @@ public class SeedingService : ISeedingService
 
         _logger.Info("Started seeding: {0}", torrent.Name);
         _eventAggregator.PublishEvent(new SeedingStartedEvent(torrentId));
+        return true;
     }
 
-    public void Stop(int torrentId)
+    public bool Stop(int torrentId)
     {
         var torrent = _torrentService.Get(torrentId);
         if (torrent == null)
         {
-            return;
+            return false;
         }
 
         if (torrent.Status == TorrentStatus.Stopped)
         {
-            return;
+            return true;
         }
 
         torrent.Stop();
@@ -78,6 +79,7 @@ public class SeedingService : ISeedingService
 
         _logger.Info("Stopped seeding: {0}", torrent.Name);
         _eventAggregator.PublishEvent(new SeedingStoppedEvent(torrentId));
+        return true;
     }
 
     public void StartAll()

@@ -64,7 +64,11 @@ public class SeedingController : Controller, IHandle<SeedingTickEvent>
     [Authorize(Policy = Policies.Operator)]
     public ActionResult Start(int torrentId)
     {
-        _seedingService.Start(torrentId);
+        if (!_seedingService.Start(torrentId))
+        {
+            return NotFound();
+        }
+
         return Ok();
     }
 
@@ -72,7 +76,11 @@ public class SeedingController : Controller, IHandle<SeedingTickEvent>
     [Authorize(Policy = Policies.Operator)]
     public ActionResult Stop(int torrentId)
     {
-        _seedingService.Stop(torrentId);
+        if (!_seedingService.Stop(torrentId))
+        {
+            return NotFound();
+        }
+
         return Ok();
     }
 
