@@ -14,8 +14,6 @@ using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Host;
-using Seedarr.Http.Authentication;
-
 namespace NzbDrone.Core.Test.Lifecycle;
 
 [TestFixture]
@@ -51,7 +49,6 @@ public class AppLifetimeTest
 
         _subject = new AppLifetime(
             _eventAggregator,
-            null,
             _torrentService,
             _configService,
             _diskSpaceService,
@@ -461,49 +458,6 @@ public class AppLifetimeTest
     }
 
     [Test]
-    public async Task StartAsync_should_honor_cancelled_startup_token_after_auth_init()
-    {
-        var authManager = Substitute.For<IDynamicAuthSchemeManager>();
-        authManager.InitializeConfiguredProvidersAsync().Returns(async callInfo =>
-        {
-            await Task.Yield();
-        });
-
-        using var cts = new CancellationTokenSource();
-        var subject = new AppLifetime(
-            _eventAggregator,
-            authManager,
-            _torrentService,
-            _configService,
-            _diskSpaceService,
-            _upnpService,
-            _fastResumeService,
-            _trackerAnnounceService,
-            _connectionManager,
-            _pieceStorage,
-            _mainDatabase,
-            _peerServer);
-
-        cts.Cancel();
-
-        try
-        {
-            await subject.StartAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            subject.Dispose();
-        }
-
-        await authManager.Received(1).InitializeConfiguredProvidersAsync();
-        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<ApplicationStartedEvent>());
-        _fastResumeService.DidNotReceive().LoadAll();
-    }
-
-    [Test]
     public async Task StopAsync_should_continue_checkpoint_when_optimize_fails()
     {
         _torrentService.GetAll().Returns(new List<Torrent>());
@@ -547,7 +501,6 @@ public class AppLifetimeTest
         var maintenanceService = Substitute.For<IDatabaseMaintenanceService>();
         var subject = new AppLifetime(
             _eventAggregator,
-            null,
             _torrentService,
             _configService,
             _diskSpaceService,

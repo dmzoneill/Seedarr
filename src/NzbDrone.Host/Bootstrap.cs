@@ -16,6 +16,7 @@ using NzbDrone.Common.Instrumentation;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Security;
+using Seedarr.Http.Authentication;
 
 namespace NzbDrone.Host;
 
@@ -66,6 +67,8 @@ public static class Bootstrap
         var app = builder.Build();
         startup.Configure(app);
 
+        InitializeDynamicAuthSchemesAsync(app.Services).GetAwaiter().GetResult();
+
         TableRegistration.RegisterTables();
 
         var mainDb = app.Services.GetRequiredService<IMainDatabase>();
@@ -106,6 +109,29 @@ public static class Bootstrap
         }
 
         return app;
+    }
+
+    public static async Task InitializeDynamicAuthSchemesAsync(IServiceProvider services)
+    {
+        if (services == null)
+        {
+            return;
+        }
+
+        var manager = services.GetService<IDynamicAuthSchemeManager>();
+        if (manager == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await manager.InitializeConfiguredProvidersAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to initialize dynamic authentication providers during bootstrap");
+        }
     }
 
     public static void ValidateListenUrlOverrides(string[] urls)

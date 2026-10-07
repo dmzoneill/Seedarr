@@ -15,14 +15,11 @@ using NzbDrone.Core.Network;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
-using Seedarr.Http.Authentication;
-
 namespace NzbDrone.Host;
 
 public class AppLifetime : IHostedService, IDisposable
 {
     private readonly IEventAggregator _eventAggregator;
-    private readonly IDynamicAuthSchemeManager _dynamicAuthManager;
     private readonly ITorrentService _torrentService;
     private readonly IConfigService _configService;
     private readonly IDiskSpaceService _diskSpaceService;
@@ -43,7 +40,6 @@ public class AppLifetime : IHostedService, IDisposable
 
     public AppLifetime(
         IEventAggregator eventAggregator,
-        IDynamicAuthSchemeManager dynamicAuthManager = null,
         ITorrentService torrentService = null,
         IConfigService configService = null,
         IDiskSpaceService diskSpaceService = null,
@@ -57,7 +53,6 @@ public class AppLifetime : IHostedService, IDisposable
         IDatabaseMaintenanceService databaseMaintenanceService = null)
     {
         _eventAggregator = eventAggregator;
-        _dynamicAuthManager = dynamicAuthManager;
         _torrentService = torrentService;
         _configService = configService;
         _diskSpaceService = diskSpaceService;
@@ -74,20 +69,6 @@ public class AppLifetime : IHostedService, IDisposable
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (_dynamicAuthManager != null)
-        {
-            try
-            {
-                await _dynamicAuthManager.InitializeConfiguredProvidersAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Error initializing dynamic authentication providers on startup");
-            }
-        }
-
         cancellationToken.ThrowIfCancellationRequested();
 
         _logger.Info("Seedarr application started");
