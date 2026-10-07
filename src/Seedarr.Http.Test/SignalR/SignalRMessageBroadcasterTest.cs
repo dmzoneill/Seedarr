@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
@@ -711,6 +712,30 @@ public class SignalRMessageBroadcasterTest
 
         await Task.Delay(50);
         Assert.Pass("Faulted tracker continuation completed safely");
+    }
+
+    [Test]
+    public void PieceCompletedMessage_serializes_without_circular_body_reference()
+    {
+        var msg = new PieceCompletedMessage("testhash", 3, 16384);
+        msg.TorrentId = 42;
+
+        Assert.DoesNotThrow(() => JsonSerializer.Serialize(msg));
+        Assert.DoesNotThrow(() => JsonSerializer.Serialize(msg.Body));
+
+        var bodyJson = JsonSerializer.Serialize(msg.Body);
+        Assert.That(bodyJson, Does.Contain("42"));
+        Assert.That(bodyJson, Does.Not.Contain("\"body\""));
+    }
+
+    [Test]
+    public void PieceBatchCompletedMessage_serializes_without_circular_body_reference()
+    {
+        var msg = new PieceBatchCompletedMessage("testhash", new[] { 1, 2, 3 }, 49152);
+        msg.TorrentId = 7;
+
+        Assert.DoesNotThrow(() => JsonSerializer.Serialize(msg));
+        Assert.DoesNotThrow(() => JsonSerializer.Serialize(msg.Body));
     }
 
     [Test]
