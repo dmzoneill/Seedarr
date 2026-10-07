@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
-using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Torrents;
@@ -12,7 +11,6 @@ namespace NzbDrone.Core.Test.Seeding;
 public class SeedingServiceTest
 {
     private ITorrentService _torrentService;
-    private IConfigService _configService;
     private IEventAggregator _eventAggregator;
     private SeedingService _service;
 
@@ -20,9 +18,8 @@ public class SeedingServiceTest
     public void Setup()
     {
         _torrentService = Substitute.For<ITorrentService>();
-        _configService = Substitute.For<IConfigService>();
         _eventAggregator = Substitute.For<IEventAggregator>();
-        _service = new SeedingService(_torrentService, _configService, _eventAggregator);
+        _service = new SeedingService(_torrentService, _eventAggregator);
     }
 
     [Test]
@@ -186,29 +183,6 @@ public class SeedingServiceTest
     }
 
     [Test]
-    public void StartAll_should_enable_autostart_when_disabled()
-    {
-        _configService.AutoStart.Returns(false);
-        _torrentService.GetAll().Returns(new List<Torrent>());
-
-        _service.StartAll();
-
-        _configService.Received(1).SaveConfigDictionary(
-            Arg.Is<Dictionary<string, object>>(d => (bool)d["AutoStart"] == true));
-    }
-
-    [Test]
-    public void StartAll_should_not_enable_autostart_when_already_enabled()
-    {
-        _configService.AutoStart.Returns(true);
-        _torrentService.GetAll().Returns(new List<Torrent>());
-
-        _service.StartAll();
-
-        _configService.DidNotReceive().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
-    }
-
-    [Test]
     public void StartAll_should_start_stopped_queued_and_paused_torrents_with_correct_status()
     {
         var stoppedComplete = new Torrent { Id = 1, Name = "StoppedComplete", Status = TorrentStatus.Stopped, Progress = 1.0 };
@@ -219,7 +193,6 @@ public class SeedingServiceTest
         var seeding = new Torrent { Id = 6, Name = "Seeding", Status = TorrentStatus.Seeding };
         var downloading = new Torrent { Id = 7, Name = "Downloading", Status = TorrentStatus.Downloading };
 
-        _configService.AutoStart.Returns(true);
         _torrentService.GetAll().Returns(new List<Torrent>
         {
             stoppedComplete,
@@ -273,36 +246,12 @@ public class SeedingServiceTest
     {
         var stopped = new Torrent { Id = 1, Name = "S1", Status = TorrentStatus.Stopped };
         var queued = new Torrent { Id = 2, Name = "S2", Status = TorrentStatus.Queued };
-        _configService.AutoStart.Returns(true);
         _torrentService.GetAll().Returns(new List<Torrent> { stopped, queued });
 
         _service.StartAll();
 
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SeedingStartedEvent>(e => e.TorrentId == 1));
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SeedingStartedEvent>(e => e.TorrentId == 2));
-    }
-
-    [Test]
-    public void StopAll_should_disable_autostart_when_enabled()
-    {
-        _configService.AutoStart.Returns(true);
-        _torrentService.GetAll().Returns(new List<Torrent>());
-
-        _service.StopAll();
-
-        _configService.Received(1).SaveConfigDictionary(
-            Arg.Is<Dictionary<string, object>>(d => (bool)d["AutoStart"] == false));
-    }
-
-    [Test]
-    public void StopAll_should_not_disable_autostart_when_already_disabled()
-    {
-        _configService.AutoStart.Returns(false);
-        _torrentService.GetAll().Returns(new List<Torrent>());
-
-        _service.StopAll();
-
-        _configService.DidNotReceive().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
     }
 
     [Test]
@@ -331,7 +280,6 @@ public class SeedingServiceTest
         var stopped = new Torrent { Id = 3, Name = "Stopped", Status = TorrentStatus.Stopped, Active = false };
         var paused = new Torrent { Id = 4, Name = "Paused", Status = TorrentStatus.Paused, Active = false };
 
-        _configService.AutoStart.Returns(false);
         _torrentService.GetAll().Returns(new List<Torrent> { seeding, downloading, stopped, paused });
 
         _service.StopAll();
@@ -359,7 +307,6 @@ public class SeedingServiceTest
     {
         var s1 = new Torrent { Id = 1, Name = "S1", Status = TorrentStatus.Seeding };
         var d1 = new Torrent { Id = 2, Name = "D1", Status = TorrentStatus.Downloading };
-        _configService.AutoStart.Returns(false);
         _torrentService.GetAll().Returns(new List<Torrent> { s1, d1 });
 
         _service.StopAll();
