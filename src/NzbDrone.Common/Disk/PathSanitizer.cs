@@ -29,12 +29,12 @@ public static class PathSanitizer
         "/boot",
     };
 
-    private static readonly HashSet<string> BlockedWindowsPaths = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly string[] BlockedWindowsRootDirectoryNames =
     {
-        @"C:\Windows",
-        @"C:\Program Files",
-        @"C:\Program Files (x86)",
-        @"C:\ProgramData",
+        "Windows",
+        "Program Files",
+        "Program Files (x86)",
+        "ProgramData",
     };
 
     public static bool IsWindowsReservedName(string name)
@@ -147,20 +147,49 @@ public static class PathSanitizer
         }
 
         var normalized = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var blockedList = OperatingSystem.IsWindows() ? BlockedWindowsPaths : BlockedUnixPaths;
 
-        foreach (var blocked in blockedList)
+        if (OperatingSystem.IsWindows())
         {
-            var normalizedBlocked = blocked.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (normalized.Equals(normalizedBlocked, StringComparison.OrdinalIgnoreCase) ||
-                normalized.StartsWith(normalizedBlocked + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                normalized.StartsWith(normalizedBlocked + "/", StringComparison.OrdinalIgnoreCase))
+            return IsUnderBlockedWindowsRootDirectories(normalized);
+        }
+
+        foreach (var blocked in BlockedUnixPaths)
+        {
+            if (IsPathUnderBlockedRoot(normalized, blocked))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static bool IsUnderBlockedWindowsRootDirectories(string normalized)
+    {
+        var root = Path.GetPathRoot(normalized);
+        if (string.IsNullOrEmpty(root))
+        {
+            return false;
+        }
+
+        foreach (var directoryName in BlockedWindowsRootDirectoryNames)
+        {
+            var blockedRoot = Path.Combine(root, directoryName);
+            if (IsPathUnderBlockedRoot(normalized, blockedRoot))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPathUnderBlockedRoot(string normalized, string blockedRoot)
+    {
+        var normalizedBlocked = blockedRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return normalized.Equals(normalizedBlocked, StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith(normalizedBlocked + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith(normalizedBlocked + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsValidPath(string path)
