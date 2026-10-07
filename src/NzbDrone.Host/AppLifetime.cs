@@ -383,8 +383,14 @@ public class AppLifetime : IHostedService, IDisposable
         // Torrent stall and speed-limit automation events are published only by SeedingEngine.
 
         // 2. Evaluate Port Forwarding
-        if (_upnpService != null && _configService != null && _configService.UpnpEnabled)
+        if (_upnpService != null && _configService != null)
         {
+            if (!_configService.UpnpEnabled)
+            {
+                _portForwardingFailureEmitted = false;
+                return;
+            }
+
             try
             {
                 var peerPort = _configService.ListeningPort;
