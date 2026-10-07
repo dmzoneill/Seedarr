@@ -655,12 +655,11 @@ public class TorrentService : ITorrentService,
             return _torrentRecheckService.Value.QueueRecheck(id) ?? _torrentRecheckService.Value.Recheck(torrent);
         }
 
-        _logger.Info("Rechecking torrent: {0}", torrent.Name);
+        _logger.Warn(
+            "Torrent recheck requested for '{0}' but ITorrentRecheckService is not available; leaving progress unchanged",
+            torrent.Name);
 
-        torrent.Progress = torrent.Progress >= 1.0 ? 1.0 : 0.0;
-        torrent.LastActive = DateTime.UtcNow;
-
-        return _repository.Update(torrent);
+        return torrent;
     }
 
     public void MoveQueue(int id, string position)
