@@ -109,6 +109,12 @@ public class DiskProvider : IDiskProvider
     }
 
     /// <summary>
+    /// Mount prefix matching for non-Windows drive resolution. Paths may differ in case from
+    /// <see cref="DriveInfo.Name"/> when users type save paths on case-sensitive filesystems.
+    /// </summary>
+    private static readonly StringComparison MountPrefixComparison = StringComparison.OrdinalIgnoreCase;
+
+    /// <summary>
     /// Finds the longest mount point prefix for a filesystem path.
     /// </summary>
     public static string GetLongestMatchingMountPoint(string fullPath, IEnumerable<string> mountPoints)
@@ -141,9 +147,9 @@ public class DiskProvider : IDiskProvider
             }
 
             var normalizedMountPath = mountPath == "/" ? "/" : mountPath + "/";
-            if (normalizedFullPath.StartsWith(normalizedMountPath, StringComparison.Ordinal) ||
-                fullPath.Equals(mountPath, StringComparison.Ordinal) ||
-                fullPath.Equals(mountPoint, StringComparison.Ordinal))
+            if (normalizedFullPath.StartsWith(normalizedMountPath, MountPrefixComparison) ||
+                fullPath.Equals(mountPath, MountPrefixComparison) ||
+                fullPath.Equals(mountPoint, MountPrefixComparison))
             {
                 if (mountPath.Length > longestMatchLength)
                 {
@@ -185,7 +191,7 @@ public class DiskProvider : IDiskProvider
                     mountPath = "/";
                 }
 
-                if (string.Equals(mountPath, bestMount, StringComparison.Ordinal))
+                if (string.Equals(mountPath, bestMount, MountPrefixComparison))
                 {
                     return drive;
                 }
