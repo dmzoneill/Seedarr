@@ -241,9 +241,9 @@ public class SystemController : ControllerBase
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<ScheduledTaskResource> UpdateTask(int id, [FromBody] UpdateScheduledTaskRequest request)
     {
-        if (request == null || request.Interval < 1)
+        if (request == null)
         {
-            return BadRequest("Interval must be at least 1 minute.");
+            return BadRequest("Request body is required.");
         }
 
         var existing = _taskManager.GetAll().FirstOrDefault(t => t.Id == id);
@@ -252,7 +252,15 @@ public class SystemController : ControllerBase
             return NotFound(new { message = $"Task with ID {id} not found" });
         }
 
-        _taskManager.Update(id, request.Interval, request.IsEnabled);
+        var interval = request.Interval ?? existing.Interval;
+        var isEnabled = request.IsEnabled ?? existing.IsEnabled;
+
+        if (interval < 1)
+        {
+            return BadRequest("Interval must be at least 1 minute.");
+        }
+
+        _taskManager.Update(id, interval, isEnabled);
         var updated = _taskManager.GetAll().FirstOrDefault(t => t.Id == id);
         return Ok(ToScheduledTaskResource(updated));
     }

@@ -1619,8 +1619,8 @@ export interface ScheduledTaskResource {
 }
 
 export interface UpdateScheduledTaskRequest {
-  interval: number;
-  isEnabled: boolean;
+  interval?: number;
+  isEnabled?: boolean;
 }
 
 export interface PackageImportTorrentSummary {
@@ -2288,4 +2288,3 @@ export interface DebuggerSourceCodeResponse {
   lineCount: number;
   exists: boolean;
 }
-
