@@ -46,6 +46,33 @@ public class SmartAuthForwardDefaultSelectorTest
     }
 
     [Test]
+    public void SelectScheme_WhenSessionCookieAndInvalidApiKeyHeaderPresent_PrefersCookieScheme()
+    {
+        _configFileProvider.ApiKey.Returns("configured-secret-key");
+
+        var context = CreateContext();
+        context.Request.Headers["X-Api-Key"] = "wrong-key";
+        context.Request.Cookies.Append(SmartAuthForwardDefaultSelector.SessionCookieName, "session-value");
+
+        var scheme = SmartAuthForwardDefaultSelector.SelectScheme(context);
+
+        Assert.That(scheme, Is.EqualTo(SmartAuthForwardDefaultSelector.CookieScheme));
+    }
+
+    [Test]
+    public void SelectScheme_WhenValidApiKeyHeaderPresent_SelectsApiKeyScheme()
+    {
+        _configFileProvider.ApiKey.Returns("configured-secret-key");
+
+        var context = CreateContext();
+        context.Request.Headers["X-Api-Key"] = "configured-secret-key";
+
+        var scheme = SmartAuthForwardDefaultSelector.SelectScheme(context);
+
+        Assert.That(scheme, Is.EqualTo(ApiKeyAuthenticationOptions.DefaultScheme));
+    }
+
+    [Test]
     public void SelectScheme_WhenSessionCookieAndForwardAuthHeadersPresent_PrefersCookieScheme()
     {
         var forwardAuthIdp = new IdentityProviderDefinition
