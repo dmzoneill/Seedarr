@@ -75,6 +75,23 @@ public class TaskManagerTest
     }
 
     [Test]
+    public void GetNextScheduled_should_order_by_calculated_next_execution_not_naive_add_minutes()
+    {
+        var now = DateTime.UtcNow;
+        var tasks = new List<ScheduledTask>
+        {
+            new() { Id = 1, TypeName = "NaiveDueSooner", Interval = 30, LastExecution = now.AddMinutes(-65) },
+            new() { Id = 2, TypeName = "CalculatedDueSooner", Interval = 30, LastExecution = now.AddMinutes(-20) }
+        };
+        _repository.All().Returns(tasks);
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var result = _subject.GetNextScheduled();
+
+        Assert.That(result.TypeName, Is.EqualTo("CalculatedDueSooner"));
+    }
+
+    [Test]
     public void GetNextScheduled_should_return_null_when_no_tasks()
     {
         _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());

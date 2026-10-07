@@ -151,9 +151,7 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
     {
         return GetAll()
             .Where(t => t.IsEnabled)
-            .OrderBy(t => t.LastExecution == DateTime.MinValue
-                ? DateTime.UtcNow.AddMinutes(t.Interval)
-                : t.LastExecution.AddMinutes(t.Interval))
+            .OrderBy(t => ScheduledTask.GetSchedulerOrderingKey(t.LastExecution, t.Interval))
             .FirstOrDefault();
     }
 

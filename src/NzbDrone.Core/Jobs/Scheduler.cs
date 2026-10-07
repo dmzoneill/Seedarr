@@ -122,12 +122,7 @@ public class Scheduler : BackgroundService
                         continue;
                     }
 
-                    var isUninitialized = next.LastExecution == DateTime.MinValue || next.LastExecution <= DateTime.MinValue.AddDays(1);
-                    var dueAt = isUninitialized
-                        ? DateTime.UtcNow
-                        : next.LastExecution.AddMinutes(next.Interval);
-
-                    if (dueAt <= DateTime.UtcNow)
+                    if (ScheduledTask.IsSchedulerDue(next.LastExecution, next.Interval))
                     {
                         if (_taskManager.IsRunning(next.TypeName))
                         {
@@ -231,8 +226,7 @@ public class Scheduler : BackgroundService
                         // Stagger consecutive/overdue task runs with jitter to prevent CPU/IO spikes
                         var nextPending = _taskManager.GetNextScheduled();
                         var isNextOverdue = nextPending != null &&
-                            (nextPending.LastExecution == DateTime.MinValue ||
-                            nextPending.LastExecution.AddMinutes(nextPending.Interval) <= DateTime.UtcNow);
+                            ScheduledTask.IsSchedulerDue(nextPending.LastExecution, nextPending.Interval);
 
                         if (isNextOverdue)
                         {

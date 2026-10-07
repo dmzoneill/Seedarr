@@ -293,6 +293,39 @@ public class SchedulerTest
     }
 
     [Test]
+    public void IsSchedulerDue_should_align_with_calculate_next_execution_after_missed_intervals()
+    {
+        var baseTime = new DateTime(2026, 9, 17, 10, 0, 0, DateTimeKind.Utc);
+        var beforeSlot = baseTime.AddMinutes(65);
+        var atSlot = baseTime.AddMinutes(90);
+
+        Assert.That(ScheduledTask.IsSchedulerDue(baseTime, 30, beforeSlot), Is.False);
+        Assert.That(ScheduledTask.IsSchedulerDue(baseTime, 30, atSlot), Is.True);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_should_not_execute_missed_interval_task_before_drift_free_next_execution()
+    {
+        var testTask = new TestScheduledTask();
+        var scheduled = new ScheduledTask
+        {
+            TypeName = typeof(TestScheduledTask).FullName,
+            Interval = 30,
+            LastExecution = DateTime.UtcNow.AddMinutes(-65)
+        };
+
+        _taskManager.GetNextScheduled().Returns(scheduled);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { testTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await _subject.StartAsync(cts.Token);
+        await Task.Delay(500);
+
+        Assert.That(testTask.ExecuteCount, Is.EqualTo(0));
+    }
+
+    [Test]
     public void ScheduledTask_NextExecution_should_be_in_utc()
     {
         var task = new ScheduledTask
