@@ -29,6 +29,7 @@ public class WalCheckpointTaskTest
         _maintenanceService.CheckpointWal(WalCheckpointMode.Passive).Returns(new DatabaseMaintenanceResult
         {
             Success = true,
+            DatabaseType = DatabaseType.SQLite.ToString(),
             Busy = 0,
             WalLogPages = 100,
             WalCheckpointedPages = 100,
@@ -39,6 +40,24 @@ public class WalCheckpointTaskTest
 
         _maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Passive);
         _maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Restart);
+    }
+
+    [Test]
+    public void Execute_should_not_escalate_to_restart_for_non_sqlite_no_op_checkpoint()
+    {
+        _maintenanceService.CheckpointWal(WalCheckpointMode.Passive).Returns(new DatabaseMaintenanceResult
+        {
+            Success = true,
+            DatabaseType = DatabaseType.PostgreSQL.ToString(),
+            Busy = 0,
+            CheckpointMode = WalCheckpointMode.Passive,
+            Message = "PostgreSQL database does not use WAL mode."
+        });
+
+        _subject.Execute();
+
+        _maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Passive);
+        _maintenanceService.DidNotReceive().CheckpointWal(WalCheckpointMode.Restart);
     }
 
     [Test]

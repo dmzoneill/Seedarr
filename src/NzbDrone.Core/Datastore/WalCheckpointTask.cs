@@ -1,3 +1,4 @@
+using System;
 using NLog;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
@@ -22,7 +23,10 @@ public class WalCheckpointTask : IScheduledTask, IExecute<WalCheckpointCommand>
         _logger.Info("Executing scheduled WAL checkpoint task");
         var result = _maintenanceService.CheckpointWal(WalCheckpointMode.Passive);
 
-        if (result != null && result.Success && result.Busy == 0)
+        if (result != null
+            && result.Success
+            && result.Busy == 0
+            && string.Equals(result.DatabaseType, DatabaseType.SQLite.ToString(), StringComparison.OrdinalIgnoreCase))
         {
             _logger.Debug("Passive WAL checkpoint succeeded with no busy readers; executing RESTART checkpoint to reset WAL write pointer");
             _maintenanceService.CheckpointWal(WalCheckpointMode.Restart);
