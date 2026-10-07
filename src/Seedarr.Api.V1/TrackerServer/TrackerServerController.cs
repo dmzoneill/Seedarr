@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Torrents;
@@ -14,6 +16,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.TrackerServer;
 
 [V1ApiController("trackerserver")]
+[Authorize(Policy = Policies.Reader)]
 public class TrackerServerController : Controller
 {
     private readonly IPeerDatabase _peerDatabase;
