@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:36:10Z",
+  "updatedAt": "2026-10-07T02:37:18Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,43 +14,48 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_97d3ac3f",
+    "lastScheduleId": "sched_195f374f",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "issue": 1160,
-      "worktree": "../seedarr_worktrees/issue-1160",
+      "session": "koala",
+      "issue": 1109,
+      "worktree": "../seedarr_worktrees/issue-1109",
       "area": "authentication"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1151,
-      "worktree": "../seedarr_worktrees/issue-1151",
+      "session": "otter",
+      "issue": 1153,
+      "worktree": "../seedarr_worktrees/issue-1153",
       "area": "datastore"
     },
     "api": {
       "status": "running",
       "worker": "hawk",
-      "issue": 1171,
-      "worktree": "../seedarr_worktrees/issue-1171",
+      "session": "mouse",
+      "issue": 1170,
+      "worktree": "../seedarr_worktrees/issue-1170",
       "area": "api"
     },
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "issue": 946,
-      "worktree": "../seedarr_worktrees/issue-946",
+      "session": "panda",
+      "issue": 912,
+      "worktree": "../seedarr_worktrees/issue-912",
       "area": "torrents"
     },
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "issue": 1194,
-      "worktree": "../seedarr_worktrees/issue-1194",
+      "session": "llama",
+      "issue": 1186,
+      "worktree": "../seedarr_worktrees/issue-1186",
       "area": "signalr"
     }
   },
@@ -69,6 +74,6 @@
       1236
     ]
   },
-  "githubOpen": 185,
-  "lastMonitorNote": "fix monitor: #947 on main; elk dispatched #946"
+  "githubOpen": 180,
+  "lastMonitorNote": "fix monitor: batch closed #1160-1194; 5 dispatches auth/datastore/api/torrents/signalr"
 }
