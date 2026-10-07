@@ -574,4 +574,66 @@ public class CsrfProtectionMiddlewareTest
 
         Assert.That(nextCalled, Is.True);
     }
+
+    [Test]
+    public async Task AuthLogin_WithConfiguredUrlBase_BeforeUsePathBase_BypassesCsrfWithoutOrigin()
+    {
+        _configFileProvider.UrlBase.Returns("seedarr");
+
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/seedarr/api/v1/auth/login";
+        context.Request.Host = new HostString("seedarr.local:9898");
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.True);
+    }
+
+    [Test]
+    public async Task RpcPath_WithConfiguredUrlBase_BeforeUsePathBase_BypassesCsrfWithoutOriginOrCookies()
+    {
+        _configFileProvider.UrlBase.Returns("/seedarr/");
+
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/seedarr/api/v2/torrents/add";
+        context.Request.Host = new HostString("seedarr.local:8080");
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.True);
+    }
+
+    [TestCase("/seedarr", "/seedarr/api/v1/auth/login", true)]
+    [TestCase("seedarr", "/seedarr/api/v2/torrents/add", true)]
+    [TestCase("/seedarr", "/api/v1/auth/login", false)]
+    public void ResolveUrlBaseForPath_UsesConfiguredUrlBaseWhenPathBaseEmpty(string configuredUrlBase, string requestPath, bool expectAuthOrRpc)
+    {
+        _configFileProvider.UrlBase.Returns(configuredUrlBase);
+
+        var context = new DefaultHttpContext();
+        context.Request.Path = requestPath;
+
+        var urlBase = CsrfProtectionMiddleware.ResolveUrlBaseForPath(context, _configFileProvider);
+        var path = context.Request.Path.Value ?? string.Empty;
+
+        Assert.That(
+            CsrfProtectionMiddleware.IsAuthPath(path, urlBase) || CsrfProtectionMiddleware.IsRpcPath(path, urlBase),
+            Is.EqualTo(expectAuthOrRpc));
+    }
 }

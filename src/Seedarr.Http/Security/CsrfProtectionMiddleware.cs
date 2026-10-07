@@ -240,10 +240,11 @@ public class CsrfProtectionMiddleware
                 !HttpMethods.IsTrace(method))
             {
                 var path = context.Request.Path.Value ?? string.Empty;
-                var hasAuthCookie = HasAmbientAuthCookie(context.Request.Cookies);
-                var isAuthPath = IsAuthPath(path, context.Request.PathBase.Value);
-                var isRpcPath = IsRpcPath(path, context.Request.PathBase.Value);
                 configFileProvider ??= context.RequestServices?.GetService(typeof(IConfigFileProvider)) as IConfigFileProvider;
+                var urlBaseForPath = ResolveUrlBaseForPath(context, configFileProvider);
+                var hasAuthCookie = HasAmbientAuthCookie(context.Request.Cookies);
+                var isAuthPath = IsAuthPath(path, urlBaseForPath);
+                var isRpcPath = IsRpcPath(path, urlBaseForPath);
                 var hasVerifiedCredential = HasVerifiedNonAmbientCredential(context, configFileProvider);
 
                 // CSRF bypass rules:
@@ -409,5 +410,27 @@ public class CsrfProtectionMiddleware
             host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
             host.Equals("::1", StringComparison.OrdinalIgnoreCase) ||
             host.Equals("[::1]", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Security middleware runs before <c>UsePathBase</c>, so <see cref="HttpRequest.PathBase"/> may still be empty
+    /// while the configured url base prefix remains on <see cref="HttpRequest.Path"/>.
+    /// </summary>
+    internal static string ResolveUrlBaseForPath(HttpContext context, IConfigFileProvider configFileProvider)
+    {
+        var pathBase = context.Request.PathBase.Value;
+        if (!string.IsNullOrEmpty(pathBase))
+        {
+            return pathBase;
+        }
+
+        var configured = configFileProvider?.UrlBase;
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = configured.Trim().Trim('/');
+        return string.IsNullOrEmpty(trimmed) ? string.Empty : "/" + trimmed;
     }
 }
