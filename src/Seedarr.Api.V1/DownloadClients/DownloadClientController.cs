@@ -147,12 +147,12 @@ public class DownloadClientController : Controller
             client = _downloadClientFactory.CreateClient(definition);
             if (client == null)
             {
-                return BadRequest(new { message = $"Unknown client type: {definition.ClientType}" });
+                return Ok(DownloadClientTestResult.Fail($"Invalid configuration: Unknown client type: {definition.ClientType}"));
             }
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return Ok(DownloadClientTestResult.Fail($"Invalid configuration: {ex.Message}"));
         }
 
         var result = client.TestConnectionDetailed();

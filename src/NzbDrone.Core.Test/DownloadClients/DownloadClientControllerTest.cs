@@ -640,6 +640,53 @@ public class DownloadClientControllerTest
         _downloadClientFactory.DidNotReceive().CreateClient(Arg.Any<DownloadClientDefinition>());
     }
 
+    [Test]
+    public void TestConnection_with_unknown_client_type_returns_ok_with_failure_result()
+    {
+        var definition = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Broken Client",
+            ClientType = "LegacyType",
+            Host = "127.0.0.1",
+            Port = 8080,
+        };
+        _downloadClientFactory.Get(1).Returns(definition);
+        _downloadClientFactory.CreateClient(definition).Returns((IDownloadClient)null);
+
+        var result = _controller.TestConnection(1);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result.Result;
+        var testResult = (DownloadClientTestResult)ok.Value;
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("Unknown client type"));
+    }
+
+    [Test]
+    public void TestConnection_with_invalid_configuration_returns_ok_with_failure_result()
+    {
+        var definition = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Misconfigured Client",
+            ClientType = "QBitTorrent",
+            Host = "127.0.0.1",
+            Port = 8080,
+        };
+        _downloadClientFactory.Get(1).Returns(definition);
+        _downloadClientFactory.CreateClient(definition).Returns(x => throw new ArgumentException("Host is required"));
+
+        var result = _controller.TestConnection(1);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result.Result;
+        var testResult = (DownloadClientTestResult)ok.Value;
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("Invalid configuration"));
+        Assert.That(testResult.Message, Does.Contain("Host is required"));
+    }
+
     [TestCase("qbittorrent", "QBitTorrent", "QBitTorrentClient", "QBitTorrentSettings")]
     [TestCase("transmission", "Transmission", "TransmissionClient", "TransmissionSettings")]
     [TestCase("deluge", "Deluge", "DelugeClient", "DelugeSettings")]
