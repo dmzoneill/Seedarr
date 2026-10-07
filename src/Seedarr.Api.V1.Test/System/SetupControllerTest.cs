@@ -1,8 +1,10 @@
+using System.Collections.Generic;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Api.V1.System;
 
@@ -80,6 +82,9 @@ public class SetupControllerTest
     public void Complete_should_mark_setup_completed_and_enable_auth()
     {
         _configService.IsSetupCompleted.Returns(false);
+        Dictionary<string, object> savedConfig = null;
+        _configService.When(x => x.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>()))
+            .Do(call => savedConfig = call.Arg<Dictionary<string, object>>());
 
         var request = new SetupCompleteRequest
         {
@@ -93,6 +98,10 @@ public class SetupControllerTest
         _configService.Received(1).AuthenticationEnabled = true;
         _configService.Received(1).IsSetupCompleted = true;
         _configFileProvider.Received(1).SetIsSetupCompleted(true);
+        Assert.That(savedConfig, Is.Not.Null);
+        var storedPassword = savedConfig["AdminPassword"] as string;
+        Assert.That(storedPassword, Does.StartWith("v1$"));
+        Assert.That(new LocalAdminCredentialService().VerifyStoredPassword(request.Password, storedPassword), Is.True);
     }
 
     [TestCase(null)]

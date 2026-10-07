@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 
 namespace Seedarr.Http.Authentication;
@@ -22,15 +23,21 @@ public class BasicAuthenticationOptions : AuthenticationSchemeOptions
 public class BasicAuthenticationHandler : AuthenticationHandler<BasicAuthenticationOptions>
 {
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly IConfigService _configService;
+    private readonly ILocalAdminCredentialService _localAdminCredentialService;
 
     public BasicAuthenticationHandler(
         IOptionsMonitor<BasicAuthenticationOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        IConfigFileProvider configFileProvider)
+        IConfigFileProvider configFileProvider,
+        IConfigService configService = null,
+        ILocalAdminCredentialService localAdminCredentialService = null)
         : base(options, logger, encoder)
     {
         _configFileProvider = configFileProvider;
+        _configService = configService;
+        _localAdminCredentialService = localAdminCredentialService ?? new LocalAdminCredentialService();
     }
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -58,11 +65,17 @@ public class BasicAuthenticationHandler : AuthenticationHandler<BasicAuthenticat
             var passwordMatchesApiKey = !string.IsNullOrWhiteSpace(configuredApiKey) && FixedTimeEquals(password, configuredApiKey);
             var usernameMatchesApiKey = !string.IsNullOrWhiteSpace(configuredApiKey) && FixedTimeEquals(username, configuredApiKey);
             var isApiKeyValid = passwordMatchesApiKey || usernameMatchesApiKey;
-            if (!_configFileProvider.AuthenticationEnabled || isApiKeyValid)
+            var isAdminPasswordValid = _localAdminCredentialService.IsAdminPasswordCredential(username, password, _configService);
+            if (!_configFileProvider.AuthenticationEnabled || isApiKeyValid || isAdminPasswordValid)
             {
+                var configuredAdminUsername = _configService != null
+                    ? _localAdminCredentialService.GetAdminUsername(_configService)
+                    : "admin";
                 var safeUsername = string.IsNullOrWhiteSpace(username) || usernameMatchesApiKey
                     ? "Admin"
-                    : username;
+                    : isAdminPasswordValid
+                        ? configuredAdminUsername
+                        : username;
 
                 var claims = new[]
                 {

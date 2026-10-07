@@ -2,6 +2,8 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 
 namespace Seedarr.Http.Security;
@@ -111,6 +113,14 @@ public static class RpcAuthenticationHelper
                     var passwordMatches = FixedTimeEquals(password, masterApiKey);
                     var usernameMatches = FixedTimeEquals(username, masterApiKey);
                     if (!string.IsNullOrWhiteSpace(masterApiKey) && (passwordMatches || usernameMatches))
+                    {
+                        return true;
+                    }
+
+                    var configService = context.RequestServices?.GetService(typeof(IConfigService)) as IConfigService;
+                    var localAdminCredentialService = context.RequestServices?.GetService(typeof(ILocalAdminCredentialService)) as ILocalAdminCredentialService
+                        ?? new LocalAdminCredentialService();
+                    if (localAdminCredentialService.IsAdminPasswordCredential(username, password, configService))
                     {
                         return true;
                     }
