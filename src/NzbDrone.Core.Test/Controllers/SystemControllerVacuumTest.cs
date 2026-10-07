@@ -96,6 +96,26 @@ public class SystemControllerVacuumTest
     }
 
     [Test]
+    public void VacuumDatabase_should_return_500_when_maintenance_reports_failure()
+    {
+        _maintenanceService.PerformMaintenance(null).Returns(new DatabaseMaintenanceResult
+        {
+            Success = false,
+            DatabaseType = "PostgreSQL",
+            Message = "VACUUM is not supported for this database type."
+        });
+
+        var result = _controller.VacuumDatabase(null, null);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result.Result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(500));
+        var resource = (DatabaseVacuumResource)objectResult.Value;
+        Assert.That(resource.Success, Is.False);
+        Assert.That(resource.DatabaseType, Is.EqualTo("PostgreSQL"));
+    }
+
+    [Test]
     public void VacuumDatabase_should_return_500_when_maintenance_service_is_null()
     {
         var controllerWithoutService = new SystemController(

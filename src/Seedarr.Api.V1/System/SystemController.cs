@@ -794,6 +794,11 @@ public class SystemController : ControllerBase
             Message = result.Message
         };
 
+        if (!result.Success)
+        {
+            return StatusCode(500, resource);
+        }
+
         return Ok(resource);
     }
 }
