@@ -172,6 +172,21 @@ public class WebhookReceiverControllerTest
     }
 
     [Test]
+    public void ReceiveArrWebhook_when_process_webhook_fails_should_return_bad_request()
+    {
+        SetupRequest(xApiKeyHeader: ExpectedApiKey);
+        var payload = new ArrWebhookPayload { EventType = "Grab" };
+        var expectedResult = new ArrWebhookResult { Success = false, Message = "No downloadId in webhook payload" };
+        _webhookService.ProcessWebhook(payload).Returns(expectedResult);
+
+        var response = _controller.ReceiveArrWebhook(payload);
+
+        Assert.That(response.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)response.Result;
+        Assert.That(badRequest.Value, Is.EqualTo(expectedResult));
+    }
+
+    [Test]
     public void ReceiveArrWebhook_with_invalid_api_key_should_return_unauthorized()
     {
         SetupRequest(xApiKeyHeader: "wrong-api-key");

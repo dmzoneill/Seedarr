@@ -33,6 +33,11 @@ public class WebhookReceiverController : Controller
         }
 
         var result = _webhookService.ProcessWebhook(payload);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
         return Ok(result);
     }
 
