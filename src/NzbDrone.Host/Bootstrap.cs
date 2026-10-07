@@ -97,7 +97,9 @@ public static class Bootstrap
         if (urls == null)
         {
             var isPortCollision = HasPortCollision(configProvider);
-            if (!isPortCollision)
+            var shouldLogHttpListener = !isPortCollision
+                || (configProvider.EnableSsl && !httpsListenerAvailability.IsActive);
+            if (shouldLogHttpListener)
             {
                 var httpUrl = $"http://{configProvider.BindAddress}:{configProvider.Port}";
                 Logger.Info("Listening on {0}", httpUrl);
@@ -261,6 +263,13 @@ public static class Bootstrap
                 {
                     Logger.Error(ex, "Failed to initialize SSL listener on port {0}. HTTPS will not be active.", configProvider.SslPort);
                     httpsListenerAvailability?.SetActive(false);
+                    if (isPortCollision)
+                    {
+                        Logger.Warn(
+                            "HTTP and SSL share port {0}; falling back to unencrypted HTTP because HTTPS initialization failed.",
+                            configProvider.Port);
+                        serverOptions.ListenAnyIP(configProvider.Port);
+                    }
                 }
             }
         }
@@ -290,6 +299,13 @@ public static class Bootstrap
                 {
                     Logger.Error(ex, "Failed to initialize SSL listener on port {0}. HTTPS will not be active.", configProvider.SslPort);
                     httpsListenerAvailability?.SetActive(false);
+                    if (isPortCollision)
+                    {
+                        Logger.Warn(
+                            "HTTP and SSL share port {0}; falling back to unencrypted HTTP because HTTPS initialization failed.",
+                            configProvider.Port);
+                        serverOptions.Listen(ip, configProvider.Port);
+                    }
                 }
             }
         }
