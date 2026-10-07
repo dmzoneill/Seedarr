@@ -52,4 +52,28 @@ public class ScheduledTask : ModelBase
 
         return DateTime.SpecifyKind(next, DateTimeKind.Utc);
     }
+
+    public static bool IsSchedulerDue(DateTime lastExecution, int interval, DateTime? utcNow = null)
+    {
+        var now = utcNow ?? DateTime.UtcNow;
+
+        if (lastExecution == DateTime.MinValue || lastExecution <= DateTime.MinValue.AddDays(1))
+        {
+            return true;
+        }
+
+        var lastUtc = DateTime.SpecifyKind(lastExecution, DateTimeKind.Utc);
+        var reference = now.AddSeconds(-1);
+        if (reference < lastUtc)
+        {
+            reference = lastUtc;
+        }
+
+        return now >= CalculateNextExecution(lastExecution, interval, reference);
+    }
+
+    public static DateTime GetSchedulerOrderingKey(DateTime lastExecution, int interval, DateTime? utcNow = null)
+    {
+        return CalculateNextExecution(lastExecution, interval, utcNow);
+    }
 }
