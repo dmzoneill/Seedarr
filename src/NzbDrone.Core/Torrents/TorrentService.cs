@@ -54,8 +54,8 @@ public class TorrentService : ITorrentService,
     private readonly ITorrentEventLogRepository _torrentEventLogRepository;
     private readonly ITorrentMediaMetadataRepository _torrentMediaMetadataRepository;
     private readonly ITorrentEventLogService _torrentEventLogService;
-    private readonly IConnectionManager _connectionManager;
-    private readonly IFastResumeService _fastResumeService;
+    private readonly Lazy<IConnectionManager> _connectionManager;
+    private readonly Lazy<IFastResumeService> _fastResumeService;
     private readonly object _sortOrderLock = new();
     private readonly Logger _logger;
 
@@ -117,8 +117,8 @@ public class TorrentService : ITorrentService,
         ITorrentEventLogRepository torrentEventLogRepository = null,
         ITorrentMediaMetadataRepository torrentMediaMetadataRepository = null,
         ITorrentEventLogService torrentEventLogService = null,
-        IConnectionManager connectionManager = null,
-        IFastResumeService fastResumeService = null)
+        Lazy<IConnectionManager> connectionManager = null,
+        Lazy<IFastResumeService> fastResumeService = null)
     {
         _repository = repository;
         _torrentFileService = torrentFileService;
@@ -331,7 +331,7 @@ public class TorrentService : ITorrentService,
 
         if (torrent != null && !string.IsNullOrWhiteSpace(torrent.InfoHash))
         {
-            _fastResumeService?.DeleteFastResume(torrent.InfoHash);
+            _fastResumeService?.Value?.DeleteFastResume(torrent.InfoHash);
             _pieceHashesByHash.TryRemove(torrent.InfoHash, out _);
         }
 
@@ -403,7 +403,7 @@ public class TorrentService : ITorrentService,
             torrentMap.TryGetValue(id, out var torrent);
             if (torrent != null && !string.IsNullOrWhiteSpace(torrent.InfoHash))
             {
-                _fastResumeService?.DeleteFastResume(torrent.InfoHash);
+                _fastResumeService?.Value?.DeleteFastResume(torrent.InfoHash);
                 _pieceHashesByHash.TryRemove(torrent.InfoHash, out _);
             }
 
@@ -443,7 +443,7 @@ public class TorrentService : ITorrentService,
 
         try
         {
-            _connectionManager?.DisconnectByInfoHash(torrent.InfoHash);
+            _connectionManager?.Value?.DisconnectByInfoHash(torrent.InfoHash);
         }
         catch (Exception ex)
         {
