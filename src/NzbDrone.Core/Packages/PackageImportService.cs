@@ -77,9 +77,9 @@ public class PackageImportService : IPackageImportService
             try
             {
                 var freeSpace = _diskProvider.GetAvailableFreeSpace(canonicalTargetRoot);
-                if (freeSpace > 0 && freeSpace < effectiveMaxBytes)
+                if (freeSpace.HasValue && freeSpace.Value > 0 && freeSpace.Value < effectiveMaxBytes)
                 {
-                    effectiveMaxBytes = freeSpace;
+                    effectiveMaxBytes = freeSpace.Value;
                 }
             }
             catch (Exception ex)

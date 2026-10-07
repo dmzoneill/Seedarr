@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using NLog;
 
 namespace NzbDrone.Common.Disk;
 
 public class DiskProvider : IDiskProvider
 {
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
     private static readonly Func<string, bool> DirExists = (Func<string, bool>)Delegate.CreateDelegate(
         typeof(Func<string, bool>),
         typeof(Directory).GetMethod(nameof(Directory.Exists), new[] { typeof(string) })!);
@@ -18,15 +21,15 @@ public class DiskProvider : IDiskProvider
     public Func<DriveInfo[]> DrivesProvider { get; set; }
 
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is used to query filesystem drive space")]
-    public long GetAvailableFreeSpace(string path)
+    public long? GetAvailableFreeSpace(string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return 0;
+        }
+
         try
         {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return 0;
-            }
-
             var fullPath = Path.GetFullPath(path);
 
             if (OperatingSystem.IsWindows())
@@ -35,7 +38,7 @@ public class DiskProvider : IDiskProvider
                 if (!string.IsNullOrEmpty(volumePath))
                 {
                     var volumeDrive = new DriveInfo(volumePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-                    return volumeDrive.AvailableFreeSpace;
+                    return ReadAvailableFreeSpace(volumeDrive, path);
                 }
             }
 
@@ -43,7 +46,7 @@ public class DiskProvider : IDiskProvider
             var bestMatch = SelectLongestMatchingDrive(fullPath, drives);
             if (bestMatch != null)
             {
-                return bestMatch.AvailableFreeSpace;
+                return ReadAvailableFreeSpace(bestMatch, path);
             }
 
             var root = Path.GetPathRoot(fullPath);
@@ -53,11 +56,51 @@ public class DiskProvider : IDiskProvider
             }
 
             var drive = new DriveInfo(root);
-            return drive.AvailableFreeSpace;
+            return ReadAvailableFreeSpace(drive, path);
         }
-        catch
+        catch (ArgumentException)
         {
             return 0;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to query available free space for path: {0}", path);
+            return null;
+        }
+    }
+
+    private static long? ReadAvailableFreeSpace(DriveInfo drive, string pathForLog)
+    {
+        if (drive == null)
+        {
+            Logger.Warn("Failed to query available free space for path: {0} (no matching drive)", pathForLog);
+            return null;
+        }
+
+        try
+        {
+            if (!drive.IsReady)
+            {
+                Logger.Warn("Drive '{0}' is not ready when querying free space for path: {1}", drive.Name, pathForLog);
+                return null;
+            }
+
+            return drive.AvailableFreeSpace;
+        }
+        catch (IOException ex)
+        {
+            Logger.Warn(ex, "I/O error querying free space on drive '{0}' for path: {1}", drive.Name, pathForLog);
+            return null;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Logger.Warn(ex, "Access denied querying free space on drive '{0}' for path: {1}", drive.Name, pathForLog);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to query free space on drive '{0}' for path: {1}", drive.Name, pathForLog);
+            return null;
         }
     }
 

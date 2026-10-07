@@ -101,6 +101,17 @@ public class DiskProviderTest
     }
 
     [Test]
+    public void GetAvailableFreeSpace_returns_null_when_drives_provider_throws()
+    {
+        var subject = new DiskProvider
+        {
+            DrivesProvider = () => throw new IOException("drive not ready"),
+        };
+
+        Assert.That(subject.GetAvailableFreeSpace("/mnt/nas/shows/file.mkv"), Is.Null);
+    }
+
+    [Test]
     public void CheckFolderWritable_returns_false_for_blank_path()
     {
         var subject = new DiskProvider();
