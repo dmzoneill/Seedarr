@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:04:21Z",
+  "updatedAt": "2026-10-07T02:03:51Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_30406395",
+    "lastScheduleId": "sched_3a2eba92",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -77,5 +77,5 @@
     ]
   },
   "githubOpen": 243,
-  "lastMonitorNote": "fix monitor: #1146 #1119 #877 closed; badger->#1116 hawk->#1008 sparrow->#1132; 243 open"
+  "lastMonitorNote": "fix monitor: 243 open; 0 restarts; all slots active"
 }
