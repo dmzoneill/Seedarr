@@ -45,6 +45,7 @@ public class TerminalHub : Hub
         if (config != null && config.AuthenticationEnabled)
         {
             var isAuth = Context.User?.Identity?.IsAuthenticated == true;
+            var masterApiKeyGranted = false;
             var masterApiKey = config.ApiKey;
 
             if (!isAuth && httpContext != null)
@@ -60,6 +61,7 @@ public class TerminalHub : Hub
                             if (FixedTimeEquals(token, masterApiKey))
                             {
                                 isAuth = true;
+                                masterApiKeyGranted = true;
                             }
                         }
                         else if (authStr.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
@@ -75,6 +77,7 @@ public class TerminalHub : Hub
                                 if (FixedTimeEquals(password, masterApiKey) || FixedTimeEquals(username, masterApiKey))
                                 {
                                     isAuth = true;
+                                    masterApiKeyGranted = true;
                                 }
                             }
                             catch (FormatException ex)
@@ -88,31 +91,37 @@ public class TerminalHub : Hub
                         FixedTimeEquals(headerKey.ToString(), masterApiKey))
                     {
                         isAuth = true;
+                        masterApiKeyGranted = true;
                     }
                     else if (!isAuth && httpContext.Request.Headers.TryGetValue("ApiKey", out var customApiKey) &&
                         FixedTimeEquals(customApiKey.ToString(), masterApiKey))
                     {
                         isAuth = true;
+                        masterApiKeyGranted = true;
                     }
                     else if (!isAuth && httpContext.Request.Query.TryGetValue("access_token", out var queryToken) &&
                         FixedTimeEquals(queryToken.ToString(), masterApiKey))
                     {
                         isAuth = true;
+                        masterApiKeyGranted = true;
                     }
                     else if (!isAuth && httpContext.Request.Query.TryGetValue("apikey", out var queryApiKey) &&
                         FixedTimeEquals(queryApiKey.ToString(), masterApiKey))
                     {
                         isAuth = true;
+                        masterApiKeyGranted = true;
                     }
                     else if (!isAuth && httpContext.Request.Query.TryGetValue("api_key", out var queryApiKey2) &&
                         FixedTimeEquals(queryApiKey2.ToString(), masterApiKey))
                     {
                         isAuth = true;
+                        masterApiKeyGranted = true;
                     }
                     else if (!isAuth && httpContext.Request.Query.TryGetValue("token", out var queryToken2) &&
                         FixedTimeEquals(queryToken2.ToString(), masterApiKey))
                     {
                         isAuth = true;
+                        masterApiKeyGranted = true;
                     }
                 }
 
@@ -133,19 +142,24 @@ public class TerminalHub : Hub
                     }
                 }
 
-                if (!isAuth)
+            }
+
+            if (!isAuth)
+            {
+                _logger.Warn("Rejecting unauthenticated Terminal SignalR connection: {0}", Context.ConnectionId);
+                Context.Abort();
+                return;
+            }
+
+            if (!masterApiKeyGranted)
+            {
+                var effectiveUser = Context.User ?? httpContext?.User;
+                if (effectiveUser?.Identity?.IsAuthenticated != true || !IsAdminUser(effectiveUser))
                 {
-                    _logger.Warn("Rejecting unauthenticated Terminal SignalR connection: {0}", Context.ConnectionId);
+                    _logger.Warn("Rejecting non-admin Terminal SignalR connection: {0}", Context.ConnectionId);
                     Context.Abort();
                     return;
                 }
-            }
-
-            if (Context.User?.Identity?.IsAuthenticated == true && !IsAdminUser(Context.User))
-            {
-                _logger.Warn("Rejecting non-admin Terminal SignalR connection: {0}", Context.ConnectionId);
-                Context.Abort();
-                return;
             }
         }
 

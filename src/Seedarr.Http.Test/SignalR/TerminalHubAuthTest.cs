@@ -6,11 +6,13 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections.Features;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Authentication;
@@ -125,6 +127,92 @@ public class TerminalHubAuthTest
         _configFileProvider.ApiKey.Returns("valid-master-api-key");
 
         _httpContext.Request.QueryString = new QueryString("?access_token=valid-master-api-key");
+
+        await CreateHub().OnConnectedAsync();
+
+        _callerContext.DidNotReceive().Abort();
+    }
+
+    [Test]
+    public async Task OnConnectedAsync_aborts_when_authentication_enabled_and_http_context_missing()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.TerminalAccessEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var httpContextFeature = Substitute.For<IHttpContextFeature>();
+        httpContextFeature.HttpContext.Returns((HttpContext)null);
+        _features.Set<IHttpContextFeature>(httpContextFeature);
+
+        await CreateHub().OnConnectedAsync();
+
+        _callerContext.Received(1).Abort();
+    }
+
+    [Test]
+    public async Task OnConnectedAsync_aborts_readonly_principal_restored_on_http_context_via_AuthenticateAsync()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.TerminalAccessEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var identity = new ClaimsIdentity(
+            new[]
+            {
+                new Claim(ClaimTypes.Name, "readonly"),
+                new Claim(ClaimTypes.Role, Roles.ReadOnly)
+            },
+            "Cookies");
+        var principal = new ClaimsPrincipal(identity);
+        var ticket = new AuthenticationTicket(principal, "Cookies");
+
+        var authService = Substitute.For<IAuthenticationService>();
+        authService.AuthenticateAsync(_httpContext, "Cookies")
+            .Returns(Task.FromResult(AuthenticateResult.Success(ticket)));
+
+        var schemeProvider = Substitute.For<IAuthenticationSchemeProvider>();
+        schemeProvider.GetDefaultAuthenticateSchemeAsync()
+            .Returns(Task.FromResult<AuthenticationScheme>(new AuthenticationScheme("Cookies", "Cookies", typeof(IAuthenticationHandler))));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(authService);
+        services.AddSingleton(schemeProvider);
+        _httpContext.RequestServices = services.BuildServiceProvider();
+
+        await CreateHub().OnConnectedAsync();
+
+        _callerContext.Received(1).Abort();
+    }
+
+    [Test]
+    public async Task OnConnectedAsync_allows_admin_principal_restored_on_http_context_via_AuthenticateAsync()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.TerminalAccessEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var identity = new ClaimsIdentity(
+            new[]
+            {
+                new Claim(ClaimTypes.Name, "admin"),
+                new Claim(ClaimTypes.Role, Roles.Admin)
+            },
+            "Cookies");
+        var principal = new ClaimsPrincipal(identity);
+        var ticket = new AuthenticationTicket(principal, "Cookies");
+
+        var authService = Substitute.For<IAuthenticationService>();
+        authService.AuthenticateAsync(_httpContext, "Cookies")
+            .Returns(Task.FromResult(AuthenticateResult.Success(ticket)));
+
+        var schemeProvider = Substitute.For<IAuthenticationSchemeProvider>();
+        schemeProvider.GetDefaultAuthenticateSchemeAsync()
+            .Returns(Task.FromResult<AuthenticationScheme>(new AuthenticationScheme("Cookies", "Cookies", typeof(IAuthenticationHandler))));
+
+        var services = new ServiceCollection();
+        services.AddSingleton(authService);
+        services.AddSingleton(schemeProvider);
+        _httpContext.RequestServices = services.BuildServiceProvider();
 
         await CreateHub().OnConnectedAsync();
 
