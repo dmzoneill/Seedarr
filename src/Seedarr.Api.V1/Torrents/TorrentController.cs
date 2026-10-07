@@ -1786,8 +1786,13 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     public ActionResult Delete(int id, [FromQuery] bool deleteFiles = false)
     {
         var torrent = _torrentService.Get(id);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
         _torrentService.Delete(id, deleteFiles);
-        InvalidateBroadcastCache(id, torrent?.InfoHash);
+        InvalidateBroadcastCache(id, torrent.InfoHash);
         return Ok();
     }
 
