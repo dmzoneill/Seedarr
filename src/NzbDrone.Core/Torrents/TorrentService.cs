@@ -362,11 +362,15 @@ public class TorrentService : ITorrentService,
         var torrents = _repository.All()?.Where(t => ids.Contains(t.Id)).ToList() ?? new List<Torrent>();
         var torrentMap = torrents.ToDictionary(t => t.Id);
 
+        Dictionary<int, List<TorrentFile>> filesByTorrentId = null;
         if (deleteFiles)
         {
+            filesByTorrentId = new Dictionary<int, List<TorrentFile>>();
             foreach (var torrent in torrents)
             {
                 PrepareTorrentForPayloadDeletion(torrent);
+                var files = _torrentFileService?.GetByTorrentId(torrent.Id);
+                filesByTorrentId[torrent.Id] = files ?? new List<TorrentFile>();
             }
         }
 
@@ -378,7 +382,7 @@ public class TorrentService : ITorrentService,
             {
                 try
                 {
-                    var files = _torrentFileService?.GetByTorrentId(torrent.Id);
+                    filesByTorrentId.TryGetValue(torrent.Id, out var files);
                     DeleteTorrentFiles(torrent, files);
                 }
                 catch (Exception ex)

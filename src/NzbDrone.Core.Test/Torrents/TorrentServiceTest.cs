@@ -805,6 +805,50 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
+        public void DeleteMany_should_delete_per_file_payloads_when_TorrentFiles_rows_removed_before_cleanup()
+        {
+            var rootDir = Path.Combine(Path.GetTempPath(), "seedarr_downloads_bulk_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(rootDir);
+            try
+            {
+                var file1 = Path.Combine(rootDir, "ep1.mkv");
+                var file2 = Path.Combine(rootDir, "ep2.mkv");
+                var otherFile = Path.Combine(rootDir, "other.mkv");
+                File.WriteAllText(file1, "ep1");
+                File.WriteAllText(file2, "ep2");
+                File.WriteAllText(otherFile, "other");
+
+                var torrent = new Torrent
+                {
+                    Id = 1,
+                    Name = "MyShow",
+                    SavePath = rootDir
+                };
+                var torrentFiles = new List<TorrentFile>
+                {
+                    new TorrentFile { TorrentId = 1, Path = "ep1.mkv" },
+                    new TorrentFile { TorrentId = 1, Path = "ep2.mkv" }
+                };
+
+                _repository.All().Returns(new List<Torrent> { torrent }.AsQueryable());
+                _torrentFileService.GetByTorrentId(1).Returns(torrentFiles, new List<TorrentFile>());
+
+                _subject.DeleteMany(new List<int> { 1 }, deleteFiles: true);
+
+                Assert.That(File.Exists(file1), Is.False);
+                Assert.That(File.Exists(file2), Is.False);
+                Assert.That(File.Exists(otherFile), Is.True);
+            }
+            finally
+            {
+                if (Directory.Exists(rootDir))
+                {
+                    Directory.Delete(rootDir, true);
+                }
+            }
+        }
+
+        [Test]
         public void DeleteMany_should_do_nothing_when_ids_null_or_empty()
         {
             _subject.DeleteMany(null);
