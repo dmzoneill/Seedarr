@@ -115,7 +115,7 @@ public class IdentityProviderService : IIdentityProviderService
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to encrypt identity provider client secret");
-            return secret;
+            throw new InvalidOperationException("Failed to encrypt identity provider client secret.", ex);
         }
     }
 
