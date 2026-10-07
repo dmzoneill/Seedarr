@@ -21,6 +21,12 @@ import {
 } from "../api/signalr";
 import { useToast } from "../context/ToastContext";
 import { useTorrentStore } from "../stores/useTorrentStore";
+import type { Torrent } from "../api/types";
+import {
+  normalizePieceMapWirePayload,
+  resolvePieceMapTorrentId,
+  type PieceMapWirePayload,
+} from "../utils/pieceMapSignalR";
 
 export {
   subscribeToTorrent,
@@ -214,11 +220,13 @@ export default function SignalRProvider({
 
     const handlePieceMapPayload = (body: unknown) => {
       if (!body || typeof body !== "object") return;
-      const b = body as { torrentId?: number; id?: number };
-      const tid = Number(b.torrentId || b.id);
-      if (tid) {
-        useTorrentStore.getState().updatePieceMap(tid, b);
-      }
+      const wire = body as PieceMapWirePayload;
+      const torrents = queryClient.getQueryData<Torrent[]>(["torrents"]);
+      const tid = resolvePieceMapTorrentId(wire, torrents);
+      if (!tid) return;
+      useTorrentStore
+        .getState()
+        .updatePieceMap(tid, normalizePieceMapWirePayload(wire));
     };
 
     const onSpeedPulse = (data: unknown) => {
