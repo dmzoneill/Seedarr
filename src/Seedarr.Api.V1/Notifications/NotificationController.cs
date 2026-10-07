@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Notifications;
 using Seedarr.Http;
 
@@ -132,14 +133,46 @@ public class NotificationController : Controller
     /// Updates an existing notification configuration.
     /// </summary>
     [HttpPut("{id:int}")]
-    public ActionResult<NotificationResource> Update(int id, [FromBody] NotificationResource resource)
+    public ActionResult<NotificationResource> Update(int id, [FromBody] JsonElement body)
+    {
+        if (body.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return BadRequest();
+        }
+
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            return BadRequest();
+        }
+
+        var presentPropertyKeys = body.EnumerateObject()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var resource = JsonSerializer.Deserialize<NotificationResource>(body, STJson.GetSerializerSettings());
+        if (resource == null)
+        {
+            return BadRequest();
+        }
+
+        return UpdateNotification(id, resource, presentPropertyKeys);
+    }
+
+    [NonAction]
+    public ActionResult<NotificationResource> Update(int id, NotificationResource resource) =>
+        UpdateNotification(id, resource, null);
+
+    private ActionResult<NotificationResource> UpdateNotification(
+        int id,
+        NotificationResource resource,
+        IReadOnlySet<string> presentPropertyKeys)
     {
         if (resource == null)
         {
             return BadRequest();
         }
 
-        if (!HasActiveTrigger(resource))
+        if (presentPropertyKeys == null && !HasActiveTrigger(resource))
         {
             return BadRequest("At least one notification trigger must be enabled");
         }
@@ -150,16 +183,27 @@ public class NotificationController : Controller
             return NotFound();
         }
 
-        var fallbackError = ValidateFallbackNotificationId(resource, id);
+        var model = presentPropertyKeys == null
+            ? ToModel(resource)
+            : NotificationUpdateMerger.Merge(existing, resource, presentPropertyKeys);
+        model.Id = id;
+
+        if (presentPropertyKeys != null && !HasActiveTrigger(model))
+        {
+            return BadRequest("At least one notification trigger must be enabled");
+        }
+
+        var fallbackError = ValidateFallbackNotificationId(ToResource(model), id);
         if (fallbackError != null)
         {
             return BadRequest(fallbackError);
         }
 
-        resource.Settings = RestoreSecrets(resource.Settings, existing.Settings, resource.Implementation ?? existing.Implementation);
+        model.Settings = RestoreSecrets(
+            model.Settings,
+            existing.Settings,
+            model.Implementation ?? existing.Implementation);
 
-        var model = ToModel(resource);
-        model.Id = id;
         _notificationRepository.Update(model);
         return Ok(ToResource(model));
     }
@@ -1094,6 +1138,22 @@ public class NotificationController : Controller
             resource.OnApplicationUpdate ||
             resource.OnBackupComplete ||
             resource.OnBackupFailed;
+    }
+
+    private static bool HasActiveTrigger(NotificationDefinition definition)
+    {
+        return definition.OnGrab ||
+            definition.OnDownloadComplete ||
+            definition.OnMediaInspected ||
+            definition.OnExtractComplete ||
+            definition.OnSeedGoalReached ||
+            definition.OnTorrentDeleted ||
+            definition.OnHealthIssue ||
+            definition.OnHealthRestored ||
+            definition.OnManualInteractionRequired ||
+            definition.OnApplicationUpdate ||
+            definition.OnBackupComplete ||
+            definition.OnBackupFailed;
     }
 
     private static string ExtractSetting(string settings, params string[] propertyNames)
