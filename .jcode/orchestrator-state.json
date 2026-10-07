@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_e1ee1742",
+    "lastScheduleId": "sched_820dca16",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
