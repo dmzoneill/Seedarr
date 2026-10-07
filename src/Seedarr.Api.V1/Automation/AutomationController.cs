@@ -2,7 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using NzbDrone.Common.Serializer;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Automation;
@@ -73,7 +75,38 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
     [HttpPut("{id:int}")]
     [HttpPut]
     [Authorize(Policy = Policies.AdminOnly)]
-    public ActionResult<AutomationScriptResource> Update([FromBody] AutomationScriptResource resource, int? id = null)
+    public ActionResult<AutomationScriptResource> Update([FromBody] JsonElement body, int? id = null)
+    {
+        if (body.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            return BadRequest("Request body must be a JSON object");
+        }
+
+        var presentPropertyKeys = body.EnumerateObject()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var resource = JsonSerializer.Deserialize<AutomationScriptResource>(body, STJson.GetSerializerSettings());
+        if (resource == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        return UpdateScript(resource, id, presentPropertyKeys);
+    }
+
+    [NonAction]
+    public ActionResult<AutomationScriptResource> Update(int id, AutomationScriptResource resource) => UpdateScript(resource, id, null);
+
+    private ActionResult<AutomationScriptResource> UpdateScript(
+        AutomationScriptResource resource,
+        int? id,
+        IReadOnlySet<string>? presentPropertyKeys)
     {
         if (resource == null)
         {
@@ -93,23 +126,36 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
             }
         }
 
-        if (string.IsNullOrWhiteSpace(resource.Name))
-        {
-            return BadRequest("Script name is required.");
-        }
-
-        if (resource.Id <= 0 || _automationService.Get(resource.Id) == null)
+        if (resource.Id <= 0)
         {
             return NotFound("Automation script not found");
         }
 
-        var model = ToModel(resource);
+        var existing = _automationService.Get(resource.Id);
+        if (existing == null)
+        {
+            return NotFound("Automation script not found");
+        }
+
+        var name = presentPropertyKeys != null && !presentPropertyKeys.Contains("name")
+            ? existing.Name
+            : resource.Name;
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return BadRequest("Script name is required.");
+        }
+
+        var model = presentPropertyKeys == null
+            ? ToModel(resource)
+            : AutomationScriptUpdateMerger.Merge(existing, resource, presentPropertyKeys);
+
+        model.Id = existing.Id;
+        model.Name = name;
+
         var updated = _automationService.Update(model);
         return Ok(ToResource(updated));
     }
-
-    [NonAction]
-    public ActionResult<AutomationScriptResource> Update(int id, AutomationScriptResource resource) => Update(resource, id);
 
     [HttpDelete("{id:int}")]
     [Authorize(Policy = Policies.AdminOnly)]

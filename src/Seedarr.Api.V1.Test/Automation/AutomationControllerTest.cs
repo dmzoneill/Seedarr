@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -200,5 +202,44 @@ public class AutomationControllerTest
         var badRequest = (BadRequestObjectResult)result.Result;
         Assert.That(badRequest.Value, Is.EqualTo("Script name is required."));
         _automationService.DidNotReceive().Update(Arg.Any<AutomationScript>());
+    }
+
+    [Test]
+    public void Update_with_partial_json_body_preserves_omitted_fields()
+    {
+        var createdAt = new DateTime(2020, 6, 15, 12, 0, 0, DateTimeKind.Utc);
+        var existing = new AutomationScript
+        {
+            Id = 1,
+            Name = "Original",
+            Trigger = AutomationTrigger.TorrentCompleted,
+            Language = AutomationLanguage.JavaScript,
+            Code = "console.log('keep');",
+            IsEnabled = true,
+            TargetCategories = new List<string> { "movies" },
+            TargetTagIds = new List<int> { 42 },
+            CreatedAt = createdAt,
+            LastExecutionStatus = "Success",
+        };
+        _automationService.Get(1).Returns(existing);
+        _automationService.Update(Arg.Any<AutomationScript>()).Returns(callInfo => callInfo.Arg<AutomationScript>());
+
+        using var document = JsonDocument.Parse("{\"id\":1,\"name\":\"Renamed only\"}");
+        var result = _controller.Update(document.RootElement, 1);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _automationService.Received(1).Update(Arg.Is<AutomationScript>(script =>
+            script.Id == 1
+            && script.Name == "Renamed only"
+            && script.Code == "console.log('keep');"
+            && script.Trigger == AutomationTrigger.TorrentCompleted
+            && script.Language == AutomationLanguage.JavaScript
+            && script.IsEnabled
+            && script.TargetCategories.Count == 1
+            && script.TargetCategories[0] == "movies"
+            && script.TargetTagIds.Count == 1
+            && script.TargetTagIds[0] == 42
+            && script.CreatedAt == createdAt
+            && script.LastExecutionStatus == "Success"));
     }
 }
