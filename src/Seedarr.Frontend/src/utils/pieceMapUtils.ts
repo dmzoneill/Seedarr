@@ -103,6 +103,21 @@ export function setPieceBitInPlace(
 }
 
 /**
+ * Clears a single piece bit in-place in a Uint8Array bitfield.
+ */
+export function clearPieceBitInPlace(
+  target: Uint8Array,
+  pieceIndex: number,
+): void {
+  if (pieceIndex < 0) return;
+  const byteIdx = pieceIndex >> 3;
+  if (byteIdx < target.length) {
+    const bitOffset = 7 - (pieceIndex & 7);
+    target[byteIdx] &= ~(1 << bitOffset);
+  }
+}
+
+/**
  * Sets multiple piece bits in-place in a Uint8Array bitfield.
  */
 export function setPieceBitsInPlace(
