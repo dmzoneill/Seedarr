@@ -5,9 +5,11 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.Serializer;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.ArrIntegration.Webhook;
 using Seedarr.Http;
@@ -15,6 +17,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.ArrIntegration;
 
 [V1ApiController("arrconnections")]
+[Authorize(Policy = Policies.Reader)]
 public class ArrConnectionController : Controller
 {
     private readonly IArrConnectionFactory _connectionFactory;
@@ -56,6 +59,7 @@ public class ArrConnectionController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<ArrConnectionDefinition> Create([FromBody] ArrConnectionDefinition definition)
     {
         if (definition == null)
@@ -122,6 +126,7 @@ public class ArrConnectionController : Controller
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Update(int id, [FromBody] JsonElement body)
     {
         if (body.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
@@ -230,6 +235,7 @@ public class ArrConnectionController : Controller
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Delete(int id)
     {
         var definition = _connectionFactory.Get(id);
@@ -244,6 +250,7 @@ public class ArrConnectionController : Controller
     }
 
     [HttpPost("{id}/test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<ArrTestResult> TestConnection(int id)
     {
         var result = _arrSyncService.TestConnectionDetailed(id);
@@ -251,6 +258,7 @@ public class ArrConnectionController : Controller
     }
 
     [HttpPost("test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<ArrTestResult> TestDirect([FromBody] ArrConnectionDefinition definition)
     {
         if (definition == null)
@@ -279,6 +287,7 @@ public class ArrConnectionController : Controller
     }
 
     [HttpPost("sync")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<SyncResult> Sync()
     {
         var result = _arrSyncService.Sync();
