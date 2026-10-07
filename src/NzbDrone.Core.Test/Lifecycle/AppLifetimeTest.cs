@@ -130,6 +130,28 @@ public class AppLifetimeTest
     }
 
     [Test]
+    public void SpeedThreshold_should_use_alt_limits_when_AlternativeSpeedEnabled()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(1250);
+        _configService.AltDownloadSpeedKbps.Returns(100);
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            DownloadSpeed = 150 * 1024,
+            Progress = 0.2
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        _subject.EvaluateWatchdogMetrics();
+        _subject.EvaluateWatchdogMetrics();
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<SpeedThresholdExceededEvent>(e => e.DownloadSpeed == 150 * 1024));
+    }
+
+    [Test]
     public void SpeedThreshold_should_publish_SpeedThresholdDroppedEvent_when_traffic_drops_below_threshold()
     {
         _configService.MaxDownloadSpeedKbps.Returns(100);
