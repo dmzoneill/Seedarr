@@ -129,6 +129,12 @@ public class TorrentRecheckService : ITorrentRecheckService
             {
                 _logger.Trace(ex, "Cancellation token already disposed for recheck torrent {0}", id);
             }
+
+            var activeTorrent = _torrentRepository?.Get(id);
+            if (activeTorrent?.Status == TorrentStatus.QueuedForChecking)
+            {
+                RevertQueuedRecheck(id);
+            }
         }
         else if (wasQueued)
         {
@@ -196,8 +202,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                         continue;
                     }
 
-                    _queuedPreviousStatus.TryRemove(nextId, out _);
-
                     var torrent = _torrentRepository?.Get(nextId);
                     if (torrent == null)
                     {
@@ -222,6 +226,7 @@ public class TorrentRecheckService : ITorrentRecheckService
                     catch (OperationCanceledException)
                     {
                         _logger.Info("Recheck canceled for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
+                        RevertQueuedRecheck(nextId);
                     }
                     catch (Exception ex)
                     {
@@ -316,6 +321,8 @@ public class TorrentRecheckService : ITorrentRecheckService
     private Task<Torrent> ExecuteRecheckCoreAsync(Torrent torrent, byte[] pieceHashes, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        _queuedPreviousStatus.TryRemove(torrent.Id, out _);
 
         _logger.Info("Starting hash verification for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
 

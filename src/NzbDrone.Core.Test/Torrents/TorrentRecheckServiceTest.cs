@@ -701,6 +701,93 @@ public class TorrentRecheckServiceTest
     }
 
     [Test]
+    public async System.Threading.Tasks.Task CancelRecheck_restores_status_and_broadcasts_when_waiting_on_concurrency_semaphore()
+    {
+        var signalR = Substitute.For<NzbDrone.SignalR.IBroadcastSignalRMessage>();
+        var serviceWithSignalR = new TorrentRecheckService(
+            _torrentRepository,
+            _torrentFileService,
+            _pieceStorage,
+            _pieceVerificationService,
+            _multiFilePieceStorage,
+            _stateMachine,
+            _eventAggregator,
+            null,
+            _fastResumeService,
+            signalR);
+
+        var blockingGate = new ManualResetEventSlim(false);
+        var blockingTorrent = new Torrent
+        {
+            Id = 28,
+            Name = "Blocking Recheck",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 1,
+            TotalSize = 1000
+        };
+        var waitingTorrent = new Torrent
+        {
+            Id = 29,
+            Name = "Waiting Recheck",
+            Status = TorrentStatus.Seeding,
+            PieceCount = 1,
+            TotalSize = 1000
+        };
+
+        _torrentRepository.Get(28).Returns(blockingTorrent);
+        _torrentRepository.Get(29).Returns(waitingTorrent);
+
+        _stateMachine.When(sm => sm.TransitionToChecking(Arg.Any<Torrent>()))
+            .Do(ci => ci.Arg<Torrent>().Status = TorrentStatus.Checking);
+        _stateMachine.TransitionFromChecking(Arg.Any<Torrent>())
+            .Returns(ci =>
+            {
+                ci.Arg<Torrent>().Status = TorrentStatus.Seeding;
+                return TorrentStatus.Seeding;
+            });
+
+        _pieceVerificationService.VerifyPieceFromStorage(
+                Arg.Any<Torrent>(),
+                Arg.Any<IList<TorrentFile>>(),
+                Arg.Any<int>(),
+                Arg.Any<byte[]>(),
+                Arg.Any<IMultiFilePieceStorage>(),
+                Arg.Any<string>())
+            .Returns(_ =>
+            {
+                blockingGate.Wait();
+                return true;
+            });
+
+        var activeRechecks = typeof(TorrentRecheckService)
+            .GetField("_activeRechecks", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(serviceWithSignalR) as ConcurrentDictionary<int, CancellationTokenSource>;
+
+        var blockingRecheck = serviceWithSignalR.RecheckAsync(blockingTorrent);
+        SpinWait.SpinUntil(() => blockingTorrent.Status == TorrentStatus.Checking, TimeSpan.FromSeconds(2));
+
+        serviceWithSignalR.QueueRecheck(29);
+        SpinWait.SpinUntil(() => activeRechecks!.ContainsKey(29), TimeSpan.FromSeconds(2));
+        Assert.That(waitingTorrent.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
+
+        serviceWithSignalR.CancelRecheck(29);
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline && waitingTorrent.Status == TorrentStatus.QueuedForChecking)
+        {
+            await System.Threading.Tasks.Task.Delay(10);
+        }
+
+        blockingGate.Set();
+        await blockingRecheck;
+
+        Assert.That(waitingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        signalR.Received().BroadcastMessage(Arg.Is<NzbDrone.SignalR.SignalRMessage>(m =>
+            m.Name == "TorrentUpdated" && m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
+        signalR.Received().BroadcastToTorrent(29, Arg.Is<NzbDrone.SignalR.SignalRMessage>(m => m.Name == "TorrentUpdated"));
+    }
+
+    [Test]
     public void QueueRecheck_sets_status_to_QueuedForChecking_and_returns_torrent()
     {
         var torrent = new Torrent
