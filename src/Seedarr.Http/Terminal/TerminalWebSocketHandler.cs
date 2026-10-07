@@ -80,15 +80,7 @@ public static class TerminalWebSocketHandler
             return;
         }
 
-        // Determine working directory
         string requestedCwd = context.Request.Query["cwd"];
-        string cwd = !string.IsNullOrWhiteSpace(requestedCwd)
-            ? requestedCwd
-            : (!string.IsNullOrWhiteSpace(configService.TorrentSaveDirectory)
-                ? configService.TorrentSaveDirectory
-                : (!string.IsNullOrWhiteSpace(configService.DefaultSavePath)
-                    ? configService.DefaultSavePath
-                    : Directory.GetCurrentDirectory()));
 
         int cols = int.TryParse(context.Request.Query["cols"], out int c) ? c : 100;
         int rows = int.TryParse(context.Request.Query["rows"], out int r) ? r : 30;
@@ -98,7 +90,7 @@ public static class TerminalWebSocketHandler
         ITerminalSession session;
         try
         {
-            session = ptyService.CreateSession(cwd, cols, rows);
+            session = ptyService.CreateSession(requestedCwd, cols, rows);
         }
         catch (Exception ex)
         {

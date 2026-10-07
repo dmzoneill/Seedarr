@@ -13,10 +13,12 @@ namespace Seedarr.Http.Terminal;
 public class PtyTerminalService : IPtyTerminalService
 {
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly IConfigService _configService;
 
-    public PtyTerminalService(IConfigFileProvider configFileProvider = null)
+    public PtyTerminalService(IConfigFileProvider configFileProvider = null, IConfigService configService = null)
     {
         this._configFileProvider = configFileProvider;
+        this._configService = configService;
     }
 
     public ITerminalSession CreateSession(string cwd, int cols, int rows)
@@ -27,32 +29,7 @@ public class PtyTerminalService : IPtyTerminalService
             throw new SecurityException("Terminal process execution is prohibited by security configuration.");
         }
 
-        // 2. Validate and sanitize working directory
-        string sanitizedCwd = null;
-        if (!string.IsNullOrWhiteSpace(cwd))
-        {
-            if (cwd.Contains('\0') || cwd.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-            {
-                throw new ArgumentException("Invalid working directory path specified.", nameof(cwd));
-            }
-
-            try
-            {
-                sanitizedCwd = Path.GetFullPath(cwd);
-            }
-            catch (Exception ex)
-            {
-                throw new ArgumentException($"Failed to resolve working directory: {ex.Message}", nameof(cwd), ex);
-            }
-
-            EnsureExistingDirectory(sanitizedCwd, nameof(cwd));
-        }
-
-        if (sanitizedCwd == null)
-        {
-            sanitizedCwd = Directory.GetCurrentDirectory();
-            EnsureExistingDirectory(sanitizedCwd, nameof(cwd));
-        }
+        string sanitizedCwd = TerminalCwdResolver.ResolveWorkingDirectory(cwd, _configService);
 
         // 3. Clamp dimensions to safe bounds
         var (clampedCols, clampedRows) = TerminalGeometry.Clamp(cols, rows);
@@ -89,16 +66,4 @@ public class PtyTerminalService : IPtyTerminalService
         return this._configFileProvider?.TerminalAccessEnabled == true;
     }
 
-    private static void EnsureExistingDirectory(string path, string paramName)
-    {
-        if (File.Exists(path) && !Directory.Exists(path))
-        {
-            throw new ArgumentException("Working directory path refers to a file, not a directory.", paramName);
-        }
-
-        if (!Directory.Exists(path))
-        {
-            throw new ArgumentException("Working directory does not exist.", paramName);
-        }
-    }
 }
