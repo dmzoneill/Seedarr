@@ -21,4 +21,6 @@ public interface ILoginRateLimiter
     void Reset(string ipAddress);
 
     void Clear();
+
+    void ClearExpired();
 }

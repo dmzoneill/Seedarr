@@ -133,6 +133,29 @@ public class LoginRateLimiterTest
     }
 
     [Test]
+    public void ClearExpired_RemovesStaleSingleFailureIpsWithoutGlobalFailureThreshold()
+    {
+        var shortWindowLimiter = new LoginRateLimiter(
+            maxFailedAttempts: 5,
+            lockoutDuration: TimeSpan.FromMinutes(1),
+            failureWindow: TimeSpan.FromMilliseconds(50));
+
+        for (var i = 0; i < 100; i++)
+        {
+            shortWindowLimiter.RecordFailedAttempt($"10.0.0.{i}");
+        }
+
+        System.Threading.Thread.Sleep(80);
+
+        shortWindowLimiter.ClearExpired();
+
+        for (var i = 0; i < 100; i++)
+        {
+            Assert.That(shortWindowLimiter.GetFailedAttempts($"10.0.0.{i}"), Is.EqualTo(0));
+        }
+    }
+
+    [Test]
     public void ClearExpired_RemovesOldExpiredRecords()
     {
         var shortWindowLimiter = new LoginRateLimiter(
