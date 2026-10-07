@@ -140,6 +140,101 @@ public class TorrentRecheckServiceTest
     }
 
     [Test]
+    public void Recheck_uses_torrent_piece_hashes_when_source_path_missing()
+    {
+        var pieceHashes = new byte[2 * 20];
+        Array.Fill(pieceHashes, (byte)0xCD);
+
+        var torrent = new Torrent
+        {
+            Id = 50,
+            InfoHash = "hash-on-entity",
+            Name = "Magnet Torrent",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 2,
+            PieceLength = 1000,
+            TotalSize = 2000,
+            PieceHashes = pieceHashes,
+            SourcePath = null
+        };
+
+        _torrentFileService.GetByTorrentId(50).Returns(new List<TorrentFile>
+        {
+            new() { TorrentId = 50, Path = "file.bin", Size = 2000 }
+        });
+
+        _pieceVerificationService.VerifyPieceFromStorage(
+            torrent,
+            Arg.Any<IList<TorrentFile>>(),
+            Arg.Any<int>(),
+            Arg.Any<byte[]>(),
+            Arg.Any<IMultiFilePieceStorage>(),
+            Arg.Any<string>()).Returns(true);
+
+        _stateMachine.TransitionFromChecking(Arg.Any<Torrent>()).Returns(TorrentStatus.Seeding);
+
+        _service.Recheck(torrent);
+
+        _pieceVerificationService.Received(2).VerifyPieceFromStorage(
+            torrent,
+            Arg.Any<IList<TorrentFile>>(),
+            Arg.Any<int>(),
+            Arg.Any<byte[]>(),
+            Arg.Any<IMultiFilePieceStorage>(),
+            Arg.Any<string>());
+    }
+
+    [Test]
+    public void Recheck_uses_piece_hash_cache_when_repository_entity_lacks_hashes()
+    {
+        var pieceHashes = new byte[20];
+        Array.Fill(pieceHashes, (byte)0xEF);
+
+        TorrentService.PopulatePieceHashes(new Torrent
+        {
+            Id = 51,
+            InfoHash = "cached-hash",
+            PieceHashes = pieceHashes
+        });
+
+        var torrent = new Torrent
+        {
+            Id = 51,
+            InfoHash = "cached-hash",
+            Name = "Cached Hash Torrent",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 1,
+            PieceLength = 1000,
+            TotalSize = 1000
+        };
+
+        _torrentFileService.GetByTorrentId(51).Returns(new List<TorrentFile>
+        {
+            new() { TorrentId = 51, Path = "file.bin", Size = 1000 }
+        });
+
+        _pieceVerificationService.VerifyPieceFromStorage(
+            torrent,
+            Arg.Any<IList<TorrentFile>>(),
+            Arg.Any<int>(),
+            Arg.Any<byte[]>(),
+            Arg.Any<IMultiFilePieceStorage>(),
+            Arg.Any<string>()).Returns(true);
+
+        _stateMachine.TransitionFromChecking(Arg.Any<Torrent>()).Returns(TorrentStatus.Seeding);
+
+        _service.Recheck(torrent);
+
+        _pieceVerificationService.Received(1).VerifyPieceFromStorage(
+            torrent,
+            Arg.Any<IList<TorrentFile>>(),
+            0,
+            Arg.Is<byte[]>(h => h.Length == 20 && h[0] == 0xEF),
+            Arg.Any<IMultiFilePieceStorage>(),
+            Arg.Any<string>());
+    }
+
+    [Test]
     public void Recheck_resumes_to_downloading_when_partial_pieces_verified()
     {
         var torrent = new Torrent

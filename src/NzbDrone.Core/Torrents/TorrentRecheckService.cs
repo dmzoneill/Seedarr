@@ -310,6 +310,15 @@ public class TorrentRecheckService : ITorrentRecheckService
                 };
             }
 
+            if (pieceHashes == null)
+            {
+                TorrentService.PopulatePieceHashes(torrent);
+                if (torrent.PieceHashes != null && torrent.PieceHashes.Length > 0)
+                {
+                    pieceHashes = torrent.PieceHashes;
+                }
+            }
+
             if (pieceHashes == null && !string.IsNullOrWhiteSpace(torrent.SourcePath) && File.Exists(torrent.SourcePath))
             {
                 try

@@ -61,7 +61,7 @@ public class TorrentService : ITorrentService,
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> _pieceHashesByHash = new(StringComparer.OrdinalIgnoreCase);
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, byte[]> _pieceHashesById = new();
 
-    private static void PopulatePieceHashes(Torrent torrent)
+    internal static void PopulatePieceHashes(Torrent torrent)
     {
         if (torrent == null)
         {
