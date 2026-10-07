@@ -170,6 +170,11 @@ public class IdentityProviderService : IIdentityProviderService
 
         try
         {
+            if (provider.ProviderType == IdentityProviderType.ForwardAuth)
+            {
+                return true;
+            }
+
             var rawUrl = provider.ProviderType switch
             {
                 IdentityProviderType.Oidc => !string.IsNullOrWhiteSpace(provider.IssuerUrl)
