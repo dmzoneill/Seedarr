@@ -1,5 +1,5 @@
 {
-  "updatedAt": "${TS}",
+  "updatedAt": "2026-10-07T00:49:36Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,44 +14,44 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_9a7bf7f8",
+    "lastScheduleId": "sched_883555dc",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "walrus",
-      "issue": 1144,
-      "worktree": "../seedarr_worktrees/issue-1144",
+      "worker": "lion",
+      "issue": 1145,
+      "worktree": "../seedarr_worktrees/issue-1145",
       "area": "authentication"
     },
     "host": {
       "status": "running",
-      "worker": "panther",
-      "issue": 1272,
-      "worktree": "../seedarr_worktrees/issue-1272",
-      "area": "disk"
+      "worker": "koala",
+      "issue": 955,
+      "worktree": "../seedarr_worktrees/issue-955",
+      "area": "host"
     },
     "api": {
       "status": "running",
-      "worker": "eagle",
-      "issue": 1274,
-      "worktree": "../seedarr_worktrees/issue-1274",
-      "area": "api"
+      "worker": "crane",
+      "issue": 1135,
+      "worktree": "../seedarr_worktrees/issue-1135",
+      "area": "downloadclients"
     },
     "core-torrents": {
       "status": "running",
-      "worker": "bison",
-      "issue": 1287,
-      "worktree": "../seedarr_worktrees/issue-1287",
+      "worker": "trout",
+      "issue": 1284,
+      "worktree": "../seedarr_worktrees/issue-1284",
       "area": "torrents"
     },
     "http": {
       "status": "running",
-      "worker": "sparrow",
-      "issue": 922,
-      "worktree": "../seedarr_worktrees/issue-922",
-      "area": "http"
+      "worker": "wolf",
+      "issue": 1277,
+      "worktree": "../seedarr_worktrees/issue-1277",
+      "area": "signalr"
     }
   },
   "issueQueue": {
@@ -60,17 +60,17 @@
       "host",
       "downloadclients",
       "torrents",
-      "http"
+      "signalr"
     ],
     "nextCandidates": [
-      1277,
       1286,
-      1284,
-      1135,
-      1145,
-      955
+      1283,
+      1281,
+      1280,
+      1279,
+      1276
     ]
   },
-  "githubOpen": 410,
-  "lastMonitorNote": "fix monitor: 5 issues closed; rotated to #1144,#1272,#1274,#1287,#922"
+  "githubOpen": 405,
+  "lastMonitorNote": "fix monitor: batch #1144,#1272,#1274,#1287,#922 closed; rotated to #1145,#955,#1135,#1284,#1277"
 }
