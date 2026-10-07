@@ -436,6 +436,54 @@ public class RssRuleControllerTest
     }
 
     [Test]
+    public void SyncRss_when_sync_throws_does_not_apply_cooldown()
+    {
+        RssRuleController.ResetSyncCooldown();
+        var rssSyncService = Substitute.For<IRssSyncService>();
+        rssSyncService.Sync(true).Returns<int>(_ => throw new InvalidOperationException("indexer down"));
+
+        var controller = new RssRuleController(
+            _rssRuleRepository,
+            _indexerRepository,
+            _categoryService,
+            _grabHistoryRepository,
+            rssSyncService: rssSyncService);
+
+        var failed = controller.SyncRss();
+        Assert.That(failed.Result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)failed.Result).StatusCode, Is.EqualTo(500));
+
+        rssSyncService.Sync(true).Returns(2);
+        var retry = controller.SyncRss();
+
+        Assert.That(retry.Result, Is.InstanceOf<OkObjectResult>());
+        rssSyncService.Received(2).Sync(true);
+    }
+
+    [Test]
+    public void SyncRss_applies_cooldown_only_after_successful_sync()
+    {
+        RssRuleController.ResetSyncCooldown();
+        var rssSyncService = Substitute.For<IRssSyncService>();
+        rssSyncService.Sync(true).Returns(1);
+
+        var controller = new RssRuleController(
+            _rssRuleRepository,
+            _indexerRepository,
+            _categoryService,
+            _grabHistoryRepository,
+            rssSyncService: rssSyncService);
+
+        var first = controller.SyncRss();
+        Assert.That(first.Result, Is.InstanceOf<OkObjectResult>());
+
+        var second = controller.SyncRss();
+        Assert.That(second.Result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)second.Result).StatusCode, Is.EqualTo(429));
+        rssSyncService.Received(1).Sync(true);
+    }
+
+    [Test]
     public void Delete_for_nonexistent_rule_returns_not_found()
     {
         const int missingId = 999999;

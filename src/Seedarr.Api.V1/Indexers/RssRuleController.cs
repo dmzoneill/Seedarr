@@ -38,6 +38,7 @@ public class RssRuleController : Controller
     private static readonly TimeSpan _syncCooldown = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
     private static DateTime _lastSyncTime = DateTime.MinValue;
+    private static bool _manualSyncInFlight;
 
     public RssRuleController(
         IRssRuleRepository rssRuleRepository,
@@ -270,6 +271,15 @@ public class RssRuleController : Controller
 
         lock (_syncLock)
         {
+            if (_manualSyncInFlight)
+            {
+                return StatusCode(429, new
+                {
+                    message = "RSS sync is already in progress. Please wait for the current sync to finish.",
+                    retryAfterSeconds = 1
+                });
+            }
+
             var elapsed = DateTime.UtcNow - _lastSyncTime;
             if (elapsed < _syncCooldown)
             {
@@ -281,11 +291,30 @@ public class RssRuleController : Controller
                 });
             }
 
-            _lastSyncTime = DateTime.UtcNow;
+            _manualSyncInFlight = true;
         }
 
-        var grabbedCount = _rssSyncService.Sync(isManual: true);
-        return Ok(new { success = true, grabbedCount });
+        try
+        {
+            var grabbedCount = _rssSyncService.Sync(isManual: true);
+            lock (_syncLock)
+            {
+                _lastSyncTime = DateTime.UtcNow;
+            }
+
+            return Ok(new { success = true, grabbedCount });
+        }
+        catch
+        {
+            return StatusCode(500, new { message = "RSS sync failed." });
+        }
+        finally
+        {
+            lock (_syncLock)
+            {
+                _manualSyncInFlight = false;
+            }
+        }
     }
 
     public static void ResetSyncCooldown()
@@ -293,6 +322,7 @@ public class RssRuleController : Controller
         lock (_syncLock)
         {
             _lastSyncTime = DateTime.MinValue;
+            _manualSyncInFlight = false;
         }
     }
 
