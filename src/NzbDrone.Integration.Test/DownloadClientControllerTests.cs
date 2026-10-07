@@ -114,6 +114,17 @@ public class DownloadClientControllerTests : IntegrationTestBase
     }
 
     [Test]
+    public async Task Delete_for_nonexistent_client_returns_not_found_with_message()
+    {
+        var response = await DeleteAsync("/api/v1/downloadclients/999999");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("message").GetString(), Does.Contain("999999"));
+    }
+
+    [Test]
     public async Task Update_for_nonexistent_client_returns_not_found_with_message()
     {
         var clientDef = new
