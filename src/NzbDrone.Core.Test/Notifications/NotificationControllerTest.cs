@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -1473,5 +1476,26 @@ public class NotificationControllerTest
         Assert.That(result, Is.InstanceOf<OkResult>());
         _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<NotificationDefinition>>());
         _repository.Received(1).Delete(2);
+    }
+
+    [Test]
+    public void NotificationController_should_have_proper_authorization_policies()
+    {
+        var classAttr = typeof(NotificationController).GetCustomAttribute<AuthorizeAttribute>();
+        Assert.That(classAttr.Policy, Is.EqualTo(Policies.Reader));
+
+        Assert.That(typeof(NotificationController).GetMethod(nameof(NotificationController.Create))!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(NotificationController).GetMethod(
+            nameof(NotificationController.Update), new[] { typeof(int), typeof(JsonElement) })!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(NotificationController).GetMethod(nameof(NotificationController.UpdateWithoutId))!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(NotificationController).GetMethod(nameof(NotificationController.Delete))!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(NotificationController).GetMethod(nameof(NotificationController.Test), new[] { typeof(int) })!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(NotificationController).GetMethod(nameof(NotificationController.TestDirect))!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 }
