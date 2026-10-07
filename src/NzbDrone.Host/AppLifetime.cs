@@ -114,6 +114,16 @@ public class AppLifetime : IHostedService, IDisposable
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.Info("Seedarr application stopping");
+
+        try
+        {
+            _peerServer?.StopListening();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Error stopping peer listener on shutdown");
+        }
+
         _eventAggregator.PublishEvent(new ApplicationShutdownRequested());
 
         if (_cts != null)
@@ -133,16 +143,8 @@ public class AppLifetime : IHostedService, IDisposable
             }
         }
 
-        // Phase 1: Halt inbound traffic & announce stopped to trackers
-        _logger.Info("Executing phased shutdown phase 1: halting inbound traffic and announcing stopped to trackers");
-        try
-        {
-            _peerServer?.StopListening();
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn(ex, "Error stopping peer listener on shutdown");
-        }
+        // Phase 1: Announce stopped to trackers (inbound listener already halted)
+        _logger.Info("Executing phased shutdown phase 1: announcing stopped to trackers");
 
         if (_trackerAnnounceService != null && _torrentService != null)
         {

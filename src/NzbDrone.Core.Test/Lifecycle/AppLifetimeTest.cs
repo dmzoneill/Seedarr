@@ -525,6 +525,23 @@ public class AppLifetimeTest
     }
 
     [Test]
+    public async Task StopAsync_should_stop_listening_before_publishing_ApplicationShutdownRequested()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        await _subject.StartAsync(CancellationToken.None);
+        await _subject.StopAsync(CancellationToken.None);
+
+        Received.InOrder(() =>
+        {
+            _peerServer.Received(1).StopListening();
+            _eventAggregator.Received(1).PublishEvent(Arg.Any<ApplicationShutdownRequested>());
+        });
+
+        _peerServer.Received(1).StopListening();
+    }
+
+    [Test]
     public async Task StopAsync_should_checkpoint_wal_via_maintenance_service_when_main_database_is_null()
     {
         var maintenanceService = Substitute.For<IDatabaseMaintenanceService>();
