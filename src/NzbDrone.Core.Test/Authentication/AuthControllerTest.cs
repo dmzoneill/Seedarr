@@ -13,6 +13,7 @@ using NUnit.Framework;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Api.V1.Auth;
+using Seedarr.Http.Security;
 using Roles = NzbDrone.Core.Authentication.Roles;
 
 namespace NzbDrone.Core.Test.Authentication;
@@ -23,6 +24,7 @@ public class AuthControllerTest
     private IIdentityProviderService _identityProviderService;
     private IConfigFileProvider _configFileProvider;
     private ISessionRevocationService _sessionRevocationService;
+    private IRpcSessionStore _rpcSessionStore;
     private ILoginRateLimiter _loginRateLimiter;
     private AuthController _controller;
 
@@ -32,8 +34,9 @@ public class AuthControllerTest
         _identityProviderService = Substitute.For<IIdentityProviderService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
         _sessionRevocationService = Substitute.For<ISessionRevocationService>();
+        _rpcSessionStore = new RpcSessionStore();
         _loginRateLimiter = new LoginRateLimiter();
-        _controller = new AuthController(_identityProviderService, _configFileProvider, _sessionRevocationService, _loginRateLimiter);
+        _controller = new AuthController(_identityProviderService, _configFileProvider, _sessionRevocationService, _loginRateLimiter, _rpcSessionStore);
     }
 
     [Test]
@@ -264,6 +267,9 @@ public class AuthControllerTest
         };
         httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Cookies"));
 
+        _rpcSessionStore.SetSession("emulated-qb-sid", TimeSpan.FromDays(7));
+        Assert.That(_rpcSessionStore.IsValid("emulated-qb-sid"), Is.True);
+
         _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         var result = await _controller.Logout();
@@ -271,6 +277,7 @@ public class AuthControllerTest
         Assert.That(result, Is.TypeOf<OkObjectResult>());
         _sessionRevocationService.Received(1).RevokeSession("session-xyz-123");
         _sessionRevocationService.Received(1).RevokeSession("testuser");
+        Assert.That(_rpcSessionStore.IsValid("emulated-qb-sid"), Is.False);
         await authService.Received(1).SignOutAsync(httpContext, "Cookies", Arg.Any<AuthenticationProperties>());
     }
 

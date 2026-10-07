@@ -1,12 +1,15 @@
 using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Security;
 using Seedarr.Api.V1.Config;
+using Seedarr.Http.Security;
 
 namespace NzbDrone.Core.Test.Controllers;
 
@@ -16,6 +19,7 @@ public class ConfigControllerTests
     private IConfigService _configService;
     private IConfigFileProvider _configFileProvider;
     private ICertificateManager _certificateManager;
+    private IRpcSessionStore _rpcSessionStore;
     private GeneralConfigController _controller;
 
     [SetUp]
@@ -24,11 +28,18 @@ public class ConfigControllerTests
         _configService = Substitute.For<IConfigService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
         _certificateManager = Substitute.For<ICertificateManager>();
+        _rpcSessionStore = new RpcSessionStore();
 
         _controller = new GeneralConfigController(
             _configService,
             _configFileProvider,
-            _certificateManager);
+            _certificateManager,
+            _rpcSessionStore);
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext(),
+        };
     }
 
     [TestCase(0)]
@@ -326,6 +337,28 @@ public class ConfigControllerTests
         Assert.That(resource.ApiKey, Is.EqualTo("my*custom*api*key*2026"));
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             (string)d["ApiKey"] == "my*custom*api*key*2026"));
+    }
+
+    [Test]
+    public void SaveConfig_with_new_api_key_invalidates_emulated_client_rpc_sessions()
+    {
+        _configFileProvider.ApiKey.Returns("1234567890abcdef");
+        _rpcSessionStore.SetSession("qbittorrent-sid", TimeSpan.FromDays(7));
+        Assert.That(_rpcSessionStore.IsValid("qbittorrent-sid"), Is.True);
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            ApiKey = "rotated-api-key-value-2026",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(_rpcSessionStore.IsValid("qbittorrent-sid"), Is.False);
     }
 
     [Test]
