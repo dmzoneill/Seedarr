@@ -343,6 +343,43 @@ public class IdentityProviderServiceTest
     }
 
     [Test]
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase("********")]
+    [TestCase("******")]
+    public void Update_WhenClientSecretEmptyOrMasked_PreservesExistingSecret(string incomingSecret)
+    {
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, dataProtection);
+
+        var existingEncrypted = service.EncryptClientSecret("stored-secret-789");
+        var existing = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test_preserve",
+            Name = "Test Preserve",
+            ClientSecretEncrypted = existingEncrypted,
+        };
+
+        _repository.Get(1).Returns(existing);
+
+        var provider = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test_preserve",
+            Name = "Updated Name",
+            ClientSecretEncrypted = incomingSecret,
+        };
+
+        var result = service.Update(provider);
+
+        Assert.That(result.ClientSecretEncrypted, Is.EqualTo(existingEncrypted));
+        Assert.That(service.DecryptClientSecret(result.ClientSecretEncrypted), Is.EqualTo("stored-secret-789"));
+        _repository.Received(1).Update(Arg.Is<IdentityProviderDefinition>(p => p.ClientSecretEncrypted == existingEncrypted));
+    }
+
+    [Test]
     public void Update_WhenNewClientSecretProvided_EncryptsSecretAtRest()
     {
         var dataProtection = new EphemeralDataProtectionProvider();
