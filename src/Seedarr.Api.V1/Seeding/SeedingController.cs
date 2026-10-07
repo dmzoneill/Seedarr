@@ -5,6 +5,7 @@ using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Seeding;
+using NzbDrone.Core.Torrents;
 using NzbDrone.SignalR;
 using Seedarr.Http;
 
@@ -16,12 +17,18 @@ public class SeedingController : Controller, IHandle<SeedingTickEvent>
 {
     private readonly ISeedingService _seedingService;
     private readonly ISpeedHistoryService _speedHistoryService;
+    private readonly ITorrentService _torrentService;
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
 
-    public SeedingController(ISeedingService seedingService, ISpeedHistoryService speedHistoryService, IBroadcastSignalRMessage signalRBroadcaster)
+    public SeedingController(
+        ISeedingService seedingService,
+        ISpeedHistoryService speedHistoryService,
+        ITorrentService torrentService,
+        IBroadcastSignalRMessage signalRBroadcaster)
     {
         _seedingService = seedingService;
         _speedHistoryService = speedHistoryService;
+        _torrentService = torrentService;
         _signalRBroadcaster = signalRBroadcaster;
     }
 
@@ -57,6 +64,11 @@ public class SeedingController : Controller, IHandle<SeedingTickEvent>
     [HttpGet("history/{torrentId:int}")]
     public ActionResult<List<TorrentSpeedSnapshot>> GetTorrentHistory(int torrentId)
     {
+        if (_torrentService.Get(torrentId) == null)
+        {
+            return NotFound();
+        }
+
         return _speedHistoryService.GetTorrentHistory(torrentId);
     }
 

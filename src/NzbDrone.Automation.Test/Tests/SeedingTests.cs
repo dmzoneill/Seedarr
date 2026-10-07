@@ -116,4 +116,11 @@ public class SeedingTests : ApiTestBase
         var response = await Client.PostAsync($"{SeedarrUrl}/api/v1/seeding/stop/999999", null);
         Assert.That((int)response.StatusCode, Is.EqualTo(404));
     }
+
+    [Test]
+    public async Task Torrent_history_missing_torrent_returns_404()
+    {
+        var response = await Client.GetAsync($"{SeedarrUrl}/api/v1/seeding/history/999999");
+        Assert.That((int)response.StatusCode, Is.EqualTo(404));
+    }
 }
