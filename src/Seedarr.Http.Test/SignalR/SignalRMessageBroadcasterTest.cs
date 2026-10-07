@@ -422,6 +422,27 @@ public class SignalRMessageBroadcasterTest
     }
 
     [Test]
+    public void BroadcastToChannel_trims_whitespace_before_routing_to_channel_group()
+    {
+        var channelProxy = Substitute.For<IClientProxy>();
+        channelProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _hubClients.Group("channel-torrents").Returns(channelProxy);
+
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 1 }
+        };
+
+        _broadcaster.BroadcastToChannel(" torrents ", msg);
+
+        _hubClients.Received(1).Group("channel-torrents");
+        channelProxy.Received(1).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public void BroadcastToGroup_does_not_throw_when_group_or_message_is_null()
     {
         Assert.DoesNotThrow(() => _broadcaster.BroadcastToGroup(null, new SignalRMessage { Name = "Test" }));
