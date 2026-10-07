@@ -33,6 +33,7 @@ public class IndexerControllerTest
     private IIndexerStatusService _indexerStatusService;
     private IRssRuleRepository _rssRuleRepository;
     private IndexerController _controller;
+    private FakeHttpMessageHandler _defaultHttpHandler;
 
     [SetUp]
     public void SetUp()
@@ -47,6 +48,9 @@ public class IndexerControllerTest
         _indexerStatusService = Substitute.For<IIndexerStatusService>();
         _rssRuleRepository = Substitute.For<IRssRuleRepository>();
 
+        _defaultHttpHandler = CreateOkHttpHandler();
+        var httpClient = new HttpClient(_defaultHttpHandler);
+
         _controller = new IndexerController(
             _indexerFactory,
             _torrentService,
@@ -56,8 +60,22 @@ public class IndexerControllerTest
             _downloadHistoryService,
             _indexerStatusService,
             _proxySettingsProvider,
-            _rssRuleRepository);
+            _rssRuleRepository,
+            httpClient);
     }
+
+    private static FakeHttpMessageHandler CreateOkHttpHandler()
+    {
+        return new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(Array.Empty<byte>())
+            }
+        };
+    }
+
+    private static SocketsHttpHandler CreateFastFailProxyHandler() => TestSocketsHttpHandlers.FastFailingProxyHandler();
 
     [TestCase("http://169.254.169.254/latest/meta-data")]
     [TestCase("http://169.254.169.254")]
@@ -1661,8 +1679,7 @@ public class IndexerControllerTest
         _proxySettingsProvider.Type.Returns(ProxyType.Http);
         _proxySettingsProvider.Host.Returns("127.0.0.1");
         _proxySettingsProvider.Port.Returns(8080);
-        var proxyHandler = new SocketsHttpHandler();
-        _proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+        _proxySettingsProvider.CreateHandler().Returns(_ => CreateFastFailProxyHandler());
 
         var definition = new IndexerDefinition
         {
@@ -1684,8 +1701,7 @@ public class IndexerControllerTest
         _proxySettingsProvider.Type.Returns(ProxyType.Http);
         _proxySettingsProvider.Host.Returns("127.0.0.1");
         _proxySettingsProvider.Port.Returns(8080);
-        var proxyHandler = new SocketsHttpHandler();
-        _proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+        _proxySettingsProvider.CreateHandler().Returns(_ => CreateFastFailProxyHandler());
 
         var definition = new IndexerDefinition
         {
@@ -1707,8 +1723,7 @@ public class IndexerControllerTest
         _proxySettingsProvider.Type.Returns(ProxyType.Http);
         _proxySettingsProvider.Host.Returns("127.0.0.1");
         _proxySettingsProvider.Port.Returns(8080);
-        var proxyHandler = new SocketsHttpHandler();
-        _proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+        _proxySettingsProvider.CreateHandler().Returns(_ => CreateFastFailProxyHandler());
 
         var definition = new IndexerDefinition
         {
@@ -1748,7 +1763,7 @@ public class IndexerControllerTest
         _proxySettingsProvider.Type.Returns(ProxyType.Http);
         _proxySettingsProvider.Host.Returns("127.0.0.1");
         _proxySettingsProvider.Port.Returns(8080);
-        _proxySettingsProvider.CreateHandler().Returns(_ => new SocketsHttpHandler());
+        _proxySettingsProvider.CreateHandler().Returns(_ => CreateFastFailProxyHandler());
 
         var parsedInfo = new ParsedTorrent
         {
@@ -1788,8 +1803,7 @@ public class IndexerControllerTest
         _proxySettingsProvider.Type.Returns(ProxyType.Http);
         _proxySettingsProvider.Host.Returns("127.0.0.1");
         _proxySettingsProvider.Port.Returns(8080);
-        var proxyHandler = new SocketsHttpHandler();
-        _proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+        _proxySettingsProvider.CreateHandler().Returns(_ => CreateFastFailProxyHandler());
 
         var indexerDef = new IndexerDefinition
         {
@@ -1905,7 +1919,10 @@ public class IndexerControllerTest
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
         public HttpRequestMessage SentRequest { get; private set; }
-        public HttpResponseMessage ResponseToReturn { get; set; } = new(System.Net.HttpStatusCode.BadRequest);
+        public HttpResponseMessage ResponseToReturn { get; set; } = new(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(Array.Empty<byte>())
+        };
 
         protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
         {

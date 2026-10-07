@@ -1019,7 +1019,7 @@ public class HttpTrackerProviderTest
 
         Assert.That(initialHandler, Is.InstanceOf<SocketsHttpHandler>());
 
-        var proxyHandler = new SocketsHttpHandler();
+        var proxyHandler = TestSocketsHttpHandlers.FastFailingProxyHandler();
         proxySettingsProvider.IsEnabled.Returns(true);
         proxySettingsProvider.Type.Returns(ProxyType.Http);
         proxySettingsProvider.Host.Returns("127.0.0.1");
@@ -1041,7 +1041,7 @@ public class HttpTrackerProviderTest
         proxySettingsProvider.Host.Returns("proxy1.local");
         proxySettingsProvider.Port.Returns(8080);
 
-        var proxyHandler1 = new SocketsHttpHandler();
+        var proxyHandler1 = TestSocketsHttpHandlers.FastFailingProxyHandler();
         proxySettingsProvider.CreateHandler().Returns(proxyHandler1);
 
         var provider = new HttpTrackerProvider(_configService, proxySettingsProvider);
@@ -1049,7 +1049,7 @@ public class HttpTrackerProviderTest
 
         Assert.That(provider.Handler, Is.SameAs(proxyHandler1));
 
-        var proxyHandler2 = new SocketsHttpHandler();
+        var proxyHandler2 = TestSocketsHttpHandlers.FastFailingProxyHandler();
         proxySettingsProvider.Host.Returns("proxy2.local");
         proxySettingsProvider.Port.Returns(9090);
         proxySettingsProvider.CreateHandler().Returns(proxyHandler2);
@@ -1069,7 +1069,7 @@ public class HttpTrackerProviderTest
         proxySettingsProvider.Host.Returns("127.0.0.1");
         proxySettingsProvider.Port.Returns(8080);
 
-        var proxyHandler = new SocketsHttpHandler();
+        var proxyHandler = TestSocketsHttpHandlers.FastFailingProxyHandler();
         proxySettingsProvider.CreateHandler().Returns(proxyHandler);
 
         var provider = new HttpTrackerProvider(_configService, proxySettingsProvider);
@@ -1094,7 +1094,7 @@ public class HttpTrackerProviderTest
         var provider = new HttpTrackerProvider(_configService, proxySettingsProvider);
         var initialClient = provider.Client;
 
-        var proxyHandler = new SocketsHttpHandler();
+        var proxyHandler = TestSocketsHttpHandlers.FastFailingProxyHandler();
         proxySettingsProvider.IsEnabled.Returns(true);
         proxySettingsProvider.Type.Returns(ProxyType.Socks5);
         proxySettingsProvider.Host.Returns("10.0.0.5");
@@ -1115,7 +1115,7 @@ public class HttpTrackerProviderTest
         var inFlightClient = provider.Client;
 
         proxySettingsProvider.IsEnabled.Returns(true);
-        var proxyHandler = new SocketsHttpHandler();
+        var proxyHandler = TestSocketsHttpHandlers.FastFailingProxyHandler();
         proxySettingsProvider.CreateHandler().Returns(proxyHandler);
 
         provider.Handle(new ConfigSavedEvent());
