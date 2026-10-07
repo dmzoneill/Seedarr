@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.IO.Compression;
 using Microsoft.Data.Sqlite;
 using NSubstitute;
@@ -242,6 +243,29 @@ public class BackupServiceTest
 
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0].Name, Does.Contain("seedarr_backup_"));
+    }
+
+    [Test]
+    public void GetBackups_should_use_stable_order_when_creation_times_match()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var olderName = "seedarr_backup_1.0_2024-01-01.zip";
+        var newerName = "seedarr_backup_1.0_2024-01-02.zip";
+        var olderPath = Path.Combine(backupDir, olderName);
+        var newerPath = Path.Combine(backupDir, newerName);
+        File.WriteAllText(olderPath, "older");
+        File.WriteAllText(newerPath, "newer");
+
+        var tiedTime = new DateTime(2024, 6, 1, 12, 0, 0, DateTimeKind.Utc);
+        File.SetCreationTimeUtc(olderPath, tiedTime);
+        File.SetCreationTimeUtc(newerPath, tiedTime);
+
+        var first = _subject.GetBackups().Select(b => b.Name).ToList();
+        var second = _subject.GetBackups().Select(b => b.Name).ToList();
+
+        Assert.That(second, Is.EqualTo(first));
+        Assert.That(first, Is.EqualTo(new[] { olderName, newerName }));
     }
 
     [Test]

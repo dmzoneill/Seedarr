@@ -273,6 +273,7 @@ public class BackupService : IBackupService
         return Directory.GetFiles(backupFolder, "seedarr_backup_*.zip")
             .Select(f => new FileInfo(f))
             .OrderByDescending(f => f.CreationTimeUtc)
+            .ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
             .Select(f => new BackupInfo
             {
                 Name = f.Name,
