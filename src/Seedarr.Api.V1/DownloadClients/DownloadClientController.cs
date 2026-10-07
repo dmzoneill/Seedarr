@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
@@ -10,6 +12,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.DownloadClients;
 
 [V1ApiController("downloadclients")]
+[Authorize(Policy = Policies.Reader)]
 public class DownloadClientController : Controller
 {
     private const string PasswordMask = "********"; // NOSONAR
@@ -45,6 +48,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<DownloadClientDefinition> Create([FromBody] DownloadClientDefinition definition)
     {
         if (definition == null)
@@ -75,6 +79,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpPut("{id}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Update(int id, [FromBody] DownloadClientDefinition definition)
     {
         if (definition == null)
@@ -120,6 +125,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Delete(int id)
     {
         var existing = _downloadClientFactory.Get(id);
@@ -134,6 +140,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id}/test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<DownloadClientTestResult> TestConnection(int id)
     {
         var definition = _downloadClientFactory.Get(id);
@@ -166,6 +173,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<DownloadClientTestResult> TestDirect([FromBody] DownloadClientDefinition definition)
     {
         if (definition == null)
@@ -240,6 +248,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id:int}/torrents/{infoHash}/pause")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult PauseTorrent(int id, string infoHash)
     {
         var definition = _downloadClientFactory.Get(id);
@@ -272,6 +281,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id:int}/torrents/{infoHash}/resume")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult ResumeTorrent(int id, string infoHash)
     {
         var definition = _downloadClientFactory.Get(id);
@@ -304,6 +314,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpDelete("{id:int}/torrents/{infoHash}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult DeleteTorrent(int id, string infoHash, [FromQuery] bool deleteData = false)
     {
         var definition = _downloadClientFactory.Get(id);
@@ -378,6 +389,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id}/import/{infoHash}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<Torrent> ImportTorrent(int id, string infoHash, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);
@@ -413,6 +425,7 @@ public class DownloadClientController : Controller
 
     [HttpPost("{id}/import")]
     [HttpPost("{id}/import-torrents")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<BatchImportResponse> ImportTorrents(int id, [FromBody] DownloadClientImportRequest request, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);

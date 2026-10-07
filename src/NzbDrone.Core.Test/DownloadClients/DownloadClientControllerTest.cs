@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.DownloadClients;
@@ -1493,5 +1496,33 @@ public class DownloadClientControllerTest
         var badRequest = (BadRequestObjectResult)result.Result;
         Assert.That(badRequest.Value, Is.EqualTo("InfoHashes is required"));
         _syncService.DidNotReceive().ImportTorrents(Arg.Any<int>(), Arg.Any<List<string>>());
+    }
+
+    [Test]
+    public void DownloadClientController_should_have_proper_authorization_policies()
+    {
+        var classAttr = typeof(DownloadClientController).GetCustomAttribute<AuthorizeAttribute>();
+        Assert.That(classAttr.Policy, Is.EqualTo(Policies.Reader));
+
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.Create))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.Update))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.Delete))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.TestConnection))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.TestDirect))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.PauseTorrent))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.Operator));
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.ResumeTorrent))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.Operator));
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.DeleteTorrent))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.Operator));
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.ImportTorrent))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.Operator));
+        Assert.That(typeof(DownloadClientController).GetMethod(nameof(DownloadClientController.ImportTorrents))!.GetCustomAttribute<AuthorizeAttribute>()!.Policy,
+            Is.EqualTo(Policies.Operator));
     }
 }
