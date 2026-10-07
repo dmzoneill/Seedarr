@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T01:00:00Z",
+  "updatedAt": "2026-10-07T01:15:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Blocklist",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/DownloadClients",
-    "completedAt": "2026-10-07T01:00:00Z",
-    "issuesFiled": [1252, 1253, 1254],
+    "subfolder": "src/NzbDrone.Core/Blocklist",
+    "completedAt": "2026-10-07T01:15:00Z",
+    "issuesFiled": [1261, 1262],
     "issuesReopened": [],
-    "taskId": "core-hunter",
-    "note": "DownloadClients pass: static review of 9 files (Factory, models, repository, Sync/DownloadClientSyncService, Deluge/QBitTorrent/Transmission clients). Filed #1252 (QBit MapState metaDL/allocating/moving), #1253 (Deluge AddTrackers per-URL tier), #1254 (DownloadId never populated). Deduped open #884, #923, #925, #931, #1008-#1013, #1097-#1099, #1118-#1119, #1163-#1164, #1212-#1213, #1226-#1228 and related API issues. No dotnet build/test."
+    "taskId": "core-hunter-wren",
+    "note": "Blocklist pass: static review of 14 files (PeerBlocklistSyncService, Ipv4/Ipv6 interval trees, BlocklistArchiveStreamProvider, update task/command, metadata). Filed #1261 (transport failure leaves stale LastSyncHttpStatus), #1262 (unparsable feed lines inflate ActiveRules). Deduped open #904, #905, #937-#939, #1021-#1024, #1029, #1032, #1129-#1130, #1175-#1177, #1224-#1225 and related semicolon issue #1023. No dotnet build/test."
   }
 }
