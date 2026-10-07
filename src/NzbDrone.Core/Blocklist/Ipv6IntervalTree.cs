@@ -196,6 +196,31 @@ public class Ipv6IntervalTree
             }
         }
 
+        // Space-separated label prefix: e.g. "Bad Organization 2001:db8::1 - 2001:db8::ff"
+        for (var spaceIdx = trimmed.LastIndexOf(' '); spaceIdx > 0; spaceIdx = spaceIdx > 0 ? trimmed.LastIndexOf(' ', spaceIdx - 1) : -1)
+        {
+            var candidate = trimmed[(spaceIdx + 1)..].Trim();
+            if (candidate.Length == 0)
+            {
+                continue;
+            }
+
+            var candidateComma = candidate.IndexOf(',');
+            if (candidateComma > 0)
+            {
+                var candidateBeforeComma = candidate[..candidateComma].Trim();
+                if (TryParseCleanIPv6(candidateBeforeComma, out range))
+                {
+                    return true;
+                }
+            }
+
+            if (TryParseCleanIPv6(candidate, out range))
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 
