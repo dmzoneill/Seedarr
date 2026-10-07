@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Indexers.Prowlarr;
 
@@ -142,6 +143,12 @@ public class ProwlarrIndexerSyncService : IProwlarrIndexerSyncService
         if (string.IsNullOrWhiteSpace(prowlarrDef.Url))
         {
             result.Errors.Add($"Prowlarr instance '{prowlarrDef.Name}' has no URL configured.");
+            return;
+        }
+
+        if (!UrlValidator.IsSafeUrl(prowlarrDef.Url))
+        {
+            result.Errors.Add($"Prowlarr instance '{prowlarrDef.Name}' URL is not permitted.");
             return;
         }
 

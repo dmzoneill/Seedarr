@@ -353,6 +353,21 @@ public class IndexerController : Controller
         var baseUrl = request?.BaseUrl;
         var apiKey = request?.ApiKey;
 
+        if (targetId.HasValue)
+        {
+            var targetDefinition = _indexerFactory.Get(targetId.Value);
+            if (targetDefinition != null &&
+                !string.IsNullOrWhiteSpace(targetDefinition.Url) &&
+                !UrlValidator.IsSafeUrl(targetDefinition.Url))
+            {
+                return BadRequest("Target host/URL is not permitted.");
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(baseUrl) && !UrlValidator.IsSafeUrl(baseUrl))
+        {
+            return BadRequest("Target host/URL is not permitted.");
+        }
+
         var result = _prowlarrSyncService.Sync(targetId, baseUrl, apiKey);
         if (!result.Success && result.Errors.Count > 0 && result.Added == 0 && result.Updated == 0)
         {
