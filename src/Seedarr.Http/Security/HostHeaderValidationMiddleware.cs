@@ -19,15 +19,11 @@ public class HostHeaderValidationMiddleware
         _next = next;
     }
 
-    public async Task InvokeAsync(HttpContext context, IConfigService configService)
+    public async Task InvokeAsync(HttpContext context, IConfigService configService, IConfigFileProvider configFileProvider)
     {
         if (configService != null && configService.HostHeaderValidationEnabled)
         {
-            var hostHeader = context.Request.Host.Value;
-            if (string.IsNullOrWhiteSpace(hostHeader))
-            {
-                hostHeader = context.Request.Host.Host;
-            }
+            var hostHeader = RequestHostResolver.GetEffectiveHostHeader(context, configFileProvider);
 
             if (string.IsNullOrWhiteSpace(hostHeader) || !IsHostAllowed(hostHeader, configService.AllowedHosts))
             {
@@ -79,12 +75,15 @@ public class HostHeaderValidationMiddleware
             }
         }
 
-        // Loopback and container network local domains are always allowed
-        if (cleanHost.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+        var hasExplicitAllowedHosts = !string.IsNullOrWhiteSpace(allowedHostsConfig);
+
+        // Loopback and container network local domains are allowed when no explicit allowlist is configured
+        if (!hasExplicitAllowedHosts &&
+            (cleanHost.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
             cleanHost.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
             cleanHost.Equals("::1", StringComparison.OrdinalIgnoreCase) ||
             cleanHost.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
-            cleanHost.Equals("seedarr", StringComparison.OrdinalIgnoreCase))
+            cleanHost.Equals("seedarr", StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
@@ -155,8 +154,8 @@ public class HostHeaderValidationMiddleware
             }
         }
 
-        // Allow local LAN IPs (IPv4 private, link-local, CGNAT/Tailscale, and IPv6 loopback, link-local, ULA, site-local)
-        if (IPAddress.TryParse(cleanHost, out var ip))
+        // Allow local LAN IPs when no explicit allowlist is configured
+        if (!hasExplicitAllowedHosts && IPAddress.TryParse(cleanHost, out var ip))
         {
             if (ip.IsIPv4MappedToIPv6)
             {

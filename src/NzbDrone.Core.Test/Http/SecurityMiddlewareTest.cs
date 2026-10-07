@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using NSubstitute;
@@ -114,6 +115,73 @@ public class SecurityMiddlewareTest
         Assert.That(allowed, Is.True);
     }
 
+    [TestCase("localhost", "seedarr.example.com", false)]
+    [TestCase("127.0.0.1", "seedarr.example.com", false)]
+    [TestCase("seedarr.example.com", "seedarr.example.com", true)]
+    public void HostHeaderValidation_WithExplicitAllowedHosts_DoesNotImplicitlyAllowLoopback(string host, string allowedHosts, bool expectedAllowed)
+    {
+        var allowed = HostHeaderValidationMiddleware.IsHostAllowed(host, allowedHosts);
+        Assert.That(allowed, Is.EqualTo(expectedAllowed));
+    }
+
+    [Test]
+    public async Task HostHeaderValidationMiddleware_BlocksForgedLoopbackHostFromUntrustedPeer()
+    {
+        var config = Substitute.For<IConfigService>();
+        config.HostHeaderValidationEnabled.Returns(true);
+        config.AllowedHosts.Returns("seedarr.example.com");
+
+        var configFile = Substitute.For<IConfigFileProvider>();
+        configFile.TrustedProxies.Returns("198.51.100.0/24");
+
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.50");
+        context.Request.Host = new HostString("localhost");
+        context.Request.Headers["X-Forwarded-Host"] = "localhost";
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new HostHeaderValidationMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, config, configFile);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
+    }
+
+    [Test]
+    public async Task HostHeaderValidationMiddleware_AllowsForwardedHostFromTrustedProxy()
+    {
+        var config = Substitute.For<IConfigService>();
+        config.HostHeaderValidationEnabled.Returns(true);
+        config.AllowedHosts.Returns("seedarr.example.com");
+
+        var configFile = Substitute.For<IConfigFileProvider>();
+        configFile.TrustedProxies.Returns("198.51.100.0/24");
+
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Parse("198.51.100.10");
+        context.Request.Host = new HostString("seedarr-internal");
+        context.Request.Headers["X-Forwarded-Host"] = "seedarr.example.com";
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new HostHeaderValidationMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, config, configFile);
+
+        Assert.That(nextCalled, Is.True);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
+    }
+
     [TestCase("[fe80::1]")]
     [TestCase("[fd00::1]")]
     [TestCase("100.100.1.1")]
@@ -140,7 +208,7 @@ public class SecurityMiddlewareTest
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context, config);
+        await middleware.InvokeAsync(context, config, null);
 
         Assert.That(nextCalled, Is.True);
         Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status200OK));
@@ -167,7 +235,7 @@ public class SecurityMiddlewareTest
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context, config);
+        await middleware.InvokeAsync(context, config, null);
 
         Assert.That(nextCalled, Is.False);
         Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
@@ -190,7 +258,7 @@ public class SecurityMiddlewareTest
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context, config);
+        await middleware.InvokeAsync(context, config, null);
 
         Assert.That(nextCalled, Is.True);
     }
@@ -239,7 +307,7 @@ public class SecurityMiddlewareTest
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context, config);
+        await middleware.InvokeAsync(context, config, null);
 
         Assert.That(nextCalled, Is.False);
         Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
@@ -264,7 +332,7 @@ public class SecurityMiddlewareTest
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context, config);
+        await middleware.InvokeAsync(context, config, null);
 
         Assert.That(nextCalled, Is.False);
         Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
@@ -288,7 +356,7 @@ public class SecurityMiddlewareTest
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context, config);
+        await middleware.InvokeAsync(context, config, null);
 
         Assert.That(nextCalled, Is.True);
     }
