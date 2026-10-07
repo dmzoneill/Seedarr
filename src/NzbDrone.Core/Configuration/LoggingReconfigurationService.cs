@@ -54,6 +54,8 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
             return;
         }
 
+        EnsureProvisionalFileLogging(config);
+
         var logToFile = _configService.LogToFile;
         var fileLogLevel = _configService.FileLogLevel;
         var debugMode = _configService.DebugMode;
@@ -63,6 +65,17 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
 
         LogManager.ReconfigExistingLoggers();
         _logger.Debug("Logging reconfigured: logToFile={0}, fileLogLevel={1}, debugMode={2}", logToFile, fileLogLevel, debugMode);
+    }
+
+    private void EnsureProvisionalFileLogging(LoggingConfiguration config)
+    {
+        if (config.FindTargetByName<FileTarget>(FileTargetName) != null)
+        {
+            return;
+        }
+
+        ConfigureFileLogging(config, logToFile: true, fileLogLevel: "Info");
+        LogManager.ReconfigExistingLoggers();
     }
 
     private void ConfigureFileLogging(LoggingConfiguration config, bool logToFile, string fileLogLevel)

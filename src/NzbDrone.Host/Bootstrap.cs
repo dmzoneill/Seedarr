@@ -80,9 +80,6 @@ public static class Bootstrap
 
         TableRegistration.RegisterTables();
 
-        var mainDb = app.Services.GetRequiredService<IMainDatabase>();
-        Logger.Info("Database initialized: {0}", mainDb.DatabaseType);
-
         try
         {
             var loggingReconfig = app.Services.GetService<ILoggingReconfigurationService>()
@@ -93,6 +90,9 @@ public static class Bootstrap
         {
             Logger.Warn(ex, "Failed to reconfigure logging during bootstrap");
         }
+
+        var mainDb = app.Services.GetRequiredService<IMainDatabase>();
+        Logger.Info("Database initialized: {0}", mainDb.DatabaseType);
 
         if (urls == null)
         {
