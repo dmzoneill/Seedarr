@@ -60,11 +60,7 @@ public class IndexerControllerTest
     }
 
     [TestCase("http://169.254.169.254/latest/meta-data")]
-    [TestCase("http://127.0.0.1:8080")]
-    [TestCase("http://localhost:9696")]
-    [TestCase("http://10.0.0.1:9696")]
-    [TestCase("http://192.168.1.1:9696")]
-    [TestCase("http://172.16.0.1:9696")]
+    [TestCase("http://169.254.169.254")]
     public void TestDirect_with_unsafe_url_returns_bad_request(string url)
     {
         var definition = new IndexerDefinition
@@ -80,6 +76,46 @@ public class IndexerControllerTest
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
         Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
+    }
+
+    [TestCase("http://127.0.0.1:9117")]
+    [TestCase("http://localhost:9696")]
+    [TestCase("http://10.0.0.1:9696")]
+    [TestCase("http://192.168.1.1:9696")]
+    public void TestDirect_with_loopback_or_internal_url_reaches_connection_test(string url)
+    {
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                ReasonPhrase = "Unauthorized"
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var definition = new IndexerDefinition
+        {
+            Name = "Local Indexer",
+            IndexerType = "Prowlarr",
+            Url = url,
+            ApiKey = "testkey"
+        };
+
+        var result = controller.TestDirect(definition);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(result.Result, Is.Not.InstanceOf<BadRequestObjectResult>());
     }
 
     [TestCase("")]
