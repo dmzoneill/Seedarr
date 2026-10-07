@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T01:12:30Z",
+  "updatedAt": "2026-10-07T00:22:15Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/Seedarr.Http/REST",
+  "currentSubfolder": "src/NzbDrone.SignalR",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,11 +10,11 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
-    "completedAt": "2026-10-07T01:12:30Z",
+    "subfolder": "src/Seedarr.Http/REST",
+    "completedAt": "2026-10-07T00:22:15Z",
     "issuesFiled": [],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "note": "Static review of TorrentRecheckService.cs (queue + direct Recheck/RecheckAsync paths, SignalR TorrentUpdated/TorrentRecheckProgress, cancel/failure terminals, ExecuteRecheckCore lifecycle). Findings deduped to open GH: #912 #936 #951 #988 #991 #1036 #1048 #1172 #1209 #1210 #1242 #1243. Added comment on #988 documenting direct-path failure terminal gap (same root cause as queued swallow). No new issues filed. Next: src/Seedarr.Http/REST. Static only; no dotnet build/test."
+    "note": "Static review of src/Seedarr.Http/REST (5 files): RestController.cs (ValidateAndRespond + null-safe validators, unused by API today), RestResource.cs (ResourceName culture-sensitive ToLower), ResourceValidator.cs (empty FluentValidation shell), Attributes/RestPutByIdAttribute.cs (optional {id:int?} route), RestControllerWithSignalR.cs (coalesce dictionaries/timers, Handle/Flush/Dispose/OnCoalesceTimerTick, IsConnected gating, PruneStaleBroadcastTimes). Cross-checked RestControllerWithSignalRTest.cs happy paths (rapid coalesce, distinct ids, create/delete cancels pending, offline skip, zero window). Findings deduped to open GH: #1047 (lastBroadcastTimes advanced before successful broadcast on leading/trailing/Flush/non-Updated paths), #1002 (timer tick + Flush clear pending while disconnected), #1003 (pending survives reconnect after delete), #1060 (Dispose drops pending, Flush unwired on shutdown), #1230 (window expiry immediate path discards newer _pendingUpdates for stale event), #1214 (_lastBroadcastTimes prune only on Updated coalesce), #1187 (stale coalesce window after reconnect), #1215 (Created seeds throttle window), #1049 (ResourceName ToLower), #1140 (RestPutById optional id). No new issues filed. Next: src/NzbDrone.SignalR. Static only; no dotnet build/test."
   }
 }
