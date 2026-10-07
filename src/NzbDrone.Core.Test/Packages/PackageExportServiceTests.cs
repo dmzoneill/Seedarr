@@ -4,8 +4,10 @@ using System.Formats.Tar;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
@@ -13,6 +15,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Serializer;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Packages;
 using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Tags;
@@ -395,5 +398,60 @@ public class PackageExportServiceTests
 
         Assert.That(entryNames.Any(e => e.Contains("..")), Is.False, "Archive entries must never contain traversal sequence '..'");
         Assert.That(entryNames.Any(e => e.StartsWith('/')), Is.False, "Archive entries must not start with '/'");
+    }
+
+    [TestCase(nameof(PackageController.Export))]
+    [TestCase(nameof(PackageController.ExportPost))]
+    public void Export_methods_should_require_Reader_policy(string methodName)
+    {
+        var method = typeof(PackageController).GetMethods().FirstOrDefault(m => m.Name == methodName);
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method!.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr!.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [Test]
+    public void Import_method_should_require_Operator_policy()
+    {
+        var method = typeof(PackageController).GetMethod(nameof(PackageController.Import));
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method!.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr!.Policy, Is.EqualTo(Policies.Operator));
+    }
+
+    [Test]
+    public async Task PackageController_Export_WithPayload_ForbidsReadOnlyPrincipal()
+    {
+        var controller = new PackageController(_service, _torrentService);
+        var httpContext = new DefaultHttpContext();
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+            new[] { new Claim(ClaimTypes.Role, Roles.ReadOnly) },
+            authenticationType: "Test"));
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = await controller.Export("1", includePayload: true);
+
+        Assert.That(result, Is.InstanceOf<ForbidResult>());
+    }
+
+    [Test]
+    public async Task PackageController_Export_WithPayload_AllowsUserPrincipal()
+    {
+        var controller = new PackageController(_service, _torrentService);
+        var httpContext = new DefaultHttpContext();
+        var responseStream = new MemoryStream();
+        httpContext.Response.Body = responseStream;
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+            new[] { new Claim(ClaimTypes.Role, Roles.User) },
+            authenticationType: "Test"));
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = await controller.Export("1", includePayload: true);
+
+        Assert.That(result, Is.InstanceOf<EmptyResult>());
     }
 }
