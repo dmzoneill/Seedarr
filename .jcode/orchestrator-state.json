@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:20:45Z",
+  "updatedAt": "2026-10-07T00:21:50Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_2f1b647a"
+    "lastScheduleId": "sched_0608e8e1"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -42,7 +42,7 @@
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "nightingale"
+      "worker": "gannet"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 401,
-  "lastMonitorNote": "401 open; crane idle >90s after Security → quail Authentication"
+  "githubOpenCount": 402,
+  "lastMonitorNote": "402 open; nightingale idle >90s after REST \u2192 gannet SignalR hub"
 }
