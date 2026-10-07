@@ -190,7 +190,9 @@ public class PathSanitizerTests
             Assert.That(PathSanitizer.IsBlockedPath(@"C:\Windows"), Is.True);
             Assert.That(PathSanitizer.IsBlockedPath(@"C:\Windows\System32"), Is.True);
             Assert.That(PathSanitizer.IsBlockedPath(@"C:\Program Files\App"), Is.True);
-            Assert.That(PathSanitizer.IsBlockedPath(@"D:\Windows"), Is.False);
+            Assert.That(PathSanitizer.IsBlockedPath(@"D:\Windows"), Is.True);
+            Assert.That(PathSanitizer.IsBlockedPath(@"E:\Program Files\App"), Is.True);
+            Assert.That(PathSanitizer.IsBlockedPath(@"F:\Downloads"), Is.False);
         }
         else
         {
