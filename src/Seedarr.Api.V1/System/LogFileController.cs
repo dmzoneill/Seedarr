@@ -56,6 +56,27 @@ public class LogFileController : ControllerBase
         return false;
     }
 
+    public static bool IsReadableLogFile(string fileName)
+    {
+        if (IsActiveLogFile(fileName))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return false;
+        }
+
+        if (!fileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return fileName.StartsWith("seedarr_", StringComparison.OrdinalIgnoreCase) ||
+               fileName.StartsWith("seedarr.", StringComparison.OrdinalIgnoreCase);
+    }
+
     [HttpGet]
     public ActionResult<List<LogFileResource>> GetLogFiles()
     {
@@ -68,6 +89,7 @@ public class LogFileController : ControllerBase
 
         var files = Directory.GetFiles(logDir, "*.*", SearchOption.TopDirectoryOnly)
             .Select(f => new FileInfo(f))
+            .Where(f => IsReadableLogFile(f.Name))
             .OrderByDescending(f => f.LastWriteTimeUtc)
             .Select(f => new LogFileResource
             {
@@ -108,6 +130,11 @@ public class LogFileController : ControllerBase
         var fullPath = Path.GetFullPath(Path.Combine(logDir, sanitized));
 
         if (!fullPath.StartsWith(logDirWithSep, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("Invalid filename");
+        }
+
+        if (!IsReadableLogFile(sanitized))
         {
             return BadRequest("Invalid filename");
         }

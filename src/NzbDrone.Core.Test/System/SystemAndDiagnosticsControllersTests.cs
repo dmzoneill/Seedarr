@@ -658,10 +658,20 @@ public class SystemAndDiagnosticsControllersTests
     }
 
     [Test]
-    public void LogFileController_GetLogFile_ReturnsNotFoundWhenFileDoesNotExist()
+    public void LogFileController_GetLogFile_ReturnsNotFoundWhenAllowlistedFileDoesNotExist()
     {
-        var result = _logFileController.GetLogFile("nonexistent.txt");
+        var result = _logFileController.GetLogFile("seedarr.99.txt");
         Assert.That(result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void LogFileController_GetLogFile_RejectsNonAllowlistedFileInLogsDirectory()
+    {
+        var filePath = Path.Combine(_logsDir, "attacker.txt");
+        File.WriteAllText(filePath, "exfil");
+
+        var result = _logFileController.GetLogFile("attacker.txt");
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
     [Test]
