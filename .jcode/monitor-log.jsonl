@@ -661,3 +661,4 @@
   "gitSha": "6e73e660",
   "note": "fix monitor: 0 open; all 5 slots idle; queue empty"
 }
+{"ts":"2026-10-07T07:17:58Z","kind":"fix_monitor_tick","scheduleId":"sched_3ea8b796","githubOpen":0,"slots":{"core-auth":"idle","host":"idle","api":"idle","core-torrents":"idle","http":"idle"},"queueLen":0,"dispatches":0,"pokes":0,"materialChange":false,"note":"fix monitor: 0 open; all 5 slots idle; queue empty; heartbeat","head":"779b3f03"}
