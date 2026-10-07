@@ -237,7 +237,8 @@ public class DbFactory : IDbFactory
             var fileName = Path.GetFileName(dbPath);
             var searchPattern = $"{fileName}.pre-migration-*.bak";
             var snapshots = Directory.GetFiles(dir, searchPattern)
-                .OrderByDescending(f => f, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .ThenByDescending(f => f, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             if (snapshots.Count > maxToRetain)

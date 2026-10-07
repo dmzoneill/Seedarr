@@ -385,6 +385,34 @@ public class DbFactoryTest
     }
 
     [Test]
+    public void PrunePreMigrationSnapshots_retains_newest_snapshots_by_write_time_not_path_order()
+    {
+        var ts = "20260101120000";
+        var b0 = $"{_tempDbPath}.pre-migration-{ts}.bak";
+        var b9 = $"{_tempDbPath}.pre-migration-{ts}_9.bak";
+        var b10 = $"{_tempDbPath}.pre-migration-{ts}_10.bak";
+        var b11 = $"{_tempDbPath}.pre-migration-{ts}_11.bak";
+
+        File.WriteAllText(b0, "0");
+        File.WriteAllText(b9, "9");
+        File.WriteAllText(b10, "10");
+        File.WriteAllText(b11, "11");
+
+        var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(b0, baseTime);
+        File.SetLastWriteTimeUtc(b9, baseTime.AddSeconds(1));
+        File.SetLastWriteTimeUtc(b10, baseTime.AddSeconds(2));
+        File.SetLastWriteTimeUtc(b11, baseTime.AddSeconds(3));
+
+        DbFactory.PrunePreMigrationSnapshots(_tempDbPath, 2);
+
+        Assert.That(File.Exists(b0), Is.False);
+        Assert.That(File.Exists(b9), Is.False);
+        Assert.That(File.Exists(b10), Is.True);
+        Assert.That(File.Exists(b11), Is.True);
+    }
+
+    [Test]
     public void Migration_failure_logs_backup_file_path_and_does_not_delete_snapshot()
     {
         using (var conn = new SqliteConnection($"Data Source={_tempDbPath}"))
