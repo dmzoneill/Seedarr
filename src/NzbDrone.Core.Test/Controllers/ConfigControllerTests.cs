@@ -520,6 +520,54 @@ public class ConfigControllerTests
     }
 
     [Test]
+    public void SaveConfig_with_null_preserves_existing_tmdb_api_key()
+    {
+        const string existing = "custom_tmdb_key_abc123";
+        _configService.TmdbApiKey.Returns(existing);
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            TmdbApiKey = null,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.TmdbApiKey, Is.EqualTo(existing));
+        _configService.Received(1).SaveConfigDictionary(
+            Arg.Is<Dictionary<string, object>>(d => (string)d["TmdbApiKey"] == existing),
+            false);
+    }
+
+    [Test]
+    public void SaveConfig_with_empty_tmdb_api_key_preserves_existing_tmdb_api_key()
+    {
+        const string existing = "custom_tmdb_key_abc123";
+        _configService.TmdbApiKey.Returns(existing);
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            TmdbApiKey = "",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.TmdbApiKey, Is.EqualTo(existing));
+        _configService.Received(1).SaveConfigDictionary(
+            Arg.Is<Dictionary<string, object>>(d => (string)d["TmdbApiKey"] == existing),
+            false);
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task TestSsl_with_new_password_containing_asterisks_passes_new_password()
     {
         _configFileProvider.SslCertPassword.Returns("OldPass123");
