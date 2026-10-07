@@ -53,6 +53,10 @@ public class DownloadClientSyncServiceTest
 
     private class TestableDownloadClientSyncService : DownloadClientSyncService
     {
+        public int? OverrideSyncLockWaitMs { get; set; }
+
+        protected override int SyncLockWaitMs => OverrideSyncLockWaitMs ?? base.SyncLockWaitMs;
+
         public IDownloadClient InjectedClient { get; set; }
         public Dictionary<int, IDownloadClient> InjectedClientsById { get; set; }
         public IIndexer InjectedIndexer { get; set; }
@@ -1961,6 +1965,38 @@ public class DownloadClientSyncServiceTest
         Assert.That(existingTorrent.DownloadSpeed, Is.EqualTo(1000));
         Assert.That(existingTorrent.UploadSpeed, Is.EqualTo(200));
         _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void Sync_should_throw_when_sweep_cannot_acquire_lock_within_timeout()
+    {
+        var holdLockEntered = new ManualResetEventSlim(false);
+        var releaseHeldLock = new ManualResetEventSlim(false);
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(_ =>
+        {
+            holdLockEntered.Set();
+            Assert.That(releaseHeldLock.Wait(10_000), Is.True);
+            return new List<DownloadClientItem>();
+        });
+
+        _service.OverrideSyncLockWaitMs = 50;
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        var blockingSync = System.Threading.Tasks.Task.Run(() => _service.Sync());
+        Assert.That(holdLockEntered.Wait(5_000), Is.True);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _service.Sync());
+        Assert.That(ex.Message, Does.Contain("busy"));
+
+        releaseHeldLock.Set();
+        blockingSync.GetAwaiter().GetResult();
     }
 
     [Test]

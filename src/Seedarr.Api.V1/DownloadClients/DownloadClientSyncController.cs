@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.DownloadClients.Sync;
@@ -18,7 +19,14 @@ public class DownloadClientSyncController : Controller
     [HttpPost("sync")]
     public ActionResult<SyncResult> Sync()
     {
-        var result = _syncService.Sync();
-        return Ok(result);
+        try
+        {
+            var result = _syncService.Sync();
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status409Conflict, new { message = ex.Message });
+        }
     }
 }
