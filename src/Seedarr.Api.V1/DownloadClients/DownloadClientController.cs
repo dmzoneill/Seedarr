@@ -206,7 +206,7 @@ public class DownloadClientController : Controller
             return BadRequest("Request body cannot be null");
         }
 
-        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}"))
+        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
         {
             return BadRequest("Target host/URL is not permitted.");
         }
