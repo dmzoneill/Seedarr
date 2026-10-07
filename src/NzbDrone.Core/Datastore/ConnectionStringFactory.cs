@@ -1,4 +1,5 @@
 using System.IO;
+using Npgsql;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 
@@ -41,10 +42,15 @@ public class ConnectionStringFactory : IConnectionStringFactory
 
     private string BuildPostgresConnectionString()
     {
-        return $"Host={_configFileProvider.PostgresHost.Trim()};" +
-            $"Port={_configFileProvider.PostgresPort};" +
-            $"Database={_configFileProvider.PostgresMainDb};" +
-            $"Username={_configFileProvider.PostgresUser};" +
-            $"Password={_configFileProvider.PostgresPassword}";
+        var builder = new NpgsqlConnectionStringBuilder
+        {
+            Host = _configFileProvider.PostgresHost.Trim(),
+            Port = _configFileProvider.PostgresPort,
+            Database = _configFileProvider.PostgresMainDb,
+            Username = _configFileProvider.PostgresUser,
+            Password = _configFileProvider.PostgresPassword
+        };
+
+        return builder.ConnectionString;
     }
 }

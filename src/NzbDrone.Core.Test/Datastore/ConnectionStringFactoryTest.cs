@@ -1,4 +1,5 @@
 using System.IO;
+using Npgsql;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
@@ -237,6 +238,25 @@ public class ConnectionStringFactoryTest
         var subject = BuildSubject();
 
         Assert.That(subject.MainDbConnectionString, Does.Contain("Password=p@ssw0rd"));
+    }
+
+    [Test]
+    public void MainDbConnectionString_should_round_trip_postgres_credentials_with_delimiter_chars()
+    {
+        _configFileProvider.PostgresHost.Returns("pg.example.com");
+        _configFileProvider.PostgresPort.Returns(5432);
+        _configFileProvider.PostgresMainDb.Returns("seedarr");
+        _configFileProvider.PostgresUser.Returns("user=name");
+        _configFileProvider.PostgresPassword.Returns("pass;word\\");
+
+        var subject = BuildSubject();
+
+        var parsed = new NpgsqlConnectionStringBuilder(subject.MainDbConnectionString);
+        Assert.That(parsed.Host, Is.EqualTo("pg.example.com"));
+        Assert.That(parsed.Port, Is.EqualTo(5432));
+        Assert.That(parsed.Database, Is.EqualTo("seedarr"));
+        Assert.That(parsed.Username, Is.EqualTo("user=name"));
+        Assert.That(parsed.Password, Is.EqualTo("pass;word\\"));
     }
 
     [Test]
