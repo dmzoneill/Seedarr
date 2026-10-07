@@ -75,6 +75,20 @@ public class DownloadClientRemoteItem
     public string ClientName { get; set; }
 }
 
+public class DownloadClientItemFetchError
+{
+    public int ClientId { get; set; }
+    public string ClientName { get; set; }
+    public string Code { get; set; }
+    public string Message { get; set; }
+}
+
+public class DownloadClientAllItemsResult
+{
+    public List<DownloadClientRemoteItem> Items { get; set; } = new();
+    public List<DownloadClientItemFetchError> ClientErrors { get; set; } = new();
+}
+
 public class DownloadClientImportRequest
 {
     public System.Collections.Generic.List<string> InfoHashes { get; set; } = new();

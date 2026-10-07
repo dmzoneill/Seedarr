@@ -205,12 +205,32 @@ public class DownloadClientController : Controller
     }
 
     [HttpGet("items")]
-    public ActionResult<List<DownloadClientRemoteItem>> GetAllItems()
+    public ActionResult<DownloadClientAllItemsResult> GetAllItems([FromQuery] bool strict = false)
     {
         try
         {
-            var items = _syncService.GetAllClientItems();
-            return Ok(items);
+            var result = _syncService.GetAllClientItems();
+            if (strict && result.ClientErrors.Count > 0)
+            {
+                var firstError = result.ClientErrors[0];
+                var statusCode = firstError.Code switch
+                {
+                    "authentication" => Microsoft.AspNetCore.Http.StatusCodes.Status401Unauthorized,
+                    "unavailable" => Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable,
+                    "backoff" => Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable,
+                    "configuration" => Microsoft.AspNetCore.Http.StatusCodes.Status400BadRequest,
+                    _ => Microsoft.AspNetCore.Http.StatusCodes.Status500InternalServerError
+                };
+
+                return StatusCode(statusCode, new
+                {
+                    message = firstError.Message,
+                    clientId = firstError.ClientId,
+                    code = firstError.Code
+                });
+            }
+
+            return Ok(result);
         }
         catch (Exception ex)
         {

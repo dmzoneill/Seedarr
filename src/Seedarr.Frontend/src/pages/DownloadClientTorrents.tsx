@@ -31,13 +31,15 @@ export default function DownloadClientTorrents() {
   );
 
   const {
-    data: items,
+    data: itemsData,
     isLoading: itemsLoading,
     isError,
     error,
     refetch,
     isFetching,
   } = useDownloadClientItems(isAll ? "all" : clientId);
+  const items = itemsData?.items;
+  const clientFetchErrors = itemsData?.clientErrors ?? [];
 
   const { data: history } = useDownloadHistory();
   const { data: arrConnections } = useArrConnections();
@@ -681,6 +683,37 @@ export default function DownloadClientTorrents() {
           )}
         </div>
       </div>
+
+      {isAll && clientFetchErrors.length > 0 && (
+        <div
+          className="card"
+          style={{
+            padding: "1rem 1.25rem",
+            marginBottom: "1rem",
+            borderRadius: "8px",
+            borderLeft: "4px solid var(--warning, #f0ad4e)",
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: "0.35rem" }}>
+            Some download clients could not be queried
+          </div>
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: "1.25rem",
+              color: "var(--text-muted, #888)",
+              fontSize: "0.9rem",
+            }}
+          >
+            {clientFetchErrors.map((clientError) => (
+              <li key={`${clientError.clientId}-${clientError.code}`}>
+                {clientError.clientName ?? `Client ${clientError.clientId}`} (
+                {clientError.code}): {clientError.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Main Content Area */}
       {itemsLoading && (

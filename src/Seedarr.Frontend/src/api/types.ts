@@ -748,6 +748,23 @@ export interface DownloadClientRemoteItem {
   clientName?: string;
 }
 
+export interface DownloadClientItemFetchError {
+  clientId: number;
+  clientName?: string;
+  code: string;
+  message: string;
+}
+
+export interface DownloadClientAllItemsResponse {
+  items: DownloadClientRemoteItem[];
+  clientErrors: DownloadClientItemFetchError[];
+}
+
+export interface DownloadClientItemsQueryResult {
+  items: DownloadClientRemoteItem[];
+  clientErrors: DownloadClientItemFetchError[];
+}
+
 export interface TorznabSubcategory {
   id: number;
   name: string;
