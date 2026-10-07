@@ -14,6 +14,7 @@ public class TerminalEnvironmentSanitizerTest
         Environment.SetEnvironmentVariable("LD_PRELOAD", "/tmp/evil.so");
         Environment.SetEnvironmentVariable("BASH_ENV", "/tmp/malicious.sh");
         Environment.SetEnvironmentVariable("SEEDARR_API_KEY", "secret");
+        Environment.SetEnvironmentVariable("MY_DEPLOYMENT_LEAK", "supersecret");
 
         try
         {
@@ -22,6 +23,7 @@ public class TerminalEnvironmentSanitizerTest
             Assert.That(env.ContainsKey("LD_PRELOAD"), Is.False);
             Assert.That(env.ContainsKey("BASH_ENV"), Is.False);
             Assert.That(env.ContainsKey("SEEDARR_API_KEY"), Is.False);
+            Assert.That(env.ContainsKey("MY_DEPLOYMENT_LEAK"), Is.False);
             Assert.That(env["PWD"], Is.EqualTo("/tmp/cwd"));
             Assert.That(env["TERM"], Is.EqualTo("xterm-256color"));
         }
@@ -30,6 +32,7 @@ public class TerminalEnvironmentSanitizerTest
             Environment.SetEnvironmentVariable("LD_PRELOAD", null);
             Environment.SetEnvironmentVariable("BASH_ENV", null);
             Environment.SetEnvironmentVariable("SEEDARR_API_KEY", null);
+            Environment.SetEnvironmentVariable("MY_DEPLOYMENT_LEAK", null);
         }
     }
 
