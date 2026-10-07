@@ -82,6 +82,14 @@ public class BlocklistController : Controller
     [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<BlocklistSyncResponse>> SyncBlocklistAsync(CancellationToken cancellationToken = default)
     {
+        if (!_configService.BlocklistEnabled)
+        {
+            return Conflict(new
+            {
+                message = "Blocklist is disabled. Enable blocklist enforcement before syncing rules from upstream."
+            });
+        }
+
         var result = await _syncService.SyncBlocklistAsync(force: true, cancellationToken: cancellationToken);
         var (v4, v6) = GetRuleCounts();
         var totalRules = _syncService.RuleCount > 0 ? _syncService.RuleCount : (v4 + v6);
