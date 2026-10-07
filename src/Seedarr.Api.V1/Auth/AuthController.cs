@@ -16,6 +16,7 @@ using NLog;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http;
+using Seedarr.Http.Authentication;
 using Seedarr.Http.Security;
 
 namespace Seedarr.Api.V1.Auth;
@@ -260,7 +261,7 @@ public class AuthController : ControllerBase
     public ActionResult ChallengeProvider(string providerId, [FromQuery] string returnUrl = "/")
     {
         var safeReturnUrl = SanitizeRedirectUrl(returnUrl, GetEffectivePathBase());
-        var schemeName = $"Oidc_{providerId}";
+        var schemeName = $"Oidc_{DynamicAuthSchemeManager.SanitizeProviderId(providerId)}";
         var props = new AuthenticationProperties
         {
             RedirectUri = safeReturnUrl,
