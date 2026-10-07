@@ -128,6 +128,21 @@ public class TorrentEventLogServiceTest
     [Test]
     public void GetByTorrentId_delegates_to_repository()
     {
+        var stored = new List<TorrentEventLog>();
+        _repository.When(r => r.InsertMany(Arg.Any<IEnumerable<TorrentEventLog>>()))
+            .Do(callInfo => stored.AddRange(callInfo.Arg<IEnumerable<TorrentEventLog>>()));
+        _repository.GetByTorrentId(10, 50).Returns(_ => stored.Where(l => l.TorrentId == 10).Take(50).ToList());
+
+        _subject.Info(10, "Worker", "Recent event");
+
+        var result = _subject.GetByTorrentId(10, 50);
+
+        Assert.That(result.Any(l => l.Message == "Recent event"), Is.True);
+    }
+
+    [Test]
+    public void GetByTorrentId_delegates_to_repository_when_no_pending_logs()
+    {
         var expected = new List<TorrentEventLog>
         {
             new() { Id = 1, TorrentId = 10, Level = "Info", Message = "Log 1" }

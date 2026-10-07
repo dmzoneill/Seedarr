@@ -37,6 +37,10 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _processTask;
     private readonly SemaphoreSlim _flushLock = new(1, 1);
+    private readonly object _flushGate = new();
+    private CancellationTokenSource _flushSignalCts = new();
+    private TaskCompletionSource _pendingFlushTcs;
+    private int _pendingCount;
     private bool _disposed;
 
     public TorrentEventLogService(ITorrentEventLogRepository repository)
@@ -87,7 +91,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
 
     public List<TorrentEventLog> GetByTorrentId(int torrentId, int count)
     {
-        DrainRemainingLogs();
+        FlushAsync().GetAwaiter().GetResult();
         return _repository.GetByTorrentId(torrentId, count);
     }
 
@@ -122,9 +126,37 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
 
     public async Task FlushAsync()
     {
+        TaskCompletionSource tcs;
+        lock (_flushGate)
+        {
+            if (Volatile.Read(ref _pendingCount) <= 0)
+            {
+                DrainRemainingLogs();
+                return;
+            }
+
+            if (_pendingFlushTcs == null || _pendingFlushTcs.Task.IsCompleted)
+            {
+                _pendingFlushTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            tcs = _pendingFlushTcs;
+            TriggerFlush();
+        }
+
+        await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30))).ConfigureAwait(false);
         DrainRemainingLogs();
-        await _flushLock.WaitAsync().ConfigureAwait(false);
-        _flushLock.Release();
+    }
+
+    private void TriggerFlush()
+    {
+        lock (_flushGate)
+        {
+            if (!_flushSignalCts.IsCancellationRequested)
+            {
+                _flushSignalCts.Cancel();
+            }
+        }
     }
 
     private void Enqueue(string level, int torrentId, string source, string message)
@@ -143,7 +175,10 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
             Message = message
         };
 
-        _logChannel.Writer.TryWrite(log);
+        if (_logChannel.Writer.TryWrite(log))
+        {
+            Interlocked.Increment(ref _pendingCount);
+        }
     }
 
     private async Task ProcessLogsAsync()
@@ -154,17 +189,74 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
         {
             while (await _logChannel.Reader.WaitToReadAsync(_cts.Token).ConfigureAwait(false))
             {
-                await Task.Delay(25, _cts.Token).ConfigureAwait(false);
-
                 while (batch.Count < 100 && _logChannel.Reader.TryRead(out var log))
                 {
                     batch.Add(log);
+                }
+
+                if (batch.Count < 100 && batch.Count > 0)
+                {
+                    var deadline = DateTime.UtcNow.AddMilliseconds(25);
+                    while (batch.Count < 100)
+                    {
+                        var remaining = deadline - DateTime.UtcNow;
+                        if (remaining <= TimeSpan.Zero)
+                        {
+                            break;
+                        }
+
+                        CancellationToken flushToken;
+                        lock (_flushGate)
+                        {
+                            if (_flushSignalCts.IsCancellationRequested)
+                            {
+                                break;
+                            }
+
+                            flushToken = _flushSignalCts.Token;
+                        }
+
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, flushToken);
+                        timeoutCts.CancelAfter(remaining);
+
+                        try
+                        {
+                            var available = await _logChannel.Reader.WaitToReadAsync(timeoutCts.Token).ConfigureAwait(false);
+                            if (!available)
+                            {
+                                break;
+                            }
+
+                            while (batch.Count < 100 && _logChannel.Reader.TryRead(out var log))
+                            {
+                                batch.Add(log);
+                            }
+                        }
+                        catch (OperationCanceledException) when (!_cts.IsCancellationRequested)
+                        {
+                            break;
+                        }
+                    }
                 }
 
                 if (batch.Count > 0)
                 {
                     FlushBatch(batch);
                     batch.Clear();
+                }
+
+                lock (_flushGate)
+                {
+                    if (_flushSignalCts.IsCancellationRequested)
+                    {
+                        _flushSignalCts.Dispose();
+                        _flushSignalCts = new CancellationTokenSource();
+                    }
+
+                    if (Volatile.Read(ref _pendingCount) <= 0)
+                    {
+                        _pendingFlushTcs?.TrySetResult();
+                    }
                 }
             }
         }
@@ -178,7 +270,11 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
         }
         finally
         {
-            DrainRemainingLogs();
+            DrainRemainingLogs(batch);
+            lock (_flushGate)
+            {
+                _pendingFlushTcs?.TrySetResult();
+            }
         }
     }
 
@@ -201,12 +297,20 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
         finally
         {
             _flushLock.Release();
+            var remaining = Interlocked.Add(ref _pendingCount, -batch.Count);
+            lock (_flushGate)
+            {
+                if (remaining <= 0)
+                {
+                    _pendingFlushTcs?.TrySetResult();
+                }
+            }
         }
     }
 
-    private void DrainRemainingLogs()
+    private void DrainRemainingLogs(List<TorrentEventLog> batch = null)
     {
-        var batch = new List<TorrentEventLog>();
+        batch ??= new List<TorrentEventLog>();
         while (_logChannel.Reader.TryRead(out var log))
         {
             batch.Add(log);
@@ -239,6 +343,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
         _disposed = true;
         _purgeTimer?.Dispose();
         _logChannel.Writer.TryComplete();
+        TriggerFlush();
 
         if (_processTask != null)
         {
@@ -254,6 +359,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
 
         _cts.Dispose();
         _flushLock.Dispose();
+        _flushSignalCts.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -267,6 +373,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
             if (disposing)
             {
                 _logChannel.Writer.TryComplete();
+                TriggerFlush();
                 if (_processTask != null)
                 {
                     try
@@ -285,6 +392,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
 
                 _cts.Dispose();
                 _flushLock.Dispose();
+                _flushSignalCts.Dispose();
             }
         }
     }
