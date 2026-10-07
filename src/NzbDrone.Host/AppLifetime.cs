@@ -32,7 +32,6 @@ public class AppLifetime : IHostedService, IDisposable
     private readonly IPeerServer _peerServer;
     private readonly IDatabaseMaintenanceService _databaseMaintenanceService;
     private readonly Logger _logger;
-    private bool _speedThresholdExceededState;
     private bool _portForwardingFailureEmitted;
     private volatile bool _shuttingDown;
     private CancellationTokenSource _cts;
@@ -381,47 +380,9 @@ public class AppLifetime : IHostedService, IDisposable
             }
         }
 
-        // 2. Evaluate Torrents: speed limits (stall events are owned by SeedingEngine)
-        if (_torrentService != null)
-        {
-            try
-            {
-                var torrents = _torrentService.GetAll() ?? new List<Torrent>();
-                var activeTorrents = torrents.Where(t => t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.Seeding).ToList();
-                long totalDownloadSpeed = 0;
-                long totalUploadSpeed = 0;
+        // Torrent stall and speed-limit automation events are published only by SeedingEngine.
 
-                foreach (var torrent in activeTorrents)
-                {
-                    totalDownloadSpeed += torrent.DownloadSpeed;
-                    totalUploadSpeed += torrent.UploadSpeed;
-                }
-
-                if (_configService != null)
-                {
-                    var maxDl = SpeedLimitThresholds.EffectiveDownloadThresholdBps(_configService);
-                    var maxUl = SpeedLimitThresholds.EffectiveUploadThresholdBps(_configService);
-                    var isExceeded = (maxDl > 0 && totalDownloadSpeed >= maxDl) || (maxUl > 0 && totalUploadSpeed >= maxUl);
-
-                    if (isExceeded && !_speedThresholdExceededState)
-                    {
-                        _speedThresholdExceededState = true;
-                        _eventAggregator.PublishEvent(new SpeedThresholdExceededEvent(totalDownloadSpeed, totalUploadSpeed, activeTorrents.Count));
-                    }
-                    else if (!isExceeded && _speedThresholdExceededState)
-                    {
-                        _speedThresholdExceededState = false;
-                        _eventAggregator.PublishEvent(new SpeedThresholdDroppedEvent());
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Error evaluating torrent state in watchdog");
-            }
-        }
-
-        // 3. Evaluate Port Forwarding
+        // 2. Evaluate Port Forwarding
         if (_upnpService != null && _configService != null && _configService.UpnpEnabled)
         {
             try
