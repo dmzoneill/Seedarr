@@ -395,6 +395,52 @@ public class TorrentControllerTest
         _torrentService.Received(1).Delete(torrentId, true);
     }
 
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("not-a-valid-position")]
+    public void MoveQueue_returns_BadRequest_when_position_is_invalid(string position)
+    {
+        const int torrentId = 7;
+        _torrentService.Get(torrentId).Returns(new Torrent { Id = torrentId, Name = "Queued Torrent" });
+
+        var resource = position == null ? null : new QueuePositionResource { Position = position };
+        var result = _controller.MoveQueue(torrentId, resource);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Is.EqualTo("Invalid queue position. Allowed values: top, up, down, bottom."));
+        _torrentService.DidNotReceive().MoveQueue(Arg.Any<int>(), Arg.Any<string>());
+        _eventLogService.DidNotReceive().Info(torrentId, "Queue", Arg.Any<string>());
+    }
+
+    [TestCase("top")]
+    [TestCase("TOP")]
+    [TestCase("up")]
+    [TestCase("down")]
+    [TestCase("bottom")]
+    public void MoveQueue_returns_Ok_for_valid_position(string position)
+    {
+        const int torrentId = 8;
+        _torrentService.Get(torrentId).Returns(new Torrent { Id = torrentId, Name = "Queued Torrent" });
+
+        var result = _controller.MoveQueue(torrentId, new QueuePositionResource { Position = position });
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        _torrentService.Received(1).MoveQueue(torrentId, position);
+        _eventLogService.Received(1).Info(torrentId, "Queue", $"Queue position moved: {position}");
+    }
+
+    [Test]
+    public void MoveQueue_returns_NotFound_when_torrent_does_not_exist()
+    {
+        _torrentService.Get(999).Returns((Torrent)null);
+
+        var result = _controller.MoveQueue(999, new QueuePositionResource { Position = "top" });
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _torrentService.DidNotReceive().MoveQueue(Arg.Any<int>(), Arg.Any<string>());
+    }
+
     [Test]
     public void BulkAction_delete_calls_DeleteMany_on_TorrentService_and_returns_success()
     {

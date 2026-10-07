@@ -1776,9 +1776,28 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
+        if (resource == null || string.IsNullOrWhiteSpace(resource.Position) || !IsValidQueuePosition(resource.Position))
+        {
+            return BadRequest("Invalid queue position. Allowed values: top, up, down, bottom.");
+        }
+
         _eventLogService.Info(id, "Queue", $"Queue position moved: {resource.Position}");
         _torrentService.MoveQueue(id, resource.Position);
         return Ok();
+    }
+
+    private static bool IsValidQueuePosition(string position)
+    {
+        switch (position.Trim().ToLowerInvariant())
+        {
+            case "top":
+            case "up":
+            case "down":
+            case "bottom":
+                return true;
+            default:
+                return false;
+        }
     }
 
     [HttpDelete("{id:int}")]
