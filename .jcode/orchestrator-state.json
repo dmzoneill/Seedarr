@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T04:12:12Z",
+  "updatedAt": "2026-10-07T04:19:30Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,16 +14,16 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_62f9e505",
+    "lastScheduleId": "sched_989acbdd",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "session": "hedgehog",
-      "issue": 931,
-      "worktree": "../seedarr_worktrees/issue-931",
+      "session": "stallion",
+      "issue": 885,
+      "worktree": "../seedarr_worktrees/issue-885",
       "area": "downloadclients"
     },
     "host": {
@@ -45,17 +45,17 @@
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "session": "skunk",
-      "issue": 1025,
-      "worktree": "../seedarr_worktrees/issue-1025",
+      "session": "hog",
+      "issue": 1156,
+      "worktree": "../seedarr_worktrees/issue-1156",
       "area": "automation"
     },
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "session": "raccoon",
-      "issue": 940,
-      "worktree": "../seedarr_worktrees/issue-940",
+      "session": "dromedary",
+      "issue": 936,
+      "worktree": "../seedarr_worktrees/issue-936",
       "area": "signalr"
     }
   },
@@ -69,12 +69,11 @@
       "signalr"
     ],
     "nextCandidates": [
-      930,
-      925,
-      923,
+      918,
+      935,
       926
     ]
   },
-  "githubOpen": 30,
-  "lastMonitorNote": "fix monitor: 30 open; all slots open; agents active after prior pokes; 0 dispatches"
+  "githubOpen": 22,
+  "lastMonitorNote": "fix monitor: 22 open; closed #923 #940 #1155; dispatched stallion/dromedary/hog"
 }
