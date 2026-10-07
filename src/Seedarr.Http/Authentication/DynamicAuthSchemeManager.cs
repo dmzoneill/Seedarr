@@ -418,9 +418,22 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             }
             catch (Exception ex)
             {
-                _logger.Trace(ex, "Failed to unprotect client secret, falling back to plaintext");
+                if (IdentityProviderService.LooksLikeDataProtectionPayload(encryptedSecret))
+                {
+                    throw new InvalidOperationException(
+                        "Identity provider client secret cannot be decrypted with the current data protection key ring. Re-enter the client secret.",
+                        ex);
+                }
+
+                _logger.Trace(ex, "Failed to unprotect client secret, treating as plaintext legacy secret");
                 return encryptedSecret;
             }
+        }
+
+        if (IdentityProviderService.LooksLikeDataProtectionPayload(encryptedSecret))
+        {
+            throw new InvalidOperationException(
+                "Identity provider client secret cannot be decrypted with the current data protection key ring. Re-enter the client secret.");
         }
 
         return encryptedSecret;

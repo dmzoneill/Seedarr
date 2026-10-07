@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -15,6 +16,82 @@ namespace Seedarr.Http.Test.Authentication;
 [TestFixture]
 public class DynamicAuthSchemeManagerResilienceTest
 {
+    [Test]
+    public async Task RegisterOrUpdateOidcProviderAsync_when_client_secret_undecryptable_does_not_register_scheme()
+    {
+        var oldProtection = new EphemeralDataProtectionProvider();
+        var foreignCiphertext = oldProtection
+            .CreateProtector(IdentityProviderService.DataProtectionPurpose)
+            .Protect("real-secret");
+
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "bad_secret_idp",
+            Name = "Bad Secret Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "seedarr-client",
+            ClientSecretEncrypted = foreignCiphertext,
+            IsEnabled = true,
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await manager.RegisterOrUpdateOidcProviderAsync(provider));
+        Assert.That(ex!.Message, Does.Contain("data protection key ring"));
+
+        var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
+        var scheme = await schemeProvider.GetSchemeAsync("Oidc_bad_secret_idp");
+        Assert.That(scheme, Is.Null);
+    }
+
+    [Test]
+    public async Task InitializeConfiguredProvidersAsync_when_client_secret_undecryptable_schedules_retry_without_registering_scheme()
+    {
+        var oldProtection = new EphemeralDataProtectionProvider();
+        var foreignCiphertext = oldProtection
+            .CreateProtector(IdentityProviderService.DataProtectionPurpose)
+            .Protect("real-secret");
+
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "bad_secret_boot_idp",
+            Name = "Bad Secret Boot Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "seedarr-client",
+            ClientSecretEncrypted = foreignCiphertext,
+            IsEnabled = true,
+        };
+
+        repo.GetEnabled().Returns(new[] { provider });
+
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        await manager.InitializeConfiguredProvidersAsync();
+
+        Assert.That(manager.HasPendingRetry("bad_secret_boot_idp"), Is.True);
+
+        var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
+        var scheme = await schemeProvider.GetSchemeAsync("Oidc_bad_secret_boot_idp");
+        Assert.That(scheme, Is.Null);
+    }
+
     [Test]
     public async Task InitializeConfiguredProvidersAsync_should_handle_offline_idp_without_crashing_and_schedule_retry()
     {

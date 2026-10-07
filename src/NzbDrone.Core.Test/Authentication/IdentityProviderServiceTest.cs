@@ -828,4 +828,18 @@ public class IdentityProviderServiceTest
         Assert.Throws<InvalidOperationException>(() => service.Update(provider));
         _repository.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());
     }
+
+    [Test]
+    public void DecryptClientSecret_WhenCiphertextFromDifferentKeyRing_Throws()
+    {
+        var oldProtection = new EphemeralDataProtectionProvider();
+        var oldService = new IdentityProviderService(_repository, null, oldProtection);
+        var foreignCiphertext = oldService.EncryptClientSecret("stored-secret-789");
+
+        var newProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, newProtection);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => service.DecryptClientSecret(foreignCiphertext));
+        Assert.That(ex!.Message, Does.Contain("data protection key ring"));
+    }
 }

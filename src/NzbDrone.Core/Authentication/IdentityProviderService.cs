@@ -146,7 +146,14 @@ public class IdentityProviderService : IIdentityProviderService
         }
         catch (Exception ex)
         {
-            _logger.Trace(ex, "Failed to unprotect client secret, falling back to plaintext");
+            if (LooksLikeDataProtectionPayload(encryptedSecret))
+            {
+                throw new InvalidOperationException(
+                    "Identity provider client secret cannot be decrypted with the current data protection key ring. Re-enter the client secret.",
+                    ex);
+            }
+
+            _logger.Trace(ex, "Failed to unprotect client secret, treating as plaintext legacy secret");
             return encryptedSecret;
         }
     }
@@ -188,7 +195,7 @@ public class IdentityProviderService : IIdentityProviderService
         }
     }
 
-    private static bool LooksLikeDataProtectionPayload(string value)
+    internal static bool LooksLikeDataProtectionPayload(string value)
     {
         if (string.IsNullOrEmpty(value))
         {
