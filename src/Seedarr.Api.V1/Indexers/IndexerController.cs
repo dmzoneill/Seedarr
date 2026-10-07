@@ -27,6 +27,13 @@ public class IndexerController : Controller
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private static readonly HttpClient DefaultClient = new();
+    private static readonly object _proxySyncLock = new();
+    private static SocketsHttpHandler _proxyHandler;
+    private static HttpClient _proxyClient;
+    private static string _lastProxyHost;
+    private static int _lastProxyPort;
+    private static ProxyType _lastProxyType;
+    private static bool _lastProxyEnabled;
     private readonly HttpClient _httpClient;
     private readonly IProxySettingsProvider _proxySettingsProvider;
     private readonly IIndexerFactory _indexerFactory;
@@ -809,11 +816,48 @@ public class IndexerController : Controller
     {
         if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
         {
-            var handler = _proxySettingsProvider.CreateHandler();
-            return handler != null ? new HttpClient(handler) : DefaultClient;
+            EnsureProxyClient(_proxySettingsProvider);
+            lock (_proxySyncLock)
+            {
+                return _proxyClient ?? DefaultClient;
+            }
         }
 
         return _httpClient ?? DefaultClient;
+    }
+
+    private static void EnsureProxyClient(IProxySettingsProvider proxySettingsProvider)
+    {
+        if (proxySettingsProvider == null || !proxySettingsProvider.IsEnabled)
+        {
+            lock (_proxySyncLock)
+            {
+                _lastProxyEnabled = false;
+                _proxyClient = null;
+                _proxyHandler = null;
+            }
+
+            return;
+        }
+
+        lock (_proxySyncLock)
+        {
+            var host = proxySettingsProvider.Host;
+            var port = proxySettingsProvider.Port;
+            var type = proxySettingsProvider.Type;
+
+            if (_proxyClient == null || !_lastProxyEnabled || _lastProxyHost != host || _lastProxyPort != port || _lastProxyType != type)
+            {
+                _proxyHandler = proxySettingsProvider.CreateHandler();
+                _proxyClient = _proxyHandler != null
+                    ? new HttpClient(_proxyHandler)
+                    : DefaultClient;
+                _lastProxyEnabled = true;
+                _lastProxyHost = host;
+                _lastProxyPort = port;
+                _lastProxyType = type;
+            }
+        }
     }
 
     private string DetermineSource(DownloadReleaseRequest request)
