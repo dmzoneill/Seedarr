@@ -13,10 +13,7 @@ public static class AdminPasswordHasher
 
     public static string HashPassword(string plainTextPassword)
     {
-        if (plainTextPassword == null)
-        {
-            throw new ArgumentNullException(nameof(plainTextPassword));
-        }
+        ArgumentNullException.ThrowIfNull(plainTextPassword);
 
         var salt = RandomNumberGenerator.GetBytes(SaltSize);
         var hash = Pbkdf2(plainTextPassword, salt);
