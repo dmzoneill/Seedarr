@@ -398,7 +398,8 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 {
                     InfoHash = t.TryGetProperty("hash", out var h) ? h.GetString() : "",
                     Title = t.TryGetProperty("name", out var n) ? n.GetString() : "",
-                    TotalSize = t.TryGetProperty("total_size", out var ts) ? ts.GetInt64() : 0,
+                    TotalSize = t.TryGetProperty("size", out var sz) ? sz.GetInt64()
+                        : (t.TryGetProperty("total_size", out var ts) ? ts.GetInt64() : 0),
                     RemainingSize = t.TryGetProperty("amount_left", out var al) ? al.GetInt64() : 0,
                     Status = MapState(state),
                     OutputPath = t.TryGetProperty("save_path", out var sp) ? sp.GetString() : "",

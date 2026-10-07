@@ -225,6 +225,36 @@ public class QBitTorrentClientTest
     }
 
     [Test]
+    public void GetItems_should_read_total_size_from_size_property_for_real_qbittorrent_api()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(HttpStatusCode.OK,
+            @"[{""hash"":""abc123"",""name"":""Real qBittorrent"",""size"":2097152,""amount_left"":1048576,""state"":""downloading"",""save_path"":""/downloads"",""category"":""""}]");
+        InjectMockClient(handler);
+
+        var result = _client.GetItems();
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].TotalSize, Is.EqualTo(2097152));
+        Assert.That(result[0].RemainingSize, Is.EqualTo(1048576));
+    }
+
+    [Test]
+    public void GetItems_should_prefer_size_over_total_size_when_both_present()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(HttpStatusCode.OK,
+            @"[{""hash"":""h1"",""name"":""T1"",""size"":500,""total_size"":100,""amount_left"":0,""state"":""uploading"",""save_path"":""/dl"",""category"":""""}]");
+        InjectMockClient(handler);
+
+        var result = _client.GetItems();
+
+        Assert.That(result[0].TotalSize, Is.EqualTo(500));
+    }
+
+    [Test]
     public void GetItems_should_return_multiple_torrents()
     {
         var handler = new MockHttpMessageHandler();
