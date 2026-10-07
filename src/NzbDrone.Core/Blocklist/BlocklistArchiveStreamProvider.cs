@@ -214,28 +214,42 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
                         yield break;
                     }
 
-                    var primaryEntry = SelectPrimaryBlocklistEntry(validEntries);
-                    if (_options.MaxUncompressedBytes > 0 && primaryEntry.Length > _options.MaxUncompressedBytes)
+                    var blocklistEntries = SelectBlocklistEntries(validEntries);
+                    var cumulativeUncompressedBytes = 0L;
+
+                    foreach (var zipEntry in blocklistEntries)
                     {
-                        throw new BlocklistQuotaExceededException(
-                            $"Zip entry uncompressed size ({primaryEntry.Length} bytes) exceeds safety quota of {_options.MaxUncompressedBytes} bytes.");
-                    }
+                        var remainingQuota = _options.MaxUncompressedBytes > 0
+                            ? _options.MaxUncompressedBytes - cumulativeUncompressedBytes
+                            : 0L;
+
+                        if (_options.MaxUncompressedBytes > 0 && zipEntry.Length > remainingQuota)
+                        {
+                            throw new BlocklistQuotaExceededException(
+                                $"Zip entry uncompressed size ({zipEntry.Length} bytes) exceeds remaining safety quota of {remainingQuota} bytes.");
+                        }
 
 #pragma warning disable CA1849
-                    await using var entryStream = primaryEntry.Open();
+                        await using var entryStream = zipEntry.Open();
 #pragma warning restore CA1849
-                    await using var countingStream = new QuotaCountingStream(entryStream, _options.MaxUncompressedBytes, leaveOpen: false);
-                    using var reader = new StreamReader(
-                        countingStream,
-                        Encoding.UTF8,
-                        detectEncodingFromByteOrderMarks: true,
-                        bufferSize: _options.BufferSize,
-                        leaveOpen: false);
+                        await using var countingStream = new QuotaCountingStream(
+                            entryStream,
+                            remainingQuota > 0 ? remainingQuota : 0,
+                            leaveOpen: false);
+                        using var reader = new StreamReader(
+                            countingStream,
+                            Encoding.UTF8,
+                            detectEncodingFromByteOrderMarks: true,
+                            bufferSize: _options.BufferSize,
+                            leaveOpen: false);
 
-                    string line;
-                    while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) != null)
-                    {
-                        yield return line;
+                        string line;
+                        while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) != null)
+                        {
+                            yield return line;
+                        }
+
+                        cumulativeUncompressedBytes += countingStream.TotalBytesRead;
                     }
                 }
                 finally
@@ -381,6 +395,29 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
         return segments.Any(segment => segment == "..");
     }
 
+    internal static List<ZipArchiveEntry> SelectBlocklistEntries(List<ZipArchiveEntry> entries)
+    {
+        if (entries == null || entries.Count == 0)
+        {
+            return new List<ZipArchiveEntry>();
+        }
+
+        var ruleEntries = entries
+            .Where(e => !IsNonRuleZipEntryName(e.Name))
+            .OrderByDescending(ScoreZipEntry)
+            .ThenByDescending(e => e.Length)
+            .ThenBy(e => e.FullName, StringComparer.Ordinal)
+            .ToList();
+
+        if (ruleEntries.Count > 0)
+        {
+            return ruleEntries;
+        }
+
+        var primary = SelectPrimaryBlocklistEntry(entries);
+        return primary == null ? ruleEntries : new List<ZipArchiveEntry> { primary };
+    }
+
     internal static ZipArchiveEntry SelectPrimaryBlocklistEntry(List<ZipArchiveEntry> entries)
     {
         if (entries == null || entries.Count == 0)
@@ -393,32 +430,37 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
             return entries[0];
         }
 
-        static int ScoreEntry(ZipArchiveEntry entry)
-        {
-            var name = entry.Name;
-            var isNonRule = name.StartsWith("readme", StringComparison.OrdinalIgnoreCase) ||
-                            name.StartsWith("license", StringComparison.OrdinalIgnoreCase) ||
-                            name.StartsWith("notice", StringComparison.OrdinalIgnoreCase) ||
-                            name.StartsWith("info", StringComparison.OrdinalIgnoreCase);
-
-            var ext = Path.GetExtension(name).ToLowerInvariant();
-            var extScore = ext switch
-            {
-                ".p2p" => 100,
-                ".dat" => 90,
-                ".txt" => 80,
-                ".netfilter" => 70,
-                ".cidr" => 60,
-                _ => 10
-            };
-
-            return (isNonRule ? 0 : 1000) + extScore;
-        }
-
         return entries
-            .OrderByDescending(ScoreEntry)
+            .OrderByDescending(ScoreZipEntry)
             .ThenByDescending(e => e.Length)
             .First();
+    }
+
+    private static bool IsNonRuleZipEntryName(string name)
+    {
+        return name.StartsWith("readme", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("license", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("notice", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("info", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int ScoreZipEntry(ZipArchiveEntry entry)
+    {
+        var name = entry.Name;
+        var isNonRule = IsNonRuleZipEntryName(name);
+
+        var ext = Path.GetExtension(name).ToLowerInvariant();
+        var extScore = ext switch
+        {
+            ".p2p" => 100,
+            ".dat" => 90,
+            ".txt" => 80,
+            ".netfilter" => 70,
+            ".cidr" => 60,
+            _ => 10
+        };
+
+        return (isNonRule ? 0 : 1000) + extScore;
     }
 
     private static bool IsZipUrlOrContentType(string url, string contentType)
