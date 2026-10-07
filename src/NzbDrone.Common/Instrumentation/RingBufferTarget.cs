@@ -64,6 +64,11 @@ public class RingBufferTarget : TargetWithLayout
 
     public RingBufferTarget(int capacity = 2048)
     {
+        if (capacity < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(capacity), capacity, "Capacity must be at least 1.");
+        }
+
         Capacity = capacity;
         _buffer = new LogEntryRecord[capacity];
     }
