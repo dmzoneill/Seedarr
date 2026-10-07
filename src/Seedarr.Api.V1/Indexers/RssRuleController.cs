@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Indexers;
@@ -103,7 +105,35 @@ public class RssRuleController : Controller
     /// </summary>
     [HttpPut("{id:int}")]
     [Authorize(Policy = Policies.Operator)]
-    public ActionResult<RssRuleResource> Update(int id, [FromBody] RssRuleResource resource)
+    public ActionResult<RssRuleResource> Update(int id, [FromBody] JsonElement body)
+    {
+        if (body.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return BadRequest(new { message = "Request body cannot be null." });
+        }
+
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            return BadRequest(new { message = "Request body must be a JSON object." });
+        }
+
+        var presentPropertyKeys = body.EnumerateObject()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var resource = JsonSerializer.Deserialize<RssRuleResource>(body, STJson.GetSerializerSettings());
+        if (resource == null)
+        {
+            return BadRequest(new { message = "Request body cannot be null." });
+        }
+
+        return UpdateRule(id, resource, presentPropertyKeys);
+    }
+
+    [NonAction]
+    public ActionResult<RssRuleResource> Update(int id, RssRuleResource resource) => UpdateRule(id, resource, null);
+
+    private ActionResult<RssRuleResource> UpdateRule(int id, RssRuleResource resource, IReadOnlySet<string> presentPropertyKeys)
     {
         if (resource == null)
         {
@@ -116,14 +146,20 @@ public class RssRuleController : Controller
             return NotFound();
         }
 
-        var validationError = ValidateResource(resource, id);
+        var model = ToModel(resource);
+        if (presentPropertyKeys != null)
+        {
+            model = RssRuleUpdateMerger.Merge(existing, model, presentPropertyKeys);
+        }
+
+        model.Id = id;
+
+        var validationError = ValidateResource(ToResource(model), id);
         if (validationError != null)
         {
             return validationError;
         }
 
-        var model = ToModel(resource);
-        model.Id = id;
         _rssRuleRepository.Update(model);
         return Ok(ToResource(model));
     }
