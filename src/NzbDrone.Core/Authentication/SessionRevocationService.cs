@@ -88,11 +88,12 @@ public class SessionRevocationService : ISessionRevocationService
                 return false;
             }
 
-            revokedAtUtc = entry.RevokedAtUtc;
+            var revokedAt = entry.RevokedAtUtc;
+            revokedAtUtc = revokedAt;
             _revokedSessions.AddOrUpdate(
                 key,
-                revokedAtUtc,
-                (_, existing) => revokedAtUtc > existing ? revokedAtUtc : existing);
+                revokedAt,
+                (_, existing) => revokedAt > existing ? revokedAt : existing);
 
             return true;
         }
