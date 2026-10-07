@@ -47,6 +47,7 @@ public class AutomationService : IAutomationService
     private readonly IConnectionManager? _connectionManager;
     private readonly IConfigService? _configService;
     private readonly ITorrentService? _torrentService;
+    private readonly ITorrentRecheckService? _torrentRecheckService;
     private readonly Logger _logger;
     private readonly JintScriptRunner _jintRunner;
     private readonly YamlScriptRunner _yamlRunner;
@@ -66,7 +67,8 @@ public class AutomationService : IAutomationService
         ITrackerAnnounceService? trackerAnnounceService = null,
         IConnectionManager? connectionManager = null,
         IConfigService? configService = null,
-        ITorrentService? torrentService = null)
+        ITorrentService? torrentService = null,
+        ITorrentRecheckService? torrentRecheckService = null)
     {
         _scriptRepository = scriptRepository;
         _torrentRepository = torrentRepository;
@@ -82,6 +84,7 @@ public class AutomationService : IAutomationService
         _connectionManager = connectionManager;
         _configService = configService;
         _torrentService = torrentService;
+        _torrentRecheckService = torrentRecheckService;
         _logger = LogManager.GetCurrentClassLogger();
         _jintRunner = new JintScriptRunner(commandQueue, configFileProvider, configService);
         _yamlRunner = new YamlScriptRunner(commandQueue);
@@ -869,12 +872,31 @@ public class AutomationService : IAutomationService
 
         if (result.ShouldRecheck)
         {
-            var oldStatus = torrent.Status;
-            torrent.Status = TorrentStatus.Checking;
-            torrent.Progress = 0;
             _logger.Info("[State Machine] Torrent #{0} ('{1}') force recheck triggered by automation script.", torrent.Id, torrent.Name);
-            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Checking, "Force recheck triggered by automation script"));
-            changed = true;
+            Torrent? rechecked = null;
+            if (_torrentService != null)
+            {
+                rechecked = _torrentService.Recheck(torrent.Id);
+            }
+            else if (_torrentRecheckService != null)
+            {
+                rechecked = _torrentRecheckService.QueueRecheck(torrent.Id) ?? _torrentRecheckService.Recheck(torrent);
+            }
+            else
+            {
+                _logger.Warn(
+                    "Automation recheck requested for '{0}' but ITorrentRecheckService is not available; leaving torrent unchanged",
+                    torrent.Name);
+            }
+
+            if (rechecked != null)
+            {
+                torrent.Status = rechecked.Status;
+                torrent.Progress = rechecked.Progress;
+                torrent.Active = rechecked.Active;
+                torrent.UploadSpeed = rechecked.UploadSpeed;
+                torrent.DownloadSpeed = rechecked.DownloadSpeed;
+            }
         }
         else if (result.ShouldPause)
         {
