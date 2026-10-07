@@ -332,6 +332,15 @@ public class AppLifetime : IHostedService, IDisposable
                 _logger.Debug(ex, "Error clearing SQLite connection pool on shutdown");
             }
         }
+
+        try
+        {
+            LogManager.Flush(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Error flushing log targets on shutdown");
+        }
     }
 
     public void Dispose()
