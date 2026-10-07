@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:43:34Z",
+  "updatedAt": "2026-10-07T00:44:22Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_41ae598b",
+    "lastScheduleId": "sched_65d41d97",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -72,5 +72,5 @@
     ]
   },
   "githubOpen": 415,
-  "lastMonitorNote": "coord-fix verified: 6 issues closed on origin/main (#1294,#1292,#1293,#1291,#1282,#1269); rotated 5 slots to #1241,#1285,#1290,#1288,#1289"
+  "lastMonitorNote": "fix monitor tick: 5 agents active on #1241,#1285,#1290,#1288,#1289; 415 open; sched_65d41d97"
 }
