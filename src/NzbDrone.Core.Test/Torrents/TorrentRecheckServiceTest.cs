@@ -904,6 +904,19 @@ public class TorrentRecheckServiceTest
     [Test]
     public void RecheckAsync_respects_cancellation_token()
     {
+        var signalR = Substitute.For<NzbDrone.SignalR.IBroadcastSignalRMessage>();
+        var serviceWithSignalR = new TorrentRecheckService(
+            _torrentRepository,
+            _torrentFileService,
+            _pieceStorage,
+            _pieceVerificationService,
+            _multiFilePieceStorage,
+            _stateMachine,
+            _eventAggregator,
+            null,
+            _fastResumeService,
+            signalR);
+
         var torrent = new Torrent
         {
             Id = 22,
@@ -920,11 +933,17 @@ public class TorrentRecheckServiceTest
 
         Assert.CatchAsync<System.OperationCanceledException>(async () =>
         {
-            await _service.RecheckAsync(torrent, null, cts.Token);
+            await serviceWithSignalR.RecheckAsync(torrent, null, cts.Token);
         });
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
+            e.Torrent == torrent && e.OldStatus == TorrentStatus.Downloading && e.NewStatus == TorrentStatus.Paused));
+        _eventAggregator.Received().PublishEvent(Arg.Is<NzbDrone.Core.Datastore.Events.ModelEvent<Torrent>>(e => e.Model == torrent && e.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
         _eventAggregator.Received().PublishEvent(Arg.Is<TorrentHashCheckCompletedEvent>(e => e.Torrent == torrent && !e.IsSuccessful));
+        signalR.Received().BroadcastMessage(Arg.Is<NzbDrone.SignalR.SignalRMessage>(m =>
+            m.Name == "TorrentUpdated" && m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
+        signalR.Received().BroadcastToTorrent(22, Arg.Is<NzbDrone.SignalR.SignalRMessage>(m => m.Name == "TorrentUpdated"));
     }
 
     [Test]
