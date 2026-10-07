@@ -420,7 +420,10 @@ public class SignalRMessageBroadcasterTest
     [Test]
     public async Task MessageHub_SubscribeToTorrent_and_UnsubscribeFromTorrent_manage_groups()
     {
-        var hub = new MessageHub();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.Get(123).Returns(new Torrent { Id = 123, Name = "Existing" });
+
+        var hub = new MessageHub(torrentService: torrentService);
         var callerContext = Substitute.For<HubCallerContext>();
         var groupManager = Substitute.For<IGroupManager>();
 
@@ -515,6 +518,22 @@ public class SignalRMessageBroadcasterTest
 
         await hub.SubscribeToTorrent(20);
         await groupManager.DidNotReceive().AddToGroupAsync("conn-42", "torrent-20", Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task MessageHub_SubscribeToTorrent_does_not_join_group_when_torrent_service_unavailable()
+    {
+        var hub = new MessageHub();
+        var callerContext = Substitute.For<HubCallerContext>();
+        var groupManager = Substitute.For<IGroupManager>();
+
+        callerContext.ConnectionId.Returns("conn-42");
+        hub.Context = callerContext;
+        hub.Groups = groupManager;
+
+        await hub.SubscribeToTorrent(999);
+
+        await groupManager.DidNotReceive().AddToGroupAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
