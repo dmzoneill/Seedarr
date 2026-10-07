@@ -89,7 +89,7 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
 
         var trimmed = bindAddress.Trim();
         var clean = trimmed.Trim('[', ']');
-        if (clean is "*" or "0.0.0.0" or "::" or "localhost")
+        if (clean is "*" or "+" or "0.0.0.0" or "::" or "localhost")
         {
             return true;
         }

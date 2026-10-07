@@ -30,6 +30,7 @@ public class BootstrapTest
     }
 
     [TestCase("*")]
+    [TestCase("+")]
     [TestCase("0.0.0.0")]
     [TestCase("")]
     [TestCase("   ")]
@@ -115,6 +116,22 @@ public class BootstrapTest
         configProvider.Port.Returns(8989);
         configProvider.SslPort.Returns(8989);
         configProvider.EnableSsl.Returns(true);
+
+        var serverOptions = new KestrelServerOptions();
+
+        Assert.DoesNotThrow(() => Bootstrap.ConfigureKestrel(serverOptions, configProvider, certManager));
+    }
+
+    [Test]
+    public void ConfigureKestrel_should_handle_plus_bind_address_without_throwing()
+    {
+        var configProvider = Substitute.For<IConfigFileProvider>();
+        var certManager = Substitute.For<ICertificateManager>();
+
+        configProvider.BindAddress.Returns("+");
+        configProvider.Port.Returns(8989);
+        configProvider.SslPort.Returns(9899);
+        configProvider.EnableSsl.Returns(false);
 
         var serverOptions = new KestrelServerOptions();
 
