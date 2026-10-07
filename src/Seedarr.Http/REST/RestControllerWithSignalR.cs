@@ -105,6 +105,8 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         }
 
         var shouldBroadcastImmediately = false;
+        TModel immediateBroadcastModel = null;
+        ulong? immediateBroadcastGeneration = null;
         lock (_syncLock)
         {
             var now = DateTime.UtcNow;
@@ -113,11 +115,23 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
             if (!_lastBroadcastTimes.TryGetValue(entityId, out var lastTime) || (now - lastTime) >= _coalesceWindow)
             {
                 _lastBroadcastTimes[entityId] = now;
-                _pendingUpdates.Remove(entityId);
 
                 if (_pendingTimers.Remove(entityId, out var timer))
                 {
                     timer.Dispose();
+                }
+
+                if (_pendingUpdates.Remove(entityId, out var pendingModel))
+                {
+                    immediateBroadcastModel = pendingModel;
+                    immediateBroadcastGeneration = _pendingUpdateGenerations.TryGetValue(entityId, out var pendingGeneration)
+                        ? pendingGeneration
+                        : GetEntityGeneration(entityId);
+                    _pendingUpdateGenerations.Remove(entityId);
+                }
+                else
+                {
+                    immediateBroadcastModel = model;
                 }
 
                 shouldBroadcastImmediately = true;
@@ -142,7 +156,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
         if (shouldBroadcastImmediately)
         {
-            DispatchBroadcast(ModelAction.Updated, model);
+            DispatchBroadcast(ModelAction.Updated, immediateBroadcastModel, immediateBroadcastGeneration);
         }
     }
 
