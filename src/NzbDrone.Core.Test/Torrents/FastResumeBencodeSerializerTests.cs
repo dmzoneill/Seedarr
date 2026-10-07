@@ -315,6 +315,30 @@ public class FastResumeBencodeSerializerTests
     }
 
     [Test]
+    public void Deserialize_decodes_packed_bitfield_when_length_matches_num_pieces_div_8_even_if_bytes_are_small()
+    {
+        var dict = new BDictionary
+        {
+            ["file-version"] = new BNumber(1),
+            ["num_pieces"] = new BNumber(32),
+            ["pieces"] = new BString(new byte[] { 0xFF, 0x00, 0x00, 0x00 })
+        };
+
+        var data = _serializer.Deserialize(dict.EncodeAsBytes());
+
+        Assert.That(data.Bitfield.Length, Is.EqualTo(32));
+        for (var i = 0; i < 8; i++)
+        {
+            Assert.That(data.Bitfield[i], Is.True);
+        }
+
+        for (var i = 8; i < 32; i++)
+        {
+            Assert.That(data.Bitfield[i], Is.False);
+        }
+    }
+
+    [Test]
     public void Deserialize_decodes_packed_bitfield_when_byte_values_exceed_3()
     {
         // 0b10100000 = 160 decimal
