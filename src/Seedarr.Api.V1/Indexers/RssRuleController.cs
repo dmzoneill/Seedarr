@@ -257,6 +257,11 @@ public class RssRuleController : Controller
     [Authorize(Policy = Policies.Operator)]
     public ActionResult<object> SyncRss()
     {
+        if (_rssSyncService == null)
+        {
+            return BadRequest(new { message = "RSS sync service is not available." });
+        }
+
         lock (_syncLock)
         {
             var elapsed = DateTime.UtcNow - _lastSyncTime;
@@ -273,7 +278,7 @@ public class RssRuleController : Controller
             _lastSyncTime = DateTime.UtcNow;
         }
 
-        var grabbedCount = _rssSyncService?.Sync(isManual: true) ?? 0;
+        var grabbedCount = _rssSyncService.Sync(isManual: true);
         return Ok(new { success = true, grabbedCount });
     }
 
