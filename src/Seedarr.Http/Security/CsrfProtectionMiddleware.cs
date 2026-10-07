@@ -386,30 +386,7 @@ public class CsrfProtectionMiddleware
             }
         }
 
-        // If origin host matches request host
-        if (string.Equals(uri.Host, requestHost.Host, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        // Loopback / localhost match
-        var isOriginLoopback = IsLoopbackHost(uri.Host);
-        var isRequestLoopback = IsLoopbackHost(requestHost.Host);
-
-        if (isOriginLoopback && isRequestLoopback)
-        {
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsLoopbackHost(string host)
-    {
-        return host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-            host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
-            host.Equals("::1", StringComparison.OrdinalIgnoreCase) ||
-            host.Equals("[::1]", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(uri.Host, requestHost.Host, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
