@@ -28,6 +28,11 @@ public class SqliteDoubleTypeHandler : SqlMapper.TypeHandler<double>
 
     public override double Parse(object value)
     {
+        if (value == null || value is DBNull)
+        {
+            return 0;
+        }
+
         return Convert.ToDouble(value);
     }
 }
