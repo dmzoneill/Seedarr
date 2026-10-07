@@ -436,6 +436,31 @@ public class RssRuleControllerTest
     }
 
     [Test]
+    public void Delete_for_nonexistent_rule_returns_not_found()
+    {
+        const int missingId = 999999;
+        _rssRuleRepository.Get(missingId).Returns((RssRule)null);
+
+        var result = _controller.Delete(missingId);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _rssRuleRepository.DidNotReceive().Delete(Arg.Any<int>());
+    }
+
+    [Test]
+    public void Delete_existing_rule_succeeds()
+    {
+        const int ruleId = 7;
+        var existing = new RssRule { Id = ruleId, Name = "To Delete" };
+        _rssRuleRepository.Get(ruleId).Returns(existing);
+
+        var result = _controller.Delete(ruleId);
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        _rssRuleRepository.Received(1).Delete(ruleId);
+    }
+
+    [Test]
     public void Controller_should_have_Authorize_Reader_attribute()
     {
         var type = typeof(RssRuleController);
