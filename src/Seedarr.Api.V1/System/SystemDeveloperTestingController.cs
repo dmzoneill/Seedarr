@@ -34,7 +34,7 @@ public class SystemDeveloperTestingController : Controller
     {
         if (_testRunner == null)
         {
-            return new TestExecutionResponse();
+            return StatusCode(503, "Developer test runner is not available.");
         }
 
         var response = await _testRunner.RunTestsAsync(request ?? new TestExecutionRequest { RunAll = true });
