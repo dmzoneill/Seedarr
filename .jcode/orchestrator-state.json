@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:28:33Z",
+  "updatedAt": "2026-10-07T00:29:52Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_a26a53e9"
+    "lastScheduleId": "sched_1ec90e79"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -22,7 +22,7 @@
     "core": {
       "area": "src/NzbDrone.Core",
       "status": "running",
-      "worker": "bison"
+      "worker": "frog"
     },
     "api": {
       "area": "src/Seedarr.Api.V1",
@@ -42,7 +42,7 @@
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "cormorant"
+      "worker": "goat"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -62,5 +62,6 @@
     189
   ],
   "githubOpenCount": 409,
-  "lastMonitorNote": "409 open; albatross->hawk Torrents, manatee->lynx Startup"
+  "lastMonitorNote": "409 open; bison->frog Torrents, cormorant->goat Jobs",
+  "githubOpen": 409
 }
