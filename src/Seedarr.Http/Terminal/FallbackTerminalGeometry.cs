@@ -4,22 +4,18 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using NzbDrone.Core.Terminal;
 
 namespace Seedarr.Http.Terminal;
 
 public static class FallbackTerminalGeometry
 {
-    public const int MinCols = 10;
-    public const int MaxCols = 500;
-    public const int MinRows = 5;
-    public const int MaxRows = 200;
+    public const int MinCols = TerminalGeometry.MinCols;
+    public const int MaxCols = TerminalGeometry.MaxCols;
+    public const int MinRows = TerminalGeometry.MinRows;
+    public const int MaxRows = TerminalGeometry.MaxRows;
 
-    public static (int Cols, int Rows) Clamp(int cols, int rows)
-    {
-        int clampedCols = Math.Clamp(cols, MinCols, MaxCols);
-        int clampedRows = Math.Clamp(rows, MinRows, MaxRows);
-        return (clampedCols, clampedRows);
-    }
+    public static (int Cols, int Rows) Clamp(int cols, int rows) => TerminalGeometry.Clamp(cols, rows);
 
     public static void ApplyToEnvironment(ProcessStartInfo startInfo, int cols, int rows)
     {

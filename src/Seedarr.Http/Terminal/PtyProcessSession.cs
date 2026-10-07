@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Terminal;
 
 namespace Seedarr.Http.Terminal;
 
@@ -160,6 +161,7 @@ else:
 
     public static PtyProcessSession Start(string cwd, int cols, int rows)
     {
+        (cols, rows) = TerminalGeometry.Clamp(cols, rows);
         var safeCwd = !string.IsNullOrWhiteSpace(cwd)
             ? cwd
             : (Environment.GetEnvironmentVariable("HOME") ?? TerminalEnvironmentSanitizer.GetSafeTempDirectory());
@@ -317,6 +319,8 @@ else:
         {
             return;
         }
+
+        (cols, rows) = TerminalGeometry.Clamp(cols, rows);
 
         if (this._controlPipeStream != null)
         {

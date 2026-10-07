@@ -6,6 +6,7 @@ using System;
 using System.IO;
 using System.Security;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Terminal;
 
 namespace Seedarr.Http.Terminal;
 
@@ -54,8 +55,7 @@ public class PtyTerminalService : IPtyTerminalService
         }
 
         // 3. Clamp dimensions to safe bounds
-        int clampedCols = Math.Clamp(cols, 10, 500);
-        int clampedRows = Math.Clamp(rows, 5, 200);
+        var (clampedCols, clampedRows) = TerminalGeometry.Clamp(cols, rows);
 
         if (File.Exists("/usr/bin/python3") || File.Exists("/bin/python3") || File.Exists("/usr/local/bin/python3"))
         {

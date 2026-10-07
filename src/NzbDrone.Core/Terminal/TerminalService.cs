@@ -71,8 +71,7 @@ public class TerminalService : ITerminalService, IHandle<ApplicationShutdownRequ
             }
         }
 
-        cols = cols <= 0 ? 80 : cols;
-        rows = rows <= 0 ? 24 : rows;
+        (cols, rows) = TerminalGeometry.NormalizeSignalRDimensions(cols, rows);
 
         _logger.Info("Spawning PTY process for connection {0} ({1}x{2})", connectionId, cols, rows);
         var process = _ptyProcessFactory.Create(cols, rows);
@@ -180,8 +179,7 @@ public class TerminalService : ITerminalService, IHandle<ApplicationShutdownRequ
 
         if (_sessions.TryGetValue(connectionId, out var session))
         {
-            cols = cols <= 0 ? 80 : cols;
-            rows = rows <= 0 ? 24 : rows;
+            (cols, rows) = TerminalGeometry.NormalizeSignalRDimensions(cols, rows);
             session.Process.Resize(cols, rows);
         }
     }
