@@ -213,6 +213,7 @@ public class DelugeClientTest
 
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0].InfoHash, Is.EqualTo("abc123"));
+        Assert.That(result[0].DownloadId, Is.EqualTo("abc123"));
         Assert.That(result[0].Title, Is.EqualTo("Test Torrent"));
         Assert.That(result[0].TotalSize, Is.EqualTo(1048576));
         Assert.That(result[0].RemainingSize, Is.EqualTo(256));

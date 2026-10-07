@@ -394,9 +394,12 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                         (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
                         (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
 
+                var infoHash = t.TryGetProperty("hash", out var h) ? h.GetString() : "";
+
                 items.Add(new DownloadClientItem
                 {
-                    InfoHash = t.TryGetProperty("hash", out var h) ? h.GetString() : "",
+                    DownloadId = infoHash,
+                    InfoHash = infoHash,
                     Title = t.TryGetProperty("name", out var n) ? n.GetString() : "",
                     TotalSize = t.TryGetProperty("size", out var sz) ? sz.GetInt64()
                         : (t.TryGetProperty("total_size", out var ts) ? ts.GetInt64() : 0),

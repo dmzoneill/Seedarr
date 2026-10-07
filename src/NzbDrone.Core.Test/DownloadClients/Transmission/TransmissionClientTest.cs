@@ -305,13 +305,14 @@ public class TransmissionClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK,
-            @"{""arguments"":{""torrents"":[{""hashString"":""abc123"",""name"":""Test Torrent"",""totalSize"":1048576,""leftUntilDone"":512,""status"":6,""downloadDir"":""/downloads"",""labels"":[""cat1""]}]},""result"":""success""}");
+            @"{""arguments"":{""torrents"":[{""id"":42,""hashString"":""abc123"",""name"":""Test Torrent"",""totalSize"":1048576,""leftUntilDone"":512,""status"":6,""downloadDir"":""/downloads"",""labels"":[""cat1""]}]},""result"":""success""}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
 
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0].InfoHash, Is.EqualTo("abc123"));
+        Assert.That(result[0].DownloadId, Is.EqualTo("42"));
         Assert.That(result[0].Title, Is.EqualTo("Test Torrent"));
         Assert.That(result[0].TotalSize, Is.EqualTo(1048576));
         Assert.That(result[0].RemainingSize, Is.EqualTo(512));
