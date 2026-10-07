@@ -43,6 +43,7 @@ public class TorrentRecheckService : ITorrentRecheckService
     private readonly ConcurrentQueue<int> _recheckQueue = new();
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _activeRechecks = new();
     private readonly ConcurrentDictionary<int, bool> _queuedTorrentIds = new();
+    private readonly ConcurrentDictionary<int, TorrentStatus> _queuedPreviousStatus = new();
 
     public TorrentRecheckService(
         ITorrentRepository torrentRepository,
@@ -105,6 +106,7 @@ public class TorrentRecheckService : ITorrentRecheckService
             _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
         }
 
+        _queuedPreviousStatus[id] = oldStatus;
         _recheckQueue.Enqueue(id);
         _queuedTorrentIds[id] = true;
 
@@ -115,7 +117,7 @@ public class TorrentRecheckService : ITorrentRecheckService
 
     public void CancelRecheck(int id)
     {
-        _queuedTorrentIds.TryRemove(id, out _);
+        var wasQueued = _queuedTorrentIds.TryRemove(id, out _);
 
         if (_activeRechecks.TryGetValue(id, out var cts))
         {
@@ -127,6 +129,51 @@ public class TorrentRecheckService : ITorrentRecheckService
             {
                 _logger.Trace(ex, "Cancellation token already disposed for recheck torrent {0}", id);
             }
+        }
+        else if (wasQueued)
+        {
+            RevertQueuedRecheck(id);
+        }
+    }
+
+    private void RevertQueuedRecheck(int id)
+    {
+        if (!_queuedPreviousStatus.TryRemove(id, out var previousStatus))
+        {
+            previousStatus = TorrentStatus.Paused;
+        }
+
+        if (previousStatus == TorrentStatus.QueuedForChecking || previousStatus == TorrentStatus.Checking)
+        {
+            previousStatus = TorrentStatus.Paused;
+        }
+
+        var torrent = _torrentRepository?.Get(id);
+        if (torrent == null || torrent.Status != TorrentStatus.QueuedForChecking)
+        {
+            return;
+        }
+
+        var oldStatus = torrent.Status;
+        torrent.Status = previousStatus;
+        torrent.Active = false;
+        torrent.UploadSpeed = 0;
+        torrent.DownloadSpeed = 0;
+
+        _torrentRepository?.Update(torrent);
+        _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, previousStatus));
+        _eventAggregator?.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+
+        if (_signalRBroadcaster != null)
+        {
+            var updateMsg = new SignalRMessage
+            {
+                Name = "TorrentUpdated",
+                Action = ModelAction.Updated,
+                Body = torrent
+            };
+            _signalRBroadcaster.BroadcastMessage(updateMsg);
+            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
         }
     }
 
@@ -143,8 +190,11 @@ public class TorrentRecheckService : ITorrentRecheckService
             {
                 if (!_queuedTorrentIds.TryRemove(nextId, out _))
                 {
+                    RevertQueuedRecheck(nextId);
                     continue;
                 }
+
+                _queuedPreviousStatus.TryRemove(nextId, out _);
 
                 var torrent = _torrentRepository?.Get(nextId);
                 if (torrent == null)

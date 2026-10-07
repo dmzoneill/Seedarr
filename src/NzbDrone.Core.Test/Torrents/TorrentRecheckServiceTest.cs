@@ -614,6 +614,90 @@ public class TorrentRecheckServiceTest
     }
 
     [Test]
+    public void CancelRecheck_restores_prior_status_when_recheck_still_queued()
+    {
+        var torrent = new Torrent
+        {
+            Id = 25,
+            Name = "Cancel Queued Torrent",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 1,
+            TotalSize = 1000
+        };
+
+        _torrentRepository.Get(25).Returns(torrent);
+
+        _service.QueueRecheck(25);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
+
+        _service.CancelRecheck(25);
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+        _torrentRepository.Received(2).Update(Arg.Is<Torrent>(t => t.Id == 25));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
+            e.Torrent.Id == 25 && e.OldStatus == TorrentStatus.QueuedForChecking && e.NewStatus == TorrentStatus.Downloading));
+        _eventAggregator.Received().PublishEvent(Arg.Is<NzbDrone.Core.Datastore.Events.ModelEvent<Torrent>>(e =>
+            e.Model.Id == 25 && e.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CancelRecheck_restores_status_when_queue_processor_skips_cancelled_id()
+    {
+        var torrent = new Torrent
+        {
+            Id = 26,
+            Name = "Deferred Cancel Torrent",
+            Status = TorrentStatus.Seeding,
+            PieceCount = 1,
+            TotalSize = 1000
+        };
+
+        _torrentRepository.Get(26).Returns(torrent);
+
+        _service.QueueRecheck(26);
+        _service.CancelRecheck(26);
+
+        await System.Threading.Tasks.Task.Delay(100);
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task CancelRecheck_broadcasts_TorrentUpdated_via_signalr_when_queued()
+    {
+        var signalR = Substitute.For<NzbDrone.SignalR.IBroadcastSignalRMessage>();
+        var serviceWithSignalR = new TorrentRecheckService(
+            _torrentRepository,
+            _torrentFileService,
+            _pieceStorage,
+            _pieceVerificationService,
+            _multiFilePieceStorage,
+            _stateMachine,
+            _eventAggregator,
+            null,
+            _fastResumeService,
+            signalR);
+
+        var torrent = new Torrent
+        {
+            Id = 27,
+            Name = "SignalR Cancel Torrent",
+            Status = TorrentStatus.Paused,
+            PieceCount = 1,
+            TotalSize = 1000
+        };
+
+        _torrentRepository.Get(27).Returns(torrent);
+
+        serviceWithSignalR.QueueRecheck(27);
+        serviceWithSignalR.CancelRecheck(27);
+
+        signalR.Received().BroadcastMessage(Arg.Is<NzbDrone.SignalR.SignalRMessage>(m =>
+            m.Name == "TorrentUpdated" && m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
+        signalR.Received().BroadcastToTorrent(27, Arg.Is<NzbDrone.SignalR.SignalRMessage>(m => m.Name == "TorrentUpdated"));
+    }
+
+    [Test]
     public void QueueRecheck_sets_status_to_QueuedForChecking_and_returns_torrent()
     {
         var torrent = new Torrent
