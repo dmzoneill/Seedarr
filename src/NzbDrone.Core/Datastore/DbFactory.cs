@@ -218,7 +218,13 @@ public class DbFactory : IDbFactory
             return null;
         }
 
-        FlushSqliteWal(connectionString);
+        if (!FlushSqliteWal(connectionString))
+        {
+            _logger.Warn(
+                "Skipping pre-migration database snapshot for {0} because SQLite WAL could not be checkpointed",
+                dbPath);
+            return null;
+        }
 
         try
         {
@@ -293,7 +299,7 @@ public class DbFactory : IDbFactory
         }
     }
 
-    private void FlushSqliteWal(string connectionString)
+    private bool FlushSqliteWal(string connectionString)
     {
         try
         {
@@ -301,11 +307,25 @@ public class DbFactory : IDbFactory
             conn.Open();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-            cmd.ExecuteNonQuery();
+            using var reader = cmd.ExecuteReader();
+            if (reader.Read())
+            {
+                var busy = reader.GetInt32(0);
+                if (busy != 0)
+                {
+                    _logger.Warn(
+                        "SQLite WAL checkpoint did not complete before pre-migration snapshot (busy={0})",
+                        busy);
+                    return false;
+                }
+            }
+
+            return true;
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to flush SQLite WAL before pre-migration snapshot");
+            return false;
         }
     }
 
