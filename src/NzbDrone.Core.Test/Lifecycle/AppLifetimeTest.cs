@@ -348,6 +348,52 @@ public class AppLifetimeTest
     }
 
     [Test]
+    public async Task StopAsync_should_complete_tracker_announces_before_disconnect_when_bounded_wait_expires()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Downloading,
+            Active = true
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        using var announceBlocked = new ManualResetEventSlim(false);
+        using var releaseAnnounce = new ManualResetEventSlim(false);
+        var disconnectCalled = false;
+
+        _trackerAnnounceService
+            .When(x => x.AnnounceTorrent(Arg.Any<Torrent>(), Arg.Any<bool>(), Arg.Any<AnnounceEvent>()))
+            .Do(_ =>
+            {
+                announceBlocked.Set();
+                releaseAnnounce.Wait(TimeSpan.FromSeconds(30));
+            });
+
+        _connectionManager
+            .When(x => x.DisconnectAllAsync())
+            .Do(_ =>
+            {
+                disconnectCalled = true;
+                return Task.CompletedTask;
+            });
+
+        var stopTask = Task.Run(() => _subject.StopAsync(CancellationToken.None));
+
+        Assert.True(announceBlocked.Wait(TimeSpan.FromSeconds(10)), "Stopped announce should start");
+        await Task.Delay(2600);
+        Assert.False(disconnectCalled, "Disconnect must not run while stopped announces are still in flight");
+
+        releaseAnnounce.Set();
+        await stopTask;
+
+        Assert.True(disconnectCalled);
+        await _connectionManager.Received(1).DisconnectAllAsync();
+    }
+
+    [Test]
     public async Task StopAsync_should_continue_shutdown_when_tracker_announces_fail()
     {
         var torrent = new Torrent

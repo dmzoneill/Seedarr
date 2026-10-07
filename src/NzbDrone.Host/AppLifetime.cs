@@ -156,6 +156,7 @@ public class AppLifetime : IHostedService, IDisposable
 
                 if (activeTorrents.Count > 0)
                 {
+                    // Use CancellationToken.None so a pre-cancelled host stop token does not skip stopped announces (#953).
                     var announceTasks = activeTorrents.Select(torrent =>
                         Task.Run(
                             () =>
@@ -169,13 +170,20 @@ public class AppLifetime : IHostedService, IDisposable
                                     _logger.Debug(ex, "Failed to send stopped tracker announce for torrent {0}", torrent.Id);
                                 }
                             },
-                            cancellationToken)).ToArray();
+                            CancellationToken.None)).ToArray();
 
                     var allAnnounces = Task.WhenAll(announceTasks);
-                    var timeoutTask = Task.Delay(2500, cancellationToken);
+                    var timeoutTask = Task.Delay(2500, CancellationToken.None);
                     try
                     {
-                        await Task.WhenAny(allAnnounces, timeoutTask);
+                        var completed = await Task.WhenAny(allAnnounces, timeoutTask);
+                        if (completed != allAnnounces && !allAnnounces.IsCompleted)
+                        {
+                            _logger.Debug(
+                                "Tracker stopped announces exceeded {0}ms bounded wait; awaiting remaining tasks before later shutdown phases",
+                                2500);
+                            await allAnnounces;
+                        }
                     }
                     catch (Exception ex)
                     {
