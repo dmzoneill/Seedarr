@@ -80,6 +80,44 @@ public class PieceStorageTest
     }
 
     [Test]
+    public void SetVerifiedPieces_publishes_pieceMapUpdated_with_bulk_bitfield_via_SignalR_broadcaster()
+    {
+        const string hash = "419cb7d4838686ffb08c2a4f4e7c10d3f84898ec";
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.GetByInfoHash(hash).Returns(new Torrent { Id = 88, InfoHash = hash });
+        var bitfield = new[] { true, false, true };
+
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, torrentService);
+        storage.SetVerifiedPieces(hash, bitfield);
+
+        Assert.That(storage.GetVerifiedPieces(hash), Is.EqualTo(bitfield));
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceMapUpdatedMessage>(m =>
+            m.InfoHash == hash &&
+            m.TorrentId == 88 &&
+            !m.Cleared &&
+            m.Name == "pieceMapUpdated"));
+    }
+
+    [Test]
+    public void SetVerifiedPieces_with_null_publishes_pieceMapUpdated_cleared_via_SignalR_broadcaster()
+    {
+        const string hash = "419cb7d4838686ffb08c2a4f4e7c10d3f84898ec";
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.GetByInfoHash(hash).Returns(new Torrent { Id = 89, InfoHash = hash });
+
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, torrentService);
+        storage.SetVerifiedPieces(hash, new[] { true });
+        storage.SetVerifiedPieces(hash, null);
+
+        Assert.That(storage.GetVerifiedPieces(hash), Is.Null);
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceMapUpdatedMessage>(m =>
+            m.InfoHash == hash &&
+            m.TorrentId == 89 &&
+            m.Cleared &&
+            m.Name == "pieceMapUpdated"));
+    }
+
+    [Test]
     public void Clear_publishes_pieceMapUpdated_with_cleared_marker_via_SignalR_broadcaster()
     {
         const string hash = "419cb7d4838686ffb08c2a4f4e7c10d3f84898ec";
