@@ -196,11 +196,10 @@ public class TorrentRelocationService : ITorrentRelocationService
 
             if (sourceItem == null)
             {
-                _logger.Warn("Torrent {0} source path not found on disk: {1}", torrentId, currentPath);
-                CompleteRelocation(torrent, currentPath, newSavePath, previousStatus);
-                UnchokePeers(torrent);
-                statusTransitioned = false;
-                return true;
+                var errorMsg = $"Torrent {torrentId} source path not found on disk: {currentPath}";
+                _logger.Warn(errorMsg);
+                _eventAggregator?.PublishEvent(new FileMoveFailedEvent(torrent, currentPath, newSavePath, errorMsg));
+                return false;
             }
 
             // Pre-flight disk space & write permission validation
