@@ -49,6 +49,28 @@ public class ConnectionStringFactoryTest
     }
 
     [Test]
+    public void DatabaseType_should_be_sqlite_when_postgres_host_is_whitespace_only()
+    {
+        _configFileProvider.PostgresHost.Returns("   ");
+
+        var subject = BuildSubject();
+
+        Assert.That(subject.DatabaseType, Is.EqualTo(DatabaseType.SQLite));
+    }
+
+    [Test]
+    public void MainDbConnectionString_should_use_sqlite_when_postgres_host_is_whitespace_only()
+    {
+        _configFileProvider.PostgresHost.Returns("\t");
+        _appFolderInfo.AppDataFolder.Returns("/data/seedarr");
+
+        var subject = BuildSubject();
+
+        var expectedPath = Path.Combine("/data/seedarr", "seedarr.db");
+        Assert.That(subject.MainDbConnectionString, Does.Contain(expectedPath));
+    }
+
+    [Test]
     public void DatabaseType_should_be_postgresql_when_postgres_host_is_set()
     {
         _configFileProvider.PostgresHost.Returns("db.example.com");
@@ -131,6 +153,20 @@ public class ConnectionStringFactoryTest
         Assert.That(migrationConnStr, Does.Contain("Default Timeout=30"));
         Assert.That(migrationConnStr, Does.Contain("Foreign Keys=True"));
         Assert.That(migrationConnStr, Does.Not.Contain("Cache=Shared"));
+    }
+
+    [Test]
+    public void MainDbConnectionString_should_trim_postgres_host()
+    {
+        _configFileProvider.PostgresHost.Returns("  pg.example.com  ");
+        _configFileProvider.PostgresPort.Returns(5432);
+        _configFileProvider.PostgresMainDb.Returns("seedarr");
+        _configFileProvider.PostgresUser.Returns("user");
+        _configFileProvider.PostgresPassword.Returns("secret");
+
+        var subject = BuildSubject();
+
+        Assert.That(subject.MainDbConnectionString, Does.Contain("Host=pg.example.com"));
     }
 
     [Test]
