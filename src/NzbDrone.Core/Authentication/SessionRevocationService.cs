@@ -9,8 +9,6 @@ public class SessionRevocationService : ISessionRevocationService
     private readonly ConcurrentDictionary<string, DateTime> _revokedSessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly IRevokedSessionRepository _repository;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-    private static readonly TimeSpan DefaultRetention = TimeSpan.FromDays(30);
-
     public SessionRevocationService(IRevokedSessionRepository repository = null)
     {
         _repository = repository;
@@ -30,7 +28,7 @@ public class SessionRevocationService : ISessionRevocationService
         }
 
         var key = sessionIdOrUser.Trim();
-        var expiresAtUtc = revokedAtUtc + DefaultRetention;
+        var expiresAtUtc = AuthenticationDefaults.GetRevocationExpiresAtUtc(revokedAtUtc);
 
         if (_repository != null)
         {
@@ -108,7 +106,7 @@ public class SessionRevocationService : ISessionRevocationService
 
     public void ClearExpired(TimeSpan? maxAge = null)
     {
-        var retention = maxAge ?? DefaultRetention;
+        var retention = maxAge ?? AuthenticationDefaults.RevocationRetention;
         var cutoff = DateTime.UtcNow - retention;
 
         foreach (var kvp in _revokedSessions)
@@ -119,7 +117,7 @@ public class SessionRevocationService : ISessionRevocationService
             }
         }
 
-        _repository?.DeleteExpired(cutoff);
+        _repository?.DeleteExpired(DateTime.UtcNow);
     }
 
     private void LoadActiveRevocations()

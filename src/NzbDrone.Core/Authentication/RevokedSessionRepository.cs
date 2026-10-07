@@ -55,12 +55,12 @@ ON CONFLICT(""SessionKey"") DO UPDATE SET
                 new { SessionKey = key, RevokedAtUtc = revokedAtUtc, ExpiresAtUtc = expiresAtUtc }));
     }
 
-    public void DeleteExpired(DateTime revokedBeforeUtc)
+    public void DeleteExpired(DateTime utcNow)
     {
         ExecuteWithRetry(connection =>
             connection.Execute(
-                $"DELETE FROM \"{_table}\" WHERE \"RevokedAtUtc\" < @Cutoff",
-                new { Cutoff = revokedBeforeUtc }));
+                $"DELETE FROM \"{_table}\" WHERE \"ExpiresAtUtc\" <= @UtcNow",
+                new { UtcNow = utcNow }));
     }
 
 }

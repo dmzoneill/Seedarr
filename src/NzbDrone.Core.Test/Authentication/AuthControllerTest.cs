@@ -310,6 +310,21 @@ public class AuthControllerTest
     }
 
     [Test]
+    public void SessionRevocationService_ClearExpired_KeepsRevocationsWithinSlidingCookieWindow()
+    {
+        var service = new SessionRevocationService();
+        var revokedAt = DateTime.UtcNow.AddDays(-35);
+        var issuedBeforeRevoke = revokedAt.AddMinutes(-10);
+
+        service.RevokeSession("session-sliding", revokedAt);
+        Assert.That(service.IsSessionRevoked("session-sliding", issuedBeforeRevoke), Is.True);
+
+        service.ClearExpired();
+
+        Assert.That(service.IsSessionRevoked("session-sliding", issuedBeforeRevoke), Is.True);
+    }
+
+    [Test]
     public void SessionRevocationService_IsSessionRevoked_WhenIssuedUtcMissing_TreatsRevokedSessionAsRevoked()
     {
         var service = new SessionRevocationService();
@@ -334,7 +349,7 @@ public class AuthControllerTest
         repository.Received(1).Upsert(
             "session-persist",
             Arg.Is<DateTime>(t => Math.Abs((t - now).TotalSeconds) < 1),
-            Arg.Is<DateTime>(t => Math.Abs((t - now.AddDays(30)).TotalSeconds) < 1));
+            Arg.Is<DateTime>(t => Math.Abs((t - AuthenticationDefaults.GetRevocationExpiresAtUtc(now)).TotalSeconds) < 1));
     }
 
     [Test]
@@ -421,7 +436,7 @@ public class AuthControllerTest
         service.RevokeSession("session-old", oldTime);
         service.ClearExpired(TimeSpan.FromDays(30));
 
-        repository.Received(1).DeleteExpired(Arg.Is<DateTime>(d => d <= DateTime.UtcNow.AddDays(-30)));
+        repository.Received(1).DeleteExpired(Arg.Is<DateTime>(d => Math.Abs((d - DateTime.UtcNow).TotalSeconds) < 5));
     }
 
     [Test]

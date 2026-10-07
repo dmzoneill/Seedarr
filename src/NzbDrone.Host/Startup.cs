@@ -128,7 +128,7 @@ public class Startup
                 : Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
             var urlBase = configFileProvider?.UrlBase?.Trim();
             options.Cookie.Path = string.IsNullOrWhiteSpace(urlBase) ? "/" : (urlBase.StartsWith('/') ? urlBase : "/" + urlBase);
-            options.ExpireTimeSpan = TimeSpan.FromDays(30);
+            options.ExpireTimeSpan = AuthenticationDefaults.CookieExpireTimeSpan;
             options.SlidingExpiration = true;
             options.LoginPath = "/login";
             options.AccessDeniedPath = "/login?accessDenied=true";
