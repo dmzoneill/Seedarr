@@ -10,22 +10,38 @@ public class FixVarcharTruncationAndCascadeDeletes : NzbDroneMigrationBase
         // 1. Clean up any existing orphaned child rows in both SQLite and PostgreSQL
         if (Schema.Table("TorrentFiles").Exists())
         {
-            Execute.Sql("DELETE FROM \"TorrentFiles\" WHERE \"TorrentId\" NOT IN (SELECT \"Id\" FROM \"Torrents\");");
+            Execute.Sql("""
+                DELETE FROM "TorrentFiles"
+                WHERE "TorrentId" IS NULL
+                   OR NOT EXISTS (SELECT 1 FROM "Torrents" t WHERE t."Id" = "TorrentFiles"."TorrentId");
+                """);
         }
 
         if (Schema.Table("TrackerEntries").Exists())
         {
-            Execute.Sql("DELETE FROM \"TrackerEntries\" WHERE \"TorrentId\" NOT IN (SELECT \"Id\" FROM \"Torrents\");");
+            Execute.Sql("""
+                DELETE FROM "TrackerEntries"
+                WHERE "TorrentId" IS NULL
+                   OR NOT EXISTS (SELECT 1 FROM "Torrents" t WHERE t."Id" = "TrackerEntries"."TorrentId");
+                """);
         }
 
         if (Schema.Table("TorrentEventLogs").Exists())
         {
-            Execute.Sql("DELETE FROM \"TorrentEventLogs\" WHERE \"TorrentId\" NOT IN (SELECT \"Id\" FROM \"Torrents\");");
+            Execute.Sql("""
+                DELETE FROM "TorrentEventLogs"
+                WHERE "TorrentId" IS NULL
+                   OR NOT EXISTS (SELECT 1 FROM "Torrents" t WHERE t."Id" = "TorrentEventLogs"."TorrentId");
+                """);
         }
 
         if (Schema.Table("TorrentMediaMetadata").Exists())
         {
-            Execute.Sql("DELETE FROM \"TorrentMediaMetadata\" WHERE \"TorrentId\" NOT IN (SELECT \"Id\" FROM \"Torrents\");");
+            Execute.Sql("""
+                DELETE FROM "TorrentMediaMetadata"
+                WHERE "TorrentId" IS NULL
+                   OR NOT EXISTS (SELECT 1 FROM "Torrents" t WHERE t."Id" = "TorrentMediaMetadata"."TorrentId");
+                """);
         }
 
         // 2. Expand VARCHAR(255) columns to unbounded TEXT on PostgreSQL
