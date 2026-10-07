@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T01:28:00Z",
+  "updatedAt": "2026-10-07T00:45:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents",
+  "currentSubfolder": "src/NzbDrone.Core/Authentication",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,14 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Blocklist",
-    "completedAt": "2026-10-07T01:28:00Z",
-    "issuesFiled": [1280, 1281],
+    "subfolder": "src/NzbDrone.Core/Torrents",
+    "completedAt": "2026-10-07T00:45:00Z",
+    "issuesFiled": [
+      1287,
+      1288
+    ],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Blocklist pass: static review of 14 files (PeerBlocklistSyncService, BlocklistUpdateTask/Command, Ipv4/Ipv6IntervalTree, BlocklistArchiveStreamProvider, metadata/models, IP extensions). Filed #1280 (double 304 after empty-tree fallback returns Success with zero rules), #1281 (scheduled Execute swallows sync exceptions; command path rethrows). Deduped open #904, #905, #937-#939, #1021-#1024, #1029, #1032, #1129-#1130, #1175-#1177, #1224-#1225, #1261-#1262 and related. No dotnet build/test."
+    "note": "Torrents pass: static review of 64 files under Torrents/ (services, Merkle, Package, fastresume, import/watch folder, piece I/O). Filed #1287 (DownloadHistoryRepository case-sensitive InfoHash vs TorrentRepository), #1288 (TorrentEventLogService.FlushAsync races processor in-memory batch). Comment on #1043 for WatchFolder ProcessTorrentFile v1-only duplicate lookup. Deduped existing open issues including #948, #949, #962-#964, #1043-#1048, #1136-#1138, #1218-#1222, #1231-#1233, #1242-#1243, #1265, #1268. No dotnet build/test."
   }
 }
