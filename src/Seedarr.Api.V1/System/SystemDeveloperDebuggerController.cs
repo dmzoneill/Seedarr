@@ -1,13 +1,16 @@
 // Copyright (c) FeedItOut. All rights reserved.
 
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Developer.Debugger;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.System;
 
 [V1ApiController("system/developer/debugger")]
+[Authorize(Policy = Policies.AdminOnly)]
 public class SystemDeveloperDebuggerController : Controller
 {
     private readonly IDeveloperDebuggerService _debuggerService;

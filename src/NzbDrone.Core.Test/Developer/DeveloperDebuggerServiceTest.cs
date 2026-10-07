@@ -4,9 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Developer.Debugger;
 using Seedarr.Api.V1.System;
 
@@ -1044,6 +1046,16 @@ public class DeveloperDebuggerServiceTest
     // -------------------------------------------------------------------------
     // Helper POCOs for Snapshot condition evaluation & serialization tests
     // -------------------------------------------------------------------------
+
+    [Test]
+    public void Controller_should_have_Authorize_AdminOnly_attribute()
+    {
+        var type = typeof(SystemDeveloperDebuggerController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
+    }
 
     private class TestScorePoco
     {

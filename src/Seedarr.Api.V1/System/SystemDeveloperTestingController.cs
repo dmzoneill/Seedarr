@@ -2,13 +2,16 @@
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Developer.Testing;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.System;
 
 [V1ApiController("system/developer/testing")]
+[Authorize(Policy = Policies.AdminOnly)]
 public class SystemDeveloperTestingController : Controller
 {
     private readonly IDeveloperTestRunner _testRunner;
