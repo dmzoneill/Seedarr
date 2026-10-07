@@ -21,6 +21,9 @@ namespace Seedarr.Api.V1.Indexers;
 [Authorize(Policy = Policies.Reader)]
 public class RssRuleController : Controller
 {
+    private const int DefaultHistoryPageSize = 50;
+    private const int MaxHistoryPageSize = 500;
+
     private readonly IRssRuleRepository _rssRuleRepository;
     private readonly IIndexerRepository _indexerRepository;
     private readonly ICategoryService _categoryService;
@@ -170,10 +173,25 @@ public class RssRuleController : Controller
 
         var effectiveLimit = limit;
         var effectiveOffset = offset;
-        if (page > 0 && pageSize > 0 && limit == 50 && offset == 0)
+        if (page > 0 && pageSize > 0 && limit == DefaultHistoryPageSize && offset == 0)
         {
             effectiveLimit = pageSize;
             effectiveOffset = (page - 1) * pageSize;
+        }
+
+        if (effectiveOffset > 0 && effectiveLimit <= 0)
+        {
+            return BadRequest(new { message = "A positive limit is required when offset is specified." });
+        }
+
+        if (effectiveLimit <= 0)
+        {
+            effectiveLimit = DefaultHistoryPageSize;
+        }
+
+        if (effectiveLimit > MaxHistoryPageSize)
+        {
+            effectiveLimit = MaxHistoryPageSize;
         }
 
         var total = _rssGrabHistoryRepository.GetCount(ruleId, status);

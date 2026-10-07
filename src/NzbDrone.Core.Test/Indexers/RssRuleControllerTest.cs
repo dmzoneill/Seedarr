@@ -309,6 +309,54 @@ public class RssRuleControllerTest
     }
 
     [Test]
+    public void GetHistory_with_zero_limit_clamps_to_default_page_size()
+    {
+        _grabHistoryRepository.GetCount(null, null).Returns(0);
+        _grabHistoryRepository.GetHistory(null, null, 50, 0).Returns(new List<RssGrabHistory>());
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
+        };
+
+        var result = _controller.GetHistory(limit: 0);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _grabHistoryRepository.Received(1).GetHistory(null, null, 50, 0);
+    }
+
+    [Test]
+    public void GetHistory_with_limit_above_max_clamps_to_500()
+    {
+        _grabHistoryRepository.GetCount(null, null).Returns(0);
+        _grabHistoryRepository.GetHistory(null, null, 500, 0).Returns(new List<RssGrabHistory>());
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
+        };
+
+        var result = _controller.GetHistory(limit: 10_000);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _grabHistoryRepository.Received(1).GetHistory(null, null, 500, 0);
+    }
+
+    [Test]
+    public void GetHistory_with_offset_and_non_positive_limit_returns_bad_request()
+    {
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
+        };
+
+        var result = _controller.GetHistory(limit: 0, offset: 10);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _grabHistoryRepository.DidNotReceive().GetHistory(Arg.Any<int?>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>());
+    }
+
+    [Test]
     public void SyncRss_invokes_service_and_returns_true_grabbed_count()
     {
         RssRuleController.ResetSyncCooldown();
