@@ -43,11 +43,7 @@ public class ArrWebhookMaintenanceTask : IScheduledTask, IHandle<ApplicationStar
     public void Execute(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var failed = RegisterAllWebhooks(cancellationToken);
-        if (failed.Count > 0)
-        {
-            RetryFailedConnectionsAsync(failed, cancellationToken).GetAwaiter().GetResult();
-        }
+        RegisterAllWebhooks(cancellationToken);
     }
 
     public void Handle(ApplicationStartedEvent message)

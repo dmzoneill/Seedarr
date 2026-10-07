@@ -13,15 +13,15 @@ public class CaseInsensitiveCategoryName : NzbDroneMigrationBase
             {
                 Execute.Sql(
                     """
-                    UPDATE "RssRules" rr
+                    UPDATE "RssRules"
                     SET "CategoryId" = (
                         SELECT MIN(c."Id")
                         FROM "Categories" c
                         WHERE LOWER(TRIM(c."Name")) = LOWER(TRIM((
-                            SELECT c2."Name" FROM "Categories" c2 WHERE c2."Id" = rr."CategoryId"
+                            SELECT c2."Name" FROM "Categories" c2 WHERE c2."Id" = "RssRules"."CategoryId"
                         )))
                     )
-                    WHERE rr."CategoryId" > 0;
+                    WHERE "CategoryId" > 0;
                     """);
             }
 
@@ -29,17 +29,17 @@ public class CaseInsensitiveCategoryName : NzbDroneMigrationBase
             {
                 Execute.Sql(
                     """
-                    UPDATE "Torrents" t
+                    UPDATE "Torrents"
                     SET "Category" = (
                         SELECT c."Name"
                         FROM "Categories" c
                         WHERE c."Id" = (
                             SELECT MIN(c2."Id")
                             FROM "Categories" c2
-                            WHERE LOWER(TRIM(c2."Name")) = LOWER(TRIM(t."Category"))
+                            WHERE LOWER(TRIM(c2."Name")) = LOWER(TRIM("Torrents"."Category"))
                         )
                     )
-                    WHERE t."Category" IS NOT NULL AND TRIM(t."Category") != '';
+                    WHERE "Category" IS NOT NULL AND TRIM("Category") != '';
                     """);
             }
 

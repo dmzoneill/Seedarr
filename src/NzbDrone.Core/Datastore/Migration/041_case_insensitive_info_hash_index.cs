@@ -13,16 +13,16 @@ public class CaseInsensitiveInfoHashIndex : NzbDroneMigrationBase
             {
                 Execute.Sql(
                     """
-                    UPDATE "DownloadHistory" dh
+                    UPDATE "DownloadHistory"
                     SET "TorrentId" = (
                         SELECT MIN(t."Id")
                         FROM "Torrents" t
                         WHERE t."InfoHash" IS NOT NULL
                           AND LOWER(TRIM(t."InfoHash")) = LOWER(TRIM((
-                              SELECT t2."InfoHash" FROM "Torrents" t2 WHERE t2."Id" = dh."TorrentId"
+                              SELECT t2."InfoHash" FROM "Torrents" t2 WHERE t2."Id" = "DownloadHistory"."TorrentId"
                           )))
                     )
-                    WHERE dh."TorrentId" IS NOT NULL;
+                    WHERE "TorrentId" IS NOT NULL;
                     """);
             }
 
