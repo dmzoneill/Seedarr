@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T01:20:00Z",
+  "updatedAt": "2026-10-07T01:25:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/ArrIntegration",
+  "currentSubfolder": "src/Seedarr.Api.V1/Indexers",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/Notifications",
-    "completedAt": "2026-10-07T01:20:00Z",
-    "issuesFiled": [1271],
+    "subfolder": "src/Seedarr.Api.V1/ArrIntegration",
+    "completedAt": "2026-10-07T01:25:00Z",
+    "issuesFiled": [1274],
     "issuesReopened": [],
-    "taskId": "api-hunter-vulture",
-    "notes": "Static review: 2 files (NotificationController.cs, NotificationResource.cs). Deduped against open issues (#1070–#1076, #1071, #1075, #1191, #1192, #1073, #888, etc.). Filed #1271 (RestoreUrl skips QueryParamPasswordRegex query params). No dotnet build/test."
+    "taskId": "api-hunter-pelican",
+    "notes": "Static review: 3 files (ArrConnectionController.cs, ArrSyncController.cs, WebhookReceiverController.cs). Deduped against open issues (#1082–#1084, #1088–#1091, #1197–#1198, #886, etc.). Filed #1274 (GetImageProxy does not dispose HttpResponseMessage on failed upstream responses). No dotnet build/test."
   }
 }
