@@ -87,6 +87,17 @@ public class IdentityProviderServiceTest
     }
 
     [Test]
+    public void Add_NormalizesProviderIdToLowercase()
+    {
+        var provider = new IdentityProviderDefinition { ProviderId = "  MyOidc  ", Name = "New" };
+        _repository.Insert(provider).Returns(provider);
+
+        _service.Add(provider);
+
+        _repository.Received(1).Insert(Arg.Is<IdentityProviderDefinition>(p => p.ProviderId == "myoidc"));
+    }
+
+    [Test]
     public void Delete_CallsRepositoryDelete()
     {
         _service.Delete(5);
