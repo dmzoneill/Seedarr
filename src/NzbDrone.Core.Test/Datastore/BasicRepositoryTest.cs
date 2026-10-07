@@ -249,6 +249,23 @@ public class BasicRepositoryTest
     }
 
     [Test]
+    public void InsertMany_assigns_generated_ids_to_model_instances()
+    {
+        var tags = new[]
+        {
+            new Tag { Label = "BatchA" },
+            new Tag { Label = "BatchB" }
+        };
+
+        _subject.InsertMany(tags);
+
+        Assert.That(tags[0].Id, Is.GreaterThan(0));
+        Assert.That(tags[1].Id, Is.GreaterThan(tags[0].Id));
+        Assert.That(_subject.Get(tags[0].Id).Label, Is.EqualTo("BatchA"));
+        Assert.That(_subject.Get(tags[1].Id).Label, Is.EqualTo("BatchB"));
+    }
+
+    [Test]
     public void InsertMany_rolls_back_on_error_and_leaves_table_untouched()
     {
         _subject.Insert(new Tag { Label = "PreExisting" });
