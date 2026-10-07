@@ -831,7 +831,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         return qbtState switch
         {
             "uploading" or "stalledUP" or "forcedUP" or "queuedUP" => "seeding",
-            "downloading" or "stalledDL" or "forcedDL" or "queuedDL" => "downloading",
+            "downloading" or "stalledDL" or "forcedDL" or "queuedDL" or "metaDL" or "allocating" or "moving" => "downloading",
             "pausedUP" or "pausedDL" or "paused" or "stopped" => "paused",
             "checkingUP" or "checkingDL" or "checkingResumeData" => "checking",
             "error" or "missingFiles" => "error",
