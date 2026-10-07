@@ -463,6 +463,32 @@ public class TorrentRelocationServiceTests
     }
 
     [Test]
+    public async Task Relocate_fails_without_updating_paths_when_payload_missing_on_disk()
+    {
+        var missingSourceDir = Path.Combine(Path.GetTempPath(), "reloc_missing_" + Guid.NewGuid().ToString("N"));
+        var torrent = new Torrent
+        {
+            Id = 803,
+            Name = "missing_payload.bin",
+            SavePath = missingSourceDir,
+            SourcePath = missingSourceDir,
+            Status = TorrentStatus.Downloading,
+        };
+        _torrentService.Get(803).Returns(torrent);
+
+        var result = await _subject.RelocateTorrentAsync(803, _destDir);
+
+        Assert.That(result, Is.False);
+        Assert.That(torrent.SavePath, Is.EqualTo(missingSourceDir));
+        Assert.That(torrent.SourcePath, Is.EqualTo(missingSourceDir));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+        _eventAggregator.Received().PublishEvent(Arg.Is<FileMoveFailedEvent>(e =>
+            e.Torrent.Id == 803 && e.ErrorMessage.Contains("not found on disk")));
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<FileMoveCompletedEvent>());
+    }
+
+    [Test]
     public async Task Preflight_disk_space_check_aborts_early_when_insufficient_free_space()
     {
         var fileName = "space_test.bin";
