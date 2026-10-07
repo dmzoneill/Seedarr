@@ -142,6 +142,69 @@ public class SpeedScheduleControllerTest
     }
 
     [Test]
+    public void Create_with_omitted_optional_fields_defaults_enabled_and_unlimited_speeds()
+    {
+        var resource = new SpeedScheduleResource
+        {
+            Name = "Nightly",
+            Days = 127,
+            StartTime = "22:00",
+            EndTime = "06:00"
+        };
+
+        _speedScheduler.Add(Arg.Any<SpeedSchedule>()).Returns(callInfo =>
+        {
+            var model = callInfo.Arg<SpeedSchedule>();
+            model.Id = 7;
+            return model;
+        });
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<CreatedResult>());
+        _speedScheduler.Received(1).Add(Arg.Is<SpeedSchedule>(s =>
+            s.IsEnabled &&
+            s.MaxUploadSpeed == SpeedLimits.Unlimited &&
+            s.MaxDownloadSpeed == SpeedLimits.Unlimited));
+
+        var created = (CreatedResult)result.Result;
+        var value = (SpeedScheduleResource)created.Value;
+        Assert.That(value.IsEnabled, Is.True);
+        Assert.That(value.MaxUploadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
+        Assert.That(value.MaxDownloadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
+    }
+
+    [Test]
+    public void Create_with_explicit_disabled_and_zero_caps_honors_client_values()
+    {
+        var resource = new SpeedScheduleResource
+        {
+            Name = "Paused",
+            Days = 127,
+            StartTime = "08:00",
+            EndTime = "17:00",
+            IsEnabled = false,
+            MaxUploadSpeed = 0,
+            MaxDownloadSpeed = 0
+        };
+
+        _speedScheduler.Add(Arg.Any<SpeedSchedule>()).Returns(callInfo =>
+        {
+            var model = callInfo.Arg<SpeedSchedule>();
+            model.Id = 8;
+            return model;
+        });
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<CreatedResult>());
+        _speedScheduler.Received(1).Add(Arg.Is<SpeedSchedule>(s =>
+            !s.IsEnabled &&
+            s.MaxUploadSpeed == 0 &&
+            s.MaxDownloadSpeed == 0));
+    }
+
+    [Test]
     public void Create_with_valid_resource_returns_created()
     {
         var resource = new SpeedScheduleResource

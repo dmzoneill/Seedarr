@@ -80,7 +80,7 @@ public class SpeedScheduleController : Controller
         SpeedSchedule schedule;
         try
         {
-            schedule = ToModel(resource);
+            schedule = ToModelForCreate(resource);
         }
         catch (Exception ex) when (ex is FormatException or ArgumentException)
         {
@@ -119,7 +119,7 @@ public class SpeedScheduleController : Controller
         SpeedSchedule schedule;
         try
         {
-            schedule = ToModel(resource);
+            schedule = ToModelForUpdate(resource, existing);
         }
         catch (Exception ex) when (ex is FormatException or ArgumentException)
         {
@@ -179,7 +179,7 @@ public class SpeedScheduleController : Controller
             return BadRequest("Days must be between 1 and 127.");
         }
 
-        if (resource.MaxUploadSpeed < -1 || resource.MaxDownloadSpeed < -1)
+        if (resource.MaxUploadSpeed is < -1 || resource.MaxDownloadSpeed is < -1)
         {
             return BadRequest("Speed limit cannot be less than -1.");
         }
@@ -208,7 +208,29 @@ public class SpeedScheduleController : Controller
         };
     }
 
-    private static SpeedSchedule ToModel(SpeedScheduleResource resource)
+    private static SpeedSchedule ToModelForCreate(SpeedScheduleResource resource)
+    {
+        return MapToModel(
+            resource,
+            resource.IsEnabled ?? true,
+            resource.MaxUploadSpeed ?? SpeedLimits.Unlimited,
+            resource.MaxDownloadSpeed ?? SpeedLimits.Unlimited);
+    }
+
+    private static SpeedSchedule ToModelForUpdate(SpeedScheduleResource resource, SpeedSchedule existing)
+    {
+        return MapToModel(
+            resource,
+            resource.IsEnabled ?? existing.IsEnabled,
+            resource.MaxUploadSpeed ?? existing.MaxUploadSpeed,
+            resource.MaxDownloadSpeed ?? existing.MaxDownloadSpeed);
+    }
+
+    private static SpeedSchedule MapToModel(
+        SpeedScheduleResource resource,
+        bool isEnabled,
+        long maxUploadSpeed,
+        long maxDownloadSpeed)
     {
         if (string.IsNullOrWhiteSpace(resource.StartTime))
         {
@@ -227,9 +249,9 @@ public class SpeedScheduleController : Controller
             Days = (ScheduleDays)resource.Days,
             StartTime = TimeOnly.Parse(resource.StartTime),
             EndTime = TimeOnly.Parse(resource.EndTime),
-            MaxUploadSpeed = resource.MaxUploadSpeed,
-            MaxDownloadSpeed = resource.MaxDownloadSpeed,
-            IsEnabled = resource.IsEnabled,
+            MaxUploadSpeed = maxUploadSpeed,
+            MaxDownloadSpeed = maxDownloadSpeed,
+            IsEnabled = isEnabled,
             Priority = resource.Priority
         };
     }
