@@ -350,6 +350,28 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
 
             if (response.StatusCode == HttpStatusCode.NotModified)
             {
+                var hasLoadedTree = _tree != null && _rules.Count > 0;
+                if (!hasLoadedTree)
+                {
+                    _metadata.ConsecutiveFailures++;
+                    _metadata.LastSyncStatus = "Failed: 304 Not Modified with no blocklist loaded";
+                    _metadata.LastFailureMessage = _metadata.LastSyncStatus;
+
+                    _logger.Warn(
+                        "Blocklist at {0} returned 304 Not Modified but in-memory tree is still empty after fallback.",
+                        effectiveUrl);
+
+                    return new BlocklistSyncResult
+                    {
+                        Success = false,
+                        IsNotModified = true,
+                        Status = _metadata.LastSyncStatus,
+                        HttpStatusCode = HttpStatusCode.NotModified,
+                        RuleCount = _rules.Count,
+                        Message = "Server returned 304 Not Modified but no blocklist rules are loaded"
+                    };
+                }
+
                 _logger.Info("Blocklist at {0} is unchanged (304 Not Modified). Skipping re-parse.", effectiveUrl);
                 _metadata.LastSyncStatus = "Sync Skipped (Not Modified)";
                 _metadata.ConsecutiveFailures = 0;

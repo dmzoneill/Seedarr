@@ -157,6 +157,25 @@ public class PeerBlocklistSyncServiceTests
     }
 
     [Test]
+    public async Task SyncAsync_when_server_returns_304_twice_with_empty_tree_should_fail_without_reporting_success()
+    {
+        var response304 = new HttpResponseMessage(HttpStatusCode.NotModified);
+        _mockHandler.EnqueueResponse(response304);
+        _mockHandler.EnqueueResponse(response304);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.IsNotModified, Is.True);
+        Assert.That(result.RuleCount, Is.EqualTo(0));
+        Assert.That(_service.RuleCount, Is.EqualTo(0));
+        Assert.That(_service.IsBlocked("10.0.0.1"), Is.False);
+        Assert.That(_mockHandler.Requests.Count, Is.EqualTo(2));
+        Assert.That(_service.Metadata.ConsecutiveFailures, Is.EqualTo(1));
+        Assert.That(_service.Metadata.LastSyncStatus, Does.Contain("no blocklist loaded"));
+    }
+
+    [Test]
     public async Task SyncAsync_force_true_should_not_send_conditional_headers_even_when_tree_is_populated()
     {
         var response1 = new HttpResponseMessage(HttpStatusCode.OK)
