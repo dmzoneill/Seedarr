@@ -367,7 +367,7 @@ public class MainDatabaseTest
     }
 
     [Test]
-    public void ApplyPendingRestore_should_clean_up_config_restore_file_when_both_move_and_copy_fail()
+    public void ApplyPendingRestore_should_preserve_config_restore_file_when_both_move_and_copy_fail()
     {
         var configPath = Path.Combine(_tempDir, "config.xml");
         var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
@@ -383,7 +383,7 @@ public class MainDatabaseTest
             fileCopy: (src, dst, overwrite) => throw new IOException("Disk full"));
 
         Assert.That(File.ReadAllText(configPath), Is.EqualTo("original-config-untouched"), "Original config should be retained");
-        Assert.That(File.Exists(configRestorePath), Is.False, "Staged config restore file should be cleaned up on total failure");
+        Assert.That(File.Exists(configRestorePath) || File.Exists(configRestorePath + ".failed"), Is.True, "Staged config restore file should be preserved on total failure");
     }
 
     [Test]
