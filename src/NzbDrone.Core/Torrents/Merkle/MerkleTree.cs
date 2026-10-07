@@ -45,12 +45,13 @@ public class MerkleTree : IMerkleTreeService
         LeafCount = 0;
     }
 
-    public MerkleTree(IReadOnlyList<byte[]> leafHashes)
+    public MerkleTree(IReadOnlyList<byte[]> leafHashes, long fileLength)
     {
         LeafHashes = leafHashes ?? Array.Empty<byte[]>();
+        ValidateFileLengthForLeafCount(LeafHashes.Count, fileLength);
         LeafCount = RoundUpToPowerOfTwo(LeafHashes.Count);
         RootHash = ComputeRootHash(LeafHashes);
-        FileLength = (long)LeafHashes.Count * BlockSize;
+        FileLength = fileLength;
     }
 
     public MerkleTree(byte[] data, bool padLastBlockWithZeros = false)
@@ -89,9 +90,36 @@ public class MerkleTree : IMerkleTreeService
         return new MerkleTree(stream, length, padLastBlockWithZeros);
     }
 
-    public static MerkleTree FromLeafHashes(IReadOnlyList<byte[]> leafHashes)
+    public static MerkleTree FromLeafHashes(IReadOnlyList<byte[]> leafHashes, long fileLength)
     {
-        return new MerkleTree(leafHashes);
+        return new MerkleTree(leafHashes, fileLength);
+    }
+
+    internal static void ValidateFileLengthForLeafCount(int leafCount, long fileLength)
+    {
+        if (fileLength < 0)
+        {
+            throw new ArgumentException("File length cannot be negative.", nameof(fileLength));
+        }
+
+        if (leafCount == 0)
+        {
+            if (fileLength != 0)
+            {
+                throw new ArgumentException("File length must be 0 when there are no leaf hashes.", nameof(fileLength));
+            }
+
+            return;
+        }
+
+        var minLength = ((long)leafCount - 1) * BlockSize + 1;
+        var maxLength = (long)leafCount * BlockSize;
+        if (fileLength < minLength || fileLength > maxLength)
+        {
+            throw new ArgumentException(
+                $"File length must be between {minLength} and {maxLength} bytes for {leafCount} leaf hashes.",
+                nameof(fileLength));
+        }
     }
 
     public static int RoundUpToPowerOfTwo(int value)
