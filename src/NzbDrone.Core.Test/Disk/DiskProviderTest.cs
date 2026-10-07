@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using NUnit.Framework;
 using NzbDrone.Common.Disk;
@@ -67,5 +68,53 @@ public class DiskProviderTest
 
         Assert.That(subject.GetAvailableFreeSpace("   "), Is.EqualTo(0));
         Assert.That(subject.GetAvailableFreeSpace(null), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void CheckFolderWritable_returns_false_for_blank_path()
+    {
+        var subject = new DiskProvider();
+
+        Assert.That(subject.CheckFolderWritable("   "), Is.False);
+        Assert.That(subject.CheckFolderWritable(null), Is.False);
+    }
+
+    [TestCase("../outside")]
+    [TestCase("foo/../bar")]
+    public void CheckFolderWritable_returns_false_for_path_traversal(string path)
+    {
+        var subject = new DiskProvider();
+
+        Assert.That(subject.CheckFolderWritable(path), Is.False);
+    }
+
+    [Test]
+    public void CheckFolderWritable_returns_false_for_blocked_system_path_without_creating_directory()
+    {
+        var blockedPath = OperatingSystem.IsWindows() ? @"C:\Windows\seedarr_perm_test" : "/etc/seedarr_perm_test";
+        var subject = new DiskProvider();
+
+        Assert.That(subject.CheckFolderWritable(blockedPath), Is.False);
+        Assert.That(Directory.Exists(blockedPath), Is.False);
+    }
+
+    [Test]
+    public void CheckFolderWritable_returns_true_for_writable_temp_subdirectory()
+    {
+        var subject = new DiskProvider();
+        var target = Path.Combine(Path.GetTempPath(), "seedarr_perm_test_" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            Assert.That(subject.CheckFolderWritable(target), Is.True);
+            Assert.That(Directory.Exists(target), Is.True);
+        }
+        finally
+        {
+            if (Directory.Exists(target))
+            {
+                Directory.Delete(target, true);
+            }
+        }
     }
 }
