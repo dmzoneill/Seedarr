@@ -21,7 +21,6 @@ public static class NzbDroneLogger
         return new FileTarget(FileTargetName)
         {
             FileName = logFilePath,
-            ArchiveFileName = logFilePath,
             ArchiveSuffixFormat = "_{1:yyyyMMdd}_{0}",
             MaxArchiveFiles = 5,
             ArchiveAboveSize = 1_048_576,
