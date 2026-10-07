@@ -130,8 +130,65 @@ public class MainDatabaseVacuumTest
         var mainDb = new MainDatabase(_dbFactory, _connectionStringFactory, _appFolderInfo);
         mainDb.IncrementalVacuum(5000);
 
-        Assert.That(mockCmd.CommandText, Does.Contain("PRAGMA auto_vacuum = INCREMENTAL; VACUUM;"));
-        mockCmd.Received().ExecuteNonQuery();
+        mockCmd.Received(2).ExecuteNonQuery();
+        Assert.That(mockCmd.CommandText, Does.Contain("PRAGMA incremental_vacuum(5000);"));
+    }
+
+    [Test]
+    public void RealSqlite_should_reclaim_freelist_after_converting_auto_vacuum_from_none()
+    {
+        var dbPath = Path.Combine(_tempDir, "legacy_none_vac.db");
+        var connStr = $"Data Source={dbPath};";
+
+        using (var conn = new SqliteConnection(connStr))
+        {
+            conn.Open();
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "PRAGMA auto_vacuum = NONE;";
+                cmd.ExecuteNonQuery();
+                cmd.CommandText = "VACUUM;";
+                cmd.ExecuteNonQuery();
+
+                cmd.CommandText = "CREATE TABLE LegacyDeletes (id INTEGER PRIMARY KEY, payload TEXT);";
+                cmd.ExecuteNonQuery();
+
+                for (var i = 0; i < 200; i++)
+                {
+                    cmd.CommandText = $"INSERT INTO LegacyDeletes VALUES ({i}, '{new string('y', 2000)}');";
+                    cmd.ExecuteNonQuery();
+                }
+
+                cmd.CommandText = "DELETE FROM LegacyDeletes WHERE id > 50;";
+                cmd.ExecuteNonQuery();
+
+                cmd.CommandText = "PRAGMA freelist_count;";
+                var freelistBefore = Convert.ToInt64(cmd.ExecuteScalar());
+                Assert.That(freelistBefore, Is.GreaterThan(0));
+
+                cmd.CommandText = "PRAGMA auto_vacuum;";
+                Assert.That(Convert.ToInt32(cmd.ExecuteScalar()), Is.EqualTo(0));
+            }
+        }
+
+        var dbFactory = new DbFactory();
+        var database = dbFactory.Create(DatabaseType.SQLite, connStr);
+        var mockDbFactory = Substitute.For<IDbFactory>();
+        mockDbFactory.Create(Arg.Any<DatabaseType>(), Arg.Any<string>()).Returns(database);
+
+        var mainDb = new MainDatabase(mockDbFactory, _connectionStringFactory, _appFolderInfo);
+        mainDb.IncrementalVacuum(5000);
+
+        using (var conn = database.OpenConnection())
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA auto_vacuum;";
+            Assert.That(Convert.ToInt32(cmd.ExecuteScalar()), Is.EqualTo(2));
+
+            cmd.CommandText = "PRAGMA freelist_count;";
+            var freelistAfter = Convert.ToInt64(cmd.ExecuteScalar());
+            Assert.That(freelistAfter, Is.EqualTo(0));
+        }
     }
 
     [Test]
