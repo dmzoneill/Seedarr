@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T04:11:41Z",
+  "updatedAt": "2026-10-07T04:12:12Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_b0692df1",
+    "lastScheduleId": "sched_62f9e505",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -76,5 +76,5 @@
     ]
   },
   "githubOpen": 30,
-  "lastMonitorNote": "fix monitor: 30 open; all slots open on #880 #1001 #931 #1025 #940; 5 pokes (idle >90s)"
+  "lastMonitorNote": "fix monitor: 30 open; all slots open; agents active after prior pokes; 0 dispatches"
 }
