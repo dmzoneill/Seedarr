@@ -338,6 +338,30 @@ public class AppLifetimeTest
     }
 
     [Test]
+    public async Task StopAsync_should_send_stopped_announces_when_host_stop_token_already_cancelled()
+    {
+        var activeTorrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1111111111111111111111111111111111111111",
+            Status = TorrentStatus.Downloading,
+            Active = true
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { activeTorrent });
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await _subject.StopAsync(cts.Token);
+
+        _trackerAnnounceService.Received(1).AnnounceTorrent(
+            Arg.Is<Torrent>(t => t.Id == 1),
+            force: true,
+            eventType: AnnounceEvent.Stopped);
+    }
+
+    [Test]
     public async Task StopAsync_should_disconnect_peer_connections_gracefully()
     {
         _torrentService.GetAll().Returns(new List<Torrent>());
