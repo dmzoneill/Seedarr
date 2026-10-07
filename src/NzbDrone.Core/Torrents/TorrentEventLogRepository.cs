@@ -10,6 +10,7 @@ namespace NzbDrone.Core.Torrents;
 public interface ITorrentEventLogRepository : IBasicRepository<TorrentEventLog>
 {
     List<TorrentEventLog> GetByTorrentId(int torrentId, int count);
+    List<TorrentEventLog> GetByTorrentId(int torrentId, int count, int minimumLevelRank);
     void DeleteByTorrentId(int torrentId);
     void Purge(DateTime before);
     void Purge(DateTime before, int maxLogsPerTorrent);
@@ -29,6 +30,19 @@ public class TorrentEventLogRepository : BasicRepository<TorrentEventLog>, ITorr
             connection.Query<TorrentEventLog>(
                 $"SELECT * FROM \"{_table}\" WHERE \"TorrentId\" = @TorrentId ORDER BY \"TimeStamp\" DESC LIMIT @Count",
                 new { TorrentId = torrentId, Count = count }).ToList());
+    }
+
+    public List<TorrentEventLog> GetByTorrentId(int torrentId, int count, int minimumLevelRank)
+    {
+        if (minimumLevelRank <= TorrentEventLogLevelRanks.Trace)
+        {
+            return GetByTorrentId(torrentId, count);
+        }
+
+        return QueryWithRetry(connection =>
+            connection.Query<TorrentEventLog>(
+                $"SELECT * FROM \"{_table}\" WHERE \"TorrentId\" = @TorrentId AND ({TorrentEventLogLevelRanks.SqlRankExpression}) >= @MinimumLevelRank ORDER BY \"TimeStamp\" DESC LIMIT @Count",
+                new { TorrentId = torrentId, Count = count, MinimumLevelRank = minimumLevelRank }).ToList());
     }
 
     public void DeleteByTorrentId(int torrentId)

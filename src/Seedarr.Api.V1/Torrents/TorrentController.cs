@@ -2186,12 +2186,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         var minimumRank = ParseLevelRank(level) ?? LevelRank.Debug;
-        var entries = _eventLogService.GetByTorrentId(id, count);
+        var entries = _eventLogService.GetByTorrentId(id, count, minimumRank);
 
-        var resources = entries
-            .Where(e => ParseLevelRank(e.Level) >= minimumRank)
-            .Select(ToResource)
-            .ToList();
+        var resources = entries.Select(ToResource).ToList();
 
         return Ok(resources);
     }

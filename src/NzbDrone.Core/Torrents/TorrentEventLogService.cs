@@ -16,6 +16,7 @@ public interface ITorrentEventLogService
     void Warn(int torrentId, string source, string message);
     void Error(int torrentId, string source, string message);
     List<TorrentEventLog> GetByTorrentId(int torrentId, int count);
+    List<TorrentEventLog> GetByTorrentId(int torrentId, int count, int minimumLevelRank);
     void DeleteByTorrentId(int torrentId);
     void Purge(DateTime before);
     void Purge(DateTime before, int maxLogsPerTorrent);
@@ -93,6 +94,12 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
     {
         FlushAsync().GetAwaiter().GetResult();
         return _repository.GetByTorrentId(torrentId, count);
+    }
+
+    public List<TorrentEventLog> GetByTorrentId(int torrentId, int count, int minimumLevelRank)
+    {
+        FlushAsync().GetAwaiter().GetResult();
+        return _repository.GetByTorrentId(torrentId, count, minimumLevelRank);
     }
 
     public void DeleteByTorrentId(int torrentId)
