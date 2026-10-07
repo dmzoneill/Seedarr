@@ -186,6 +186,12 @@ public class RssRuleController : Controller
     [Authorize(Policy = Policies.Operator)]
     public ActionResult Delete(int id)
     {
+        var existing = _rssRuleRepository.Get(id);
+        if (existing == null)
+        {
+            return NotFound();
+        }
+
         _rssRuleRepository.Delete(id);
         return Ok();
     }
