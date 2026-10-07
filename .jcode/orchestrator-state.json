@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:44:22Z",
+  "updatedAt": "${TS}",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,44 +14,44 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_65d41d97",
+    "lastScheduleId": "sched_9a7bf7f8",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "moose",
-      "issue": 1241,
-      "worktree": "../seedarr_worktrees/issue-1241",
+      "worker": "walrus",
+      "issue": 1144,
+      "worktree": "../seedarr_worktrees/issue-1144",
       "area": "authentication"
     },
     "host": {
       "status": "running",
-      "worker": "badger",
-      "issue": 1285,
-      "worktree": "../seedarr_worktrees/issue-1285",
-      "area": "host"
+      "worker": "panther",
+      "issue": 1272,
+      "worktree": "../seedarr_worktrees/issue-1272",
+      "area": "disk"
     },
     "api": {
       "status": "running",
-      "worker": "crane",
-      "issue": 1290,
-      "worktree": "../seedarr_worktrees/issue-1290",
-      "area": "downloadclients-api"
+      "worker": "eagle",
+      "issue": 1274,
+      "worktree": "../seedarr_worktrees/issue-1274",
+      "area": "api"
     },
     "core-torrents": {
       "status": "running",
-      "worker": "trout",
-      "issue": 1288,
-      "worktree": "../seedarr_worktrees/issue-1288",
+      "worker": "bison",
+      "issue": 1287,
+      "worktree": "../seedarr_worktrees/issue-1287",
       "area": "torrents"
     },
     "http": {
       "status": "running",
-      "worker": "heron",
-      "issue": 1289,
-      "worktree": "../seedarr_worktrees/issue-1289",
-      "area": "http-rest"
+      "worker": "sparrow",
+      "issue": 922,
+      "worktree": "../seedarr_worktrees/issue-922",
+      "area": "http"
     }
   },
   "issueQueue": {
@@ -65,12 +65,12 @@
     "nextCandidates": [
       1277,
       1286,
-      1287,
-      1274,
-      1272,
-      1284
+      1284,
+      1135,
+      1145,
+      955
     ]
   },
-  "githubOpen": 415,
-  "lastMonitorNote": "fix monitor tick: 5 agents active on #1241,#1285,#1290,#1288,#1289; 415 open; sched_65d41d97"
+  "githubOpen": 410,
+  "lastMonitorNote": "fix monitor: 5 issues closed; rotated to #1144,#1272,#1274,#1287,#922"
 }
