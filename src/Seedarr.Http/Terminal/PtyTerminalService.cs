@@ -43,11 +43,14 @@ public class PtyTerminalService : IPtyTerminalService
             {
                 throw new ArgumentException($"Failed to resolve working directory: {ex.Message}", nameof(cwd), ex);
             }
+
+            EnsureExistingDirectory(sanitizedCwd, nameof(cwd));
         }
 
         if (sanitizedCwd == null)
         {
             sanitizedCwd = Directory.GetCurrentDirectory();
+            EnsureExistingDirectory(sanitizedCwd, nameof(cwd));
         }
 
         // 3. Clamp dimensions to safe bounds
@@ -84,5 +87,18 @@ public class PtyTerminalService : IPtyTerminalService
     public bool IsTerminalAccessPermitted()
     {
         return this._configFileProvider?.TerminalAccessEnabled == true;
+    }
+
+    private static void EnsureExistingDirectory(string path, string paramName)
+    {
+        if (File.Exists(path) && !Directory.Exists(path))
+        {
+            throw new ArgumentException("Working directory path refers to a file, not a directory.", paramName);
+        }
+
+        if (!Directory.Exists(path))
+        {
+            throw new ArgumentException("Working directory does not exist.", paramName);
+        }
     }
 }

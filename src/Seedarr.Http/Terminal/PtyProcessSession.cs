@@ -26,8 +26,9 @@ pid, master = pty.fork()
 if pid == 0:
     try:
         os.chdir(cwd)
-    except:
-        pass
+    except OSError as e:
+        sys.stderr.write(f'chdir failed: {e}\n')
+        sys.exit(1)
     os.environ['TERM'] = 'xterm-256color'
     os.environ['COLORTERM'] = 'truecolor'
     if 'LANG' not in os.environ:
