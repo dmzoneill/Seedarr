@@ -117,6 +117,14 @@ public class DatabaseMaintenanceServiceTest
     }
 
     [Test]
+    public void IsIncrementalAutoVacuumEnabled_should_return_false_for_non_sqlite()
+    {
+        _mainDatabase.DatabaseType.Returns(DatabaseType.PostgreSQL);
+
+        Assert.That(_subject.IsIncrementalAutoVacuumEnabled(), Is.False);
+    }
+
+    [Test]
     public void IsIncrementalAutoVacuumEnabled_should_return_true_only_when_auto_vacuum_is_2()
     {
         _mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);

@@ -38,7 +38,7 @@ public class DatabaseMaintenanceService : IDatabaseMaintenanceService
 
         if (_mainDatabase.DatabaseType != DatabaseType.SQLite)
         {
-            return true;
+            return false;
         }
 
         return _mainDatabase.GetAutoVacuumStatus() == 2;
