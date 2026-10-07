@@ -252,6 +252,42 @@ public class DownloadClientSyncServiceTest
     }
 
     [Test]
+    public void Sync_should_not_query_indexer_when_enable_search_is_false()
+    {
+        var hash = "223344556677889900aabbccddeeff0011223344";
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { Title = "Fedora", InfoHash = hash }
+        });
+        mockClient.GetTorrentFile(hash).Returns((byte[])null);
+
+        var mockIndexer = Substitute.For<IIndexer>();
+        mockIndexer.FetchTorrentByHash(Arg.Any<IndexerDefinition>(), hash).Returns(new byte[] { 0x64 });
+
+        _indexerFactory.All().Returns(new List<IndexerDefinition>
+        {
+            new() { Id = 1, Name = "SearchDisabled", IndexerType = "Prowlarr", Enable = true, EnableSearch = false, Url = "http://localhost:9696", ApiKey = "key" }
+        });
+
+        _service.InjectedClient = mockClient;
+        _service.InjectedIndexer = mockIndexer;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "Deluge", ClientType = "Deluge", Enable = true }
+        });
+
+        var result = _service.Sync();
+
+        Assert.That(result.Added, Is.EqualTo(0));
+        Assert.That(result.Failed, Is.EqualTo(1));
+        mockIndexer.DidNotReceive().FetchTorrentByHash(Arg.Any<IndexerDefinition>(), hash);
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
     public void Sync_should_fail_item_when_neither_client_nor_indexer_provides_torrent_bytes()
     {
         var hash = "99887766554433221100ffeeddccbbaa99887766";
