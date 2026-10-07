@@ -31,6 +31,62 @@ public class DynamicAuthSchemeManagerTest
         Assert.That(DynamicAuthSchemeManager.BuildOidcCallbackPath("myid", urlBase), Is.EqualTo(expected));
     }
 
+    [TestCase("corp.google", "corp_2egoogle")]
+    [TestCase("corp/google", "corp_2fgoogle")]
+    [TestCase("my-idp", "my-idp")]
+    public void SanitizeProviderId_encodes_disallowed_characters_without_collapsing_distinct_ids(string providerId, string expected)
+    {
+        Assert.That(DynamicAuthSchemeManager.SanitizeProviderId(providerId), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task RegisterOrUpdateOidcProviderAsync_registers_distinct_schemes_when_provider_ids_would_have_collided()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var dotProvider = new IdentityProviderDefinition
+        {
+            ProviderId = "corp.google",
+            Name = "Corp Google",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://google.example.com",
+            ClientId = "client-dot",
+            IsEnabled = true,
+        };
+
+        var slashProvider = new IdentityProviderDefinition
+        {
+            ProviderId = "corp/google",
+            Name = "Corp Slash Google",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://slash.example.com",
+            ClientId = "client-slash",
+            IsEnabled = true,
+        };
+
+        await manager.RegisterOrUpdateOidcProviderAsync(dotProvider);
+        await manager.RegisterOrUpdateOidcProviderAsync(slashProvider);
+
+        var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
+        var dotScheme = await schemeProvider.GetSchemeAsync("Oidc_corp_2egoogle");
+        var slashScheme = await schemeProvider.GetSchemeAsync("Oidc_corp_2fgoogle");
+
+        Assert.That(dotScheme, Is.Not.Null);
+        Assert.That(slashScheme, Is.Not.Null);
+        Assert.That(dotScheme.DisplayName, Is.EqualTo("Corp Google"));
+        Assert.That(slashScheme.DisplayName, Is.EqualTo("Corp Slash Google"));
+
+        var cache = sp.GetRequiredService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+        Assert.That(cache.GetOrAdd("Oidc_corp_2egoogle", () => new OpenIdConnectOptions()).ClientId, Is.EqualTo("client-dot"));
+        Assert.That(cache.GetOrAdd("Oidc_corp_2fgoogle", () => new OpenIdConnectOptions()).ClientId, Is.EqualTo("client-slash"));
+    }
+
     [Test]
     public async Task RegisterOrUpdateOidcProviderAsync_sets_CallbackPath_with_UrlBase_prefix()
     {

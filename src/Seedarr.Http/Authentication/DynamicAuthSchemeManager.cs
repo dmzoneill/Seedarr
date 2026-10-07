@@ -380,20 +380,28 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         return trimmed + callbackSuffix;
     }
 
-    private static string SanitizeProviderId(string providerId)
+    public static string SanitizeProviderId(string providerId)
     {
         if (string.IsNullOrWhiteSpace(providerId))
         {
             throw new ArgumentException("ProviderId cannot be null or empty.", nameof(providerId));
         }
 
-        var cleaned = new string(providerId.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
-        if (string.IsNullOrWhiteSpace(cleaned))
+        var sb = new StringBuilder(providerId.Length + 8);
+        foreach (var c in providerId)
         {
-            throw new ArgumentException($"ProviderId '{providerId}' contains no valid characters.", nameof(providerId));
+            if (char.IsLetterOrDigit(c) || c == '-' || c == '_')
+            {
+                sb.Append(c);
+            }
+            else
+            {
+                sb.Append('_');
+                sb.Append(((uint)c).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
+            }
         }
 
-        return cleaned;
+        return sb.ToString();
     }
 
     private string DecryptClientSecret(string encryptedSecret, IDataProtectionProvider dataProtection)
