@@ -847,66 +847,64 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
-        public void Recheck_should_set_Progress_to_1_when_already_at_1()
+        public void Recheck_without_recheck_service_should_leave_progress_unchanged()
+        {
+            var torrent = new Torrent { Id = 1, Progress = 0.4 };
+            _repository.Get(1).Returns(torrent);
+
+            var result = _subject.Recheck(1);
+
+            Assert.That(result, Is.EqualTo(torrent));
+            Assert.That(torrent.Progress, Is.EqualTo(0.4));
+            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
+        }
+
+        [Test]
+        public void Recheck_without_recheck_service_should_preserve_completed_progress()
         {
             var torrent = new Torrent { Id = 1, Progress = 1.0 };
             _repository.Get(1).Returns(torrent);
-            _repository.Update(Arg.Any<Torrent>()).Returns(torrent);
 
             _subject.Recheck(1);
 
             Assert.That(torrent.Progress, Is.EqualTo(1.0));
+            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
         }
 
         [Test]
-        public void Recheck_should_set_Progress_to_1_when_greater_than_1()
+        public void Recheck_should_delegate_to_recheck_service_when_available()
         {
-            var torrent = new Torrent { Id = 1, Progress = 1.5 };
+            var torrent = new Torrent { Id = 1, Progress = 0.4, Name = "Test" };
+            var queued = new Torrent { Id = 1, Progress = 0.4, Name = "Test" };
             _repository.Get(1).Returns(torrent);
-            _repository.Update(Arg.Any<Torrent>()).Returns(torrent);
+            var recheckService = Substitute.For<ITorrentRecheckService>();
+            recheckService.QueueRecheck(1).Returns(queued);
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
+                torrentRecheckService: new Lazy<ITorrentRecheckService>(() => recheckService));
 
-            _subject.Recheck(1);
+            var result = subject.Recheck(1);
 
-            Assert.That(torrent.Progress, Is.EqualTo(1.0));
+            Assert.That(result, Is.EqualTo(queued));
+            recheckService.Received(1).QueueRecheck(1);
+            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
         }
 
         [Test]
-        public void Recheck_should_set_Progress_to_0_when_less_than_1()
+        public void Recheck_should_call_Recheck_on_service_when_QueueRecheck_returns_null()
         {
-            var torrent = new Torrent { Id = 1, Progress = 0.5 };
+            var torrent = new Torrent { Id = 1, Progress = 0.4, Name = "Test" };
+            var rechecked = new Torrent { Id = 1, Progress = 0.8, Name = "Test" };
             _repository.Get(1).Returns(torrent);
-            _repository.Update(Arg.Any<Torrent>()).Returns(torrent);
+            var recheckService = Substitute.For<ITorrentRecheckService>();
+            recheckService.QueueRecheck(1).Returns((Torrent)null);
+            recheckService.Recheck(torrent).Returns(rechecked);
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
+                torrentRecheckService: new Lazy<ITorrentRecheckService>(() => recheckService));
 
-            _subject.Recheck(1);
+            var result = subject.Recheck(1);
 
-            Assert.That(torrent.Progress, Is.EqualTo(0.0));
-        }
-
-        [Test]
-        public void Recheck_should_set_LastActive_to_UtcNow()
-        {
-            var before = DateTime.UtcNow;
-            var torrent = new Torrent { Id = 1, Progress = 0.5 };
-            _repository.Get(1).Returns(torrent);
-            _repository.Update(Arg.Any<Torrent>()).Returns(torrent);
-
-            _subject.Recheck(1);
-
-            var after = DateTime.UtcNow;
-            Assert.That(torrent.LastActive, Is.GreaterThanOrEqualTo(before));
-            Assert.That(torrent.LastActive, Is.LessThanOrEqualTo(after));
-        }
-
-        [Test]
-        public void Recheck_should_call_repository_Update()
-        {
-            var torrent = new Torrent { Id = 1, Progress = 0.5 };
-            _repository.Get(1).Returns(torrent);
-            _repository.Update(torrent).Returns(torrent);
-
-            _subject.Recheck(1);
-
-            _repository.Received(1).Update(torrent);
+            Assert.That(result, Is.EqualTo(rechecked));
+            recheckService.Received(1).Recheck(torrent);
         }
 
         [Test]
