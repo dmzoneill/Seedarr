@@ -77,30 +77,7 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 
     private string NormalizeTypeName(string typeName)
     {
-        if (string.IsNullOrWhiteSpace(typeName))
-        {
-            return typeName;
-        }
-
-        var scheduledMatch = _scheduledTasks?.FirstOrDefault(t =>
-            string.Equals(t.GetType().FullName, typeName, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(t.GetType().Name, typeName, StringComparison.OrdinalIgnoreCase));
-
-        if (scheduledMatch != null)
-        {
-            return scheduledMatch.GetType().FullName;
-        }
-
-        var dbMatch = _repository?.All()?.FirstOrDefault(t =>
-            string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(t.TypeName.Split('.').LastOrDefault(), typeName, StringComparison.OrdinalIgnoreCase));
-
-        if (dbMatch != null)
-        {
-            return dbMatch.TypeName;
-        }
-
-        return typeName;
+        return ScheduledTaskTypeNameResolver.Normalize(typeName, _scheduledTasks, _repository?.All());
     }
 
     private string FindActiveKey(string typeName)

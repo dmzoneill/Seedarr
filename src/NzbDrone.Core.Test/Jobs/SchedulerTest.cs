@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Jobs;
+using NzbDrone.SignalR;
 
 namespace NzbDrone.Core.Test.Jobs;
 
@@ -33,6 +34,11 @@ public class SchedulerTest
         {
             throw new InvalidOperationException("Task failed");
         }
+    }
+
+    private static string GetBodyTypeName(object body)
+    {
+        return body?.GetType().GetProperty("TypeName")?.GetValue(body) as string;
     }
 
     [SetUp]
@@ -75,6 +81,40 @@ public class SchedulerTest
         await Task.Delay(500);
 
         Assert.That(testTask.ExecuteCount, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public async Task ExecuteAsync_should_broadcast_normalized_type_name_when_db_has_short_name()
+    {
+        var testTask = new TestScheduledTask();
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var scheduled = new ScheduledTask
+        {
+            TypeName = nameof(TestScheduledTask),
+            Interval = 1,
+            LastExecution = DateTime.UtcNow.AddMinutes(-10)
+        };
+
+        _taskManager.GetNextScheduled().Returns(scheduled, (ScheduledTask)null);
+        _subject = new Scheduler(
+            _taskManager,
+            new List<IScheduledTask> { testTask },
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.FromMilliseconds(10),
+            broadcaster);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await _subject.StartAsync(cts.Token);
+        await Task.Delay(500);
+
+        var expectedTypeName = typeof(TestScheduledTask).FullName;
+        broadcaster.Received().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TaskStarted" && GetBodyTypeName(m.Body) == expectedTypeName));
+        broadcaster.Received().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TaskCompleted" && GetBodyTypeName(m.Body) == expectedTypeName));
     }
 
     [Test]

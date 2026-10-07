@@ -52,9 +52,11 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         _taskManager.RecordTaskStarted(command.TaskName, cts, null, command.TriggerSource);
 
+        var signalRTypeName = ScheduledTaskTypeNameResolver.ResolveForSignalR(command.TaskName, taskInstance, _scheduledTasks);
+
         var taskInfo = new
         {
-            TypeName = command.TaskName,
+            TypeName = signalRTypeName,
             Name = taskInstance.GetType().Name,
             TriggerSource = command.TriggerSource.ToString()
         };

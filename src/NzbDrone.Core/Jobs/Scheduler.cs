@@ -146,9 +146,11 @@ public class Scheduler : BackgroundService
                             string.Equals(t.GetType().FullName, next.TypeName, StringComparison.OrdinalIgnoreCase) ||
                             string.Equals(t.GetType().Name, next.TypeName, StringComparison.OrdinalIgnoreCase));
 
+                        var signalRTypeName = ScheduledTaskTypeNameResolver.ResolveForSignalR(next.TypeName, taskInstance, _scheduledTasks);
+
                         var taskInfo = new
                         {
-                            TypeName = next.TypeName,
+                            TypeName = signalRTypeName,
                             Name = taskInstance?.GetType().Name ?? next.TypeName,
                             TriggerSource = ScheduledTaskTriggerSource.Scheduler.ToString()
                         };
@@ -180,7 +182,7 @@ public class Scheduler : BackgroundService
                                     Action = ModelAction.Updated,
                                     Body = new
                                     {
-                                        TypeName = next.TypeName,
+                                        TypeName = signalRTypeName,
                                         Name = next.TypeName,
                                         TriggerSource = ScheduledTaskTriggerSource.Scheduler.ToString(),
                                         Error = missingMessage
@@ -204,7 +206,7 @@ public class Scheduler : BackgroundService
                                 Action = ModelAction.Updated,
                                 Body = new
                                 {
-                                    TypeName = next.TypeName,
+                                    TypeName = signalRTypeName,
                                     Name = taskInstance?.GetType().Name ?? next.TypeName,
                                     TriggerSource = ScheduledTaskTriggerSource.Scheduler.ToString(),
                                     Error = ex.Message
