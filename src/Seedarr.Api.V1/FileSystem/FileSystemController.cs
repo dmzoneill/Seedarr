@@ -4,10 +4,12 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.Disk;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.FileSystem;
 using Seedarr.Http;
 
@@ -17,6 +19,7 @@ namespace Seedarr.Api.V1.FileSystem;
 /// API Controller for filesystem directory and file navigation.
 /// </summary>
 [V1ApiController("filesystem")]
+[Authorize(Policy = Policies.Reader)]
 [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is validated and normalized for filesystem browsing")]
 public class FileSystemController : Controller
 {
@@ -60,6 +63,7 @@ public class FileSystemController : Controller
     /// Creates a directory at the specified path.
     /// </summary>
     [HttpPost("mkdir")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult CreateDirectory([FromBody] DirectoryValidationRequest request)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Path))
