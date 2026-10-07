@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using NSubstitute;
 using NUnit.Framework;
@@ -155,7 +156,7 @@ public class BootstrapTest
     }
 
     [Test]
-    public void ConfigureKestrel_should_skip_configuration_when_urls_provided()
+    public void ConfigureKestrel_should_configure_http_listener_when_urls_provided()
     {
         var configProvider = Substitute.For<IConfigFileProvider>();
         var certManager = Substitute.For<ICertificateManager>();
@@ -163,6 +164,28 @@ public class BootstrapTest
         var serverOptions = new KestrelServerOptions();
 
         Assert.DoesNotThrow(() => Bootstrap.ConfigureKestrel(serverOptions, configProvider, certManager, new[] { "http://localhost:5000" }));
+        certManager.DidNotReceive().GetOrCreateCertificate(Arg.Any<IConfigFileProvider>());
+    }
+
+    [Test]
+    public void ConfigureKestrel_should_wire_certificate_manager_for_https_url_overrides()
+    {
+        var configProvider = Substitute.For<IConfigFileProvider>();
+        var certManager = Substitute.For<ICertificateManager>();
+        var certificate = Substitute.For<X509Certificate2>();
+
+        certManager.GetOrCreateCertificate(configProvider).Returns(certificate);
+        certManager.GetCertificateChain().Returns(new X509Certificate2Collection());
+
+        var serverOptions = new KestrelServerOptions();
+
+        Assert.DoesNotThrow(() => Bootstrap.ConfigureKestrel(
+            serverOptions,
+            configProvider,
+            certManager,
+            new[] { "https://127.0.0.1:8443" }));
+
+        certManager.Received().GetOrCreateCertificate(configProvider);
     }
 
     [Test]

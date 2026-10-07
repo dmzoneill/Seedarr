@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using DryIoc;
 using DryIoc.Microsoft.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
@@ -85,14 +86,7 @@ public static class Bootstrap
             Logger.Warn(ex, "Failed to reconfigure logging during bootstrap");
         }
 
-        if (urls != null)
-        {
-            foreach (var url in urls)
-            {
-                app.Urls.Add(url);
-            }
-        }
-        else
+        if (urls == null)
         {
             var isPortCollision = HasPortCollision(configProvider);
             if (!isPortCollision)
@@ -210,6 +204,7 @@ public static class Bootstrap
 
         if (urls != null)
         {
+            ConfigureKestrelUrlOverrides(serverOptions, configProvider, certManager, urls);
             return;
         }
 
@@ -237,25 +232,7 @@ public static class Bootstrap
                     serverOptions.ListenAnyIP(configProvider.SslPort, listenOptions =>
                     {
                         listenOptions.UseHttps(httpsOptions =>
-                        {
-                            httpsOptions.ServerCertificateSelector = (connectionContext, name) =>
-                            {
-                                var cert = certManager.GetOrCreateCertificate(configProvider);
-                                var chain = certManager.GetCertificateChain();
-                                if (chain != null && chain.Count > 0)
-                                {
-                                    httpsOptions.ServerCertificateChain = chain;
-                                }
-
-                                return cert;
-                            };
-
-                            var initialChain = certManager.GetCertificateChain();
-                            if (initialChain != null && initialChain.Count > 0)
-                            {
-                                httpsOptions.ServerCertificateChain = initialChain;
-                            }
-                        });
+                            ConfigureHttpsCertificate(httpsOptions, certManager, configProvider));
                     });
                     Logger.Info("Configured SSL dual-stack listener on port {0}", configProvider.SslPort);
                 }
@@ -282,25 +259,7 @@ public static class Bootstrap
                     serverOptions.Listen(ip, configProvider.SslPort, listenOptions =>
                     {
                         listenOptions.UseHttps(httpsOptions =>
-                        {
-                            httpsOptions.ServerCertificateSelector = (connectionContext, name) =>
-                            {
-                                var cert = certManager.GetOrCreateCertificate(configProvider);
-                                var chain = certManager.GetCertificateChain();
-                                if (chain != null && chain.Count > 0)
-                                {
-                                    httpsOptions.ServerCertificateChain = chain;
-                                }
-
-                                return cert;
-                            };
-
-                            var initialChain = certManager.GetCertificateChain();
-                            if (initialChain != null && initialChain.Count > 0)
-                            {
-                                httpsOptions.ServerCertificateChain = initialChain;
-                            }
-                        });
+                            ConfigureHttpsCertificate(httpsOptions, certManager, configProvider));
                     });
                     Logger.Info("Configured SSL on {0}:{1}", ip, configProvider.SslPort);
                 }
@@ -309,6 +268,67 @@ public static class Bootstrap
                     Logger.Error(ex, "Failed to initialize SSL listener on port {0}. HTTPS will not be active.", configProvider.SslPort);
                 }
             }
+        }
+    }
+
+    private static void ConfigureKestrelUrlOverrides(
+        KestrelServerOptions serverOptions,
+        IConfigFileProvider configProvider,
+        ICertificateManager certManager,
+        string[] urls)
+    {
+        foreach (var urlString in urls)
+        {
+            var uri = new Uri(urlString.Trim());
+            var ip = ResolveBindAddress(uri.Host);
+            var port = uri.Port;
+
+            if (uri.Scheme == Uri.UriSchemeHttps)
+            {
+                try
+                {
+                    _ = certManager.GetOrCreateCertificate(configProvider);
+                    serverOptions.Listen(ip, port, listenOptions =>
+                    {
+                        listenOptions.UseHttps(httpsOptions =>
+                            ConfigureHttpsCertificate(httpsOptions, certManager, configProvider));
+                    });
+                    Logger.Info("Configured SSL listener for URL override {0}", urlString);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to initialize SSL listener for URL override {0}", urlString);
+                }
+            }
+            else
+            {
+                serverOptions.Listen(ip, port);
+                Logger.Info("Configured HTTP listener for URL override {0}", urlString);
+            }
+        }
+    }
+
+    private static void ConfigureHttpsCertificate(
+        HttpsConnectionAdapterOptions httpsOptions,
+        ICertificateManager certManager,
+        IConfigFileProvider configProvider)
+    {
+        httpsOptions.ServerCertificateSelector = (connectionContext, name) =>
+        {
+            var cert = certManager.GetOrCreateCertificate(configProvider);
+            var chain = certManager.GetCertificateChain();
+            if (chain != null && chain.Count > 0)
+            {
+                httpsOptions.ServerCertificateChain = chain;
+            }
+
+            return cert;
+        };
+
+        var initialChain = certManager.GetCertificateChain();
+        if (initialChain != null && initialChain.Count > 0)
+        {
+            httpsOptions.ServerCertificateChain = initialChain;
         }
     }
 
