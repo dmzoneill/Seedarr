@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:29:52Z",
+  "updatedAt": "2026-10-07T00:30:42Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_1ec90e79"
+    "lastScheduleId": "sched_e45e9cea"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -32,7 +32,7 @@
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "salmon"
+      "worker": "stork"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -62,6 +62,6 @@
     189
   ],
   "githubOpenCount": 409,
-  "lastMonitorNote": "409 open; bison->frog Torrents, cormorant->goat Jobs",
+  "lastMonitorNote": "409 open; salmon->stork Http/REST",
   "githubOpen": 409
 }
