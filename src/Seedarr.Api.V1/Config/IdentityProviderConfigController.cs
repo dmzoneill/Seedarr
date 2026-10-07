@@ -37,6 +37,8 @@ public class IdentityProviderResource : RestResource
 
     public string RoleMappingRules { get; set; }
 
+    public string TrustedProxies { get; set; }
+
     public string IconUrl { get; set; }
 
     public string ButtonText { get; set; }
@@ -284,6 +286,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             Scopes = model.Scopes,
             Certificate = model.Certificate,
             RoleMappingRules = model.RoleMappingRules,
+            TrustedProxies = model.TrustedProxies,
             IconUrl = model.IconUrl,
             ButtonText = model.ButtonText,
         };
@@ -305,6 +308,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             Scopes = resource.Scopes,
             Certificate = resource.Certificate,
             RoleMappingRules = resource.RoleMappingRules,
+            TrustedProxies = resource.TrustedProxies,
             IconUrl = resource.IconUrl,
             ButtonText = resource.ButtonText,
         };

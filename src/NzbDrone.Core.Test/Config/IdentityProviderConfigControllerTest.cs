@@ -134,6 +134,48 @@ public class IdentityProviderConfigControllerTest
     }
 
     [Test]
+    public async Task Create_WhenForwardAuth_PersistsTrustedProxiesOnModel()
+    {
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "authelia",
+            Name = "Authelia",
+            ProviderType = IdentityProviderType.ForwardAuth,
+            IsEnabled = true,
+            TrustedProxies = "10.0.0.0/8",
+        };
+
+        _providerService.Add(Arg.Any<IdentityProviderDefinition>()).Returns(callInfo => callInfo.Arg<IdentityProviderDefinition>());
+
+        var result = await _controller.Create(resource);
+
+        Assert.That(result.Result, Is.TypeOf<CreatedResult>());
+        _providerService.Received(1).Add(Arg.Is<IdentityProviderDefinition>(p =>
+            p.TrustedProxies == "10.0.0.0/8"));
+    }
+
+    [Test]
+    public void GetById_WhenTrustedProxiesSet_ReturnsTrustedProxiesOnResource()
+    {
+        var provider = new IdentityProviderDefinition
+        {
+            Id = 2,
+            ProviderId = "authelia",
+            Name = "Authelia",
+            ProviderType = IdentityProviderType.ForwardAuth,
+            TrustedProxies = "172.16.0.0/12",
+        };
+
+        _providerService.GetById(2).Returns(provider);
+
+        var result = _controller.GetById(2);
+
+        var ok = (OkObjectResult)result.Result;
+        var res = ok.Value as IdentityProviderResource;
+        Assert.That(res.TrustedProxies, Is.EqualTo("172.16.0.0/12"));
+    }
+
+    [Test]
     public async Task Create_WhenNull_ReturnsBadRequest()
     {
         var result = await _controller.Create(null);
