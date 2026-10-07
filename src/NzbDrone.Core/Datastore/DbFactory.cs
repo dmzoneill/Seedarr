@@ -39,6 +39,8 @@ public class SqliteDoubleTypeHandler : SqlMapper.TypeHandler<double>
 
 public class TimeOnlyTypeHandler : SqlMapper.TypeHandler<TimeOnly>
 {
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+
     public override void SetValue(IDbDataParameter parameter, TimeOnly value)
     {
         parameter.Value = value.ToString("HH:mm:ss");
@@ -46,7 +48,30 @@ public class TimeOnlyTypeHandler : SqlMapper.TypeHandler<TimeOnly>
 
     public override TimeOnly Parse(object value)
     {
-        return TimeOnly.Parse((string)value);
+        if (value is TimeOnly timeOnly)
+        {
+            return timeOnly;
+        }
+
+        if (value == null || value is DBNull)
+        {
+            return default;
+        }
+
+        if (value is not string text || string.IsNullOrWhiteSpace(text))
+        {
+            return default;
+        }
+
+        try
+        {
+            return TimeOnly.Parse(text);
+        }
+        catch (FormatException ex)
+        {
+            Logger.Warn(ex, "Failed to parse TimeOnly from database value: {0}", text);
+            return default;
+        }
     }
 }
 
