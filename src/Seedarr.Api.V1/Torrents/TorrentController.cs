@@ -1165,7 +1165,14 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         if (totalPieces <= 0)
         {
-            totalPieces = 100;
+            return new PieceMapResource
+            {
+                TorrentId = torrent.Id,
+                InfoHash = torrent.InfoHash,
+                TotalPieces = 0,
+                PieceLength = 0,
+                Rarity = Array.Empty<int>()
+            };
         }
 
         var pieceLength = (long)torrent.PieceLength;
