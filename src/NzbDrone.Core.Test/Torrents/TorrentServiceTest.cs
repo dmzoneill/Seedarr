@@ -1437,6 +1437,84 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
+        public void Handle_DiskSpaceRestoredEvent_should_not_resume_when_free_space_still_insufficient_for_remaining_bytes()
+        {
+            const long totalSize = 10L * 1024 * 1024 * 1024;
+            const long downloaded = 5L * 1024 * 1024 * 1024;
+            var remainingBytes = totalSize - downloaded;
+            var requiredSpace = remainingBytes + TorrentService.EmergencyPauseFreeSpaceBufferBytes;
+
+            var autoPaused = new Torrent
+            {
+                Id = 1,
+                Name = "AutoPausedTorrent",
+                Status = TorrentStatus.Paused,
+                SavePath = "/mnt/downloads/movie1",
+                ErrorMessage = "Paused: Emergency low disk space on volume /mnt/downloads",
+                TotalSize = totalSize,
+                Downloaded = downloaded,
+            };
+
+            _repository.All().Returns(new List<Torrent> { autoPaused }.AsQueryable());
+
+            var diskSpaceService = Substitute.For<IDiskSpaceService>();
+            diskSpaceService.GetDiskSpaceForPath("/mnt/downloads/movie1").Returns(new DiskSpaceInfo
+            {
+                Path = "/mnt/downloads",
+                FreeSpace = requiredSpace - 1,
+                TotalSpace = 100L * 1024 * 1024 * 1024,
+            });
+            _subject.DiskSpaceService = diskSpaceService;
+
+            _subject.Handle(new DiskSpaceRestoredEvent("/mnt/downloads", requiredSpace - 1, 100L * 1024 * 1024 * 1024));
+
+            Assert.That(autoPaused.Status, Is.EqualTo(TorrentStatus.Paused));
+            Assert.That(autoPaused.ErrorMessage, Is.EqualTo("Paused: Emergency low disk space on volume /mnt/downloads"));
+
+            _repository.DidNotReceive().UpdateMany(Arg.Any<IList<Torrent>>());
+            _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentUpdatedEvent>());
+        }
+
+        [Test]
+        public void Handle_DiskSpaceRestoredEvent_should_resume_when_free_space_covers_remaining_bytes_and_buffer()
+        {
+            const long totalSize = 10L * 1024 * 1024 * 1024;
+            const long downloaded = 5L * 1024 * 1024 * 1024;
+            var remainingBytes = totalSize - downloaded;
+            var requiredSpace = remainingBytes + TorrentService.EmergencyPauseFreeSpaceBufferBytes;
+
+            var autoPaused = new Torrent
+            {
+                Id = 1,
+                Name = "AutoPausedTorrent",
+                Status = TorrentStatus.Paused,
+                SavePath = "/mnt/downloads/movie1",
+                ErrorMessage = "Paused: Emergency low disk space on volume /mnt/downloads",
+                TotalSize = totalSize,
+                Downloaded = downloaded,
+            };
+
+            _repository.All().Returns(new List<Torrent> { autoPaused }.AsQueryable());
+
+            var diskSpaceService = Substitute.For<IDiskSpaceService>();
+            diskSpaceService.GetDiskSpaceForPath("/mnt/downloads/movie1").Returns(new DiskSpaceInfo
+            {
+                Path = "/mnt/downloads",
+                FreeSpace = requiredSpace,
+                TotalSpace = 100L * 1024 * 1024 * 1024,
+            });
+            _subject.DiskSpaceService = diskSpaceService;
+
+            _subject.Handle(new DiskSpaceRestoredEvent("/mnt/downloads", requiredSpace, 100L * 1024 * 1024 * 1024));
+
+            Assert.That(autoPaused.Status, Is.EqualTo(TorrentStatus.Downloading));
+            Assert.That(autoPaused.ErrorMessage, Is.Null);
+
+            _repository.Received(1).UpdateMany(Arg.Is<IList<Torrent>>(list => list.Count == 1 && list.Contains(autoPaused)));
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == autoPaused));
+        }
+
+        [Test]
         public void Start_should_reject_and_throw_InsufficientDiskSpaceException_when_disk_space_is_insufficient()
         {
             var torrent = new Torrent
