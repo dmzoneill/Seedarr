@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.RemotePathMappings;
 
 namespace NzbDrone.Core.Test.RemotePathMappings;
@@ -673,5 +674,70 @@ public class RemotePathMappingServiceTest
         // General path matches the shorter prefix
         var genResult = service.RemapRemoteToLocal("remote-server", @"D:\Downloads\Movies\film.mkv");
         Assert.That(genResult, Is.EqualTo("/mnt/storage/downloads/Movies/film.mkv"));
+    }
+
+    [Test]
+    public void Add_throws_when_duplicate_host_and_remote_path()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "host1",
+            RemotePath = "/downloads",
+            LocalPath = "/mnt/a"
+        });
+
+        Assert.Throws<DuplicateRemotePathMappingException>(() => _service.Add(new RemotePathMapping
+        {
+            Host = "HOST1",
+            RemotePath = "/downloads/",
+            LocalPath = "/mnt/b"
+        }));
+    }
+
+    [Test]
+    public void Add_allows_same_remote_path_for_different_hosts()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "host1",
+            RemotePath = "/downloads",
+            LocalPath = "/mnt/a"
+        });
+
+        var added = _service.Add(new RemotePathMapping
+        {
+            Host = "host2",
+            RemotePath = "/downloads",
+            LocalPath = "/mnt/b"
+        });
+
+        Assert.That(added.Id, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Update_throws_when_changing_to_duplicate_key()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Id = 1,
+            Host = "host1",
+            RemotePath = "/downloads",
+            LocalPath = "/mnt/a"
+        });
+        _service.Add(new RemotePathMapping
+        {
+            Id = 2,
+            Host = "host2",
+            RemotePath = "/other",
+            LocalPath = "/mnt/b"
+        });
+
+        Assert.Throws<DuplicateRemotePathMappingException>(() => _service.Update(new RemotePathMapping
+        {
+            Id = 2,
+            Host = "host1",
+            RemotePath = "/downloads",
+            LocalPath = "/mnt/c"
+        }));
     }
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using NzbDrone.Core.Exceptions;
 
 namespace NzbDrone.Core.RemotePathMappings;
 
@@ -78,6 +79,8 @@ public class RemotePathMappingService : IRemotePathMappingService
     public RemotePathMapping Add(RemotePathMapping mapping)
     {
         ArgumentNullException.ThrowIfNull(mapping);
+        NormalizeMappingFields(mapping);
+        EnsureNotDuplicate(mapping);
 
         if (_repository != null)
         {
@@ -96,6 +99,8 @@ public class RemotePathMappingService : IRemotePathMappingService
     public void Update(RemotePathMapping mapping)
     {
         ArgumentNullException.ThrowIfNull(mapping);
+        NormalizeMappingFields(mapping);
+        EnsureNotDuplicate(mapping, mapping.Id);
 
         if (_repository != null)
         {
@@ -161,6 +166,62 @@ public class RemotePathMappingService : IRemotePathMappingService
             RemotePath = source.RemotePath,
             LocalPath = source.LocalPath,
         };
+    }
+
+    private static void NormalizeMappingFields(RemotePathMapping mapping)
+    {
+        mapping.Host = mapping.Host?.Trim();
+        mapping.RemotePath = mapping.RemotePath?.Trim();
+        mapping.LocalPath = mapping.LocalPath?.Trim();
+    }
+
+    private void EnsureNotDuplicate(RemotePathMapping mapping, int? excludeId = null)
+    {
+        foreach (var existing in All())
+        {
+            if (excludeId.HasValue && existing.Id == excludeId.Value)
+            {
+                continue;
+            }
+
+            if (HasSameMappingKey(mapping, existing))
+            {
+                throw new DuplicateRemotePathMappingException(mapping.Host, mapping.RemotePath);
+            }
+        }
+    }
+
+    internal static bool HasSameMappingKey(RemotePathMapping left, RemotePathMapping right)
+    {
+        if (left == null || right == null)
+        {
+            return false;
+        }
+
+        if (!string.Equals(left.Host?.Trim(), right.Host?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var leftKey = NormalizeRemotePathKey(left.RemotePath);
+        var rightKey = NormalizeRemotePathKey(right.RemotePath);
+        return string.Equals(leftKey, rightKey, GetPathComparison(left.RemotePath ?? leftKey));
+    }
+
+    internal static string NormalizeRemotePathKey(string remotePath)
+    {
+        if (string.IsNullOrWhiteSpace(remotePath))
+        {
+            return string.Empty;
+        }
+
+        var normalized = remotePath.Trim().Replace('\\', '/');
+        if (normalized.Length > 1)
+        {
+            normalized = normalized.TrimEnd('/');
+        }
+
+        return normalized;
     }
 
     public RemotePathMappingTestResult TestMapping(string host, string path, string direction = "remoteToLocal")
