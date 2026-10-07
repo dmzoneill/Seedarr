@@ -488,6 +488,36 @@ public class SystemControllerTasksTest
     }
 
     [Test]
+    public void GetTaskHistoryById_clamps_limit_to_maximum()
+    {
+        _taskManager.GetTaskHistory(5, 1000).Returns(new List<ScheduledTaskHistory>());
+
+        _controller.GetTaskHistoryById(5, 500000);
+
+        _taskManager.Received(1).GetTaskHistory(5, 1000);
+    }
+
+    [Test]
+    public void GetTaskHistoryById_normalizes_non_positive_limit_to_default()
+    {
+        _taskManager.GetTaskHistory(5, 50).Returns(new List<ScheduledTaskHistory>());
+
+        _controller.GetTaskHistoryById(5, -1);
+
+        _taskManager.Received(1).GetTaskHistory(5, 50);
+    }
+
+    [Test]
+    public void GetTaskHistoryByName_clamps_limit_to_maximum()
+    {
+        _taskManager.GetTaskHistory("SampleScheduledTask", 1000).Returns(new List<ScheduledTaskHistory>());
+
+        _controller.GetTaskHistoryByName("SampleScheduledTask", 999999);
+
+        _taskManager.Received(1).GetTaskHistory("SampleScheduledTask", 1000);
+    }
+
+    [Test]
     public void GetTaskHistoryByName_returns_ok_with_history_items()
     {
         var historyItems = new List<ScheduledTaskHistory>

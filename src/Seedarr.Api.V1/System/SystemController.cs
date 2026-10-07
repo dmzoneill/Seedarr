@@ -27,6 +27,9 @@ namespace Seedarr.Api.V1.System;
 [V1ApiController("system")]
 public class SystemController : ControllerBase
 {
+    private const int DefaultTaskHistoryLimit = 50;
+    private const int MaxTaskHistoryLimit = 1000;
+
     private static readonly DateTime StartTime = DateTime.UtcNow;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -540,12 +543,9 @@ public class SystemController : ControllerBase
     /// <returns>A list of scheduled task history resources.</returns>
     [HttpGet("task/{id:int}/history")]
     [Authorize(Policy = Policies.Reader)]
-    public ActionResult<List<ScheduledTaskHistoryResource>> GetTaskHistoryById(int id, [FromQuery] int limit = 50)
+    public ActionResult<List<ScheduledTaskHistoryResource>> GetTaskHistoryById(int id, [FromQuery] int limit = DefaultTaskHistoryLimit)
     {
-        if (limit <= 0)
-        {
-            limit = 50;
-        }
+        limit = ClampTaskHistoryLimit(limit);
 
         var history = _taskHistoryRepository != null
             ? _taskHistoryRepository.GetByTaskId(id, limit)
@@ -562,18 +562,25 @@ public class SystemController : ControllerBase
     /// <returns>A list of scheduled task history resources.</returns>
     [HttpGet("task/{name}/history")]
     [Authorize(Policy = Policies.Reader)]
-    public ActionResult<List<ScheduledTaskHistoryResource>> GetTaskHistoryByName(string name, [FromQuery] int limit = 50)
+    public ActionResult<List<ScheduledTaskHistoryResource>> GetTaskHistoryByName(string name, [FromQuery] int limit = DefaultTaskHistoryLimit)
     {
-        if (limit <= 0)
-        {
-            limit = 50;
-        }
+        limit = ClampTaskHistoryLimit(limit);
 
         var history = _taskHistoryRepository != null
             ? _taskHistoryRepository.GetByTypeName(name, limit)
             : _taskManager.GetTaskHistory(name, limit);
 
         return Ok(history.Select(MapToHistoryResource).ToList());
+    }
+
+    private static int ClampTaskHistoryLimit(int limit)
+    {
+        if (limit <= 0)
+        {
+            return DefaultTaskHistoryLimit;
+        }
+
+        return Math.Min(limit, MaxTaskHistoryLimit);
     }
 
     private static ScheduledTaskHistoryResource MapToHistoryResource(ScheduledTaskHistory h)
