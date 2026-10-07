@@ -308,7 +308,7 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
                 DurationMs = durationMs,
                 Status = historyStatus,
                 TriggerSource = trigger,
-                ErrorMessage = isCanceled ? "Task execution was canceled" : null,
+                ErrorMessage = isCanceled ? "Task execution was canceled" : (isFailed ? task?.LastErrorMessage : null),
                 ExceptionDetails = null
             };
 
@@ -369,16 +369,18 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
             ExceptionDetails = exceptionDetails
         };
 
+        var historyRecorded = false;
         try
         {
             _historyRepository?.Insert(history);
+            historyRecorded = _historyRepository != null;
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to record task failure history for '{0}'", key);
         }
 
-        if (execInfo != null)
+        if (execInfo != null && historyRecorded)
         {
             execInfo.HistoryRecorded = true;
         }
