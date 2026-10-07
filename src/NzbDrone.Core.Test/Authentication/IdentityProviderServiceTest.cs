@@ -133,6 +133,42 @@ public class IdentityProviderServiceTest
         Assert.That(result, Is.False);
     }
 
+    [Test]
+    public async Task TestConnectionAsync_WhenForwardAuthWithoutIssuerUrl_ReturnsTrueWithoutHttpProbe()
+    {
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "forward-auth",
+            Name = "Forward Auth",
+            ProviderType = IdentityProviderType.ForwardAuth,
+            IssuerUrl = null,
+            MetadataUrl = null,
+            TrustedProxies = "10.0.0.1",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.LastRequest, Is.Null);
+    }
+
+    [Test]
+    public async Task TestConnectionAsync_WhenForwardAuthWithEmptyTrustedProxies_ReturnsTrueWithoutHttpProbe()
+    {
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "forward-auth",
+            Name = "Forward Auth",
+            ProviderType = IdentityProviderType.ForwardAuth,
+            TrustedProxies = "",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.LastRequest, Is.Null);
+    }
+
     [TestCase("http://169.254.169.254/latest/meta-data")]
     [TestCase("https://169.254.169.254/latest/meta-data")]
     [TestCase("http://169.254.1.1/metadata")]
