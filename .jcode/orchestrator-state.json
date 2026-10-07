@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:04:30Z",
+  "updatedAt": "2026-10-07T01:05:36Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,43 +14,43 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_ecdf9ad1",
+    "lastScheduleId": "sched_4581d772",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "badger",
-      "issue": 905,
-      "worktree": "../seedarr_worktrees/issue-905",
+      "worker": "hedgehog",
+      "issue": 1176,
+      "worktree": "../seedarr_worktrees/issue-1176",
       "area": "blocklist"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1006,
-      "worktree": "../seedarr_worktrees/issue-1006",
+      "issue": 1158,
+      "worktree": "../seedarr_worktrees/issue-1158",
       "area": "host"
     },
     "api": {
       "status": "running",
       "worker": "eagle",
-      "issue": 1278,
-      "worktree": "../seedarr_worktrees/issue-1278",
-      "area": "api"
+      "issue": 1250,
+      "worktree": "../seedarr_worktrees/issue-1250",
+      "area": "automation"
     },
     "core-torrents": {
       "status": "running",
       "worker": "bison",
-      "issue": 1218,
-      "worktree": "../seedarr_worktrees/issue-1218",
+      "issue": 1219,
+      "worktree": "../seedarr_worktrees/issue-1219",
       "area": "torrents"
     },
     "http": {
       "status": "running",
       "worker": "crane",
-      "issue": 1244,
-      "worktree": "../seedarr_worktrees/issue-1244",
+      "issue": 1173,
+      "worktree": "../seedarr_worktrees/issue-1173",
       "area": "http"
     }
   },
@@ -64,14 +64,14 @@
       "signalr"
     ],
     "nextCandidates": [
-      1158,
-      1219,
       1136,
       1220,
-      1250,
-      1251
+      1251,
+      937,
+      1225,
+      921
     ]
   },
-  "githubOpen": 372,
-  "lastMonitorNote": "fix monitor: closed #904,#1255,#948,#1257; dispatched #905,#1278,#1218,#1244; panther on #1006"
+  "githubOpen": 368,
+  "lastMonitorNote": "fix monitor: closed #905,#1006,#1278,#1218,#1244; dispatched #1176,#1158,#1250,#1219,#1173"
 }
