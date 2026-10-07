@@ -1221,7 +1221,11 @@ public class TorrentControllerTest
             Source = "Radarr",
             DataJson = "{\"title\":\"Tracked Movie Title\",\"year\":2025}",
         };
-        historyRepo.All().Returns(new List<DownloadHistory> { history });
+        var historyByHash = new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase)
+        {
+            { torrent.InfoHash, history },
+        };
+        historyRepo.GetLatestByInfoHashes(Arg.Any<IEnumerable<string>>()).Returns(historyByHash);
 
         using var customController = new TorrentController(
             _torrentService,
@@ -1246,6 +1250,8 @@ public class TorrentControllerTest
         Assert.That(res.AnnounceInterval, Is.EqualTo(1800));
         Assert.That(res.NextUpdate, Is.GreaterThan(0));
         Assert.That(res.Source, Is.EqualTo("Radarr"));
+        historyRepo.DidNotReceive().All();
+        historyRepo.Received(1).GetLatestByInfoHashes(Arg.Is<IEnumerable<string>>(h => h.Single() == torrent.InfoHash));
     }
 
     [Test]

@@ -476,9 +476,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     {
         var torrents = _torrentService.GetAll();
         var trackers = _trackerEntryService.All();
-        var histories = _downloadHistoryRepository?.All()
-            .GroupBy(h => h.InfoHash, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First(), StringComparer.OrdinalIgnoreCase);
+        var histories = _downloadHistoryRepository?.GetLatestByInfoHashes(torrents.Select(t => t.InfoHash));
         var mediaMetas = _mediaEnrichmentService?.GetAllMetadata();
 
         return torrents.Select(t => MapTorrentToResource(t, trackers, histories, mediaMetas)).ToList();
