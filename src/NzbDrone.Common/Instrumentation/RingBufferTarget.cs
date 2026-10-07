@@ -42,6 +42,18 @@ public class RingBufferTarget : TargetWithLayout
         @"(https?://[^:/@\s]+:)([^@/\s]+)(@)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex TrackerPasskeyPathRegex = new(
+        @"(?i)(/passkey/)[^/?#\s]+",
+        RegexOptions.Compiled);
+
+    private static readonly Regex TrackerPathTokenBeforeAnnounceRegex = new(
+        @"(/)(?!announce|scrape)[A-Za-z0-9_-]{16,64}(/announce)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex TrackerPathTokenAfterAnnounceRegex = new(
+        @"(?i)(/announce/)[A-Za-z0-9_-]{16,64}",
+        RegexOptions.Compiled);
+
     private readonly object _lock = new();
     private readonly LogEntryRecord[] _buffer;
     private int _position;
@@ -71,6 +83,9 @@ public class RingBufferTarget : TargetWithLayout
         result = SensitiveJsonRegex.Replace(result, "$1[REDACTED]$2");
         result = BearerTokenRegex.Replace(result, "Bearer [REDACTED]");
         result = BasicAuthRegex.Replace(result, "$1[REDACTED]$3");
+        result = TrackerPasskeyPathRegex.Replace(result, "$1[REDACTED]");
+        result = TrackerPathTokenBeforeAnnounceRegex.Replace(result, "$1[REDACTED]$2");
+        result = TrackerPathTokenAfterAnnounceRegex.Replace(result, "$1[REDACTED]");
 
         return result;
     }

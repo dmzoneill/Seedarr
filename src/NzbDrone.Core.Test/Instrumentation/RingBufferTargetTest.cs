@@ -446,6 +446,25 @@ public class RingBufferTargetTest
         Assert.That(
             RingBufferTarget.Sanitize("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9"),
             Is.EqualTo("Authorization: Bearer [REDACTED]"));
+
+        Assert.That(
+            RingBufferTarget.Sanitize("Injected tracker https://flacsfor.me/0123456789abcdef0123456789abcdef/announce into torrent"),
+            Is.EqualTo("Injected tracker https://flacsfor.me/[REDACTED]/announce into torrent"));
+        Assert.That(
+            RingBufferTarget.Sanitize("Injected tracker https://flacsfor.me/0123456789abcdef0123456789abcdef/announce into torrent"),
+            Does.Not.Contain("0123456789abcdef0123456789abcdef"));
+
+        Assert.That(
+            RingBufferTarget.Sanitize("https://tracker.private.org/announce/44817e2f66221a38b0029e8e098b9aff"),
+            Is.EqualTo("https://tracker.private.org/announce/[REDACTED]"));
+
+        Assert.That(
+            RingBufferTarget.Sanitize("https://indexer.example/passkey/my-secret-tracker-key/scrape"),
+            Is.EqualTo("https://indexer.example/passkey/[REDACTED]/scrape"));
+
+        Assert.That(
+            RingBufferTarget.Sanitize("https://tracker.opentrackr.org:1337/announce"),
+            Is.EqualTo("https://tracker.opentrackr.org:1337/announce"));
     }
 
     [Test]
@@ -503,9 +522,11 @@ public class RingBufferTargetTest
         const string discord = "https://discord.com/api/webhooks/123/[REDACTED]";
         const string telegram = "https://api.telegram.org/bot[REDACTED]/sendMessage";
         const string queryParams = "apikey=[REDACTED]&passkey=[REDACTED]&token=[REDACTED]";
+        const string trackerAnnounce = "https://tracker.example/[REDACTED]/announce";
 
         Assert.That(RingBufferTarget.Sanitize(discord), Is.EqualTo(discord));
         Assert.That(RingBufferTarget.Sanitize(telegram), Is.EqualTo(telegram));
         Assert.That(RingBufferTarget.Sanitize(queryParams), Is.EqualTo(queryParams));
+        Assert.That(RingBufferTarget.Sanitize(trackerAnnounce), Is.EqualTo(trackerAnnounce));
     }
 }
