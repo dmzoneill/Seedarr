@@ -234,22 +234,27 @@ public class SeedingServiceTest
 
         Assert.That(stoppedComplete.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(stoppedComplete.Active, Is.True);
+        Assert.That(stoppedComplete.ForceStart, Is.True);
         Assert.That(stoppedComplete.LastActive, Is.Not.Null);
 
         Assert.That(stoppedIncomplete.Status, Is.EqualTo(TorrentStatus.Downloading));
         Assert.That(stoppedIncomplete.Active, Is.True);
+        Assert.That(stoppedIncomplete.ForceStart, Is.True);
         Assert.That(stoppedIncomplete.LastActive, Is.Not.Null);
 
         Assert.That(queued.Status, Is.EqualTo(TorrentStatus.Downloading));
         Assert.That(queued.Active, Is.True);
+        Assert.That(queued.ForceStart, Is.True);
         Assert.That(queued.LastActive, Is.Not.Null);
 
         Assert.That(pausedComplete.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(pausedComplete.Active, Is.True);
+        Assert.That(pausedComplete.ForceStart, Is.True);
         Assert.That(pausedComplete.LastActive, Is.Not.Null);
 
         Assert.That(pausedIncomplete.Status, Is.EqualTo(TorrentStatus.Downloading));
         Assert.That(pausedIncomplete.Active, Is.True);
+        Assert.That(pausedIncomplete.ForceStart, Is.True);
         Assert.That(pausedIncomplete.LastActive, Is.Not.Null);
 
         _torrentService.Received(1).Update(stoppedComplete);

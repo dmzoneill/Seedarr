@@ -97,6 +97,7 @@ public class SeedingService : ISeedingService
         {
             torrent.Resume();
             torrent.Active = true;
+            torrent.ForceStart = true;
             torrent.LastActive = DateTime.UtcNow;
             _torrentService.Update(torrent);
 
