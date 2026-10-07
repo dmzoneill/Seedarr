@@ -156,12 +156,20 @@ public class BackupController : Controller
             return BadRequest(new { message = "Invalid backup file name" });
         }
 
+        var backups = _backupService.GetBackups();
+        var matching = backups?.FirstOrDefault(b => string.Equals(b.Name, safeFileName, StringComparison.OrdinalIgnoreCase));
+        if (matching == null)
+        {
+            return NotFound();
+        }
+
+        var canonicalFileName = matching.Name;
+
         try
         {
-            _backupService.RestoreBackup(safeFileName);
+            _backupService.RestoreBackup(canonicalFileName);
 
-            var backups = _backupService.GetBackups();
-            var backup = backups?.FirstOrDefault(b => string.Equals(b.Name, safeFileName, StringComparison.OrdinalIgnoreCase));
+            var backup = matching;
             if (backup != null && backup.IsConfigOnly)
             {
                 return Ok(new { message = "Configuration restored. Restart required. Note: External database tools (pg_restore / pg_dump) are required for PostgreSQL database restoration." });
