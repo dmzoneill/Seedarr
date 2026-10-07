@@ -109,8 +109,14 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
     }
 
     [Authorize(Policy = Policies.AdminOnly)]
-    public override ActionResult<GeneralConfigResource> SaveConfig([FromBody] GeneralConfigResource resource)
+    public override ActionResult<GeneralConfigResource> SaveConfig(int? id, [FromBody] GeneralConfigResource resource)
     {
+        var idValidationError = ValidateSaveConfigId(id, resource);
+        if (idValidationError != null)
+        {
+            return idValidationError;
+        }
+
         if (resource == null)
         {
             return BadRequest("Request body cannot be empty.");
@@ -463,8 +469,14 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
     }
 
     [Authorize(Policy = Policies.AdminOnly)]
-    public override ActionResult<NetworkConfigResource> SaveConfig([FromBody] NetworkConfigResource resource)
+    public override ActionResult<NetworkConfigResource> SaveConfig(int? id, [FromBody] NetworkConfigResource resource)
     {
+        var idValidationError = ValidateSaveConfigId(id, resource);
+        if (idValidationError != null)
+        {
+            return idValidationError;
+        }
+
         if (resource == null)
         {
             return BadRequest("Request body cannot be empty.");
@@ -496,7 +508,7 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
             resource.ProxyPassword = _configService.ProxyPassword;
         }
 
-        return base.SaveConfig(resource);
+        return base.SaveConfig(id, resource);
     }
 
     [HttpPost("test-proxy")]
