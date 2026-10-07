@@ -776,7 +776,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         if (int.TryParse(cleanTrackId, out var parsedTrackId))
         {
-            matchedTrack = subtitles.FirstOrDefault(s => s.TrackId == parsedTrackId || s.FileId == parsedTrackId);
+            matchedTrack = subtitles.FirstOrDefault(s => s.TrackId == parsedTrackId);
         }
 
         matchedTrack ??= subtitles.FirstOrDefault(s =>

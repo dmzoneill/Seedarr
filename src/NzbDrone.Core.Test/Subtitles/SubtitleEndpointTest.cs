@@ -124,6 +124,48 @@ public class SubtitleEndpointTest
     }
 
     [Test]
+    public void GetSubtitleTrack_MatchesNumericIdByTrackId_NotTorrentFileId()
+    {
+        var torrent = new Torrent { Id = 10, Name = "Test Movie", SavePath = _tempDir };
+        var videoFile = new TorrentFile { Id = 101, TorrentId = 10, Path = "Movie.mkv" };
+        var enSubFile = new TorrentFile { Id = 2, TorrentId = 10, Path = "Movie.en.srt" };
+        var frSubFile = new TorrentFile { Id = 103, TorrentId = 10, Path = "Movie.fr.srt" };
+
+        File.WriteAllText(Path.Combine(_tempDir, "Movie.en.srt"), "1\n00:00:01,000 --> 00:00:03,000\nEnglish\n", Encoding.UTF8);
+        File.WriteAllText(Path.Combine(_tempDir, "Movie.fr.srt"), "1\n00:00:01,000 --> 00:00:03,000\nFrench\n", Encoding.UTF8);
+
+        var mockDiscovery = Substitute.For<ISubtitleDiscoveryService>();
+        mockDiscovery.DiscoverSubtitles(videoFile, Arg.Any<IEnumerable<TorrentFile>>()).Returns(new List<SubtitleTrackInfo>
+        {
+            new() { TrackId = 1, FileId = 2, Path = "Movie.en.srt", Language = "en", TwoLetterCode = "en", Format = "srt" },
+            new() { TrackId = 2, FileId = 103, Path = "Movie.fr.srt", Language = "fr", TwoLetterCode = "fr", Format = "srt" }
+        });
+
+        var controller = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            _validator,
+            subtitleDiscoveryService: mockDiscovery,
+            subtitleConversionService: _subtitleConversionService);
+
+        _torrentService.Get(10).Returns(torrent);
+        _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { videoFile, enSubFile, frSubFile });
+
+        var actionResult = controller.GetSubtitleTrack(10, 101, "2");
+        var contentResult = actionResult as ContentResult;
+
+        Assert.That(contentResult, Is.Not.Null);
+        Assert.That(contentResult.Content, Does.Contain("French"));
+        Assert.That(contentResult.Content, Does.Not.Contain("English"));
+    }
+
+    [Test]
     public void GetSubtitleTrack_ReturnsNotFound_WhenTorrentMissing()
     {
         _torrentService.Get(999).Returns((Torrent)null);
