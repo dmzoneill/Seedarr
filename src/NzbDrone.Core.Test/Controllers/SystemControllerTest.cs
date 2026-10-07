@@ -223,7 +223,13 @@ public class SystemControllerTest
     public void GetStatus_reports_PostgreSQL_when_mainDatabase_is_PostgreSQL()
     {
         var mainDatabase = Substitute.For<IMainDatabase>();
+        var connection = Substitute.For<IDbConnection>();
+        var command = Substitute.For<IDbCommand>();
+
         mainDatabase.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        mainDatabase.OpenConnection().Returns(connection);
+        connection.CreateCommand().Returns(command);
+        command.ExecuteScalar().Returns("16.2");
 
         var controller = new SystemController(
             _taskManager,
@@ -240,15 +246,22 @@ public class SystemControllerTest
         Assert.That(okResult, Is.Not.Null);
         var status = okResult.Value as SystemResource;
         Assert.That(status, Is.Not.Null);
-        Assert.That(status.DatabaseVersion, Is.EqualTo("PostgreSQL"));
+        Assert.That(status.DatabaseVersion, Is.EqualTo("16.2"));
         Assert.That(status.DatabaseType, Is.EqualTo("PostgreSQL"));
+        Assert.That(command.CommandText, Is.EqualTo("SHOW server_version"));
     }
 
     [Test]
     public void GetStatus_reports_SQLite_when_mainDatabase_is_SQLite()
     {
         var mainDatabase = Substitute.For<IMainDatabase>();
+        var connection = Substitute.For<IDbConnection>();
+        var command = Substitute.For<IDbCommand>();
+
         mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);
+        mainDatabase.OpenConnection().Returns(connection);
+        connection.CreateCommand().Returns(command);
+        command.ExecuteScalar().Returns("3.45.3");
 
         var controller = new SystemController(
             _taskManager,
@@ -265,15 +278,22 @@ public class SystemControllerTest
         Assert.That(okResult, Is.Not.Null);
         var status = okResult.Value as SystemResource;
         Assert.That(status, Is.Not.Null);
-        Assert.That(status.DatabaseVersion, Is.EqualTo("SQLite"));
+        Assert.That(status.DatabaseVersion, Is.EqualTo("3.45.3"));
         Assert.That(status.DatabaseType, Is.EqualTo("SQLite"));
+        Assert.That(command.CommandText, Is.EqualTo("SELECT sqlite_version()"));
     }
 
     [Test]
     public void GetStatus_reports_database_info_when_IDatabase_is_provided()
     {
         var database = Substitute.For<IDatabase>();
+        var connection = Substitute.For<IDbConnection>();
+        var command = Substitute.For<IDbCommand>();
+
         database.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        database.OpenConnection().Returns(connection);
+        connection.CreateCommand().Returns(command);
+        command.ExecuteScalar().Returns("15.4");
 
         var controller = new SystemController(
             _taskManager,
@@ -290,7 +310,7 @@ public class SystemControllerTest
         Assert.That(okResult, Is.Not.Null);
         var status = okResult.Value as SystemResource;
         Assert.That(status, Is.Not.Null);
-        Assert.That(status.DatabaseVersion, Is.EqualTo("PostgreSQL"));
+        Assert.That(status.DatabaseVersion, Is.EqualTo("15.4"));
         Assert.That(status.DatabaseType, Is.EqualTo("PostgreSQL"));
     }
 
@@ -303,7 +323,7 @@ public class SystemControllerTest
         Assert.That(okResult, Is.Not.Null);
         var status = okResult.Value as SystemResource;
         Assert.That(status, Is.Not.Null);
-        Assert.That(status.DatabaseVersion, Is.EqualTo("SQLite"));
+        Assert.That(status.DatabaseVersion, Is.EqualTo(string.Empty));
         Assert.That(status.DatabaseType, Is.EqualTo("SQLite"));
     }
 
@@ -314,9 +334,10 @@ public class SystemControllerTest
         var connection = Substitute.For<IDbConnection>();
         var command = Substitute.For<IDbCommand>();
 
+        mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);
         mainDatabase.OpenConnection().Returns(connection);
         connection.CreateCommand().Returns(command);
-        command.ExecuteScalar().Returns(42L);
+        command.ExecuteScalar().Returns("3.45.3", 42L);
 
         var controller = new SystemController(
             _taskManager,
@@ -333,6 +354,7 @@ public class SystemControllerTest
         Assert.That(okResult, Is.Not.Null);
         var status = okResult.Value as SystemResource;
         Assert.That(status, Is.Not.Null);
+        Assert.That(status.DatabaseVersion, Is.EqualTo("3.45.3"));
         Assert.That(status.DatabaseMigration, Is.EqualTo("42"));
         Assert.That(command.CommandText, Does.Contain("VersionInfo"));
     }
