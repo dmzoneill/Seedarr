@@ -31,7 +31,7 @@ public static class ContainerExtensions
 
         foreach (var type in typeList)
         {
-            if (type.IsInterface || type.IsAbstract || type.IsEnum || type.IsValueType || type.IsSubclassOf(typeof(Attribute)) || type.GetConstructors().Length == 0)
+            if (type.IsInterface || type.IsAbstract || type.IsEnum || type.IsValueType || type.IsSubclassOf(typeof(Attribute)) || type.ContainsGenericParameters || type.GetConstructors().Length == 0)
             {
                 continue;
             }
