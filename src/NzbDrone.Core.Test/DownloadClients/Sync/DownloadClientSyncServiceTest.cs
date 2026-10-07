@@ -377,6 +377,24 @@ public class DownloadClientSyncServiceTest
     }
 
     [Test]
+    public void GetClientItems_should_throw_when_client_disabled_without_polling()
+    {
+        var mockClient = Substitute.For<IDownloadClient>();
+        _service.InjectedClient = mockClient;
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Disabled qBit",
+            ClientType = "QBitTorrent",
+            Enable = false
+        });
+
+        var ex = Assert.Throws<ArgumentException>(() => _service.GetClientItems(1));
+        Assert.That(ex.Message, Does.Contain("disabled"));
+        mockClient.DidNotReceive().GetItems();
+    }
+
+    [Test]
     public void ImportTorrent_should_add_torrent_and_return_instance()
     {
         var hash = "cccc111122223333444455556666777788889999";

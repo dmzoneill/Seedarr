@@ -353,6 +353,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new ArgumentException($"Download client with id {clientId} not found.");
         }
 
+        if (!definition.Enable)
+        {
+            throw new ArgumentException($"Download client with id {clientId} is disabled.");
+        }
+
         var provider = CreateClient(definition);
         if (provider == null)
         {

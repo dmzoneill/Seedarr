@@ -491,6 +491,16 @@ public class DownloadClientControllerTest
     }
 
     [Test]
+    public void GetItems_returns_bad_request_when_client_disabled()
+    {
+        _syncService.GetClientItems(1).Returns(x => throw new System.ArgumentException("Download client with id 1 is disabled."));
+
+        var result = _controller.GetItems(1);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
     public void GetItems_returns_bad_request_when_provider_cannot_be_created()
     {
         _syncService.GetClientItems(1).Returns(x => throw new System.ArgumentException("Could not create provider for client type BrokenType."));
