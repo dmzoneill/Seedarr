@@ -79,7 +79,7 @@ public class BasicAuthenticationHandlerTest
     }
 
     [Test]
-    public async Task HandleAuthenticateAsync_WhenApiKeyInUsernameAndInvalidPassword_FailsAuthentication()
+    public async Task HandleAuthenticateAsync_WhenApiKeyInUsernameAndInvalidPassword_SucceedsAndSanitizesUsername()
     {
         _configFileProvider.ApiKey.Returns("master-api-key");
 
@@ -89,9 +89,38 @@ public class BasicAuthenticationHandlerTest
 
         var result = await AuthenticateAsync(context);
 
-        Assert.That(result.Succeeded, Is.False);
-        Assert.That(result.Failure, Is.Not.Null);
-        Assert.That(result.Failure.Message, Is.EqualTo("Invalid Basic authentication credentials."));
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Principal?.FindFirst(ClaimTypes.Name)?.Value, Is.EqualTo("Admin"));
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenApiKeyInUsernameWithEmptyPassword_Succeeds()
+    {
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var context = new DefaultHttpContext();
+        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes("master-api-key:"));
+        context.Request.Headers["Authorization"] = $"Basic {credentials}";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Principal?.FindFirst(ClaimTypes.Name)?.Value, Is.EqualTo("Admin"));
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenApiKeyInUsernameWithArbitraryPassword_Succeeds()
+    {
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var context = new DefaultHttpContext();
+        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes("master-api-key:x"));
+        context.Request.Headers["Authorization"] = $"Basic {credentials}";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Principal?.FindFirst(ClaimTypes.Name)?.Value, Is.EqualTo("Admin"));
     }
 
     [Test]
