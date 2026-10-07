@@ -15,6 +15,9 @@ namespace Seedarr.Api.V1.Torrents;
 [V1ApiController("downloadhistory")]
 public class DownloadHistoryController : Controller
 {
+    private const int DefaultOffsetLimit = 500;
+    private const int DefaultPageSize = 50;
+
     private static readonly JsonSerializerOptions CaseInsensitiveJsonOptions = new() { PropertyNameCaseInsensitive = true };
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly IDownloadHistoryService _historyService;
@@ -41,7 +44,11 @@ public class DownloadHistoryController : Controller
         var effectiveOffset = offset;
         if (page.HasValue && page.Value > 0)
         {
-            var size = pageSize.HasValue && pageSize.Value > 0 ? pageSize.Value : 50;
+            var size = pageSize is > 0
+                ? pageSize.Value
+                : limit is > 0 and not DefaultOffsetLimit
+                    ? limit
+                    : DefaultPageSize;
             effectiveLimit = size;
             effectiveOffset = (page.Value - 1) * size;
         }
