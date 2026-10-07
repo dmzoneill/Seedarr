@@ -430,6 +430,7 @@ public class PeerBlocklistSyncServiceTests
         Assert.That(deferredResult.Success, Is.False);
         Assert.That(deferredResult.IsRateLimited, Is.True);
         Assert.That(deferredResult.Message, Does.Contain("deferred"));
+        Assert.That(_service.LastCheckedUtc, Is.EqualTo(_currentTime));
         Assert.That(_mockHandler.Requests.Count, Is.EqualTo(1));
 
         _currentTime = _currentTime.AddMinutes(6);
