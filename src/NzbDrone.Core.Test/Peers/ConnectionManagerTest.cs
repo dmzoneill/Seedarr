@@ -38,7 +38,7 @@ public class ConnectionManagerTest
         _torrentService = Substitute.For<ITorrentService>();
         _fastExtensionHandler = Substitute.For<IFastExtensionHandler>();
         _eventLogService = Substitute.For<ITorrentEventLogService>();
-        _manager = new ConnectionManager(_configService, _connectionLogService, _torrentService, _fastExtensionHandler, _eventLogService);
+        _manager = new ConnectionManager(_configService, _connectionLogService, new Lazy<ITorrentService>(() => _torrentService), _fastExtensionHandler, _eventLogService);
 
         _createdConnections = new List<PeerConnection>();
         _listeners = new List<TcpListener>();
@@ -1094,7 +1094,7 @@ public class ConnectionManagerTest
             }
         }));
 
-        Task.WaitAll(tasks.ToArray());
+        Assert.That(Task.WaitAll(tasks.ToArray(), TimeSpan.FromSeconds(10)), Is.True, "Concurrent stress tasks did not finish within 10 seconds");
 
         Assert.That(exceptions, Is.Empty, $"Exceptions encountered during concurrent operations: {string.Join(", ", exceptions.Select(e => e.ToString()))}");
     }

@@ -4369,11 +4369,31 @@ public class PeerServerTest
     public void ConnectToPeer_should_not_attempt_utp_when_ForceProxy_is_true()
     {
         _configService.ForceProxy.Returns(true);
+
+        var proxyListener = new TcpListener(IPAddress.Loopback, 0);
+        proxyListener.Start();
+        _listeners.Add(proxyListener);
+        var proxyPort = ((IPEndPoint)proxyListener.LocalEndpoint).Port;
+
         var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
         proxySettingsProvider.IsEnabled.Returns(true);
         proxySettingsProvider.Type.Returns(ProxyType.Socks5);
         proxySettingsProvider.Host.Returns("127.0.0.1");
-        proxySettingsProvider.Port.Returns(1080);
+        proxySettingsProvider.Port.Returns(proxyPort);
+
+        var proxyServerTask = Task.Run(() =>
+        {
+            try
+            {
+                var client = proxyListener.AcceptTcpClient();
+                _clients.Add(client);
+                client.Close();
+            }
+            catch
+            {
+                // Best-effort test cleanup
+            }
+        });
 
         var utpManager = Substitute.For<IUtpManager>();
         utpManager.IsEnabled.Returns(true);
@@ -4403,6 +4423,7 @@ public class PeerServerTest
         };
 
         InvokeConnectToPeer(server, torrent, candidate);
+        proxyServerTask.Wait(TimeSpan.FromSeconds(3));
 
         utpManager.DidNotReceive().CreateConnection();
     }
@@ -4493,11 +4514,31 @@ public class PeerServerTest
     public void ConnectToPeer_should_not_attempt_utp_when_proxy_is_enabled_without_ForceProxy()
     {
         _configService.ForceProxy.Returns(false);
+
+        var proxyListener = new TcpListener(IPAddress.Loopback, 0);
+        proxyListener.Start();
+        _listeners.Add(proxyListener);
+        var proxyPort = ((IPEndPoint)proxyListener.LocalEndpoint).Port;
+
         var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
         proxySettingsProvider.IsEnabled.Returns(true);
         proxySettingsProvider.Type.Returns(ProxyType.Socks5);
         proxySettingsProvider.Host.Returns("127.0.0.1");
-        proxySettingsProvider.Port.Returns(1080);
+        proxySettingsProvider.Port.Returns(proxyPort);
+
+        var proxyServerTask = Task.Run(() =>
+        {
+            try
+            {
+                var client = proxyListener.AcceptTcpClient();
+                _clients.Add(client);
+                client.Close();
+            }
+            catch
+            {
+                // Best-effort test cleanup
+            }
+        });
 
         var utpManager = Substitute.For<IUtpManager>();
         utpManager.IsEnabled.Returns(true);
@@ -4527,6 +4568,7 @@ public class PeerServerTest
         };
 
         InvokeConnectToPeer(server, torrent, candidate);
+        proxyServerTask.Wait(TimeSpan.FromSeconds(3));
 
         utpManager.DidNotReceive().CreateConnection();
     }

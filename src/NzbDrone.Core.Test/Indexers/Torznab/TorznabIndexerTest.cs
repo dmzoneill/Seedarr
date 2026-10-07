@@ -1541,7 +1541,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             proxySettingsProvider.Host.Returns("127.0.0.1");
             proxySettingsProvider.Port.Returns(8080);
 
-            var proxyHandler = new SocketsHttpHandler();
+            var proxyHandler = TestSocketsHttpHandlers.FastFailingProxyHandler();
             proxySettingsProvider.CreateHandler().Returns(proxyHandler);
 
             var indexer = new TorznabIndexer(proxySettingsProvider: proxySettingsProvider);
@@ -1573,7 +1573,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             proxySettingsProvider.Host.Returns("127.0.0.1");
             proxySettingsProvider.Port.Returns(8080);
 
-            var proxyHandler = new SocketsHttpHandler();
+            var proxyHandler = TestSocketsHttpHandlers.FastFailingProxyHandler();
             proxySettingsProvider.CreateHandler().Returns(proxyHandler);
 
             var indexer = new TorznabIndexer(proxySettingsProvider: proxySettingsProvider);
@@ -1593,7 +1593,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             proxySettingsProvider.Host.Returns("127.0.0.1");
             proxySettingsProvider.Port.Returns(8080);
 
-            var proxyHandler = new SocketsHttpHandler();
+            var proxyHandler = TestSocketsHttpHandlers.FastFailingProxyHandler();
             proxySettingsProvider.CreateHandler().Returns(proxyHandler);
 
             var indexer = new TorznabIndexer(proxySettingsProvider: proxySettingsProvider);
@@ -1620,7 +1620,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             proxySettingsProvider.Host.Returns("127.0.0.1");
             proxySettingsProvider.Port.Returns(8080);
 
-            var proxyHandler = new SocketsHttpHandler();
+            var proxyHandler = TestSocketsHttpHandlers.FastFailingProxyHandler();
             proxySettingsProvider.CreateHandler().Returns(proxyHandler);
 
             var indexer = new TorznabIndexer(proxySettingsProvider: proxySettingsProvider);
@@ -1640,7 +1640,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             proxySettingsProvider.Host.Returns("proxy1.local");
             proxySettingsProvider.Port.Returns(8080);
 
-            var proxyHandler1 = new SocketsHttpHandler();
+            var proxyHandler1 = TestSocketsHttpHandlers.FastFailingProxyHandler();
             proxySettingsProvider.CreateHandler().Returns(proxyHandler1);
 
             var indexer = new TorznabIndexer(proxySettingsProvider: proxySettingsProvider);
@@ -1648,7 +1648,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
 
             Assert.That(indexer.Handler, Is.SameAs(proxyHandler1));
 
-            var proxyHandler2 = new SocketsHttpHandler();
+            var proxyHandler2 = TestSocketsHttpHandlers.FastFailingProxyHandler();
             proxySettingsProvider.Host.Returns("proxy2.local");
             proxySettingsProvider.Port.Returns(9090);
             proxySettingsProvider.CreateHandler().Returns(proxyHandler2);

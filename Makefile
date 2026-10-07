@@ -60,7 +60,7 @@ clean:
 # --- Tests (called by upstream CI: make test / make integration) ---
 
 test:
-	dotnet test $(UNIT_TEST) --configuration Release --no-build \
+	timeout 600 dotnet test $(UNIT_TEST) --configuration Release --no-build \
 		--settings .runsettings \
 		--logger "console;verbosity=normal" \
 		--logger "trx;LogFileName=test-results.trx" \
@@ -69,7 +69,7 @@ test:
 # integration runs unit/integration tests without container orchestration
 integration:
 	@if [ -f $(INTEGRATION_TEST) ]; then \
-		dotnet test $(INTEGRATION_TEST) --no-build \
+		timeout 600 dotnet test $(INTEGRATION_TEST) --no-build \
 			--settings .runsettings \
 			--logger "trx;LogFileName=integration-test-results.trx" \
 			--logger "console;verbosity=normal" \

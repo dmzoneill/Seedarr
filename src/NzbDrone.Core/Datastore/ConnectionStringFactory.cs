@@ -42,10 +42,16 @@ public class ConnectionStringFactory : IConnectionStringFactory
 
     private string BuildPostgresConnectionString()
     {
+        var port = _configFileProvider.PostgresPort;
+        if (port <= 0)
+        {
+            port = 5432;
+        }
+
         var builder = new NpgsqlConnectionStringBuilder
         {
             Host = _configFileProvider.PostgresHost.Trim(),
-            Port = _configFileProvider.PostgresPort,
+            Port = port,
             Database = _configFileProvider.PostgresMainDb,
             Username = _configFileProvider.PostgresUser,
             Password = _configFileProvider.PostgresPassword

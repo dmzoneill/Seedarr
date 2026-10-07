@@ -229,7 +229,12 @@ public class SystemControllerTest
         mainDatabase.DatabaseType.Returns(DatabaseType.PostgreSQL);
         mainDatabase.OpenConnection().Returns(connection);
         connection.CreateCommand().Returns(command);
-        command.ExecuteScalar().Returns("16.2");
+        command.ExecuteScalar().Returns(call => command.CommandText switch
+        {
+            "SHOW server_version" => "16.2",
+            _ when command.CommandText.StartsWith("SELECT Version", StringComparison.Ordinal) => "60",
+            _ => null,
+        });
 
         var controller = new SystemController(
             _taskManager,
@@ -248,7 +253,6 @@ public class SystemControllerTest
         Assert.That(status, Is.Not.Null);
         Assert.That(status.DatabaseVersion, Is.EqualTo("16.2"));
         Assert.That(status.DatabaseType, Is.EqualTo("PostgreSQL"));
-        Assert.That(command.CommandText, Is.EqualTo("SHOW server_version"));
     }
 
     [Test]
@@ -261,7 +265,12 @@ public class SystemControllerTest
         mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);
         mainDatabase.OpenConnection().Returns(connection);
         connection.CreateCommand().Returns(command);
-        command.ExecuteScalar().Returns("3.45.3");
+        command.ExecuteScalar().Returns(call => command.CommandText switch
+        {
+            "SELECT sqlite_version()" => "3.45.3",
+            _ when command.CommandText.StartsWith("SELECT Version", StringComparison.Ordinal) => "60",
+            _ => null,
+        });
 
         var controller = new SystemController(
             _taskManager,
@@ -280,7 +289,6 @@ public class SystemControllerTest
         Assert.That(status, Is.Not.Null);
         Assert.That(status.DatabaseVersion, Is.EqualTo("3.45.3"));
         Assert.That(status.DatabaseType, Is.EqualTo("SQLite"));
-        Assert.That(command.CommandText, Is.EqualTo("SELECT sqlite_version()"));
     }
 
     [Test]
