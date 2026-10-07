@@ -168,6 +168,13 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             resource.ApiKey = _configFileProvider.ApiKey;
         }
 
+        if (string.IsNullOrWhiteSpace(resource.TmdbApiKey) ||
+            resource.TmdbApiKey == "(unchanged)" ||
+            resource.TmdbApiKey == GeneralConfigResourceMapper.GetMaskedApiKey(_configService.TmdbApiKey))
+        {
+            resource.TmdbApiKey = _configService.TmdbApiKey;
+        }
+
         if (resource.SslCertPassword == null ||
             resource.SslCertPassword == "(unchanged)" ||
             resource.SslCertPassword == GeneralConfigResourceMapper.SecretMask)
