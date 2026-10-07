@@ -9,7 +9,6 @@ public class Torrent : ModelBase
     public string Name { get; set; }
     public string InfoHash { get; set; }
 
-    [Ignore]
     public string InfoHashV2 { get; set; }
     public long TotalSize { get; set; }
     public int PieceCount { get; set; }

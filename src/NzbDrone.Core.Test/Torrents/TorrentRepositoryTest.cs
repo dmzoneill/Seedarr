@@ -32,7 +32,8 @@ public class TorrentRepositoryTest
                 ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
                 ""Name"" TEXT NOT NULL,
                 ""Category"" TEXT NULL,
-                ""InfoHash"" TEXT NULL
+                ""InfoHash"" TEXT NULL,
+                ""InfoHashV2"" TEXT NULL
             );
             CREATE TABLE ""PeerConnectionLogs"" (
                 ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,12 +68,12 @@ public class TorrentRepositoryTest
         _keepAliveConnection.Dispose();
     }
 
-    private void InsertTorrent(string name, string category, string infoHash = null)
+    private void InsertTorrent(string name, string category, string infoHash = null, string infoHashV2 = null)
     {
         using var connection = _database.OpenConnection();
         connection.Execute(
-            @"INSERT INTO ""Torrents"" (""Name"", ""Category"", ""InfoHash"") VALUES (@Name, @Category, @InfoHash)",
-            new { Name = name, Category = category, InfoHash = infoHash });
+            @"INSERT INTO ""Torrents"" (""Name"", ""Category"", ""InfoHash"", ""InfoHashV2"") VALUES (@Name, @Category, @InfoHash, @InfoHashV2)",
+            new { Name = name, Category = category, InfoHash = infoHash, InfoHashV2 = infoHashV2 });
     }
 
     private string GetTorrentCategory(string name)
@@ -166,6 +167,44 @@ public class TorrentRepositoryTest
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Name, Is.EqualTo("Torrent 1"));
+    }
+
+    [Test]
+    public void GetByInfoHash_finds_hybrid_torrent_by_v2_hash_when_v1_differs()
+    {
+        const string v1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string v2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        InsertTorrent("Hybrid", "Movies", v1, v2);
+
+        var result = _subject.GetByInfoHash(v2);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Name, Is.EqualTo("Hybrid"));
+        Assert.That(result.InfoHashV2, Is.EqualTo(v2));
+    }
+
+    [Test]
+    public void ExistsByInfoHash_returns_true_when_only_InfoHashV2_matches()
+    {
+        const string v1 = "cccccccccccccccccccccccccccccccccccccccc";
+        const string v2 = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+        InsertTorrent("Hybrid", "TV", v1, v2);
+
+        Assert.That(_subject.ExistsByInfoHash(v2), Is.True);
+        Assert.That(_subject.ExistsByInfoHash(v1), Is.True);
+    }
+
+    [Test]
+    public void GetByInfoHashes_includes_torrents_matched_by_InfoHashV2()
+    {
+        const string v1 = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        const string v2 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        InsertTorrent("Hybrid", "Anime", v1, v2);
+
+        var results = _subject.GetByInfoHashes(new[] { v2 });
+
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0].Name, Is.EqualTo("Hybrid"));
     }
 
     [Test]
