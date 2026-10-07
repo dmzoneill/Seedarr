@@ -362,6 +362,24 @@ public class TransmissionClientTest
     }
 
     [Test]
+    public void GetItems_should_filter_by_category_case_insensitively()
+    {
+        _client.Category = "tv";
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            @"{""arguments"":{""torrents"":[" +
+            @"{""hashString"":""match"",""name"":""Matching"",""totalSize"":100,""leftUntilDone"":0,""status"":6,""downloadDir"":""/dl"",""labels"":[""TV""]}," +
+            @"{""hashString"":""nomatch"",""name"":""No Match"",""totalSize"":200,""leftUntilDone"":0,""status"":6,""downloadDir"":""/dl"",""labels"":[""movies""]" +
+            @"]},""result"":""success""}");
+        InjectMockClient(handler);
+
+        var result = _client.GetItems();
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].InfoHash, Is.EqualTo("match"));
+    }
+
+    [Test]
     public void GetItems_should_skip_torrents_without_matching_label()
     {
         _client.Category = "seedarr";
