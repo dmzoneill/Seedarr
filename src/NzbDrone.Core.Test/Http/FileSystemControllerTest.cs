@@ -1,8 +1,11 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using Seedarr.Api.V1.FileSystem;
 
 namespace NzbDrone.Core.Test.Http;
@@ -16,6 +19,17 @@ public class FileSystemControllerTest
     public void SetUp()
     {
         _controller = new FileSystemController();
+    }
+
+    [Test]
+    public void FileSystemController_should_have_proper_authorization_policies()
+    {
+        var classAttr = typeof(FileSystemController).GetCustomAttribute<AuthorizeAttribute>();
+        Assert.That(classAttr!.Policy, Is.EqualTo(Policies.Reader));
+
+        var mkdirAttr = typeof(FileSystemController).GetMethod(nameof(FileSystemController.CreateDirectory))!
+            .GetCustomAttribute<AuthorizeAttribute>();
+        Assert.That(mkdirAttr!.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 
     [Test]
