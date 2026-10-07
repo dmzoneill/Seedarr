@@ -155,6 +155,30 @@ public class DiskAllocationServiceTest
     }
 
     [Test]
+    public void PreallocateFiles_should_exclude_padding_from_free_space_check()
+    {
+        _configService.PreallocationMode.Returns(PreallocationMode.Sparse);
+        _diskSpaceService.GetDiskSpaceForPath(Arg.Any<string>())
+            .Returns(new DiskSpaceInfo { Path = _tempDir, FreeSpace = 2000 });
+
+        var torrent = new Torrent
+        {
+            Name = "PaddingSpaceTorrent",
+            TotalSize = 10000,
+            SavePath = _tempDir
+        };
+
+        var files = new List<TorrentFile>
+        {
+            new TorrentFile { Path = "content.dat", Size = 2000 },
+            new TorrentFile { Path = ".pad/8000", Size = 8000, IsPaddingFile = true }
+        };
+
+        Assert.DoesNotThrow(() => _subject.PreallocateFiles(torrent, files));
+        Assert.That(File.Exists(Path.Combine(_tempDir, "content.dat")), Is.True);
+    }
+
+    [Test]
     public void PreallocateFiles_should_skip_bep47_padding_files()
     {
         _configService.PreallocationMode.Returns(PreallocationMode.Sparse);
