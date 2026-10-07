@@ -139,7 +139,7 @@ public class SeedingService : ISeedingService
     public SeedingStats GetStats()
     {
         var all = _torrentService.GetAll();
-        var active = all.Where(t => t.Status == TorrentStatus.Seeding).ToList();
+        var active = all.Where(t => t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading).ToList();
 
         return new SeedingStats
         {

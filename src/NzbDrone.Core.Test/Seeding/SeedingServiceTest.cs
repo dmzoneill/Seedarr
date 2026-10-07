@@ -375,13 +375,14 @@ public class SeedingServiceTest
         {
             new Torrent { Id = 1, Status = TorrentStatus.Seeding, Uploaded = 100, Downloaded = 50, Ratio = 2.0 },
             new Torrent { Id = 2, Status = TorrentStatus.Stopped, Uploaded = 200, Downloaded = 100, Ratio = 1.0 },
-            new Torrent { Id = 3, Status = TorrentStatus.Seeding, Uploaded = 300, Downloaded = 150, Ratio = 3.0 }
+            new Torrent { Id = 3, Status = TorrentStatus.Seeding, Uploaded = 300, Downloaded = 150, Ratio = 3.0 },
+            new Torrent { Id = 4, Status = TorrentStatus.Downloading, Uploaded = 10, Downloaded = 90, Ratio = 0.5 }
         };
         _torrentService.GetAll().Returns(torrents);
 
         var stats = _service.GetStats();
 
-        Assert.That(stats.ActiveTorrents, Is.EqualTo(2));
+        Assert.That(stats.ActiveTorrents, Is.EqualTo(3));
     }
 
     [Test]
@@ -401,19 +402,20 @@ public class SeedingServiceTest
     }
 
     [Test]
-    public void GetStats_should_average_ratio_of_active_only()
+    public void GetStats_should_average_ratio_of_transferring_torrents_only()
     {
         var torrents = new List<Torrent>
         {
             new Torrent { Id = 1, Status = TorrentStatus.Seeding, Ratio = 2.0 },
             new Torrent { Id = 2, Status = TorrentStatus.Seeding, Ratio = 4.0 },
-            new Torrent { Id = 3, Status = TorrentStatus.Stopped, Ratio = 100.0 }
+            new Torrent { Id = 3, Status = TorrentStatus.Downloading, Ratio = 0.0 },
+            new Torrent { Id = 4, Status = TorrentStatus.Stopped, Ratio = 100.0 }
         };
         _torrentService.GetAll().Returns(torrents);
 
         var stats = _service.GetStats();
 
-        Assert.That(stats.AverageRatio, Is.EqualTo(3.0));
+        Assert.That(stats.AverageRatio, Is.EqualTo(2.0));
     }
 
     [Test]
