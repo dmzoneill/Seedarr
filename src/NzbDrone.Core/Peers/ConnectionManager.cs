@@ -50,7 +50,7 @@ public class ConnectionManager : IConnectionManager,
 {
     private readonly IConfigService _configService;
     private readonly IPeerConnectionLogService _connectionLogService;
-    private readonly ITorrentService _torrentService;
+    private readonly Lazy<ITorrentService> _torrentService;
     private readonly IFastExtensionHandler _fastExtensionHandler;
     private readonly ITorrentEventLogService _eventLogService;
     private readonly IRandomNumberGenerator _random;
@@ -82,7 +82,7 @@ public class ConnectionManager : IConnectionManager,
     public ConnectionManager(
         IConfigService configService,
         IPeerConnectionLogService connectionLogService,
-        ITorrentService torrentService,
+        Lazy<ITorrentService> torrentService,
         IFastExtensionHandler fastExtensionHandler,
         ITorrentEventLogService eventLogService,
         IRandomNumberGenerator random = null,
@@ -90,7 +90,7 @@ public class ConnectionManager : IConnectionManager,
     {
         _configService = configService;
         _connectionLogService = connectionLogService;
-        _torrentService = torrentService;
+        _torrentService = torrentService ?? throw new ArgumentNullException(nameof(torrentService));
         _fastExtensionHandler = fastExtensionHandler;
         _eventLogService = eventLogService;
         _random = random ?? new RandomNumberGenerator();
@@ -367,7 +367,7 @@ public class ConnectionManager : IConnectionManager,
 
         try
         {
-            var torrent = _torrentService.Get(message.TorrentId);
+            var torrent = _torrentService.Value.Get(message.TorrentId);
             if (torrent != null && !string.IsNullOrWhiteSpace(torrent.InfoHash))
             {
                 DisconnectByInfoHash(torrent.InfoHash);
@@ -411,7 +411,7 @@ public class ConnectionManager : IConnectionManager,
         {
             try
             {
-                var torrent = _torrentService.Get(message.TorrentId);
+                var torrent = _torrentService.Value.Get(message.TorrentId);
                 infoHash = torrent?.InfoHash;
             }
             catch
@@ -723,7 +723,7 @@ public class ConnectionManager : IConnectionManager,
 
         try
         {
-            return _torrentService.FindByInfoHash(infoHash) ?? _torrentService.GetByInfoHash(infoHash);
+            return _torrentService.Value.FindByInfoHash(infoHash) ?? _torrentService.Value.GetByInfoHash(infoHash);
         }
         catch
         {
