@@ -690,6 +690,82 @@ public class SignalRMessageBroadcasterTest
     }
 
     [Test]
+    public async Task BroadcastMessage_retries_identical_payload_after_receiveMessage_send_fails()
+    {
+        var receiveMessageAttempts = 0;
+        _clientProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                if (callInfo.Arg<string>() != "receiveMessage")
+                {
+                    return Task.CompletedTask;
+                }
+
+                receiveMessageAttempts++;
+                if (receiveMessageAttempts == 1)
+                {
+                    var tcs = new TaskCompletionSource();
+                    tcs.SetException(new InvalidOperationException("Simulated broadcast error"));
+                    return tcs.Task;
+                }
+
+                return Task.CompletedTask;
+            });
+
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 1, Progress = 50.0 }
+        };
+
+        _broadcaster.BroadcastMessage(msg);
+        await Task.Delay(50);
+        _broadcaster.BroadcastMessage(msg);
+
+        _clientProxy.Received(2).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task BroadcastToGroup_retries_identical_payload_after_receiveMessage_send_fails()
+    {
+        var groupProxy = Substitute.For<IClientProxy>();
+        var receiveMessageAttempts = 0;
+        groupProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                if (callInfo.Arg<string>() != "receiveMessage")
+                {
+                    return Task.CompletedTask;
+                }
+
+                receiveMessageAttempts++;
+                if (receiveMessageAttempts == 1)
+                {
+                    var tcs = new TaskCompletionSource();
+                    tcs.SetException(new InvalidOperationException("Simulated group broadcast error"));
+                    return tcs.Task;
+                }
+
+                return Task.CompletedTask;
+            });
+        _hubClients.Group("retry-group").Returns(groupProxy);
+
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 10, Progress = 80.0 }
+        };
+
+        _broadcaster.BroadcastToGroup("retry-group", msg);
+        await Task.Delay(50);
+        _broadcaster.BroadcastToGroup("retry-group", msg);
+
+        groupProxy.Received(2).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task TrackerSignalREventHandler_when_send_fails_handles_faulted_continuation()
     {
         var failingProxy = Substitute.For<IClientProxy>();
