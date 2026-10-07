@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -28,6 +30,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
     private readonly ConcurrentDictionary<string, IdentityProviderDefinition> _pendingRetryProviders = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pendingRetryCancellation = new();
     private readonly SemaphoreSlim _schemeLock = new(1, 1);
+    private readonly ConcurrentDictionary<string, byte> _surrogateSubjectWarningsLogged = new();
 
     public DynamicAuthSchemeManager(
         IServiceProvider serviceProvider,
@@ -227,8 +230,21 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
                     OnTokenValidated = context =>
                     {
                         var claims = context.Principal?.Claims.ToList() ?? new List<Claim>();
-                        var sub = claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub")?.Value
-                                    ?? Guid.NewGuid().ToString();
+                        if (!TryResolveOidcNameIdentifier(claims, provider.IssuerUrl, out var sub, out var usedSurrogate))
+                        {
+                            context.Fail(
+                                "OIDC authentication failed: token is missing the subject (sub) claim and no alternate identity claim (preferred_username, nickname, or email) is available.");
+                            return Task.CompletedTask;
+                        }
+
+                        if (usedSurrogate && _surrogateSubjectWarningsLogged.TryAdd(provider.ProviderId, 0))
+                        {
+                            _logger.Warn(
+                                "OIDC provider '{0}' ({1}) returned tokens without a subject (sub) claim; using a deterministic surrogate identifier derived from issuer and username/email.",
+                                provider.Name,
+                                provider.ProviderId);
+                        }
+
                         var username = claims.FirstOrDefault(c => c.Type == ClaimTypes.Name || c.Type == "preferred_username" || c.Type == "nickname")?.Value
                                         ?? sub;
                         var email = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email || c.Type == "email")?.Value;
@@ -571,6 +587,42 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         }
 
         return values.ToList();
+    }
+
+    public static bool TryResolveOidcNameIdentifier(IEnumerable<Claim> claims, string issuer, out string nameIdentifier, out bool usedSurrogate)
+    {
+        nameIdentifier = null;
+        usedSurrogate = false;
+
+        if (claims == null)
+        {
+            return false;
+        }
+
+        var claimList = claims as IList<Claim> ?? claims.ToList();
+        var sub = claimList.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub")?.Value;
+        if (!string.IsNullOrWhiteSpace(sub))
+        {
+            nameIdentifier = sub;
+            return true;
+        }
+
+        var alternate = claimList.FirstOrDefault(c => c.Type == "preferred_username")?.Value
+                        ?? claimList.FirstOrDefault(c => c.Type == ClaimTypes.Name)?.Value
+                        ?? claimList.FirstOrDefault(c => c.Type == "nickname")?.Value
+                        ?? claimList.FirstOrDefault(c => c.Type == ClaimTypes.Email || c.Type == "email")?.Value;
+
+        if (string.IsNullOrWhiteSpace(alternate))
+        {
+            return false;
+        }
+
+        var issuerNormalized = (issuer ?? string.Empty).Trim().TrimEnd('/');
+        var input = $"oidc-surrogate:{issuerNormalized}:{alternate}";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        nameIdentifier = Convert.ToHexString(hash).ToLowerInvariant();
+        usedSurrogate = true;
+        return true;
     }
 
     public static List<string> ResolveRoles(IEnumerable<Claim> claims, string roleMappingRulesJson)

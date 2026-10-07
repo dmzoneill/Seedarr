@@ -676,4 +676,145 @@ public class DynamicAuthSchemeManagerTest
 
         Assert.ThrowsAsync<ArgumentException>(() => manager.RegisterOrUpdateOidcProviderAsync(provider));
     }
+
+    [Test]
+    public void TryResolveOidcNameIdentifier_returns_sub_when_present()
+    {
+        var claims = new List<Claim>
+        {
+            new("sub", "user-abc"),
+            new("preferred_username", "alice"),
+        };
+
+        Assert.That(
+            DynamicAuthSchemeManager.TryResolveOidcNameIdentifier(claims, "https://auth.example.com", out var id, out var usedSurrogate),
+            Is.True);
+        Assert.That(id, Is.EqualTo("user-abc"));
+        Assert.That(usedSurrogate, Is.False);
+    }
+
+    [Test]
+    public void TryResolveOidcNameIdentifier_uses_deterministic_surrogate_when_sub_missing()
+    {
+        var claims = new List<Claim>
+        {
+            new("preferred_username", "alice"),
+        };
+
+        Assert.That(
+            DynamicAuthSchemeManager.TryResolveOidcNameIdentifier(claims, "https://auth.example.com/", out var id1, out var surrogate1),
+            Is.True);
+        Assert.That(surrogate1, Is.True);
+        Assert.That(
+            DynamicAuthSchemeManager.TryResolveOidcNameIdentifier(claims, "https://auth.example.com", out var id2, out _),
+            Is.True);
+        Assert.That(id2, Is.EqualTo(id1));
+    }
+
+    [Test]
+    public void TryResolveOidcNameIdentifier_returns_false_when_no_identity_claims()
+    {
+        var claims = new List<Claim>
+        {
+            new("groups", "users"),
+        };
+
+        Assert.That(
+            DynamicAuthSchemeManager.TryResolveOidcNameIdentifier(claims, "https://auth.example.com", out var id, out var usedSurrogate),
+            Is.False);
+        Assert.That(id, Is.Null);
+        Assert.That(usedSurrogate, Is.False);
+    }
+
+    [Test]
+    public async Task RegisterOrUpdateOidcProviderAsync_OnTokenValidated_fails_when_sub_and_alternate_claims_missing()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "no_sub",
+            Name = "No Sub Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "client-id",
+        };
+
+        await manager.RegisterOrUpdateOidcProviderAsync(provider);
+
+        var cache = sp.GetRequiredService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+        var options = cache.GetOrAdd("Oidc_no_sub", () => new OpenIdConnectOptions());
+
+        var httpContext = new DefaultHttpContext();
+        var scheme = new AuthenticationScheme("Oidc_no_sub", "No Sub Provider", typeof(OpenIdConnectHandler));
+        var userClaims = new ClaimsIdentity(new[] { new Claim("groups", "users") }, "TestAuth");
+
+        var tokenContext = new TokenValidatedContext(
+            httpContext,
+            scheme,
+            options,
+            new ClaimsPrincipal(userClaims),
+            new AuthenticationProperties());
+
+        await options.Events.TokenValidated(tokenContext);
+
+        Assert.That(tokenContext.Result?.Failure, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task RegisterOrUpdateOidcProviderAsync_OnTokenValidated_uses_stable_surrogate_NameIdentifier_without_sub()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "surrogate_sub",
+            Name = "Surrogate Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "client-id",
+        };
+
+        await manager.RegisterOrUpdateOidcProviderAsync(provider);
+
+        var cache = sp.GetRequiredService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+        var options = cache.GetOrAdd("Oidc_surrogate_sub", () => new OpenIdConnectOptions());
+        var scheme = new AuthenticationScheme("Oidc_surrogate_sub", "Surrogate Provider", typeof(OpenIdConnectHandler));
+
+        async Task<string> RunLoginAsync()
+        {
+            var httpContext = new DefaultHttpContext();
+            var userClaims = new ClaimsIdentity(
+                new[] { new Claim("preferred_username", "alice"), new Claim("groups", "users") },
+                "TestAuth");
+            var tokenContext = new TokenValidatedContext(
+                httpContext,
+                scheme,
+                options,
+                new ClaimsPrincipal(userClaims),
+                new AuthenticationProperties());
+            await options.Events.TokenValidated(tokenContext);
+            Assert.That(tokenContext.Result?.Failure, Is.Null);
+            return tokenContext.Principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+
+        var first = await RunLoginAsync();
+        var second = await RunLoginAsync();
+        Assert.That(first, Is.Not.Null.And.Not.Empty);
+        Assert.That(second, Is.EqualTo(first));
+        Assert.That(first, Has.Length.EqualTo(64));
+        Assert.That(first, Does.Not.Contain("-"));
+    }
 }
