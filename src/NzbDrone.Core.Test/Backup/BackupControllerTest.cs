@@ -129,6 +129,41 @@ public class BackupControllerTest
     }
 
     [Test]
+    public void DeleteBackup_when_id_and_fileName_disagree_should_return_bad_request()
+    {
+        const string firstName = "seedarr_backup_1.0_2026-01-01.zip";
+        const string secondName = "seedarr_backup_1.0_2026-01-02.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = firstName, Size = 100, Time = DateTime.UtcNow },
+            new() { Name = secondName, Size = 200, Time = DateTime.UtcNow }
+        });
+
+        var secondId = BackupResourceId.FromFileName(secondName);
+        var result = _controller.DeleteBackup(secondId, firstName);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        _backupService.DidNotReceive().DeleteBackup(Arg.Any<string>());
+    }
+
+    [Test]
+    public void DeleteBackup_when_id_and_fileName_agree_should_delete_matching_backup()
+    {
+        const string targetName = "seedarr_backup_1.0_2026-01-01.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = targetName, Size = 100, Time = DateTime.UtcNow },
+            new() { Name = "seedarr_backup_1.0_2026-01-02.zip", Size = 200, Time = DateTime.UtcNow }
+        });
+
+        var stableId = BackupResourceId.FromFileName(targetName);
+        var result = _controller.DeleteBackup(stableId, targetName);
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        _backupService.Received(1).DeleteBackup(targetName);
+    }
+
+    [Test]
     public void DeleteBackup_with_nonexistent_fileName_should_return_not_found()
     {
         _backupService.GetBackups().Returns(new List<BackupInfo>
