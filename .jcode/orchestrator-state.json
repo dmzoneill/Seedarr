@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:42:11Z",
+  "updatedAt": "2026-10-07T00:43:34Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,44 +14,44 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_61f7ec02",
+    "lastScheduleId": "pending",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "rabbit",
-      "issue": 1269,
-      "worktree": "../seedarr_worktrees/issue-1269",
+      "worker": "moose",
+      "issue": 1241,
+      "worktree": "../seedarr_worktrees/issue-1241",
       "area": "authentication"
     },
     "host": {
       "status": "running",
-      "worker": "otter",
-      "issue": 1293,
-      "worktree": "../seedarr_worktrees/issue-1293",
+      "worker": "badger",
+      "issue": 1285,
+      "worktree": "../seedarr_worktrees/issue-1285",
       "area": "host"
     },
     "api": {
       "status": "running",
-      "worker": "hawk",
-      "issue": 1292,
-      "worktree": "../seedarr_worktrees/issue-1292",
+      "worker": "crane",
+      "issue": 1290,
+      "worktree": "../seedarr_worktrees/issue-1290",
       "area": "downloadclients-api"
     },
     "core-torrents": {
       "status": "running",
-      "worker": "beaver",
-      "issue": 1291,
-      "worktree": "../seedarr_worktrees/issue-1291",
+      "worker": "trout",
+      "issue": 1288,
+      "worktree": "../seedarr_worktrees/issue-1288",
       "area": "torrents"
     },
     "http": {
       "status": "running",
-      "worker": "owl",
-      "issue": 1282,
-      "worktree": "../seedarr_worktrees/issue-1282",
-      "area": "terminal"
+      "worker": "heron",
+      "issue": 1289,
+      "worktree": "../seedarr_worktrees/issue-1289",
+      "area": "http-rest"
     }
   },
   "issueQueue": {
@@ -60,17 +60,17 @@
       "host",
       "downloadclients",
       "torrents",
-      "terminal"
+      "http"
     ],
     "nextCandidates": [
-      1290,
-      1285,
       1277,
       1286,
+      1287,
       1274,
-      1272
+      1272,
+      1284
     ]
   },
-  "githubOpen": 416,
-  "lastMonitorNote": "fox completed #1294 (closed); dispatched rabbit on #1269; stopped otter"
+  "githubOpen": 415,
+  "lastMonitorNote": "coord-fix verified: 6 issues closed on origin/main (#1294,#1292,#1293,#1291,#1282,#1269); rotated 5 slots to #1241,#1285,#1290,#1288,#1289"
 }
