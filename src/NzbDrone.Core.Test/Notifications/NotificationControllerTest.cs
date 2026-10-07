@@ -1281,4 +1281,39 @@ public class NotificationControllerTest
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d => d.FallbackNotificationId == 2));
     }
+
+    [Test]
+    public void Delete_clears_fallback_references_before_removing_notification()
+    {
+        var primary = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Discord primary",
+            Implementation = "Discord",
+            OnGrab = true,
+            FallbackNotificationId = 2,
+        };
+        var backup = new NotificationDefinition { Id = 2, Name = "Email backup", Implementation = "Email" };
+        _repository.All().Returns(new List<NotificationDefinition> { primary, backup });
+
+        var result = _controller.Delete(2);
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<NotificationDefinition>>(items =>
+            items.Count() == 1 && items.Single().Id == 1 && items.Single().FallbackNotificationId == null));
+        _repository.Received(1).Delete(2);
+    }
+
+    [Test]
+    public void Delete_without_fallback_references_deletes_only()
+    {
+        var notif = new NotificationDefinition { Id = 2, Name = "Email", Implementation = "Email" };
+        _repository.All().Returns(new List<NotificationDefinition> { notif });
+
+        var result = _controller.Delete(2);
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<NotificationDefinition>>());
+        _repository.Received(1).Delete(2);
+    }
 }
