@@ -179,6 +179,73 @@ public class IndexerControllerTest
         Assert.That(badRequest.Value, Is.EqualTo("URL cannot be empty."));
     }
 
+    [Test]
+    public void Create_with_masked_api_key_and_no_source_id_returns_bad_request()
+    {
+        var definition = new IndexerDefinition
+        {
+            Name = "Clone",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "********key"
+        };
+
+        var result = _controller.Create(definition);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _indexerFactory.DidNotReceive().Create(Arg.Any<IndexerDefinition>());
+    }
+
+    [Test]
+    public void Create_with_masked_api_key_and_unknown_source_id_returns_bad_request()
+    {
+        _indexerFactory.Get(99).Returns((IndexerDefinition)null);
+
+        var definition = new IndexerDefinition
+        {
+            Id = 99,
+            Name = "Clone",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "********key"
+        };
+
+        var result = _controller.Create(definition);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _indexerFactory.DidNotReceive().Create(Arg.Any<IndexerDefinition>());
+    }
+
+    [Test]
+    public void Create_with_masked_api_key_and_valid_source_id_restores_key_and_creates_new_indexer()
+    {
+        var source = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Torznab",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "stored-secret-key"
+        };
+        _indexerFactory.Get(1).Returns(source);
+        _indexerFactory.Create(Arg.Any<IndexerDefinition>()).Returns(ci => ci.Arg<IndexerDefinition>());
+
+        var definition = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Torznab Copy",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "********-key"
+        };
+
+        var result = _controller.Create(definition);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _indexerFactory.Received(1).Create(Arg.Is<IndexerDefinition>(d =>
+            d.Id == 0 && d.ApiKey == "stored-secret-key" && d.Name == "Torznab Copy"));
+    }
+
     [TestCase("http://169.254.169.254/latest/meta-data")]
     [TestCase("http://127.0.0.1:8080")]
     [TestCase("http://localhost:9696")]

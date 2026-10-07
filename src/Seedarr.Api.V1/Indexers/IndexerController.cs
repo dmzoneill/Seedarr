@@ -127,6 +127,24 @@ public class IndexerController : Controller
             definition.ConfigContract = "IndexerDefinition";
         }
 
+        if (!string.IsNullOrWhiteSpace(definition.ApiKey) && definition.ApiKey.Contains('*'))
+        {
+            if (definition.Id <= 0)
+            {
+                return BadRequest("ApiKey is masked; provide a full API key when creating a new indexer.");
+            }
+
+            var source = _indexerFactory.Get(definition.Id);
+            if (source == null)
+            {
+                return BadRequest("ApiKey is masked; provide a full API key or a valid existing indexer id to copy credentials from.");
+            }
+
+            definition.ApiKey = source.ApiKey;
+        }
+
+        definition.Id = 0;
+
         var created = _indexerFactory.Create(definition);
         return Ok(MaskApiKey(created));
     }
