@@ -31,7 +31,7 @@ public class RingBufferTarget : TargetWithLayout
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex SensitiveJsonRegex = new(
-        @"(""?(?:api[_-]?key|passkey|password|token|secret|access[_-]?token|client[_-]?secret|refresh[_-]?token|bot[_-]?token|auth|key)""?\s*[:=]\s*"?)(?:"(?:[^"\\]|\\.)*"|[^""',\s&}]+)("?)",
+        "(\"?(?:api[_-]?key|passkey|password|token|secret|access[_-]?token|client[_-]?secret|refresh[_-]?token|bot[_-]?token|auth|key)\"?\\s*[:=]\\s*\"?)(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^\"',\\s&}]+)(\"?)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex BearerTokenRegex = new(
@@ -195,7 +195,7 @@ public class RingBufferTarget : TargetWithLayout
 
         if (string.IsNullOrWhiteSpace(level))
         {
-            return LogLevel.Trace >= minimumLevel;
+            return minimumLevel <= LogLevel.Trace;
         }
 
         try
@@ -204,7 +204,7 @@ public class RingBufferTarget : TargetWithLayout
         }
         catch (ArgumentException)
         {
-            return LogLevel.Trace >= minimumLevel;
+            return minimumLevel <= LogLevel.Trace;
         }
     }
 
