@@ -1,6 +1,9 @@
 using System.Collections.Generic;
+using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -102,5 +105,17 @@ public class TorrentFilePriorityFixture
 
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         _torrentFileService.DidNotReceive().SetPriorities(Arg.Any<int>(), Arg.Any<IEnumerable<(int, int)>>());
+    }
+
+    [TestCase(nameof(TorrentController.SetFilePriority))]
+    [TestCase(nameof(TorrentController.SetFilePriorities))]
+    public void File_priority_mutations_should_have_Authorize_Operator_attribute(string methodName)
+    {
+        var method = typeof(TorrentController).GetMethods().FirstOrDefault(m => m.Name == methodName);
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method!.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr!.Policy, Is.EqualTo(Policies.Operator));
     }
 }
