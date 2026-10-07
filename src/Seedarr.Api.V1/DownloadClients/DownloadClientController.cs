@@ -115,6 +115,7 @@ public class DownloadClientController : Controller
         }
 
         _downloadClientFactory.Update(definition);
+        _syncService.ResetClientStatus(id);
         return Ok(MaskPassword(definition));
     }
 
