@@ -79,8 +79,8 @@ public class LinuxPtySessionStartTest
 
         try
         {
-            Assert.That(output, Does.Not.Contain(leakKey, StringComparison.Ordinal));
-            Assert.That(output, Does.Not.Contain(leakValue, StringComparison.Ordinal));
+            Assert.That(output.ToUpperInvariant(), Does.Not.Contain(leakKey.ToUpperInvariant()));
+            Assert.That(output.ToUpperInvariant(), Does.Not.Contain(leakValue.ToUpperInvariant()));
         }
         finally
         {

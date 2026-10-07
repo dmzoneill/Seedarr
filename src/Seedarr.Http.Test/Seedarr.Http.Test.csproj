@@ -1,8 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <NoWarn>$(NoWarn);SA1501;SA1502;SA1503;SA1315;SA1316;SA1515;IDE0005</NoWarn>
+    <NoWarn>$(NoWarn);SA1501;SA1502;SA1503;SA1315;SA1316;SA1515;IDE0005;CA2012;CS4014</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NzbDrone.Core\Seedarr.Core.csproj" />

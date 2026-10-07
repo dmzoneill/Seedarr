@@ -475,6 +475,28 @@ public class DownloadClientController : Controller
         return new BadRequestObjectResult(new { message = ex.Message });
     }
 
+    private ActionResult TryRejectClientBackoff(int clientId, bool force)
+    {
+        if (force)
+        {
+            return null;
+        }
+
+        var status = _syncService.GetClientStatus(clientId);
+        if (status?.IsInBackoff != true)
+        {
+            return null;
+        }
+
+        return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable, new
+        {
+            message = $"Download client is in backoff until {status.BackoffUntil:O}.",
+            code = "backoff",
+            clientId,
+            backoffUntil = status.BackoffUntil,
+        });
+    }
+
     private DownloadClientDefinition EnrichWithStatus(DownloadClientDefinition definition)
     {
         if (definition == null)

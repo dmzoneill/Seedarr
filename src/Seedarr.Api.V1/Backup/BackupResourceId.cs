@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using NzbDrone.Core.Backup;
 
 namespace Seedarr.Api.V1.Backup;
 
@@ -27,7 +29,7 @@ public static class BackupResourceId
         }
     }
 
-    public static bool TryResolveName(System.Collections.Generic.IReadOnlyList<NzbDrone.Core.Backup.BackupInfo> backups, int id, out string name)
+    public static bool TryResolveName(IReadOnlyList<BackupInfo> backups, int id, out string name)
     {
         name = null;
         if (id < 1)

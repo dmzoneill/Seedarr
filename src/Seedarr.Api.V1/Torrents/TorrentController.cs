@@ -1342,13 +1342,13 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     shouldUpdate = true;
                 }
 
-                if (resource.SequentialDownload)
+                if (resource.SequentialDownload == true)
                 {
                     imported.SequentialDownload = true;
                     shouldUpdate = true;
                 }
 
-                if (resource.FirstLastPiecePrio)
+                if (resource.FirstLastPiecePrio == true)
                 {
                     imported.FirstLastPiecePrio = true;
                     shouldUpdate = true;

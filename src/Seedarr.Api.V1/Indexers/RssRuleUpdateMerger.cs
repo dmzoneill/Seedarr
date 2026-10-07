@@ -11,15 +11,8 @@ internal static class RssRuleUpdateMerger
         RssRule incoming,
         IReadOnlySet<string> presentPropertyKeys)
     {
-        if (existing == null)
-        {
-            throw new ArgumentNullException(nameof(existing));
-        }
-
-        if (incoming == null)
-        {
-            throw new ArgumentNullException(nameof(incoming));
-        }
+        ArgumentNullException.ThrowIfNull(existing);
+        ArgumentNullException.ThrowIfNull(incoming);
 
         var merged = Copy(existing);
 

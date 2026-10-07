@@ -704,6 +704,7 @@ public class SignalRMessageBroadcasterTest
         Assert.Pass("Faulted task continuation completed safely");
     }
 
+#pragma warning disable CS4014
     [Test]
     public async Task BroadcastMessage_retries_identical_payload_after_receiveMessage_send_fails()
     {

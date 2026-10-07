@@ -9,9 +9,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.Serializer;
-using NzbDrone.Core.Authentication;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.ArrIntegration.Webhook;
+using NzbDrone.Core.Authentication;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.ArrIntegration;
