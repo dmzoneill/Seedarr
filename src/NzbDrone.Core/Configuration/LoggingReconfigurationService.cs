@@ -76,7 +76,7 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
             return;
         }
 
-        ConfigureFileLogging(config, logToFile: true, fileLogLevel: "Info");
+        ConfigureFileLogging(config, logToFile: true, fileLogLevel: "Info", debugMode: false);
         LogManager.ReconfigExistingLoggers();
     }
 
