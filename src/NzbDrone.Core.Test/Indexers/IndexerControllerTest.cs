@@ -269,6 +269,59 @@ public class IndexerControllerTest
     }
 
     [Test]
+    public void TestDirect_with_existing_indexer_and_null_api_key_returns_result_without_recording_status()
+    {
+        var existing = new IndexerDefinition
+        {
+            Id = 5,
+            Name = "No Key Torznab",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = null
+        };
+        _indexerFactory.Get(5).Returns(existing);
+
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                ReasonPhrase = "Unauthorized"
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var incoming = new IndexerDefinition
+        {
+            Id = 5,
+            Name = "No Key Torznab",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696"
+        };
+
+        var actionResult = controller.TestDirect(incoming);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+        _indexerStatusService.DidNotReceive().RecordSuccess(5);
+        _indexerStatusService.DidNotReceive().RecordFailure(
+            5,
+            Arg.Any<int?>(),
+            Arg.Any<string>(),
+            Arg.Any<Exception>(),
+            Arg.Any<TimeSpan?>());
+    }
+
+    [Test]
     public void TestConnection_with_unsafe_url_returns_bad_request()
     {
         var existing = new IndexerDefinition
