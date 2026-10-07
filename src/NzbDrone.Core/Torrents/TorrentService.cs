@@ -1039,8 +1039,31 @@ public class TorrentService : ITorrentService,
             return;
         }
 
-        _logger.Info("[State Machine] Disk space restored on volume {0}: resuming {1} auto-paused torrents.", message.DrivePath, matchingTorrents.Count);
+        var torrentsToResume = new List<Torrent>();
         foreach (var torrent in matchingTorrents)
+        {
+            try
+            {
+                ValidateDiskSpaceForTorrent(torrent);
+                torrentsToResume.Add(torrent);
+            }
+            catch (InsufficientDiskSpaceException)
+            {
+                _logger.Warn(
+                    "[State Machine] Torrent #{0} ('{1}') remains paused after disk space restored on volume '{2}': insufficient free space to complete download.",
+                    torrent.Id,
+                    torrent.Name,
+                    message.DrivePath);
+            }
+        }
+
+        if (torrentsToResume.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Info("[State Machine] Disk space restored on volume {0}: resuming {1} auto-paused torrents.", message.DrivePath, torrentsToResume.Count);
+        foreach (var torrent in torrentsToResume)
         {
             torrent.ErrorMessage = null;
             torrent.Resume();
@@ -1049,8 +1072,8 @@ public class TorrentService : ITorrentService,
             _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Paused, torrent.Status, $"Disk space restored on volume '{message.DrivePath}'"));
         }
 
-        _repository.UpdateMany(matchingTorrents);
-        foreach (var torrent in matchingTorrents)
+        _repository.UpdateMany(torrentsToResume);
+        foreach (var torrent in torrentsToResume)
         {
             _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
             _eventAggregator.PublishEvent(new TorrentUpdatedEvent(torrent));
