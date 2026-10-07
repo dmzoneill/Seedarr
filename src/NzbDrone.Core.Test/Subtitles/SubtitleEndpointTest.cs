@@ -166,6 +166,27 @@ public class SubtitleEndpointTest
     }
 
     [Test]
+    public void GetSubtitleTrack_ConvertsSrtToWebVtt_WhenOnlySourcePathConfigured()
+    {
+        var torrent = new Torrent { Id = 10, Name = "Test Movie", SourcePath = _tempDir };
+        var videoFile = new TorrentFile { Id = 101, TorrentId = 10, Path = "Movie.mkv" };
+        var subFile = new TorrentFile { Id = 102, TorrentId = 10, Path = "Movie.en.srt" };
+
+        var srtContent = "1\n00:00:01,000 --> 00:00:03,000\nHello from source path\n";
+        File.WriteAllText(Path.Combine(_tempDir, "Movie.en.srt"), srtContent, Encoding.UTF8);
+
+        _torrentService.Get(10).Returns(torrent);
+        _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { videoFile, subFile });
+
+        var actionResult = _controller.GetSubtitleTrack(10, 101, "1");
+        var contentResult = actionResult as ContentResult;
+
+        Assert.That(contentResult, Is.Not.Null);
+        Assert.That(contentResult.ContentType, Is.EqualTo("text/vtt; charset=utf-8"));
+        Assert.That(contentResult.Content, Does.Contain("Hello from source path"));
+    }
+
+    [Test]
     public void GetSubtitleTrack_ReturnsNotFound_WhenTorrentMissing()
     {
         _torrentService.Get(999).Returns((Torrent)null);

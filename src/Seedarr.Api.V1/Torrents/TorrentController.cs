@@ -775,7 +775,10 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         subFile ??= files.FirstOrDefault(f => string.Equals(f.Path, matchedTrack.Path, StringComparison.OrdinalIgnoreCase));
 
         var relativePath = subFile?.Path ?? matchedTrack.Path;
-        var basePath = torrent.SavePath;
+        var basePath = !string.IsNullOrWhiteSpace(torrent.SavePath)
+            ? torrent.SavePath
+            : torrent.SourcePath;
+
         if (string.IsNullOrWhiteSpace(basePath))
         {
             basePath = _configService?.DefaultSavePath ?? string.Empty;
