@@ -38,7 +38,7 @@ public class DownloadClientController : Controller
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
-            return NotFound();
+            return NotFound(new { message = $"Download client {id} not found" });
         }
 
         return Ok(MaskPassword(EnrichWithStatus(definition)));
@@ -94,7 +94,7 @@ public class DownloadClientController : Controller
         var existing = _downloadClientFactory.Get(id);
         if (existing == null)
         {
-            return NotFound();
+            return NotFound(new { message = $"Download client {id} not found" });
         }
 
         definition.Id = id;
@@ -138,7 +138,7 @@ public class DownloadClientController : Controller
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
-            return NotFound();
+            return NotFound(new { message = $"Download client {id} not found" });
         }
 
         if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
