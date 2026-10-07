@@ -600,6 +600,72 @@ public class IdentityProviderServiceTest
     }
 
     [Test]
+    public void EncryptClientSecret_WhenProtectedWithDifferentKeyRing_ThrowsWithoutReWrapping()
+    {
+        var oldProtection = new EphemeralDataProtectionProvider();
+        var oldService = new IdentityProviderService(_repository, null, oldProtection);
+        var foreignCiphertext = oldService.EncryptClientSecret("stored-secret-789");
+
+        var newProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, newProtection);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => service.EncryptClientSecret(foreignCiphertext));
+        Assert.That(ex!.Message, Does.Contain("data protection key ring"));
+    }
+
+    [Test]
+    public void Update_WhenClientSecretCiphertextFromDifferentKeyRing_ThrowsWithoutPersisting()
+    {
+        var oldProtection = new EphemeralDataProtectionProvider();
+        var oldService = new IdentityProviderService(_repository, null, oldProtection);
+        var foreignCiphertext = oldService.EncryptClientSecret("stored-secret-789");
+
+        var existing = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test_key_rotation",
+            Name = "Test Key Rotation",
+            ClientSecretEncrypted = foreignCiphertext,
+        };
+        _repository.Get(1).Returns(existing);
+
+        var newProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, newProtection);
+
+        var provider = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test_key_rotation",
+            Name = "Updated Name",
+            ClientSecretEncrypted = foreignCiphertext,
+        };
+
+        Assert.Throws<InvalidOperationException>(() => service.Update(provider));
+        _repository.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());
+    }
+
+    [Test]
+    public void Add_WhenClientSecretCiphertextFromDifferentKeyRing_ThrowsWithoutPersisting()
+    {
+        var oldProtection = new EphemeralDataProtectionProvider();
+        var oldService = new IdentityProviderService(_repository, null, oldProtection);
+        var foreignCiphertext = oldService.EncryptClientSecret("stored-secret-789");
+
+        var newProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, newProtection);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "test_key_rotation_add",
+            Name = "Test Key Rotation Add",
+            ClientSecretEncrypted = foreignCiphertext,
+        };
+
+        Assert.Throws<InvalidOperationException>(() => service.Add(provider));
+        _repository.DidNotReceive().Insert(Arg.Any<IdentityProviderDefinition>());
+    }
+
+    [Test]
     public void Update_WhenProtectFails_DoesNotPersistPlaintextSecret()
     {
         var dataProtection = Substitute.For<IDataProtectionProvider>();

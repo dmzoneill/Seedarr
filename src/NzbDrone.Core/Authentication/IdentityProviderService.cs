@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.DataProtection;
@@ -103,9 +104,15 @@ public class IdentityProviderService : IIdentityProviderService
             return secret;
         }
 
-        if (IsEncrypted(secret))
+        if (IsEncryptedWithCurrentKeyRing(secret))
         {
             return secret;
+        }
+
+        if (LooksLikeDataProtectionPayload(secret))
+        {
+            throw new InvalidOperationException(
+                "Identity provider client secret cannot be decrypted with the current data protection key ring. Re-enter the client secret.");
         }
 
         try
@@ -144,7 +151,7 @@ public class IdentityProviderService : IIdentityProviderService
             || clientSecret == AlternateMaskedClientSecret;
     }
 
-    private bool IsEncrypted(string value)
+    private bool IsEncryptedWithCurrentKeyRing(string value)
     {
         if (string.IsNullOrEmpty(value) || _protector == null)
         {
@@ -156,10 +163,51 @@ public class IdentityProviderService : IIdentityProviderService
             _protector.Unprotect(value);
             return true;
         }
-        catch
+        catch (CryptographicException)
         {
             return false;
         }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool LooksLikeDataProtectionPayload(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return false;
+        }
+
+        byte[] data;
+        try
+        {
+            data = Convert.FromBase64String(PadBase64(value));
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        if (data.Length < 10)
+        {
+            return false;
+        }
+
+        // Default ASP.NET Core data protection payload header.
+        return data[0] == 0x09 && data[1] == 0xF0 && data[2] == 0xC9 && data[3] == 0xF0;
+    }
+
+    private static string PadBase64(string value)
+    {
+        var remainder = value.Length % 4;
+        if (remainder == 0)
+        {
+            return value;
+        }
+
+        return value + new string('=', 4 - remainder);
     }
 
     public async Task<bool> TestConnectionAsync(IdentityProviderDefinition provider)
