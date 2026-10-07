@@ -459,6 +459,20 @@ public class RingBufferTargetTest
             Is.EqualTo("Authorization: Bearer [REDACTED]"));
 
         Assert.That(
+            RingBufferTarget.Sanitize("Authorization: Basic dXNlcjpwYXNzd29yZA=="),
+            Is.EqualTo("Authorization: Basic [REDACTED]"));
+        Assert.That(
+            RingBufferTarget.Sanitize("Authorization: Basic dXNlcjpwYXNzd29yZA=="),
+            Does.Not.Contain("dXNlcjpwYXNzd29yZA=="));
+
+        Assert.That(
+            RingBufferTarget.Sanitize("authorization: apikey my-secret-key-99"),
+            Is.EqualTo("authorization: apikey [REDACTED]"));
+        Assert.That(
+            RingBufferTarget.Sanitize("authorization: apikey my-secret-key-99"),
+            Does.Not.Contain("my-secret-key-99"));
+
+        Assert.That(
             RingBufferTarget.Sanitize("Injected tracker https://flacsfor.me/0123456789abcdef0123456789abcdef/announce into torrent"),
             Is.EqualTo("Injected tracker https://flacsfor.me/[REDACTED]/announce into torrent"));
         Assert.That(
