@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:35:04Z",
+  "updatedAt": "2026-10-07T02:36:10Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -42,8 +42,8 @@
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "issue": 947,
-      "worktree": "../seedarr_worktrees/issue-947",
+      "issue": 946,
+      "worktree": "../seedarr_worktrees/issue-946",
       "area": "torrents"
     },
     "http": {
@@ -69,6 +69,6 @@
       1236
     ]
   },
-  "githubOpen": 186,
-  "lastMonitorNote": "fix monitor: #986 #1199 #1178 #1203 closed; 4 dispatches"
+  "githubOpen": 185,
+  "lastMonitorNote": "fix monitor: #947 on main; elk dispatched #946"
 }
