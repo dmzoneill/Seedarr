@@ -722,4 +722,22 @@ public class NotificationEventHandlerTest
         var completed = await Task.WhenAny(fallbackSignal.Task, Task.Delay(500));
         Assert.That(completed, Is.EqualTo(fallbackSignal.Task), "Fallback notification should be dispatched when primary throws exception");
     }
+
+    [Test]
+    public async Task DispatchSingleNotificationAsync_CustomScript_skips_execution_when_path_outside_authorized_directories()
+    {
+        var notif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Evil Script",
+            Implementation = "CustomScript",
+            Settings = "{\"path\":\"/tmp/evil.sh\"}",
+        };
+
+        var success = await _handler.DispatchSingleNotificationAsync(notif, "OnGrab", null, null, null);
+
+        Assert.That(success, Is.False);
+        await _customScriptService.DidNotReceive()
+            .ExecuteScriptAsync(Arg.Any<string>(), Arg.Any<Torrent>(), Arg.Any<string>(), Arg.Any<string>());
+    }
 }
