@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T07:00:16Z",
+  "updatedAt": "2026-10-07T07:01:10Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_6d07b400",
+    "lastScheduleId": "sched_0a9e4a67",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -61,5 +61,5 @@
     "nextCandidates": []
   },
   "githubOpen": 0,
-  "lastMonitorNote": "fix monitor: 0 open; all 5 slots idle; queue empty; heartbeat (~2026-10-07T07:00:16Z)"
+  "lastMonitorNote": "fix monitor: 0 open; all 5 slots idle; queue empty; heartbeat (~2026-10-07T07:01:10Z)"
 }
