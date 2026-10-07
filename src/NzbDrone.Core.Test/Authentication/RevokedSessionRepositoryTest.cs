@@ -130,6 +130,32 @@ public class RevokedSessionRepositoryTest
     }
 
     [Test]
+    public void Upsert_case_variant_session_keys_collapses_to_one_row()
+    {
+        var revokedAt = DateTime.UtcNow;
+        var expiresAt = revokedAt.AddDays(30);
+
+        _subject.Upsert("admin", revokedAt, expiresAt);
+        _subject.Upsert("Admin", revokedAt.AddMinutes(5), expiresAt);
+
+        var rows = _subject.GetActive(DateTime.UtcNow.AddYears(1)).ToList();
+        Assert.That(rows, Has.Count.EqualTo(1));
+        Assert.That(rows[0].SessionKey, Is.EqualTo("admin"));
+        Assert.That(rows[0].RevokedAtUtc, Is.EqualTo(revokedAt.AddMinutes(5)).Within(TimeSpan.FromSeconds(1)));
+    }
+
+    [Test]
+    public void GetActiveBySessionKey_is_case_insensitive()
+    {
+        var revokedAt = DateTime.UtcNow;
+        _subject.Upsert("User-A", revokedAt, revokedAt.AddDays(30));
+
+        var active = _subject.GetActiveBySessionKey("user-a", DateTime.UtcNow);
+        Assert.That(active, Is.Not.Null);
+        Assert.That(active.SessionKey, Is.EqualTo("user-a"));
+    }
+
+    [Test]
     public void GetActiveBySessionKey_returns_active_row_only()
     {
         var revokedAt = DateTime.UtcNow.AddHours(-1);

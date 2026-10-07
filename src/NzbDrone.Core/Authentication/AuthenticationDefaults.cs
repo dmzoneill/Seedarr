@@ -19,4 +19,9 @@ public static class AuthenticationDefaults
     {
         return revokedAtUtc + RevocationRetention;
     }
+
+    public static string NormalizeSessionKey(string sessionKey)
+    {
+        return sessionKey.Trim().ToLowerInvariant();
+    }
 }

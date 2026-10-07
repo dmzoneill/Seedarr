@@ -27,7 +27,7 @@ public class RevokedSessionRepository : BasicRepository<RevokedSession>, IRevoke
             return null;
         }
 
-        var key = sessionKey.Trim();
+        var key = AuthenticationDefaults.NormalizeSessionKey(sessionKey);
 
         return QueryWithRetry(connection =>
             connection.QueryFirstOrDefault<RevokedSession>(
@@ -42,7 +42,7 @@ public class RevokedSessionRepository : BasicRepository<RevokedSession>, IRevoke
             return;
         }
 
-        var key = sessionKey.Trim();
+        var key = AuthenticationDefaults.NormalizeSessionKey(sessionKey);
 
         ExecuteWithRetry(connection =>
             connection.Execute(

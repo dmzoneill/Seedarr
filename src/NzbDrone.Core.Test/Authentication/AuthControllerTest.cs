@@ -338,6 +338,20 @@ public class AuthControllerTest
     }
 
     [Test]
+    public void SessionRevocationService_RevokeSession_is_case_insensitive_for_lookup()
+    {
+        var repository = Substitute.For<IRevokedSessionRepository>();
+        var service = new SessionRevocationService(repository);
+        var now = DateTime.UtcNow;
+
+        service.RevokeSession("Admin", now);
+
+        repository.Received(1).Upsert("admin", Arg.Any<DateTime>(), Arg.Any<DateTime>());
+        Assert.That(service.IsSessionRevoked("admin", now.AddMinutes(-5)), Is.True);
+        Assert.That(service.IsSessionRevoked("ADMIN", now.AddMinutes(-5)), Is.True);
+    }
+
+    [Test]
     public void SessionRevocationService_RevokeSession_PersistsToRepository()
     {
         var repository = Substitute.For<IRevokedSessionRepository>();

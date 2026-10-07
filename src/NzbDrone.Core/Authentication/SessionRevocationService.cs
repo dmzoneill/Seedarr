@@ -27,7 +27,7 @@ public class SessionRevocationService : ISessionRevocationService
             return;
         }
 
-        var key = sessionIdOrUser.Trim();
+        var key = AuthenticationDefaults.NormalizeSessionKey(sessionIdOrUser);
         var expiresAtUtc = AuthenticationDefaults.GetRevocationExpiresAtUtc(revokedAtUtc);
 
         if (_repository != null)
@@ -50,7 +50,7 @@ public class SessionRevocationService : ISessionRevocationService
             return false;
         }
 
-        var key = sessionIdOrUser.Trim();
+        var key = AuthenticationDefaults.NormalizeSessionKey(sessionIdOrUser);
         var issuedUtcUnknown = issuedUtc == default || issuedUtc == DateTime.MinValue;
 
         if (!TryGetActiveRevocation(key, out var revokedAtUtc))
@@ -137,7 +137,7 @@ public class SessionRevocationService : ISessionRevocationService
                     continue;
                 }
 
-                var key = entry.SessionKey.Trim();
+                var key = AuthenticationDefaults.NormalizeSessionKey(entry.SessionKey);
                 _revokedSessions.AddOrUpdate(
                     key,
                     entry.RevokedAtUtc,
