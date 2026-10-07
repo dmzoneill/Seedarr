@@ -42,7 +42,7 @@ public sealed class LinuxPtySession : ITerminalSession
 
         string safeCwd = !string.IsNullOrWhiteSpace(cwd) ? Path.GetFullPath(cwd) : null;
         string shell = File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh";
-        string[] argv = [shell, "-i"];
+        string[] argv = TerminalShellArgv.BuildInteractiveExecArgv(shell);
 
         var envVars = TerminalEnvironmentSanitizer.BuildSanitizedEnvironment(safeCwd);
         var envStrings = envVars.Select(kv => $"{kv.Key}={kv.Value}").ToArray();
