@@ -483,6 +483,111 @@ public class SeedingEngineTest
     }
 
     [Test]
+    public void Tick_should_publish_SpeedThresholdExceededEvent_once_on_threshold_crossing()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(100);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1_000_000_000,
+            Downloaded = 0,
+            Progress = 0.2,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 200 * 1024 });
+
+        CallTick();
+        CallTick();
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<SpeedThresholdExceededEvent>(e => e.DownloadSpeed == 200 * 1024));
+    }
+
+    [Test]
+    public void Tick_should_ignore_stale_speeds_on_stopped_or_paused_torrents_for_speed_threshold()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(100);
+        var activeTorrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1_000_000_000,
+            Downloaded = 0,
+            Progress = 0.2,
+            InfoHash = "abc123"
+        };
+        var inactiveTorrent = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Paused,
+            DownloadSpeed = 200 * 1024,
+            Progress = 1.0
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { activeTorrent, inactiveTorrent });
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 50 * 1024 });
+
+        CallTick();
+        CallTick();
+
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SpeedThresholdExceededEvent>());
+    }
+
+    [Test]
+    public void Tick_should_use_alt_limits_when_AlternativeSpeedEnabled_for_speed_threshold()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(1250);
+        _configService.AltDownloadSpeedKbps.Returns(100);
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1_000_000_000,
+            Downloaded = 0,
+            Progress = 0.2,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 150 * 1024 });
+
+        CallTick();
+        CallTick();
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<SpeedThresholdExceededEvent>(e => e.DownloadSpeed == 150 * 1024));
+    }
+
+    [Test]
+    public void Tick_should_publish_SpeedThresholdDroppedEvent_when_traffic_drops_below_threshold()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(100);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1_000_000_000,
+            Downloaded = 0,
+            Progress = 0.2,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 200 * 1024 }, new long[] { 50 * 1024 });
+
+        CallTick();
+        CallTick();
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<SpeedThresholdExceededEvent>());
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<SpeedThresholdDroppedEvent>());
+
+        CallTick();
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<SpeedThresholdDroppedEvent>());
+    }
+
+    [Test]
     public void Tick_should_add_peer_for_active_torrents_with_infohash()
     {
         var torrent = new Torrent

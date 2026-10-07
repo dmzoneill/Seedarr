@@ -170,7 +170,7 @@ public class AppLifetimeTest
     }
 
     [Test]
-    public void SpeedThreshold_should_publish_SpeedThresholdExceededEvent_once_on_threshold_crossing()
+    public void Watchdog_should_not_publish_speed_threshold_events()
     {
         _configService.MaxDownloadSpeedKbps.Returns(100);
         var torrent = new Torrent
@@ -182,86 +182,12 @@ public class AppLifetimeTest
         };
 
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
-
-        _subject.EvaluateWatchdogMetrics();
-        _subject.EvaluateWatchdogMetrics();
-
-        _eventAggregator.Received(1).PublishEvent(Arg.Is<SpeedThresholdExceededEvent>(e => e.DownloadSpeed == 200 * 1024));
-    }
-
-    [Test]
-    public void SpeedThreshold_should_ignore_stale_speeds_on_stopped_or_paused_torrents()
-    {
-        _configService.MaxDownloadSpeedKbps.Returns(100);
-        var activeTorrent = new Torrent
-        {
-            Id = 1,
-            Status = TorrentStatus.Downloading,
-            DownloadSpeed = 50 * 1024,
-            Progress = 0.2
-        };
-        var inactiveTorrent = new Torrent
-        {
-            Id = 2,
-            Status = TorrentStatus.Paused,
-            DownloadSpeed = 200 * 1024,
-            Progress = 1.0
-        };
-
-        _torrentService.GetAll().Returns(new List<Torrent> { activeTorrent, inactiveTorrent });
 
         _subject.EvaluateWatchdogMetrics();
         _subject.EvaluateWatchdogMetrics();
 
         _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SpeedThresholdExceededEvent>());
-    }
-
-    [Test]
-    public void SpeedThreshold_should_use_alt_limits_when_AlternativeSpeedEnabled()
-    {
-        _configService.MaxDownloadSpeedKbps.Returns(1250);
-        _configService.AltDownloadSpeedKbps.Returns(100);
-        _configService.AlternativeSpeedEnabled.Returns(true);
-        var torrent = new Torrent
-        {
-            Id = 1,
-            Status = TorrentStatus.Downloading,
-            DownloadSpeed = 150 * 1024,
-            Progress = 0.2
-        };
-
-        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
-
-        _subject.EvaluateWatchdogMetrics();
-        _subject.EvaluateWatchdogMetrics();
-
-        _eventAggregator.Received(1).PublishEvent(Arg.Is<SpeedThresholdExceededEvent>(e => e.DownloadSpeed == 150 * 1024));
-    }
-
-    [Test]
-    public void SpeedThreshold_should_publish_SpeedThresholdDroppedEvent_when_traffic_drops_below_threshold()
-    {
-        _configService.MaxDownloadSpeedKbps.Returns(100);
-        var torrent = new Torrent
-        {
-            Id = 1,
-            Status = TorrentStatus.Downloading,
-            DownloadSpeed = 200 * 1024,
-            Progress = 0.2
-        };
-
-        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
-        _subject.EvaluateWatchdogMetrics();
-
-        // Speed drops below threshold
-        torrent.DownloadSpeed = 50 * 1024;
-        _subject.EvaluateWatchdogMetrics();
-
-        _eventAggregator.Received(1).PublishEvent(Arg.Any<SpeedThresholdDroppedEvent>());
-
-        // Subsequent tick below threshold should not re-emit
-        _subject.EvaluateWatchdogMetrics();
-        _eventAggregator.Received(1).PublishEvent(Arg.Any<SpeedThresholdDroppedEvent>());
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SpeedThresholdDroppedEvent>());
     }
 
     [Test]
