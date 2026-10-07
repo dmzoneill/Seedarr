@@ -353,6 +353,16 @@ public class Startup
             });
         }
 
+        var httpsListenerAvailability = this._container.IsRegistered<HttpsListenerAvailability>()
+            ? this._container.Resolve<HttpsListenerAvailability>()
+            : null;
+        if (configFileProvider.EnableSsl
+            && configFileProvider.RedirectHttpToHttps
+            && (httpsListenerAvailability == null || httpsListenerAvailability.IsActive))
+        {
+            app.UseHttpsRedirection();
+        }
+
         var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
         if (Directory.Exists(wwwroot))
         {
@@ -397,16 +407,6 @@ public class Startup
             ServeUnknownFileTypes = true,
             DefaultContentType = "application/octet-stream",
         });
-
-        var httpsListenerAvailability = this._container.IsRegistered<HttpsListenerAvailability>()
-            ? this._container.Resolve<HttpsListenerAvailability>()
-            : null;
-        if (configFileProvider.EnableSsl
-            && configFileProvider.RedirectHttpToHttps
-            && (httpsListenerAvailability == null || httpsListenerAvailability.IsActive))
-        {
-            app.UseHttpsRedirection();
-        }
 
         app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/swagger"), swaggerApp =>
         {
