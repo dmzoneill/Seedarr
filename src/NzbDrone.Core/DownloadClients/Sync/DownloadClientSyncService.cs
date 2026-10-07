@@ -42,6 +42,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly IIndexerFactory _indexerFactory;
+    private readonly IIndexerStatusService _indexerStatusService;
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileParser _torrentFileParser;
     private readonly ITrackerEntryService _trackerEntryService;
@@ -124,10 +125,12 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         ITorrentFileParser torrentFileParser,
         ITrackerEntryService trackerEntryService = null,
         ITorrentFileService torrentFileService = null,
-        IRemotePathMappingService remotePathMappingService = null)
+        IRemotePathMappingService remotePathMappingService = null,
+        IIndexerStatusService indexerStatusService = null)
     {
         _downloadClientFactory = downloadClientFactory;
         _indexerFactory = indexerFactory;
+        _indexerStatusService = indexerStatusService;
         _torrentService = torrentService;
         _torrentFileParser = torrentFileParser;
         _trackerEntryService = trackerEntryService;
@@ -1080,12 +1083,24 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     protected virtual IIndexer CreateIndexer(IndexerDefinition definition)
     {
+        if (_indexerFactory != null)
+        {
+            var available = _indexerFactory.GetAvailableProviders();
+            var matched = available?.FirstOrDefault(p =>
+                string.Equals(p.GetType().Name, definition.Implementation, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.IndexerType, definition.IndexerType, StringComparison.OrdinalIgnoreCase));
+            if (matched != null)
+            {
+                return matched;
+            }
+        }
+
         return definition.IndexerType?.Trim().ToLowerInvariant() switch
         {
-            "prowlarr" => new NzbDrone.Core.Indexers.Prowlarr.ProwlarrIndexer(),
-            "torznab" => new NzbDrone.Core.Indexers.Torznab.TorznabIndexer(),
-            "newznab" => new NzbDrone.Core.Indexers.Newznab.NewznabIndexer(),
-            _ => null
+            "newznab" => new NzbDrone.Core.Indexers.Newznab.NewznabIndexer(indexerStatusService: _indexerStatusService),
+            "prowlarr" => new NzbDrone.Core.Indexers.Prowlarr.ProwlarrIndexer(indexerStatusService: _indexerStatusService),
+            "torznab" => new NzbDrone.Core.Indexers.Torznab.TorznabIndexer(indexerStatusService: _indexerStatusService),
+            _ => new NzbDrone.Core.Indexers.Torznab.TorznabIndexer(indexerStatusService: _indexerStatusService)
         };
     }
 

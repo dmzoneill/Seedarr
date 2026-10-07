@@ -26,6 +26,31 @@ public class DownloadClientSyncServiceTest
     private IRemotePathMappingService _remotePathMappingService;
     private TestableDownloadClientSyncService _service;
 
+    private sealed class DiResolvedIndexerStub : IIndexer
+    {
+        public byte[] TorrentBytes { get; init; }
+        public bool FetchCalled { get; private set; }
+
+        public string Name => "ProwlarrIndexer";
+        public string IndexerType => string.Empty;
+
+        public byte[] FetchTorrentByHash(IndexerDefinition definition, string infoHash)
+        {
+            FetchCalled = true;
+            return TorrentBytes;
+        }
+
+        public bool TestConnection(IndexerDefinition definition) => true;
+
+        public IndexerTestResult TestConnectionDetailed(IndexerDefinition definition) => new() { Success = true };
+
+        public List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null, int offset = 0, int limit = 50) => new();
+
+        public List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery) => new();
+
+        public List<ReleaseInfo> Search(IndexerDefinition definition, TorznabSearchCriteria criteria) => new();
+    }
+
     private class TestableDownloadClientSyncService : DownloadClientSyncService
     {
         public IDownloadClient InjectedClient { get; set; }
@@ -249,6 +274,58 @@ public class DownloadClientSyncServiceTest
             t.Name == "Arch Linux 2026" &&
             t.InfoHash == hash &&
             t.TotalSize == 800000));
+    }
+
+    [Test]
+    public void Sync_hash_fallback_should_resolve_indexer_via_GetAvailableProviders_when_implementation_matches()
+    {
+        var hash = "aabbccddeeff00112233445566778899aabbccdd";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+        var diIndexer = new DiResolvedIndexerStub { TorrentBytes = rawBytes };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { Title = "Via DI Indexer", InfoHash = hash }
+        });
+        mockClient.GetTorrentFile(hash).Returns((byte[])null);
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Via DI Indexer",
+            TotalSize = 500000,
+            PieceCount = 250,
+            PieceLength = 2000
+        });
+
+        _indexerFactory.GetAvailableProviders().Returns(new List<IIndexer> { diIndexer });
+        _indexerFactory.All().Returns(new List<IndexerDefinition>
+        {
+            new()
+            {
+                Id = 1,
+                Name = "Prowlarr",
+                Implementation = nameof(DiResolvedIndexerStub),
+                IndexerType = string.Empty,
+                Enable = true,
+                Url = "http://localhost:9696",
+                ApiKey = "key"
+            }
+        });
+
+        _service.InjectedClient = mockClient;
+        _service.InjectedIndexer = null;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "Deluge", ClientType = "Deluge", Enable = true }
+        });
+
+        var result = _service.Sync();
+
+        Assert.That(result.Added, Is.EqualTo(1));
+        Assert.That(diIndexer.FetchCalled, Is.True);
+        _indexerFactory.Received(1).GetAvailableProviders();
     }
 
     [Test]
