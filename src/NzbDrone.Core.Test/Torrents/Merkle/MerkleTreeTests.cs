@@ -20,6 +20,24 @@ public class MerkleTreeTests
     }
 
     [Test]
+    public void FromLeafHashes_PartialFinalBlock_ReportsActualFileLength()
+    {
+        const int payloadLength = 20000;
+        var data = new byte[payloadLength];
+        Array.Fill(data, (byte)'m');
+
+        var leaves = MerkleTree.ComputeLeafHashes(data.AsSpan());
+        Assert.That(leaves.Count, Is.EqualTo(2));
+
+        var tree = MerkleTree.FromLeafHashes(leaves, payloadLength);
+        Assert.That(tree.FileLength, Is.EqualTo(payloadLength));
+        Assert.That(tree.BlockCount, Is.EqualTo(2));
+
+        var fromData = new MerkleTree(data);
+        Assert.That(tree.RootHash, Is.EqualTo(fromData.RootHash));
+    }
+
+    [Test]
     public void EmptyFile_ComputesAllZerosRoot()
     {
         var tree = new MerkleTree(Array.Empty<byte>());
