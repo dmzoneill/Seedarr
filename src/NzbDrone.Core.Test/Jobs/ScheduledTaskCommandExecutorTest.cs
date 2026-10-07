@@ -201,7 +201,9 @@ public class ScheduledTaskCommandExecutorTest
         broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskStarted"));
         broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Name == "TaskFailed" &&
-            m.Body.GetType().GetProperty("Error")?.GetValue(m.Body) as string == FailingTask.FailureMessage));
+            (m.Body.GetType().GetProperty("Error") == null
+                ? null
+                : m.Body.GetType().GetProperty("Error").GetValue(m.Body) as string) == FailingTask.FailureMessage));
         broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskCompleted"));
     }
 }

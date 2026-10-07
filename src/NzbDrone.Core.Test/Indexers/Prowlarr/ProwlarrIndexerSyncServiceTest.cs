@@ -331,7 +331,7 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
 
             Assert.That(task.DefaultInterval, Is.EqualTo(360));
 
-            task.Execute();
+            task.Execute(CancellationToken.None);
             syncService.Received(1).Sync(null, null, null);
 
             var cmd = new SyncProwlarrIndexersCommand(42);

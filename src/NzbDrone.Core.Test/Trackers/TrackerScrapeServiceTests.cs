@@ -223,7 +223,7 @@ public class TrackerScrapeServiceTests
         var job = new TrackerScrapeJob(scrapeService);
         Assert.That(job.DefaultInterval, Is.EqualTo(60));
 
-        job.Execute();
+        job.Execute(CancellationToken.None);
 
         scrapeService.Received(1).ScrapeAllTorrentsAsync(Arg.Any<CancellationToken>());
     }
@@ -237,7 +237,7 @@ public class TrackerScrapeServiceTests
 
         var job = new TrackerScrapeJob(scrapeService);
 
-        Assert.Throws<InvalidOperationException>(() => job.Execute());
+        Assert.Throws<InvalidOperationException>(() => job.Execute(CancellationToken.None));
     }
 
     [Test]

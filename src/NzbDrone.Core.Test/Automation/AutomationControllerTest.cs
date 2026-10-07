@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -149,7 +150,7 @@ public class AutomationControllerTest
             Name = "Updated Without Route ID"
         };
 
-        var result = _controller.Update(resource);
+        var result = _controller.Update(JsonSerializer.SerializeToElement(resource));
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _automationService.Received(1).Update(Arg.Is<AutomationScript>(s => s.Id == 5));
@@ -166,7 +167,7 @@ public class AutomationControllerTest
             Name = "NonExistent Script"
         };
 
-        var result = _controller.Update(resource);
+        var result = _controller.Update(JsonSerializer.SerializeToElement(resource));
 
         Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
         var notFoundResult = (NotFoundObjectResult)result.Result;

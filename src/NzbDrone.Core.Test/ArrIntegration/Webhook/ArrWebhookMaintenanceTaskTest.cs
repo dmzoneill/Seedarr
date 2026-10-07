@@ -36,7 +36,7 @@ public class ArrWebhookMaintenanceTaskTest
         _connectionFactory.All().Returns(connections);
         _webhookRegistration.RegisterWebhook(Arg.Any<ArrConnectionDefinition>()).Returns(true);
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _webhookRegistration.Received(2).RegisterWebhook(Arg.Any<ArrConnectionDefinition>());
     }
@@ -52,7 +52,7 @@ public class ArrWebhookMaintenanceTaskTest
         _connectionFactory.All().Returns(connections);
         _webhookRegistration.RegisterWebhook(Arg.Any<ArrConnectionDefinition>()).Returns(true);
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _webhookRegistration.Received(1).RegisterWebhook(Arg.Any<ArrConnectionDefinition>());
     }
@@ -68,7 +68,7 @@ public class ArrWebhookMaintenanceTaskTest
         _connectionFactory.All().Returns(connections);
         _webhookRegistration.RegisterWebhook(Arg.Any<ArrConnectionDefinition>()).Returns(true);
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _webhookRegistration.Received(1).RegisterWebhook(Arg.Any<ArrConnectionDefinition>());
     }
@@ -78,7 +78,7 @@ public class ArrWebhookMaintenanceTaskTest
     {
         _connectionFactory.All().Returns(new List<ArrConnectionDefinition>());
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _webhookRegistration.DidNotReceive().RegisterWebhook(Arg.Any<ArrConnectionDefinition>());
     }
@@ -92,7 +92,7 @@ public class ArrWebhookMaintenanceTaskTest
         _webhookRegistration.RegisterWebhook(sonarr).Returns(false);
         _webhookRegistration.RegisterWebhook(radarr).Returns(true);
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _webhookRegistration.Received(1).RegisterWebhook(sonarr);
         _webhookRegistration.Received(1).RegisterWebhook(radarr);
@@ -193,7 +193,7 @@ public class ArrWebhookMaintenanceTaskTest
         _webhookRegistration.RegisterWebhook(sonarr).Returns(x => throw new System.Net.Http.HttpRequestException("connection refused"));
         _webhookRegistration.RegisterWebhook(radarr).Returns(true);
 
-        Assert.DoesNotThrow(() => _task.Execute());
+        Assert.DoesNotThrow(() => _task.Execute(CancellationToken.None));
         _webhookRegistration.Received(1).RegisterWebhook(radarr);
     }
 }

@@ -30,7 +30,7 @@ public class DatabaseVacuumTaskTest
         _maintenanceService.GetFreelistCount().Returns(100L);
         _maintenanceService.IsIncrementalAutoVacuumEnabled().Returns(true);
 
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
 
         _maintenanceService.Received(1).PerformMaintenance(5000);
     }
@@ -41,7 +41,7 @@ public class DatabaseVacuumTaskTest
         _maintenanceService.GetFreelistCount().Returns(0L);
         _maintenanceService.IsIncrementalAutoVacuumEnabled().Returns(false);
 
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
 
         _maintenanceService.Received(1).PerformMaintenance(5000);
     }
@@ -52,7 +52,7 @@ public class DatabaseVacuumTaskTest
         _maintenanceService.GetFreelistCount().Returns(0L);
         _maintenanceService.IsIncrementalAutoVacuumEnabled().Returns(true);
 
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
 
         _maintenanceService.DidNotReceive().PerformMaintenance(Arg.Any<int?>());
     }

@@ -39,7 +39,7 @@ public class BitTorrentConfigControllerTest
             ScrapeIntervalSeconds = 900,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -69,7 +69,7 @@ public class BitTorrentConfigControllerTest
             ScrapeIntervalSeconds = 900,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
     }
@@ -94,7 +94,7 @@ public class BitTorrentConfigControllerTest
             CustomScriptTimeoutSeconds = invalidTimeout,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -121,7 +121,7 @@ public class BitTorrentConfigControllerTest
             PeerIdPrefix = invalidPrefix,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -150,7 +150,7 @@ public class BitTorrentConfigControllerTest
             PeerIdPrefix = validPrefix,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
     }
@@ -172,7 +172,7 @@ public class BitTorrentConfigControllerTest
             ScrapeIntervalSeconds = 900,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
         var objResult = (ObjectResult)result.Result;

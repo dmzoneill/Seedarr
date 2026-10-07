@@ -36,7 +36,7 @@ public class SeedingConfigControllerTest
             DownloadCustomIntervalMinutes = 5,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -62,7 +62,7 @@ public class SeedingConfigControllerTest
             DownloadCustomIntervalMinutes = 5,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -88,7 +88,7 @@ public class SeedingConfigControllerTest
             DownloadCustomIntervalMinutes = 5,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -114,7 +114,7 @@ public class SeedingConfigControllerTest
             DownloadCustomIntervalMinutes = 5,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
     }
@@ -134,7 +134,7 @@ public class SeedingConfigControllerTest
             DownloadCustomIntervalMinutes = 5,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
     }
@@ -155,7 +155,7 @@ public class SeedingConfigControllerTest
             MaxActiveDownloads = -1,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -181,7 +181,7 @@ public class SeedingConfigControllerTest
             MaxActiveSeeds = -1,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -207,7 +207,7 @@ public class SeedingConfigControllerTest
             MaxActiveTorrents = -1,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -233,7 +233,7 @@ public class SeedingConfigControllerTest
             SlowTorrentThresholdKbps = -1,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -296,7 +296,7 @@ public class SeedingConfigControllerTest
             MaxUploadSpeedKbps = (int.MaxValue / 1024) + 1,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;

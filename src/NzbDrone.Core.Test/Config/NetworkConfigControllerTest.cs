@@ -40,7 +40,7 @@ public class NetworkConfigControllerTest
             ProxyPort = 8080,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -67,7 +67,7 @@ public class NetworkConfigControllerTest
             ProxyPort = 8080,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
     }
@@ -91,7 +91,7 @@ public class NetworkConfigControllerTest
             ProxyPassword = "*Proxy*Pass*",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.ProxyPassword, Is.EqualTo("*Proxy*Pass*"));
@@ -118,7 +118,7 @@ public class NetworkConfigControllerTest
             ProxyPassword = "********",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.ProxyPassword, Is.EqualTo("ExistingProxySecret123"));
@@ -145,7 +145,7 @@ public class NetworkConfigControllerTest
             ProxyPassword = "(unchanged)",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.ProxyPassword, Is.EqualTo("ExistingProxySecret123"));
@@ -172,7 +172,7 @@ public class NetworkConfigControllerTest
             ProxyPassword = null,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.ProxyPassword, Is.EqualTo("ExistingProxySecret123"));
@@ -199,7 +199,7 @@ public class NetworkConfigControllerTest
             ProxyPort = 8080,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>().Or.InstanceOf<BadRequestResult>());
     }
@@ -226,7 +226,7 @@ public class NetworkConfigControllerTest
             ProxyPort = 8080,
         };
 
-        var result = controller.SaveConfig(resource);
+        var result = controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>().Or.InstanceOf<BadRequestResult>());
     }
@@ -253,7 +253,7 @@ public class NetworkConfigControllerTest
             ProxyPort = 8080,
         };
 
-        var result = controller.SaveConfig(resource);
+        var result = controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>().Or.InstanceOf<BadRequestResult>());
     }
@@ -321,7 +321,7 @@ public class NetworkConfigControllerTest
             ProxyPort = 0,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
     }
@@ -343,7 +343,7 @@ public class NetworkConfigControllerTest
             ProxyPort = 0,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -370,7 +370,7 @@ public class NetworkConfigControllerTest
             ProxyPort = 0,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;

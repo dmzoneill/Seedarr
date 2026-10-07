@@ -141,12 +141,18 @@ public class DownloadClientController : Controller
 
     [HttpPost("{id}/test")]
     [Authorize(Policy = Policies.AdminOnly)]
-    public ActionResult<DownloadClientTestResult> TestConnection(int id)
+    public ActionResult<DownloadClientTestResult> TestConnection(int id, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
         }
 
         if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))

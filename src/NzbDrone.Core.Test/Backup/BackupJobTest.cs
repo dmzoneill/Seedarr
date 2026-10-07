@@ -20,7 +20,7 @@ public class BackupJobTest
     [Test]
     public void Execute_should_invoke_CreateBackup_with_Scheduled_type()
     {
-        _job.Execute();
+        _job.Execute(CancellationToken.None);
 
         _backupService.Received(1).CreateBackup(BackupType.Scheduled);
     }

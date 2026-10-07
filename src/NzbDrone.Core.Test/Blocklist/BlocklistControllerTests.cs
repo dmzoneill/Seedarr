@@ -135,7 +135,7 @@ public class BlocklistControllerTests
         var actionResult = await _controller.SyncBlocklistAsync();
 
         Assert.That(actionResult.Result, Is.InstanceOf<ConflictObjectResult>());
-        await _syncService.DidNotReceive().SyncBlocklistAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await _syncService.DidNotReceive().SyncBlocklistAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

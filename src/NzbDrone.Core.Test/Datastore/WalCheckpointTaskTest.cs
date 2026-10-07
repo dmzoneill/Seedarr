@@ -36,7 +36,7 @@ public class WalCheckpointTaskTest
             CheckpointMode = WalCheckpointMode.Passive
         });
 
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
 
         _maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Passive);
         _maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Restart);
@@ -54,7 +54,7 @@ public class WalCheckpointTaskTest
             Message = "PostgreSQL database does not use WAL mode."
         });
 
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
 
         _maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Passive);
         _maintenanceService.DidNotReceive().CheckpointWal(WalCheckpointMode.Restart);
@@ -72,7 +72,7 @@ public class WalCheckpointTaskTest
             CheckpointMode = WalCheckpointMode.Passive
         });
 
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
 
         _maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Passive);
         _maintenanceService.DidNotReceive().CheckpointWal(WalCheckpointMode.Restart);
@@ -89,7 +89,7 @@ public class WalCheckpointTaskTest
             CheckpointMode = WalCheckpointMode.Passive
         });
 
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
 
         _maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Passive);
         _maintenanceService.DidNotReceive().CheckpointWal(WalCheckpointMode.Restart);

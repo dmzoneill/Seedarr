@@ -339,7 +339,7 @@ public class TerminalControllerTest
             { "AWS_CREDENTIALS", "cred" }
         };
 
-        var sanitized = TerminalEnvironmentSanitizer.Sanitize(input);
+        var sanitized = NzbDrone.Core.Terminal.TerminalEnvironmentSanitizer.Sanitize(input);
 
         Assert.That(sanitized.ContainsKey("SEEDARR_API_KEY"), Is.False);
         Assert.That(sanitized.ContainsKey("SEEDARR_CUSTOM_CONFIG"), Is.False);
@@ -370,7 +370,7 @@ public class TerminalControllerTest
             { "SEEDARR_SECRET", "should-be-stripped" }
         };
 
-        var sanitized = TerminalEnvironmentSanitizer.Sanitize(input);
+        var sanitized = NzbDrone.Core.Terminal.TerminalEnvironmentSanitizer.Sanitize(input);
 
         Assert.That(sanitized["TERM"], Is.EqualTo("xterm"));
         Assert.That(sanitized["COLORTERM"], Is.EqualTo("truecolor"));
@@ -389,10 +389,10 @@ public class TerminalControllerTest
             { "USER", "testuser" }
         };
 
-        var sanitized = TerminalEnvironmentSanitizer.Sanitize(input);
+        var sanitized = NzbDrone.Core.Terminal.TerminalEnvironmentSanitizer.Sanitize(input);
 
-        Assert.That(sanitized["TERM"], Is.EqualTo(TerminalEnvironmentSanitizer.DefaultTerm));
-        Assert.That(sanitized["LANG"], Is.EqualTo(TerminalEnvironmentSanitizer.DefaultLang));
+        Assert.That(sanitized["TERM"], Is.EqualTo(NzbDrone.Core.Terminal.TerminalEnvironmentSanitizer.DefaultTerm));
+        Assert.That(sanitized["LANG"], Is.EqualTo(NzbDrone.Core.Terminal.TerminalEnvironmentSanitizer.DefaultLang));
         Assert.That(sanitized["USER"], Is.EqualTo("testuser"));
     }
 }

@@ -13,7 +13,7 @@ public class LoginRateLimiterCleanupTaskTest
         var limiter = Substitute.For<ILoginRateLimiter>();
         var task = new LoginRateLimiterCleanupTask(limiter);
 
-        task.Execute();
+        task.Execute(CancellationToken.None);
 
         limiter.Received(1).ClearExpired();
     }

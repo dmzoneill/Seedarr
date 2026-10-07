@@ -2,8 +2,12 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <!-- Suppress pre-existing StyleCop violations in test files -->
-    <NoWarn>$(NoWarn);SA1501;SA1502;SA1503;SA1315;SA1316;SA1515;IDE0005</NoWarn>
+    <NoWarn>$(NoWarn);SA1501;SA1502;SA1503;SA1315;SA1316;SA1515;SA1210;SA1507;CA2100;IDE0005</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System.Threading" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NzbDrone.Core\Seedarr.Core.csproj" />

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
-using NzbDrone.Core.Trackers;
+using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Torrents;
 
 namespace NzbDrone.Core.Test.Torrents;

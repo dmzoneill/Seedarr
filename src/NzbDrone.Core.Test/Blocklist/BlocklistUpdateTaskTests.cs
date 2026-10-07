@@ -74,7 +74,7 @@ public class BlocklistUpdateTaskTests
         _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(new BlocklistSyncResult { Success = true }));
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _syncService.Received(1).SyncAsync(null, false, Arg.Any<CancellationToken>());
     }
@@ -85,7 +85,7 @@ public class BlocklistUpdateTaskTests
         _configService.BlocklistEnabled.Returns(true);
         _configService.BlocklistAutoUpdate.Returns(false);
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _syncService.DidNotReceiveWithAnyArgs().SyncAsync(default, default, default);
     }
@@ -95,7 +95,7 @@ public class BlocklistUpdateTaskTests
     {
         _configService.BlocklistEnabled.Returns(false);
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _syncService.DidNotReceiveWithAnyArgs().SyncAsync(default, default, default);
     }
@@ -108,7 +108,7 @@ public class BlocklistUpdateTaskTests
         _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Sync error"));
 
-        Assert.DoesNotThrow(() => _task.Execute());
+        Assert.DoesNotThrow(() => _task.Execute(CancellationToken.None));
     }
 
     [Test]
@@ -199,7 +199,7 @@ public class BlocklistUpdateTaskTests
                 Message = "No blocklist URL configured"
             }));
 
-        Assert.DoesNotThrow(() => _task.Execute());
+        Assert.DoesNotThrow(() => _task.Execute(CancellationToken.None));
     }
 
     [Test]
