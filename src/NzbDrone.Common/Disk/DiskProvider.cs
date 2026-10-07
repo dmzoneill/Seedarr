@@ -49,6 +49,12 @@ public class DiskProvider : IDiskProvider
                 return ReadAvailableFreeSpace(bestMatch, path);
             }
 
+            if (!OperatingSystem.IsWindows())
+            {
+                Logger.Warn("Failed to query available free space for path: {0} (no matching mount)", path);
+                return 0;
+            }
+
             var root = Path.GetPathRoot(fullPath);
             if (string.IsNullOrEmpty(root))
             {
