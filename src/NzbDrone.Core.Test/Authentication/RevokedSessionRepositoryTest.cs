@@ -33,7 +33,8 @@ public class RevokedSessionRepositoryTest
                 ""RevokedAtUtc"" TEXT NOT NULL,
                 ""ExpiresAtUtc"" TEXT NOT NULL
             );
-            CREATE UNIQUE INDEX ""IX_RevokedSessions_SessionKey"" ON ""RevokedSessions"" (""SessionKey"");";
+            CREATE UNIQUE INDEX ""IX_RevokedSessions_SessionKey"" ON ""RevokedSessions"" (""SessionKey"");
+            CREATE INDEX ""IX_RevokedSessions_ExpiresAtUtc"" ON ""RevokedSessions"" (""ExpiresAtUtc"");";
         cmd.ExecuteNonQuery();
 
         _database = new Database(() => new SqliteConnection(_connectionString), DatabaseType.SQLite);
