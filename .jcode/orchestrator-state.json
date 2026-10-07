@@ -1,69 +1,63 @@
 {
-  "updatedAt": "2026-10-07T00:36:59Z",
-  "lastValidationAt": "2026-10-06T22:03:00Z",
-  "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
-  "status": "stopped",
-  "mode": "bug-hunt",
-  "monitor": {
-    "cadenceSeconds": 60,
-    "mechanism": "schedule.wake_at",
-    "active": false,
-    "lastScheduleId": "sched_6fe25428",
-    "stoppedAt": "2026-10-07T00:36:59Z",
-    "stopReason": "user requested stop bug hunters"
-  },
+  "updatedAt": "2026-10-07T00:41:00Z",
+  "status": "running",
+  "mode": "fix",
   "policy": {
     "pushTarget": "origin/main",
     "runTestsLocally": false,
     "simulationContext": "Seedarr is a BitTorrent seeding simulator; preserve simulated I/O semantics.",
     "continuousDispatch": true,
-    "fileIssuesOnly": true,
-    "dedupeGitHubIssues": true
+    "validateBeforeFix": true,
+    "worktreeRoot": "../seedarr_worktrees"
   },
-  "huntSlots": {
-    "core": {
-      "area": "src/NzbDrone.Core",
-      "status": "stopped",
-      "worker": "buffalo"
-    },
-    "api": {
-      "area": "src/Seedarr.Api.V1",
-      "status": "stopped",
-      "worker": "eagle"
-    },
-    "http": {
-      "area": "src/Seedarr.Http",
-      "status": "stopped",
-      "worker": "magpie"
+  "monitor": {
+    "cadenceSeconds": 120,
+    "mechanism": "schedule.wake_at",
+    "active": true,
+    "lastScheduleId": null,
+    "startedAt": "2026-10-07T00:41:00Z"
+  },
+  "fixSlots": {
+    "core-auth": {
+      "status": "running",
+      "worker": "fox",
+      "issue": 1294,
+      "worktree": "../seedarr_worktrees/issue-1294",
+      "area": "authentication"
     },
     "host": {
-      "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-      "status": "stopped",
-      "worker": "panther"
+      "status": "running",
+      "worker": "otter",
+      "issue": 1293,
+      "worktree": "../seedarr_worktrees/issue-1293",
+      "area": "host"
     },
-    "signalr": {
-      "area": "src/NzbDrone.SignalR",
-      "status": "stopped",
-      "worker": "elk"
+    "api": {
+      "status": "running",
+      "worker": "hawk",
+      "issue": 1292,
+      "worktree": "../seedarr_worktrees/issue-1292",
+      "area": "downloadclients-api"
+    },
+    "core-torrents": {
+      "status": "running",
+      "worker": "beaver",
+      "issue": 1291,
+      "worktree": "../seedarr_worktrees/issue-1291",
+      "area": "torrents"
+    },
+    "http": {
+      "status": "running",
+      "worker": "owl",
+      "issue": 1282,
+      "worktree": "../seedarr_worktrees/issue-1282",
+      "area": "terminal"
     }
   },
-  "huntProgressDir": ".jcode/hunt-progress/",
-  "completedFixIssues": [
-    811,
-    814,
-    815,
-    863,
-    869,
-    841,
-    755,
-    725,
-    492,
-    411,
-    186,
-    397,
-    189
-  ],
-  "githubOpenCount": 419,
-  "lastMonitorNote": "stopped by user; cancelled sched_6fe25428; stopped buffalo/eagle/magpie/panther/elk",
-  "githubOpen": 419
+  "issueQueue": {
+    "reservedComponents": ["authentication", "host", "downloadclients", "torrents", "terminal"],
+    "nextCandidates": [1290, 1285, 1277, 1286, 1274, 1272, 1269]
+  },
+  "githubOpen": 421,
+  "lastMonitorNote": "fix-mode started; 5 agents on #1294 #1293 #1292 #1291 #1282"
 }
