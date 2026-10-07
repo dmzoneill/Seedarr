@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
@@ -1080,5 +1081,29 @@ public class DownloadClientControllerTest
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         _downloadClientFactory.Received(1).Update(Arg.Is<DownloadClientDefinition>(d => d.Port == 9091));
+    }
+
+    [Test]
+    public void ImportTorrent_returns_bad_request_when_sync_is_busy()
+    {
+        const string message = "Download client sync is busy. Try again shortly.";
+        _syncService.ImportTorrent(1, "abc").Returns(x => throw new InvalidOperationException(message));
+
+        var result = _controller.ImportTorrent(1, "abc");
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void ImportTorrents_returns_bad_request_when_sync_is_busy()
+    {
+        const string message = "Download client sync is busy. Try again shortly.";
+        _syncService.ImportTorrents(1, Arg.Any<List<string>>())
+            .Returns(x => throw new InvalidOperationException(message));
+
+        var request = new DownloadClientImportRequest { InfoHashes = new List<string> { "abc" } };
+        var result = _controller.ImportTorrents(1, request);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
     }
 }
