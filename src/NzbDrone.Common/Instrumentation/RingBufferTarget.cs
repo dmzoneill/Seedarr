@@ -38,6 +38,10 @@ public class RingBufferTarget : TargetWithLayout
         @"\bBearer\s+[A-Za-z0-9_\-\.]+",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex AuthorizationHeaderCredentialRegex = new(
+        @"(Authorization:\s*)(Basic|ApiKey|Token)\s+\S+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private static readonly Regex BasicAuthRegex = new(
         @"(https?://[^:/@\s]+:)([^@/\s]+)(@)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -87,6 +91,7 @@ public class RingBufferTarget : TargetWithLayout
         result = SensitiveParamRegex.Replace(result, "$1[REDACTED]");
         result = SensitiveJsonRegex.Replace(result, "$1[REDACTED]$2");
         result = BearerTokenRegex.Replace(result, "Bearer [REDACTED]");
+        result = AuthorizationHeaderCredentialRegex.Replace(result, "${1}${2} [REDACTED]");
         result = BasicAuthRegex.Replace(result, "$1[REDACTED]$3");
         result = TrackerPasskeyPathRegex.Replace(result, "$1[REDACTED]");
         result = TrackerPathTokenBeforeAnnounceRegex.Replace(result, "$1[REDACTED]$2");
