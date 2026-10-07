@@ -232,7 +232,8 @@ public class TorrentImportService : ITorrentImportService
             throw new ArgumentException("Magnet link is required", nameof(magnetLink));
         }
 
-        var parsed = MagnetLinkParser.Parse(magnetLink);
+        var trimmedMagnetLink = magnetLink.Trim();
+        var parsed = MagnetLinkParser.Parse(trimmedMagnetLink);
 
         var primaryHash = parsed.InfoHash ?? parsed.InfoHashV2;
         ValidateInfoHash(primaryHash);
@@ -269,6 +270,12 @@ public class TorrentImportService : ITorrentImportService
                 }
             }
 
+            if (string.IsNullOrWhiteSpace(existing.MagnetUrl))
+            {
+                existing.MagnetUrl = trimmedMagnetLink;
+                existing = _torrentService.Update(existing);
+            }
+
             _eventLogService.Info(existing.Id, "Update", $"Torrent '{existing.Name}' updated with new trackers from magnet link");
             return existing;
         }
@@ -279,6 +286,7 @@ public class TorrentImportService : ITorrentImportService
             InfoHash = parsed.InfoHash ?? parsed.InfoHashV2,
             InfoHashV2 = parsed.InfoHashV2,
             TrackerUrl = parsed.Trackers != null && parsed.Trackers.Length > 0 ? parsed.Trackers[0] : null,
+            MagnetUrl = trimmedMagnetLink,
             Status = TorrentStatus.Queued,
             DateAdded = DateTime.UtcNow
         };
