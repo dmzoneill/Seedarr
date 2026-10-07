@@ -164,6 +164,43 @@ public class DownloadClientControllerTest
     }
 
     [Test]
+    public void Create_enriches_client_with_sync_status()
+    {
+        var def = new DownloadClientDefinition
+        {
+            Name = "My Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = "QBitTorrent",
+        };
+
+        _downloadClientFactory.Create(def).Returns(callInfo =>
+        {
+            var created = callInfo.Arg<DownloadClientDefinition>();
+            created.Id = 10;
+            return created;
+        });
+
+        var status = new DownloadClientStatus
+        {
+            IsOnline = false,
+            Version = "4.6.0",
+            LastErrorMessage = "Connection refused",
+            ConsecutiveFailures = 1,
+        };
+        _syncService.GetClientStatus(10).Returns(status);
+
+        var result = _controller.Create(def);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var value = (DownloadClientDefinition)((OkObjectResult)result.Result).Value;
+        Assert.That(value.IsOnline, Is.False);
+        Assert.That(value.Version, Is.EqualTo("4.6.0"));
+        Assert.That(value.LastErrorMessage, Is.EqualTo("Connection refused"));
+        Assert.That(value.ConsecutiveFailures, Is.EqualTo(1));
+    }
+
+    [Test]
     public void Update_with_null_body_returns_bad_request()
     {
         var result = _controller.Update(1, null);
@@ -318,6 +355,47 @@ public class DownloadClientControllerTest
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         _downloadClientFactory.Received(1).Update(Arg.Is<DownloadClientDefinition>(d => d.Password == "existingPassword" && d.Name == "New Client"));
+        _syncService.Received(1).ResetClientStatus(1);
+    }
+
+    [Test]
+    public void Update_enriches_client_with_sync_status_after_reset()
+    {
+        var existing = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Old Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = "QBitTorrent",
+            Password = "existingPassword",
+        };
+
+        var updated = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "New Client",
+            Host = "127.0.0.1",
+            Port = 8085,
+            ClientType = "QBitTorrent",
+            Password = "********",
+        };
+
+        _downloadClientFactory.Get(1).Returns(existing);
+        _syncService.GetClientStatus(1).Returns(new DownloadClientStatus
+        {
+            IsOnline = true,
+            Version = "4.6.0",
+            ConsecutiveFailures = 0,
+        });
+
+        var result = _controller.Update(1, updated);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var value = (DownloadClientDefinition)((OkObjectResult)result).Value;
+        Assert.That(value.IsOnline, Is.True);
+        Assert.That(value.Version, Is.EqualTo("4.6.0"));
+        Assert.That(value.ConsecutiveFailures, Is.EqualTo(0));
         _syncService.Received(1).ResetClientStatus(1);
     }
 
