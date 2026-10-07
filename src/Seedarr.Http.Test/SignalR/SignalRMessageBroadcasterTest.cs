@@ -32,6 +32,9 @@ public class SignalRMessageBroadcasterTest
         _clientProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
+        MessageHub.ResetForTesting();
+        MessageHub.AddConnectionForTesting();
+
         _broadcaster = new SignalRMessageBroadcaster(_hubContext, TimeSpan.FromMilliseconds(500));
     }
 
@@ -39,6 +42,72 @@ public class SignalRMessageBroadcasterTest
     public void TearDown()
     {
         _broadcaster?.Dispose();
+        MessageHub.ResetForTesting();
+    }
+
+    [Test]
+    public void BroadcastMessage_does_not_record_dedup_cache_when_no_clients_connected()
+    {
+        MessageHub.ResetForTesting();
+
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 1, Progress = 50.0 }
+        };
+
+        _broadcaster.BroadcastMessage(msg);
+        _broadcaster.BroadcastMessage(msg);
+
+        Assert.That(_broadcaster.RecentPayloadCount, Is.EqualTo(0));
+        _clientProxy.Received(2).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void BroadcastMessage_after_offline_broadcast_delivers_first_connected_update_with_same_payload()
+    {
+        MessageHub.ResetForTesting();
+
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 1, Progress = 50.0 }
+        };
+
+        _broadcaster.BroadcastMessage(msg);
+        Assert.That(_broadcaster.RecentPayloadCount, Is.EqualTo(0));
+
+        MessageHub.AddConnectionForTesting();
+        _broadcaster.BroadcastMessage(msg);
+
+        _clientProxy.Received(2).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        _clientProxy.Received(2).SendCoreAsync("TorrentUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void BroadcastToGroup_does_not_record_dedup_cache_when_no_clients_connected()
+    {
+        MessageHub.ResetForTesting();
+
+        var groupProxy = Substitute.For<IClientProxy>();
+        groupProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _hubClients.Group("group-offline").Returns(groupProxy);
+
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 10, Progress = 80.0 }
+        };
+
+        _broadcaster.BroadcastToGroup("group-offline", msg);
+        _broadcaster.BroadcastToGroup("group-offline", msg);
+
+        Assert.That(_broadcaster.RecentPayloadCount, Is.EqualTo(0));
+        groupProxy.Received(2).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
