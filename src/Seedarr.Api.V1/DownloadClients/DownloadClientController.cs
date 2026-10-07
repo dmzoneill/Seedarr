@@ -201,6 +201,7 @@ public class DownloadClientController : Controller
         }
 
         var result = client.TestConnectionDetailed();
+        _syncService.RecordConnectionTestResult(id, result);
         return Ok(result);
     }
 
@@ -250,6 +251,11 @@ public class DownloadClientController : Controller
         }
 
         var result = client.TestConnectionDetailed();
+        if (definition.Id > 0)
+        {
+            _syncService.RecordConnectionTestResult(definition.Id, result);
+        }
+
         return Ok(result);
     }
 

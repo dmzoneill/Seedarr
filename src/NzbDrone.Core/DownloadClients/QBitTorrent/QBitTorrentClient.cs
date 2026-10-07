@@ -627,6 +627,37 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         return TestConnectionDetailed().Success;
     }
 
+    public string GetRemoteVersion()
+    {
+        if (string.IsNullOrWhiteSpace(Host))
+        {
+            return null;
+        }
+
+        try
+        {
+            return TryFetchAppVersion();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string TryFetchAppVersion()
+    {
+        using var versionReq = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/app/version");
+        using var versionResp = _client.Send(versionReq);
+        if (!versionResp.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        using var reader = new StreamReader(versionResp.Content.ReadAsStream());
+        var version = reader.ReadToEnd();
+        return string.IsNullOrWhiteSpace(version) ? null : version.Trim();
+    }
+
     public DownloadClientTestResult TestConnectionDetailed()
     {
         if (string.IsNullOrWhiteSpace(Host))
@@ -636,14 +667,12 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
         try
         {
-            using var versionReq = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/app/version");
-            using var versionResp = _client.Send(versionReq);
-            if (versionResp.IsSuccessStatusCode)
+            var appVersion = TryFetchAppVersion();
+            if (appVersion != null)
             {
-                using var reader = new StreamReader(versionResp.Content.ReadAsStream());
-                var version = reader.ReadToEnd();
-                var verStr = string.IsNullOrWhiteSpace(version) ? "" : $" {version.Trim()}";
-                return DownloadClientTestResult.Ok($"Successfully connected to qBittorrent{verStr} at {BaseUrl}");
+                return DownloadClientTestResult.Ok(
+                    $"Successfully connected to qBittorrent {appVersion} at {BaseUrl}",
+                    appVersion);
             }
 
             using var content = new FormUrlEncodedContent(new[]
@@ -665,7 +694,11 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             if (response.IsSuccessStatusCode && body.Contains("Ok"))
             {
                 _isAuthenticated = true;
-                return DownloadClientTestResult.Ok($"Successfully connected to qBittorrent at {BaseUrl}");
+                appVersion = TryFetchAppVersion();
+                var verStr = appVersion == null ? "" : $" {appVersion}";
+                return DownloadClientTestResult.Ok(
+                    $"Successfully connected to qBittorrent{verStr} at {BaseUrl}",
+                    appVersion);
             }
 
             _isAuthenticated = false;

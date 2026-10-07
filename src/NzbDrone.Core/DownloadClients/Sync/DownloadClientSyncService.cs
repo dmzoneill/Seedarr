@@ -33,6 +33,7 @@ public interface IDownloadClientSyncService
     DownloadClientStatus GetClientStatus(int clientId);
     IReadOnlyDictionary<int, DownloadClientStatus> GetAllClientStatuses();
     void ResetClientStatus(int clientId);
+    void RecordConnectionTestResult(int clientId, DownloadClientTestResult result);
 }
 
 public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
@@ -73,7 +74,24 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         return TimeSpan.FromSeconds(seconds);
     }
 
-    private void RecordSuccess(int clientId)
+    public void RecordConnectionTestResult(int clientId, DownloadClientTestResult result)
+    {
+        if (result == null)
+        {
+            return;
+        }
+
+        if (result.Success)
+        {
+            RecordSuccess(clientId, result.Version);
+        }
+        else
+        {
+            RecordFailure(clientId, new Exception(result.Message ?? "Connection test failed"));
+        }
+    }
+
+    private void RecordSuccess(int clientId, string version = null)
     {
         var status = _clientStatuses.GetOrAdd(clientId, id => new DownloadClientStatus { ClientId = id });
         status.IsOnline = true;
@@ -81,6 +99,28 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         status.BackoffUntil = null;
         status.LastErrorMessage = null;
         status.LastSyncTime = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(version))
+        {
+            status.Version = version.Trim();
+        }
+    }
+
+    private void RecordSuccessFromClient(int clientId, IDownloadClient provider)
+    {
+        string version = null;
+        if (provider != null)
+        {
+            try
+            {
+                version = provider.GetRemoteVersion();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to read version from download client {0}", clientId);
+            }
+        }
+
+        RecordSuccess(clientId, version);
     }
 
     private void RecordFailure(int clientId, Exception ex)
@@ -161,7 +201,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 try
                 {
                     var items = provider.GetItems();
-                    RecordSuccess(definition.Id);
+                    RecordSuccessFromClient(definition.Id, provider);
                     foreach (var item in items)
                     {
                         if (string.IsNullOrEmpty(item.InfoHash))
@@ -377,7 +417,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         try
         {
             items = provider.GetItems();
-            RecordSuccess(clientId);
+            RecordSuccessFromClient(clientId, provider);
         }
         catch (Exception ex)
         {
@@ -519,7 +559,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         try
         {
             var items = provider.GetItems();
-            RecordSuccess(clientId);
+            RecordSuccessFromClient(clientId, provider);
             matchingItem = items?.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception ex)
@@ -897,7 +937,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         try
         {
             var items = provider.GetItems();
-            RecordSuccess(clientId);
+            RecordSuccessFromClient(clientId, provider);
             if (items != null)
             {
                 foreach (var item in items)
