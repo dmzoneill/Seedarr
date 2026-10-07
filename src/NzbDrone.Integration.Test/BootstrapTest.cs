@@ -278,4 +278,47 @@ public class BootstrapTest
 
         Assert.That(availability.IsActive, Is.False);
     }
+
+    [Test]
+    public void ConfigureKestrel_should_fallback_to_http_when_port_collision_and_certificate_load_fails()
+    {
+        var configProvider = Substitute.For<IConfigFileProvider>();
+        configProvider.BindAddress.Returns("127.0.0.1");
+        configProvider.Port.Returns(8687);
+        configProvider.SslPort.Returns(8687);
+        configProvider.EnableSsl.Returns(true);
+
+        var certManager = Substitute.For<ICertificateManager>();
+        certManager
+            .GetOrCreateCertificate(configProvider)
+            .Returns(_ => throw new InvalidOperationException("cert unavailable"));
+
+        var availability = new HttpsListenerAvailability();
+        availability.SetActive(HttpsListenerAvailability.TryPrepareCertificate(configProvider, certManager));
+        var serverOptions = new KestrelServerOptions();
+
+        Assert.DoesNotThrow(() => Bootstrap.ConfigureKestrel(serverOptions, configProvider, certManager, null, availability));
+        Assert.That(availability.IsActive, Is.False);
+    }
+
+    [Test]
+    public void ConfigureKestrel_should_fallback_to_http_on_any_ip_when_port_collision_and_certificate_load_fails()
+    {
+        var configProvider = Substitute.For<IConfigFileProvider>();
+        configProvider.BindAddress.Returns("*");
+        configProvider.Port.Returns(8687);
+        configProvider.SslPort.Returns(8687);
+        configProvider.EnableSsl.Returns(true);
+
+        var certManager = Substitute.For<ICertificateManager>();
+        certManager
+            .GetOrCreateCertificate(configProvider)
+            .Returns(_ => throw new InvalidOperationException("cert unavailable"));
+
+        var availability = new HttpsListenerAvailability();
+        var serverOptions = new KestrelServerOptions();
+
+        Assert.DoesNotThrow(() => Bootstrap.ConfigureKestrel(serverOptions, configProvider, certManager, null, availability));
+        Assert.That(availability.IsActive, Is.False);
+    }
 }
