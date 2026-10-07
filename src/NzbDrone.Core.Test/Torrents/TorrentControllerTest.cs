@@ -1093,6 +1093,38 @@ public class TorrentControllerTest
     }
 
     [Test]
+    public void GetPieceMap_returns_empty_map_when_piece_metadata_is_missing()
+    {
+        const int torrentId = 99;
+        const string infoHash = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        var torrent = new Torrent
+        {
+            Id = torrentId,
+            InfoHash = infoHash,
+            PieceCount = 0,
+            PieceLength = 0,
+            TotalSize = 0,
+            Progress = 0.5
+        };
+
+        _torrentService.Get(torrentId).Returns(torrent);
+        _connectionManager.GetConnections(infoHash).Returns(new List<PeerConnection>());
+
+        var result = _controller.GetPieceMap(torrentId.ToString());
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var pieceMap = ((OkObjectResult)result.Result).Value as PieceMapResource;
+
+        Assert.That(pieceMap, Is.Not.Null);
+        Assert.That(pieceMap.TotalPieces, Is.EqualTo(0));
+        Assert.That(pieceMap.PieceLength, Is.EqualTo(0));
+        Assert.That(pieceMap.Spans, Is.Empty);
+        Assert.That(pieceMap.RleSpans, Is.Empty);
+        Assert.That(pieceMap.Rarity, Is.Empty);
+        Assert.That(pieceMap.RaritySpans, Is.Empty);
+    }
+
+    [Test]
     public void GetPieceMap_returns_NotFound_when_torrent_does_not_exist()
     {
         _torrentService.Get(999).Returns((Torrent)null);
