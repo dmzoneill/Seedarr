@@ -166,7 +166,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
     [Microsoft.AspNetCore.Mvc.NonAction]
     public void Flush()
     {
-        List<(TModel Model, ulong Generation)> toFlush;
+        List<(int EntityId, TModel Model, ulong Generation)> toFlush;
         lock (_syncLock)
         {
             foreach (var timer in _pendingTimers.Values)
@@ -176,22 +176,22 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
             _pendingTimers.Clear();
 
-            toFlush = new List<(TModel, ulong)>(_pendingUpdates.Count);
+            toFlush = new List<(int, TModel, ulong)>(_pendingUpdates.Count);
             foreach (var kvp in _pendingUpdates)
             {
                 var generation = _pendingUpdateGenerations.TryGetValue(kvp.Key, out var gen)
                     ? gen
                     : GetEntityGeneration(kvp.Key);
-                toFlush.Add((kvp.Value, generation));
+                toFlush.Add((kvp.Key, kvp.Value, generation));
             }
-
-            _pendingUpdates.Clear();
-            _pendingUpdateGenerations.Clear();
         }
 
-        foreach (var (model, generation) in toFlush)
+        foreach (var (entityId, model, generation) in toFlush)
         {
-            DispatchBroadcast(ModelAction.Updated, model, generation);
+            if (TryDispatchBroadcast(ModelAction.Updated, model, generation))
+            {
+                RemovePendingUpdate(entityId);
+            }
         }
     }
 
@@ -255,6 +255,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
         TModel modelToBroadcast = null;
         ulong generationAtQueue = 0;
+        var hasPending = false;
         lock (_syncLock)
         {
             if (_pendingTimers.Remove(entityId, out var timer))
@@ -262,19 +263,32 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
                 timer.Dispose();
             }
 
-            if (_pendingUpdates.Remove(entityId, out var model))
+            if (_pendingUpdates.TryGetValue(entityId, out var model))
             {
+                hasPending = true;
                 generationAtQueue = _pendingUpdateGenerations.TryGetValue(entityId, out var gen)
                     ? gen
                     : GetEntityGeneration(entityId);
-                _pendingUpdateGenerations.Remove(entityId);
                 modelToBroadcast = model;
             }
         }
 
-        if (modelToBroadcast != null)
+        if (!hasPending || modelToBroadcast == null)
         {
-            DispatchBroadcast(ModelAction.Updated, modelToBroadcast, generationAtQueue);
+            return;
+        }
+
+        if (TryDispatchBroadcast(ModelAction.Updated, modelToBroadcast, generationAtQueue))
+        {
+            RemovePendingUpdate(entityId);
+        }
+        else if (!_signalRBroadcaster.IsConnected)
+        {
+            SchedulePendingCoalesceTimer(entityId);
+        }
+        else
+        {
+            RemovePendingUpdate(entityId);
         }
     }
 
@@ -299,14 +313,19 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
     private void DispatchBroadcast(ModelAction action, TModel model, ulong? pendingGeneration = null)
     {
+        TryDispatchBroadcast(action, model, pendingGeneration);
+    }
+
+    private bool TryDispatchBroadcast(ModelAction action, TModel model, ulong? pendingGeneration = null)
+    {
         if (!_signalRBroadcaster.IsConnected)
         {
-            return;
+            return false;
         }
 
         if (pendingGeneration.HasValue && !IsPendingGenerationCurrent(model.Id, pendingGeneration.Value))
         {
-            return;
+            return false;
         }
 
         try
@@ -314,7 +333,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
             var resource = GetResourceById(model);
             if (pendingGeneration.HasValue && !IsPendingGenerationCurrent(model.Id, pendingGeneration.Value))
             {
-                return;
+                return false;
             }
 
             if (resource != null)
@@ -324,11 +343,38 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
                 {
                     RecordSuccessfulBroadcast(model.Id);
                 }
+
+                return true;
             }
+
+            return false;
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to broadcast SignalR model event for {0}", typeof(TModel).Name);
+            return false;
+        }
+    }
+
+    private void RemovePendingUpdate(int entityId)
+    {
+        lock (_syncLock)
+        {
+            _pendingUpdates.Remove(entityId);
+            _pendingUpdateGenerations.Remove(entityId);
+        }
+    }
+
+    private void SchedulePendingCoalesceTimer(int entityId)
+    {
+        lock (_syncLock)
+        {
+            if (_pendingTimers.ContainsKey(entityId) || !_pendingUpdates.ContainsKey(entityId))
+            {
+                return;
+            }
+
+            _pendingTimers[entityId] = new Timer(OnCoalesceTimerTick, entityId, _coalesceWindow, Timeout.InfiniteTimeSpan);
         }
     }
 
