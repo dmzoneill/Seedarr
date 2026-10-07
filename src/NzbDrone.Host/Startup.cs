@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi;
@@ -332,6 +333,20 @@ public class Startup
         return CorsSecurityHelper.IsOriginAllowed(origin, allowedOrigins);
     }
 
+    internal static void PrepareWwwrootStaticFileResponse(StaticFileResponseContext ctx)
+    {
+        if (ctx.File.Name.Equals("index.html", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+            ctx.Context.Response.Headers.Pragma = "no-cache";
+            ctx.Context.Response.Headers.Expires = "0";
+        }
+        else
+        {
+            ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        }
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "ASP.NET Core convention expects instance Configure method")]
     public void Configure(WebApplication app)
     {
@@ -372,43 +387,23 @@ public class Startup
             });
         }
 
-        app.UseDefaultFiles();
-        app.UseStaticFiles(new StaticFileOptions
-        {
-            OnPrepareResponse = ctx =>
-            {
-                if (ctx.File.Name.Equals("index.html", StringComparison.OrdinalIgnoreCase))
-                {
-                    ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
-                    ctx.Context.Response.Headers.Pragma = "no-cache";
-                    ctx.Context.Response.Headers.Expires = "0";
-                }
-                else
-                {
-                    ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
-                }
-            },
-        });
-
-        var wwwroot = Path.Combine(System.AppContext.BaseDirectory, "wwwroot");
+        var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
         if (Directory.Exists(wwwroot))
         {
+            var wwwrootProvider = new PhysicalFileProvider(wwwroot);
+            app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = wwwrootProvider });
             app.UseStaticFiles(new StaticFileOptions
             {
-                FileProvider = new PhysicalFileProvider(wwwroot),
-                OnPrepareResponse = ctx =>
-                {
-                    if (ctx.File.Name.Equals("index.html", StringComparison.OrdinalIgnoreCase))
-                    {
-                        ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
-                        ctx.Context.Response.Headers.Pragma = "no-cache";
-                        ctx.Context.Response.Headers.Expires = "0";
-                    }
-                    else
-                    {
-                        ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
-                    }
-                },
+                FileProvider = wwwrootProvider,
+                OnPrepareResponse = PrepareWwwrootStaticFileResponse,
+            });
+        }
+        else
+        {
+            app.UseDefaultFiles();
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                OnPrepareResponse = PrepareWwwrootStaticFileResponse,
             });
         }
 
