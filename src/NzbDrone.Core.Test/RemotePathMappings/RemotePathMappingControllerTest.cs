@@ -58,7 +58,7 @@ public class RemotePathMappingControllerTest
     [Test]
     public void Create_returns_conflict_on_duplicate_mapping()
     {
-        _service.Add(Arg.Any<RemotePathMapping>()).Throws(new DuplicateRemotePathMappingException("host1", "/downloads"));
+        _service.When(s => s.Add(Arg.Any<RemotePathMapping>())).Do(_ => throw new DuplicateRemotePathMappingException("host1", "/downloads"));
 
         var result = _controller.Create(new RemotePathMappingResource
         {
@@ -74,7 +74,7 @@ public class RemotePathMappingControllerTest
     public void Update_returns_conflict_on_duplicate_mapping()
     {
         _service.Get(2).Returns(new RemotePathMapping { Id = 2, Host = "host2", RemotePath = "/other", LocalPath = "/mnt/b" });
-        _service.Update(Arg.Any<RemotePathMapping>()).Throws(new DuplicateRemotePathMappingException("host1", "/downloads"));
+        _service.When(s => s.Update(Arg.Any<RemotePathMapping>())).Do(_ => throw new DuplicateRemotePathMappingException("host1", "/downloads"));
 
         var result = _controller.Update(2, new RemotePathMappingResource
         {

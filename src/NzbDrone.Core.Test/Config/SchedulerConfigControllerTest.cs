@@ -35,7 +35,7 @@ public class SchedulerConfigControllerTest
             TimeZone = invalidTimeZone,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -61,7 +61,7 @@ public class SchedulerConfigControllerTest
             TimeZone = validOrEmptyTimeZone,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
     }

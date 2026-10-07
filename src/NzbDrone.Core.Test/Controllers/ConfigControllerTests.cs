@@ -55,7 +55,7 @@ public class ConfigControllerTests
             WatchFolderScanIntervalSeconds = 10
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         _configFileProvider.DidNotReceive().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
@@ -75,7 +75,7 @@ public class ConfigControllerTests
             WatchFolderScanIntervalSeconds = 10
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         _configFileProvider.DidNotReceive().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
@@ -92,7 +92,7 @@ public class ConfigControllerTests
             WatchFolderScanIntervalSeconds = 10
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -114,7 +114,7 @@ public class ConfigControllerTests
             WatchFolderScanIntervalSeconds = 10
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
@@ -141,7 +141,7 @@ public class ConfigControllerTests
             WatchFolderScanIntervalSeconds = 10
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
@@ -166,7 +166,7 @@ public class ConfigControllerTests
             WatchFolderScanIntervalSeconds = 10
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.UrlBase, Is.EqualTo(expectedNormalized));
@@ -220,7 +220,7 @@ public class ConfigControllerTests
             SslCertPassword = "P@ssw*rd#2026",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.SslCertPassword, Is.EqualTo(GeneralConfigResourceMapper.SecretMask));
@@ -242,7 +242,7 @@ public class ConfigControllerTests
             SslCertPassword = "********",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.SslCertPassword, Is.EqualTo(GeneralConfigResourceMapper.SecretMask));
@@ -264,7 +264,7 @@ public class ConfigControllerTests
             SslCertPassword = "(unchanged)",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.SslCertPassword, Is.EqualTo(GeneralConfigResourceMapper.SecretMask));
@@ -286,7 +286,7 @@ public class ConfigControllerTests
             SslCertPassword = null,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.SslCertPassword, Is.EqualTo(GeneralConfigResourceMapper.SecretMask));
@@ -309,7 +309,7 @@ public class ConfigControllerTests
             ColorScheme = null
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.ThemeStyle, Is.EqualTo("slate"));
@@ -330,7 +330,7 @@ public class ConfigControllerTests
             ApiKey = "my*custom*api*key*2026",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.ApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey("my*custom*api*key*2026")));
@@ -354,7 +354,7 @@ public class ConfigControllerTests
             ApiKey = "rotated-api-key-value-2026",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(_rpcSessionStore.IsValid("qbittorrent-sid"), Is.False);
@@ -398,7 +398,7 @@ public class ConfigControllerTests
             ApiKey = masked,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.ApiKey, Is.EqualTo(masked));
@@ -420,7 +420,7 @@ public class ConfigControllerTests
             ApiKey = "(unchanged)",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.ApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey("1234567890abcdef")));
@@ -464,7 +464,7 @@ public class ConfigControllerTests
 
         var resource = GeneralConfigResourceMapper.ToResource(_configService, _configFileProvider);
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         _configFileProvider.Received(1).SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
@@ -484,7 +484,7 @@ public class ConfigControllerTests
             TmdbApiKey = "my*tmdb*key*2026",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.TmdbApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey("my*tmdb*key*2026")));
@@ -509,7 +509,7 @@ public class ConfigControllerTests
             TmdbApiKey = masked,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.TmdbApiKey, Is.EqualTo(masked));
@@ -533,7 +533,7 @@ public class ConfigControllerTests
             TmdbApiKey = "(unchanged)",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.TmdbApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey(existing)));
@@ -557,7 +557,7 @@ public class ConfigControllerTests
             TmdbApiKey = null,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.TmdbApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey(existing)));
@@ -581,7 +581,7 @@ public class ConfigControllerTests
             TmdbApiKey = "",
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.TmdbApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey(existing)));
@@ -604,7 +604,7 @@ public class ConfigControllerTests
 
         var resource = GeneralConfigResourceMapper.ToResource(_configService, _configFileProvider);
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Assert.That(resource.ApiKey, Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey(apiKey)));
@@ -726,7 +726,7 @@ public class ConfigControllerTests
             ColorScheme = "blue"
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
 
@@ -780,7 +780,7 @@ public class ConfigControllerTests
             WatchFolderScanIntervalSeconds = 10
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
         var objResult = (ObjectResult)result.Result;
@@ -802,7 +802,7 @@ public class ConfigControllerTests
             WatchFolderScanIntervalSeconds = 10
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
         var objResult = (ObjectResult)result.Result;
@@ -822,7 +822,7 @@ public class ConfigControllerTests
             WatchFolderScanIntervalSeconds = 10
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
         Received.InOrder(() =>

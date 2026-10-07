@@ -191,7 +191,7 @@ public class MediaCoverEvictionTest
 
         Assert.That(task.DefaultInterval, Is.EqualTo(1440));
 
-        task.Execute();
+        task.Execute(CancellationToken.None);
 
         enrichmentService.Received(1).EvictMediaCoverCache();
     }

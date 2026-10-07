@@ -214,7 +214,7 @@ namespace NzbDrone.Core.Test.Configuration
             config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget);
             LogManager.Configuration = config;
 
-            _configService.When(x => x.LogToFile).Do(_ => throw new InvalidOperationException("config not ready"));
+            _configService.LogToFile.Returns(_ => throw new InvalidOperationException("config not ready"));
 
             Assert.Throws<InvalidOperationException>(() => _subject.ReconfigureLogging());
             Assert.That(LogManager.Configuration.FindTargetByName<FileTarget>("file"), Is.Not.Null);

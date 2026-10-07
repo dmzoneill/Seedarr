@@ -33,7 +33,7 @@ public class TrackerBoostOptimizationTaskTest
                 executed = true;
             });
 
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
 
         Assert.That(executed, Is.True);
         _trackerBoostService.Received(1).RunOptimizationCycleAsync(Arg.Any<CancellationToken>());
@@ -62,13 +62,13 @@ public class TrackerBoostOptimizationTaskTest
             .Returns(tcs.Task);
 
         // Start first execution in background thread to hold the lock
-        var firstTask = Task.Run(() => _subject.Execute());
+        var firstTask = Task.Run(() => _subject.Execute(CancellationToken.None));
 
         // Wait briefly for first execution to acquire lock
         Thread.Sleep(50);
 
         // Attempt a second concurrent execution
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
         concurrentRunAttempted = true;
 
         // Release the first execution
@@ -85,8 +85,8 @@ public class TrackerBoostOptimizationTaskTest
     {
         _trackerBoostService.RunOptimizationCycleAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        _subject.Execute();
-        _subject.Execute();
+        _subject.Execute(CancellationToken.None);
+        _subject.Execute(CancellationToken.None);
 
         _trackerBoostService.Received(2).RunOptimizationCycleAsync(Arg.Any<CancellationToken>());
     }
@@ -98,13 +98,13 @@ public class TrackerBoostOptimizationTaskTest
             .Throws(new InvalidOperationException("Service failed"));
 
         // Should not throw as RunOptimizationCycleSafelyAsync catches exceptions
-        Assert.DoesNotThrow(() => _subject.Execute());
+        Assert.DoesNotThrow(() => _subject.Execute(CancellationToken.None));
 
         // Subsequent call should succeed and acquire lock again
         _trackerBoostService.RunOptimizationCycleAsync(Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
-        Assert.DoesNotThrow(() => _subject.Execute());
+        Assert.DoesNotThrow(() => _subject.Execute(CancellationToken.None));
         _trackerBoostService.Received(2).RunOptimizationCycleAsync(Arg.Any<CancellationToken>());
     }
 

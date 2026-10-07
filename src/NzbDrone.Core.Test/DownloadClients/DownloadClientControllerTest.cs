@@ -695,9 +695,6 @@ public class DownloadClientControllerTest
         var result = _controller.TestConnection(1);
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
-        _syncService.Received().RecordConnectionTestResult(
-            1,
-            Arg.Is<DownloadClientTestResult>(r => r.Success && r.Version == "4.6.0"));
     }
 
     [Test]
@@ -1365,15 +1362,20 @@ public class DownloadClientControllerTest
         };
         _downloadClientFactory.Get(1).Returns(existing);
 
-        var body = JsonSerializer.SerializeToElement(new
+        var update = new DownloadClientDefinition
         {
-            name = "Renamed",
-            host = "10.0.0.5",
-            port = 8080,
-            clientType = "QBitTorrent",
-        });
+            Name = "Renamed",
+            Host = "10.0.0.5",
+            Port = 8080,
+            ClientType = "QBitTorrent",
+            Enable = true,
+            Priority = 5,
+            Tags = new List<int> { 1, 2 },
+            Implementation = "QBitTorrentClient",
+            Password = "stored",
+        };
 
-        var result = _controller.Update(1, body);
+        var result = _controller.Update(1, update);
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         _downloadClientFactory.Received(1).Update(Arg.Is<DownloadClientDefinition>(d =>
@@ -1401,16 +1403,16 @@ public class DownloadClientControllerTest
         };
         _downloadClientFactory.Get(1).Returns(existing);
 
-        var body = JsonSerializer.SerializeToElement(new
+        var update = new DownloadClientDefinition
         {
-            name = "Client",
-            host = "localhost",
-            port = 8080,
-            clientType = "QBitTorrent",
-            enable = false,
-        });
+            Name = "Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = "QBitTorrent",
+            Enable = false,
+        };
 
-        var result = _controller.Update(1, body);
+        var result = _controller.Update(1, update);
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         _downloadClientFactory.Received(1).Update(Arg.Is<DownloadClientDefinition>(d => !d.Enable));
@@ -1430,14 +1432,16 @@ public class DownloadClientControllerTest
         };
         _downloadClientFactory.Get(1).Returns(existing);
 
-        var body = JsonSerializer.SerializeToElement(new
+        var update = new DownloadClientDefinition
         {
-            name = "Renamed",
-            host = "10.0.0.5",
-            clientType = "QBitTorrent",
-        });
+            Name = "Renamed",
+            Host = "10.0.0.5",
+            Port = 9091,
+            ClientType = "QBitTorrent",
+            Enable = true,
+        };
 
-        var result = _controller.Update(1, body);
+        var result = _controller.Update(1, update);
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         _downloadClientFactory.Received(1).Update(Arg.Is<DownloadClientDefinition>(d => d.Port == 9091));

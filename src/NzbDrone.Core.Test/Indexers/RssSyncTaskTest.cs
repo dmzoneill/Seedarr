@@ -23,7 +23,7 @@ public class RssSyncTaskTest
         syncService.Sync(false).Returns(2);
         var task = new RssSyncTask(syncService);
 
-        task.Execute();
+        task.Execute(CancellationToken.None);
 
         syncService.Received(1).Sync(false);
     }

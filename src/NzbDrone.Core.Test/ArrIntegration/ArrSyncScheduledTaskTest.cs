@@ -32,7 +32,7 @@ public class ArrSyncScheduledTaskTest
     {
         _connectionFactory.All().Returns(new List<ArrConnectionDefinition>());
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _arrSyncService.DidNotReceive().Sync();
     }
@@ -46,7 +46,7 @@ public class ArrSyncScheduledTaskTest
         };
         _connectionFactory.All().Returns(connections);
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _arrSyncService.DidNotReceive().Sync();
     }
@@ -60,7 +60,7 @@ public class ArrSyncScheduledTaskTest
         };
         _connectionFactory.All().Returns(connections);
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _arrSyncService.DidNotReceive().Sync();
     }
@@ -76,7 +76,7 @@ public class ArrSyncScheduledTaskTest
         _connectionFactory.All().Returns(connections);
         _arrSyncService.Sync().Returns(new SyncResult { Added = 2, Skipped = 1, Failed = 0 });
 
-        _task.Execute();
+        _task.Execute(CancellationToken.None);
 
         _arrSyncService.Received(1).Sync();
     }
@@ -91,7 +91,7 @@ public class ArrSyncScheduledTaskTest
         _connectionFactory.All().Returns(connections);
         _arrSyncService.When(s => s.Sync()).Do(_ => throw new Exception("Sync exploded"));
 
-        Assert.DoesNotThrow(() => _task.Execute());
+        Assert.DoesNotThrow(() => _task.Execute(CancellationToken.None));
     }
 
     [Test]
@@ -99,7 +99,7 @@ public class ArrSyncScheduledTaskTest
     {
         _connectionFactory.All().Returns((List<ArrConnectionDefinition>)null);
 
-        Assert.DoesNotThrow(() => _task.Execute());
+        Assert.DoesNotThrow(() => _task.Execute(CancellationToken.None));
         _arrSyncService.DidNotReceive().Sync();
     }
 }
