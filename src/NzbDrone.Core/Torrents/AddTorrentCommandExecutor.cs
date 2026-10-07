@@ -41,11 +41,12 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
         _logger.Info("Adding torrent from file: {0}", command.FilePath);
 
         var parsed = _parser.Parse(command.FilePath);
+        var primaryHash = parsed.InfoHash ?? parsed.InfoHashV2;
 
-        var existing = _torrentService.GetByInfoHash(parsed.InfoHash);
+        var existing = _torrentService.GetByInfoHash(primaryHash);
         if (existing != null)
         {
-            _logger.Info("Torrent already exists with info hash {0}, merging trackers", parsed.InfoHash);
+            _logger.Info("Torrent already exists with info hash {0}, merging trackers", primaryHash);
             var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
             var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
 
@@ -87,7 +88,8 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
         var torrent = new Torrent
         {
             Name = parsed.Name,
-            InfoHash = parsed.InfoHash,
+            InfoHash = primaryHash,
+            InfoHashV2 = parsed.InfoHashV2,
             TotalSize = parsed.TotalSize,
             PieceCount = parsed.PieceCount,
             PieceLength = parsed.PieceLength,

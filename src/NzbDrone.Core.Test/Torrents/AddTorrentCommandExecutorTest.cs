@@ -49,6 +49,58 @@ public class AddTorrentCommandExecutorTest
     }
 
     [Test]
+    public void Execute_should_use_info_hash_v2_when_v1_hash_is_null()
+    {
+        const string v2Hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var command = new AddTorrentCommand { FilePath = "/path/to/v2only.torrent" };
+        var parsed = new ParsedTorrent
+        {
+            Name = "V2OnlyTorrent",
+            InfoHash = null,
+            InfoHashV2 = v2Hash,
+            TotalSize = 1000
+        };
+
+        _parser.Parse("/path/to/v2only.torrent").Returns(parsed);
+        _torrentService.GetByInfoHash(v2Hash).Returns((Torrent)null);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 200, Name = "V2OnlyTorrent" });
+
+        _subject.Execute(command);
+
+        _torrentService.Received(1).GetByInfoHash(v2Hash);
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == v2Hash && t.InfoHashV2 == v2Hash));
+    }
+
+    [Test]
+    public void Execute_should_merge_trackers_for_v2_only_hash_when_torrent_already_exists()
+    {
+        const string v2Hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var command = new AddTorrentCommand { FilePath = "/path/to/v2existing.torrent" };
+        var parsed = new ParsedTorrent
+        {
+            Name = "V2Existing",
+            InfoHash = null,
+            InfoHashV2 = v2Hash,
+            TotalSize = 1000,
+            AnnounceUrl = "http://new-tracker.example.com/announce"
+        };
+
+        var existing = new Torrent { Id = 11, InfoHash = v2Hash, InfoHashV2 = v2Hash };
+
+        _parser.Parse("/path/to/v2existing.torrent").Returns(parsed);
+        _torrentService.GetByInfoHash(v2Hash).Returns(existing);
+        _trackerEntryService.GetByTorrentId(11).Returns(new List<TrackerEntry>());
+
+        _subject.Execute(command);
+
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+        _torrentService.Received(1).GetByInfoHash(v2Hash);
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t =>
+            t.TorrentId == 11 && t.Url == "http://new-tracker.example.com/announce"));
+    }
+
+    [Test]
     public void Execute_should_merge_trackers_when_torrent_already_exists()
     {
         var command = new AddTorrentCommand { FilePath = "/path/to/existing.torrent" };
