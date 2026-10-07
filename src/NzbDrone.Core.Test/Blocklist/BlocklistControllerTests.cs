@@ -104,9 +104,21 @@ public class BlocklistControllerTests
     }
 
     [Test]
+    public async Task SyncBlocklistAsync_when_blocklist_disabled_should_return_conflict_without_syncing()
+    {
+        _configService.BlocklistEnabled.Returns(false);
+
+        var actionResult = await _controller.SyncBlocklistAsync();
+
+        Assert.That(actionResult.Result, Is.InstanceOf<ConflictObjectResult>());
+        await _syncService.DidNotReceive().SyncBlocklistAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task SyncBlocklistAsync_should_trigger_sync_and_return_counts()
     {
         // Arrange
+        _configService.BlocklistEnabled.Returns(true);
         var syncResult = new BlocklistSyncResult
         {
             Success = true,
