@@ -425,6 +425,48 @@ public class TorrentRecheckServiceTest
     }
 
     [Test]
+    public void Recheck_completion_keeps_paused_when_user_paused_during_checking()
+    {
+        var torrent = new Torrent
+        {
+            Id = 24,
+            InfoHash = "hash-paused-recheck",
+            Name = "Paused During Recheck",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 2,
+            TotalSize = 2000
+        };
+
+        var persistedTorrent = new Torrent
+        {
+            Id = 24,
+            InfoHash = torrent.InfoHash,
+            Name = torrent.Name,
+            Status = TorrentStatus.Paused,
+            PieceCount = 2,
+            TotalSize = 2000
+        };
+
+        _pieceVerificationService.VerifyPieceFromStorage(
+            Arg.Any<Torrent>(),
+            Arg.Any<IList<TorrentFile>>(),
+            Arg.Any<int>(),
+            Arg.Any<byte[]>(),
+            Arg.Any<IMultiFilePieceStorage>(),
+            Arg.Any<string>()).Returns(true);
+
+        _stateMachine.When(sm => sm.TransitionToChecking(Arg.Any<Torrent>()))
+            .Do(callInfo => callInfo.Arg<Torrent>().Status = TorrentStatus.Checking);
+
+        _torrentRepository.Get(24).Returns(persistedTorrent);
+
+        var result = _service.Recheck(torrent);
+
+        Assert.That(result.Status, Is.EqualTo(TorrentStatus.Paused));
+        _stateMachine.DidNotReceive().TransitionFromChecking(Arg.Any<Torrent>());
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task RecheckAsync_broadcasts_progress_via_signalr_broadcaster()
     {
         var signalR = Substitute.For<NzbDrone.SignalR.IBroadcastSignalRMessage>();

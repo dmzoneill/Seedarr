@@ -419,8 +419,20 @@ public class TorrentRecheckService : ITorrentRecheckService
                 torrent.Progress = 1.0;
             }
 
-            // 6. Transition state back to appropriate status (Downloading or Seeding)
-            if (_stateMachine != null)
+            // 6. Transition state back to appropriate status unless the user paused during recheck
+            var persistedStatus = _torrentRepository?.Get(torrent.Id)?.Status;
+            if (persistedStatus == TorrentStatus.Paused)
+            {
+                torrent.Status = TorrentStatus.Paused;
+                torrent.Active = false;
+                torrent.UploadSpeed = 0;
+                torrent.DownloadSpeed = 0;
+                _logger.Info(
+                    "Recheck completed for paused torrent {0} (Id: {1}); keeping Paused status",
+                    torrent.Name,
+                    torrent.Id);
+            }
+            else if (_stateMachine != null)
             {
                 _stateMachine.TransitionFromChecking(torrent);
             }
