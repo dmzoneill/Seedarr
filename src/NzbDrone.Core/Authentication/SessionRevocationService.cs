@@ -52,19 +52,32 @@ public class SessionRevocationService : ISessionRevocationService
             return false;
         }
 
-        if (issuedUtc == default || issuedUtc == DateTime.MinValue)
+        var key = sessionIdOrUser.Trim();
+        var issuedUtcUnknown = issuedUtc == default || issuedUtc == DateTime.MinValue;
+
+        if (!TryGetActiveRevocation(key, out var revokedAtUtc))
         {
             return false;
         }
 
-        var key = sessionIdOrUser.Trim();
-        if (_revokedSessions.TryGetValue(key, out var revokedAtUtc))
+        if (issuedUtcUnknown)
         {
-            return issuedUtc <= revokedAtUtc;
+            return true;
+        }
+
+        return issuedUtc <= revokedAtUtc;
+    }
+
+    private bool TryGetActiveRevocation(string key, out DateTime revokedAtUtc)
+    {
+        if (_revokedSessions.TryGetValue(key, out revokedAtUtc))
+        {
+            return true;
         }
 
         if (_repository == null)
         {
+            revokedAtUtc = default;
             return false;
         }
 
@@ -73,20 +86,22 @@ public class SessionRevocationService : ISessionRevocationService
             var entry = _repository.GetActiveBySessionKey(key, DateTime.UtcNow);
             if (entry == null || string.IsNullOrWhiteSpace(entry.SessionKey))
             {
+                revokedAtUtc = default;
                 return false;
             }
 
-            var revokedFromStore = entry.RevokedAtUtc;
+            revokedAtUtc = entry.RevokedAtUtc;
             _revokedSessions.AddOrUpdate(
                 key,
-                revokedFromStore,
-                (_, existing) => revokedFromStore > existing ? revokedFromStore : existing);
+                revokedAtUtc,
+                (_, existing) => revokedAtUtc > existing ? revokedAtUtc : existing);
 
-            return issuedUtc <= revokedFromStore;
+            return true;
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to check revoked session {0} in database", key);
+            revokedAtUtc = default;
             return false;
         }
     }

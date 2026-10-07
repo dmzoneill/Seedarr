@@ -142,12 +142,7 @@ public class Startup
                         return;
                     }
 
-                    if (!context.Properties.IssuedUtc.HasValue)
-                    {
-                        context.Properties.IssuedUtc = DateTimeOffset.UtcNow;
-                    }
-
-                    var issuedUtc = context.Properties.IssuedUtc.Value.UtcDateTime;
+                    var issuedUtc = context.Properties.IssuedUtc?.UtcDateTime ?? default;
                     var sessionId = context.Principal?.FindFirst("SessionId")?.Value;
                     var username = context.Principal?.Identity?.Name;
 
