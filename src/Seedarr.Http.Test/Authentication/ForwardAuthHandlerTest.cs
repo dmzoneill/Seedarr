@@ -94,6 +94,8 @@ public class ForwardAuthHandlerTest
     [Test]
     public async Task HandleAuthenticateAsync_WhenRemoteIpIsLoopback_Succeeds()
     {
+        _configFileProvider.TrustedProxies.Returns("127.0.0.1,::1");
+
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
         context.Request.Headers["X-Forwarded-User"] = "validuser";
@@ -107,6 +109,8 @@ public class ForwardAuthHandlerTest
     [Test]
     public async Task HandleAuthenticateAsync_WhenRemoteIpIsIPv6Loopback_Succeeds()
     {
+        _configFileProvider.TrustedProxies.Returns("127.0.0.1,::1");
+
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.IPv6Loopback;
         context.Request.Headers["Remote-User"] = "alice";
@@ -120,6 +124,8 @@ public class ForwardAuthHandlerTest
     [Test]
     public async Task HandleAuthenticateAsync_WhenRemoteIpIsIPv4MappedLoopback_Succeeds()
     {
+        _configFileProvider.TrustedProxies.Returns("127.0.0.1,::1");
+
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.Parse("::ffff:127.0.0.1");
         context.Request.Headers["X-Forwarded-User"] = "bob";

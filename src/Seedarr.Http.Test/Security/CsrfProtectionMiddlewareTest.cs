@@ -330,6 +330,8 @@ public class CsrfProtectionMiddlewareTest
     [Test]
     public async Task ReverseProxy_WithXForwardedHeaders_MatchesOriginWithoutPortMismatchRejection()
     {
+        _configFileProvider.TrustedProxies.Returns("127.0.0.1,::1");
+
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.Loopback;
         context.Request.Method = "POST";
@@ -461,6 +463,34 @@ public class CsrfProtectionMiddlewareTest
         context.Request.Headers["X-Forwarded-Host"] = "seedarr.example.com";
         context.Request.Headers["Cookie"] = "Seedarr_Auth=valid_session";
         context.Request.Headers["Origin"] = "https://seedarr.example.com";
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
+    }
+
+    [Test]
+    public async Task ReverseProxy_WithXForwardedHeaders_FromLoopbackWithoutTrustedProxies_RejectsForgedOrigin()
+    {
+        var context = new DefaultHttpContext();
+        context.Connection.RemoteIpAddress = IPAddress.Loopback;
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/system/restart";
+        context.Request.Scheme = "http";
+        context.Request.Host = new HostString("127.0.0.1:9898");
+        context.Request.Headers["X-Forwarded-Proto"] = "http";
+        context.Request.Headers["X-Forwarded-Host"] = "evil.example";
+        context.Request.Headers["Cookie"] = "Seedarr_Auth=valid_session";
+        context.Request.Headers["Origin"] = "http://evil.example";
         context.Response.Body = new MemoryStream();
 
         var nextCalled = false;
