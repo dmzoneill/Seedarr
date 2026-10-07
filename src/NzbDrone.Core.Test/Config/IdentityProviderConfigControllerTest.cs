@@ -208,6 +208,7 @@ public class IdentityProviderConfigControllerTest
         var result = await _controller.Create(resource);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.Received(1).Delete(42);
     }
 
     [Test]
@@ -406,6 +407,44 @@ public class IdentityProviderConfigControllerTest
         var result = await _controller.Update(1, resource);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.Received(1).Update(Arg.Is<IdentityProviderDefinition>(p =>
+            p.Id == 1 &&
+            p.ProviderId == "test-provider" &&
+            p.Name == "Test Provider"));
+        await _dynamicAuthManager.Received(1).RegisterOrUpdateOidcProviderAsync(Arg.Is<IdentityProviderDefinition>(p =>
+            p.Id == 1 &&
+            p.ProviderId == "test-provider"));
+    }
+
+    [Test]
+    public async Task Update_WhenDisablingAndRemoveSchemeFails_RollsBackProvider()
+    {
+        var existing = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test-provider",
+            Name = "Test Provider",
+            IsEnabled = true,
+        };
+
+        _providerService.GetById(1).Returns(existing);
+        _providerService.Update(Arg.Any<IdentityProviderDefinition>()).Returns(x => x.Arg<IdentityProviderDefinition>());
+
+        _dynamicAuthManager.When(m => m.RemoveProviderSchemeAsync(Arg.Any<string>()))
+            .Do(_ => throw new Exception("Dynamic removal failed"));
+
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "test-provider",
+            Name = "Test Provider",
+            IsEnabled = false,
+        };
+
+        var result = await _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.Received(2).Update(Arg.Any<IdentityProviderDefinition>());
+        _providerService.Received(1).Update(Arg.Is<IdentityProviderDefinition>(p => p.IsEnabled == true));
     }
 
     [Test]

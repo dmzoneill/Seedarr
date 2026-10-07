@@ -150,6 +150,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Failed to register dynamic authentication scheme for provider: {0}", created.ProviderId);
+                RollbackCreatedProvider(created.Id);
                 return BadRequest(new { message = $"Failed to register authentication scheme: {ex.Message}" });
             }
         }
@@ -201,6 +202,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Failed to remove dynamic authentication scheme for previous provider id: {0}", existing.ProviderId);
+                await RollbackProviderUpdateAsync(existing);
                 return BadRequest(new { message = $"Failed to remove previous authentication scheme: {ex.Message}" });
             }
         }
@@ -214,6 +216,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Failed to update dynamic authentication scheme for provider: {0}", updated.ProviderId);
+                await RollbackProviderUpdateAsync(existing);
                 return BadRequest(new { message = $"Failed to update authentication scheme: {ex.Message}" });
             }
         }
@@ -226,6 +229,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Failed to remove dynamic authentication scheme for provider: {0}", updated.ProviderId);
+                await RollbackProviderUpdateAsync(existing);
                 return BadRequest(new { message = $"Failed to remove authentication scheme: {ex.Message}" });
             }
         }
@@ -333,5 +337,73 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     {
         return Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private void RollbackCreatedProvider(int providerId)
+    {
+        try
+        {
+            _providerService.Delete(providerId);
+        }
+        catch (Exception rollbackEx)
+        {
+            _logger.Error(rollbackEx, "Failed to roll back identity provider {0} after scheme registration failure", providerId);
+        }
+    }
+
+    private async Task RollbackProviderUpdateAsync(IdentityProviderDefinition previous)
+    {
+        try
+        {
+            _providerService.Update(CloneDefinition(previous));
+        }
+        catch (Exception rollbackEx)
+        {
+            _logger.Error(rollbackEx, "Failed to roll back identity provider {0} after scheme sync failure", previous.Id);
+            return;
+        }
+
+        await TryRestoreProviderSchemeAsync(previous);
+    }
+
+    private async Task TryRestoreProviderSchemeAsync(IdentityProviderDefinition provider)
+    {
+        if (!provider.IsEnabled)
+        {
+            return;
+        }
+
+        try
+        {
+            await _dynamicAuthManager.RegisterOrUpdateOidcProviderAsync(CloneDefinition(provider));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to restore authentication scheme after rollback for provider: {0}", provider.ProviderId);
+        }
+    }
+
+    private static IdentityProviderDefinition CloneDefinition(IdentityProviderDefinition source)
+    {
+        return new IdentityProviderDefinition
+        {
+            Id = source.Id,
+            ProviderId = source.ProviderId,
+            Name = source.Name,
+            ProviderType = source.ProviderType,
+            IsEnabled = source.IsEnabled,
+            ClientId = source.ClientId,
+            ClientSecretEncrypted = source.ClientSecretEncrypted,
+            IssuerUrl = source.IssuerUrl,
+            MetadataUrl = source.MetadataUrl,
+            Scopes = source.Scopes,
+            Certificate = source.Certificate,
+            RoleMappingRules = source.RoleMappingRules,
+            TrustedProxies = source.TrustedProxies,
+            IconUrl = source.IconUrl,
+            ButtonText = source.ButtonText,
+            CreatedAt = source.CreatedAt,
+            UpdatedAt = source.UpdatedAt,
+        };
     }
 }
