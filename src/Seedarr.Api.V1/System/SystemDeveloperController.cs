@@ -21,6 +21,7 @@ using NzbDrone.Core.Mcp;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Simulation.ClientBehavior;
+using NzbDrone.Core.Telemetry;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.System;
@@ -58,6 +59,8 @@ public class SystemDeveloperController : Controller
     private readonly IDeveloperUmlService _umlService;
     private readonly IDeveloperGitHubService _gitHubService;
     private readonly IDeveloperQualityService _qualityService;
+    private readonly ISystemResourceService _resourceService;
+    private readonly IClientProfileFactory _clientProfileFactory;
     private readonly Logger _logger;
 
     public SystemDeveloperController(
@@ -73,7 +76,9 @@ public class SystemDeveloperController : Controller
         IMcpService mcpService = null,
         IDeveloperUmlService umlService = null,
         IDeveloperGitHubService gitHubService = null,
-        IDeveloperQualityService qualityService = null)
+        IDeveloperQualityService qualityService = null,
+        ISystemResourceService resourceService = null,
+        IClientProfileFactory clientProfileFactory = null)
     {
         _eventStore = eventStore;
         _httpTrafficStore = httpTrafficStore;
@@ -88,6 +93,8 @@ public class SystemDeveloperController : Controller
         _umlService = umlService;
         _gitHubService = gitHubService;
         _qualityService = qualityService;
+        _resourceService = resourceService;
+        _clientProfileFactory = clientProfileFactory;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -568,18 +575,39 @@ public class SystemDeveloperController : Controller
     [HttpGet("simulation")]
     public ActionResult<DeveloperSimulationResponse> GetSimulation()
     {
-        var profiles = new List<string> { "QBittorrent", "Transmission", "Deluge", "uTorrent", "BiglyBT" };
-        var mcpTools = new List<string> { "list_torrents", "get_status", "start_seeding", "stop_seeding", "adjust_speed" };
+        var profiles = _clientProfileFactory?.All()
+            .Select(p => p.Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList() ?? new List<string>();
 
+        var mcpTools = _mcpService != null
+            ? McpService.GetRegisteredToolNames().ToList()
+            : new List<string>();
+
+        if (_resourceService == null)
+        {
+            return new DeveloperSimulationResponse
+            {
+                IsRunning = false,
+                ActiveAlgorithm = _configService?.UploadDistributionAlgorithm?.ToString() ?? "Equal",
+                ClientProfiles = profiles,
+                McpEnabled = _mcpService != null,
+                McpTools = mcpTools,
+            };
+        }
+
+        var engine = _resourceService.GetTorrentEngineMetrics();
         return new DeveloperSimulationResponse
         {
-            IsRunning = true,
+            IsRunning = engine.IsRunning,
             ActiveAlgorithm = _configService?.UploadDistributionAlgorithm?.ToString() ?? "Equal",
-            ActiveSimulatedTorrents = 5,
-            TotalUploadedBytes = 1024L * 1024 * 1024 * 45, // 45 GB
-            TotalDownloadedBytes = 1024L * 1024 * 1024 * 12, // 12 GB
-            CurrentUploadRateBytesPerSec = 1024 * 1024 * 1.5,
-            CurrentDownloadRateBytesPerSec = 1024 * 256,
+            ActiveSimulatedTorrents = engine.ActiveTorrents,
+            TotalUploadedBytes = engine.TotalDataUploaded,
+            TotalDownloadedBytes = engine.TotalDataDownloaded,
+            CurrentUploadRateBytesPerSec = engine.TotalUploadSpeed,
+            CurrentDownloadRateBytesPerSec = engine.TotalDownloadSpeed,
             ClientProfiles = profiles,
             McpEnabled = _mcpService != null,
             McpTools = mcpTools,

@@ -15,6 +15,7 @@ using NzbDrone.Core.Developer.Quality;
 using NzbDrone.Core.Developer.Uml;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Telemetry;
 using Seedarr.Api.V1.System;
 
 namespace NzbDrone.Core.Test.Developer;
@@ -30,6 +31,7 @@ public class SystemDeveloperControllerTest
     private IDeveloperWebhookStore _webhookStore;
     private IManageCommandQueue _commandQueue;
     private IMainDatabase _mainDatabase;
+    private ISystemResourceService _resourceService;
     private SystemDeveloperController _controller;
 
     [SetUp]
@@ -43,6 +45,16 @@ public class SystemDeveloperControllerTest
         _webhookStore = Substitute.For<IDeveloperWebhookStore>();
         _commandQueue = Substitute.For<IManageCommandQueue>();
         _mainDatabase = Substitute.For<IMainDatabase>();
+        _resourceService = Substitute.For<ISystemResourceService>();
+        _resourceService.GetTorrentEngineMetrics().Returns(new TorrentEngineMetrics
+        {
+            IsRunning = true,
+            ActiveTorrents = 0,
+            TotalDataUploaded = 0,
+            TotalDataDownloaded = 0,
+            TotalUploadSpeed = 0,
+            TotalDownloadSpeed = 0,
+        });
 
         _controller = new SystemDeveloperController(
             eventStore: _eventStore,
@@ -52,7 +64,8 @@ public class SystemDeveloperControllerTest
             mainDatabase: _mainDatabase,
             umlService: _umlService,
             gitHubService: _gitHubService,
-            qualityService: _qualityService);
+            qualityService: _qualityService,
+            resourceService: _resourceService);
     }
 
     [Test]
@@ -315,11 +328,26 @@ public class SystemDeveloperControllerTest
     }
 
     [Test]
-    public void Simulation_endpoint_should_return_status()
+    public void Simulation_endpoint_should_return_live_engine_metrics()
     {
+        _resourceService.GetTorrentEngineMetrics().Returns(new TorrentEngineMetrics
+        {
+            IsRunning = true,
+            ActiveTorrents = 2,
+            TotalDataUploaded = 4096,
+            TotalDataDownloaded = 2048,
+            TotalUploadSpeed = 512,
+            TotalDownloadSpeed = 128,
+        });
+
         var sim = _controller.GetSimulation();
         Assert.That(sim.Value, Is.Not.Null);
         Assert.That(sim.Value.IsRunning, Is.True);
+        Assert.That(sim.Value.ActiveSimulatedTorrents, Is.EqualTo(2));
+        Assert.That(sim.Value.TotalUploadedBytes, Is.EqualTo(4096));
+        Assert.That(sim.Value.TotalDownloadedBytes, Is.EqualTo(2048));
+        Assert.That(sim.Value.CurrentUploadRateBytesPerSec, Is.EqualTo(512));
+        Assert.That(sim.Value.CurrentDownloadRateBytesPerSec, Is.EqualTo(128));
     }
 
     [Test]
@@ -344,5 +372,10 @@ public class SystemDeveloperControllerTest
 
         var wh = defaultController.GetWebhookHistory();
         Assert.That(wh.Value, Is.Not.Null);
+
+        var sim = defaultController.GetSimulation();
+        Assert.That(sim.Value, Is.Not.Null);
+        Assert.That(sim.Value.IsRunning, Is.False);
+        Assert.That(sim.Value.ActiveSimulatedTorrents, Is.EqualTo(0));
     }
 }

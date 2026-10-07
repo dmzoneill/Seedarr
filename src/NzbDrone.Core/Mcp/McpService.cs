@@ -259,6 +259,11 @@ public class McpService : IMcpService
         };
     }
 
+    public static IReadOnlyList<string> GetRegisteredToolNames()
+    {
+        return HandleToolsList().Tools.Select(t => t.Name).ToList();
+    }
+
     private async Task<McpToolCallResult> HandleToolCallAsync(JsonElement? paramsElement, CancellationToken cancellationToken)
     {
         if (!paramsElement.HasValue)
