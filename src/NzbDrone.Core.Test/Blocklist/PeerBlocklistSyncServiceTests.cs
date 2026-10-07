@@ -73,6 +73,58 @@ public class PeerBlocklistSyncServiceTests
     }
 
     [Test]
+    public async Task SyncAsync_500_should_apply_exponential_backoff_and_defer_immediate_sync()
+    {
+        var response500 = new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        _mockHandler.EnqueueResponse(response500);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.IsRateLimited, Is.True);
+        Assert.That(result.HttpStatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+        Assert.That(_service.NextAllowedSyncUtc, Is.EqualTo(_currentTime.AddMinutes(5)));
+        Assert.That(_service.IsSyncAllowed(), Is.False);
+        Assert.That(_mockHandler.Requests.Count, Is.EqualTo(1));
+
+        _currentTime = _currentTime.AddMinutes(2);
+        var deferredResult = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(deferredResult.Success, Is.False);
+        Assert.That(deferredResult.IsRateLimited, Is.True);
+        Assert.That(deferredResult.Message, Does.Contain("deferred"));
+        Assert.That(_mockHandler.Requests.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task SyncAsync_502_with_Retry_After_should_honor_header()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.BadGateway);
+        response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(90));
+        _mockHandler.EnqueueResponse(response);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.IsRateLimited, Is.True);
+        Assert.That(_service.NextAllowedSyncUtc, Is.EqualTo(_currentTime.AddSeconds(90)));
+    }
+
+    [Test]
+    public async Task SyncAsync_transport_failure_should_apply_exponential_backoff()
+    {
+        _mockHandler.ResponseFactory = _ => throw new HttpRequestException("Connection reset");
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.IsRateLimited, Is.True);
+        Assert.That(_service.NextAllowedSyncUtc, Is.EqualTo(_currentTime.AddMinutes(5)));
+        Assert.That(_service.IsSyncAllowed(), Is.False);
+        Assert.That(_service.Metadata.LastSyncStatus, Does.Contain("Retry after"));
+    }
+
+    [Test]
     public async Task SyncAsync_http_timeout_should_apply_exponential_backoff()
     {
         using var handler = new StallHttpMessageHandler();

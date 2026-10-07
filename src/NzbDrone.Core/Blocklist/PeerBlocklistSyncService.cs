@@ -423,18 +423,34 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             if (!response.IsSuccessStatusCode)
             {
                 _metadata.ConsecutiveFailures++;
-                _metadata.LastSyncStatus = $"Failed: {(int)response.StatusCode} {response.StatusCode}";
-                _metadata.LastFailureMessage = _metadata.LastSyncStatus;
+                var failureStatus = $"Failed: {(int)response.StatusCode} {response.StatusCode}";
+                _metadata.LastFailureMessage = failureStatus;
 
-                _logger.Warn("Blocklist download failed from {0} with status code {1}.", effectiveUrl, response.StatusCode);
+                var retrySpan = ParseRetryAfter(response, now);
+                if (!retrySpan.HasValue)
+                {
+                    var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
+                    retrySpan = CalculateExponentialBackoff(retryCount);
+                }
+
+                _metadata.NextAllowedSyncUtc = now.Add(retrySpan.Value);
+                _metadata.LastSyncStatus = $"{failureStatus} (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
+
+                _logger.Warn(
+                    "Blocklist download failed from {0} with status code {1}. Backing off until {2}.",
+                    effectiveUrl,
+                    response.StatusCode,
+                    _metadata.NextAllowedSyncUtc.Value);
 
                 return new BlocklistSyncResult
                 {
                     Success = false,
+                    IsRateLimited = true,
                     Status = _metadata.LastSyncStatus,
                     HttpStatusCode = response.StatusCode,
+                    NextAllowedSyncUtc = _metadata.NextAllowedSyncUtc,
                     RuleCount = _rules.Count,
-                    Message = $"Download failed with HTTP status {(int)response.StatusCode}"
+                    Message = $"Download failed with HTTP status {(int)response.StatusCode}. Retry after {retrySpan.Value}."
                 };
             }
         }
@@ -628,7 +644,12 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             }
             else
             {
-                _metadata.LastSyncStatus = $"Failed: {ex.Message}";
+                var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
+                var retrySpan = CalculateExponentialBackoff(retryCount);
+                _metadata.NextAllowedSyncUtc = now.Add(retrySpan);
+                nextAllowedSyncUtc = _metadata.NextAllowedSyncUtc;
+                isRateLimited = true;
+                _metadata.LastSyncStatus = $"Failed: {ex.Message} (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
                 status = _metadata.LastSyncStatus;
             }
         }
