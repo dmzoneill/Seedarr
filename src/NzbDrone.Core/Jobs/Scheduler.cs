@@ -170,7 +170,22 @@ public class Scheduler : BackgroundService
                             }
                             else
                             {
-                                _logger.Warn("No task instance found for scheduled type: {0}", next.TypeName);
+                                failed = true;
+                                var missingMessage = $"No task instance found for scheduled type: {next.TypeName}";
+                                _logger.Warn(missingMessage);
+                                _taskManager.RecordTaskFailed(next.TypeName, startTime, missingMessage);
+                                _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                                {
+                                    Name = "TaskFailed",
+                                    Action = ModelAction.Updated,
+                                    Body = new
+                                    {
+                                        TypeName = next.TypeName,
+                                        Name = next.TypeName,
+                                        TriggerSource = ScheduledTaskTriggerSource.Scheduler.ToString(),
+                                        Error = missingMessage
+                                    }
+                                });
                             }
                         }
                         catch (OperationCanceledException)
