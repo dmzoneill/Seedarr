@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
@@ -60,6 +61,7 @@ public class IndexerControllerDeleteCascadeTest
         };
 
         _rssRuleRepository.All().Returns(new List<RssRule> { ruleWithIndexer, ruleWithoutIndexer });
+        _indexerFactory.Get(indexerIdToDelete).Returns(new IndexerDefinition { Id = indexerIdToDelete, Name = "ToDelete" });
 
         _controller.Delete(indexerIdToDelete);
 
@@ -70,5 +72,18 @@ public class IndexerControllerDeleteCascadeTest
             r.IndexerIds.Contains(10) &&
             r.IndexerIds.Contains(20)));
         _rssRuleRepository.DidNotReceive().Update(Arg.Is<RssRule>(r => r.Id == 2));
+    }
+
+    [Test]
+    public void Delete_for_nonexistent_indexer_returns_not_found()
+    {
+        const int missingId = 999999;
+        _indexerFactory.Get(missingId).Returns((IndexerDefinition)null);
+
+        var result = _controller.Delete(missingId);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _indexerFactory.DidNotReceive().Delete(Arg.Any<int>());
+        _rssRuleRepository.DidNotReceive().All();
     }
 }

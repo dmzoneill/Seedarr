@@ -181,6 +181,12 @@ public class IndexerController : Controller
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Delete(int id)
     {
+        var existing = _indexerFactory.Get(id);
+        if (existing == null)
+        {
+            return NotFound();
+        }
+
         _indexerFactory.Delete(id);
 
         if (_rssRuleRepository != null)
