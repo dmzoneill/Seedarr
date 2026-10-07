@@ -428,6 +428,18 @@ public class AppLifetimeTest
     }
 
     [Test]
+    public async Task StartAsync_should_publish_ApplicationStartedEvent_after_FastResumeService_LoadAll()
+    {
+        await _subject.StartAsync(CancellationToken.None);
+
+        Received.InOrder(() =>
+        {
+            _fastResumeService.Received(1).LoadAll();
+            _eventAggregator.Received(1).PublishEvent(Arg.Any<ApplicationStartedEvent>());
+        });
+    }
+
+    [Test]
     public void StartAsync_should_honor_cancelled_startup_token_before_side_effects()
     {
         using var cts = new CancellationTokenSource();

@@ -71,7 +71,6 @@ public class AppLifetime : IHostedService, IDisposable
         cancellationToken.ThrowIfCancellationRequested();
 
         _logger.Info("Seedarr application started");
-        _eventAggregator.PublishEvent(new ApplicationStartedEvent());
 
         if (_fastResumeService != null)
         {
@@ -84,6 +83,8 @@ public class AppLifetime : IHostedService, IDisposable
                 _logger.Warn(ex, "Error loading/reconciling FastResume data on startup");
             }
         }
+
+        _eventAggregator.PublishEvent(new ApplicationStartedEvent());
 
         cancellationToken.ThrowIfCancellationRequested();
 
