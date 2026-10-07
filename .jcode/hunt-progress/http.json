@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T00:58:00Z",
+  "updatedAt": "2026-10-07T01:05:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Terminal",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Authentication",
-    "completedAt": "2026-10-07T00:58:00Z",
-    "issuesFiled": [1249],
+    "subfolder": "src/Seedarr.Http/Terminal",
+    "completedAt": "2026-10-07T01:05:00Z",
+    "issuesFiled": [1257, 1258],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 28: Authentication (5 files: ApiKeyAuthenticationHandler, BasicAuthenticationHandler, DynamicAuthSchemeManager, ForwardAuthHandler, IDynamicAuthSchemeManager). Static review only. GitHub dedupe: overlaps #877 #895 #893 #906 #922 #1105 #1109 #1116 #1117 #1160 #1161 #1211 #1240 left open; filed #1249 (SmartAuth ForwardAuth before Seedarr_Auth cookie). No reopen. Next: Terminal. No dotnet build/test."
+    "note": "Pass 29: Terminal (10 files: FallbackProcessSession, IPtyTerminalService, ITerminalSession, LinuxPtySession, NativePty, PtyProcessSession, PtyTerminalService, TerminalEnvironmentSanitizer, TerminalHub, TerminalWebSocketHandler). Static review only. GitHub dedupe: overlaps #892 #902 #902 #956 #965 #966 #967 #1027 #1131 #1132 #1133 #1173 #1174 #1223 left open; filed #1257 (FallbackProcessSession ignores cols/rows), #1258 (cwd not validated / silent chdir). No reopen. Next: REST. No dotnet build/test."
   }
 }
