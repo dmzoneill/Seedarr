@@ -45,6 +45,7 @@ public class MessageHub : Hub
     };
 
     private static readonly HashSet<string> Connections = new();
+    private static long _connectionEpoch;
     private readonly IConfigFileProvider _configFileProvider;
     private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
@@ -67,12 +68,16 @@ public class MessageHub : Hub
         }
     }
 
+    public static long ConnectionEpoch => Interlocked.Read(ref _connectionEpoch);
+
     public static void ResetForTesting()
     {
         lock (Connections)
         {
             Connections.Clear();
         }
+
+        Interlocked.Exchange(ref _connectionEpoch, 0);
     }
 
     public static void AddConnectionForTesting(string connectionId = "test-connection")
@@ -295,6 +300,8 @@ public class MessageHub : Hub
             Connections.Add(Context.ConnectionId);
         }
 
+        BumpConnectionEpoch();
+
         _logger.Debug("SignalR client connected: {0}", Context.ConnectionId);
 
         var message = new SignalRMessage
@@ -326,8 +333,20 @@ public class MessageHub : Hub
             Connections.Remove(Context.ConnectionId);
         }
 
+        BumpConnectionEpoch();
+
         _logger.Debug("SignalR client disconnected: {0}", Context.ConnectionId);
         return base.OnDisconnectedAsync(exception);
+    }
+
+    public static void BumpConnectionEpochForTesting()
+    {
+        BumpConnectionEpoch();
+    }
+
+    private static void BumpConnectionEpoch()
+    {
+        Interlocked.Increment(ref _connectionEpoch);
     }
 
     private static bool FixedTimeEquals(string a, string b)
