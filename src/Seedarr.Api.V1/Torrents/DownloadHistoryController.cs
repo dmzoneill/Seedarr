@@ -4,15 +4,18 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Torrents;
 
 [V1ApiController("downloadhistory")]
+[Authorize(Policy = Policies.Reader)]
 public class DownloadHistoryController : Controller
 {
     private const int DefaultOffsetLimit = 500;
@@ -111,6 +114,7 @@ public class DownloadHistoryController : Controller
     }
 
     [HttpPost("{id:int}/readd")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<TorrentResource> ReAdd(int id)
     {
         try
@@ -133,6 +137,7 @@ public class DownloadHistoryController : Controller
     }
 
     [HttpPost("{id:int}/enrich")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult<DownloadHistoryResource> Enrich(int id)
     {
         if (_metadataEnricherService == null)
@@ -153,6 +158,7 @@ public class DownloadHistoryController : Controller
     }
 
     [HttpPost("enrich-all")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult EnrichAll()
     {
         if (_metadataEnricherService == null)
@@ -176,6 +182,7 @@ public class DownloadHistoryController : Controller
     }
 
     [HttpPost("reconcile")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Reconcile()
     {
         var count = 0;
@@ -192,6 +199,7 @@ public class DownloadHistoryController : Controller
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Delete(int id)
     {
         _historyService.Delete(id);
@@ -199,6 +207,7 @@ public class DownloadHistoryController : Controller
     }
 
     [HttpDelete]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult ClearAll()
     {
         _historyService.ClearAll();

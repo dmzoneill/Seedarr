@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Torrents;
 
@@ -283,5 +285,41 @@ public class DownloadHistoryControllerTest
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _historyService.Received(1).GetAll(null, null, 10, 10);
         Assert.That(_controller.Response.Headers["X-Page-Count"].ToString(), Is.EqualTo("10"));
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_Reader_attribute()
+    {
+        var type = typeof(DownloadHistoryController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
+    }
+
+    [TestCase(nameof(DownloadHistoryController.ReAdd))]
+    [TestCase(nameof(DownloadHistoryController.Enrich))]
+    [TestCase(nameof(DownloadHistoryController.EnrichAll))]
+    [TestCase(nameof(DownloadHistoryController.Reconcile))]
+    [TestCase(nameof(DownloadHistoryController.Delete))]
+    public void Mutating_methods_should_have_Authorize_Operator_attribute(string methodName)
+    {
+        var method = typeof(DownloadHistoryController).GetMethods().FirstOrDefault(m => m.Name == methodName);
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Operator));
+    }
+
+    [Test]
+    public void ClearAll_should_have_Authorize_AdminOnly_attribute()
+    {
+        var method = typeof(DownloadHistoryController).GetMethod(nameof(DownloadHistoryController.ClearAll));
+        Assert.That(method, Is.Not.Null);
+
+        var attr = method.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 }
