@@ -87,6 +87,7 @@ public class TerminalService : ITerminalService, IHandle<ApplicationShutdownRequ
         session.ReadLoopTask = Task.Run(async () =>
         {
             var buffer = new byte[4096];
+            var utf8Decoder = new TerminalUtf8ChunkDecoder();
             try
             {
                 while (!session.CancellationTokenSource.Token.IsCancellationRequested && !session.Process.HasExited)
@@ -100,8 +101,8 @@ public class TerminalService : ITerminalService, IHandle<ApplicationShutdownRequ
                         break;
                     }
 
-                    var text = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    if (onOutput != null)
+                    var text = utf8Decoder.Decode(buffer.AsSpan(0, bytesRead));
+                    if (!string.IsNullOrEmpty(text) && onOutput != null)
                     {
                         try
                         {
@@ -111,6 +112,19 @@ public class TerminalService : ITerminalService, IHandle<ApplicationShutdownRequ
                         {
                             _logger.Trace(ex, "Error executing onOutput callback for {0}", connectionId);
                         }
+                    }
+                }
+
+                var trailing = utf8Decoder.Flush();
+                if (!string.IsNullOrEmpty(trailing) && onOutput != null)
+                {
+                    try
+                    {
+                        await onOutput(trailing);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Trace(ex, "Error executing onOutput callback for {0}", connectionId);
                     }
                 }
             }
