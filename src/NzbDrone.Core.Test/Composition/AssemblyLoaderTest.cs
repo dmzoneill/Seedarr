@@ -10,6 +10,20 @@ namespace NzbDrone.Core.Test.Composition;
 public class AssemblyLoaderTest
 {
     [Test]
+    public void Load_deduplicates_assembly_names_ordinal_ignore_case()
+    {
+        var assemblies = AssemblyLoader.Load(new List<string>
+        {
+            "Seedarr.Common",
+            "Seedarr.Common",
+            "seedarr.common"
+        });
+
+        Assert.That(assemblies, Has.Count.EqualTo(1));
+        Assert.That(assemblies[0].GetName().Name, Is.EqualTo("Seedarr.Common"));
+    }
+
+    [Test]
     public void Load_returns_assemblies_when_all_names_resolve()
     {
         var assemblies = AssemblyLoader.Load(new List<string> { "Seedarr.Common" });
