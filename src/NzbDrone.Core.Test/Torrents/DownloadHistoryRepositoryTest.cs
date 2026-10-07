@@ -347,6 +347,40 @@ public class DownloadHistoryRepositoryTest
     }
 
     [Test]
+    public void GetHistory_with_offset_and_limit_skips_rows_in_descending_date_order()
+    {
+        var baseDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var entries = new List<DownloadHistory>();
+        for (var i = 0; i < 5; i++)
+        {
+            entries.Add(new DownloadHistory
+            {
+                Title = $"Torrent {i}",
+                InfoHash = $"hash_{i}",
+                Status = "Active",
+                DateAdded = baseDate.AddHours(i)
+            });
+        }
+
+        _subject.InsertMany(entries);
+
+        var page = _subject.GetHistory(limit: 2, offset: 2);
+
+        Assert.That(page, Has.Count.EqualTo(2));
+        Assert.That(page[0].Title, Is.EqualTo("Torrent 2"));
+        Assert.That(page[1].Title, Is.EqualTo("Torrent 1"));
+    }
+
+    [Test]
+    public void GetHistory_with_offset_and_non_positive_limit_throws()
+    {
+        _subject.Insert(new DownloadHistory { Title = "One", InfoHash = "h1", Status = "Active" });
+
+        Assert.Throws<ArgumentException>(() => _subject.GetHistory(limit: 0, offset: 1));
+        Assert.Throws<ArgumentException>(() => _subject.GetHistory(limit: -1, offset: 5));
+    }
+
+    [Test]
     public void GetLatestByInfoHashes_should_match_case_insensitively()
     {
         const string storedHash = "FEDCBA0987654321FEDCBA0987654321FEDCBA09";

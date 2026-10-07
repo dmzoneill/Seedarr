@@ -164,6 +164,15 @@ public class DownloadHistoryControllerTest
     }
 
     [Test]
+    public void GetAll_with_offset_and_non_positive_limit_returns_bad_request()
+    {
+        var result = _controller.GetAll(limit: 0, offset: 100);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _historyService.DidNotReceive().GetAll(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>());
+    }
+
+    [Test]
     public void GetAll_with_page_and_pageSize_calculates_effective_limit_and_offset()
     {
         var entries = new List<DownloadHistory>

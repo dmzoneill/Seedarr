@@ -46,6 +46,11 @@ public class DownloadHistoryController : Controller
             effectiveOffset = (page.Value - 1) * size;
         }
 
+        if (effectiveOffset > 0 && effectiveLimit <= 0)
+        {
+            return BadRequest(new { message = "A positive limit is required when offset is specified." });
+        }
+
         var totalCount = _historyService.GetCount(query, status);
         var records = _historyService.GetAll(query, status, effectiveLimit, effectiveOffset);
 
