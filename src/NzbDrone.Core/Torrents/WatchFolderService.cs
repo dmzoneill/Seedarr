@@ -181,21 +181,14 @@ public class WatchFolderService : BackgroundService
     {
         var newCts = new CancellationTokenSource();
 
-        var oldCts = _fileDebounceTokens.AddOrUpdate(
+        _fileDebounceTokens.AddOrUpdate(
             filePath,
             newCts,
             (_, existing) =>
             {
                 existing.Cancel();
-                existing.Dispose();
                 return newCts;
             });
-
-        if (oldCts != null && oldCts != newCts)
-        {
-            await oldCts.CancelAsync();
-            oldCts.Dispose();
-        }
 
         try
         {
