@@ -24,11 +24,6 @@ public static class IpSecurityHelper
 
         var effectiveIp = remoteIp.IsIPv4MappedToIPv6 ? remoteIp.MapToIPv4() : remoteIp;
 
-        if (IPAddress.IsLoopback(effectiveIp))
-        {
-            return true;
-        }
-
         if (string.IsNullOrWhiteSpace(configuredProxies))
         {
             return false;
@@ -46,11 +41,6 @@ public static class IpSecurityHelper
         }
 
         var effectiveIp = remoteIp.IsIPv4MappedToIPv6 ? remoteIp.MapToIPv4() : remoteIp;
-
-        if (IPAddress.IsLoopback(effectiveIp))
-        {
-            return true;
-        }
 
         if (configuredProxies == null)
         {

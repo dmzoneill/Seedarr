@@ -20,12 +20,21 @@ public class IpSecurityHelperTest
     [TestCase("127.0.0.2")]
     [TestCase("::1")]
     [TestCase("::ffff:127.0.0.1")]
-    public void IsTrustedProxy_WhenLoopbackWithoutConfiguredProxies_ReturnsTrue(string ipString)
+    public void IsTrustedProxy_WhenLoopbackWithoutConfiguredProxies_ReturnsFalse(string ipString)
     {
         var ip = IPAddress.Parse(ipString);
-        Assert.That(IpSecurityHelper.IsTrustedProxy(ip), Is.True);
-        Assert.That(IpSecurityHelper.IsTrustedProxy(ip, string.Empty), Is.True);
-        Assert.That(IpSecurityHelper.IsTrustedProxy(ip, (string)null), Is.True);
+        Assert.That(IpSecurityHelper.IsTrustedProxy(ip), Is.False);
+        Assert.That(IpSecurityHelper.IsTrustedProxy(ip, string.Empty), Is.False);
+        Assert.That(IpSecurityHelper.IsTrustedProxy(ip, (string)null), Is.False);
+    }
+
+    [TestCase("127.0.0.1", "127.0.0.1")]
+    [TestCase("::1", "::1")]
+    [TestCase("127.0.0.2", "127.0.0.0/8")]
+    public void IsTrustedProxy_WhenLoopbackListedInConfiguredProxies_ReturnsTrue(string ipString, string configuredProxies)
+    {
+        var ip = IPAddress.Parse(ipString);
+        Assert.That(IpSecurityHelper.IsTrustedProxy(ip, configuredProxies), Is.True);
     }
 
     [TestCase("192.168.1.1")]
