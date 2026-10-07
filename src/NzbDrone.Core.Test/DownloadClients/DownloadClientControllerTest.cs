@@ -431,6 +431,31 @@ public class DownloadClientControllerTest
     }
 
     [Test]
+    public void TestConnection_records_result_in_sync_service()
+    {
+        var definition = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Host = "127.0.0.1",
+            Port = 8080,
+        };
+        _downloadClientFactory.Get(1).Returns(definition);
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.TestConnectionDetailed().Returns(DownloadClientTestResult.Ok("Connected", "4.6.0"));
+        _downloadClientFactory.CreateClient(definition).Returns(mockClient);
+
+        var result = _controller.TestConnection(1);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _syncService.Received().RecordConnectionTestResult(
+            1,
+            Arg.Is<DownloadClientTestResult>(r => r.Success && r.Version == "4.6.0"));
+    }
+
+    [Test]
     public void TestConnection_with_unsafe_host_returns_bad_request()
     {
         var definition = new DownloadClientDefinition

@@ -493,6 +493,27 @@ public class TransmissionClient : IDownloadClient, IDisposable
         return TestConnectionDetailed().Success;
     }
 
+    public string GetRemoteVersion()
+    {
+        try
+        {
+            using var doc = SendRequest("session-get", new { });
+            if (doc.RootElement.TryGetProperty("result", out var result) && result.GetString() == "success" &&
+                doc.RootElement.TryGetProperty("arguments", out var args) &&
+                args.TryGetProperty("version", out var v))
+            {
+                var version = v.GetString();
+                return string.IsNullOrWhiteSpace(version) ? null : version;
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+
+        return null;
+    }
+
     public DownloadClientTestResult TestConnectionDetailed()
     {
         if (string.IsNullOrWhiteSpace(Host))
@@ -502,18 +523,18 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
         try
         {
+            var version = GetRemoteVersion();
+            if (version != null)
+            {
+                return DownloadClientTestResult.Ok(
+                    $"Successfully connected to Transmission v{version} at {RpcUrl}",
+                    version);
+            }
+
             using var doc = SendRequest("session-get", new { });
             if (doc.RootElement.TryGetProperty("result", out var result) && result.GetString() == "success")
             {
-                var version = "";
-                if (doc.RootElement.TryGetProperty("arguments", out var args) &&
-                    args.TryGetProperty("version", out var v))
-                {
-                    version = v.GetString();
-                }
-
-                var verStr = string.IsNullOrEmpty(version) ? "" : $" v{version}";
-                return DownloadClientTestResult.Ok($"Successfully connected to Transmission{verStr} at {RpcUrl}");
+                return DownloadClientTestResult.Ok($"Successfully connected to Transmission at {RpcUrl}");
             }
 
             return DownloadClientTestResult.Fail("Transmission session-get returned unexpected result");

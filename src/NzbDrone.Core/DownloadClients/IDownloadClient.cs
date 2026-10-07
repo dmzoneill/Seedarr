@@ -9,8 +9,11 @@ public class DownloadClientTestResult
 {
     public bool Success { get; set; }
     public string Message { get; set; }
+    public string Version { get; set; }
 
-    public static DownloadClientTestResult Ok(string message = "Connection successful") => new() { Success = true, Message = message };
+    public static DownloadClientTestResult Ok(string message = "Connection successful", string version = null) =>
+        new() { Success = true, Message = message, Version = version };
+
     public static DownloadClientTestResult Fail(string message) => new() { Success = false, Message = message };
 }
 
@@ -27,6 +30,7 @@ public interface IDownloadClient : IProvider
     bool DeleteTorrent(string infoHash, bool deleteData = false);
     bool TestConnection();
     DownloadClientTestResult TestConnectionDetailed();
+    string GetRemoteVersion();
     Task<DownloadClientSpeedLimits> GetSpeedLimitsAsync(CancellationToken cancellationToken = default);
     Task SetSpeedLimitsAsync(long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default);
     Task SetTorrentLimitsAsync(string infoHash, long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default);

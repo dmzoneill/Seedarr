@@ -637,6 +637,30 @@ public class DelugeClient : IDownloadClient, IDisposable
         return TestConnectionDetailed().Success;
     }
 
+    public string GetRemoteVersion()
+    {
+        try
+        {
+            if (!Authenticate())
+            {
+                return null;
+            }
+
+            using var verDoc = SendRequest("web.get_api_version", Array.Empty<object>());
+            if (verDoc.RootElement.TryGetProperty("result", out var ver) && ver.ValueKind == JsonValueKind.String)
+            {
+                var version = ver.GetString();
+                return string.IsNullOrWhiteSpace(version) ? null : version;
+            }
+        }
+        catch
+        {
+            // ignored
+        }
+
+        return null;
+    }
+
     public DownloadClientTestResult TestConnectionDetailed()
     {
         if (string.IsNullOrWhiteSpace(Host))
@@ -654,17 +678,12 @@ public class DelugeClient : IDownloadClient, IDisposable
             using var doc = SendRequest("daemon.get_method_list", Array.Empty<object>());
             if (doc.RootElement.TryGetProperty("result", out _))
             {
-                try
+                var apiVersion = GetRemoteVersion();
+                if (apiVersion != null)
                 {
-                    using var verDoc = SendRequest("web.get_api_version", Array.Empty<object>());
-                    if (verDoc.RootElement.TryGetProperty("result", out var ver) && ver.ValueKind == JsonValueKind.String)
-                    {
-                        return DownloadClientTestResult.Ok($"Successfully connected to Deluge (Web API {ver.GetString()}) at {JsonUrl}");
-                    }
-                }
-                catch
-                {
-                    // Ignore extra version fetch failure
+                    return DownloadClientTestResult.Ok(
+                        $"Successfully connected to Deluge (Web API {apiVersion}) at {JsonUrl}",
+                        apiVersion);
                 }
 
                 return DownloadClientTestResult.Ok($"Successfully connected to Deluge at {JsonUrl}");

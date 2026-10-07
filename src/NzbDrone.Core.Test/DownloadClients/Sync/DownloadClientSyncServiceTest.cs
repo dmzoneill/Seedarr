@@ -77,6 +77,37 @@ public class DownloadClientSyncServiceTest
     }
 
     [Test]
+    public void Sync_should_store_remote_version_on_success()
+    {
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>());
+        mockClient.GetRemoteVersion().Returns("4.6.0");
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 3, Name = "qBit", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        _service.Sync();
+
+        var status = _service.GetClientStatus(3);
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.Version, Is.EqualTo("4.6.0"));
+    }
+
+    [Test]
+    public void RecordConnectionTestResult_should_store_version_on_success()
+    {
+        _service.RecordConnectionTestResult(9, DownloadClientTestResult.Ok("Connected", "v4.6.7"));
+
+        var status = _service.GetClientStatus(9);
+        Assert.That(status.IsOnline, Is.True);
+        Assert.That(status.Version, Is.EqualTo("v4.6.7"));
+    }
+
+    [Test]
     public void Sync_should_return_zeros_when_no_clients_configured()
     {
         _torrentService.GetAll().Returns(new List<Torrent>());
