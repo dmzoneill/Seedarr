@@ -233,7 +233,7 @@ for (var i = 0; i < 2000; i++) {
     }
 
     [Test]
-    public void ExecuteScript_should_recheck_torrent_and_publish_status_changed_event()
+    public void ExecuteScript_should_recheck_torrent_via_recheck_service()
     {
         var torrent = new Torrent
         {
@@ -243,6 +243,25 @@ for (var i = 0; i < 2000; i++) {
             Progress = 0.85,
         };
 
+        var queued = new Torrent
+        {
+            Id = 10,
+            Name = "Recheck Torrent",
+            Status = TorrentStatus.QueuedForChecking,
+            Progress = 0.85,
+            Active = false,
+        };
+
+        var recheckService = Substitute.For<ITorrentRecheckService>();
+        recheckService.QueueRecheck(10).Returns(queued);
+
+        var subject = new AutomationService(
+            _scriptRepository,
+            _torrentRepository,
+            _tagService,
+            _eventAggregator,
+            torrentRecheckService: recheckService);
+
         var script = new AutomationScript
         {
             Id = 1,
@@ -251,13 +270,13 @@ for (var i = 0; i < 2000; i++) {
             Code = "steps:\n  - name: Recheck\n    actions:\n      - recheck: true\n",
         };
 
-        var result = _subject.ExecuteScript(script, torrent);
+        var result = subject.ExecuteScript(script, torrent);
 
         Assert.That(result.Success, Is.True);
-        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Checking));
-        Assert.That(torrent.Progress, Is.EqualTo(0));
-        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == torrent && e.NewStatus == TorrentStatus.Checking));
-        _torrentRepository.Received(1).Update(torrent);
+        recheckService.Received(1).QueueRecheck(10);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
+        Assert.That(torrent.Active, Is.False);
+        _torrentRepository.DidNotReceive().Update(torrent);
     }
 
     [Test]
