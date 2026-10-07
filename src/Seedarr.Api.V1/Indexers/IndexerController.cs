@@ -797,10 +797,15 @@ public class IndexerController : Controller
         {
             indexer = CreateIndexer(definition);
         }
+        catch (ArgumentException ex)
+        {
+            _logger.Warn(ex, "Failed to create indexer {0} for capabilities check", definition?.Name);
+            return BadRequest(ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to create indexer {0} for capabilities check", definition?.Name);
-            return Ok(new TorznabCapabilities());
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
         }
 
         if (indexer is TorznabIndexer torznabIndexer)

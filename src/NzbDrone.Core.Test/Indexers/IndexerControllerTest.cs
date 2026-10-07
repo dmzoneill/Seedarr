@@ -1634,6 +1634,35 @@ public class IndexerControllerTest
         _indexerStatusService.DidNotReceive().Reset(Arg.Any<int>());
     }
 
+    [Test]
+    public void GetCapabilities_when_indexer_not_found_returns_not_found()
+    {
+        _indexerFactory.Get(99).Returns((IndexerDefinition)null);
+
+        var result = _controller.GetCapabilities(99);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void GetCapabilities_with_unknown_indexer_type_returns_bad_request()
+    {
+        _indexerFactory.Get(1).Returns(new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Misconfigured",
+            IndexerType = "InvalidType",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key"
+        });
+
+        var result = _controller.GetCapabilities(1);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Unknown indexer type: InvalidType"));
+    }
+
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
         public HttpRequestMessage SentRequest { get; private set; }
