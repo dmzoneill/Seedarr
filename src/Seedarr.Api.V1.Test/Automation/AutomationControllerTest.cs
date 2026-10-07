@@ -335,8 +335,21 @@ public class AutomationControllerTest
     }
 
     [Test]
+    public void Run_with_missing_script_id_returns_not_found()
+    {
+        _automationService.Get(999999).Returns((AutomationScript)null);
+
+        var result = _controller.Run(999999);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+        _automationService.DidNotReceive().ExecuteScript(Arg.Any<int>(), Arg.Any<int?>());
+        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
     public void Run_with_missing_torrent_id_returns_not_found()
     {
+        _automationService.Get(1).Returns(new AutomationScript { Id = 1, Name = "Script" });
         _torrentService.Get(99999).Returns((Torrent)null);
 
         var result = _controller.Run(1, 99999);

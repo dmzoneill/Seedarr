@@ -182,6 +182,11 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationExecutionResult> Run(int id, [FromQuery] int? torrentId = null)
     {
+        if (_automationService.Get(id) == null)
+        {
+            return NotFound();
+        }
+
         if (torrentId is > 0 && _torrentService.Get(torrentId.Value) == null)
         {
             return NotFound("Torrent not found.");
