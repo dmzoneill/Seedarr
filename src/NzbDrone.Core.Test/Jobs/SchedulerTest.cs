@@ -38,6 +38,16 @@ public class SchedulerTest
         }
     }
 
+    private class CancelingScheduledTask : IScheduledTask
+    {
+        public int DefaultInterval => 1;
+
+        public void Execute(CancellationToken cancellationToken)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+    }
+
     private static string GetBodyTypeName(object body)
     {
         return body?.GetType().GetProperty("TypeName")?.GetValue(body) as string;
@@ -167,6 +177,65 @@ public class SchedulerTest
             Arg.Any<DateTime>(),
             Arg.Is<Exception>(ex => ex.Message == "Task failed"),
             ScheduledTaskTriggerSource.Scheduler);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_should_record_task_failed_when_task_is_canceled()
+    {
+        var cancelingTask = new CancelingScheduledTask();
+        var scheduled = new ScheduledTask
+        {
+            TypeName = typeof(CancelingScheduledTask).FullName,
+            Interval = 1,
+            LastExecution = DateTime.UtcNow.AddMinutes(-10)
+        };
+
+        _taskManager.GetNextScheduled().Returns(scheduled, (ScheduledTask)null);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { cancelingTask }, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await _subject.StartAsync(cts.Token);
+        await Task.Delay(500);
+
+        _taskManager.Received().RecordTaskFailed(
+            typeof(CancelingScheduledTask).FullName,
+            Arg.Any<DateTime>(),
+            Arg.Any<OperationCanceledException>(),
+            ScheduledTaskTriggerSource.Scheduler);
+        _taskManager.Received().RecordTaskFinished(typeof(CancelingScheduledTask).FullName, Arg.Any<DateTime>(), ScheduledTaskTriggerSource.Scheduler);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_should_broadcast_TaskFailed_not_TaskCompleted_when_task_is_canceled()
+    {
+        var cancelingTask = new CancelingScheduledTask();
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var scheduled = new ScheduledTask
+        {
+            TypeName = typeof(CancelingScheduledTask).FullName,
+            Interval = 1,
+            LastExecution = DateTime.UtcNow.AddMinutes(-10)
+        };
+
+        _taskManager.GetNextScheduled().Returns(scheduled, (ScheduledTask)null);
+        _subject = new Scheduler(
+            _taskManager,
+            new List<IScheduledTask> { cancelingTask },
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.FromMilliseconds(10),
+            broadcaster);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await _subject.StartAsync(cts.Token);
+        await Task.Delay(500);
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskStarted"));
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskFailed"));
+        broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskCompleted"));
     }
 
     [Test]

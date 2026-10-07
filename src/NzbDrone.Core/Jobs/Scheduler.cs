@@ -185,10 +185,25 @@ public class Scheduler : BackgroundService
                                 });
                             }
                         }
-                        catch (OperationCanceledException)
+                        catch (OperationCanceledException ex)
                         {
                             failed = true;
                             _logger.Warn("Scheduled task was canceled or timed out: {0}", next.TypeName);
+                            _taskManager.RecordTaskFailed(next.TypeName, startTime, ex, ScheduledTaskTriggerSource.Scheduler);
+                            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                            {
+                                Name = "TaskFailed",
+                                Action = ModelAction.Updated,
+                                Body = new
+                                {
+                                    TypeName = signalRTypeName,
+                                    Name = taskInstance?.GetType().Name ?? next.TypeName,
+                                    TriggerSource = ScheduledTaskTriggerSource.Scheduler.ToString(),
+                                    Error = string.IsNullOrWhiteSpace(ex.Message)
+                                        ? "Scheduled task was canceled or timed out"
+                                        : ex.Message
+                                }
+                            });
                         }
                         catch (Exception ex)
                         {
