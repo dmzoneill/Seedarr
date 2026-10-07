@@ -25,6 +25,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
     private readonly Logger _logger;
     private readonly IBlocklistArchiveStreamProvider _streamProvider;
     private readonly object _syncLock = new();
+    private readonly SemaphoreSlim _syncGate = new(1, 1);
 
     private readonly BlocklistSyncMetadata _metadata = new();
     private List<string> _rules = new();
@@ -245,6 +246,19 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             };
         }
 
+        await _syncGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await SyncAsyncCore(effectiveUrl, force, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _syncGate.Release();
+        }
+    }
+
+    private async Task<BlocklistSyncResult> SyncAsyncCore(string effectiveUrl, bool force, CancellationToken cancellationToken)
+    {
         var now = _nowProvider();
 
         lock (_syncLock)

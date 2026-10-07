@@ -740,6 +740,46 @@ public class PeerBlocklistSyncServiceTests
         Assert.That(readCount, Is.GreaterThan(0));
     }
 
+    [Test]
+    public async Task SyncAsync_overlapping_calls_should_not_apply_stale_rules_when_slow_sync_finishes_last()
+    {
+        var slowRelease = new ManualResetEventSlim(false);
+        var slowStarted = new ManualResetEventSlim(false);
+        var requestCount = 0;
+
+        _mockHandler.ResponseFactory = _ =>
+        {
+            var count = Interlocked.Increment(ref requestCount);
+            if (count == 1)
+            {
+                slowStarted.Set();
+                slowRelease.Wait(TimeSpan.FromSeconds(5));
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("10.0.0.0/8\n")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("192.168.0.0/16\n")
+            };
+        };
+
+        var url = "http://blocklist.test/rules.txt";
+        var slowSync = _service.SyncAsync(url);
+        Assert.That(slowStarted.Wait(TimeSpan.FromSeconds(5)), Is.True, "slow sync should start HTTP before fast sync runs");
+
+        var fastSync = _service.SyncAsync(url);
+        slowRelease.Set();
+
+        await Task.WhenAll(slowSync, fastSync);
+
+        Assert.That(_service.IsBlocked("192.168.1.1"), Is.True);
+        Assert.That(_service.IsBlocked("10.0.0.1"), Is.False);
+        Assert.That(requestCount, Is.EqualTo(2));
+    }
+
     private sealed class TrackDisposeHttpResponseMessage : HttpResponseMessage
     {
         public bool IsDisposed { get; private set; }
