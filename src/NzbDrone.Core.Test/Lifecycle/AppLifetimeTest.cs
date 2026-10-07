@@ -178,8 +178,12 @@ public class AppLifetimeTest
         _upnpService.IsAvailable.Returns(false);
         _subject.EvaluateWatchdogMetrics();
 
-        // Recovers
+        // Recovers with active peer TCP mapping
         _upnpService.IsAvailable.Returns(true);
+        _upnpService.GetMappings().Returns(new List<PortMapping>
+        {
+            new PortMapping { InternalPort = 6881, Protocol = "TCP", IsActive = true }
+        });
         _subject.EvaluateWatchdogMetrics();
 
         // Fails again
@@ -187,6 +191,30 @@ public class AppLifetimeTest
         _subject.EvaluateWatchdogMetrics();
 
         _eventAggregator.Received(2).PublishEvent(Arg.Is<PortForwardingFailedEvent>(e => e.Port == 6881));
+    }
+
+    [Test]
+    public void PortForwarding_should_publish_PortForwardingFailedEvent_when_gateway_available_but_mapping_inactive()
+    {
+        _configService.UpnpEnabled.Returns(true);
+        _configService.ListeningPort.Returns(6881);
+        _upnpService.IsAvailable.Returns(true);
+        _upnpService.GetMappings().Returns(new List<PortMapping>
+        {
+            new PortMapping
+            {
+                InternalPort = 6881,
+                Protocol = "TCP",
+                IsActive = false,
+                ErrorMessage = "Router rejected TCP mapping"
+            }
+        });
+
+        _subject.EvaluateWatchdogMetrics();
+        _subject.EvaluateWatchdogMetrics();
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<PortForwardingFailedEvent>(e =>
+            e.Port == 6881 && e.ErrorMessage == "Router rejected TCP mapping"));
     }
 
     [Test]

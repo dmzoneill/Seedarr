@@ -409,12 +409,22 @@ public class AppLifetime : IHostedService, IDisposable
         {
             try
             {
-                if (!_upnpService.IsAvailable)
+                var peerPort = _configService.ListeningPort;
+                var mappings = _upnpService.GetMappings() ?? new List<PortMapping>();
+                var peerMapping = mappings.FirstOrDefault(m => m.InternalPort == peerPort && string.Equals(m.Protocol, "TCP", StringComparison.OrdinalIgnoreCase));
+                var portForwardFailed = !_upnpService.IsAvailable || peerMapping == null || !peerMapping.IsActive;
+
+                if (portForwardFailed)
                 {
                     if (!_portForwardingFailureEmitted)
                     {
                         _portForwardingFailureEmitted = true;
-                        _eventAggregator.PublishEvent(new PortForwardingFailedEvent(_configService.ListeningPort, "TCP", "UPnP device unavailable or port mapping failed"));
+                        var detail = !string.IsNullOrEmpty(peerMapping?.ErrorMessage)
+                            ? peerMapping.ErrorMessage
+                            : !_upnpService.IsAvailable
+                                ? "UPnP device unavailable or port mapping failed"
+                                : "No compatible UPnP or NAT-PMP gateway discovered or port redirection was rejected.";
+                        _eventAggregator.PublishEvent(new PortForwardingFailedEvent(peerPort, "TCP", detail));
                     }
                 }
                 else
