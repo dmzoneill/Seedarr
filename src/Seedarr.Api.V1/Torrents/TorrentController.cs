@@ -1160,10 +1160,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         {
             torrent = _torrentService.Get(torrentId);
         }
-
-        if (torrent == null)
+        else
         {
-            torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, id, StringComparison.OrdinalIgnoreCase));
+            torrent = _torrentService.GetByInfoHash(id);
         }
 
         if (torrent == null)

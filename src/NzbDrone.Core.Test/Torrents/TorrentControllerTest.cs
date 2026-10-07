@@ -975,10 +975,32 @@ public class TorrentControllerTest
     public void GetPieceMap_returns_NotFound_when_torrent_does_not_exist()
     {
         _torrentService.Get(999).Returns((Torrent)null);
-        _torrentService.GetAll().Returns(new List<Torrent>());
 
         var result = _controller.GetPieceMap("999");
         Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+        _torrentService.DidNotReceive().GetAll();
+    }
+
+    [Test]
+    public void GetPieceMap_looks_up_infohash_via_GetByInfoHash_without_scanning_all_torrents()
+    {
+        const string infoHash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 7,
+            InfoHash = infoHash,
+            PieceCount = 2,
+            PieceLength = 16384
+        };
+
+        _torrentService.GetByInfoHash(infoHash).Returns(torrent);
+        _connectionManager.GetConnections(infoHash).Returns(new List<PeerConnection>());
+
+        var result = _controller.GetPieceMap(infoHash);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _torrentService.Received(1).GetByInfoHash(infoHash);
+        _torrentService.DidNotReceive().GetAll();
     }
 
     [Test]
