@@ -161,6 +161,11 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Delete(int id)
     {
+        if (_automationService.Get(id) == null)
+        {
+            return NotFound();
+        }
+
         _automationService.Delete(id);
         return Ok();
     }
