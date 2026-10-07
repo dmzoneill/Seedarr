@@ -210,7 +210,12 @@ public class IndexerController : Controller
             return BadRequest("Target host/URL is not permitted.");
         }
 
-        if (string.IsNullOrWhiteSpace(definition.Implementation))
+        if (!string.Equals(existing.IndexerType, definition.IndexerType, StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(definition.IndexerType))
+        {
+            definition.Implementation = $"{definition.IndexerType}Indexer";
+        }
+        else if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
             definition.Implementation = !string.IsNullOrWhiteSpace(definition.IndexerType)
                 ? $"{definition.IndexerType}Indexer"
