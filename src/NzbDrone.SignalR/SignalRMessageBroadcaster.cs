@@ -303,16 +303,14 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
             string.Equals(message.Name, "trackerUpdated", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "tracker_updated", StringComparison.OrdinalIgnoreCase))
         {
-            list.Add("trackerUpdated");
-            list.Add("tracker_updated");
+            list.Add("TrackerUpdated");
         }
         else if (string.Equals(message.Name, "TrackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "trackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "TrackerAnnounceEvent", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "tracker_announced", StringComparison.OrdinalIgnoreCase))
         {
-            list.Add("trackerAnnounced");
-            list.Add("tracker_announced");
+            list.Add("TrackerAnnounced");
         }
         else if (string.Equals(message.Name, "TorrentRecheckProgress", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "torrent_recheck_progress", StringComparison.OrdinalIgnoreCase))

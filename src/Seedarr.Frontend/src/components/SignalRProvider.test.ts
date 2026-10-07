@@ -43,8 +43,6 @@ describe("SignalRProvider: isHandledByNamedEvent", () => {
     // Tracker events
     assert.equal(isHandledByNamedEvent("TrackerUpdated"), true);
     assert.equal(isHandledByNamedEvent("TrackerAnnounced"), true);
-    assert.equal(isHandledByNamedEvent("trackerUpdated"), true);
-    assert.equal(isHandledByNamedEvent("trackerAnnounced"), true);
   });
 
   it("returns false for generic messages that are NOT dispatched via named events", () => {

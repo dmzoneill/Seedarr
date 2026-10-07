@@ -539,7 +539,6 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
             errorMessage = message.ErrorMessage
         };
 
-        BroadcastTrackerUpdated(payload, message.Torrent?.Id ?? 0);
         BroadcastTrackerAnnounced(payload, message.Torrent?.Id ?? 0);
     }
 
