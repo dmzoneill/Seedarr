@@ -99,16 +99,21 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
 
             sql.Append(" ORDER BY \"DateAdded\" DESC");
 
+            if (offset > 0 && limit <= 0)
+            {
+                throw new ArgumentException("Offset requires a positive limit.", nameof(limit));
+            }
+
             if (limit > 0)
             {
                 sql.Append(" LIMIT @Limit");
                 parameters.Add("Limit", limit);
-            }
 
-            if (offset > 0)
-            {
-                sql.Append(" OFFSET @Offset");
-                parameters.Add("Offset", offset);
+                if (offset > 0)
+                {
+                    sql.Append(" OFFSET @Offset");
+                    parameters.Add("Offset", offset);
+                }
             }
 
             return connection.Query<DownloadHistory>(sql.ToString(), parameters).ToList();
