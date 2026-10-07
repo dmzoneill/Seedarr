@@ -74,6 +74,7 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
             return;
         }
 
+        var dedupKey = GetDeduplicationKey(message);
         if (_deduplicationWindow > TimeSpan.Zero && IsDuplicate(message))
         {
             _logger.Trace("Suppressing duplicate SignalR broadcast for message: {0}", message.Name);
@@ -84,7 +85,11 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
         {
             _logger.Trace("Broadcasting SignalR message: {0}", message.Name);
             _hubContext?.Clients?.All?.SendAsync("receiveMessage", message)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR broadcast failed"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                ?.ContinueWith(t =>
+                {
+                    _recentPayloads.TryRemove(dedupKey, out _);
+                    _logger.Warn(t.Exception, "SignalR broadcast failed");
+                }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
             var eventNames = GetNamedEvents(message);
             foreach (var eventName in eventNames)
@@ -107,6 +112,7 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
             return;
         }
 
+        var dedupKey = GetDeduplicationKey(message, groupName);
         if (_deduplicationWindow > TimeSpan.Zero && IsDuplicate(message, groupName))
         {
             _logger.Trace("Suppressing duplicate SignalR broadcast for group {0}, message: {1}", groupName, message.Name);
@@ -123,7 +129,11 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
         {
             _logger.Trace("Broadcasting SignalR message to group {0}: {1}", groupName, message.Name);
             group.SendAsync("receiveMessage", message)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "SignalR group broadcast failed"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                ?.ContinueWith(t =>
+                {
+                    _recentPayloads.TryRemove(dedupKey, out _);
+                    _logger.Warn(t.Exception, "SignalR group broadcast failed");
+                }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
 
             var eventNames = GetNamedEvents(message);
             foreach (var eventName in eventNames)
