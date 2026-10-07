@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using NLog;
 
@@ -32,7 +33,7 @@ public static class AssemblyLoader
             {
                 try
                 {
-                    assemblies.Add(Assembly.LoadFrom(path));
+                    assemblies.Add(LoadFromDiskPath(path, name));
                 }
                 catch (Exception ex) when (ex is FileNotFoundException or BadImageFormatException or FileLoadException)
                 {
@@ -61,6 +62,32 @@ public static class AssemblyLoader
         }
 
         return assemblies;
+    }
+
+    private static Assembly LoadFromDiskPath(string path, string name)
+    {
+        var assemblyName = AssemblyName.GetAssemblyName(path);
+        var loaded = FindLoadedAssembly(assemblyName);
+        if (loaded != null)
+        {
+            return loaded;
+        }
+
+        try
+        {
+            return Assembly.Load(assemblyName);
+        }
+        catch (FileNotFoundException)
+        {
+            Logger.Debug("Assembly {0} not in default load context; loading from {1}", name, path);
+            return Assembly.LoadFrom(path);
+        }
+    }
+
+    private static Assembly FindLoadedAssembly(AssemblyName assemblyName)
+    {
+        return AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(assembly => AssemblyName.ReferenceMatchesDefinition(assembly.GetName(), assemblyName));
     }
 
     private static string DescribeInvalidAssemblyName(string name)

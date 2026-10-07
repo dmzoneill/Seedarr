@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using NzbDrone.Common.Composition;
 
@@ -15,6 +16,16 @@ public class AssemblyLoaderTest
 
         Assert.That(assemblies, Has.Count.EqualTo(1));
         Assert.That(assemblies[0].GetName().Name, Is.EqualTo("Seedarr.Common"));
+    }
+
+    [Test]
+    public void Load_reuses_default_context_assembly_when_dll_exists_beside_host()
+    {
+        var expected = typeof(AssemblyLoader).Assembly;
+        var assemblies = AssemblyLoader.Load(new List<string> { expected.GetName().Name! });
+
+        Assert.That(assemblies, Has.Count.EqualTo(1));
+        Assert.That(assemblies[0], Is.SameAs(expected));
     }
 
     [Test]
