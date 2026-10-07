@@ -133,6 +133,13 @@ public class PathSanitizerTests
     }
 
     [Test]
+    public void IsPathUnderRoot_rejects_relative_root()
+    {
+        Assert.That(PathSanitizer.IsPathUnderRoot("downloads/MyShow", "Season 1/Episode 01.mkv"), Is.False);
+        Assert.That(PathSanitizer.IsPathUnderRoot("downloads/MyShow", "../outside.mkv"), Is.False);
+    }
+
+    [Test]
     public void IsBlockedPath_detects_sensitive_system_directories()
     {
         if (OperatingSystem.IsWindows())
