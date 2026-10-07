@@ -1,34 +1,85 @@
+using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
+using NzbDrone.Core.Configuration;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Config;
 
 [V1ApiController("config/ai")]
-public class AiConfigController : Controller
+public class AiConfigController : ConfigController<AiConfigResource>
 {
-    [HttpGet]
-    public ActionResult<object> GetConfig()
+    private static readonly HashSet<string> AllowedActiveProviders = new(StringComparer.OrdinalIgnoreCase)
     {
-        return Ok(new
-        {
-            id = 1,
-            enabled = false,
-            activeProvider = "none",
-            ollamaEndpoint = "http://localhost:11434",
-            ollamaModel = "llama3:latest",
-            geminiApiKey = string.Empty,
-            geminiModel = "gemini-1.5-flash",
-            onnxModelPath = "/config/models/seedarr-ai.onnx",
-            enableCopilot = false,
-            enableAnomalyDetection = false,
-            enableNaturalLanguageSearch = false,
-            enableAutoRemediation = false
-        });
+        "RuleHeuristic",
+        "Ollama",
+        "Gemini",
+        "Onnx",
+    };
+
+    public AiConfigController(IConfigService configService)
+        : base(configService)
+    {
+        SharedValidator.RuleFor(c => c.ActiveAiProvider)
+            .Must(p => !string.IsNullOrWhiteSpace(p) && AllowedActiveProviders.Contains(p.Trim()))
+            .WithMessage("ActiveAiProvider must be one of: RuleHeuristic, Ollama, Gemini, Onnx.");
+
+        SharedValidator.RuleFor(c => c.OllamaHost)
+            .Must(IsValidOllamaHost)
+            .WithMessage("OllamaHost must be a valid http or https URL.");
+
+        SharedValidator.RuleFor(c => c.OnnxModelPath)
+            .NotEmpty()
+            .WithMessage("OnnxModelPath is required.");
     }
 
-    [HttpPut("{id}")]
-    public ActionResult<object> UpdateConfig(int id, [FromBody] object config)
+    protected override AiConfigResource ToResource(IConfigService model)
     {
-        return Ok(config);
+        return AiConfigResourceMapper.ToResource(model);
+    }
+
+    [Authorize(Policy = Policies.AdminOnly)]
+    public override ActionResult<AiConfigResource> SaveConfig(int? id, [FromBody] AiConfigResource resource)
+    {
+        var idValidationError = ValidateSaveConfigId(id, resource);
+        if (idValidationError != null)
+        {
+            return idValidationError;
+        }
+
+        if (resource == null)
+        {
+            return BadRequest("Request body cannot be empty.");
+        }
+
+        var existingGeminiKey = _configService.GetValue("GeminiApiKey", string.Empty);
+        if (string.IsNullOrWhiteSpace(resource.GeminiApiKey) ||
+            resource.GeminiApiKey == "(unchanged)" ||
+            resource.GeminiApiKey == GeneralConfigResourceMapper.GetMaskedApiKey(existingGeminiKey))
+        {
+            resource.GeminiApiKey = existingGeminiKey;
+        }
+
+        var actionResult = base.SaveConfig(id, resource);
+        if (actionResult.Value != null)
+        {
+            actionResult.Value.GeminiApiKey =
+                GeneralConfigResourceMapper.GetMaskedApiKey(actionResult.Value.GeminiApiKey);
+        }
+
+        return actionResult;
+    }
+
+    private static bool IsValidOllamaHost(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return false;
+        }
+
+        return Uri.TryCreate(host.Trim(), UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 }
