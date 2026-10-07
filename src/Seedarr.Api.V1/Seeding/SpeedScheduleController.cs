@@ -184,6 +184,11 @@ public class SpeedScheduleController : Controller
             return BadRequest("Speed limit cannot be less than -1.");
         }
 
+        if (resource.Priority < 0)
+        {
+            return BadRequest("Priority cannot be negative.");
+        }
+
         return null;
     }
 

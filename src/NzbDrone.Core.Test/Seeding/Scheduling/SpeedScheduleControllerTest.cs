@@ -99,6 +99,26 @@ public class SpeedScheduleControllerTest
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
+    [TestCase(-1)]
+    [TestCase(-100)]
+    public void Create_with_negative_priority_returns_bad_request(int priority)
+    {
+        var resource = new SpeedScheduleResource
+        {
+            Name = "Test",
+            Days = 127,
+            StartTime = "08:00",
+            EndTime = "17:00",
+            MaxUploadSpeed = 1000,
+            MaxDownloadSpeed = 1000,
+            Priority = priority
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
     [TestCase(null, "17:00")]
     [TestCase("08:00", null)]
     [TestCase("invalid", "17:00")]
@@ -208,6 +228,29 @@ public class SpeedScheduleControllerTest
             EndTime = "17:00",
             MaxUploadSpeed = upload,
             MaxDownloadSpeed = download
+        };
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [TestCase(-1)]
+    [TestCase(-100)]
+    public void Update_with_negative_priority_returns_bad_request(int priority)
+    {
+        var existing = new SpeedSchedule { Id = 1, Name = "Existing" };
+        _speedScheduler.Get(1).Returns(existing);
+
+        var resource = new SpeedScheduleResource
+        {
+            Name = "Test",
+            Days = 127,
+            StartTime = "08:00",
+            EndTime = "17:00",
+            MaxUploadSpeed = 1000,
+            MaxDownloadSpeed = 1000,
+            Priority = priority
         };
 
         var result = _controller.Update(1, resource);
