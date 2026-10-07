@@ -87,6 +87,31 @@ public class FastResumeServiceTest
     }
 
     [Test]
+    public void DeleteFastResume_should_remove_persisted_file_and_clear_piece_storage()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            Uploaded = 100,
+            Downloaded = 200,
+            Progress = 1.0,
+            PieceCount = 1,
+            Status = TorrentStatus.Seeding
+        };
+
+        _service.SaveFastResume(torrent);
+
+        var filePath = Path.Combine(_tempAppDataFolder, "fastresume", torrent.InfoHash.ToLowerInvariant() + ".fastresume");
+        Assert.That(File.Exists(filePath), Is.True);
+
+        _service.DeleteFastResume(torrent.InfoHash);
+
+        Assert.That(File.Exists(filePath), Is.False);
+        _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, null);
+    }
+
+    [Test]
     public void SaveFastResume_should_persist_bitfield_and_metadata()
     {
         var torrent = new Torrent

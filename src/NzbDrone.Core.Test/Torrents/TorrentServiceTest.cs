@@ -302,6 +302,40 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
+        public void Delete_should_call_DeleteFastResume_when_torrent_has_info_hash()
+        {
+            const string infoHash = "0123456789abcdef0123456789abcdef01234567";
+            var torrent = new Torrent { Id = 1, InfoHash = infoHash };
+            _repository.Get(1).Returns(torrent);
+            var fastResumeService = Substitute.For<IFastResumeService>();
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
+                fastResumeService: fastResumeService);
+
+            subject.Delete(1);
+
+            fastResumeService.Received(1).DeleteFastResume(infoHash);
+        }
+
+        [Test]
+        public void DeleteMany_should_call_DeleteFastResume_for_each_deleted_torrent()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 1, InfoHash = "1111111111111111111111111111111111111111" },
+                new Torrent { Id = 2, InfoHash = "2222222222222222222222222222222222222222" }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+            var fastResumeService = Substitute.For<IFastResumeService>();
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
+                fastResumeService: fastResumeService);
+
+            subject.DeleteMany(new List<int> { 1, 2 }, false);
+
+            fastResumeService.Received(1).DeleteFastResume(torrents[0].InfoHash);
+            fastResumeService.Received(1).DeleteFastResume(torrents[1].InfoHash);
+        }
+
+        [Test]
         public void Delete_should_call_DeleteByTorrentId_on_file_service()
         {
             _subject.Delete(1);

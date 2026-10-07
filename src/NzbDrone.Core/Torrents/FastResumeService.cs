@@ -247,6 +247,45 @@ public class FastResumeService : IFastResumeService
         }
     }
 
+    public void DeleteFastResume(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return;
+        }
+
+        var appDataFolder = _appFolderInfo?.AppDataFolder ?? AppContext.BaseDirectory;
+        var resumeDir = Path.Combine(appDataFolder, "fastresume");
+        var filePath = Path.Combine(resumeDir, $"{infoHash.ToLowerInvariant()}.fastresume");
+        var tempPath = $"{filePath}.tmp";
+
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to delete FastResume file for {0}", infoHash);
+        }
+
+        try
+        {
+            _pieceStorage?.SetVerifiedPieces(infoHash, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to clear verified pieces after FastResume delete for {0}", infoHash);
+        }
+    }
+
     public FastResumeData LoadFastResume(Torrent torrent)
     {
         if (torrent == null)

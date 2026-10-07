@@ -8,6 +8,8 @@ public interface IFastResumeService
 
     void SaveFastResume(Torrent torrent);
 
+    void DeleteFastResume(string infoHash);
+
     FastResumeData LoadFastResume(string infoHash);
 
     FastResumeData LoadFastResume(Torrent torrent);
