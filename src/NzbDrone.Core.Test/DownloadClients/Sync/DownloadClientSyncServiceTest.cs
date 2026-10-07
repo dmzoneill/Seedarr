@@ -189,6 +189,9 @@ public class DownloadClientSyncServiceTest
     {
         var hash = "aabbccddeeff00112233445566778899aabbccdd";
         var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+        var pieceHashes = new byte[40];
+        pieceHashes[0] = 0xAB;
+        pieceHashes[39] = 0xCD;
 
         var mockClient = Substitute.For<IDownloadClient>();
         mockClient.GetItems().Returns(new List<DownloadClientItem>
@@ -202,7 +205,8 @@ public class DownloadClientSyncServiceTest
             Name = "Ubuntu 24.04 Desktop",
             TotalSize = 1000000,
             PieceCount = 500,
-            PieceLength = 2000
+            PieceLength = 2000,
+            PieceHashes = pieceHashes
         });
 
         _service.InjectedClient = mockClient;
@@ -224,6 +228,10 @@ public class DownloadClientSyncServiceTest
             t.TotalSize == 1000000 &&
             t.PieceCount == 500 &&
             t.PieceLength == 2000 &&
+            t.PieceHashes != null &&
+            t.PieceHashes.Length == 40 &&
+            t.PieceHashes[0] == 0xAB &&
+            t.PieceHashes[39] == 0xCD &&
             t.Status == TorrentStatus.Stopped));
     }
 
