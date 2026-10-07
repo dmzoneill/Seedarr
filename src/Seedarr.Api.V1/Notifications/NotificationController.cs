@@ -713,7 +713,11 @@ public class NotificationController : Controller
 
             if (valueNode is JsonValue)
             {
-                var strValue = valueNode.ToString();
+                if (!TryGetJsonValueString(valueNode, out var strValue))
+                {
+                    continue;
+                }
+
                 if (string.IsNullOrEmpty(strValue))
                 {
                     continue;
@@ -920,7 +924,11 @@ public class NotificationController : Controller
 
             if (valueNode is JsonValue)
             {
-                var strValue = valueNode.ToString();
+                if (!TryGetJsonValueString(valueNode, out var strValue))
+                {
+                    continue;
+                }
+
                 if (string.IsNullOrEmpty(strValue))
                 {
                     continue;
@@ -967,7 +975,11 @@ public class NotificationController : Controller
                 continue;
             }
 
-            var existingStr = existingVal.ToString();
+            if (!TryGetJsonValueString(existingVal, out var existingStr))
+            {
+                continue;
+            }
+
             if (string.IsNullOrEmpty(existingStr))
             {
                 continue;
@@ -981,7 +993,11 @@ public class NotificationController : Controller
                 }
                 else
                 {
-                    var incomingStr = incomingVal.ToString();
+                    if (!TryGetJsonValueString(incomingVal, out var incomingStr))
+                    {
+                        continue;
+                    }
+
                     if (string.IsNullOrWhiteSpace(incomingStr) || incomingStr == PasswordMask || incomingStr.Contains('*'))
                     {
                         incomingObj[key] = existingVal.DeepClone();
@@ -992,7 +1008,11 @@ public class NotificationController : Controller
             {
                 if (incomingObj.TryGetPropertyValue(key, out var incomingVal) && incomingVal != null)
                 {
-                    var incomingStr = incomingVal.ToString();
+                    if (!TryGetJsonValueString(incomingVal, out var incomingStr))
+                    {
+                        continue;
+                    }
+
                     if (!string.IsNullOrEmpty(incomingStr) && (incomingStr.Contains('*') || incomingStr == PasswordMask))
                     {
                         var restoredUrl = RestoreUrl(incomingStr, existingStr);
@@ -1021,6 +1041,24 @@ public class NotificationController : Controller
         }
 
         return false;
+    }
+
+    private static bool TryGetJsonValueString(JsonNode valueNode, out string value)
+    {
+        value = null;
+        if (valueNode is not JsonValue jsonValue)
+        {
+            return false;
+        }
+
+        if (jsonValue.GetValueKind() == JsonValueKind.String)
+        {
+            value = jsonValue.GetValue<string>();
+            return true;
+        }
+
+        value = jsonValue.ToString();
+        return !string.IsNullOrEmpty(value);
     }
 
     private static NotificationDefinition ToModel(NotificationResource r)
