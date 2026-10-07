@@ -433,6 +433,23 @@ public class RingBufferTargetTest
             Is.EqualTo("api_key=[REDACTED]&passkey=[REDACTED]&token=[REDACTED]&apikey=[REDACTED]"));
 
         Assert.That(
+            RingBufferTarget.Sanitize("https://idp.example/token?client_secret=abc123&refresh_token=rtok"),
+            Is.EqualTo("https://idp.example/token?client_secret=[REDACTED]&refresh_token=[REDACTED]"));
+        Assert.That(
+            RingBufferTarget.Sanitize("https://idp.example/token?client_secret=abc123&refresh_token=rtok"),
+            Does.Not.Contain("abc123"));
+        Assert.That(
+            RingBufferTarget.Sanitize("https://idp.example/token?client_secret=abc123&refresh_token=rtok"),
+            Does.Not.Contain("rtok"));
+
+        Assert.That(
+            RingBufferTarget.Sanitize("body: {\"client_secret\": \"oauth-secret\", \"refresh_token\": \"refresh-value\"}"),
+            Does.Not.Contain("oauth-secret"));
+        Assert.That(
+            RingBufferTarget.Sanitize("body: {\"client_secret\": \"oauth-secret\", \"refresh_token\": \"refresh-value\"}"),
+            Does.Contain("\"client_secret\": \"[REDACTED]\""));
+
+        Assert.That(
             RingBufferTarget.Sanitize("GET failed https://indexer.example/api?auth=supersecret&key=indexer-key-99"),
             Is.EqualTo("GET failed https://indexer.example/api?auth=[REDACTED]&key=[REDACTED]"));
 
