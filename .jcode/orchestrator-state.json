@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:37:18Z",
+  "updatedAt": "2026-10-07T02:37:54Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_195f374f",
+    "lastScheduleId": "sched_0f1a0ce8",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -75,5 +75,5 @@
     ]
   },
   "githubOpen": 180,
-  "lastMonitorNote": "fix monitor: batch closed #1160-1194; 5 dispatches auth/datastore/api/torrents/signalr"
+  "lastMonitorNote": "fix monitor: all slots active; no closures; 0 dispatches"
 }
