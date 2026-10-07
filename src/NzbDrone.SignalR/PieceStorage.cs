@@ -156,14 +156,21 @@ public class PieceStorage : IPieceStorage, IDisposable
             return;
         }
 
-        if (indexList.Count == 1)
+        if (_coalesceWindow <= TimeSpan.Zero)
         {
-            PublishPieceSignalR(infoHash, new PieceCompletedMessage(infoHash, indexList[0], bytesDownloaded));
+            if (indexList.Count == 1)
+            {
+                PublishPieceSignalR(infoHash, new PieceCompletedMessage(infoHash, indexList[0], bytesDownloaded));
+            }
+            else
+            {
+                PublishPieceSignalR(infoHash, new PieceBatchCompletedMessage(infoHash, indexList, bytesDownloaded));
+            }
+
+            return;
         }
-        else
-        {
-            PublishPieceSignalR(infoHash, new PieceBatchCompletedMessage(infoHash, indexList, bytesDownloaded));
-        }
+
+        QueueCoalescedPieces(infoHash, indexList, bytesDownloaded);
     }
 
     public void MarkPieceCorrupted(string infoHash, int pieceIndex)
@@ -384,6 +391,16 @@ public class PieceStorage : IPieceStorage, IDisposable
 
     private void QueueCoalescedPiece(string infoHash, int pieceIndex, long bytesDownloaded)
     {
+        QueueCoalescedPieces(infoHash, new[] { pieceIndex }, bytesDownloaded);
+    }
+
+    private void QueueCoalescedPieces(string infoHash, IReadOnlyList<int> pieceIndexes, long bytesDownloaded)
+    {
+        if (pieceIndexes == null || pieceIndexes.Count == 0)
+        {
+            return;
+        }
+
         while (true)
         {
             if (_disposed)
@@ -399,15 +416,24 @@ public class PieceStorage : IPieceStorage, IDisposable
                     continue;
                 }
 
-                if (batch.PieceIndexes.Contains(pieceIndex))
+                var addedAny = false;
+                foreach (var pieceIndex in pieceIndexes)
                 {
-                    break;
+                    if (batch.PieceIndexes.Contains(pieceIndex))
+                    {
+                        continue;
+                    }
+
+                    batch.PieceIndexes.Add(pieceIndex);
+                    addedAny = true;
                 }
 
-                batch.PieceIndexes.Add(pieceIndex);
-                batch.BytesDownloaded += bytesDownloaded;
+                if (addedAny)
+                {
+                    batch.BytesDownloaded += bytesDownloaded;
+                }
 
-                if (batch.Timer == null)
+                if (batch.PieceIndexes.Count > 0 && batch.Timer == null)
                 {
                     batch.Timer = new Timer(_ => FlushBatch(infoHash), null, _coalesceWindow, Timeout.InfiniteTimeSpan);
                 }

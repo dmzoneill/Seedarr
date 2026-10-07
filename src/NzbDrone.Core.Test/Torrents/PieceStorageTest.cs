@@ -146,6 +146,43 @@ public class PieceStorageTest
     }
 
     [Test]
+    public void Coalescing_batches_MarkPiecesVerified_when_window_is_set()
+    {
+        const string hash = "bulk-coalesce-hash";
+        var pieceIndexes = new[] { 1, 2, 3 };
+        using var coalescingStorage = new PieceStorage(_signalRBroadcaster, TimeSpan.FromMilliseconds(500));
+
+        coalescingStorage.MarkPiecesVerified(hash, pieceIndexes, 6000);
+
+        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+        Assert.That(coalescingStorage.PendingBatchCount, Is.EqualTo(1));
+
+        coalescingStorage.Flush();
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceBatchCompletedMessage>(m =>
+            m.InfoHash == hash &&
+            m.PieceIndexes.SequenceEqual(pieceIndexes) &&
+            m.BytesDownloaded == 6000));
+    }
+
+    [Test]
+    public void Coalescing_MarkPiecesVerified_merges_with_pending_MarkPieceVerified_batch()
+    {
+        const string hash = "mixed-bulk-coalesce-hash";
+        using var coalescingStorage = new PieceStorage(_signalRBroadcaster, TimeSpan.FromMilliseconds(500));
+
+        coalescingStorage.MarkPieceVerified(hash, 1, 1000);
+        coalescingStorage.MarkPiecesVerified(hash, new[] { 2, 3 }, 5000);
+
+        coalescingStorage.Flush();
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceBatchCompletedMessage>(m =>
+            m.InfoHash == hash &&
+            m.PieceIndexes.Count == 3 &&
+            m.BytesDownloaded == 6000));
+    }
+
+    [Test]
     public void Flush_prunes_empty_pending_batches()
     {
         const string hash = "prune-test-hash";
