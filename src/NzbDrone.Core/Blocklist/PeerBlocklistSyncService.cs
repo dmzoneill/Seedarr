@@ -251,6 +251,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         {
             if (!force && _metadata.NextAllowedSyncUtc.HasValue && now < _metadata.NextAllowedSyncUtc.Value)
             {
+                _metadata.LastCheckedUtc = now;
                 _logger.Warn("Blocklist sync deferred: upstream rate-limit backoff active until {0}.", _metadata.NextAllowedSyncUtc.Value);
                 return new BlocklistSyncResult
                 {
