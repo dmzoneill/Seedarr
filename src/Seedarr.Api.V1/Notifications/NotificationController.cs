@@ -99,6 +99,12 @@ public class NotificationController : Controller
             return BadRequest("At least one notification trigger must be enabled");
         }
 
+        var fallbackError = ValidateFallbackNotificationId(resource);
+        if (fallbackError != null)
+        {
+            return BadRequest(fallbackError);
+        }
+
         var model = ToModel(resource);
         var created = _notificationRepository.Insert(model);
         return Ok(ToResource(created));
@@ -124,6 +130,12 @@ public class NotificationController : Controller
         if (existing == null)
         {
             return NotFound();
+        }
+
+        var fallbackError = ValidateFallbackNotificationId(resource, id);
+        if (fallbackError != null)
+        {
+            return BadRequest(fallbackError);
         }
 
         resource.Settings = RestoreSecrets(resource.Settings, existing.Settings, resource.Implementation ?? existing.Implementation);
@@ -532,6 +544,7 @@ public class NotificationController : Controller
             OnApplicationUpdate = n.OnApplicationUpdate,
             OnBackupComplete = n.OnBackupComplete,
             OnBackupFailed = n.OnBackupFailed,
+            FallbackNotificationId = n.FallbackNotificationId,
             Tags = n.Tags != null ? new List<int>(n.Tags) : new List<int>(),
             Categories = n.Categories != null ? new List<string>(n.Categories) : new List<string>(),
         };
@@ -925,9 +938,37 @@ public class NotificationController : Controller
             OnApplicationUpdate = r.OnApplicationUpdate,
             OnBackupComplete = r.OnBackupComplete,
             OnBackupFailed = r.OnBackupFailed,
+            FallbackNotificationId = r.FallbackNotificationId,
             Tags = r.Tags ?? new List<int>(),
             Categories = r.Categories ?? new List<string>(),
         };
+    }
+
+    private string ValidateFallbackNotificationId(NotificationResource resource, int? notificationId = null)
+    {
+        if (!resource.FallbackNotificationId.HasValue)
+        {
+            return null;
+        }
+
+        var fallbackId = resource.FallbackNotificationId.Value;
+        if (fallbackId <= 0)
+        {
+            return "Fallback notification ID must be a positive integer.";
+        }
+
+        var selfId = notificationId ?? (resource.Id > 0 ? resource.Id : (int?)null);
+        if (selfId.HasValue && fallbackId == selfId.Value)
+        {
+            return "A notification cannot use itself as a fallback notification.";
+        }
+
+        if (_notificationRepository.Get(fallbackId) == null)
+        {
+            return $"Fallback notification with ID {fallbackId} was not found.";
+        }
+
+        return null;
     }
 
     private static bool HasActiveTrigger(NotificationResource resource)

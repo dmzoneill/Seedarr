@@ -991,4 +991,124 @@ public class NotificationControllerTest
         Assert.That(testResult.Message, Does.Contain("port"));
         Assert.That(testResult.Message, Does.Contain("is not permitted"));
     }
+
+    [Test]
+    public void ToResource_maps_fallback_notification_id()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Primary",
+            Implementation = "Discord",
+            FallbackNotificationId = 2,
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource.FallbackNotificationId, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Create_persists_fallback_notification_id_when_target_exists()
+    {
+        var fallback = new NotificationDefinition { Id = 2, Name = "Email backup", Implementation = "Email" };
+        _repository.Get(2).Returns(fallback);
+
+        var resource = new NotificationResource
+        {
+            Name = "Discord primary",
+            Implementation = "Discord",
+            OnGrab = true,
+            FallbackNotificationId = 2,
+        };
+
+        _repository.Insert(Arg.Any<NotificationDefinition>()).Returns(callInfo =>
+        {
+            var def = callInfo.Arg<NotificationDefinition>();
+            def.Id = 1;
+            return def;
+        });
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Insert(Arg.Is<NotificationDefinition>(d => d.FallbackNotificationId == 2));
+    }
+
+    [Test]
+    public void Create_with_unknown_fallback_returns_bad_request()
+    {
+        _repository.Get(99).Returns((NotificationDefinition)null);
+
+        var resource = new NotificationResource
+        {
+            Name = "Discord primary",
+            Implementation = "Discord",
+            OnGrab = true,
+            FallbackNotificationId = 99,
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Fallback notification with ID 99 was not found."));
+    }
+
+    [Test]
+    public void Update_with_self_fallback_returns_bad_request()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 5,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+        };
+        _repository.Get(5).Returns(existing);
+
+        var resource = new NotificationResource
+        {
+            Id = 5,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+            FallbackNotificationId = 5,
+        };
+
+        var result = _controller.Update(5, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("A notification cannot use itself as a fallback notification."));
+    }
+
+    [Test]
+    public void Update_persists_fallback_notification_id_when_target_exists()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+        };
+        var fallback = new NotificationDefinition { Id = 2, Name = "Email", Implementation = "Email" };
+        _repository.Get(1).Returns(existing);
+        _repository.Get(2).Returns(fallback);
+
+        var resource = new NotificationResource
+        {
+            Id = 1,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+            FallbackNotificationId = 2,
+        };
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d => d.FallbackNotificationId == 2));
+    }
 }
