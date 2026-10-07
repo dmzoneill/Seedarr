@@ -50,7 +50,7 @@ public sealed class FallbackProcessSession : ITerminalSession
     {
         var isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         var shell = isWindows ? "powershell.exe" : (File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh");
-        var args = isWindows ? "-NoLogo" : (File.Exists("/bin/bash") ? "--noprofile --norc -i" : "-i");
+        var args = isWindows ? "-NoLogo" : TerminalShellArgv.BuildInteractiveProcessArguments(shell);
 
         var startInfo = new ProcessStartInfo
         {
