@@ -15,6 +15,12 @@ namespace Seedarr.Api.V1.Subsystems;
 [V1ApiController("subsystems")]
 public class SubsystemsController : Controller
 {
+    // Reserve GET .../metrics for aggregate telemetry; do not treat "metrics" as a subsystem id.
+    internal const string KnownSubsystemIdPattern =
+        "bittorrent|torrentengine|extractor|archiveextractor|mediainspector|inspector|geoip|blocklist|networkbinding|binding|mediametadata|metadata|httptransport|transport|ai|intelligence|simulation";
+
+    private const string SubsystemIdRoute = "{subsystemId:regex(^(" + KnownSubsystemIdPattern + ")$)}";
+
     private readonly ISystemResourceService _resourceService;
     private readonly IConfigService _configService;
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
@@ -36,7 +42,7 @@ public class SubsystemsController : Controller
         return Ok(reports);
     }
 
-    [HttpGet("{subsystemId}/metrics")]
+    [HttpGet(SubsystemIdRoute + "/metrics")]
     public async Task<ActionResult<SubsystemTelemetryReport>> GetSubsystemMetrics(string subsystemId, CancellationToken cancellationToken = default)
     {
         var normalized = NormalizeSubsystemId(subsystemId);
@@ -71,7 +77,7 @@ public class SubsystemsController : Controller
         return Ok(result);
     }
 
-    [HttpGet("{subsystemId}")]
+    [HttpGet(SubsystemIdRoute)]
     public ActionResult<SubsystemOverviewResource> GetSubsystem(string subsystemId)
     {
         var normalized = NormalizeSubsystemId(subsystemId);
@@ -98,7 +104,7 @@ public class SubsystemsController : Controller
         return Ok(subsystem);
     }
 
-    [HttpPost("{subsystemId}/switch")]
+    [HttpPost(SubsystemIdRoute + "/switch")]
     public ActionResult<SwitchSubsystemProviderResult> SwitchProvider(string subsystemId, [FromBody] SwitchSubsystemProviderRequest request)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.ProviderId))
@@ -133,7 +139,7 @@ public class SubsystemsController : Controller
         return Ok(result);
     }
 
-    [HttpPost("{subsystemId}/probe/{providerId}")]
+    [HttpPost(SubsystemIdRoute + "/probe/{providerId}")]
     public ActionResult<SubsystemProbeResult> ProbeProvider(string subsystemId, string providerId)
     {
         var normalized = NormalizeSubsystemId(subsystemId);

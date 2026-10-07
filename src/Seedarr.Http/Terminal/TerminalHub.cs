@@ -141,7 +141,6 @@ public class TerminalHub : Hub
                         _logger.Debug(ex, "Default AuthenticateAsync failed for Terminal SignalR connection");
                     }
                 }
-
             }
 
             if (!isAuth)

@@ -43,7 +43,7 @@ public static class ForwardedHeadersSecurityHelper
             {
                 if (System.Net.IPNetwork.TryParse(entry, out var network))
                 {
-                    options.KnownIPNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(network.BaseAddress, network.PrefixLength));
+                    options.KnownIPNetworks.Add(network);
                 }
             }
             else if (IPAddress.TryParse(entry, out var parsedIp))

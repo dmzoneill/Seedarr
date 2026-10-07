@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -142,6 +143,7 @@ public class SubsystemsControllerTests
     [TestCase("nonexistent")]
     [TestCase("unknown")]
     [TestCase("random123")]
+    [TestCase("metrics")]
     public void GetSubsystem_returns_not_found_for_invalid_subsystem(string invalidId)
     {
         var result = _controller.GetSubsystem(invalidId);
@@ -257,6 +259,17 @@ public class SubsystemsControllerTests
         Assert.That(probe.StatusMessage, Does.Contain(providerId));
         Assert.That(probe.DependencyChecks, Is.Not.Empty);
         Assert.That(probe.Warnings, Is.Empty);
+    }
+
+    [Test]
+    public void GetSubsystem_route_template_excludes_metrics_literal()
+    {
+        var method = typeof(SubsystemsController).GetMethod(nameof(SubsystemsController.GetSubsystem));
+        var routeTemplate = method!.GetCustomAttribute<HttpGetAttribute>()!.Template;
+
+        Assert.That(routeTemplate, Does.Contain("regex"));
+        Assert.That(SubsystemsController.KnownSubsystemIdPattern, Does.Not.Contain("metrics"));
+        Assert.That(routeTemplate, Does.Contain(SubsystemsController.KnownSubsystemIdPattern));
     }
 
     [Test]
