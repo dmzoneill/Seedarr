@@ -397,4 +397,17 @@ public class Ipv6IntervalTreeTests
         Assert.That(r3.Start, Is.EqualTo(IPAddress.Parse("2001:db8::1").ToUInt128()));
         Assert.That(r3.End, Is.EqualTo(IPAddress.Parse("2001:db8::ff").ToUInt128()));
     }
+
+    [Test]
+    public void Ipv6IntervalTree_TryParse_handles_space_separated_label_prefix()
+    {
+        var line = "Bad Organization 2001:db8::1 - 2001:db8::ff";
+        Assert.That(Ipv6IntervalTree.TryParse(line, out var range), Is.True);
+        Assert.That(range.Start, Is.EqualTo(IPAddress.Parse("2001:db8::1").ToUInt128()));
+        Assert.That(range.End, Is.EqualTo(IPAddress.Parse("2001:db8::ff").ToUInt128()));
+
+        var tree = Ipv6IntervalTree.Parse(new[] { line });
+        Assert.That(tree.Contains(IPAddress.Parse("2001:db8::2")), Is.True);
+        Assert.That(tree.Contains(IPAddress.Parse("2001:db8::100")), Is.False);
+    }
 }
