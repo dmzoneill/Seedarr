@@ -117,8 +117,12 @@ public class SecurityMiddlewareTest
 
     [TestCase("localhost", "seedarr.example.com", false)]
     [TestCase("127.0.0.1", "seedarr.example.com", false)]
+    [TestCase("rebind.evil.local", "seedarr.example.com", false)]
+    [TestCase("rebind.evil.local:8096", "seedarr.example.com", false)]
+    [TestCase("seedarr", "seedarr.example.com", false)]
+    [TestCase("evil.example.com", "seedarr.example.com", false)]
     [TestCase("seedarr.example.com", "seedarr.example.com", true)]
-    public void HostHeaderValidation_WithExplicitAllowedHosts_DoesNotImplicitlyAllowLoopback(string host, string allowedHosts, bool expectedAllowed)
+    public void HostHeaderValidation_WithExplicitAllowedHosts_DoesNotImplicitlyAllowLocalExceptions(string host, string allowedHosts, bool expectedAllowed)
     {
         var allowed = HostHeaderValidationMiddleware.IsHostAllowed(host, allowedHosts);
         Assert.That(allowed, Is.EqualTo(expectedAllowed));
