@@ -354,6 +354,36 @@ public class Startup
         }
     }
 
+    internal static async Task<bool> TryEnsureAuthenticatedWhenRequiredAsync(HttpContext context, IConfigFileProvider config)
+    {
+        if (!config.AuthenticationEnabled)
+        {
+            return true;
+        }
+
+        var isAuth = context.User?.Identity?.IsAuthenticated == true;
+        if (!isAuth)
+        {
+            var authResult = await context.AuthenticateAsync("Cookies");
+            if (authResult.Succeeded)
+            {
+                isAuth = true;
+                context.User = authResult.Principal;
+            }
+            else
+            {
+                var apiKeyResult = await context.AuthenticateAsync(ApiKeyAuthenticationOptions.DefaultScheme);
+                if (apiKeyResult.Succeeded)
+                {
+                    isAuth = true;
+                    context.User = apiKeyResult.Principal;
+                }
+            }
+        }
+
+        return isAuth;
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "ASP.NET Core convention expects instance Configure method")]
     public void Configure(WebApplication app)
     {
@@ -416,6 +446,21 @@ public class Startup
 
         var fixturesPath = Path.Combine(System.AppContext.BaseDirectory, "fixtures");
         Directory.CreateDirectory(fixturesPath);
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/fixtures"))
+            {
+                var config = context.RequestServices.GetRequiredService<IConfigFileProvider>();
+                if (!await TryEnsureAuthenticatedWhenRequiredAsync(context, config))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    await context.Response.WriteAsync("Authentication required to access fixtures.");
+                    return;
+                }
+            }
+
+            await next();
+        });
         app.UseStaticFiles(new StaticFileOptions
         {
             FileProvider = new PhysicalFileProvider(fixturesPath),
@@ -442,34 +487,11 @@ public class Startup
                 context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'";
 
                 var config = context.RequestServices.GetRequiredService<IConfigFileProvider>();
-                if (config.AuthenticationEnabled)
+                if (!await TryEnsureAuthenticatedWhenRequiredAsync(context, config))
                 {
-                    var isAuth = context.User?.Identity?.IsAuthenticated == true;
-                    if (!isAuth)
-                    {
-                        var authResult = await context.AuthenticateAsync("Cookies");
-                        if (authResult.Succeeded)
-                        {
-                            isAuth = true;
-                            context.User = authResult.Principal;
-                        }
-                        else
-                        {
-                            var apiKeyResult = await context.AuthenticateAsync(ApiKeyAuthenticationOptions.DefaultScheme);
-                            if (apiKeyResult.Succeeded)
-                            {
-                                isAuth = true;
-                                context.User = apiKeyResult.Principal;
-                            }
-                        }
-                    }
-
-                    if (!isAuth)
-                    {
-                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                        await context.Response.WriteAsync("Authentication required to access API documentation.");
-                        return;
-                    }
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    await context.Response.WriteAsync("Authentication required to access API documentation.");
+                    return;
                 }
 
                 await next();
