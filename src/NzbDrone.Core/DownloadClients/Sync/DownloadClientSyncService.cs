@@ -265,7 +265,6 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             torrent.UpdateRatio();
                             _torrentService.Update(torrent);
                             result.Updated++;
-                            result.Skipped++;
                             continue;
                         }
 
