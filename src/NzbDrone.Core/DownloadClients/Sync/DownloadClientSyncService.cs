@@ -350,8 +350,17 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                         }
                         else
                         {
-                            _logger.Warn("Could not fetch torrent data for {0} ({1}). Seedarr cannot sync it.", item.Title, hash);
-                            result.Failed++;
+                            try
+                            {
+                                torrent = ImportTorrentInternal(definition, provider, hash, item, torrentBytes);
+                                existingTorrents[hash] = torrent;
+                                result.Added++;
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Warn(ex, "Could not fetch torrent data for {0} ({1}). Seedarr cannot sync it.", item.Title, hash);
+                                result.Failed++;
+                            }
                         }
                     }
                 }
