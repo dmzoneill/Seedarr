@@ -429,6 +429,42 @@ public class TaskManagerTest
     }
 
     [Test]
+    public void RecordTaskFinished_should_save_failed_history_when_failure_insert_throws()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 42,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        var historyRepo = Substitute.For<IScheduledTaskHistoryRepository>();
+        var insertAttempts = 0;
+        historyRepo
+            .When(x => x.Insert(Arg.Any<ScheduledTaskHistory>()))
+            .Do(_ =>
+            {
+                insertAttempts++;
+                if (insertAttempts == 1)
+                {
+                    throw new InvalidOperationException("Simulated SQLite lock");
+                }
+            });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>(), historyRepo);
+
+        var startTime = DateTime.UtcNow.AddSeconds(-2);
+        _subject.RecordTaskStarted("TestTask", ScheduledTaskTriggerSource.Scheduler);
+        _subject.RecordTaskFailed("TestTask", startTime, "Simulated failure");
+        _subject.RecordTaskFinished("TestTask", startTime);
+
+        historyRepo.Received(2).Insert(Arg.Any<ScheduledTaskHistory>());
+        historyRepo.Received(1).Insert(Arg.Is<ScheduledTaskHistory>(h =>
+            h.Status == ScheduledTaskHistoryStatus.Failed &&
+            h.ErrorMessage == "Simulated failure"));
+    }
+
+    [Test]
     public void RecordTaskFailed_should_persist_failed_status_and_error_message_to_scheduled_task()
     {
         var task = new ScheduledTask
