@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -717,6 +720,78 @@ public class TorrentRecheckServiceTest
         Assert.That(result.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
         _torrentRepository.Received().Update(Arg.Is<Torrent>(t => t.Id == 20 && t.Status == TorrentStatus.QueuedForChecking));
         _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent.Id == 20 && e.NewStatus == TorrentStatus.QueuedForChecking));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task ProcessQueueAsync_processes_tail_enqueue_when_spawn_races_lock_release()
+    {
+        const int firstId = 40;
+        const int tailId = 41;
+        var first = new Torrent
+        {
+            Id = firstId,
+            Name = "First Queued Torrent",
+            Status = TorrentStatus.Paused,
+            PieceCount = 1,
+            TotalSize = 1000
+        };
+        var tail = new Torrent
+        {
+            Id = tailId,
+            Name = "Tail Queued Torrent",
+            Status = TorrentStatus.Paused,
+            PieceCount = 1,
+            TotalSize = 1000
+        };
+
+        _torrentRepository.Get(firstId).Returns(first);
+        _torrentRepository.Get(tailId).Returns(tail);
+
+        _pieceVerificationService.VerifyPieceFromStorage(
+                Arg.Any<Torrent>(),
+                Arg.Any<IList<TorrentFile>>(),
+                Arg.Any<int>(),
+                Arg.Any<byte[]>(),
+                Arg.Any<IMultiFilePieceStorage>(),
+                Arg.Any<string>())
+            .Returns(true);
+        _stateMachine.When(sm => sm.TransitionToChecking(Arg.Any<Torrent>()))
+            .Do(ci => ci.Arg<Torrent>().Status = TorrentStatus.Checking);
+        _stateMachine.TransitionFromChecking(Arg.Any<Torrent>())
+            .Returns(ci =>
+            {
+                ci.Arg<Torrent>().Status = TorrentStatus.Seeding;
+                return TorrentStatus.Seeding;
+            });
+
+        var activeRechecks = typeof(TorrentRecheckService)
+            .GetField("_activeRechecks", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(_service) as ConcurrentDictionary<int, CancellationTokenSource>;
+
+        _service.QueueRecheck(firstId);
+
+        var racer = System.Threading.Tasks.Task.Run(() =>
+        {
+            SpinWait.SpinUntil(() => activeRechecks!.ContainsKey(firstId));
+            SpinWait.SpinUntil(() => !activeRechecks!.ContainsKey(firstId));
+            for (var i = 0; i < 10_000; i++)
+            {
+                _service.QueueRecheck(tailId);
+                if (tail.Status == TorrentStatus.Seeding)
+                {
+                    return;
+                }
+            }
+        });
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline && tail.Status != TorrentStatus.Seeding)
+        {
+            await System.Threading.Tasks.Task.Delay(5);
+        }
+
+        await racer;
+        Assert.That(tail.Status, Is.EqualTo(TorrentStatus.Seeding));
     }
 
     [Test]
