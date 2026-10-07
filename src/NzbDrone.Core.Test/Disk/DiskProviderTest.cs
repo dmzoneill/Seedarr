@@ -39,6 +39,19 @@ public class DiskProviderTest
     }
 
     [Test]
+    public void GetLongestMatchingMountPoint_matches_mount_when_path_casing_differs()
+    {
+        var mounts = new[] { "/", "/mnt/nas" };
+
+        Assert.That(
+            DiskProvider.GetLongestMatchingMountPoint("/MNT/nas/torrents/file.part", mounts),
+            Is.EqualTo("/mnt/nas"));
+        Assert.That(
+            DiskProvider.GetLongestMatchingMountPoint("/MNT/nas", mounts),
+            Is.EqualTo("/mnt/nas"));
+    }
+
+    [Test]
     public void GetAvailableFreeSpace_returns_non_negative_for_temp_path()
     {
         var subject = new DiskProvider();
