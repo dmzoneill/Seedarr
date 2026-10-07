@@ -1497,4 +1497,42 @@ public class TorrentControllerTest
         Assert.That(badRequest.Value, Is.EqualTo("No torrent file provided"));
         _torrentImportService.DidNotReceive().ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>());
     }
+
+    [Test]
+    public void GetLogs_returns_BadRequest_when_level_is_invalid()
+    {
+        const int torrentId = 42;
+        _torrentService.Get(torrentId).Returns(new Torrent { Id = torrentId, Name = "Test" });
+
+        var result = _controller.GetLogs(torrentId, level: "notalevel");
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _eventLogService.DidNotReceive().GetByTorrentId(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>());
+    }
+
+    [Test]
+    public void GetLogs_defaults_to_Debug_minimum_when_level_omitted()
+    {
+        const int torrentId = 43;
+        _torrentService.Get(torrentId).Returns(new Torrent { Id = torrentId, Name = "Test" });
+        _eventLogService.GetByTorrentId(torrentId, 100, LevelRank.Debug).Returns(new List<TorrentEventLog>());
+
+        var result = _controller.GetLogs(torrentId);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _eventLogService.Received(1).GetByTorrentId(torrentId, 100, LevelRank.Debug);
+    }
+
+    [Test]
+    public void GetLogs_passes_parsed_level_to_event_log_service()
+    {
+        const int torrentId = 44;
+        _torrentService.Get(torrentId).Returns(new Torrent { Id = torrentId, Name = "Test" });
+        _eventLogService.GetByTorrentId(torrentId, 50, LevelRank.Warn).Returns(new List<TorrentEventLog>());
+
+        var result = _controller.GetLogs(torrentId, level: "warning", count: 50);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _eventLogService.Received(1).GetByTorrentId(torrentId, 50, LevelRank.Warn);
+    }
 }
