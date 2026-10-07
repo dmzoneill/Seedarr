@@ -32,6 +32,8 @@ namespace NzbDrone.Host;
 
 public class Startup
 {
+    public const string SpaFallbackExcludePathRegex = "^(?!(api|signalr|swagger|fixtures|transmission|ws)).*$";
+
     private readonly IContainer _container;
 
     public Startup(IContainer container)
@@ -560,6 +562,6 @@ public class Startup
 
         app.MapGet("/swagger-custom.css", () => Microsoft.AspNetCore.Http.Results.Content(SwaggerTheme.Css, "text/css")).AllowAnonymous();
 
-        app.MapFallbackToFile("{*path:nonfile:regex(^(?!(api|signalr|swagger|fixtures)).*$)}", "index.html");
+        app.MapFallbackToFile($"{{*path:nonfile:regex({SpaFallbackExcludePathRegex})}}", "index.html");
     }
 }
