@@ -190,6 +190,45 @@ public class DownloadHistoryControllerTest
     }
 
     [Test]
+    public void GetAll_with_zero_limit_clamps_to_default_page_size()
+    {
+        var entries = new List<DownloadHistory>();
+        _historyService.GetCount(null, null).Returns(0);
+        _historyService.GetAll(null, null, 500, 0).Returns(entries);
+
+        var result = _controller.GetAll(limit: 0, offset: 0);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _historyService.Received(1).GetAll(null, null, 500, 0);
+    }
+
+    [Test]
+    public void GetAll_with_negative_limit_clamps_to_default_page_size()
+    {
+        var entries = new List<DownloadHistory>();
+        _historyService.GetCount(null, null).Returns(0);
+        _historyService.GetAll(null, null, 500, 0).Returns(entries);
+
+        var result = _controller.GetAll(limit: -1, offset: 0);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _historyService.Received(1).GetAll(null, null, 500, 0);
+    }
+
+    [Test]
+    public void GetAll_with_excessive_limit_clamps_to_max_page_size()
+    {
+        var entries = new List<DownloadHistory>();
+        _historyService.GetCount(null, null).Returns(0);
+        _historyService.GetAll(null, null, 500, 0).Returns(entries);
+
+        var result = _controller.GetAll(limit: 10_000, offset: 0);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _historyService.Received(1).GetAll(null, null, 500, 0);
+    }
+
+    [Test]
     public void GetAll_with_page_and_pageSize_calculates_effective_limit_and_offset()
     {
         var entries = new List<DownloadHistory>
