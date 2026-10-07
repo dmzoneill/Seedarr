@@ -27,6 +27,7 @@ describe("SignalRProvider: isHandledByNamedEvent", () => {
     assert.equal(isHandledByNamedEvent("Command"), true);
     assert.equal(isHandledByNamedEvent("CommandStarted"), true);
     assert.equal(isHandledByNamedEvent("CommandCompleted"), true);
+    assert.equal(isHandledByNamedEvent("CommandFailed"), true);
     assert.equal(isHandledByNamedEvent("System"), true);
 
     // Task events
@@ -64,6 +65,13 @@ describe("SignalRProvider: configuration maps", () => {
     assert.ok(EVENT_INVALIDATION_MAP.TrackerUpdated);
     assert.ok(EVENT_INVALIDATION_MAP.TrackerAnnounced);
     assert.ok(EVENT_INVALIDATION_MAP.TaskFailed);
+    assert.ok(EVENT_INVALIDATION_MAP.CommandFailed);
+
+    const commandFailedKeys = EVENT_INVALIDATION_MAP.CommandFailed.map((k) =>
+      k.join("/"),
+    );
+    assert.ok(commandFailedKeys.includes("system/commands"));
+    assert.ok(commandFailedKeys.includes("system/status"));
 
     const taskFailedKeys = EVENT_INVALIDATION_MAP.TaskFailed.map((k) =>
       k.join("/"),

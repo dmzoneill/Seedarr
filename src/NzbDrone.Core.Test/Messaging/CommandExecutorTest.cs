@@ -47,8 +47,9 @@ internal class StubCommandRepository : IBasicRepository<CommandModel>
 {
     public CommandModel LastUpdated { get; private set; }
     public List<CommandModel> UpdatedSnapshots { get; } = new();
+    public Func<int, CommandModel> GetHandler { get; set; }
 
-    public CommandModel Get(int id) => null;
+    public CommandModel Get(int id) => GetHandler?.Invoke(id);
 
     public IEnumerable<CommandModel> All() => [];
 
@@ -291,5 +292,94 @@ public class CommandExecutorTest
             m.Name == "CommandCompleted" &&
             m.Action == ModelAction.Updated &&
             m.Body == command));
+    }
+
+    [Test]
+    public void Execute_should_broadcast_CommandFailed_not_CommandCompleted_when_handler_throws()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var subject = new CommandExecutor(_serviceFactory, _repository, broadcaster);
+        var command = new CommandModel { Id = 7, Name = "ThrowingCommand", Body = "{}" };
+
+        subject.Execute(command);
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "CommandStarted"));
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "CommandFailed" &&
+            m.Action == ModelAction.Updated &&
+            m.Body == command));
+        broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "CommandCompleted"));
+    }
+
+    [Test]
+    public void Execute_should_broadcast_CommandFailed_for_unknown_command_type()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var subject = new CommandExecutor(_serviceFactory, _repository, broadcaster);
+        var command = new CommandModel { Id = 8, Name = "UnknownCommand" };
+
+        subject.Execute(command);
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "CommandStarted"));
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "CommandFailed"));
+        broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "CommandCompleted"));
+    }
+
+    [Test]
+    public void Execute_should_not_broadcast_when_cancelled_before_execution_starts()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var repository = new StubCommandRepository
+        {
+            GetHandler = _ => new CommandModel
+            {
+                Id = 9,
+                Status = CommandStatus.Cancelled,
+                Message = "Cancelled by user",
+                EndedAt = DateTime.UtcNow
+            }
+        };
+        var subject = new CommandExecutor(_serviceFactory, repository, broadcaster);
+        var command = new CommandModel { Id = 9, Name = "SampleCommand", Body = "{}" };
+
+        subject.Execute(command);
+
+        broadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void Execute_should_broadcast_CommandFailed_not_CommandCompleted_when_cancelled_during_execution()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var getCount = 0;
+        var repository = new StubCommandRepository
+        {
+            GetHandler = id =>
+            {
+                getCount++;
+                if (getCount >= 2)
+                {
+                    return new CommandModel
+                    {
+                        Id = id,
+                        Status = CommandStatus.Cancelled,
+                        Message = "Cancelled by user",
+                        EndedAt = DateTime.UtcNow
+                    };
+                }
+
+                return null;
+            }
+        };
+        var subject = new CommandExecutor(_serviceFactory, repository, broadcaster);
+        var command = new CommandModel { Id = 10, Name = "SampleCommand", Body = "{}" };
+
+        subject.Execute(command);
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "CommandStarted"));
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "CommandFailed" &&
+            ((CommandModel)m.Body).Status == CommandStatus.Cancelled));
+        broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "CommandCompleted"));
     }
 }

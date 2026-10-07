@@ -205,6 +205,21 @@ public class SignalRMessageBroadcasterTest
     }
 
     [Test]
+    public void BroadcastMessage_broadcasts_CommandFailed_event()
+    {
+        var failedMsg = new SignalRMessage
+        {
+            Name = "CommandFailed",
+            Action = ModelAction.Updated,
+            Body = new { Id = 12, Name = "BackupCommand", Status = "Failed" }
+        };
+
+        _broadcaster.BroadcastMessage(failedMsg);
+
+        _clientProxy.Received(1).SendCoreAsync("CommandFailed", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public void BroadcastMessage_recognizes_Command_name_with_actions()
     {
         var startedMsg = new SignalRMessage

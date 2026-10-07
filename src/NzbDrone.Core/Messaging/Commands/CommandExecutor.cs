@@ -40,6 +40,9 @@ public class CommandExecutor : ICommandExecutor
     {
         _logger.Trace("Executing {0}", command.Name);
 
+        var executionStarted = false;
+        var completedSuccessfully = false;
+
         try
         {
             var current = _repository.Get(command.Id);
@@ -53,6 +56,7 @@ public class CommandExecutor : ICommandExecutor
             command.StartedAt = DateTime.UtcNow;
             _repository.Update(command);
             BroadcastCommand("CommandStarted", ModelAction.Created, command);
+            executionStarted = true;
 
             var commandType = FindCommandType(command.Name);
             if (commandType == null)
@@ -86,10 +90,12 @@ public class CommandExecutor : ICommandExecutor
             if (current != null && current.Status == CommandStatus.Cancelled)
             {
                 _logger.Debug("Command {0} (id: {1}) was cancelled during execution", command.Name, command.Id);
+                SyncFromPersisted(command, current);
                 return;
             }
 
             command.Status = CommandStatus.Completed;
+            completedSuccessfully = true;
             _logger.Debug("Completed {0}", command.Name);
         }
         catch (Exception ex)
@@ -98,6 +104,7 @@ public class CommandExecutor : ICommandExecutor
             if (current != null && current.Status == CommandStatus.Cancelled)
             {
                 _logger.Debug("Command {0} (id: {1}) was cancelled", command.Name, command.Id);
+                SyncFromPersisted(command, current);
                 return;
             }
 
@@ -109,14 +116,39 @@ public class CommandExecutor : ICommandExecutor
         finally
         {
             var current = _repository.Get(command.Id);
-            if (current == null || current.Status != CommandStatus.Cancelled)
+            var wasCancelled = current != null && current.Status == CommandStatus.Cancelled;
+
+            if (!wasCancelled)
             {
                 command.EndedAt = DateTime.UtcNow;
                 _repository.Update(command);
             }
+            else if (executionStarted)
+            {
+                SyncFromPersisted(command, current);
+            }
 
-            BroadcastCommand("CommandCompleted", ModelAction.Updated, command);
+            if (completedSuccessfully)
+            {
+                BroadcastCommand("CommandCompleted", ModelAction.Updated, command);
+            }
+            else if (executionStarted)
+            {
+                BroadcastCommand("CommandFailed", ModelAction.Updated, command);
+            }
         }
+    }
+
+    private static void SyncFromPersisted(CommandModel command, CommandModel persisted)
+    {
+        if (persisted == null)
+        {
+            return;
+        }
+
+        command.Status = persisted.Status;
+        command.Message = persisted.Message;
+        command.EndedAt = persisted.EndedAt;
     }
 
     private void BroadcastCommand(string eventName, ModelAction action, CommandModel command)

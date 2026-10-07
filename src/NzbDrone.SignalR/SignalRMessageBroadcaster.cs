@@ -267,6 +267,7 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
         }
         else if (string.Equals(message.Name, "CommandStarted", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "CommandCompleted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "CommandFailed", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "TaskStarted", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "TaskCompleted", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "task_progress", StringComparison.OrdinalIgnoreCase) ||
