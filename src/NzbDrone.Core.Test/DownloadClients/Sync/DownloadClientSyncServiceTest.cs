@@ -965,7 +965,8 @@ public class DownloadClientSyncServiceTest
         var result = _service.Sync();
 
         Assert.That(result.Added, Is.EqualTo(0));
-        Assert.That(result.Skipped, Is.EqualTo(1));
+        Assert.That(result.Updated, Is.EqualTo(1));
+        Assert.That(result.Skipped, Is.EqualTo(0));
         Assert.That(result.Failed, Is.EqualTo(0));
 
         Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
