@@ -26,9 +26,9 @@ public class BackupController : Controller
     {
         var backups = _backupService.GetBackups();
 
-        return backups.Select((b, i) => new BackupResource
+        return backups.Select(b => new BackupResource
         {
-            Id = i + 1,
+            Id = BackupResourceId.FromFileName(b.Name),
             Name = b.Name,
             Size = b.Size,
             Time = b.Time,
@@ -51,7 +51,7 @@ public class BackupController : Controller
 
             return Ok(new BackupResource
             {
-                Id = 1,
+                Id = BackupResourceId.FromFileName(backup.Name),
                 Name = backup.Name,
                 Size = backup.Size,
                 Time = backup.Time,
@@ -92,12 +92,10 @@ public class BackupController : Controller
         }
         else
         {
-            if (id < 1 || id > backups.Count)
+            if (!BackupResourceId.TryResolveName(backups, id, out targetFileName))
             {
                 return NotFound();
             }
-
-            targetFileName = backups[id - 1].Name;
         }
 
         var safeTarget = Path.GetFileName(targetFileName);
@@ -116,12 +114,12 @@ public class BackupController : Controller
     {
         var backups = _backupService.GetBackups();
 
-        if (id < 1 || id > backups.Count)
+        if (!BackupResourceId.TryResolveName(backups, id, out var targetName))
         {
             return NotFound();
         }
 
-        var backup = backups[id - 1];
+        var backup = backups.First(b => string.Equals(b.Name, targetName, StringComparison.OrdinalIgnoreCase));
         var stream = _backupService.GetBackupStream(backup.Name);
 
         if (stream == null)

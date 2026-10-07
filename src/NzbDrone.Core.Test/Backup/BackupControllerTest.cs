@@ -69,18 +69,20 @@ public class BackupControllerTest
     }
 
     [Test]
-    public void DeleteBackup_by_id_should_delete_backup_at_index()
+    public void DeleteBackup_by_id_should_delete_backup_matching_stable_id()
     {
+        const string targetName = "seedarr_backup_1.0_2026-01-02.zip";
         _backupService.GetBackups().Returns(new List<BackupInfo>
         {
             new() { Name = "seedarr_backup_1.0_2026-01-01.zip", Size = 100, Time = DateTime.UtcNow },
-            new() { Name = "seedarr_backup_1.0_2026-01-02.zip", Size = 200, Time = DateTime.UtcNow }
+            new() { Name = targetName, Size = 200, Time = DateTime.UtcNow }
         });
 
-        var result = _controller.DeleteBackup(2, null);
+        var stableId = BackupResourceId.FromFileName(targetName);
+        var result = _controller.DeleteBackup(stableId, null);
 
         Assert.That(result, Is.InstanceOf<OkResult>());
-        _backupService.Received(1).DeleteBackup("seedarr_backup_1.0_2026-01-02.zip");
+        _backupService.Received(1).DeleteBackup(targetName);
     }
 
     [Test]
@@ -252,6 +254,43 @@ public class BackupControllerTest
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result;
         Assert.That(badRequest.Value?.ToString(), Does.Contain("Unexpected restore lock error"));
+    }
+
+    [Test]
+    public void GetBackups_should_assign_stable_ids_from_file_name()
+    {
+        const string firstName = "seedarr_backup_1.0_2026-01-01.zip";
+        const string secondName = "seedarr_backup_1.0_2026-01-02.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = firstName, Size = 100, Time = DateTime.UtcNow },
+            new() { Name = secondName, Size = 200, Time = DateTime.UtcNow }
+        });
+
+        var result = _controller.GetBackups();
+        var resources = result.Value;
+
+        Assert.That(resources[0].Id, Is.EqualTo(BackupResourceId.FromFileName(firstName)));
+        Assert.That(resources[1].Id, Is.EqualTo(BackupResourceId.FromFileName(secondName)));
+        Assert.That(resources[0].Id, Is.Not.EqualTo(resources[1].Id));
+    }
+
+    [Test]
+    public void CreateBackup_should_return_stable_id_for_created_archive()
+    {
+        const string createdName = "seedarr_backup_1.0_2026-03-07.zip";
+        _backupService.CreateBackup(Arg.Any<BackupType>()).Returns(new BackupInfo
+        {
+            Name = createdName,
+            Path = "/path/to/backup.zip",
+            Size = 2048,
+            Time = DateTime.UtcNow
+        });
+
+        var result = _controller.CreateBackup();
+        var resource = (BackupResource)((OkObjectResult)result.Result).Value;
+
+        Assert.That(resource.Id, Is.EqualTo(BackupResourceId.FromFileName(createdName)));
     }
 
     [Test]
