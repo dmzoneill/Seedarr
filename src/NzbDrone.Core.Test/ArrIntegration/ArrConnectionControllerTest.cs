@@ -291,6 +291,74 @@ public class ArrConnectionControllerTest
     }
 
     [Test]
+    public void Create_with_masked_api_key_and_no_source_id_returns_bad_request()
+    {
+        var definition = new ArrConnectionDefinition
+        {
+            Name = "Clone",
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "********key"
+        };
+
+        var result = _controller.Create(definition);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        _connectionFactory.DidNotReceive().Create(Arg.Any<ArrConnectionDefinition>());
+    }
+
+    [Test]
+    public void Create_with_masked_api_key_and_unknown_source_id_returns_bad_request()
+    {
+        _connectionFactory.Get(99).Returns((ArrConnectionDefinition)null);
+
+        var definition = new ArrConnectionDefinition
+        {
+            Id = 99,
+            Name = "Clone",
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "********key"
+        };
+
+        var result = _controller.Create(definition);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        _connectionFactory.DidNotReceive().Create(Arg.Any<ArrConnectionDefinition>());
+    }
+
+    [Test]
+    public void Create_with_masked_api_key_and_valid_source_id_restores_key_and_creates_new_connection()
+    {
+        var source = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "stored-secret-key"
+        };
+        _connectionFactory.Get(1).Returns(source);
+        _arrSyncService.TestConnectionDirect(Arg.Any<ArrConnectionDefinition>()).Returns(true);
+        _connectionFactory.Create(Arg.Any<ArrConnectionDefinition>()).Returns(ci => ci.Arg<ArrConnectionDefinition>());
+
+        var definition = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr Copy",
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "********-key"
+        };
+
+        var result = _controller.Create(definition);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _connectionFactory.Received(1).Create(Arg.Is<ArrConnectionDefinition>(d =>
+            d.Id == 0 && d.ApiKey == "stored-secret-key" && d.Name == "Sonarr Copy"));
+    }
+
+    [Test]
     public void TestDirect_with_existing_id_and_omitted_api_key_restores_stored_key_before_test()
     {
         var existing = new ArrConnectionDefinition
