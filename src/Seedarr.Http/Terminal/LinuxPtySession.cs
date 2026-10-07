@@ -92,21 +92,14 @@ public sealed class LinuxPtySession : ITerminalSession
                 NativePty.Exit(1);
             }
         }
-        finally
+        catch
         {
-            if (cwdPtr != IntPtr.Zero)
-            {
-                Marshal.FreeCoTaskMem(cwdPtr);
-            }
-
-            if (shellPtr != IntPtr.Zero)
-            {
-                Marshal.FreeCoTaskMem(shellPtr);
-            }
-
-            FreeNativeStringArray(argvArrayPtr, argvPointers);
-            FreeNativeStringArray(envArrayPtr, envPointers);
+            FreeForkPreparedMemory(cwdPtr, shellPtr, argvArrayPtr, argvPointers, envArrayPtr, envPointers);
+            throw;
         }
+
+        // Parent only: child must not free argv/env until execve replaces the address space.
+        FreeForkPreparedMemory(cwdPtr, shellPtr, argvArrayPtr, argvPointers, envArrayPtr, envPointers);
 
         return new LinuxPtySession(masterFd, pid);
     }
@@ -289,6 +282,28 @@ public sealed class LinuxPtySession : ITerminalSession
         {
             Marshal.FreeHGlobal(arrayPtr);
         }
+    }
+
+    private static void FreeForkPreparedMemory(
+        IntPtr cwdPtr,
+        IntPtr shellPtr,
+        IntPtr argvArrayPtr,
+        IntPtr[] argvPointers,
+        IntPtr envArrayPtr,
+        IntPtr[] envPointers)
+    {
+        if (cwdPtr != IntPtr.Zero)
+        {
+            Marshal.FreeCoTaskMem(cwdPtr);
+        }
+
+        if (shellPtr != IntPtr.Zero)
+        {
+            Marshal.FreeCoTaskMem(shellPtr);
+        }
+
+        FreeNativeStringArray(argvArrayPtr, argvPointers);
+        FreeNativeStringArray(envArrayPtr, envPointers);
     }
 
     private void StartWatcher()
