@@ -63,6 +63,7 @@ public class IdentityProviderService : IIdentityProviderService
 
     public IdentityProviderDefinition Add(IdentityProviderDefinition provider)
     {
+        NormalizeProviderId(provider);
         provider.CreatedAt = DateTime.UtcNow;
         provider.UpdatedAt = DateTime.UtcNow;
 
@@ -76,6 +77,7 @@ public class IdentityProviderService : IIdentityProviderService
 
     public IdentityProviderDefinition Update(IdentityProviderDefinition provider)
     {
+        NormalizeProviderId(provider);
         provider.UpdatedAt = DateTime.UtcNow;
 
         var existing = _repository.Get(provider.Id);
@@ -146,6 +148,14 @@ public class IdentityProviderService : IIdentityProviderService
         {
             _logger.Trace(ex, "Failed to unprotect client secret, falling back to plaintext");
             return encryptedSecret;
+        }
+    }
+
+    private static void NormalizeProviderId(IdentityProviderDefinition provider)
+    {
+        if (!string.IsNullOrWhiteSpace(provider?.ProviderId))
+        {
+            provider.ProviderId = provider.ProviderId.Trim().ToLowerInvariant();
         }
     }
 
