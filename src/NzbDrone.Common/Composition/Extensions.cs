@@ -48,7 +48,7 @@ public static class ContainerExtensions
                     new[] { type },
                     reuse,
                     serviceTypeCondition: t => !IsIgnoredInterface(t),
-                    ifAlreadyRegistered: IfAlreadyRegistered.AppendNotKeyed);
+                    ifAlreadyRegistered: IfAlreadyRegistered.Keep);
             }
             else if (HasExplicitReuseAttribute(type))
             {

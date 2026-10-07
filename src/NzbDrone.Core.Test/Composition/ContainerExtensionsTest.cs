@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using DryIoc;
 using NUnit.Framework;
@@ -73,6 +74,18 @@ public class ContainerExtensionsTest
 
     public class OpenGenericCustomService<T> : IGenericCustomService<T>
     {
+    }
+
+    [Test]
+    public void AutoAddServices_second_pass_does_not_duplicate_interface_registrations()
+    {
+        var container = new Container(rules => rules.WithNzbDroneRules());
+
+        container.AutoAddServices(new[] { typeof(DisposableService) });
+        container.AutoAddServices(new[] { typeof(DisposableService) });
+
+        var services = container.Resolve<IEnumerable<ICustomService>>();
+        Assert.That(services.Count(), Is.EqualTo(1));
     }
 
     [Test]
