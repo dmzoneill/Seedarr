@@ -540,7 +540,7 @@ public class TorrentRecheckService : ITorrentRecheckService
             var fileEnd = currentOffset + file.Size;
             if (currentOffset < pieceEnd && fileEnd > pieceStart)
             {
-                var diskPath = Path.IsPathRooted(file.Path) ? file.Path : Path.Combine(basePath, file.Path);
+                var diskPath = FastResumeService.ResolveFileDiskPath(basePath, torrent.Name, file.Path);
                 if (!File.Exists(diskPath))
                 {
                     return false;
