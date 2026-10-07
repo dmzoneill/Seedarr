@@ -252,6 +252,16 @@ public class PeerBlocklistSyncServiceTests
     }
 
     [Test]
+    public void IsBlocked_string_should_trim_whitespace_before_parse()
+    {
+        _service.SetActiveRules(new[] { "10.0.0.0/8" });
+
+        Assert.That(_service.IsBlocked("10.0.0.1"), Is.True);
+        Assert.That(_service.IsBlocked(" 10.0.0.1 "), Is.True);
+        Assert.That(_service.IsBlocked("\t10.0.0.1\n"), Is.True);
+    }
+
+    [Test]
     public async Task SyncAsync_after_blocklist_url_change_should_not_send_stale_conditional_headers()
     {
         var feedA = "http://blocklist-a.test/rules.txt";

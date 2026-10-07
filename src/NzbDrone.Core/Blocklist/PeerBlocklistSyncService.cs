@@ -215,6 +215,8 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             return false;
         }
 
+        ip = ip.Trim();
+
         if (!IPAddress.TryParse(ip, out var address))
         {
             return false;
