@@ -11,6 +11,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Deluge;
+using Seedarr.Http.Security;
 using Seedarr.Api.V1.QBittorrent;
 using Seedarr.Api.V1.Transmission;
 
@@ -105,6 +106,7 @@ public class AlternateSpeedModeSyncTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             categoryService: _categoryService);
 
         _transmissionController = new TransmissionRpcController(
@@ -129,6 +131,7 @@ public class AlternateSpeedModeSyncTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             categoryService: _categoryService);
     }
 

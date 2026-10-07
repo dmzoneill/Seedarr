@@ -90,7 +90,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         _tagService = tagService;
         _configFileProvider = configFileProvider;
         _httpClient = httpClient ?? httpClientFactory?.CreateClient() ?? DefaultHttpClient;
-        _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
+        _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _remotePathMappingService = remotePathMappingService;
         _callerHostResolver = callerHostResolver;
         _categoryService = categoryService;
