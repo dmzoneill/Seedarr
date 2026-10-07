@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Net;
+using System.Text.Json;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.DownloadClients;
@@ -102,10 +103,45 @@ public class DownloadClientControllerTests : IntegrationTestBase
     }
 
     [Test]
+    public async Task Get_for_nonexistent_client_returns_not_found_with_message()
+    {
+        var response = await GetAsync("/api/v1/downloadclients/999999");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("message").GetString(), Does.Contain("999999"));
+    }
+
+    [Test]
+    public async Task Update_for_nonexistent_client_returns_not_found_with_message()
+    {
+        var clientDef = new
+        {
+            name = "Ghost Client",
+            clientType = "QBitTorrent",
+            host = "localhost",
+            port = 8080,
+            enable = true
+        };
+
+        var response = await PutJsonAsync("/api/v1/downloadclients/999999", clientDef);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("message").GetString(), Does.Contain("999999"));
+    }
+
+    [Test]
     public async Task TestConnection_for_nonexistent_client_returns_not_found()
     {
         var response = await PostJsonAsync("/api/v1/downloadclients/999999/test", new { });
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("message").GetString(), Does.Contain("999999"));
     }
 
     [Test]
