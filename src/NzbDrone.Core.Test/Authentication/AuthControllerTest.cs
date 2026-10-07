@@ -25,6 +25,8 @@ public class AuthControllerTest
 {
     private IIdentityProviderService _identityProviderService;
     private IConfigFileProvider _configFileProvider;
+    private IConfigService _configService;
+    private ILocalAdminCredentialService _localAdminCredentialService;
     private ISessionRevocationService _sessionRevocationService;
     private IRpcSessionStore _rpcSessionStore;
     private ILoginRateLimiter _loginRateLimiter;
@@ -35,10 +37,19 @@ public class AuthControllerTest
     {
         _identityProviderService = Substitute.For<IIdentityProviderService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
+        _configService = Substitute.For<IConfigService>();
+        _localAdminCredentialService = new LocalAdminCredentialService();
         _sessionRevocationService = Substitute.For<ISessionRevocationService>();
         _rpcSessionStore = new RpcSessionStore();
         _loginRateLimiter = new LoginRateLimiter();
-        _controller = new AuthController(_identityProviderService, _configFileProvider, _sessionRevocationService, _loginRateLimiter, _rpcSessionStore);
+        _controller = new AuthController(
+            _identityProviderService,
+            _configFileProvider,
+            _sessionRevocationService,
+            _loginRateLimiter,
+            _rpcSessionStore,
+            _configService,
+            _localAdminCredentialService);
     }
 
     [Test]
@@ -76,6 +87,29 @@ public class AuthControllerTest
         var badRequest = (BadRequestObjectResult)result.Result;
         var error = badRequest.Value.GetType().GetProperty("error")?.GetValue(badRequest.Value) as string;
         Assert.That(error, Is.EqualTo("Password or API key is required"));
+    }
+
+    [Test]
+    public async Task Login_WhenAuthenticationEnabledAndSetupAdminPasswordValid_ReturnsOk()
+    {
+        const string setupPassword = "StrongPassword1!";
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("different-api-key-value");
+        _configService.GetValue("AdminUsername", string.Empty).Returns("admin");
+        _configService.GetValue("AdminPassword", string.Empty).Returns(_localAdminCredentialService.HashPassword(setupPassword));
+
+        var httpContext = new DefaultHttpContext();
+        var authService = Substitute.For<IAuthenticationService>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IAuthenticationService)).Returns(authService);
+        httpContext.RequestServices = serviceProvider;
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var request = new LoginRequestResource { Username = "admin", Password = setupPassword };
+
+        var result = await _controller.Login(request);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
     }
 
     [Test]

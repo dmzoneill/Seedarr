@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http.Authentication;
 
@@ -19,6 +20,8 @@ namespace Seedarr.Http.Test.Authentication;
 public class BasicAuthenticationHandlerTest
 {
     private IConfigFileProvider _configFileProvider;
+    private IConfigService _configService;
+    private ILocalAdminCredentialService _localAdminCredentialService;
     private IOptionsMonitor<BasicAuthenticationOptions> _optionsMonitor;
     private ILoggerFactory _loggerFactory;
     private UrlEncoder _encoder;
@@ -28,6 +31,8 @@ public class BasicAuthenticationHandlerTest
     {
         _configFileProvider = Substitute.For<IConfigFileProvider>();
         _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configService = Substitute.For<IConfigService>();
+        _localAdminCredentialService = new LocalAdminCredentialService();
 
         _optionsMonitor = Substitute.For<IOptionsMonitor<BasicAuthenticationOptions>>();
         var options = new BasicAuthenticationOptions();
@@ -40,7 +45,13 @@ public class BasicAuthenticationHandlerTest
 
     private async Task<AuthenticateResult> AuthenticateAsync(HttpContext context)
     {
-        var handler = new BasicAuthenticationHandler(_optionsMonitor, _loggerFactory, _encoder, _configFileProvider);
+        var handler = new BasicAuthenticationHandler(
+            _optionsMonitor,
+            _loggerFactory,
+            _encoder,
+            _configFileProvider,
+            _configService,
+            _localAdminCredentialService);
         var scheme = new AuthenticationScheme(BasicAuthenticationOptions.DefaultScheme, null, typeof(BasicAuthenticationHandler));
         await handler.InitializeAsync(scheme, context);
         return await handler.AuthenticateAsync();
@@ -121,6 +132,24 @@ public class BasicAuthenticationHandlerTest
 
         Assert.That(result.Succeeded, Is.True);
         Assert.That(result.Principal?.FindFirst(ClaimTypes.Name)?.Value, Is.EqualTo("Admin"));
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenSetupAdminPasswordValid_Succeeds()
+    {
+        const string setupPassword = "StrongPassword1!";
+        _configFileProvider.ApiKey.Returns("unrelated-api-key");
+        _configService.GetValue("AdminUsername", string.Empty).Returns("admin");
+        _configService.GetValue("AdminPassword", string.Empty).Returns(_localAdminCredentialService.HashPassword(setupPassword));
+
+        var context = new DefaultHttpContext();
+        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"admin:{setupPassword}"));
+        context.Request.Headers["Authorization"] = $"Basic {credentials}";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Principal?.FindFirst(ClaimTypes.Name)?.Value, Is.EqualTo("admin"));
     }
 
     [Test]

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.Disk;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DiskSpace;
@@ -506,7 +507,7 @@ public class DelugeJsonRpcController : ControllerBase
             }
 
             if (!string.IsNullOrWhiteSpace(userPassword) &&
-                RpcAuthenticationHelper.FixedTimeEquals(providedPassword, userPassword))
+                AdminPasswordHasher.VerifyPassword(providedPassword, userPassword))
             {
                 loginSuccess = true;
             }

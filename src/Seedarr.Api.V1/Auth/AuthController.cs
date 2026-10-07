@@ -26,6 +26,8 @@ public class AuthController : ControllerBase
 {
     private readonly IIdentityProviderService _identityProviderService;
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly IConfigService _configService;
+    private readonly ILocalAdminCredentialService _localAdminCredentialService;
     private readonly ISessionRevocationService _sessionRevocationService;
     private readonly IRpcSessionStore _rpcSessionStore;
     private readonly ILoginRateLimiter _loginRateLimiter;
@@ -36,10 +38,14 @@ public class AuthController : ControllerBase
         IConfigFileProvider configFileProvider,
         ISessionRevocationService sessionRevocationService = null,
         ILoginRateLimiter loginRateLimiter = null,
-        IRpcSessionStore rpcSessionStore = null)
+        IRpcSessionStore rpcSessionStore = null,
+        IConfigService configService = null,
+        ILocalAdminCredentialService localAdminCredentialService = null)
     {
         _identityProviderService = identityProviderService;
         _configFileProvider = configFileProvider;
+        _configService = configService;
+        _localAdminCredentialService = localAdminCredentialService ?? new LocalAdminCredentialService();
         _sessionRevocationService = sessionRevocationService;
         _rpcSessionStore = rpcSessionStore;
         _loginRateLimiter = loginRateLimiter ?? new LoginRateLimiter();
@@ -114,8 +120,12 @@ public class AuthController : ControllerBase
         var enteredUser = request.Username?.Trim();
         var enteredPass = request.Password;
 
-        var passwordMatches = !string.IsNullOrWhiteSpace(masterApiKey) && FixedTimeEquals(enteredPass, masterApiKey);
-        var isValid = !_configFileProvider.AuthenticationEnabled || passwordMatches;
+        var credentialsValid = _localAdminCredentialService.ValidateLocalCredentials(
+            enteredUser,
+            enteredPass,
+            _configFileProvider,
+            _configService);
+        var isValid = !_configFileProvider.AuthenticationEnabled || credentialsValid;
 
         if (!isValid)
         {
@@ -127,11 +137,23 @@ public class AuthController : ControllerBase
         _loginRateLimiter?.RecordSuccessfulLogin(clientIp);
 
         var usernameMatchesApiKey = !string.IsNullOrWhiteSpace(masterApiKey) && FixedTimeEquals(enteredUser, masterApiKey);
+        var configuredAdminUsername = _configService != null
+            ? _localAdminCredentialService.GetAdminUsername(_configService)
+            : "admin";
+        var loginViaAdminPassword = _configService != null
+            && _localAdminCredentialService.IsAdminPasswordCredential(enteredUser, enteredPass, _configService);
         var username = string.IsNullOrWhiteSpace(enteredUser) || usernameMatchesApiKey
             ? "admin"
             : enteredUser;
+        if (loginViaAdminPassword && !usernameMatchesApiKey)
+        {
+            username = configuredAdminUsername;
+        }
+
         var sessionId = Guid.NewGuid().ToString("N");
-        var role = (username == "admin" || usernameMatchesApiKey) ? Roles.Admin : Roles.ReadOnly;
+        var isAdminUser = usernameMatchesApiKey
+            || string.Equals(username, configuredAdminUsername, StringComparison.OrdinalIgnoreCase);
+        var role = isAdminUser ? Roles.Admin : Roles.ReadOnly;
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, "1"),

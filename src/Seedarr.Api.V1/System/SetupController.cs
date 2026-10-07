@@ -18,11 +18,16 @@ public class SetupController : Controller
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly IConfigService _configService;
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly ILocalAdminCredentialService _localAdminCredentialService;
 
-    public SetupController(IConfigService configService, IConfigFileProvider configFileProvider = null)
+    public SetupController(
+        IConfigService configService,
+        IConfigFileProvider configFileProvider = null,
+        ILocalAdminCredentialService localAdminCredentialService = null)
     {
         _configService = configService ?? throw new ArgumentNullException(nameof(configService));
         _configFileProvider = configFileProvider;
+        _localAdminCredentialService = localAdminCredentialService ?? new LocalAdminCredentialService();
     }
 
     [HttpGet("status")]
@@ -88,7 +93,7 @@ public class SetupController : Controller
         _configService.SaveConfigDictionary(new Dictionary<string, object>
         {
             { "AdminUsername", adminUsername },
-            { "AdminPassword", request.Password },
+            { "AdminPassword", _localAdminCredentialService.HashPassword(request.Password) },
             { "AuthenticationEnabled", true },
             { "IsSetupCompleted", true },
         });
