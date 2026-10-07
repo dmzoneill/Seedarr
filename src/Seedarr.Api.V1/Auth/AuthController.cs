@@ -26,6 +26,7 @@ public class AuthController : ControllerBase
     private readonly IIdentityProviderService _identityProviderService;
     private readonly IConfigFileProvider _configFileProvider;
     private readonly ISessionRevocationService _sessionRevocationService;
+    private readonly IRpcSessionStore _rpcSessionStore;
     private readonly ILoginRateLimiter _loginRateLimiter;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -33,11 +34,13 @@ public class AuthController : ControllerBase
         IIdentityProviderService identityProviderService,
         IConfigFileProvider configFileProvider,
         ISessionRevocationService sessionRevocationService = null,
-        ILoginRateLimiter loginRateLimiter = null)
+        ILoginRateLimiter loginRateLimiter = null,
+        IRpcSessionStore rpcSessionStore = null)
     {
         _identityProviderService = identityProviderService;
         _configFileProvider = configFileProvider;
         _sessionRevocationService = sessionRevocationService;
+        _rpcSessionStore = rpcSessionStore;
         _loginRateLimiter = loginRateLimiter ?? new LoginRateLimiter();
     }
 
@@ -194,6 +197,8 @@ public class AuthController : ControllerBase
         {
             _sessionRevocationService?.RevokeSession(username);
         }
+
+        EmulatedClientSessionRevocation.RevokeAll(_rpcSessionStore, Response);
 
         await HttpContext.SignOutAsync("Cookies");
         return Ok(new { message = "Logged out successfully" });

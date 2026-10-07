@@ -15,6 +15,7 @@ using NzbDrone.Core.Network;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Security;
 using Seedarr.Http;
+using Seedarr.Http.Security;
 
 namespace Seedarr.Api.V1.Config;
 
@@ -41,14 +42,17 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
 
     private readonly IConfigFileProvider _configFileProvider;
     private readonly ICertificateManager _certificateManager;
+    private readonly IRpcSessionStore _rpcSessionStore;
 
     public GeneralConfigController(
         IConfigService configService,
         IConfigFileProvider configFileProvider,
-        ICertificateManager certificateManager)
+        ICertificateManager certificateManager,
+        IRpcSessionStore rpcSessionStore = null)
         : base(configService)
     {
         _configFileProvider = configFileProvider;
+        _rpcSessionStore = rpcSessionStore;
         _certificateManager = certificateManager;
 
         SharedValidator.RuleFor(c => c.WatchFolderScanIntervalSeconds)
@@ -121,6 +125,9 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         {
             return BadRequest("Request body cannot be empty.");
         }
+
+        var previousApiKey = _configFileProvider?.ApiKey;
+        var previousAuthenticationEnabled = _configFileProvider?.AuthenticationEnabled ?? true;
 
         if (resource.Port < 1 || resource.Port > 65535)
         {
@@ -257,6 +264,13 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             }
 
             return Problem(detail: ex.Message, title: "Failed to save configuration.", statusCode: 500);
+        }
+
+        var apiKeyChanged = !string.Equals(previousApiKey, resource.ApiKey, StringComparison.Ordinal);
+        var authenticationChanged = previousAuthenticationEnabled != resource.AuthenticationEnabled;
+        if (apiKeyChanged || authenticationChanged)
+        {
+            EmulatedClientSessionRevocation.RevokeAll(_rpcSessionStore, Response);
         }
 
         return Accepted(resource);
