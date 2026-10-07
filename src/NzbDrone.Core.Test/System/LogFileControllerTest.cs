@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Authorization;
@@ -116,7 +117,31 @@ public class LogFileControllerTest
     {
         var result = _controller.GetLogFile("nonexistent.txt");
 
-        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void GetLogFile_WhenFileIsNotAllowlisted_ReturnsBadRequestEvenIfFileExists()
+    {
+        var filePath = Path.Combine(_logsDir, "attacker.txt");
+        File.WriteAllText(filePath, "sensitive data");
+
+        var result = _controller.GetLogFile("attacker.txt");
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void GetLogFiles_ExcludesNonSeedarrFiles()
+    {
+        File.WriteAllText(Path.Combine(_logsDir, "seedarr.txt"), "log");
+        File.WriteAllText(Path.Combine(_logsDir, "seedarr.1.txt"), "rotated");
+        File.WriteAllText(Path.Combine(_logsDir, "secrets.txt"), "secret");
+
+        var actionResult = _controller.GetLogFiles();
+        var files = (List<LogFileResource>)((OkObjectResult)actionResult.Result).Value;
+
+        Assert.That(files.Select(f => f.Filename), Is.EquivalentTo(new[] { "seedarr.txt", "seedarr.1.txt" }));
     }
 
     [TestCase("../secret.txt")]
@@ -184,6 +209,18 @@ public class LogFileControllerTest
     public void IsActiveLogFile_ClassifiesCorrectly(string filename, bool expected)
     {
         Assert.That(LogFileController.IsActiveLogFile(filename), Is.EqualTo(expected));
+    }
+
+    [TestCase("seedarr.txt", true)]
+    [TestCase("seedarr.1.txt", true)]
+    [TestCase("seedarr_20260916_0.txt", true)]
+    [TestCase("seedarr.trace.20260915.txt", true)]
+    [TestCase("attacker.txt", false)]
+    [TestCase("secrets.txt", false)]
+    [TestCase("old_diagnostic.txt", false)]
+    public void IsReadableLogFile_ClassifiesCorrectly(string filename, bool expected)
+    {
+        Assert.That(LogFileController.IsReadableLogFile(filename), Is.EqualTo(expected));
     }
 
     [Test]
