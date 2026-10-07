@@ -321,10 +321,15 @@ public class TorrentRecheckService : ITorrentRecheckService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        _queuedPreviousStatus.TryRemove(torrent.Id, out _);
+        var statusBeforeChecking = torrent.Status;
+        if (_queuedPreviousStatus.TryRemove(torrent.Id, out var queuedPreviousStatus))
+        {
+            statusBeforeChecking = queuedPreviousStatus;
+        }
 
         _logger.Info("Starting hash verification for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
-
+        try
+        {
         // 1. Suspend active transfer speeds and active flags before hash verification
         torrent.Active = false;
         torrent.UploadSpeed = 0;
@@ -357,8 +362,6 @@ public class TorrentRecheckService : ITorrentRecheckService
             _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
         }
 
-        try
-        {
             // 3. Resolve files and expected piece hashes
             var files = _torrentFileService?.GetByTorrentId(torrent.Id) ?? torrent.Files;
             if ((files == null || files.Count == 0) && torrent.TotalSize > 0)
@@ -564,6 +567,11 @@ public class TorrentRecheckService : ITorrentRecheckService
             PublishRecheckCancellation(torrent, torrent.Status);
             throw;
         }
+        catch (Exception)
+        {
+            PublishRecheckFailure(torrent, statusBeforeChecking);
+            throw;
+        }
     }
 
     private void PublishRecheckCancellation(Torrent torrent, TorrentStatus statusBeforeCancel)
@@ -583,6 +591,58 @@ public class TorrentRecheckService : ITorrentRecheckService
             };
             _signalRBroadcaster.BroadcastMessage(cancelMsg);
             _signalRBroadcaster.BroadcastToTorrent(torrent.Id, cancelMsg);
+        }
+
+        _eventAggregator?.PublishEvent(new TorrentHashCheckCompletedEvent(torrent, false));
+    }
+
+    private void PublishRecheckFailure(Torrent torrent, TorrentStatus statusBeforeChecking)
+    {
+        if (torrent.Status != TorrentStatus.Checking)
+        {
+            return;
+        }
+
+        var restoreStatus = statusBeforeChecking;
+        if (restoreStatus == TorrentStatus.QueuedForChecking || restoreStatus == TorrentStatus.Checking)
+        {
+            restoreStatus = TorrentStatus.Paused;
+        }
+
+        torrent.Status = restoreStatus;
+        torrent.Active = false;
+        torrent.UploadSpeed = 0;
+        torrent.DownloadSpeed = 0;
+
+        _torrentRepository?.Update(torrent);
+        _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Checking, restoreStatus));
+        _eventAggregator?.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+
+        if (_signalRBroadcaster != null)
+        {
+            var updateMsg = new SignalRMessage
+            {
+                Name = "TorrentUpdated",
+                Action = ModelAction.Updated,
+                Body = torrent
+            };
+            _signalRBroadcaster.BroadcastMessage(updateMsg);
+            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
+
+            var progressMsg = new SignalRMessage
+            {
+                Name = "TorrentRecheckProgress",
+                Body = new
+                {
+                    torrentId = torrent.Id,
+                    progress = 0.0,
+                    checkedPieces = 0,
+                    totalPieces = torrent.PieceCount > 0 ? torrent.PieceCount : 1,
+                    failed = true
+                }
+            };
+            _signalRBroadcaster.BroadcastMessage(progressMsg);
+            _signalRBroadcaster.BroadcastToTorrent(torrent.Id, progressMsg);
         }
 
         _eventAggregator?.PublishEvent(new TorrentHashCheckCompletedEvent(torrent, false));
