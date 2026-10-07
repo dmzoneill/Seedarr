@@ -251,3 +251,4 @@
 {"ts":"2026-10-07T01:19:54Z","mode":"fix","scheduleId":"sched_3e4e989c","githubOpen":339,"restarts":0,"closedIssues":[957],"dispatches":[{"slot":"core-torrents","worker":"elk","issue":1189}],"stopped":["trout"],"note":"material"}
 {"ts": "2026-10-07T01:21:24Z", "mode": "fix", "scheduleId": "sched_4738be99", "githubOpen": 335, "restarts": 0, "closedIssues": [1022, 1208, 1207, 1092], "dispatches": [{"slot": "core-auth", "worker": "badger", "issue": 1024}, {"slot": "host", "worker": "panther", "issue": 910}, {"slot": "api", "worker": "eagle", "issue": 1252}, {"slot": "http", "worker": "crane", "issue": 1068}], "stopped": ["bug", "cat", "chicken", "chick"], "note": "material"}
 
+{"ts":"2026-10-07T01:21:52Z","mode":"fix","scheduleId":"sched_18ae4e3d","githubOpen":335,"restarts":0,"pokes":["elk"],"note":"all slots open; elk idle>90s"}
