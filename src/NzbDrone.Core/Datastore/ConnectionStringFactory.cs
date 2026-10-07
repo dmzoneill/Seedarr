@@ -18,7 +18,7 @@ public class ConnectionStringFactory : IConnectionStringFactory
     {
         _configFileProvider = configFileProvider;
 
-        if (!string.IsNullOrEmpty(_configFileProvider.PostgresHost))
+        if (!string.IsNullOrWhiteSpace(_configFileProvider.PostgresHost))
         {
             DatabaseType = DatabaseType.PostgreSQL;
             MainDbConnectionString = BuildPostgresConnectionString();
@@ -41,7 +41,7 @@ public class ConnectionStringFactory : IConnectionStringFactory
 
     private string BuildPostgresConnectionString()
     {
-        return $"Host={_configFileProvider.PostgresHost};" +
+        return $"Host={_configFileProvider.PostgresHost.Trim()};" +
             $"Port={_configFileProvider.PostgresPort};" +
             $"Database={_configFileProvider.PostgresMainDb};" +
             $"Username={_configFileProvider.PostgresUser};" +
