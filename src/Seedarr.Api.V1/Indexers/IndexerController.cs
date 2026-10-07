@@ -28,7 +28,7 @@ namespace Seedarr.Api.V1.Indexers;
 public class IndexerController : Controller
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
-    private static readonly HttpClient DefaultClient = new();
+    private static readonly HttpClient DefaultClient = new() { Timeout = TimeSpan.FromSeconds(30) };
     private static readonly object _proxySyncLock = new();
     private static SocketsHttpHandler _proxyHandler;
     private static HttpClient _proxyClient;
@@ -899,6 +899,11 @@ public class IndexerController : Controller
 
     private HttpClient GetHttpClient()
     {
+        if (_httpClient != null)
+        {
+            return _httpClient;
+        }
+
         if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
         {
             EnsureProxyClient(_proxySettingsProvider);

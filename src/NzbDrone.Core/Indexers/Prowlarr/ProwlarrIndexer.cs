@@ -51,6 +51,11 @@ public class ProwlarrIndexer : IIndexer
 
     private HttpClient GetHttpClient()
     {
+        if (_httpClient != null)
+        {
+            return _httpClient;
+        }
+
         if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
         {
             EnsureProxyClient();

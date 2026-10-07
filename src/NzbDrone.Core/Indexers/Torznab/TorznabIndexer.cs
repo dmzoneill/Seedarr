@@ -17,7 +17,7 @@ namespace NzbDrone.Core.Indexers.Torznab;
 
 public class TorznabIndexer : IIndexer
 {
-    private static readonly HttpClient DefaultClient = new();
+    private static readonly HttpClient DefaultClient = new() { Timeout = TimeSpan.FromSeconds(30) };
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
     private readonly IIndexerStatusService _indexerStatusService;
@@ -168,6 +168,11 @@ public class TorznabIndexer : IIndexer
 
     private HttpClient GetHttpClient()
     {
+        if (_httpClient != null)
+        {
+            return _httpClient;
+        }
+
         if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
         {
             EnsureProxyClient();

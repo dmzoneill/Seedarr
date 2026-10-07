@@ -11,6 +11,8 @@
     <NumberOfTestWorkers>4</NumberOfTestWorkers>
     <DefaultTestNamePattern>{m}{a}</DefaultTestNamePattern>
     <StopOnError>false</StopOnError>
+    <!-- Per-test ceiling so a stuck await/network call cannot run for hours -->
+    <DefaultTimeout>120000</DefaultTimeout>
   </NUnit>
 
   <DataCollectionRunSettings>
