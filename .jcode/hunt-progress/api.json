@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T01:15:00Z",
+  "updatedAt": "2026-10-07T01:20:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Notifications",
+  "currentSubfolder": "src/Seedarr.Api.V1/ArrIntegration",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/System",
-    "completedAt": "2026-10-07T01:15:00Z",
-    "issuesFiled": [1264, 1266],
+    "subfolder": "src/Seedarr.Api.V1/Notifications",
+    "completedAt": "2026-10-07T01:20:00Z",
+    "issuesFiled": [1271],
     "issuesReopened": [],
-    "taskId": "api-hunter-pheasant",
-    "notes": "Static review: 27 files under System. Deduped against open issues (#1050, #1183, #1182, #1180, #1051, #1052, #1053, #1178, #879, #1055, #985, etc.). Filed #1264 (safe mode allows mutating PRAGMA) and #1266 (unbounded developer events/network limit). No dotnet build/test."
+    "taskId": "api-hunter-vulture",
+    "notes": "Static review: 2 files (NotificationController.cs, NotificationResource.cs). Deduped against open issues (#1070–#1076, #1071, #1075, #1191, #1192, #1073, #888, etc.). Filed #1271 (RestoreUrl skips QueryParamPasswordRegex query params). No dotnet build/test."
   }
 }
