@@ -13,14 +13,14 @@ public class PieceStorage : IPieceStorage, IDisposable
     private readonly ConcurrentDictionary<string, HashSet<int>> _corruptedPieces = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, PendingBatch> _pendingBatches = new(StringComparer.OrdinalIgnoreCase);
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
-    private readonly ITorrentService _torrentService;
+    private readonly Lazy<ITorrentService> _torrentService;
     private readonly TimeSpan _coalesceWindow;
     private readonly object _stateLock = new();
     private bool _disposed;
 
     public int PendingBatchCount => _pendingBatches.Count;
 
-    public PieceStorage(IBroadcastSignalRMessage signalRBroadcaster = null, TimeSpan? coalesceWindow = null, ITorrentService torrentService = null)
+    public PieceStorage(IBroadcastSignalRMessage signalRBroadcaster = null, TimeSpan? coalesceWindow = null, Lazy<ITorrentService> torrentService = null)
     {
         _signalRBroadcaster = signalRBroadcaster;
         _torrentService = torrentService;
@@ -572,7 +572,7 @@ public class PieceStorage : IPieceStorage, IDisposable
 
         try
         {
-            var torrent = _torrentService.GetByInfoHash(infoHash);
+            var torrent = _torrentService.Value.GetByInfoHash(infoHash);
             return torrent?.Id > 0 ? torrent.Id : null;
         }
         catch
