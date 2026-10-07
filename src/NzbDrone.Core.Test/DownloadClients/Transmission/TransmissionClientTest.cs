@@ -384,7 +384,7 @@ public class TransmissionClientTest
         handler.Enqueue(HttpStatusCode.OK,
             @"{""arguments"":{""torrents"":[" +
             @"{""hashString"":""match"",""name"":""Matching"",""totalSize"":100,""leftUntilDone"":0,""status"":6,""downloadDir"":""/dl"",""labels"":[""TV""]}," +
-            @"{""hashString"":""nomatch"",""name"":""No Match"",""totalSize"":200,""leftUntilDone"":0,""status"":6,""downloadDir"":""/dl"",""labels"":[""movies""]" +
+            @"{""hashString"":""nomatch"",""name"":""No Match"",""totalSize"":200,""leftUntilDone"":0,""status"":6,""downloadDir"":""/dl"",""labels"":[""movies""]}" +
             @"]},""result"":""success""}");
         InjectMockClient(handler);
 
