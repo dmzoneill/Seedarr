@@ -1,5 +1,7 @@
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.TrackerBoost;
 using Seedarr.Http;
 
@@ -7,6 +9,7 @@ namespace Seedarr.Api.V1.TrackerBoost;
 
 [V1ApiController("trackerboost")]
 [Route("api/v1/downloadplusplus")]
+[Authorize(Policy = Policies.Reader)]
 public class TrackerBoostController : Controller
 {
     private readonly ITrackerBoostService _trackerBoostService;
@@ -31,6 +34,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPut("settings")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public IActionResult UpdateSettings([FromBody] TrackerBoostSettings settings)
     {
         if (settings == null)
@@ -71,6 +75,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("trackers")]
+    [Authorize(Policy = Policies.Operator)]
     public IActionResult AddTracker([FromBody] AddTrackerResource resource)
     {
         if (resource == null || string.IsNullOrWhiteSpace(resource.Url))
@@ -83,6 +88,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpDelete("trackers/{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public IActionResult DeleteTracker(int id)
     {
         _trackerBoostService.DeleteTracker(id);
@@ -90,6 +96,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("scan")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> ScanTrackers()
     {
         var testedCount = await _trackerBoostService.ProbeTrackerHealthAsync();
@@ -97,6 +104,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("harvest/downloads")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> HarvestFromDownloads()
     {
         var count = await _trackerBoostService.HarvestFromActiveDownloadsAsync();
@@ -104,6 +112,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("harvest/prowlarr")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> HarvestProwlarr()
     {
         var count = await _trackerBoostService.HarvestFromProwlarrAsync();
@@ -111,6 +120,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("harvest/feeds")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> HarvestFeeds()
     {
         var count = await _trackerBoostService.HarvestFromCuratedListsAsync();
@@ -118,6 +128,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("boost/{torrentId:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> BoostTorrent(int torrentId, [FromQuery] bool onlyVerified = true)
     {
         var result = await _trackerBoostService.BoostTorrentAsync(torrentId, onlyVerified);
@@ -125,6 +136,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("boost-hash/{infoHash}")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> BoostHash(string infoHash, [FromQuery] string name = "", [FromQuery] bool onlyVerified = true, [FromQuery] bool force = false)
     {
         var result = await _trackerBoostService.BoostHashAsync(infoHash, name, onlyVerified, force);
@@ -132,6 +144,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("inject")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> InjectTracker([FromBody] InjectTrackerResource resource)
     {
         if (resource == null || (resource.TorrentId <= 0 && string.IsNullOrWhiteSpace(resource.InfoHash)) || string.IsNullOrWhiteSpace(resource.TrackerUrl))
@@ -152,6 +165,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("boost-all")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> BoostAllTorrents([FromQuery] bool onlyVerified = true)
     {
         var results = await _trackerBoostService.BoostAllTorrentsAsync(onlyVerified);
@@ -159,6 +173,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("recover-trackers")]
+    [Authorize(Policy = Policies.Operator)]
     public async Task<IActionResult> RecoverMissingTrackers()
     {
         var recovered = await _trackerBoostService.RecoverMissingTrackersAsync();
@@ -173,6 +188,7 @@ public class TrackerBoostController : Controller
     }
 
     [HttpDelete("logs")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public IActionResult ClearLogs()
     {
         _trackerBoostService.ClearLogs();
