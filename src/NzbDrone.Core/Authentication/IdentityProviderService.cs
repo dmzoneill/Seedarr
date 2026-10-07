@@ -238,7 +238,9 @@ public class IdentityProviderService : IIdentityProviderService
                             ? provider.IssuerUrl.Trim()
                             : (provider.IssuerUrl.Trim().EndsWith('/') ? provider.IssuerUrl.Trim() + ".well-known/openid-configuration" : provider.IssuerUrl.Trim() + "/.well-known/openid-configuration"))
                         : null,
-                IdentityProviderType.Saml => provider.MetadataUrl,
+                IdentityProviderType.Saml => !string.IsNullOrWhiteSpace(provider.MetadataUrl)
+                    ? provider.MetadataUrl
+                    : provider.IssuerUrl,
                 _ => provider.IssuerUrl,
             };
 
