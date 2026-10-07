@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Terminal;
 
 namespace Seedarr.Http.Terminal;
 
@@ -36,8 +37,8 @@ public sealed class LinuxPtySession : ITerminalSession
     {
         var ws = new NativePty.Winsize
         {
-            WsCol = (ushort)Math.Max(10, Math.Min(cols, 500)),
-            WsRow = (ushort)Math.Max(5, Math.Min(rows, 200)),
+            WsCol = (ushort)TerminalGeometry.Clamp(cols, rows).Cols,
+            WsRow = (ushort)TerminalGeometry.Clamp(cols, rows).Rows,
         };
 
         string safeCwd = !string.IsNullOrWhiteSpace(cwd) ? Path.GetFullPath(cwd) : null;
@@ -186,8 +187,8 @@ public sealed class LinuxPtySession : ITerminalSession
 
         var ws = new NativePty.Winsize
         {
-            WsCol = (ushort)Math.Max(10, Math.Min(cols, 500)),
-            WsRow = (ushort)Math.Max(5, Math.Min(rows, 200)),
+            WsCol = (ushort)TerminalGeometry.Clamp(cols, rows).Cols,
+            WsRow = (ushort)TerminalGeometry.Clamp(cols, rows).Rows,
         };
 
         if (NativePty.Ioctl(this._masterFd, NativePty.TIOCSWINSZ, ref ws) != 0)

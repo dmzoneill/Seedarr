@@ -111,6 +111,20 @@ public class TerminalServiceTests
         _service.Resize(connId, -5, 0);
         Assert.That(proc.LastCols, Is.EqualTo(80));
         Assert.That(proc.LastRows, Is.EqualTo(24));
+
+        _service.Resize(connId, int.MaxValue, int.MaxValue);
+        Assert.That(proc.LastCols, Is.EqualTo(TerminalGeometry.MaxCols));
+        Assert.That(proc.LastRows, Is.EqualTo(TerminalGeometry.MaxRows));
+    }
+
+    [Test]
+    public async Task StartSessionAsync_should_clamp_oversized_dimensions()
+    {
+        var connId = "conn-max";
+        await _service.StartSessionAsync(connId, int.MaxValue, int.MaxValue, _ => Task.CompletedTask);
+
+        Assert.That(_mockFactory.LastCreatedProcess.LastCols, Is.EqualTo(TerminalGeometry.MaxCols));
+        Assert.That(_mockFactory.LastCreatedProcess.LastRows, Is.EqualTo(TerminalGeometry.MaxRows));
     }
 
     [Test]
@@ -224,6 +238,33 @@ public class TerminalServiceTests
 
         await hub.OnDisconnectedAsync(null);
         await mockService.Received(1).CloseSessionAsync("hub-conn-1");
+    }
+
+    [Test]
+    public async Task TerminalHub_should_clamp_oversized_dimensions_before_service_calls()
+    {
+        var mockService = Substitute.For<ITerminalService>();
+        var configFileProvider = Substitute.For<IConfigFileProvider>();
+        configFileProvider.TerminalAccessEnabled.Returns(true);
+        configFileProvider.AuthenticationEnabled.Returns(false);
+
+        var hub = new TerminalHub(mockService, configFileProvider);
+        var hubContext = Substitute.For<HubCallerContext>();
+        hubContext.ConnectionId.Returns("hub-conn-max");
+        hubContext.ConnectionAborted.Returns(CancellationToken.None);
+        hub.Context = hubContext;
+
+        await hub.StartSession(int.MaxValue, int.MaxValue);
+        await mockService.Received(1).StartSessionAsync(
+            "hub-conn-max",
+            TerminalGeometry.MaxCols,
+            TerminalGeometry.MaxRows,
+            Arg.Any<Func<string, Task>>(),
+            Arg.Any<Action>(),
+            Arg.Any<CancellationToken>());
+
+        hub.Resize(int.MaxValue, int.MaxValue);
+        mockService.Received(1).Resize("hub-conn-max", TerminalGeometry.MaxCols, TerminalGeometry.MaxRows);
     }
 
     [Test]

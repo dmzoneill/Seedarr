@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Terminal;
 using Seedarr.Http.Security;
 
 namespace Seedarr.Http.Terminal;
@@ -89,8 +90,9 @@ public static class TerminalWebSocketHandler
                     ? configService.DefaultSavePath
                     : Directory.GetCurrentDirectory()));
 
-        int cols = int.TryParse(context.Request.Query["cols"], out int c) ? Math.Max(10, c) : 100;
-        int rows = int.TryParse(context.Request.Query["rows"], out int r) ? Math.Max(5, r) : 30;
+        int cols = int.TryParse(context.Request.Query["cols"], out int c) ? c : 100;
+        int rows = int.TryParse(context.Request.Query["rows"], out int r) ? r : 30;
+        (cols, rows) = TerminalGeometry.Clamp(cols, rows);
 
         using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
         ITerminalSession session;
@@ -226,10 +228,11 @@ public static class TerminalWebSocketHandler
                                     else if (type == "resize" &&
                                             root.TryGetProperty("cols", out var colsProp) &&
                                             root.TryGetProperty("rows", out var rowsProp) &&
-                                            colsProp.TryGetInt32(out var cols) &&
-                                            rowsProp.TryGetInt32(out var rows))
+                                            colsProp.TryGetInt32(out var resizeCols) &&
+                                            rowsProp.TryGetInt32(out var resizeRows))
                                     {
-                                        session.Resize(cols, rows);
+                                        (resizeCols, resizeRows) = TerminalGeometry.Clamp(resizeCols, resizeRows);
+                                        session.Resize(resizeCols, resizeRows);
                                     }
                                     else if (type == "ping")
                                     {

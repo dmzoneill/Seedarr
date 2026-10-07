@@ -157,6 +157,7 @@ public class TerminalHub : Hub
         EnsureTerminalAccessEnabled();
 
         var connectionId = Context.ConnectionId;
+        (cols, rows) = TerminalGeometry.NormalizeSignalRDimensions(cols, rows);
         _logger.Info("Starting terminal session for connection {0} ({1}x{2})", connectionId, cols, rows);
 
         await _terminalService.StartSessionAsync(
@@ -185,6 +186,7 @@ public class TerminalHub : Hub
     {
         EnsureTerminalAccessEnabled();
 
+        (cols, rows) = TerminalGeometry.NormalizeSignalRDimensions(cols, rows);
         _terminalService.Resize(Context.ConnectionId, cols, rows);
     }
 
