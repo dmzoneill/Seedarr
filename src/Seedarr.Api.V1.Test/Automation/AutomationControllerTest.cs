@@ -347,6 +347,18 @@ public class AutomationControllerTest
     }
 
     [Test]
+    public void Run_with_disabled_script_returns_conflict()
+    {
+        _automationService.Get(1).Returns(new AutomationScript { Id = 1, Name = "Script", IsEnabled = false });
+
+        var result = _controller.Run(1);
+
+        Assert.That(result.Result, Is.InstanceOf<ConflictObjectResult>());
+        _automationService.DidNotReceive().ExecuteScript(Arg.Any<int>(), Arg.Any<int?>());
+        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
     public void Run_with_missing_torrent_id_returns_not_found()
     {
         _automationService.Get(1).Returns(new AutomationScript { Id = 1, Name = "Script" });

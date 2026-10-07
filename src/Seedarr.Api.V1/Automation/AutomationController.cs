@@ -182,9 +182,15 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationExecutionResult> Run(int id, [FromQuery] int? torrentId = null)
     {
-        if (_automationService.Get(id) == null)
+        var script = _automationService.Get(id);
+        if (script == null)
         {
             return NotFound();
+        }
+
+        if (!script.IsEnabled)
+        {
+            return Conflict(new { message = "Automation script is disabled." });
         }
 
         if (torrentId is > 0 && _torrentService.Get(torrentId.Value) == null)
