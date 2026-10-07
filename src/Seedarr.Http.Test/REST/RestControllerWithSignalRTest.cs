@@ -171,10 +171,13 @@ public class RestControllerWithSignalRTest
             m.Action == ModelAction.Created &&
             ((TestResource)m.Body).Id == 50));
 
-        // 2. Throttled update queued
+        // 2. First update after create broadcasts immediately (Created does not start coalesce window)
         var updateModel = new TestModel { Id = 50, Name = "UpdatedItem", Value = 101 };
         _controller.Handle(new ModelEvent<TestModel>(updateModel, ModelAction.Updated));
-        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 101));
 
         // 3. Delete dispatched promptly and cancels pending update
         var deleteModel = new TestModel { Id = 50, Name = "DeletedItem", Value = 101 };
@@ -191,6 +194,25 @@ public class RestControllerWithSignalRTest
         _broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Action == ModelAction.Updated &&
             ((TestResource)m.Body).Id == 50));
+    }
+
+    [Test]
+    public void First_updated_after_created_broadcasts_immediately_within_coalesce_window()
+    {
+        const int entityId = 99;
+        var created = new TestModel { Id = entityId, Name = "New", Value = 0 };
+        _controller.Handle(new ModelEvent<TestModel>(created, ModelAction.Created));
+
+        Thread.Sleep(50);
+
+        var updated = new TestModel { Id = entityId, Name = "New", Value = 50 };
+        _controller.Handle(new ModelEvent<TestModel>(updated, ModelAction.Updated));
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _broadcaster.Received(2).BroadcastMessage(Arg.Any<SignalRMessage>());
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 50));
     }
 
     [Test]
