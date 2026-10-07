@@ -122,13 +122,14 @@ public class DeveloperTestingControllerTest
     }
 
     [Test]
-    public async Task RunTests_should_return_default_response_when_runner_is_null()
+    public async Task RunTests_should_return_503_when_runner_is_null()
     {
         var actionResult = await _controllerWithoutRunner.RunTests(new TestExecutionRequest());
 
-        Assert.That(actionResult.Value, Is.Not.Null);
-        Assert.That(actionResult.Value.TotalTests, Is.EqualTo(0));
-        Assert.That(actionResult.Value.Results, Is.Empty);
+        var objResult = actionResult.Result as ObjectResult;
+        Assert.That(objResult, Is.Not.Null);
+        Assert.That(objResult.StatusCode, Is.EqualTo(503));
+        Assert.That(objResult.Value, Is.EqualTo("Developer test runner is not available."));
     }
 
     [Test]
