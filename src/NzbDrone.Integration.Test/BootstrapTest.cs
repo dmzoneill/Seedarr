@@ -147,4 +147,41 @@ public class BootstrapTest
 
         Assert.DoesNotThrow(() => Bootstrap.ConfigureKestrel(serverOptions, configProvider, certManager, new[] { "http://localhost:5000" }));
     }
+
+    [Test]
+    public void ValidateListenUrlOverrides_should_allow_null()
+    {
+        Assert.DoesNotThrow(() => Bootstrap.ValidateListenUrlOverrides(null));
+    }
+
+    [Test]
+    public void ValidateListenUrlOverrides_should_accept_valid_http_urls()
+    {
+        Assert.DoesNotThrow(() => Bootstrap.ValidateListenUrlOverrides(new[] { "http://127.0.0.1:0", "http://localhost:5000" }));
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase(null)]
+    public void ValidateListenUrlOverrides_should_reject_null_or_blank_entries(string invalidUrl)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => Bootstrap.ValidateListenUrlOverrides(new[] { invalidUrl }));
+        Assert.That(ex.ParamName, Is.EqualTo("urls"));
+    }
+
+    [Test]
+    public void ValidateListenUrlOverrides_should_reject_empty_array()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => Bootstrap.ValidateListenUrlOverrides(Array.Empty<string>()));
+        Assert.That(ex.ParamName, Is.EqualTo("urls"));
+    }
+
+    [TestCase("not-a-uri")]
+    [TestCase("/relative/path")]
+    [TestCase("ftp://localhost:21")]
+    public void ValidateListenUrlOverrides_should_reject_invalid_urls(string invalidUrl)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => Bootstrap.ValidateListenUrlOverrides(new[] { invalidUrl }));
+        Assert.That(ex.ParamName, Is.EqualTo("urls"));
+    }
 }

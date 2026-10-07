@@ -35,6 +35,8 @@ public static class Bootstrap
 
     public static WebApplication CreateApplication(StartupContext startupContext, string[] urls = null)
     {
+        ValidateListenUrlOverrides(urls);
+
         if (LogManager.Configuration == null)
         {
             NzbDroneLogger.Register(startupContext);
@@ -104,6 +106,34 @@ public static class Bootstrap
         }
 
         return app;
+    }
+
+    public static void ValidateListenUrlOverrides(string[] urls)
+    {
+        if (urls == null)
+        {
+            return;
+        }
+
+        if (urls.Length == 0)
+        {
+            throw new ArgumentException("At least one URL must be provided when overriding listen addresses.", nameof(urls));
+        }
+
+        for (var i = 0; i < urls.Length; i++)
+        {
+            var url = urls[i];
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                throw new ArgumentException($"URL at index {i} cannot be null or whitespace.", nameof(urls));
+            }
+
+            if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                throw new ArgumentException($"URL at index {i} is not a valid absolute HTTP or HTTPS URI: '{url}'.", nameof(urls));
+            }
+        }
     }
 
     public static void ConfigureKestrelLimits(KestrelServerOptions serverOptions)
