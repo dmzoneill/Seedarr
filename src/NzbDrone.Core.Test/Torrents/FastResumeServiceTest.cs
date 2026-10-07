@@ -17,6 +17,8 @@ public class FastResumeServiceTest
 {
     private ITorrentService _torrentService;
     private IPieceStorage _pieceStorage;
+    private IPieceVerificationService _pieceVerificationService;
+    private IMultiFilePieceStorage _multiFilePieceStorage;
     private IAppFolderInfo _appFolderInfo;
     private string _tempAppDataFolder;
     private FastResumeService _service;
@@ -26,13 +28,22 @@ public class FastResumeServiceTest
     {
         _torrentService = Substitute.For<ITorrentService>();
         _pieceStorage = Substitute.For<IPieceStorage>();
+        _pieceVerificationService = Substitute.For<IPieceVerificationService>();
+        _multiFilePieceStorage = Substitute.For<IMultiFilePieceStorage>();
         _appFolderInfo = Substitute.For<IAppFolderInfo>();
 
         _tempAppDataFolder = Path.Combine(Path.GetTempPath(), "seedarr_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempAppDataFolder);
         _appFolderInfo.AppDataFolder.Returns(_tempAppDataFolder);
 
-        _service = new FastResumeService(new Lazy<ITorrentService>(() => _torrentService), _pieceStorage, _appFolderInfo);
+        _service = new FastResumeService(
+            new Lazy<ITorrentService>(() => _torrentService),
+            _pieceStorage,
+            _appFolderInfo,
+            null,
+            null,
+            _pieceVerificationService,
+            _multiFilePieceStorage);
     }
 
     [TearDown]
@@ -458,6 +469,18 @@ public class FastResumeServiceTest
         var filePath = Path.Combine(_tempAppDataFolder, "verified_file.dat");
         File.WriteAllBytes(filePath, new byte[1024]);
 
+        var pieceHashes = new byte[2 * 20];
+        Array.Fill(pieceHashes, (byte)0xAB);
+        torrent.PieceHashes = pieceHashes;
+
+        _pieceVerificationService.VerifyPieceFromStorage(
+            torrent,
+            Arg.Any<IList<TorrentFile>>(),
+            Arg.Any<int>(),
+            Arg.Any<byte[]>(),
+            _multiFilePieceStorage,
+            Arg.Any<string>()).Returns(true);
+
         var resumeData = new FastResumeData
         {
             InfoHash = torrent.InfoHash,
@@ -474,9 +497,73 @@ public class FastResumeServiceTest
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(torrent.Progress, Is.EqualTo(1.0));
         _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 2 && b[0] && b[1]));
+        _pieceVerificationService.Received(2).VerifyPieceFromStorage(
+            torrent,
+            Arg.Any<IList<TorrentFile>>(),
+            Arg.Any<int>(),
+            Arg.Any<byte[]>(),
+            _multiFilePieceStorage,
+            Arg.Any<string>());
 
         var writtenFile = Path.Combine(_tempAppDataFolder, "fastresume", $"{torrent.InfoHash.ToLowerInvariant()}.fastresume");
         Assert.That(File.Exists(writtenFile), Is.True);
+    }
+
+    [Test]
+    public void PerformPieceHashVerification_should_not_mark_sequential_prefix_from_file_sizes_only()
+    {
+        var torrent = new Torrent
+        {
+            Id = 6,
+            InfoHash = "prefixbug123456789012345678901234567890",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 2,
+            PieceLength = 512,
+            TotalSize = 1024,
+            Progress = 0.0,
+            Status = TorrentStatus.QueuedForChecking,
+            PieceHashes = new byte[2 * 20]
+        };
+        Array.Fill(torrent.PieceHashes, (byte)0xCD);
+
+        var file1 = Path.Combine(_tempAppDataFolder, "part1.dat");
+        var file2 = Path.Combine(_tempAppDataFolder, "part2.dat");
+        File.WriteAllBytes(file1, new byte[512]);
+        File.WriteAllBytes(file2, new byte[256]);
+
+        _pieceVerificationService.VerifyPieceFromStorage(
+            torrent,
+            Arg.Any<IList<TorrentFile>>(),
+            0,
+            Arg.Any<byte[]>(),
+            _multiFilePieceStorage,
+            Arg.Any<string>()).Returns(true);
+        _pieceVerificationService.VerifyPieceFromStorage(
+            torrent,
+            Arg.Any<IList<TorrentFile>>(),
+            1,
+            Arg.Any<byte[]>(),
+            _multiFilePieceStorage,
+            Arg.Any<string>()).Returns(false);
+
+        var resumeData = new FastResumeData
+        {
+            InfoHash = torrent.InfoHash,
+            SavePath = _tempAppDataFolder,
+            Files = new List<FastResumeFileEntry>
+            {
+                new() { Path = "part1.dat", Length = 512, Mtime = File.GetLastWriteTimeUtc(file1) },
+                new() { Path = "part2.dat", Length = 512, Mtime = File.GetLastWriteTimeUtc(file2) }
+            }
+        };
+
+        _service.PerformPieceHashVerification(torrent, resumeData);
+
+        Assert.That(torrent.Progress, Is.EqualTo(0.5));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+        _pieceStorage.Received(1).SetVerifiedPieces(
+            torrent.InfoHash,
+            Arg.Is<bool[]>(b => b.Length == 2 && b[0] && !b[1]));
     }
 
     [Test]
