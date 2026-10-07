@@ -12,6 +12,7 @@ public static class AssemblyLoader
     public static List<Assembly> Load(List<string> names)
     {
         var assemblies = new List<Assembly>();
+        var failed = new List<string>();
         var baseDir = AppDomain.CurrentDomain.BaseDirectory;
 
         foreach (var name in names)
@@ -19,7 +20,15 @@ public static class AssemblyLoader
             var path = Path.Combine(baseDir, $"{name}.dll");
             if (File.Exists(path))
             {
-                assemblies.Add(Assembly.LoadFrom(path));
+                try
+                {
+                    assemblies.Add(Assembly.LoadFrom(path));
+                }
+                catch (Exception ex) when (ex is FileNotFoundException or BadImageFormatException or FileLoadException)
+                {
+                    Logger.Warn(ex, "Could not load assembly {0}", name);
+                    failed.Add(name);
+                }
             }
             else
             {
@@ -30,8 +39,15 @@ public static class AssemblyLoader
                 catch (Exception ex) when (ex is FileNotFoundException or BadImageFormatException or FileLoadException)
                 {
                     Logger.Warn(ex, "Could not load assembly {0}", name);
+                    failed.Add(name);
                 }
             }
+        }
+
+        if (failed.Count > 0)
+        {
+            throw new HostStartupException(
+                "Required assemblies could not be loaded: " + string.Join(", ", failed));
         }
 
         return assemblies;
