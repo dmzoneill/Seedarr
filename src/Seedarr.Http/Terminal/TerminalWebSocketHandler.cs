@@ -207,35 +207,37 @@ public static class TerminalWebSocketHandler
                             using var doc = await JsonDocument.ParseAsync(ms, cancellationToken: cts.Token);
                             var root = doc.RootElement;
 
-                            if (root.ValueKind == JsonValueKind.Object)
+                            if (root.ValueKind == JsonValueKind.Object &&
+                                root.TryGetProperty("type", out var typeProp) &&
+                                typeProp.ValueKind == JsonValueKind.String)
                             {
-                                isHandled = true;
-
-                                if (root.TryGetProperty("type", out var typeProp) && typeProp.ValueKind == JsonValueKind.String)
+                                var type = typeProp.GetString();
+                                if (type == "input" &&
+                                    root.TryGetProperty("data", out var dataProp) &&
+                                    dataProp.ValueKind == JsonValueKind.String)
                                 {
-                                    var type = typeProp.GetString();
-                                    if (type == "input" && root.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == JsonValueKind.String)
+                                    isHandled = true;
+                                    var inputStr = dataProp.GetString();
+                                    if (!string.IsNullOrEmpty(inputStr))
                                     {
-                                        var inputStr = dataProp.GetString();
-                                        if (!string.IsNullOrEmpty(inputStr))
-                                        {
-                                            var inputBytes = Encoding.UTF8.GetBytes(inputStr);
-                                            await session.WriteAsync(inputBytes, cts.Token);
-                                        }
+                                        var inputBytes = Encoding.UTF8.GetBytes(inputStr);
+                                        await session.WriteAsync(inputBytes, cts.Token);
                                     }
-                                    else if (type == "resize" &&
-                                            root.TryGetProperty("cols", out var colsProp) &&
-                                            root.TryGetProperty("rows", out var rowsProp) &&
-                                            colsProp.TryGetInt32(out var resizeCols) &&
-                                            rowsProp.TryGetInt32(out var resizeRows))
-                                    {
-                                        (resizeCols, resizeRows) = TerminalGeometry.Clamp(resizeCols, resizeRows);
-                                        session.Resize(resizeCols, resizeRows);
-                                    }
-                                    else if (type == "ping")
-                                    {
-                                        await SafeSendTextAsync("{\"type\":\"pong\"}", cts.Token);
-                                    }
+                                }
+                                else if (type == "resize" &&
+                                         root.TryGetProperty("cols", out var colsProp) &&
+                                         root.TryGetProperty("rows", out var rowsProp) &&
+                                         colsProp.TryGetInt32(out var resizeCols) &&
+                                         rowsProp.TryGetInt32(out var resizeRows))
+                                {
+                                    isHandled = true;
+                                    (resizeCols, resizeRows) = TerminalGeometry.Clamp(resizeCols, resizeRows);
+                                    session.Resize(resizeCols, resizeRows);
+                                }
+                                else if (type == "ping")
+                                {
+                                    isHandled = true;
+                                    await SafeSendTextAsync("{\"type\":\"pong\"}", cts.Token);
                                 }
                             }
                         }
