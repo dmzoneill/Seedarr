@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:05:30Z",
+  "updatedAt": "2026-10-07T02:06:30Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_1d8f0cea",
+    "lastScheduleId": "sched_e651f5e3",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -28,8 +28,8 @@
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 993,
-      "worktree": "../seedarr_worktrees/issue-993",
+      "issue": 992,
+      "worktree": "../seedarr_worktrees/issue-992",
       "area": "common"
     },
     "api": {
@@ -42,8 +42,8 @@
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "issue": 1037,
-      "worktree": "../seedarr_worktrees/issue-1037",
+      "issue": 1038,
+      "worktree": "../seedarr_worktrees/issue-1038",
       "area": "torrents"
     },
     "http": {
@@ -70,12 +70,11 @@
       1235,
       1214,
       1124,
-      1038,
       1062,
       982,
       1027
     ]
   },
-  "githubOpen": 243,
-  "lastMonitorNote": "fix monitor: 243 open; 2 pokes (elk,panther); 0 dispatches"
+  "githubOpen": 242,
+  "lastMonitorNote": "fix monitor: 242 open; dispatches elk #1038 panther #992; 3 pokes; stopped tigress macaque"
 }
