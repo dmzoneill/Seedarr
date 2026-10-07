@@ -50,7 +50,7 @@ public static class ContainerExtensions
                     serviceTypeCondition: t => !IsIgnoredInterface(t),
                     ifAlreadyRegistered: IfAlreadyRegistered.AppendNotKeyed);
             }
-            else
+            else if (HasExplicitReuseAttribute(type))
             {
                 container.Register(type, reuse, ifAlreadyRegistered: IfAlreadyRegistered.Keep);
             }
@@ -77,6 +77,13 @@ public static class ContainerExtensions
         }
 
         return false;
+    }
+
+    private static bool HasExplicitReuseAttribute(Type type)
+    {
+        return type.IsDefined(typeof(TransientAttribute), false)
+            || type.IsDefined(typeof(ScopedAttribute), false)
+            || type.IsDefined(typeof(SingletonAttribute), false);
     }
 
     private static IReuse DetermineReuse(Type type, bool hasInterfaces)

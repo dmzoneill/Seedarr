@@ -42,6 +42,15 @@ public class ContainerExtensionsTest
         }
     }
 
+    public class PlainPocoService
+    {
+    }
+
+    [Singleton]
+    public class SingletonConcreteService
+    {
+    }
+
     [Transient]
     public class TransientCustomService : ICustomService
     {
@@ -112,14 +121,29 @@ public class ContainerExtensionsTest
     }
 
     [Test]
-    public void AutoAddServices_registers_class_only_implementing_IDisposable_by_concrete_type()
+    public void AutoAddServices_does_not_register_interface_less_types_without_explicit_reuse_attribute()
     {
         var container = new Container(rules => rules.WithNzbDroneRules());
 
-        container.AutoAddServices(new[] { typeof(OnlyDisposableService) });
+        container.AutoAddServices(new[] { typeof(OnlyDisposableService), typeof(PlainPocoService) });
 
         Assert.That(container.IsRegistered<IDisposable>(), Is.False);
-        Assert.That(container.IsRegistered<OnlyDisposableService>(), Is.True);
+        Assert.That(container.IsRegistered<OnlyDisposableService>(), Is.False);
+        Assert.That(container.IsRegistered<PlainPocoService>(), Is.False);
+    }
+
+    [Test]
+    public void AutoAddServices_registers_interface_less_types_with_explicit_reuse_attribute()
+    {
+        var container = new Container(rules => rules.WithNzbDroneRules());
+
+        container.AutoAddServices(new[] { typeof(SingletonConcreteService) });
+
+        Assert.That(container.IsRegistered<SingletonConcreteService>(), Is.True);
+
+        var instance1 = container.Resolve<SingletonConcreteService>();
+        var instance2 = container.Resolve<SingletonConcreteService>();
+        Assert.That(instance1, Is.SameAs(instance2));
     }
 
     [Test]
