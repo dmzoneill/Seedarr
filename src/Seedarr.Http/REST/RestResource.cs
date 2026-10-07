@@ -19,7 +19,7 @@ public abstract class RestResource
                 typeName = typeName[..^8];
             }
 
-            return typeName.ToLower();
+            return typeName.ToLowerInvariant();
         }
     }
 }
