@@ -57,6 +57,25 @@ public class BlocklistArchiveStreamProviderTests
     }
 
     [Test]
+    public async Task ExtractRulesAsync_should_merge_all_rule_files_in_multi_entry_zip_archive()
+    {
+        var entries = new[]
+        {
+            ("readme.txt", "Bluetack archive metadata"),
+            ("level1.p2p", "10.0.0.1\n"),
+            ("level2.p2p", "10.0.0.2\n")
+        };
+        var zipBytes = CreateZipBytes(entries);
+        using var stream = new MemoryStream(zipBytes);
+
+        var rules = await _provider.ExtractRulesAsync(stream, url: "http://example.com/bluetack-levels.zip");
+
+        Assert.That(rules.Count, Is.EqualTo(2));
+        Assert.That(rules, Does.Contain("10.0.0.1"));
+        Assert.That(rules, Does.Contain("10.0.0.2"));
+    }
+
+    [Test]
     public async Task DetectFormat_should_detect_gzip_via_magic_bytes_without_url_or_header_hints()
     {
         var text = "1.1.1.1\n2.2.2.2\n";
