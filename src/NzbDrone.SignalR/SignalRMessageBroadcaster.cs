@@ -151,7 +151,8 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
             return;
         }
 
-        BroadcastToGroup($"channel-{channel.ToLowerInvariant()}", message);
+        var normalized = channel.Trim().ToLowerInvariant();
+        BroadcastToGroup($"channel-{normalized}", message);
     }
 
     private static List<string> GetNamedEvents(SignalRMessage message)
