@@ -1,14 +1,16 @@
 {
-  "updatedAt": "2026-10-07T00:36:17Z",
+  "updatedAt": "2026-10-07T00:36:59Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
-  "status": "running",
+  "status": "stopped",
   "mode": "bug-hunt",
   "monitor": {
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
-    "active": true,
-    "lastScheduleId": "sched_6fe25428"
+    "active": false,
+    "lastScheduleId": "sched_6fe25428",
+    "stoppedAt": "2026-10-07T00:36:59Z",
+    "stopReason": "user requested stop bug hunters"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -21,27 +23,27 @@
   "huntSlots": {
     "core": {
       "area": "src/NzbDrone.Core",
-      "status": "running",
+      "status": "stopped",
       "worker": "buffalo"
     },
     "api": {
       "area": "src/Seedarr.Api.V1",
-      "status": "running",
+      "status": "stopped",
       "worker": "eagle"
     },
     "http": {
       "area": "src/Seedarr.Http",
-      "status": "running",
+      "status": "stopped",
       "worker": "magpie"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-      "status": "running",
+      "status": "stopped",
       "worker": "panther"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
-      "status": "running",
+      "status": "stopped",
       "worker": "elk"
     }
   },
@@ -62,6 +64,6 @@
     189
   ],
   "githubOpenCount": 419,
-  "lastMonitorNote": "419 open; 2 restarts frog->buffalo core Auth, stork->magpie http Ping",
+  "lastMonitorNote": "stopped by user; cancelled sched_6fe25428; stopped buffalo/eagle/magpie/panther/elk",
   "githubOpen": 419
 }
