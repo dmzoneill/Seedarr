@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using NLog;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Common.Instrumentation;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.DiskSpace;
@@ -576,5 +581,43 @@ public class AppLifetimeTest
         await subject.StopAsync(CancellationToken.None);
 
         maintenanceService.Received(1).CheckpointWal(WalCheckpointMode.Truncate);
+    }
+
+    [Test]
+    public async Task StopAsync_should_flush_log_targets_so_shutdown_messages_reach_disk()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "seedarr-applifetime-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var savedConfig = LogManager.Configuration;
+        var savedRingBufferInstance = RingBufferTarget.Instance;
+        try
+        {
+            NzbDroneLogger.Register(new StartupContext("--data=" + tempDir));
+            _torrentService.GetAll().Returns(new List<Torrent>());
+
+            await _subject.StopAsync(CancellationToken.None);
+
+            Assert.That(RingBufferTarget.Instance, Is.Not.Null);
+            var entries = RingBufferTarget.Instance.GetEntries(200, LogLevel.Info);
+            Assert.That(
+                entries.Select(e => e.Message),
+                Does.Contain("Executing phased shutdown phase 3: disconnecting peer connections, persisting torrent stats, and executing database checkpoint"));
+        }
+        finally
+        {
+            LogManager.Configuration = savedConfig;
+            RingBufferTarget.Instance = savedRingBufferInstance;
+            if (Directory.Exists(tempDir))
+            {
+                try
+                {
+                    Directory.Delete(tempDir, true);
+                }
+                catch
+                {
+                    // Best-effort test cleanup
+                }
+            }
+        }
     }
 }
