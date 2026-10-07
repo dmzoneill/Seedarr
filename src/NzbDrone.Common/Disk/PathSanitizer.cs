@@ -204,8 +204,9 @@ public static class PathSanitizer
             return string.Empty;
         }
 
+        var isUncRooted = path.Length >= 2 && path[0] == '\\' && path[1] == '\\';
         var isWindowsRooted = path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':';
-        var isUnixRooted = path.StartsWith('/') || path.StartsWith('\\');
+        var isUnixRooted = path.StartsWith('/') || (path.StartsWith('\\') && !isUncRooted);
 
         var normalized = path.Replace('\\', '/');
         var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
@@ -228,7 +229,7 @@ public static class PathSanitizer
 
             if (trimmed == "..")
             {
-                var minCount = isWindowsRooted ? 1 : 0;
+                var minCount = isWindowsRooted ? 1 : isUncRooted ? 2 : 0;
                 if (sanitizedSegments.Count > minCount)
                 {
                     sanitizedSegments.RemoveAt(sanitizedSegments.Count - 1);
@@ -245,10 +246,31 @@ public static class PathSanitizer
         }
 
         var separator = System.IO.Path.DirectorySeparatorChar.ToString();
-        var result = string.Join(separator, sanitizedSegments);
-        if (isUnixRooted && !isWindowsRooted)
+        string result;
+        if (isUncRooted)
         {
-            result = separator + result;
+            if (sanitizedSegments.Count == 0)
+            {
+                return separator + separator;
+            }
+
+            if (sanitizedSegments.Count == 1)
+            {
+                return separator + separator + sanitizedSegments[0];
+            }
+
+            var uncTail = sanitizedSegments.Count > 2
+                ? separator + string.Join(separator, sanitizedSegments.Skip(2))
+                : string.Empty;
+            result = separator + separator + sanitizedSegments[0] + separator + sanitizedSegments[1] + uncTail;
+        }
+        else
+        {
+            result = string.Join(separator, sanitizedSegments);
+            if (isUnixRooted && !isWindowsRooted)
+            {
+                result = separator + result;
+            }
         }
 
         return result;
