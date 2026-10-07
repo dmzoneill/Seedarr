@@ -250,6 +250,32 @@ public class IndexerControllerTest
     }
 
     [Test]
+    public void Update_when_indexer_type_changes_without_implementation_recomputes_implementation()
+    {
+        var existing = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "MyIndexer",
+            IndexerType = "Torznab",
+            Implementation = "TorznabIndexer",
+            Url = "http://8.8.8.8:9117",
+            ApiKey = "secret-key",
+        };
+        _indexerFactory.Get(1).Returns(existing);
+
+        using var doc = JsonDocument.Parse(
+            "{\"indexerType\":\"Prowlarr\",\"url\":\"http://8.8.8.8:9696\"}");
+        var result = _controller.Update(1, doc.RootElement);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _indexerFactory.Received(1).Update(Arg.Is<IndexerDefinition>(d =>
+            d.IndexerType == "Prowlarr"
+            && d.Implementation == "ProwlarrIndexer"
+            && d.Url == "http://8.8.8.8:9696"
+            && d.ApiKey == "secret-key"));
+    }
+
+    [Test]
     public void TestDirect_with_null_body_returns_bad_request()
     {
         var result = _controller.TestDirect(null);

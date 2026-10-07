@@ -56,6 +56,11 @@ internal static class IndexerUpdateMerger
         if (Present(presentPropertyKeys, "indexerType"))
         {
             merged.IndexerType = incoming.IndexerType;
+            if (!Present(presentPropertyKeys, "implementation")
+                && !string.Equals(existing.IndexerType, incoming.IndexerType, StringComparison.Ordinal))
+            {
+                merged.Implementation = null;
+            }
         }
 
         if (Present(presentPropertyKeys, "url"))
