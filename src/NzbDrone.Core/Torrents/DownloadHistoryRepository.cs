@@ -17,10 +17,17 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
 
     public DownloadHistory FindByInfoHash(string infoHash)
     {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return null;
+        }
+
+        var normalized = infoHash.Trim().ToLowerInvariant();
+
         return QueryWithRetry(connection =>
             connection.QueryFirstOrDefault<DownloadHistory>(
-                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash ORDER BY \"Id\" DESC",
-                new { InfoHash = infoHash }));
+                $"SELECT * FROM \"{_table}\" WHERE LOWER(\"InfoHash\") = @InfoHash ORDER BY \"Id\" DESC",
+                new { InfoHash = normalized }));
     }
 
     public DownloadHistory FindByTorrentId(int torrentId)
@@ -38,7 +45,11 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
             return new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
         }
 
-        var hashes = infoHashes.Where(h => !string.IsNullOrWhiteSpace(h)).Distinct().ToList();
+        var hashes = infoHashes
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .Select(h => h.Trim().ToLowerInvariant())
+            .Distinct()
+            .ToList();
         if (hashes.Count == 0)
         {
             return new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
@@ -51,7 +62,7 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
             foreach (var batch in hashes.Chunk(500))
             {
                 var records = connection.Query<DownloadHistory>(
-                    $"SELECT * FROM \"{_table}\" WHERE \"Id\" IN (SELECT MAX(\"Id\") FROM \"{_table}\" WHERE \"InfoHash\" IN @Hashes GROUP BY \"InfoHash\")",
+                    $"SELECT * FROM \"{_table}\" WHERE \"Id\" IN (SELECT MAX(\"Id\") FROM \"{_table}\" WHERE LOWER(\"InfoHash\") IN @Hashes GROUP BY LOWER(\"InfoHash\"))",
                     new { Hashes = batch });
 
                 foreach (var record in records)

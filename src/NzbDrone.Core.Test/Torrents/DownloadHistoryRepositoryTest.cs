@@ -325,4 +325,47 @@ public class DownloadHistoryRepositoryTest
         Assert.That(completedUbuntu, Is.EqualTo(1));
         Assert.That(removedUbuntu, Is.EqualTo(0));
     }
+
+    [Test]
+    public void FindByInfoHash_should_match_case_insensitively()
+    {
+        const string storedHash = "ABCDEF0123456789ABCDEF0123456789ABCDEF01";
+        _subject.Insert(new DownloadHistory
+        {
+            Title = "Case Test",
+            InfoHash = storedHash,
+            Status = "Active"
+        });
+
+        var found = _subject.FindByInfoHash(storedHash.ToLowerInvariant());
+        Assert.That(found, Is.Not.Null);
+        Assert.That(found.InfoHash, Is.EqualTo(storedHash));
+
+        Assert.That(_subject.FindByInfoHash("  " + storedHash.ToLowerInvariant() + "  "), Is.Not.Null);
+        Assert.That(_subject.FindByInfoHash(null), Is.Null);
+        Assert.That(_subject.FindByInfoHash("   "), Is.Null);
+    }
+
+    [Test]
+    public void GetLatestByInfoHashes_should_match_case_insensitively()
+    {
+        const string storedHash = "FEDCBA0987654321FEDCBA0987654321FEDCBA09";
+        _subject.Insert(new DownloadHistory
+        {
+            Title = "Older",
+            InfoHash = storedHash,
+            Status = "Removed"
+        });
+        _subject.Insert(new DownloadHistory
+        {
+            Title = "Latest",
+            InfoHash = storedHash.ToLowerInvariant(),
+            Status = "Active"
+        });
+
+        var result = _subject.GetLatestByInfoHashes(new[] { storedHash.ToUpperInvariant() });
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[storedHash.ToLowerInvariant()].Title, Is.EqualTo("Latest"));
+    }
 }
