@@ -411,11 +411,29 @@ public class QBitTorrentClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, "v4.6.1");
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
         InjectMockClient(handler);
 
         var result = _client.TestConnection();
 
         Assert.That(result, Is.True);
+        Assert.That(handler.Requests, Has.Count.EqualTo(2));
+        Assert.That(handler.Requests[0].RequestUri.AbsolutePath, Does.Contain("app/version"));
+        Assert.That(handler.Requests[1].RequestUri.AbsolutePath, Does.Contain("auth/login"));
+    }
+
+    [Test]
+    public void TestConnection_should_fail_when_version_succeeds_but_credentials_invalid()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "v4.6.1");
+        handler.Enqueue(HttpStatusCode.OK, "Fails.");
+        InjectMockClient(handler);
+
+        var result = _client.TestConnection();
+
+        Assert.That(result, Is.False);
+        Assert.That(handler.Requests, Has.Count.EqualTo(2));
     }
 
     [Test]

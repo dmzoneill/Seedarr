@@ -671,6 +671,20 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             var appVersion = TryFetchAppVersion();
             if (appVersion != null)
             {
+                try
+                {
+                    EnsureAuthenticated(force: true);
+                }
+                catch (DownloadClientAuthenticationException ex)
+                {
+                    _isAuthenticated = false;
+                    return DownloadClientTestResult.Fail(ex.Message);
+                }
+                catch (DownloadClientUnavailableException ex)
+                {
+                    return DownloadClientTestResult.Fail(ex.Message);
+                }
+
                 return DownloadClientTestResult.Ok(
                     $"Successfully connected to qBittorrent {appVersion} at {BaseUrl}",
                     appVersion);
