@@ -13,8 +13,10 @@ using NUnit.Framework;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using Seedarr.Api.V1.Auth;
+using Seedarr.Http.Authentication;
 using Seedarr.Http.Security;
 using Roles = NzbDrone.Core.Authentication.Roles;
+
 
 namespace NzbDrone.Core.Test.Authentication;
 
@@ -193,6 +195,23 @@ public class AuthControllerTest
         Assert.That(capturedPrincipal.FindFirst(ClaimTypes.Name)?.Value, Is.EqualTo("custom_operator"));
         Assert.That(capturedPrincipal.FindFirst("DisplayName")?.Value, Is.EqualTo("custom_operator"));
         Assert.That(capturedPrincipal.Claims.Any(c => c.Value.Contains("super-secret-api-key-999")), Is.False);
+    }
+
+    [TestCase("corp.google", "Oidc_corp_2egoogle")]
+    [TestCase("my-idp", "Oidc_my-idp")]
+    public void ChallengeProvider_UsesSanitizedOidcSchemeName(string providerId, string expectedScheme)
+    {
+        var httpContext = new DefaultHttpContext();
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = _controller.ChallengeProvider(providerId);
+
+        Assert.That(result, Is.TypeOf<ChallengeResult>());
+        var challenge = (ChallengeResult)result;
+        Assert.That(challenge.AuthenticationSchemes, Contains.Item(expectedScheme));
+        Assert.That(
+            challenge.Properties?.RedirectUri,
+            Is.EqualTo(AuthController.SanitizeRedirectUrl("/", null)));
     }
 
     [Test]
