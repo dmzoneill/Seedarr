@@ -293,13 +293,31 @@ public class FastResumeBencodeSerializer : IFastResumeBencodeSerializer
             }
         }
 
+        int? numPieces = null;
+        if (dict.ContainsKey("num_pieces") && dict["num_pieces"] is BNumber numPiecesNum)
+        {
+            numPieces = (int)numPiecesNum.Value;
+        }
+
         // 3. pieces
         if (dict.ContainsKey("pieces") && dict["pieces"] is BString piecesStr)
         {
             var pBytes = piecesStr.Value.ToArray();
             if (pBytes.Length > 0 && pBytes.Length <= int.MaxValue / 8)
             {
-                var isV1BytePerPiece = fileVersion <= 1 && pBytes.All(b => b <= 3);
+                var isV1BytePerPiece = false;
+                if (fileVersion <= 1 && pBytes.All(b => b <= 3))
+                {
+                    if (numPieces is > 0)
+                    {
+                        isV1BytePerPiece = pBytes.Length == numPieces.Value;
+                    }
+                    else
+                    {
+                        isV1BytePerPiece = true;
+                    }
+                }
+
                 if (isV1BytePerPiece)
                 {
                     var bitfield = new bool[pBytes.Length];
