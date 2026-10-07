@@ -346,6 +346,34 @@ public class RestControllerWithSignalRTest
     }
 
     [Test]
+    public void Pending_coalesce_does_not_broadcast_updated_after_deleted_while_hub_offline()
+    {
+        const int entityId = 1003;
+        var leading = new TestModel { Id = entityId, Name = "Item", Value = 1 };
+        _controller.Handle(new ModelEvent<TestModel>(leading, ModelAction.Updated));
+
+        var trailing = new TestModel { Id = entityId, Name = "Item", Value = 2 };
+        _controller.Handle(new ModelEvent<TestModel>(trailing, ModelAction.Updated));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+        _broadcaster.Received(1).BroadcastMessage(Arg.Any<SignalRMessage>());
+
+        _broadcaster.IsConnected.Returns(false);
+        var deleteModel = new TestModel { Id = entityId, Name = "DeletedItem", Value = 2 };
+        _controller.Handle(new ModelEvent<TestModel>(deleteModel, ModelAction.Deleted));
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Action == ModelAction.Deleted));
+
+        _broadcaster.IsConnected.Returns(true);
+        Thread.Sleep(250);
+
+        _broadcaster.Received(1).BroadcastMessage(Arg.Any<SignalRMessage>());
+        _broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Id == entityId));
+    }
+
+    [Test]
     public void Coalesce_timer_retains_pending_update_when_hub_disconnects_before_flush()
     {
         const int entityId = 1;

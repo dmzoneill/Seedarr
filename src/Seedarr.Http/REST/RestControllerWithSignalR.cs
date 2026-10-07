@@ -70,11 +70,6 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
         RefreshCoalesceStateForHubEpoch();
 
-        if (!_signalRBroadcaster.IsConnected)
-        {
-            return;
-        }
-
         if (message?.Model == null)
         {
             return;
@@ -82,30 +77,22 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
         var model = message.Model;
         var entityId = model.Id;
+        var isConnected = _signalRBroadcaster.IsConnected;
 
         if (message.Action != ModelAction.Updated || _coalesceWindow <= TimeSpan.Zero)
         {
-            lock (_syncLock)
+            ApplyLifecycleCoalesceSideEffects(message.Action, entityId);
+
+            if (isConnected)
             {
-                PruneStaleBroadcastTimes(DateTime.UtcNow);
-                BumpEntityGeneration(entityId);
-
-                if (_pendingTimers.Remove(entityId, out var timer))
-                {
-                    timer.Dispose();
-                }
-
-                _pendingUpdates.Remove(entityId);
-                _pendingUpdateGenerations.Remove(entityId);
-
-                if (message.Action == ModelAction.Deleted)
-                {
-                    _lastBroadcastTimes.Remove(entityId);
-                    _entityGenerations.Remove(entityId);
-                }
+                DispatchBroadcast(message.Action, model);
             }
 
-            DispatchBroadcast(message.Action, model);
+            return;
+        }
+
+        if (!isConnected)
+        {
             return;
         }
 
@@ -253,6 +240,8 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
             return;
         }
 
+        RefreshCoalesceStateForHubEpoch();
+
         TModel modelToBroadcast = null;
         ulong generationAtQueue = 0;
         var hasPending = false;
@@ -289,6 +278,29 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         else
         {
             RemovePendingUpdate(entityId);
+        }
+    }
+
+    private void ApplyLifecycleCoalesceSideEffects(ModelAction action, int entityId)
+    {
+        lock (_syncLock)
+        {
+            PruneStaleBroadcastTimes(DateTime.UtcNow);
+            BumpEntityGeneration(entityId);
+
+            if (_pendingTimers.Remove(entityId, out var timer))
+            {
+                timer.Dispose();
+            }
+
+            _pendingUpdates.Remove(entityId);
+            _pendingUpdateGenerations.Remove(entityId);
+
+            if (action == ModelAction.Deleted)
+            {
+                _lastBroadcastTimes.Remove(entityId);
+                _entityGenerations.Remove(entityId);
+            }
         }
     }
 
