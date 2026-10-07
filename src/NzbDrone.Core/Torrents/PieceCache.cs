@@ -109,6 +109,11 @@ public class PieceCache : IPieceCache
             {
                 EvictToLimit(pieceLength);
 
+                if (_currentCacheSizeBytes + pieceLength > _maxCacheSizeBytes)
+                {
+                    return false;
+                }
+
                 var newPiece = new CachedPiece(torrentId, pieceIndex, pieceLength);
                 node = _lruList.AddFirst(newPiece);
                 _pieces[key] = node;
@@ -299,7 +304,11 @@ public class PieceCache : IPieceCache
 
             if (targetNode == null)
             {
-                break;
+                targetNode = _lruList.Last;
+                if (targetNode == null)
+                {
+                    break;
+                }
             }
 
             _lruList.Remove(targetNode);

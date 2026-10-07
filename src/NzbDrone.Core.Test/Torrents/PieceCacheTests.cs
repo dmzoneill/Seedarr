@@ -280,7 +280,7 @@ public class PieceCacheTests
     }
 
     [Test]
-    public void EvictToLimit_does_not_evict_unflushed_pieces_when_cache_limit_reached()
+    public void EvictToLimit_evicts_lru_unflushed_piece_when_no_flushed_entries_available()
     {
         var cache = new PieceCache(maxCacheSizeBytes: 32768);
         var pieceLength = 16384;
@@ -289,13 +289,28 @@ public class PieceCacheTests
         cache.AddBlock(1, 0, 0, block, pieceLength);
         cache.AddBlock(1, 1, 0, block, pieceLength);
 
-        // Neither piece 0 nor piece 1 is flushed. Adding piece 2 exceeds 32768.
+        // Neither piece is flushed. Adding piece 2 must evict LRU unflushed piece 0.
         cache.AddBlock(1, 2, 0, block, pieceLength);
 
-        // In-flight unflushed pieces must not be discarded
-        Assert.That(cache.ContainsPiece(1, 0), Is.True);
+        Assert.That(cache.ContainsPiece(1, 0), Is.False);
         Assert.That(cache.ContainsPiece(1, 1), Is.True);
         Assert.That(cache.ContainsPiece(1, 2), Is.True);
+        Assert.That(cache.CurrentCacheSizeBytes, Is.LessThanOrEqualTo(cache.MaxCacheSizeBytes));
+        Assert.That(cache.CachedPieceCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void AddBlock_rejects_new_piece_when_it_cannot_fit_after_eviction()
+    {
+        var cache = new PieceCache(maxCacheSizeBytes: 16384);
+        var pieceLength = 32768;
+        var block = new byte[16384];
+
+        var admitted = cache.AddBlock(1, 0, 0, block, pieceLength);
+
+        Assert.That(admitted, Is.False);
+        Assert.That(cache.ContainsPiece(1, 0), Is.False);
+        Assert.That(cache.CurrentCacheSizeBytes, Is.EqualTo(0));
     }
 
     [Test]
