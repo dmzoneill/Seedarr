@@ -253,3 +253,4 @@
 
 {"ts":"2026-10-07T01:21:52Z","mode":"fix","scheduleId":"sched_18ae4e3d","githubOpen":335,"restarts":0,"pokes":["elk"],"note":"all slots open; elk idle>90s"}
 {"ts": "2026-10-07T01:23:10Z", "mode": "fix", "scheduleId": "sched_cde0311e", "githubOpen": 332, "restarts": 0, "closedIssues": [1024, 910, 1252, 1068], "dispatches": [{"slot": "core-auth", "worker": "hedgehog", "issue": 1130}, {"slot": "host", "worker": "koala", "issue": 1031}, {"slot": "api", "worker": "hawk", "issue": 1134}, {"slot": "http", "worker": "sparrow", "issue": 967}], "stopped": ["cow", "crocodile", "cricket", "dog"], "note": "material"}
+{"ts":"2026-10-07T01:23:30Z","mode":"fix","scheduleId":"sched_ff66e3e4","githubOpen":330,"restarts":0,"dispatches":0,"pokes":0,"slots":{"hedgehog":1130,"koala":1031,"hawk":1134,"elk":1189,"sparrow":967},"note":"healthy all active"}
