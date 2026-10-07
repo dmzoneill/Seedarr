@@ -4,5 +4,7 @@ public enum BlocklistArchiveFormat
 {
     PlainText,
     GZip,
+    Deflate,
+    Brotli,
     Zip
 }

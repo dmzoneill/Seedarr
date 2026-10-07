@@ -124,6 +124,77 @@ public class BlocklistArchiveStreamProviderTests
         Assert.That(
             BlocklistArchiveStreamProvider.DetectFormat(plainText, 4, url: "http://site.test/list.zip"),
             Is.EqualTo(BlocklistArchiveFormat.Zip));
+
+        Assert.That(
+            BlocklistArchiveStreamProvider.DetectFormat(plainText, 4, contentEncoding: "deflate"),
+            Is.EqualTo(BlocklistArchiveFormat.Deflate));
+
+        Assert.That(
+            BlocklistArchiveStreamProvider.DetectFormat(plainText, 4, contentEncoding: "br"),
+            Is.EqualTo(BlocklistArchiveFormat.Brotli));
+    }
+
+    [Test]
+    public async Task ExtractRulesAsync_should_decompress_deflate_when_content_encoding_deflate()
+    {
+        var text = "1.2.3.4\n5.6.7.8\n";
+        var deflateBytes = CreateDeflateBytes(text);
+        using var stream = new MemoryStream(deflateBytes);
+
+        var rules = await _provider.ExtractRulesAsync(
+            stream,
+            url: "http://example.com/blocklist",
+            contentEncoding: "deflate");
+
+        Assert.That(rules.Count, Is.EqualTo(2));
+        Assert.That(rules[0], Is.EqualTo("1.2.3.4"));
+        Assert.That(rules[1], Is.EqualTo("5.6.7.8"));
+    }
+
+    [Test]
+    public async Task ExtractRulesAsync_should_decompress_brotli_when_content_encoding_br()
+    {
+        var text = "192.168.0.1\n10.0.0.1\n";
+        var brotliBytes = CreateBrotliBytes(text);
+        using var stream = new MemoryStream(brotliBytes);
+
+        var rules = await _provider.ExtractRulesAsync(
+            stream,
+            url: "http://example.com/blocklist",
+            contentEncoding: "br");
+
+        Assert.That(rules.Count, Is.EqualTo(2));
+        Assert.That(rules[0], Is.EqualTo("192.168.0.1"));
+        Assert.That(rules[1], Is.EqualTo("10.0.0.1"));
+    }
+
+    [Test]
+    public async Task PeerBlocklistSyncService_should_seamlessly_sync_deflate_blocklist()
+    {
+        using var mockHandler = new MockHttpMessageHandler();
+        using var httpClient = new HttpClient(mockHandler);
+        var now = new DateTime(2026, 9, 20, 10, 0, 0, DateTimeKind.Utc);
+
+        var service = new PeerBlocklistSyncService(
+            httpClient,
+            configService: null,
+            nowProvider: () => now,
+            streamProvider: _provider);
+
+        var deflateBytes = CreateDeflateBytes("# list\n192.168.10.0/24\n10.20.30.40\n");
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(deflateBytes)
+        };
+        response.Content.Headers.ContentEncoding.Add("deflate");
+        mockHandler.EnqueueResponse(response);
+
+        var result = await service.SyncAsync("http://example.com/blocklist");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RuleCount, Is.EqualTo(2));
+        Assert.That(service.ActiveRules[0], Is.EqualTo("192.168.10.0/24"));
+        Assert.That(service.ActiveRules[1], Is.EqualTo("10.20.30.40"));
     }
 
     [Test]
@@ -421,6 +492,30 @@ public class BlocklistArchiveStreamProviderTests
         using var ms = new MemoryStream();
         using (var gzip = new GZipStream(ms, CompressionLevel.Optimal, leaveOpen: true))
         using (var writer = new StreamWriter(gzip, Encoding.UTF8))
+        {
+            writer.Write(content);
+        }
+
+        return ms.ToArray();
+    }
+
+    private static byte[] CreateDeflateBytes(string content)
+    {
+        using var ms = new MemoryStream();
+        using (var deflate = new DeflateStream(ms, CompressionLevel.Optimal, leaveOpen: true))
+        using (var writer = new StreamWriter(deflate, Encoding.UTF8))
+        {
+            writer.Write(content);
+        }
+
+        return ms.ToArray();
+    }
+
+    private static byte[] CreateBrotliBytes(string content)
+    {
+        using var ms = new MemoryStream();
+        using (var brotli = new BrotliStream(ms, CompressionLevel.Optimal, leaveOpen: true))
+        using (var writer = new StreamWriter(brotli, Encoding.UTF8))
         {
             writer.Write(content);
         }

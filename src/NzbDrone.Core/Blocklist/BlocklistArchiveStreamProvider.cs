@@ -153,10 +153,16 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
 
         try
         {
-            if (format == BlocklistArchiveFormat.GZip)
+            if (format is BlocklistArchiveFormat.GZip or BlocklistArchiveFormat.Deflate or BlocklistArchiveFormat.Brotli)
             {
-                await using var gzipStream = new GZipStream(fullStream, CompressionMode.Decompress, leaveOpen: false);
-                await using var countingStream = new QuotaCountingStream(gzipStream, _options.MaxUncompressedBytes, leaveOpen: false);
+                await using Stream decompressStream = format switch
+                {
+                    BlocklistArchiveFormat.GZip => new GZipStream(fullStream, CompressionMode.Decompress, leaveOpen: false),
+                    BlocklistArchiveFormat.Deflate => new DeflateStream(fullStream, CompressionMode.Decompress, leaveOpen: false),
+                    BlocklistArchiveFormat.Brotli => new BrotliStream(fullStream, CompressionMode.Decompress, leaveOpen: false),
+                    _ => throw new InvalidOperationException($"Unsupported compressed format: {format}")
+                };
+                await using var countingStream = new QuotaCountingStream(decompressStream, _options.MaxUncompressedBytes, leaveOpen: false);
                 using var reader = new StreamReader(
                     countingStream,
                     Encoding.UTF8,
@@ -297,10 +303,22 @@ public class BlocklistArchiveStreamProvider : IBlocklistArchiveStreamProvider
         }
 
         // 2. Content-Encoding check
-        if (!string.IsNullOrWhiteSpace(contentEncoding) &&
-            contentEncoding.Contains("gzip", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(contentEncoding))
         {
-            return BlocklistArchiveFormat.GZip;
+            if (contentEncoding.Contains("gzip", StringComparison.OrdinalIgnoreCase))
+            {
+                return BlocklistArchiveFormat.GZip;
+            }
+
+            if (contentEncoding.Contains("deflate", StringComparison.OrdinalIgnoreCase))
+            {
+                return BlocklistArchiveFormat.Deflate;
+            }
+
+            if (contentEncoding.Contains("br", StringComparison.OrdinalIgnoreCase))
+            {
+                return BlocklistArchiveFormat.Brotli;
+            }
         }
 
         // 3. Content-Type check
