@@ -1,8 +1,8 @@
 {
   "slot": "host",
-  "updatedAt": "2026-10-07T01:10:00Z",
+  "updatedAt": "2026-10-07T01:15:00Z",
   "area": "src/NzbDrone.Host,src/NzbDrone.Common",
-  "currentSubfolder": "src/NzbDrone.Common/Disk",
+  "currentSubfolder": "src/NzbDrone.Common/Instrumentation",
   "rotation": [
     "src/NzbDrone.Host/Startup.cs",
     "src/NzbDrone.Host/Bootstrap.cs",
@@ -12,11 +12,11 @@
     "src/NzbDrone.Common/Composition"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Host/AppLifetime.cs",
-    "completedAt": "2026-10-07T01:10:00Z",
-    "issuesFiled": [1263],
+    "subfolder": "src/NzbDrone.Common/Disk",
+    "completedAt": "2026-10-07T01:15:00Z",
+    "issuesFiled": [1272],
     "issuesReopened": [],
     "taskId": "host-hunter",
-    "note": "Pass #18 AppLifetime.cs: static review StartAsync/StopAsync phased shutdown, watchdog EvaluateWatchdogMetrics (stall/speed/UPnP). Deduped open #953 #944 #910 #1065 #1066 #1067 #1157 #1158 #1159 #1216 #1217 #1251 #955; filed #1263 orphan tracker stopped announces after 2.5s WhenAny vs phase 3 disconnect. No dotnet build/test."
+    "note": "Pass #19 NzbDrone.Common/Disk: static review DiskProvider (GetAvailableFreeSpace mount selection, CheckFolderWritable sentinel), PathSanitizer (traversal, blocked paths, SanitizePath/RelativePath, IsPathUnderRoot). Deduped open #969 #977 #1081 #1229 #1165 #1166 #1167 #968 #1090 #980; filed #1272 IsPathUnderRoot relative rootPath resolved via process cwd. No dotnet build/test."
   }
 }
