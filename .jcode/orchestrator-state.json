@@ -1,6 +1,6 @@
 {
-  "updatedAt": "2026-10-07T08:52:22Z",
-  "status": "running",
+  "updatedAt": "2026-10-07T08:53:04Z",
+  "status": "stopped",
   "mode": "fix",
   "policy": {
     "pushTarget": "origin/main",
@@ -13,9 +13,11 @@
   "monitor": {
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
-    "active": true,
+    "active": false,
     "lastScheduleId": "sched_4685e12f",
-    "startedAt": "2026-10-07T00:41:00Z"
+    "startedAt": "2026-10-07T00:41:00Z",
+    "stoppedAt": "2026-10-07T08:53:04Z",
+    "stopReason": "user said stop"
   },
   "fixSlots": {
     "core-auth": {
@@ -61,5 +63,5 @@
     "nextCandidates": []
   },
   "githubOpen": 0,
-  "lastMonitorNote": "fix monitor: 0 open; all 5 slots idle; queue empty; heartbeat (2026-10-07T08:52:22Z)"
+  "lastMonitorNote": "fix monitor stopped by user (2026-10-07T08:53:04Z)"
 }
