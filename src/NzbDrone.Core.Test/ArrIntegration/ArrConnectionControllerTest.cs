@@ -259,9 +259,10 @@ public class ArrConnectionControllerTest
 
         var result = await controller.GetImageProxy(1, "/MediaCover/1/poster.jpg");
 
-        Assert.That(result, Is.InstanceOf<FileStreamResult>());
-        var fileResult = (FileStreamResult)result;
+        Assert.That(result, Is.InstanceOf<FileContentResult>());
+        var fileResult = (FileContentResult)result;
         Assert.That(fileResult.ContentType, Is.EqualTo("image/jpeg"));
+        Assert.That(fileResult.FileContents, Is.EqualTo(imageBytes));
     }
 
     [Test]
@@ -285,5 +286,50 @@ public class ArrConnectionControllerTest
         Assert.That(result, Is.InstanceOf<StatusCodeResult>());
         var statusResult = (StatusCodeResult)result;
         Assert.That(statusResult.StatusCode, Is.EqualTo(404));
+    }
+
+    [Test]
+    public async Task GetImageProxy_disposes_response_when_remote_call_fails()
+    {
+        var handler = new MockHttpMessageHandler();
+        var responseMsg = new DisposableTrackingHttpResponseMessage(HttpStatusCode.NotFound)
+        {
+            Content = new StringContent("Not found")
+        };
+        handler.EnqueueResponse(responseMsg);
+        var httpClient = new HttpClient(handler);
+        var controller = new ArrConnectionController(_connectionFactory, _arrSyncService, _webhookRegistration, httpClient);
+
+        _connectionFactory.Get(1).Returns(new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "my-key"
+        });
+
+        await controller.GetImageProxy(1, "/MediaCover/999/poster.jpg");
+
+        Assert.That(responseMsg.WasDisposed, Is.True);
+    }
+
+    private sealed class DisposableTrackingHttpResponseMessage : HttpResponseMessage
+    {
+        public bool WasDisposed { get; private set; }
+
+        public DisposableTrackingHttpResponseMessage(HttpStatusCode statusCode)
+            : base(statusCode)
+        {
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                WasDisposed = true;
+            }
+
+            base.Dispose(disposing);
+        }
     }
 }
