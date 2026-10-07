@@ -8,6 +8,7 @@ using NzbDrone.Common.Serializer;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Automation;
+using NzbDrone.Core.Torrents;
 using NzbDrone.SignalR;
 using Seedarr.Http;
 using Seedarr.Http.REST;
@@ -20,16 +21,19 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
 {
     private readonly IAutomationService _automationService;
     private readonly IAutomationMarketplaceService _marketplaceService;
+    private readonly ITorrentService _torrentService;
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
 
     public AutomationController(
         IAutomationService automationService,
         IAutomationMarketplaceService marketplaceService,
+        ITorrentService torrentService,
         IBroadcastSignalRMessage signalRBroadcaster)
         : base(signalRBroadcaster)
     {
         _automationService = automationService;
         _marketplaceService = marketplaceService;
+        _torrentService = torrentService;
         _signalRBroadcaster = signalRBroadcaster;
     }
 
@@ -178,6 +182,11 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationExecutionResult> Run(int id, [FromQuery] int? torrentId = null)
     {
+        if (torrentId is > 0 && _torrentService.Get(torrentId.Value) == null)
+        {
+            return NotFound("Torrent not found.");
+        }
+
         var result = _automationService.ExecuteScript(id, torrentId);
         _signalRBroadcaster.BroadcastMessage(new SignalRMessage
         {
@@ -204,6 +213,11 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
         if (request?.Script == null)
         {
             return BadRequest("Script definition is required.");
+        }
+
+        if (request.TorrentId is > 0 && _torrentService.Get(request.TorrentId.Value) == null)
+        {
+            return NotFound("Torrent not found.");
         }
 
         var model = ToModel(request.Script);

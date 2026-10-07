@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Automation;
+using NzbDrone.Core.Torrents;
 using NzbDrone.SignalR;
 using Seedarr.Api.V1.Automation;
 
@@ -15,6 +16,7 @@ public class AutomationControllerTest
 {
     private IAutomationService _automationService;
     private IAutomationMarketplaceService _marketplaceService;
+    private ITorrentService _torrentService;
     private IBroadcastSignalRMessage _signalRBroadcaster;
     private AutomationController _controller;
 
@@ -23,8 +25,9 @@ public class AutomationControllerTest
     {
         _automationService = Substitute.For<IAutomationService>();
         _marketplaceService = Substitute.For<IAutomationMarketplaceService>();
+        _torrentService = Substitute.For<ITorrentService>();
         _signalRBroadcaster = Substitute.For<IBroadcastSignalRMessage>();
-        _controller = new AutomationController(_automationService, _marketplaceService, _signalRBroadcaster);
+        _controller = new AutomationController(_automationService, _marketplaceService, _torrentService, _signalRBroadcaster);
     }
 
     [Test]
@@ -329,5 +332,34 @@ public class AutomationControllerTest
 
         Assert.That(result, Is.InstanceOf<OkResult>());
         _automationService.Received(1).Delete(1);
+    }
+
+    [Test]
+    public void Run_with_missing_torrent_id_returns_not_found()
+    {
+        _torrentService.Get(99999).Returns((Torrent)null);
+
+        var result = _controller.Run(1, 99999);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
+        _automationService.DidNotReceive().ExecuteScript(Arg.Any<int>(), Arg.Any<int?>());
+    }
+
+    [Test]
+    public void Test_with_missing_torrent_id_returns_not_found()
+    {
+        _torrentService.Get(99999).Returns((Torrent)null);
+
+        var result = _controller.Test(new AutomationTestRequestResource
+        {
+            Script = new AutomationScriptResource { Name = "Test", Code = "console.log(1);" },
+            TorrentId = 99999,
+        });
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
+        _automationService.DidNotReceive().TestScript(
+            Arg.Any<AutomationScript>(),
+            Arg.Any<int?>(),
+            Arg.Any<Dictionary<string, object>>());
     }
 }
