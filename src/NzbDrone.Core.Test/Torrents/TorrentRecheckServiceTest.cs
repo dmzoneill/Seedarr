@@ -150,6 +150,67 @@ public class TorrentRecheckServiceTest
     }
 
     [Test]
+    public void Recheck_presence_fallback_skips_bep47_padding_files_missing_on_disk()
+    {
+        var saveRoot = Path.Combine(Path.GetTempPath(), "seedarr_recheck_pad_" + Guid.NewGuid().ToString("N"));
+        var torrentSubdir = Path.Combine(saveRoot, "Padded Show");
+        Directory.CreateDirectory(torrentSubdir);
+        var payloadPath = Path.Combine(torrentSubdir, "episode.mkv");
+        File.WriteAllBytes(payloadPath, new byte[800]);
+
+        try
+        {
+            var torrent = new Torrent
+            {
+                Id = 61,
+                InfoHash = "hash-presence-padding",
+                Name = "Padded Show",
+                SavePath = saveRoot,
+                Status = TorrentStatus.Downloading,
+                PieceCount = 1,
+                PieceLength = 1000,
+                TotalSize = 1000,
+                SourcePath = null
+            };
+
+            _torrentFileService.GetByTorrentId(61).Returns(new List<TorrentFile>
+            {
+                new() { TorrentId = 61, Path = "episode.mkv", Size = 800 },
+                new() { TorrentId = 61, Path = ".pad/200", Size = 200, IsPaddingFile = true }
+            });
+
+            _stateMachine.TransitionFromChecking(Arg.Any<Torrent>())
+                .Returns(callInfo =>
+                {
+                    var t = callInfo.Arg<Torrent>();
+                    t.Status = TorrentStatus.Seeding;
+                    return TorrentStatus.Seeding;
+                });
+
+            var result = _service.Recheck(torrent);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Progress, Is.EqualTo(1.0));
+            Assert.That(result.Status, Is.EqualTo(TorrentStatus.Seeding));
+            _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 1 && b[0]));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(saveRoot))
+                {
+                    Directory.Delete(saveRoot, recursive: true);
+                }
+            }
+            catch
+            {
+                // Best-effort test cleanup
+            }
+        }
+    }
+
+    [Test]
     public void Recheck_resumes_to_seeding_when_all_pieces_verified()
     {
         var torrent = new Torrent

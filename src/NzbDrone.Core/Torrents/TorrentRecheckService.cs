@@ -538,7 +538,7 @@ public class TorrentRecheckService : ITorrentRecheckService
         foreach (var file in files)
         {
             var fileEnd = currentOffset + file.Size;
-            if (currentOffset < pieceEnd && fileEnd > pieceStart)
+            if (!MultiFilePieceStorage.IsPadding(file) && currentOffset < pieceEnd && fileEnd > pieceStart)
             {
                 var diskPath = FastResumeService.ResolveFileDiskPath(basePath, torrent.Name, file.Path);
                 if (!File.Exists(diskPath))
