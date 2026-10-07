@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T04:31:45Z",
+  "updatedAt": "2026-10-07T04:32:21Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_032a2d67",
+    "lastScheduleId": "sched_72329401",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -25,11 +25,9 @@
       "area": "trackerboost"
     },
     "host": {
-      "status": "running",
+      "status": "idle",
       "worker": "panther",
-      "session": "mizaru",
-      "issue": 899,
-      "worktree": "../seedarr_worktrees/issue-899",
+      "issue": null,
       "area": "trackermetrics"
     },
     "api": {
@@ -64,6 +62,6 @@
     ],
     "nextCandidates": []
   },
-  "githubOpen": 2,
-  "lastMonitorNote": "fix monitor: #891 #888 #889 #897 #890 closed on main; 2 agents on #899 #654; 3 slots idle"
+  "githubOpen": 1,
+  "lastMonitorNote": "fix monitor: #899 closed on GitHub; host idle; kikazaru on #654; 4 slots idle queue empty"
 }
