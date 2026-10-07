@@ -428,6 +428,45 @@ public class PeerBlocklistSyncServiceTests
     }
 
     [Test]
+    public async Task SyncAsync_200_OK_with_no_enforceable_rules_should_retain_prior_blocklist()
+    {
+        _service.SetActiveRules(new[] { "10.0.0.0/8" });
+        Assert.That(_service.IsBlocked("10.0.0.1"), Is.True);
+
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("not-an-ip-range\n<html><body>error</body></html>")
+        };
+        _mockHandler.EnqueueResponse(response);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.HttpStatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(result.Status, Does.StartWith("Failed:"));
+        Assert.That(_service.RuleCount, Is.EqualTo(1));
+        Assert.That(_service.ActiveRules[0], Is.EqualTo("10.0.0.0/8"));
+        Assert.That(_service.IsBlocked("10.0.0.1"), Is.True);
+        Assert.That(_service.Metadata.ConsecutiveFailures, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task SyncAsync_200_OK_with_empty_body_should_succeed_when_no_prior_rules()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(string.Empty)
+        };
+        _mockHandler.EnqueueResponse(response);
+
+        var result = await _service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.RuleCount, Is.EqualTo(0));
+        Assert.That(_service.RuleCount, Is.EqualTo(0));
+    }
+
+    [Test]
     public void CalculateExponentialBackoff_should_cap_at_24_hours()
     {
         var backoff = PeerBlocklistSyncService.CalculateExponentialBackoff(20);

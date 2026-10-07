@@ -499,6 +499,40 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         parsedRules = Ipv6IntervalTree.SelectEnforceableRules(parsedRules);
         var newTree = parsedRules.Count > 0 ? Ipv6IntervalTree.Parse(parsedRules) : null;
 
+        int priorRuleCount;
+        Ipv6IntervalTree priorTree;
+        lock (_syncLock)
+        {
+            priorRuleCount = _rules.Count;
+            priorTree = _tree;
+        }
+
+        if (!HasEnforceableIntervals(newTree) && (HasEnforceableIntervals(priorTree) || priorRuleCount > 0))
+        {
+            const string failureMessage = "HTTP 200 response contained no enforceable blocklist rules";
+            var status = $"Failed: {failureMessage}";
+            lock (_syncLock)
+            {
+                _metadata.ConsecutiveFailures++;
+                _metadata.LastSyncStatus = status;
+                _metadata.LastFailureMessage = failureMessage;
+            }
+
+            _logger.Warn(
+                "Refusing to replace active blocklist from {0}: response had no enforceable intervals (parsed {1} rule line(s)).",
+                effectiveUrl,
+                parsedRules.Count);
+
+            return new BlocklistSyncResult
+            {
+                Success = false,
+                Status = status,
+                HttpStatusCode = HttpStatusCode.OK,
+                RuleCount = priorRuleCount,
+                Message = failureMessage
+            };
+        }
+
         lock (_syncLock)
         {
             _rules = parsedRules;
@@ -539,6 +573,21 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             RuleCount = parsedRules.Count,
             Message = "Blocklist updated successfully"
         };
+    }
+
+    private static bool HasEnforceableIntervals(Ipv6IntervalTree tree)
+    {
+        if (tree == null)
+        {
+            return false;
+        }
+
+        if (tree.IntervalCount > 0)
+        {
+            return true;
+        }
+
+        return tree.Ipv4Tree?.IntervalCount > 0;
     }
 
     public static TimeSpan? ParseRetryAfter(HttpResponseMessage response, DateTime now)
