@@ -491,9 +491,41 @@ public class DelugeClient : IDownloadClient, IDisposable
         try
         {
             var trackerObjects = new List<object>();
+            var seenUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            using (var statusDoc = SendRequest("core.get_torrent_status", new object[] { infoHash, TrackersField }))
+            {
+                if (statusDoc.RootElement.TryGetProperty("result", out var statusResult) &&
+                    statusResult.TryGetProperty("trackers", out var existingTrackers))
+                {
+                    foreach (var tr in existingTrackers.EnumerateArray())
+                    {
+                        if (!tr.TryGetProperty("url", out var urlProp))
+                        {
+                            continue;
+                        }
+
+                        var existingUrl = urlProp.GetString()?.Trim();
+                        if (string.IsNullOrWhiteSpace(existingUrl) || !seenUrls.Add(existingUrl))
+                        {
+                            continue;
+                        }
+
+                        var tier = tr.TryGetProperty("tier", out var tierProp) ? tierProp.GetInt32() : 0;
+                        trackerObjects.Add(new { tier, url = existingUrl });
+                    }
+                }
+            }
+
             foreach (var t in trackers)
             {
-                trackerObjects.Add(new { tier = 0, url = t });
+                var url = t?.Trim();
+                if (string.IsNullOrWhiteSpace(url) || !seenUrls.Add(url))
+                {
+                    continue;
+                }
+
+                trackerObjects.Add(new { tier = 0, url });
             }
 
             using var doc = SendRequest("core.set_torrent_trackers", new object[] { infoHash, trackerObjects.ToArray() });

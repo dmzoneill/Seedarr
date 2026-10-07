@@ -751,15 +751,16 @@ public class DelugeClientTest
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
-        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":2}"); // core.set_torrent_trackers
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""trackers"":[]},""id"":2}"); // core.get_torrent_status
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":3}"); // core.set_torrent_trackers
         InjectMockClient(handler);
 
         var trackers = new[] { "http://tracker1.example/announce", "http://tracker2.example/announce" };
         var result = _client.AddTrackers("abc123", trackers);
 
         Assert.That(result, Is.True);
-        Assert.That(handler.Requests, Has.Count.EqualTo(3));
-        var body = await handler.Requests[2].Content.ReadAsStringAsync();
+        Assert.That(handler.Requests, Has.Count.EqualTo(4));
+        var body = await handler.Requests[3].Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(body);
         var trackerParams = doc.RootElement.GetProperty("params")[1];
         Assert.That(trackerParams.GetArrayLength(), Is.EqualTo(2));
@@ -767,5 +768,31 @@ public class DelugeClientTest
         Assert.That(trackerParams[1].GetProperty("tier").GetInt32(), Is.EqualTo(0));
         Assert.That(trackerParams[0].GetProperty("url").GetString(), Is.EqualTo(trackers[0]));
         Assert.That(trackerParams[1].GetProperty("url").GetString(), Is.EqualTo(trackers[1]));
+    }
+
+    [Test]
+    public async Task AddTrackers_should_merge_with_existing_trackers_without_dropping()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""trackers"":[{""tier"":0,""url"":""http://tracker-a.example/announce""},{""tier"":1,""url"":""http://tracker-b.example/announce""}]},""id"":2}"); // core.get_torrent_status
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":3}"); // core.set_torrent_trackers
+        InjectMockClient(handler);
+
+        var result = _client.AddTrackers("abc123", new[] { "http://tracker-c.example/announce" });
+
+        Assert.That(result, Is.True);
+        var body = await handler.Requests[3].Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(body);
+        Assert.That(doc.RootElement.GetProperty("method").GetString(), Is.EqualTo("core.set_torrent_trackers"));
+        var trackerParams = doc.RootElement.GetProperty("params")[1];
+        Assert.That(trackerParams.GetArrayLength(), Is.EqualTo(3));
+        Assert.That(trackerParams[0].GetProperty("url").GetString(), Is.EqualTo("http://tracker-a.example/announce"));
+        Assert.That(trackerParams[0].GetProperty("tier").GetInt32(), Is.EqualTo(0));
+        Assert.That(trackerParams[1].GetProperty("url").GetString(), Is.EqualTo("http://tracker-b.example/announce"));
+        Assert.That(trackerParams[1].GetProperty("tier").GetInt32(), Is.EqualTo(1));
+        Assert.That(trackerParams[2].GetProperty("url").GetString(), Is.EqualTo("http://tracker-c.example/announce"));
+        Assert.That(trackerParams[2].GetProperty("tier").GetInt32(), Is.EqualTo(0));
     }
 }
