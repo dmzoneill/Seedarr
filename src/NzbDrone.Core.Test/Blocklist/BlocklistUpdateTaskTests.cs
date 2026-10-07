@@ -62,12 +62,24 @@ public class BlocklistUpdateTaskTests
     public void Execute_when_BlocklistEnabled_is_true_should_call_SyncAsync()
     {
         _configService.BlocklistEnabled.Returns(true);
+        _configService.BlocklistAutoUpdate.Returns(true);
         _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(new BlocklistSyncResult { Success = true }));
 
         _task.Execute();
 
         _syncService.Received(1).SyncAsync(null, false, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void Execute_when_BlocklistAutoUpdate_is_false_should_not_call_SyncAsync()
+    {
+        _configService.BlocklistEnabled.Returns(true);
+        _configService.BlocklistAutoUpdate.Returns(false);
+
+        _task.Execute();
+
+        _syncService.DidNotReceiveWithAnyArgs().SyncAsync(default, default, default);
     }
 
     [Test]
@@ -84,6 +96,7 @@ public class BlocklistUpdateTaskTests
     public void Execute_should_catch_exceptions_without_crashing()
     {
         _configService.BlocklistEnabled.Returns(true);
+        _configService.BlocklistAutoUpdate.Returns(true);
         _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Sync error"));
 
@@ -107,6 +120,7 @@ public class BlocklistUpdateTaskTests
     public void Execute_command_with_Force_false_when_enabled_should_call_SyncAsync()
     {
         _configService.BlocklistEnabled.Returns(true);
+        _configService.BlocklistAutoUpdate.Returns(true);
         _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(new BlocklistSyncResult { Success = true }));
 
@@ -128,6 +142,32 @@ public class BlocklistUpdateTaskTests
     }
 
     [Test]
+    public void Execute_command_with_Force_false_when_auto_update_disabled_should_not_call_SyncAsync()
+    {
+        _configService.BlocklistEnabled.Returns(true);
+        _configService.BlocklistAutoUpdate.Returns(false);
+
+        var command = new BlocklistUpdateCommand { Force = false };
+        _task.Execute(command);
+
+        _syncService.DidNotReceiveWithAnyArgs().SyncAsync(default, default, default);
+    }
+
+    [Test]
+    public void Execute_command_with_Force_true_when_auto_update_disabled_should_call_SyncAsync()
+    {
+        _configService.BlocklistEnabled.Returns(true);
+        _configService.BlocklistAutoUpdate.Returns(false);
+        _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new BlocklistSyncResult { Success = true }));
+
+        var command = new BlocklistUpdateCommand { Force = true };
+        _task.Execute(command);
+
+        _syncService.Received(1).SyncAsync(null, true, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public void Execute_command_should_catch_exceptions_without_crashing()
     {
         _configService.BlocklistEnabled.Returns(true);
@@ -143,6 +183,7 @@ public class BlocklistUpdateTaskTests
     public void Execute_should_not_throw_when_sync_returns_unsuccessful_result()
     {
         _configService.BlocklistEnabled.Returns(true);
+        _configService.BlocklistAutoUpdate.Returns(true);
         _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(new BlocklistSyncResult
             {
@@ -157,6 +198,7 @@ public class BlocklistUpdateTaskTests
     public void Execute_command_should_not_throw_when_sync_returns_unsuccessful_result()
     {
         _configService.BlocklistEnabled.Returns(true);
+        _configService.BlocklistAutoUpdate.Returns(true);
         _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(new BlocklistSyncResult
             {
