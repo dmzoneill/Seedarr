@@ -959,6 +959,57 @@ public class TorrentControllerTest
     }
 
     [Test]
+    public void InvalidateBroadcastCache_on_http_controller_clears_cache_used_by_singleton_event_handler()
+    {
+        var sharedCache = new TorrentBroadcastEnrichmentCache();
+        var staleTrackers = new List<TrackerEntry>
+        {
+            new() { TorrentId = 5, Url = "http://stale/announce", Tier = 0, AnnounceInterval = 60 },
+        };
+        var freshTrackers = new List<TrackerEntry>
+        {
+            new() { TorrentId = 5, Url = "http://fresh/announce", Tier = 0, AnnounceInterval = 120 },
+        };
+
+        _trackerEntryService.GetByTorrentId(5).Returns(staleTrackers, freshTrackers);
+        _signalRBroadcaster.IsConnected.Returns(true);
+
+        using var eventHandlerInstance = CreateControllerWithBroadcastCache(sharedCache);
+        using var httpRequestInstance = CreateControllerWithBroadcastCache(sharedCache);
+
+        var torrent = new Torrent { Id = 5, Name = "Shared broadcast cache torrent" };
+
+        eventHandlerInstance.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+        _trackerEntryService.Received(1).GetByTorrentId(5);
+
+        httpRequestInstance.InvalidateBroadcastCache(5);
+
+        eventHandlerInstance.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+        _trackerEntryService.Received(2).GetByTorrentId(5);
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            ((TorrentResource)m.Body).TrackerUrl == "http://fresh/announce"));
+    }
+
+    private TorrentController CreateControllerWithBroadcastCache(ITorrentBroadcastEnrichmentCache cache)
+    {
+        return new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            _validator,
+            trackerAnnounceService: _trackerAnnounceService,
+            categoryService: _categoryService,
+            coalesceWindow: TimeSpan.Zero,
+            broadcastEnrichmentCache: cache);
+    }
+
+    [Test]
     public void GetPieceMap_returns_compressed_RLE_bitmask_and_rarity()
     {
         const int torrentId = 42;

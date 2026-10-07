@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -62,10 +61,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ISubtitleEncodingDetector _subtitleEncodingDetector;
     private readonly ITorrentRecheckService _torrentRecheckService;
     private readonly ITorrentExporter _torrentExporter;
-
-    private readonly ConcurrentDictionary<int, (List<TrackerEntry> Trackers, DateTime Expiry)> _broadcastTrackersCache = new();
-    private readonly ConcurrentDictionary<int, (TorrentMediaMetadata Metadata, DateTime Expiry)> _broadcastMediaMetaCache = new();
-    private readonly ConcurrentDictionary<string, (DownloadHistory History, MediaMetadata ParsedMetadata, DateTime Expiry)> _broadcastHistoryCache = new();
+    private readonly ITorrentBroadcastEnrichmentCache _broadcastEnrichmentCache;
 
     public TorrentController(
         ITorrentService torrentService,
@@ -94,7 +90,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         IMainDatabase mainDatabase = null,
         ITorrentRecheckService torrentRecheckService = null,
         ITorrentExporter torrentExporter = null,
-        IConfigFileProvider configFileProvider = null)
+        IConfigFileProvider configFileProvider = null,
+        ITorrentBroadcastEnrichmentCache broadcastEnrichmentCache = null)
         : base(signalRBroadcaster, null, coalesceWindow)
     {
         _torrentService = torrentService;
@@ -120,6 +117,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _trackerScrapeService = trackerScrapeService;
         _torrentRecheckService = torrentRecheckService;
         _torrentExporter = torrentExporter ?? new TorrentExporter(_torrentFileService, _trackerEntryService);
+        _broadcastEnrichmentCache = broadcastEnrichmentCache ?? new TorrentBroadcastEnrichmentCache();
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -228,12 +226,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     [NonAction]
     public void InvalidateBroadcastCache(int torrentId, string infoHash = null)
     {
-        _broadcastTrackersCache.TryRemove(torrentId, out _);
-        _broadcastMediaMetaCache.TryRemove(torrentId, out _);
-        if (!string.IsNullOrEmpty(infoHash))
-        {
-            _broadcastHistoryCache.TryRemove(infoHash, out _);
-        }
+        _broadcastEnrichmentCache.Invalidate(torrentId, infoHash);
     }
 
     protected override TorrentResource GetResourceById(Torrent model)
@@ -298,15 +291,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
     private List<TrackerEntry> GetBroadcastTrackers(int torrentId)
     {
-        var now = DateTime.UtcNow;
-        if (_broadcastTrackersCache.TryGetValue(torrentId, out var entry) && entry.Expiry > now)
-        {
-            return entry.Trackers;
-        }
-
-        var trackers = _trackerEntryService?.GetByTorrentId(torrentId) ?? new List<TrackerEntry>();
-        _broadcastTrackersCache[torrentId] = (trackers, now.AddSeconds(30));
-        return trackers;
+        return _broadcastEnrichmentCache.GetOrAddTrackers(
+            torrentId,
+            () => _trackerEntryService?.GetByTorrentId(torrentId) ?? new List<TrackerEntry>());
     }
 
     private TorrentMediaMetadata GetBroadcastMediaMetadata(int torrentId)
@@ -316,15 +303,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return null;
         }
 
-        var now = DateTime.UtcNow;
-        if (_broadcastMediaMetaCache.TryGetValue(torrentId, out var entry) && entry.Expiry > now)
-        {
-            return entry.Metadata;
-        }
-
-        var metadata = _mediaEnrichmentService.GetMetadata(torrentId);
-        _broadcastMediaMetaCache[torrentId] = (metadata, now.AddMinutes(2));
-        return metadata;
+        return _broadcastEnrichmentCache.GetOrAddMediaMetadata(
+            torrentId,
+            () => _mediaEnrichmentService.GetMetadata(torrentId));
     }
 
     private (DownloadHistory History, MediaMetadata ParsedMetadata) GetBroadcastHistoryMetadata(string infoHash)
@@ -334,30 +315,26 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return (null, null);
         }
 
-        var now = DateTime.UtcNow;
-        if (_broadcastHistoryCache.TryGetValue(infoHash, out var entry) && entry.Expiry > now)
+        return _broadcastEnrichmentCache.GetOrAddHistory(infoHash, () =>
         {
-            return (entry.History, entry.ParsedMetadata);
-        }
-
-        var history = _downloadHistoryRepository.FindByInfoHash(infoHash);
-        MediaMetadata parsed = null;
-        if (history != null && !string.IsNullOrEmpty(history.DataJson))
-        {
-            try
+            var history = _downloadHistoryRepository.FindByInfoHash(infoHash);
+            MediaMetadata parsed = null;
+            if (history != null && !string.IsNullOrEmpty(history.DataJson))
             {
-                parsed = JsonSerializer.Deserialize<MediaMetadata>(
-                    history.DataJson,
-                    CaseInsensitiveJsonOptions);
+                try
+                {
+                    parsed = JsonSerializer.Deserialize<MediaMetadata>(
+                        history.DataJson,
+                        CaseInsensitiveJsonOptions);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to deserialize media metadata for torrent {0}", infoHash);
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Failed to deserialize media metadata for torrent {0}", infoHash);
-            }
-        }
 
-        _broadcastHistoryCache[infoHash] = (history, parsed, now.AddMinutes(5));
-        return (history, parsed);
+            return (history, parsed);
+        });
     }
 
     private void ApplyMediaMetadataToResource(TorrentResource resource, TorrentMediaMetadata mediaMetadata)
@@ -1047,7 +1024,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         TriggerAnnounceInternal(torrent);
         _eventLogService.Info(torrentId, "Tracker", $"Added tracker {clean} and triggered announce");
 
-        _broadcastTrackersCache.TryRemove(torrentId, out _);
+        InvalidateBroadcastCache(torrentId);
 
         var updatedEntry = _trackerEntryService.GetByTorrentId(torrentId).FirstOrDefault(t => t.Id == entry.Id) ?? entry;
 
@@ -1087,7 +1064,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         _trackerEntryService.Update(target);
-        _broadcastTrackersCache.TryRemove(torrentId, out _);
+        InvalidateBroadcastCache(torrentId);
         _eventLogService.Info(torrentId, "Tracker", $"Updated tracker {target.Url}: Tier={target.Tier}, Enabled={target.Enabled}");
 
         var remaining = _trackerEntryService.GetByTorrentId(torrentId);
@@ -1121,7 +1098,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         _trackerEntryService.Delete(trackerId);
-        _broadcastTrackersCache.TryRemove(torrentId, out _);
+        InvalidateBroadcastCache(torrentId);
         _eventLogService.Info(torrentId, "Tracker", $"Removed tracker {target.Url}");
 
         var remaining = _trackerEntryService.GetByTorrentId(torrentId);
