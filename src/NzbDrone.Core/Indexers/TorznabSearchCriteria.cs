@@ -36,6 +36,35 @@ public class TorznabSearchCriteria
 
     public int Limit { get; set; } = 50;
 
+    public bool HasSearchCriteria()
+    {
+        if (!string.IsNullOrWhiteSpace(Query) ||
+            Season.HasValue ||
+            Episode.HasValue ||
+            !string.IsNullOrWhiteSpace(ImdbId) ||
+            !string.IsNullOrWhiteSpace(TmdbId) ||
+            !string.IsNullOrWhiteSpace(TvdbId) ||
+            !string.IsNullOrWhiteSpace(Rid) ||
+            !string.IsNullOrWhiteSpace(Artist) ||
+            !string.IsNullOrWhiteSpace(Album) ||
+            !string.IsNullOrWhiteSpace(Author) ||
+            !string.IsNullOrWhiteSpace(Title) ||
+            !string.IsNullOrWhiteSpace(Category) ||
+            !string.IsNullOrWhiteSpace(Categories) ||
+            Year.HasValue)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(SearchType))
+        {
+            return false;
+        }
+
+        var st = SearchType.Trim().ToLowerInvariant();
+        return st != "search";
+    }
+
     public SearchMode DetermineSearchMode()
     {
         if (!string.IsNullOrWhiteSpace(SearchType))

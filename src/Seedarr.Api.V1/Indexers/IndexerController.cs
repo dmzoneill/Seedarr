@@ -420,17 +420,7 @@ public class IndexerController : Controller
             Year = year
         };
 
-        if (string.IsNullOrWhiteSpace(criteria.Query) &&
-            !criteria.Season.HasValue &&
-            !criteria.Episode.HasValue &&
-            string.IsNullOrWhiteSpace(criteria.ImdbId) &&
-            string.IsNullOrWhiteSpace(criteria.TmdbId) &&
-            string.IsNullOrWhiteSpace(criteria.TvdbId) &&
-            string.IsNullOrWhiteSpace(criteria.Rid) &&
-            string.IsNullOrWhiteSpace(criteria.Artist) &&
-            string.IsNullOrWhiteSpace(criteria.Album) &&
-            string.IsNullOrWhiteSpace(criteria.Author) &&
-            string.IsNullOrWhiteSpace(criteria.Title))
+        if (!criteria.HasSearchCriteria())
         {
             return Ok(new List<ReleaseInfo>());
         }
