@@ -154,6 +154,8 @@ public class TerminalHub : Hub
 
     public async Task StartSession(int cols, int rows)
     {
+        EnsureTerminalAccessEnabled();
+
         var connectionId = Context.ConnectionId;
         _logger.Info("Starting terminal session for connection {0} ({1}x{2})", connectionId, cols, rows);
 
@@ -174,11 +176,15 @@ public class TerminalHub : Hub
 
     public async Task WriteInput(string data)
     {
+        EnsureTerminalAccessEnabled();
+
         await _terminalService.WriteInputAsync(Context.ConnectionId, data);
     }
 
     public void Resize(int cols, int rows)
     {
+        EnsureTerminalAccessEnabled();
+
         _terminalService.Resize(Context.ConnectionId, cols, rows);
     }
 
@@ -188,6 +194,29 @@ public class TerminalHub : Hub
         _logger.Info("Client disconnected, terminating terminal session for {0}", connectionId);
         await _terminalService.CloseSessionAsync(connectionId);
         await base.OnDisconnectedAsync(exception);
+    }
+
+    private IConfigFileProvider GetConfigFileProvider()
+    {
+        if (_configFileProvider != null)
+        {
+            return _configFileProvider;
+        }
+
+        var httpContext = Context.GetHttpContext();
+        return httpContext?.RequestServices?.GetService(typeof(IConfigFileProvider)) as IConfigFileProvider;
+    }
+
+    private void EnsureTerminalAccessEnabled()
+    {
+        var config = GetConfigFileProvider();
+        if (config != null && !config.TerminalAccessEnabled)
+        {
+            _logger.Warn(
+                "Rejecting terminal hub invocation because TerminalAccessEnabled is false: {0}",
+                Context.ConnectionId);
+            throw new HubException("Terminal access is disabled in system configuration.");
+        }
     }
 
     private static bool FixedTimeEquals(string left, string right)

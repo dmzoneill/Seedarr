@@ -1,8 +1,10 @@
 #pragma warning disable SA1117
 #pragma warning disable IDE0007
 
+using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -138,5 +140,44 @@ public class TerminalHubAuthTest
         await CreateHub().OnConnectedAsync();
 
         _callerContext.Received(1).Abort();
+    }
+
+    [Test]
+    public void StartSession_throws_when_TerminalAccessEnabled_is_false()
+    {
+        _configFileProvider.TerminalAccessEnabled.Returns(false);
+
+        var hub = CreateHub();
+
+        Assert.ThrowsAsync<HubException>(async () => await hub.StartSession(80, 24));
+        _terminalService.DidNotReceive().StartSessionAsync(
+            Arg.Any<string>(),
+            Arg.Any<int>(),
+            Arg.Any<int>(),
+            Arg.Any<Func<string, Task>>(),
+            Arg.Any<Action>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void WriteInput_throws_when_TerminalAccessEnabled_is_false()
+    {
+        _configFileProvider.TerminalAccessEnabled.Returns(false);
+
+        var hub = CreateHub();
+
+        Assert.ThrowsAsync<HubException>(async () => await hub.WriteInput("ls"));
+        _terminalService.DidNotReceive().WriteInputAsync(Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void Resize_throws_when_TerminalAccessEnabled_is_false()
+    {
+        _configFileProvider.TerminalAccessEnabled.Returns(false);
+
+        var hub = CreateHub();
+
+        Assert.Throws<HubException>(() => hub.Resize(120, 40));
+        _terminalService.DidNotReceive().Resize(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>());
     }
 }
