@@ -13,15 +13,17 @@ public class PieceStorage : IPieceStorage, IDisposable
     private readonly ConcurrentDictionary<string, HashSet<int>> _corruptedPieces = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, PendingBatch> _pendingBatches = new(StringComparer.OrdinalIgnoreCase);
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
+    private readonly ITorrentService _torrentService;
     private readonly TimeSpan _coalesceWindow;
     private readonly object _stateLock = new();
     private bool _disposed;
 
     public int PendingBatchCount => _pendingBatches.Count;
 
-    public PieceStorage(IBroadcastSignalRMessage signalRBroadcaster = null, TimeSpan? coalesceWindow = null)
+    public PieceStorage(IBroadcastSignalRMessage signalRBroadcaster = null, TimeSpan? coalesceWindow = null, ITorrentService torrentService = null)
     {
         _signalRBroadcaster = signalRBroadcaster;
+        _torrentService = torrentService;
         _coalesceWindow = coalesceWindow ?? TimeSpan.Zero;
     }
 
@@ -98,7 +100,7 @@ public class PieceStorage : IPieceStorage, IDisposable
 
         if (_coalesceWindow <= TimeSpan.Zero)
         {
-            _signalRBroadcaster.BroadcastMessage(new PieceCompletedMessage(infoHash, pieceIndex, bytesDownloaded));
+            PublishPieceSignalR(infoHash, new PieceCompletedMessage(infoHash, pieceIndex, bytesDownloaded));
             return;
         }
 
@@ -156,11 +158,11 @@ public class PieceStorage : IPieceStorage, IDisposable
 
         if (indexList.Count == 1)
         {
-            _signalRBroadcaster.BroadcastMessage(new PieceCompletedMessage(infoHash, indexList[0], bytesDownloaded));
+            PublishPieceSignalR(infoHash, new PieceCompletedMessage(infoHash, indexList[0], bytesDownloaded));
         }
         else
         {
-            _signalRBroadcaster.BroadcastMessage(new PieceBatchCompletedMessage(infoHash, indexList, bytesDownloaded));
+            PublishPieceSignalR(infoHash, new PieceBatchCompletedMessage(infoHash, indexList, bytesDownloaded));
         }
     }
 
@@ -463,16 +465,54 @@ public class PieceStorage : IPieceStorage, IDisposable
         {
             if (indexesToBroadcast.Count == 1)
             {
-                _signalRBroadcaster.BroadcastMessage(new PieceCompletedMessage(infoHash, indexesToBroadcast[0], bytesToBroadcast));
+                PublishPieceSignalR(infoHash, new PieceCompletedMessage(infoHash, indexesToBroadcast[0], bytesToBroadcast));
             }
             else
             {
-                _signalRBroadcaster.BroadcastMessage(new PieceBatchCompletedMessage(infoHash, indexesToBroadcast, bytesToBroadcast));
+                PublishPieceSignalR(infoHash, new PieceBatchCompletedMessage(infoHash, indexesToBroadcast, bytesToBroadcast));
             }
         }
         catch
         {
             // Defensive guard against unhandled timer callback exceptions
+        }
+    }
+
+    private void PublishPieceSignalR(string infoHash, SignalRMessage message)
+    {
+        if (_signalRBroadcaster == null || message == null)
+        {
+            return;
+        }
+
+        var torrentId = ResolveTorrentId(infoHash);
+        if (message is PieceCompletedMessage pieceMessage && torrentId.HasValue)
+        {
+            pieceMessage.TorrentId = torrentId.Value;
+        }
+        else if (message is PieceBatchCompletedMessage batchMessage && torrentId.HasValue)
+        {
+            batchMessage.TorrentId = torrentId.Value;
+        }
+
+        SignalRBroadcastFanout.Broadcast(_signalRBroadcaster, message, "torrents", torrentId);
+    }
+
+    private int? ResolveTorrentId(string infoHash)
+    {
+        if (_torrentService == null || string.IsNullOrWhiteSpace(infoHash))
+        {
+            return null;
+        }
+
+        try
+        {
+            var torrent = _torrentService.GetByInfoHash(infoHash);
+            return torrent?.Id > 0 ? torrent.Id : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 

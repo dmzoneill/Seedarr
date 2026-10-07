@@ -260,6 +260,7 @@ export function getSignalRConnection(): HubConnection {
     connection.onreconnecting(() => notifyStatus("reconnecting"));
     connection.onreconnected(async () => {
       notifyStatus("connected");
+      await subscribeDefaultChannels();
       await resubscribeActiveGroups();
       try {
         const snapshot = await connection?.invoke<StateSnapshot>(
@@ -319,9 +320,10 @@ export async function startSignalR(): Promise<void> {
     if (!startPromise) {
       startPromise = conn
         .start()
-        .then(() => {
+        .then(async () => {
           notifyStatus("connected");
-          void resubscribeActiveGroups();
+          await subscribeDefaultChannels();
+          await resubscribeActiveGroups();
         })
         .catch((err) => {
           console.error("SignalR connection failed:", err);
@@ -390,6 +392,22 @@ export async function reconnectSignalR(): Promise<void> {
 
 const activeTorrentSubscriptions = new Set<number>();
 const activeChannelSubscriptions = new Set<string>();
+
+const DEFAULT_SIGNALR_CHANNELS = [
+  "torrents",
+  "trackers",
+  "system",
+  "health",
+  "speeds",
+  "tasks",
+  "activity",
+] as const;
+
+async function subscribeDefaultChannels(): Promise<void> {
+  for (const channel of DEFAULT_SIGNALR_CHANNELS) {
+    await subscribeToChannel(channel);
+  }
+}
 
 export async function subscribeToTorrent(torrentId: number): Promise<void> {
   activeTorrentSubscriptions.add(torrentId);

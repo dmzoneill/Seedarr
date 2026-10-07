@@ -23,6 +23,31 @@ public class TestResource : RestResource
     public int Value { get; set; }
 }
 
+public class ScopedTorrentResource : RestResource
+{
+    public override string ResourceName => "torrent";
+
+    public string Name { get; set; }
+}
+
+public class ScopedTorrentModel : ModelBase
+{
+    public string Name { get; set; }
+}
+
+public class ScopedTorrentController : RestControllerWithSignalR<ScopedTorrentResource, ScopedTorrentModel>
+{
+    public ScopedTorrentController(IBroadcastSignalRMessage broadcaster, TimeSpan? coalesceWindow = null)
+        : base(broadcaster, null, coalesceWindow)
+    {
+    }
+
+    protected override ScopedTorrentResource GetResourceById(ScopedTorrentModel model)
+    {
+        return new ScopedTorrentResource { Id = model.Id, Name = model.Name };
+    }
+}
+
 public class TestControllerWithSignalR : RestControllerWithSignalR<TestResource, TestModel>
 {
     public int GetResourceByIdCallCount { get; private set; }
@@ -350,6 +375,19 @@ public class RestControllerWithSignalRTest
 
         Assert.That(GetLastBroadcastTimesCount(), Is.EqualTo(0));
         _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Action == ModelAction.Created));
+    }
+
+    [Test]
+    public void Torrent_resource_change_broadcasts_to_global_channel_and_torrent_groups()
+    {
+        using var controller = new ScopedTorrentController(_broadcaster, TimeSpan.Zero);
+        var model = new ScopedTorrentModel { Id = 55, Name = "Scoped" };
+
+        controller.Handle(new ModelEvent<ScopedTorrentModel>(model, ModelAction.Updated));
+
+        _broadcaster.Received(1).BroadcastMessage(Arg.Any<SignalRMessage>());
+        _broadcaster.Received(1).BroadcastToChannel("torrents", Arg.Any<SignalRMessage>());
+        _broadcaster.Received(1).BroadcastToTorrent(55, Arg.Any<SignalRMessage>());
     }
 
     [Test]
