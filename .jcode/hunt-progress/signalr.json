@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T01:25:00Z",
+  "updatedAt": "2026-10-07T00:35:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Jobs",
+  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,12 +10,12 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.SignalR",
-    "completedAt": "2026-10-07T01:25:00Z",
-    "issuesFiled": [1277],
+    "subfolder": "src/NzbDrone.Core/Jobs",
+    "completedAt": "2026-10-07T00:35:00Z",
+    "issuesFiled": [1286],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "worker": "gannet",
-    "note": "Static review (gannet) of MessageHub.cs (OnConnectedAsync supplemental auth/Bearer+query paths, FixedTimeEquals, SubscribeToTorrent/Channel whitelist, RequestStateSnapshot push+return, TrackerSignalREventHandler quadruple fan-out), SignalRMessageBroadcaster.cs (dedup/prune/EvictOldest, GetNamedEvents aliases, group/torrent/channel routing, fire-and-forget SendAsync), PieceCompletedMessage/PieceBatchCompletedMessage (Body=self), StateSnapshotResource, PieceStorage.cs (coalesce Flush/Dispose/Clear). Cross-checked Seedarr.Http.Test SignalR fixtures (MessageHubSnapshotAndAuthTest, SignalRMessageBroadcasterTest) and frontend signalr.ts hub invoke/resubscribe. Deduped open GH: #878 #887 #919 #936 #940 #954 #961 #1016 #1019 #1094 #1095 #1147 #1194 #1195 #1234 #1235 #1260. Filed #1277 (dedup cache populated while MessageHub.IsConnected false suppresses first post-reconnect update). No issues reopened. Next: src/NzbDrone.Core/Jobs. Static only; no dotnet build/test."
+    "worker": "emu",
+    "note": "Static review (emu) of Jobs/: Scheduler.cs (due check vs CalculateNextExecution overlap #1125, startup grace, jitter, SignalR TaskStarted/Completed/Failed paths, missing IScheduledTask instance), TaskManager.cs (NormalizeTypeName, RecordTaskStarted/Finished/Failed history dedup, cancel status, GetNextScheduled ordering), ScheduledTaskCommandExecutor.cs (TaskCompleted on cancel/failure overlap #911/#985/#1236), ScheduledTask/CalculateNextExecution, ScheduledTaskHistoryRepository (PurgeOldHistory, GetByTypeName), DatabaseVacuumTask/TrackerScrapeJob (IJob token shim #821, swallowed errors #971). Cross-checked NzbDrone.Core.Test Jobs fixtures (SchedulerTest, TaskManagerTest, ScheduledTaskCommandExecutorTest, ScheduledTaskHistoryRepositoryTest). Deduped open GH: #821 #911 #952 #971 #985 #1026 #1125 #1162 #1202 #1203 #1235 #1236. Filed #1286 (Success task history inserted when Scheduler cannot resolve IScheduledTask). No issues reopened. Next: src/NzbDrone.Core/Torrents/TorrentRecheckService.cs. Static only; no dotnet build/test."
   }
 }
