@@ -208,12 +208,48 @@ public class BackupControllerTest
     [Test]
     public void RestoreBackup_with_valid_fileName_should_restore_backup_and_return_ok()
     {
-        var request = new RestoreRequest { FileName = "seedarr_backup_1.0_2026-01-01.zip" };
+        var canonicalName = "seedarr_backup_1.0_2026-01-01.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = canonicalName, Size = 100, Time = DateTime.UtcNow }
+        });
+        var request = new RestoreRequest { FileName = canonicalName };
 
         var result = _controller.RestoreBackup(request);
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        _backupService.Received(1).RestoreBackup("seedarr_backup_1.0_2026-01-01.zip");
+        _backupService.Received(1).RestoreBackup(canonicalName);
+    }
+
+    [Test]
+    public void RestoreBackup_with_differing_fileName_casing_should_restore_using_canonical_name()
+    {
+        var canonicalName = "seedarr_backup_1.0_2026-01-01_12-00-00-000.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = canonicalName, Size = 100, Time = DateTime.UtcNow }
+        });
+        var request = new RestoreRequest { FileName = "SEEDARR_backup_1.0_2026-01-01_12-00-00-000.zip" };
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _backupService.Received(1).RestoreBackup(canonicalName);
+    }
+
+    [Test]
+    public void RestoreBackup_with_nonexistent_fileName_should_return_not_found_without_calling_service()
+    {
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = "seedarr_backup_1.0_2026-01-01.zip", Size = 100, Time = DateTime.UtcNow }
+        });
+        var request = new RestoreRequest { FileName = "seedarr_backup_nonexistent.zip" };
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _backupService.DidNotReceive().RestoreBackup(Arg.Any<string>());
     }
 
     [Test]
@@ -230,9 +266,14 @@ public class BackupControllerTest
     [Test]
     public void RestoreBackup_when_file_not_found_should_return_not_found()
     {
-        var request = new RestoreRequest { FileName = "nonexistent.zip" };
-        _backupService.When(s => s.RestoreBackup("nonexistent.zip"))
-            .Do(_ => throw new FileNotFoundException("Backup file not found", "nonexistent.zip"));
+        var fileName = "nonexistent.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = fileName, Size = 100, Time = DateTime.UtcNow }
+        });
+        var request = new RestoreRequest { FileName = fileName };
+        _backupService.When(s => s.RestoreBackup(fileName))
+            .Do(_ => throw new FileNotFoundException("Backup file not found", fileName));
 
         var result = _controller.RestoreBackup(request);
 
@@ -242,8 +283,13 @@ public class BackupControllerTest
     [Test]
     public void RestoreBackup_when_archive_is_corrupt_should_return_bad_request()
     {
-        var request = new RestoreRequest { FileName = "corrupt.zip" };
-        _backupService.When(s => s.RestoreBackup("corrupt.zip"))
+        var fileName = "corrupt.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = fileName, Size = 100, Time = DateTime.UtcNow }
+        });
+        var request = new RestoreRequest { FileName = fileName };
+        _backupService.When(s => s.RestoreBackup(fileName))
             .Do(_ => throw new InvalidDataException("Corrupted zip archive"));
 
         var result = _controller.RestoreBackup(request);
@@ -254,8 +300,13 @@ public class BackupControllerTest
     [Test]
     public void RestoreBackup_when_io_exception_should_return_bad_request()
     {
-        var request = new RestoreRequest { FileName = "disk_full.zip" };
-        _backupService.When(s => s.RestoreBackup("disk_full.zip"))
+        var fileName = "disk_full.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = fileName, Size = 100, Time = DateTime.UtcNow }
+        });
+        var request = new RestoreRequest { FileName = fileName };
+        _backupService.When(s => s.RestoreBackup(fileName))
             .Do(_ => throw new IOException("Disk full"));
 
         var result = _controller.RestoreBackup(request);
@@ -266,8 +317,13 @@ public class BackupControllerTest
     [Test]
     public void RestoreBackup_when_invalid_operation_exception_should_return_bad_request()
     {
-        var request = new RestoreRequest { FileName = "missing_db.zip" };
-        _backupService.When(s => s.RestoreBackup("missing_db.zip"))
+        var fileName = "missing_db.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = fileName, Size = 100, Time = DateTime.UtcNow }
+        });
+        var request = new RestoreRequest { FileName = fileName };
+        _backupService.When(s => s.RestoreBackup(fileName))
             .Do(_ => throw new InvalidOperationException("Database file not found in backup archive"));
 
         var result = _controller.RestoreBackup(request);
@@ -280,8 +336,13 @@ public class BackupControllerTest
     [Test]
     public void RestoreBackup_when_unexpected_exception_should_return_bad_request()
     {
-        var request = new RestoreRequest { FileName = "lock_error.zip" };
-        _backupService.When(s => s.RestoreBackup("lock_error.zip"))
+        var fileName = "lock_error.zip";
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = fileName, Size = 100, Time = DateTime.UtcNow }
+        });
+        var request = new RestoreRequest { FileName = fileName };
+        _backupService.When(s => s.RestoreBackup(fileName))
             .Do(_ => throw new Exception("Unexpected restore lock error"));
 
         var result = _controller.RestoreBackup(request);
