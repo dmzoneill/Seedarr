@@ -3,7 +3,6 @@
 #pragma warning disable SX1309
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -45,34 +44,7 @@ public sealed class LinuxPtySession : ITerminalSession
         string shell = File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh";
         string[] argv = [shell, "-i"];
 
-        var envVars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
-        {
-            var key = entry.Key?.ToString();
-            var val = entry.Value?.ToString();
-            if (!string.IsNullOrEmpty(key) && !TerminalEnvironmentSanitizer.IsSensitiveKey(key))
-            {
-                envVars[key] = val ?? string.Empty;
-            }
-        }
-
-        envVars["TERM"] = "xterm-256color";
-        envVars["COLORTERM"] = "truecolor";
-        if (!envVars.ContainsKey("LANG"))
-        {
-            envVars["LANG"] = "en_US.UTF-8";
-        }
-
-        if (!envVars.ContainsKey("PATH"))
-        {
-            envVars["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-        }
-
-        if (!string.IsNullOrEmpty(safeCwd))
-        {
-            envVars["PWD"] = safeCwd;
-        }
-
+        var envVars = TerminalEnvironmentSanitizer.BuildSanitizedEnvironment(safeCwd);
         var envStrings = envVars.Select(kv => $"{kv.Key}={kv.Value}").ToArray();
 
         IntPtr cwdPtr = safeCwd != null ? Marshal.StringToCoTaskMemUTF8(safeCwd) : IntPtr.Zero;
