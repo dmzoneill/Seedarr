@@ -244,6 +244,72 @@ public class AutomationControllerTest
     }
 
     [Test]
+    public void Update_with_list_preview_lastExecutionLog_does_not_persist_truncation()
+    {
+        var fullLog = new string('x', AutomationController.MaxListLogPreviewCharacters + 200);
+        var truncatedPreview = string.Concat(fullLog.AsSpan(0, AutomationController.MaxListLogPreviewCharacters), "...");
+        var existing = new AutomationScript
+        {
+            Id = 1,
+            Name = "Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "name: Test",
+            LastExecutionLog = fullLog,
+            LastExecutionStatus = "Success",
+        };
+        _automationService.Get(1).Returns(existing);
+        _automationService.Update(Arg.Any<AutomationScript>()).Returns(callInfo => callInfo.Arg<AutomationScript>());
+
+        var json = JsonSerializer.Serialize(new
+        {
+            id = 1,
+            name = "Renamed",
+            lastExecutionLog = truncatedPreview,
+            lastExecutionStatus = "Failed",
+        });
+        using var document = JsonDocument.Parse(json);
+        var result = _controller.Update(document.RootElement, 1);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _automationService.Received(1).Update(Arg.Is<AutomationScript>(script =>
+            script.Name == "Renamed"
+            && script.LastExecutionLog == fullLog
+            && script.LastExecutionStatus == "Success"));
+    }
+
+    [Test]
+    public void Update_with_full_resource_body_preserves_existing_lastExecutionLog()
+    {
+        var fullLog = new string('y', AutomationController.MaxListLogPreviewCharacters + 50);
+        var truncatedPreview = string.Concat(fullLog.AsSpan(0, AutomationController.MaxListLogPreviewCharacters), "...");
+        var existing = new AutomationScript
+        {
+            Id = 2,
+            Name = "Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "name: Test",
+            LastExecutionLog = fullLog,
+        };
+        _automationService.Get(2).Returns(existing);
+        _automationService.Update(Arg.Any<AutomationScript>()).Returns(callInfo => callInfo.Arg<AutomationScript>());
+
+        var resource = new AutomationScriptResource
+        {
+            Id = 2,
+            Name = "Updated",
+            Language = AutomationLanguage.Yaml,
+            Code = "name: Updated",
+            LastExecutionLog = truncatedPreview,
+        };
+
+        var result = _controller.Update(2, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _automationService.Received(1).Update(Arg.Is<AutomationScript>(script =>
+            script.LastExecutionLog == fullLog && script.Name == "Updated"));
+    }
+
+    [Test]
     public void Delete_returns_NotFound_when_script_does_not_exist()
     {
         _automationService.Get(999).Returns((AutomationScript)null);
