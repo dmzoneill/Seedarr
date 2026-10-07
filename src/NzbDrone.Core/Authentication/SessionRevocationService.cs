@@ -30,13 +30,17 @@ public class SessionRevocationService : ISessionRevocationService
         }
 
         var key = sessionIdOrUser.Trim();
+        var expiresAtUtc = revokedAtUtc + DefaultRetention;
+
+        if (_repository != null)
+        {
+            _repository.Upsert(key, revokedAtUtc, expiresAtUtc);
+        }
+
         _revokedSessions.AddOrUpdate(
             key,
             revokedAtUtc,
             (_, existing) => revokedAtUtc > existing ? revokedAtUtc : existing);
-
-        var expiresAtUtc = revokedAtUtc + DefaultRetention;
-        _repository?.Upsert(key, revokedAtUtc, expiresAtUtc);
 
         _logger.Debug("Revoked session or user token: {0} at {1:u}", key, revokedAtUtc);
     }

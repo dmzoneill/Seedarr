@@ -330,6 +330,21 @@ public class AuthControllerTest
     }
 
     [Test]
+    public void SessionRevocationService_RevokeSession_WhenUpsertFails_DoesNotUpdateInMemoryCache()
+    {
+        var repository = Substitute.For<IRevokedSessionRepository>();
+        repository
+            .When(r => r.Upsert(Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<DateTime>()))
+            .Throw(new InvalidOperationException("db fail"));
+        var service = new SessionRevocationService(repository);
+        var now = DateTime.UtcNow;
+        var issuedBeforeRevoke = now.AddMinutes(-10);
+
+        Assert.Throws<InvalidOperationException>(() => service.RevokeSession("session-abc", now));
+        Assert.That(service.IsSessionRevoked("session-abc", issuedBeforeRevoke), Is.False);
+    }
+
+    [Test]
     public void SessionRevocationService_LoadsActiveRevocationsOnConstruction()
     {
         var repository = Substitute.For<IRevokedSessionRepository>();
