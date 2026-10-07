@@ -287,6 +287,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
             {
                 _metadata.ConsecutiveFailures++;
                 _metadata.LastCheckedUtc = now;
+                _metadata.LastSyncHttpStatus = null;
                 _metadata.LastSyncStatus = $"Failed: {ex.Message}";
                 _metadata.LastFailureMessage = ex.Message;
             }
@@ -325,6 +326,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
                     {
                         _metadata.ConsecutiveFailures++;
                         _metadata.LastCheckedUtc = now;
+                        _metadata.LastSyncHttpStatus = null;
                         _metadata.LastSyncStatus = $"Failed: {ex.Message}";
                         _metadata.LastFailureMessage = ex.Message;
                     }
