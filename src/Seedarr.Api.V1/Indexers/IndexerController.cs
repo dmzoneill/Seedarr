@@ -265,10 +265,12 @@ public class IndexerController : Controller
         if (definition.Id > 0 && (string.IsNullOrWhiteSpace(definition.ApiKey) || definition.ApiKey.Contains('*')))
         {
             var existing = _indexerFactory.Get(definition.Id);
-            if (existing != null)
+            if (existing == null)
             {
-                definition.ApiKey = existing.ApiKey;
+                return NotFound();
             }
+
+            definition.ApiKey = existing.ApiKey;
         }
 
         IIndexer indexer;

@@ -376,6 +376,46 @@ public class IndexerControllerTest
     }
 
     [Test]
+    public void TestDirect_with_missing_indexer_id_and_masked_api_key_returns_not_found()
+    {
+        _indexerFactory.Get(99).Returns((IndexerDefinition)null);
+
+        var incoming = new IndexerDefinition
+        {
+            Id = 99,
+            Name = "Deleted Indexer",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "****_key"
+        };
+
+        var result = _controller.TestDirect(incoming);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+        _indexerFactory.Received(1).Get(99);
+    }
+
+    [Test]
+    public void TestDirect_with_missing_indexer_id_and_empty_api_key_returns_not_found()
+    {
+        _indexerFactory.Get(99).Returns((IndexerDefinition)null);
+
+        var incoming = new IndexerDefinition
+        {
+            Id = 99,
+            Name = "Deleted Indexer",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = ""
+        };
+
+        var result = _controller.TestDirect(incoming);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+        _indexerFactory.Received(1).Get(99);
+    }
+
+    [Test]
     public void TestDirect_with_existing_indexer_and_null_api_key_returns_result_without_recording_status()
     {
         var existing = new IndexerDefinition
