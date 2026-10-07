@@ -565,6 +565,11 @@ public class DownloadClientController : Controller
             return "Port must be between 1 and 65535";
         }
 
+        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
+        {
+            return "Target host/URL is not permitted.";
+        }
+
         return null;
     }
 }
