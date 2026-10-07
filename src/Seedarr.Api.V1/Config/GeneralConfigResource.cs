@@ -83,6 +83,20 @@ public static class GeneralConfigResourceMapper
             : string.Empty;
     }
 
+    public static void MaskSecretsForResponse(GeneralConfigResource resource)
+    {
+        if (resource == null)
+        {
+            return;
+        }
+
+        resource.ApiKey = GetMaskedApiKey(resource.ApiKey);
+        resource.TmdbApiKey = GetMaskedApiKey(resource.TmdbApiKey);
+        resource.SslCertPassword = string.IsNullOrEmpty(resource.SslCertPassword)
+            ? string.Empty
+            : SecretMask;
+    }
+
     public static GeneralConfigResource ToResource(IConfigService config, IConfigFileProvider fileProvider)
     {
         var apiKey = fileProvider?.ApiKey;
