@@ -590,6 +590,118 @@ public class IndexerControllerTest
     }
 
     [Test]
+    public async Task Search_with_category_only_queries_indexer_and_includes_cat_parameter()
+    {
+        var xml = @"<?xml version=""1.0""?><rss version=""2.0""><channel></channel></rss>";
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(xml)
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 31,
+            Name = "Torznab Category",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
+
+        await controller.Search(category: "movies");
+
+        _indexerStatusService.Received(1).RecordSuccess(31);
+        Assert.That(handler.SentRequest, Is.Not.Null);
+        Assert.That(handler.SentRequest.RequestUri.OriginalString, Does.Contain("cat="));
+    }
+
+    [Test]
+    public async Task Search_with_categories_only_queries_indexer()
+    {
+        var xml = @"<?xml version=""1.0""?><rss version=""2.0""><channel></channel></rss>";
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(xml)
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 32,
+            Name = "Torznab Categories",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
+
+        await controller.Search(categories: "2000");
+
+        _indexerStatusService.Received(1).RecordSuccess(32);
+        Assert.That(handler.SentRequest, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task Search_with_no_criteria_returns_empty_without_calling_indexer()
+    {
+        var handler = new FakeHttpMessageHandler();
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var actionResult = await controller.Search();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var list = okResult.Value as List<ReleaseInfo>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list, Is.Empty);
+        Assert.That(handler.SentRequest, Is.Null);
+        _indexerFactory.DidNotReceive().All();
+    }
+
+    [Test]
     public async Task Search_when_indexer_succeeds_records_success()
     {
         var xml = @"<?xml version=""1.0""?><rss version=""2.0""><channel></channel></rss>";
