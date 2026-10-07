@@ -34,9 +34,7 @@ public class SetupController : Controller
         {
             var isSetupCompleted = _configService.IsSetupCompleted;
             var isAuthEnabled = _configService.AuthenticationEnabled;
-            var hasAdminUser = isSetupCompleted ||
-                !string.IsNullOrWhiteSpace(_configService.GetValue("AdminUsername", string.Empty)) ||
-                !string.IsNullOrWhiteSpace(_configService.GetValue("AdminPassword", string.Empty));
+            var hasAdminUser = isSetupCompleted && isAuthEnabled;
 
             return Ok(new SetupStatusResource
             {

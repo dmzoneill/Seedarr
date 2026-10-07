@@ -43,6 +43,23 @@ public class SetupControllerTest
     }
 
     [Test]
+    public void GetStatus_should_not_report_has_admin_user_when_partial_config_keys_exist()
+    {
+        _configService.IsSetupCompleted.Returns(false);
+        _configService.AuthenticationEnabled.Returns(false);
+        _configService.GetValue("AdminUsername", string.Empty).Returns("admin");
+        _configService.GetValue("AdminPassword", string.Empty).Returns("orphaned-password");
+
+        var actionResult = _controller.GetStatus();
+        var okResult = actionResult.Result as OkObjectResult;
+
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SetupStatusResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.HasAdminUser, Is.False);
+    }
+
+    [Test]
     public void GetStatus_should_return_correct_setup_and_auth_flags_when_completed()
     {
         _configService.IsSetupCompleted.Returns(true);
