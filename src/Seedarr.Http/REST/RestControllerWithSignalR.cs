@@ -234,7 +234,14 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
             Action = action
         };
 
-        _signalRBroadcaster.BroadcastMessage(signalRMessage);
+        if (SignalRBroadcastFanout.TryResolveScope(resource.ResourceName, resource, out var channel, out var torrentId))
+        {
+            SignalRBroadcastFanout.Broadcast(_signalRBroadcaster, signalRMessage, channel, torrentId);
+        }
+        else
+        {
+            _signalRBroadcaster.BroadcastMessage(signalRMessage);
+        }
     }
 
     private void OnCoalesceTimerTick(object state)

@@ -65,6 +65,21 @@ public class PieceStorageTest
     }
 
     [Test]
+    public void MarkPieceVerified_fans_out_to_torrent_group_when_torrent_service_resolves_hash()
+    {
+        const string hash = "419cb7d4838686ffb08c2a4f4e7c10d3f84898ec";
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.GetByInfoHash(hash).Returns(new Torrent { Id = 77, InfoHash = hash });
+
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, torrentService);
+        storage.MarkPieceVerified(hash, 2, 16384);
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceCompletedMessage>(m => m.TorrentId == 77));
+        _signalRBroadcaster.Received(1).BroadcastToChannel("torrents", Arg.Any<PieceCompletedMessage>());
+        _signalRBroadcaster.Received(1).BroadcastToTorrent(77, Arg.Any<PieceCompletedMessage>());
+    }
+
+    [Test]
     public void MarkPieceCorrupted_records_corrupted_piece_and_clears_verified()
     {
         const string hash = "abcdef1234567890abcdef1234567890abcdef12";

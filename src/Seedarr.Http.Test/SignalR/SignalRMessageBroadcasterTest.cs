@@ -302,7 +302,7 @@ public class SignalRMessageBroadcasterTest
     [Test]
     public void TrackerSignalREventHandler_handles_TrackerAnnounceEvent_and_broadcasts()
     {
-        var handler = new TrackerSignalREventHandler(_hubContext);
+        var handler = new TrackerSignalREventHandler(_broadcaster);
         var torrent = new Torrent { Id = 10, Name = "Test Torrent" };
         var announceEvent = new TrackerAnnounceEvent(torrent, "http://tr.com/announce", 25, 5, 30, 150, true, null, 7, TrackerStatus.Working);
 
@@ -315,7 +315,7 @@ public class SignalRMessageBroadcasterTest
     [Test]
     public void TrackerSignalREventHandler_handles_TrackerStatusChangedEvent_and_broadcasts()
     {
-        var handler = new TrackerSignalREventHandler(_hubContext);
+        var handler = new TrackerSignalREventHandler(_broadcaster);
         var torrent = new Torrent { Id = 11, Name = "Test Torrent 2" };
         var tracker = new TrackerEntry { Id = 8, TorrentId = 11, Url = "http://tr.com/announce", Status = TrackerStatus.Announcing };
         var statusEvent = new TrackerStatusChangedEvent(torrent, tracker, TrackerStatus.Unknown, TrackerStatus.Announcing);
@@ -440,6 +440,46 @@ public class SignalRMessageBroadcasterTest
 
         _hubClients.Received(1).Group("channel-torrents");
         channelProxy.Received(1).SendCoreAsync("receiveMessage", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void BroadcastToChannel_ignores_non_whitelisted_channel()
+    {
+        var msg = new SignalRMessage
+        {
+            Name = "Torrent",
+            Action = ModelAction.Updated,
+            Body = new { Id = 1 }
+        };
+
+        _broadcaster.BroadcastToChannel("arbitrary_unknown_channel", msg);
+
+        _hubClients.DidNotReceive().Group(Arg.Is<string>(g => g.StartsWith("channel-")));
+    }
+
+    [Test]
+    public void TrackerSignalREventHandler_routes_to_trackers_channel_and_torrent_group()
+    {
+        var trackersProxy = Substitute.For<IClientProxy>();
+        trackersProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _hubClients.Group("channel-trackers").Returns(trackersProxy);
+
+        var torrentProxy = Substitute.For<IClientProxy>();
+        torrentProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        _hubClients.Group("torrent-10").Returns(torrentProxy);
+
+        var handler = new TrackerSignalREventHandler(_broadcaster);
+        var torrent = new Torrent { Id = 10, Name = "Grouped Torrent" };
+        var announceEvent = new TrackerAnnounceEvent(torrent, "http://tr.com/announce", 25, 5, 30, 150, true, null, 7, TrackerStatus.Working);
+
+        handler.Handle(announceEvent);
+
+        _hubClients.Received().Group("channel-trackers");
+        _hubClients.Received().Group("torrent-10");
+        torrentProxy.Received().SendCoreAsync("trackerUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        torrentProxy.Received().SendCoreAsync("trackerAnnounced", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -659,7 +699,7 @@ public class SignalRMessageBroadcasterTest
 
         _hubClients.All.Returns(failingProxy);
 
-        var handler = new TrackerSignalREventHandler(_hubContext);
+        var handler = new TrackerSignalREventHandler(_broadcaster);
         var torrent = new Torrent { Id = 12, Name = "Test Torrent Fault" };
         var announceEvent = new TrackerAnnounceEvent(torrent, "http://tr.com/announce", 1, 1, 1, 10, true, null, 1, TrackerStatus.Working);
 

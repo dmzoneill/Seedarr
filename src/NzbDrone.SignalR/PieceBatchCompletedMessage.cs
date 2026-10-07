@@ -7,6 +7,8 @@ public class PieceBatchCompletedMessage : SignalRMessage
 {
     public string InfoHash { get; set; }
 
+    public int TorrentId { get; set; }
+
     public List<int> PieceIndexes { get; set; } = new();
 
     public long BytesDownloaded { get; set; }

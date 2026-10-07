@@ -151,7 +151,13 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
             return;
         }
 
-        var normalized = channel.Trim().ToLowerInvariant();
+        var trimmed = channel.Trim();
+        if (trimmed.Length > MessageHub.MaxChannelLength || !MessageHub.AllowedChannels.Contains(trimmed))
+        {
+            return;
+        }
+
+        var normalized = trimmed.ToLowerInvariant();
         BroadcastToGroup($"channel-{normalized}", message);
     }
 

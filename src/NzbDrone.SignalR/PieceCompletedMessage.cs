@@ -6,6 +6,8 @@ public class PieceCompletedMessage : SignalRMessage
 {
     public string InfoHash { get; set; }
 
+    public int TorrentId { get; set; }
+
     public int PieceIndex { get; set; }
 
     public long BytesDownloaded { get; set; }

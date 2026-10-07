@@ -507,12 +507,12 @@ public class MessageHub : Hub
 
 public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle<TrackerStatusChangedEvent>
 {
-    private readonly IHubContext<MessageHub> _hubContext;
+    private readonly IBroadcastSignalRMessage _broadcaster;
     private readonly Logger _logger;
 
-    public TrackerSignalREventHandler(IHubContext<MessageHub> hubContext)
+    public TrackerSignalREventHandler(IBroadcastSignalRMessage broadcaster)
     {
-        _hubContext = hubContext;
+        _broadcaster = broadcaster;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -539,7 +539,7 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
             errorMessage = message.ErrorMessage
         };
 
-        BroadcastTrackerPayload(payload);
+        BroadcastTrackerPayload(payload, message.Torrent?.Id ?? 0);
     }
 
     public void Handle(TrackerStatusChangedEvent message)
@@ -561,33 +561,34 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
             errorMessage = message.Tracker?.ErrorMessage
         };
 
-        BroadcastTrackerPayload(payload);
+        var torrentId = message.Torrent?.Id ?? message.Tracker?.TorrentId ?? 0;
+        BroadcastTrackerPayload(payload, torrentId);
     }
 
-    private void BroadcastTrackerPayload(object payload)
+    private void BroadcastTrackerPayload(object payload, int torrentId)
     {
+        if (_broadcaster == null)
+        {
+            return;
+        }
+
         try
         {
-            _hubContext.Clients?.All?.SendAsync("trackerUpdated", payload)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast trackerUpdated"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-
-            _hubContext.Clients?.All?.SendAsync("trackerAnnounced", payload)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast trackerAnnounced"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-
-            _hubContext.Clients?.All?.SendAsync("TrackerUpdated", payload)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast TrackerUpdated"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-
-            _hubContext.Clients?.All?.SendAsync("TrackerAnnounced", payload)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast TrackerAnnounced"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-
-            var message = new SignalRMessage
+            var updated = new SignalRMessage
             {
                 Name = "TrackerUpdated",
                 Action = ModelAction.Updated,
                 Body = payload
             };
-            _hubContext.Clients?.All?.SendAsync("receiveMessage", message)
-                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast tracker receiveMessage"), CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+            SignalRBroadcastFanout.Broadcast(_broadcaster, updated, "trackers", torrentId > 0 ? torrentId : null);
+
+            var announced = new SignalRMessage
+            {
+                Name = "TrackerAnnounced",
+                Action = ModelAction.Updated,
+                Body = payload
+            };
+            SignalRBroadcastFanout.Broadcast(_broadcaster, announced, "trackers", torrentId > 0 ? torrentId : null);
         }
         catch (Exception ex)
         {
