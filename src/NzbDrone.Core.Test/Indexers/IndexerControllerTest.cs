@@ -816,6 +816,86 @@ public class IndexerControllerTest
     }
 
     [Test]
+    public async Task Search_multi_indexer_applies_global_limit_and_offset_after_merge()
+    {
+        var defA = new IndexerDefinition
+        {
+            Id = 201,
+            Name = "Indexer A",
+            IndexerType = "Torznab",
+            Url = "http://1.1.1.1:9696",
+            ApiKey = "key1",
+            Enable = true,
+            EnableSearch = true
+        };
+        var defB = new IndexerDefinition
+        {
+            Id = 202,
+            Name = "Indexer B",
+            IndexerType = "Torznab",
+            Url = "http://2.2.2.2:9696",
+            ApiKey = "key2",
+            Enable = true,
+            EnableSearch = true
+        };
+
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { defA, defB });
+
+        string ItemXml(string title, int seeders) => $@"
+    <item>
+      <title>{title}</title>
+      <guid>http://example.com/{title}</guid>
+      <torznab:attr name=""seeders"" value=""{seeders}"" xmlns:torznab=""http://torznab.com/schemas/2015/feed""/>
+    </item>";
+
+        var xmlA = $"<?xml version=\"1.0\"?>\n<rss version=\"2.0\">\n  <channel>\n{ItemXml("Release-A-100", 100)}\n{ItemXml("Release-A-90", 90)}\n{ItemXml("Release-A-80", 80)}\n  </channel>\n</rss>";
+        var xmlB = $"<?xml version=\"1.0\"?>\n<rss version=\"2.0\">\n  <channel>\n{ItemXml("Release-B-70", 70)}\n{ItemXml("Release-B-60", 60)}\n{ItemXml("Release-B-50", 50)}\n  </channel>\n</rss>";
+
+        var handler = new FakeRoutingHttpMessageHandler(req =>
+        {
+            if (req.RequestUri.Host == "1.1.1.1")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(xmlA) };
+            }
+
+            if (req.RequestUri.Host == "2.2.2.2")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(xmlB) };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var actionResult = await controller.Search("ubuntu", limit: 3, offset: 0);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var page = okResult.Value as List<ReleaseInfo>;
+        Assert.That(page, Is.Not.Null);
+        Assert.That(page.Count, Is.EqualTo(3));
+        Assert.That(page.Select(r => r.Title).ToList(), Is.EqualTo(new[] { "Release-A-100", "Release-A-90", "Release-A-80" }));
+
+        var page2Result = await controller.Search("ubuntu", limit: 2, offset: 2);
+        var page2 = (page2Result.Result as OkObjectResult)?.Value as List<ReleaseInfo>;
+        Assert.That(page2, Is.Not.Null);
+        Assert.That(page2.Count, Is.EqualTo(2));
+        Assert.That(page2.Select(r => r.Title).ToList(), Is.EqualTo(new[] { "Release-A-80", "Release-B-70" }));
+    }
+
+    [Test]
     public async Task Search_when_targeted_indexer_fails_returns_error_response_with_message()
     {
         var handler = new FakeHttpMessageHandler

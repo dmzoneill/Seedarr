@@ -557,10 +557,16 @@ public class IndexerController : Controller
 
         var allResults = resultsArray.SelectMany(r => r).ToList();
 
-        var sorted = allResults
+        IEnumerable<ReleaseInfo> sortedQuery = allResults
             .OrderByDescending(r => r.Seeders ?? 0)
-            .ThenByDescending(r => r.PublishDate ?? DateTime.MinValue)
-            .ToList();
+            .ThenByDescending(r => r.PublishDate ?? DateTime.MinValue);
+
+        if (definitions.Count > 1)
+        {
+            sortedQuery = sortedQuery.Skip(offset).Take(limit);
+        }
+
+        var sorted = sortedQuery.ToList();
 
         return Ok(sorted);
     }
