@@ -357,7 +357,7 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
 
         if (message is PieceBatchCompletedMessage pbcm)
         {
-            return $"{prefix}{name}:{pbcm.InfoHash}:{string.Join(",", pbcm.PieceIndexes)}";
+            return $"{prefix}{name}:{pbcm.InfoHash}:{FormatCanonicalPieceIndexes(pbcm.PieceIndexes)}";
         }
 
         if (message.Body != null)
@@ -376,11 +376,31 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
         return $"{prefix}{name}:{action}";
     }
 
+    private static string FormatCanonicalPieceIndexes(IEnumerable<int> pieceIndexes)
+    {
+        if (pieceIndexes == null)
+        {
+            return string.Empty;
+        }
+
+        return string.Join(",", pieceIndexes.Distinct().OrderBy(i => i));
+    }
+
     private static string GetPayloadFingerprint(object body)
     {
         if (body == null)
         {
             return "null";
+        }
+
+        if (body is PieceBatchCompletedMessage pbcm)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                pbcm.InfoHash,
+                PieceIndexes = pbcm.PieceIndexes?.Distinct().OrderBy(i => i).ToList() ?? new List<int>(),
+                pbcm.BytesDownloaded
+            });
         }
 
         try
