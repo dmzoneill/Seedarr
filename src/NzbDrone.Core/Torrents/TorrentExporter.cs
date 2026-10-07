@@ -238,23 +238,24 @@ public class TorrentExporter : ITorrentExporter
             pieceCount = 1;
         }
 
-        byte[] piecesBytes;
-        if (torrent.PieceHashes != null && torrent.PieceHashes.Length > 0)
+        ResolvePieceHashes(torrent);
+
+        var requiredPieceBytes = pieceCount * 20;
+        if (torrent.PieceHashes == null || torrent.PieceHashes.Length < requiredPieceBytes)
         {
-            var expectedLen = Math.Max(pieceCount * 20, (int)Math.Ceiling((double)torrent.PieceHashes.Length / 20) * 20);
-            if (torrent.PieceHashes.Length < expectedLen)
-            {
-                piecesBytes = new byte[expectedLen];
-                Array.Copy(torrent.PieceHashes, 0, piecesBytes, 0, torrent.PieceHashes.Length);
-            }
-            else
-            {
-                piecesBytes = torrent.PieceHashes;
-            }
+            throw new InvalidOperationException(
+                "Cannot synthesize torrent metainfo without piece hashes. Import a .torrent file or wait for metadata download.");
+        }
+
+        byte[] piecesBytes;
+        if (torrent.PieceHashes.Length == requiredPieceBytes)
+        {
+            piecesBytes = torrent.PieceHashes;
         }
         else
         {
-            piecesBytes = new byte[pieceCount * 20];
+            piecesBytes = new byte[requiredPieceBytes];
+            Array.Copy(torrent.PieceHashes, 0, piecesBytes, 0, requiredPieceBytes);
         }
 
         info["pieces"] = new BString(piecesBytes);
@@ -262,5 +263,32 @@ public class TorrentExporter : ITorrentExporter
         root["info"] = info;
 
         return root.EncodeAsBytes();
+    }
+
+    private void ResolvePieceHashes(Torrent torrent)
+    {
+        TorrentService.PopulatePieceHashes(torrent);
+        if (torrent.PieceHashes != null && torrent.PieceHashes.Length > 0)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(torrent.SourcePath) || !File.Exists(torrent.SourcePath))
+        {
+            return;
+        }
+
+        try
+        {
+            var parsed = new TorrentFileParser().Parse(torrent.SourcePath);
+            if (parsed?.PieceHashes != null && parsed.PieceHashes.Length > 0)
+            {
+                torrent.PieceHashes = parsed.PieceHashes;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to parse piece hashes from source torrent at {0}", torrent.SourcePath);
+        }
     }
 }
