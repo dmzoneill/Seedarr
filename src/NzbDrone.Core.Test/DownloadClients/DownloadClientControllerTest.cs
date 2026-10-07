@@ -1303,6 +1303,8 @@ public class DownloadClientControllerTest
     public void ImportTorrents_returns_bad_request_when_sync_is_busy()
     {
         const string message = "Download client sync is busy. Try again shortly.";
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
         _syncService.ImportTorrents(1, Arg.Any<List<string>>())
             .Returns(x => throw new InvalidOperationException(message));
 
@@ -1310,5 +1312,34 @@ public class DownloadClientControllerTest
         var result = _controller.ImportTorrents(1, request);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void ImportTorrents_returns_bad_request_when_request_is_null()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+
+        var result = _controller.ImportTorrents(1, null);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Request body cannot be null"));
+        _syncService.DidNotReceive().ImportTorrents(Arg.Any<int>(), Arg.Any<List<string>>());
+    }
+
+    [Test]
+    public void ImportTorrents_returns_bad_request_when_info_hashes_empty()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+
+        var request = new DownloadClientImportRequest();
+        var result = _controller.ImportTorrents(1, request);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("InfoHashes is required"));
+        _syncService.DidNotReceive().ImportTorrents(Arg.Any<int>(), Arg.Any<List<string>>());
     }
 }

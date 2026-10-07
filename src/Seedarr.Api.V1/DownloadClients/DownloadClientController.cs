@@ -426,9 +426,19 @@ public class DownloadClientController : Controller
             return backoffResult;
         }
 
+        if (request == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        if (request.InfoHashes == null || request.InfoHashes.Count == 0)
+        {
+            return BadRequest("InfoHashes is required");
+        }
+
         try
         {
-            var result = _syncService.ImportTorrents(id, request?.InfoHashes ?? new List<string>());
+            var result = _syncService.ImportTorrents(id, request.InfoHashes);
             return Ok(result);
         }
         catch (ArgumentException ex)
