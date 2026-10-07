@@ -90,6 +90,66 @@ public class TorrentRecheckServiceTest
     }
 
     [Test]
+    public void Recheck_presence_fallback_finds_files_under_torrent_name_subdirectory()
+    {
+        var saveRoot = Path.Combine(Path.GetTempPath(), "seedarr_recheck_" + Guid.NewGuid().ToString("N"));
+        var torrentSubdir = Path.Combine(saveRoot, "My Show");
+        Directory.CreateDirectory(torrentSubdir);
+        var payloadPath = Path.Combine(torrentSubdir, "episode.mkv");
+        File.WriteAllBytes(payloadPath, new byte[1000]);
+
+        try
+        {
+            var torrent = new Torrent
+            {
+                Id = 60,
+                InfoHash = "hash-presence-subdir",
+                Name = "My Show",
+                SavePath = saveRoot,
+                Status = TorrentStatus.Downloading,
+                PieceCount = 1,
+                PieceLength = 1000,
+                TotalSize = 1000,
+                SourcePath = null
+            };
+
+            _torrentFileService.GetByTorrentId(60).Returns(new List<TorrentFile>
+            {
+                new() { TorrentId = 60, Path = "episode.mkv", Size = 1000 }
+            });
+
+            _stateMachine.TransitionFromChecking(Arg.Any<Torrent>())
+                .Returns(callInfo =>
+                {
+                    var t = callInfo.Arg<Torrent>();
+                    t.Status = TorrentStatus.Seeding;
+                    return TorrentStatus.Seeding;
+                });
+
+            var result = _service.Recheck(torrent);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Progress, Is.EqualTo(1.0));
+            Assert.That(result.Status, Is.EqualTo(TorrentStatus.Seeding));
+            _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 1 && b[0]));
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(saveRoot))
+                {
+                    Directory.Delete(saveRoot, recursive: true);
+                }
+            }
+            catch
+            {
+                // Best-effort test cleanup
+            }
+        }
+    }
+
+    [Test]
     public void Recheck_resumes_to_seeding_when_all_pieces_verified()
     {
         var torrent = new Torrent
