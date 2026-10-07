@@ -196,7 +196,9 @@ public static class Bootstrap
             "localhost" or "127.0.0.1" => IPAddress.Loopback,
             "::1" => IPAddress.IPv6Loopback,
             _ when IPAddress.TryParse(cleanAddress, out var parsed) => parsed,
-            _ => IPAddress.Any,
+            _ => throw new ArgumentException(
+                $"Invalid BindAddress '{bindAddress}'. Allowed values are '*', '+', '0.0.0.0', '::', 'localhost', or a valid IP address.",
+                nameof(bindAddress)),
         };
     }
 

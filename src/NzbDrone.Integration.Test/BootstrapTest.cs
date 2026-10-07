@@ -42,11 +42,13 @@ public class BootstrapTest
         Assert.That(result, Is.EqualTo(IPAddress.Any));
     }
 
-    [Test]
-    public void ResolveBindAddress_should_fallback_to_any_on_invalid_address()
+    [TestCase("invalid_ip_format")]
+    [TestCase("vpn0")]
+    [TestCase("192.168.1.00")]
+    public void ResolveBindAddress_should_throw_on_invalid_address(string input)
     {
-        var result = Bootstrap.ResolveBindAddress("invalid_ip_format");
-        Assert.That(result, Is.EqualTo(IPAddress.Any));
+        var ex = Assert.Throws<ArgumentException>(() => Bootstrap.ResolveBindAddress(input));
+        Assert.That(ex.ParamName, Is.EqualTo("bindAddress"));
     }
 
     [Test]
