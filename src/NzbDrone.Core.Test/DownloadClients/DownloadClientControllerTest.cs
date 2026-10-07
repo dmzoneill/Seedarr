@@ -239,9 +239,6 @@ public class DownloadClientControllerTest
     }
 
     [TestCase("169.254.169.254", 80)]
-    [TestCase("127.0.0.1", 8080)]
-    [TestCase("10.0.0.1", 9091)]
-    [TestCase("192.168.1.1", 8080)]
     public void TestDirect_with_unsafe_host_returns_bad_request(string host, int port)
     {
         var definition = new DownloadClientDefinition
@@ -258,6 +255,29 @@ public class DownloadClientControllerTest
         var badRequest = (BadRequestObjectResult)result.Result;
         Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
         _downloadClientFactory.DidNotReceive().CreateClient(Arg.Any<DownloadClientDefinition>());
+    }
+
+    [TestCase("127.0.0.1", 8080)]
+    [TestCase("10.0.0.1", 9091)]
+    [TestCase("192.168.1.1", 8080)]
+    public void TestDirect_with_loopback_or_internal_host_invokes_factory(string host, int port)
+    {
+        var definition = new DownloadClientDefinition
+        {
+            Name = "Local Client",
+            ClientType = "QBitTorrent",
+            Host = host,
+            Port = port,
+        };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.TestConnectionDetailed().Returns(DownloadClientTestResult.Ok("Connected successfully"));
+        _downloadClientFactory.CreateClient(definition).Returns(mockClient);
+
+        var result = _controller.TestDirect(definition);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _downloadClientFactory.Received(1).CreateClient(Arg.Is<DownloadClientDefinition>(d => d.Host == host && d.Port == port));
     }
 
     [Test]
