@@ -194,6 +194,67 @@ public class NotificationControllerTest
     }
 
     [Test]
+    public void ToResource_masks_discord_webhookUrl_property_in_json_settings()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 41,
+            Name = "Discord webhookUrl",
+            Implementation = "Discord",
+            Settings = "{\"webhookUrl\":\"https://discord.com/api/webhooks/1234567890/AbCdEfGhIjKlMnOpQrStUvWxYz\"}"
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource, Is.Not.Null);
+        using var doc = JsonDocument.Parse(resource.Settings);
+        var maskedUrl = doc.RootElement.GetProperty("webhookUrl").GetString();
+        Assert.That(maskedUrl, Is.EqualTo("https://discord.com/api/webhooks/1234567890/********"));
+        Assert.That(maskedUrl, Does.Not.Contain("AbCdEfGhIjKlMnOpQrStUvWxYz"));
+    }
+
+    [Test]
+    public void MaskSettings_masks_slack_webhook_in_serverUrl_json_property()
+    {
+        var settings = "{\"serverUrl\":\"https://hooks.slack.com/services/T00000000/B00000000/SECRETTOKEN12345\"}";
+        var masked = NotificationController.MaskSettings(settings, "Slack");
+
+        using var doc = JsonDocument.Parse(masked);
+        Assert.That(
+            doc.RootElement.GetProperty("serverUrl").GetString(),
+            Is.EqualTo("https://hooks.slack.com/services/T00000000/B00000000/********"));
+    }
+
+    [Test]
+    public void Update_preserves_discord_webhookUrl_when_masked_in_json_settings()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 42,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+            Settings = "{\"webhookUrl\":\"https://discord.com/api/webhooks/99999/REAL_WEBHOOK_SECRET\"}"
+        };
+        _repository.Get(42).Returns(existing);
+
+        var updateResource = new NotificationResource
+        {
+            Id = 42,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+            Settings = "{\"webhookUrl\":\"https://discord.com/api/webhooks/99999/********\"}"
+        };
+
+        var result = _controller.Update(42, updateResource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("REAL_WEBHOOK_SECRET")));
+    }
+
+    [Test]
     public void ToResource_masks_slack_webhook_secret_token_in_url()
     {
         var definition = new NotificationDefinition
