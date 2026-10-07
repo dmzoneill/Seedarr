@@ -100,6 +100,27 @@ public class LoginRateLimiterTest
     }
 
     [Test]
+    public async Task RecordFailedAttempt_AfterLockoutExpires_WithoutIsRateLimited_DoesNotImmediatelyRelock()
+    {
+        var shortLimiter = new LoginRateLimiter(
+            maxFailedAttempts: 2,
+            lockoutDuration: TimeSpan.FromMilliseconds(50),
+            failureWindow: TimeSpan.FromMinutes(1));
+
+        shortLimiter.RecordFailedAttempt("192.168.1.100");
+        shortLimiter.RecordFailedAttempt("192.168.1.100");
+
+        Assert.That(shortLimiter.IsRateLimited("192.168.1.100", out _), Is.True);
+
+        await Task.Delay(100);
+
+        shortLimiter.RecordFailedAttempt("192.168.1.100");
+
+        Assert.That(shortLimiter.IsRateLimited("192.168.1.100", out _), Is.False);
+        Assert.That(shortLimiter.GetFailedAttempts("192.168.1.100"), Is.EqualTo(1));
+    }
+
+    [Test]
     public void Clear_RemovesAllTrackedIps()
     {
         _rateLimiter.RecordFailedAttempt("192.168.1.1");

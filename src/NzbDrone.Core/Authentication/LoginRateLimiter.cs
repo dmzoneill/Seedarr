@@ -92,9 +92,16 @@ public class LoginRateLimiter : ILoginRateLimiter
         {
             var now = DateTime.UtcNow;
 
-            if (record.LockedOutUntilUtc.HasValue && record.LockedOutUntilUtc.Value > now)
+            if (record.LockedOutUntilUtc.HasValue)
             {
-                return;
+                if (record.LockedOutUntilUtc.Value > now)
+                {
+                    return;
+                }
+
+                // Lockout has expired; reset record before counting new attempts
+                record.FailedAttempts = 0;
+                record.LockedOutUntilUtc = null;
             }
 
             if (now - record.LastFailedUtc > FailureWindow)
