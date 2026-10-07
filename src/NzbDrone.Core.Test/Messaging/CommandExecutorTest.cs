@@ -32,6 +32,16 @@ internal class ThrowingCommandExecutor : IExecute<ThrowingCommand>
     }
 }
 
+internal class CanceledCommand : Command { }
+
+internal class CanceledCommandExecutor : IExecute<CanceledCommand>
+{
+    public void Execute(CanceledCommand command)
+    {
+        throw new OperationCanceledException("Task canceled or timed out");
+    }
+}
+
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Interface implementation stub")]
 internal class StubCommandRepository : IBasicRepository<CommandModel>
 {
@@ -98,6 +108,7 @@ internal class StubServiceFactory : IServiceFactory
 {
     private readonly SampleCommandExecutor _sampleHandler = new();
     private readonly ThrowingCommandExecutor _throwingHandler = new();
+    private readonly CanceledCommandExecutor _canceledHandler = new();
 
     public T Build<T>()
         where T : class
@@ -115,6 +126,11 @@ internal class StubServiceFactory : IServiceFactory
         if (type == typeof(IExecute<ThrowingCommand>))
         {
             return _throwingHandler;
+        }
+
+        if (type == typeof(IExecute<CanceledCommand>))
+        {
+            return _canceledHandler;
         }
 
         throw new InvalidOperationException($"No handler for {type.Name}");
@@ -205,6 +221,17 @@ public class CommandExecutorTest
 
         Assert.That(command.Status, Is.EqualTo(CommandStatus.Failed));
         Assert.That(command.Message, Is.EqualTo("Handler error"));
+    }
+
+    [Test]
+    public void Execute_should_set_failed_when_handler_throws_operation_canceled()
+    {
+        var command = new CommandModel { Name = "CanceledCommand", Body = "{}" };
+
+        _subject.Execute(command);
+
+        Assert.That(command.Status, Is.EqualTo(CommandStatus.Failed));
+        Assert.That(command.Message, Is.EqualTo("Task canceled or timed out"));
     }
 
     [Test]

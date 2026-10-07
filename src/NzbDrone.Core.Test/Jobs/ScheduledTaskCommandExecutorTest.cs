@@ -26,6 +26,16 @@ public class ScheduledTaskCommandExecutorTest
         }
     }
 
+    private class CancelingTask : IScheduledTask
+    {
+        public int DefaultInterval => 15;
+
+        public void Execute(CancellationToken cancellationToken)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+    }
+
     private static string GetBodyTypeName(object body)
     {
         return body?.GetType().GetProperty("TypeName")?.GetValue(body) as string;
@@ -117,5 +127,36 @@ public class ScheduledTaskCommandExecutorTest
             m.Name == "TaskStarted" && GetBodyTypeName(m.Body) == expectedTypeName));
         broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Name == "TaskCompleted" && GetBodyTypeName(m.Body) == expectedTypeName));
+    }
+
+    [Test]
+    public void Execute_should_rethrow_and_record_failure_when_task_is_canceled()
+    {
+        var cancelingTask = new CancelingTask();
+        var subject = new ScheduledTaskCommandExecutor(new[] { cancelingTask }, _taskManager);
+        var command = new ScheduledTaskCommand { TaskName = typeof(CancelingTask).FullName };
+
+        Assert.Throws<OperationCanceledException>(() => subject.Execute(command));
+
+        _taskManager.Received(1).RecordTaskFailed(
+            typeof(CancelingTask).FullName,
+            Arg.Any<DateTime>(),
+            Arg.Any<OperationCanceledException>(),
+            Arg.Any<ScheduledTaskTriggerSource?>());
+    }
+
+    [Test]
+    public void Execute_should_broadcast_TaskFailed_not_TaskCompleted_when_canceled()
+    {
+        var cancelingTask = new CancelingTask();
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var subject = new ScheduledTaskCommandExecutor(new[] { cancelingTask }, _taskManager, broadcaster);
+        var command = new ScheduledTaskCommand { TaskName = typeof(CancelingTask).FullName };
+
+        Assert.Throws<OperationCanceledException>(() => subject.Execute(command));
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskStarted"));
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskFailed"));
+        broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskCompleted"));
     }
 }

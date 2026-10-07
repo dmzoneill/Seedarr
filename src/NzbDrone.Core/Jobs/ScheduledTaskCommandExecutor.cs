@@ -68,17 +68,34 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
             Body = taskInfo
         });
 
+        var completedSuccessfully = true;
         try
         {
             taskInstance.Execute(cts.Token);
             _logger.Info("Scheduled task completed successfully: {0}", command.TaskName);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
+            completedSuccessfully = false;
             _logger.Warn("Scheduled task was canceled or timed out: {0}", command.TaskName);
+            _taskManager.RecordTaskFailed(command.TaskName, startTime, ex, command.TriggerSource);
+            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+            {
+                Name = "TaskFailed",
+                Action = Datastore.ModelAction.Updated,
+                Body = new
+                {
+                    taskInfo.TypeName,
+                    taskInfo.Name,
+                    taskInfo.TriggerSource,
+                    Error = ex.Message
+                }
+            });
+            throw;
         }
         catch (Exception ex)
         {
+            completedSuccessfully = false;
             _logger.Error(ex, "Scheduled task failed: {0}", command.TaskName);
             _taskManager.RecordTaskFailed(command.TaskName, startTime, ex, command.TriggerSource);
             throw;
@@ -88,12 +105,15 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
             _taskManager.UpdateLastExecution(command.TaskName);
             _taskManager.RecordTaskFinished(command.TaskName, startTime, command.TriggerSource);
 
-            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+            if (completedSuccessfully)
             {
-                Name = "TaskCompleted",
-                Action = Datastore.ModelAction.Updated,
-                Body = taskInfo
-            });
+                _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                {
+                    Name = "TaskCompleted",
+                    Action = Datastore.ModelAction.Updated,
+                    Body = taskInfo
+                });
+            }
         }
     }
 }
