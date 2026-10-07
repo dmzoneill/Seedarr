@@ -18,9 +18,9 @@ public class CaseInsensitiveInfoHashIndex : NzbDroneMigrationBase
                         SELECT MIN(t."Id")
                         FROM "Torrents" t
                         WHERE t."InfoHash" IS NOT NULL
-                          AND LOWER(TRIM(t."InfoHash")) = LOWER(TRIM((
-                              SELECT t2."InfoHash" FROM "Torrents" t2 WHERE t2."Id" = "DownloadHistory"."TorrentId"
-                          )))
+                            AND LOWER(TRIM(t."InfoHash")) = LOWER(TRIM((
+                                SELECT t2."InfoHash" FROM "Torrents" t2 WHERE t2."Id" = "DownloadHistory"."TorrentId"
+                            )))
                     )
                     WHERE "TorrentId" IS NOT NULL;
                     """);
@@ -35,12 +35,12 @@ public class CaseInsensitiveInfoHashIndex : NzbDroneMigrationBase
                         SELECT t."Id"
                         FROM "Torrents" t
                         WHERE t."InfoHash" IS NOT NULL
-                          AND t."Id" NOT IN (
-                              SELECT MIN(t2."Id")
-                              FROM "Torrents" t2
-                              WHERE t2."InfoHash" IS NOT NULL
-                              GROUP BY LOWER(TRIM(t2."InfoHash"))
-                          )
+                            AND t."Id" NOT IN (
+                                SELECT MIN(t2."Id")
+                                FROM "Torrents" t2
+                                WHERE t2."InfoHash" IS NOT NULL
+                                GROUP BY LOWER(TRIM(t2."InfoHash"))
+                            )
                     );
                     """);
             }
@@ -54,12 +54,12 @@ public class CaseInsensitiveInfoHashIndex : NzbDroneMigrationBase
                         SELECT t."Id"
                         FROM "Torrents" t
                         WHERE t."InfoHash" IS NOT NULL
-                          AND t."Id" NOT IN (
-                              SELECT MIN(t2."Id")
-                              FROM "Torrents" t2
-                              WHERE t2."InfoHash" IS NOT NULL
-                              GROUP BY LOWER(TRIM(t2."InfoHash"))
-                          )
+                            AND t."Id" NOT IN (
+                                SELECT MIN(t2."Id")
+                                FROM "Torrents" t2
+                                WHERE t2."InfoHash" IS NOT NULL
+                                GROUP BY LOWER(TRIM(t2."InfoHash"))
+                            )
                     );
                     """);
             }
@@ -73,12 +73,12 @@ public class CaseInsensitiveInfoHashIndex : NzbDroneMigrationBase
                         SELECT t."Id"
                         FROM "Torrents" t
                         WHERE t."InfoHash" IS NOT NULL
-                          AND t."Id" NOT IN (
-                              SELECT MIN(t2."Id")
-                              FROM "Torrents" t2
-                              WHERE t2."InfoHash" IS NOT NULL
-                              GROUP BY LOWER(TRIM(t2."InfoHash"))
-                          )
+                            AND t."Id" NOT IN (
+                                SELECT MIN(t2."Id")
+                                FROM "Torrents" t2
+                                WHERE t2."InfoHash" IS NOT NULL
+                                GROUP BY LOWER(TRIM(t2."InfoHash"))
+                            )
                     );
                     """);
             }
@@ -92,12 +92,12 @@ public class CaseInsensitiveInfoHashIndex : NzbDroneMigrationBase
                         SELECT t."Id"
                         FROM "Torrents" t
                         WHERE t."InfoHash" IS NOT NULL
-                          AND t."Id" NOT IN (
-                              SELECT MIN(t2."Id")
-                              FROM "Torrents" t2
-                              WHERE t2."InfoHash" IS NOT NULL
-                              GROUP BY LOWER(TRIM(t2."InfoHash"))
-                          )
+                            AND t."Id" NOT IN (
+                                SELECT MIN(t2."Id")
+                                FROM "Torrents" t2
+                                WHERE t2."InfoHash" IS NOT NULL
+                                GROUP BY LOWER(TRIM(t2."InfoHash"))
+                            )
                     );
                     """);
             }
@@ -106,12 +106,12 @@ public class CaseInsensitiveInfoHashIndex : NzbDroneMigrationBase
                 """
                 DELETE FROM "Torrents"
                 WHERE "InfoHash" IS NOT NULL
-                  AND "Id" NOT IN (
-                      SELECT MIN("Id")
-                      FROM "Torrents"
-                      WHERE "InfoHash" IS NOT NULL
-                      GROUP BY LOWER(TRIM("InfoHash"))
-                  );
+                    AND "Id" NOT IN (
+                        SELECT MIN("Id")
+                        FROM "Torrents"
+                        WHERE "InfoHash" IS NOT NULL
+                        GROUP BY LOWER(TRIM("InfoHash"))
+                    );
                 """);
 
             Execute.Sql("UPDATE \"Torrents\" SET \"InfoHash\" = LOWER(TRIM(\"InfoHash\")) WHERE \"InfoHash\" IS NOT NULL;");
