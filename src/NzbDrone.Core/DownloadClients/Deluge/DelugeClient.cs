@@ -491,10 +491,9 @@ public class DelugeClient : IDownloadClient, IDisposable
         try
         {
             var trackerObjects = new List<object>();
-            var tier = 0;
             foreach (var t in trackers)
             {
-                trackerObjects.Add(new { tier = tier++, url = t });
+                trackerObjects.Add(new { tier = 0, url = t });
             }
 
             using var doc = SendRequest("core.set_torrent_trackers", new object[] { infoHash, trackerObjects.ToArray() });

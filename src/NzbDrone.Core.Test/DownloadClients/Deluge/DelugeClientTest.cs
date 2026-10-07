@@ -4,6 +4,8 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Text.Json;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.DownloadClients;
@@ -741,5 +743,29 @@ public class DelugeClientTest
     {
         var result = _client.DeleteTorrent("");
         Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task AddTrackers_should_assign_same_tier_to_all_urls_in_one_call()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":2}"); // core.set_torrent_trackers
+        InjectMockClient(handler);
+
+        var trackers = new[] { "http://tracker1.example/announce", "http://tracker2.example/announce" };
+        var result = _client.AddTrackers("abc123", trackers);
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests, Has.Count.EqualTo(3));
+        var body = await handler.Requests[2].Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(body);
+        var trackerParams = doc.RootElement.GetProperty("params")[1];
+        Assert.That(trackerParams.GetArrayLength(), Is.EqualTo(2));
+        Assert.That(trackerParams[0].GetProperty("tier").GetInt32(), Is.EqualTo(0));
+        Assert.That(trackerParams[1].GetProperty("tier").GetInt32(), Is.EqualTo(0));
+        Assert.That(trackerParams[0].GetProperty("url").GetString(), Is.EqualTo(trackers[0]));
+        Assert.That(trackerParams[1].GetProperty("url").GetString(), Is.EqualTo(trackers[1]));
     }
 }
