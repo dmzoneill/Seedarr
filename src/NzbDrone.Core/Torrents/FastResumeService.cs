@@ -126,13 +126,6 @@ public class FastResumeService : IFastResumeService
             resumeData.FinishedTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         }
 
-        if (torrent.Priority > 0 && bitfield != null && bitfield.Length > 0)
-        {
-            var pp = new byte[bitfield.Length];
-            Array.Fill(pp, (byte)torrent.Priority);
-            resumeData.PiecePriority = pp;
-        }
-
         var torrentFiles = torrent.Files;
         if ((torrentFiles == null || torrentFiles.Count == 0) && torrent.Id > 0 && _torrentFileService != null)
         {

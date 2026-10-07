@@ -123,6 +123,39 @@ public class FastResumeServiceTest
     }
 
     [Test]
+    public void SaveFastResume_should_not_write_torrent_queue_priority_as_piece_priority()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            Uploaded = 100,
+            Downloaded = 200,
+            Progress = 0.5,
+            PieceCount = 3,
+            Priority = 7,
+            Status = TorrentStatus.Downloading,
+            Files = new List<TorrentFile>
+            {
+                new() { Path = "a.bin", Size = 100, Wanted = true, Priority = 1 },
+                new() { Path = "b.bin", Size = 100, Wanted = false, Priority = 0 }
+            }
+        };
+
+        var bitfield = new[] { true, false, true };
+        _pieceStorage.GetVerifiedPieces(torrent.InfoHash).Returns(bitfield);
+
+        _service.SaveFastResume(torrent);
+
+        var filePath = Path.Combine(_tempAppDataFolder, "fastresume", torrent.InfoHash.ToLowerInvariant() + ".fastresume");
+        var bytes = File.ReadAllBytes(filePath);
+        var parser = new BencodeParser();
+        var dict = parser.Parse<BDictionary>(bytes);
+
+        Assert.That(dict.ContainsKey("piece_priority"), Is.False);
+    }
+
+    [Test]
     public void SaveFastResume_should_persist_bitfield_and_metadata()
     {
         var torrent = new Torrent
