@@ -136,6 +136,7 @@ public class TorrentRecheckServiceTest
         _stateMachine.Received(1).TransitionFromChecking(torrent);
         _torrentRepository.Received().Update(torrent);
         _fastResumeService.Received(1).SaveFastResume(torrent);
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentHashCheckCompletedEvent>(e => e.Torrent == torrent && e.IsSuccessful));
     }
 
     [Test]
@@ -186,6 +187,7 @@ public class TorrentRecheckServiceTest
         Assert.That(result.Downloaded, Is.EqualTo(2000));
         Assert.That(result.Status, Is.EqualTo(TorrentStatus.Downloading));
         _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b[0] && b[1] && !b[2] && !b[3]));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentHashCheckCompletedEvent>(e => e.Torrent == torrent && !e.IsSuccessful));
     }
 
     [Test]
@@ -426,6 +428,7 @@ public class TorrentRecheckServiceTest
         });
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentHashCheckCompletedEvent>(e => e.Torrent == torrent && !e.IsSuccessful));
     }
 
     [Test]
