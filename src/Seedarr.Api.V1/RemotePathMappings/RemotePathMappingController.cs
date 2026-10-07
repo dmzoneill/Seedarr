@@ -3,6 +3,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Authentication;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.RemotePathMappings;
 using Seedarr.Http;
 
@@ -62,9 +63,16 @@ public class RemotePathMappingController : Controller
             return BadRequest("Local path is required");
         }
 
-        var model = RemotePathMappingResourceMapper.ToModel(resource);
-        var created = _remotePathMappingService.Add(model);
-        return Ok(RemotePathMappingResourceMapper.ToResource(created));
+        try
+        {
+            var model = RemotePathMappingResourceMapper.ToModel(resource);
+            var created = _remotePathMappingService.Add(model);
+            return Ok(RemotePathMappingResourceMapper.ToResource(created));
+        }
+        catch (DuplicateRemotePathMappingException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id:int}")]
@@ -104,12 +112,19 @@ public class RemotePathMappingController : Controller
             return BadRequest("Local path is required");
         }
 
-        var model = RemotePathMappingResourceMapper.ToModel(resource);
-        model.Id = targetId;
-        _remotePathMappingService.Update(model);
+        try
+        {
+            var model = RemotePathMappingResourceMapper.ToModel(resource);
+            model.Id = targetId;
+            _remotePathMappingService.Update(model);
 
-        var updated = _remotePathMappingService.Get(targetId);
-        return Ok(RemotePathMappingResourceMapper.ToResource(updated));
+            var updated = _remotePathMappingService.Get(targetId);
+            return Ok(RemotePathMappingResourceMapper.ToResource(updated));
+        }
+        catch (DuplicateRemotePathMappingException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
     }
 
     [HttpDelete("{id:int}")]
