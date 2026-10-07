@@ -33,15 +33,20 @@ public abstract class ConfigController<TResource> : Controller
         return resource;
     }
 
+    private const int ConfigResourceId = 1;
+
     [HttpGet("{id:int}")]
     [Authorize(Policy = Policies.Reader)]
     [Produces("application/json")]
-    public TResource GetConfigById(int id)
+    public ActionResult<TResource> GetConfigById(int id)
     {
+        if (id != ConfigResourceId)
+        {
+            return NotFound();
+        }
+
         return GetConfig();
     }
-
-    private const int ConfigResourceId = 1;
 
     [RestPutById]
     [Authorize(Policy = Policies.AdminOnly)]

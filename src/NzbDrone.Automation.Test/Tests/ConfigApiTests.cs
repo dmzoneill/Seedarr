@@ -27,6 +27,13 @@ public class ConfigApiTests : ApiTestBase
     }
 
     [Test]
+    public async Task Config_seeding_by_invalid_id_returns_404()
+    {
+        var response = await Client.GetAsync($"{SeedarrUrl}/api/v1/config/seeding/999");
+        Assert.That((int)response.StatusCode, Is.EqualTo(404), "GET config/seeding/999 should return 404 Not Found");
+    }
+
+    [Test]
     public async Task Config_advanced_by_id_returns_singleton()
     {
         var json = await GetJsonAsync($"{SeedarrUrl}/api/v1/config/advanced/1");

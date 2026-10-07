@@ -243,6 +243,25 @@ public class SeedingConfigControllerTest
             e.PropertyName == nameof(SeedingConfigResource.SlowTorrentThresholdKbps)));
     }
 
+    [TestCase(2)]
+    [TestCase(999)]
+    public void GetConfigById_should_return_not_found_when_id_is_not_singleton(int id)
+    {
+        var result = _controller.GetConfigById(id);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void GetConfigById_should_return_singleton_when_id_is_one()
+    {
+        var result = _controller.GetConfigById(1);
+
+        Assert.That(result.Result, Is.Null);
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(result.Value.Id, Is.EqualTo(1));
+    }
+
     [Test]
     public void GetConfig_should_map_queue_concurrency_properties()
     {
