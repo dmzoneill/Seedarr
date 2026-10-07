@@ -530,12 +530,12 @@ public class SystemDatabaseController : Controller
                 });
             }
 
-            if (IsMutationQuery(trimmedQuery))
+            if (IsSafeModeBlockedQuery(trimmedQuery))
             {
                 return BadRequest(new DatabaseQueryResult
                 {
                     Success = false,
-                    ErrorMessage = "Query contains write/mutation statements (INSERT, UPDATE, DELETE, DROP, etc.) but Safe Mode (Read-Only) is enabled.",
+                    ErrorMessage = "Query contains write/mutation statements (INSERT, UPDATE, DELETE, DROP, PRAGMA, ANALYZE, etc.) but Safe Mode (Read-Only) is enabled.",
                     ExecutionTimeMs = 0
                 });
             }
@@ -776,4 +776,63 @@ public class SystemDatabaseController : Controller
 
         return tokens.Any(t => mutationKeywords.Contains(t));
     }
+
+    private static bool IsSafeModeBlockedQuery(string query)
+    {
+        if (IsMutationQuery(query))
+        {
+            return true;
+        }
+
+        var clean = StripSqlComments(query);
+        var tokens = clean.Split(SqlTokenizerSeparators, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0)
+        {
+            return false;
+        }
+
+        var first = tokens[0];
+        if (string.Equals(first, "ANALYZE", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!string.Equals(first, "PRAGMA", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (tokens.Length < 2)
+        {
+            return true;
+        }
+
+        var pragmaToken = tokens[1];
+        if (pragmaToken.Contains('='))
+        {
+            return true;
+        }
+
+        return !SafeModeReadOnlyPragmas.Contains(pragmaToken);
+    }
+
+    private static readonly HashSet<string> SafeModeReadOnlyPragmas = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "application_id",
+        "compile_options",
+        "database_list",
+        "encoding",
+        "foreign_key_list",
+        "freelist_count",
+        "index_info",
+        "index_list",
+        "journal_mode",
+        "page_count",
+        "page_size",
+        "quick_check",
+        "schema_version",
+        "synchronous",
+        "table_info",
+        "user_version",
+    };
 }

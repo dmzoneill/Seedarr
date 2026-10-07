@@ -199,6 +199,54 @@ public class SystemDatabaseControllerTest
         Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 
+    [Test]
+    public async Task ExecuteQuery_should_reject_mutating_pragma_in_safe_mode()
+    {
+        var request = new DatabaseQueryRequest
+        {
+            Query = "PRAGMA journal_mode=WAL",
+            ReadOnly = true,
+        };
+
+        var response = await _controller.ExecuteQuery(request);
+        var badRequest = response.Result as BadRequestObjectResult;
+
+        Assert.That(badRequest, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ExecuteQuery_should_reject_writable_schema_pragma_in_safe_mode()
+    {
+        var request = new DatabaseQueryRequest
+        {
+            Query = "PRAGMA writable_schema=ON",
+            ReadOnly = true,
+        };
+
+        var response = await _controller.ExecuteQuery(request);
+        var badRequest = response.Result as BadRequestObjectResult;
+
+        Assert.That(badRequest, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ExecuteQuery_should_allow_read_only_pragma_in_safe_mode()
+    {
+        var request = new DatabaseQueryRequest
+        {
+            Query = "PRAGMA table_info('Torrents')",
+            ReadOnly = true,
+        };
+
+        var response = await _controller.ExecuteQuery(request);
+        var okResult = response.Result as OkObjectResult;
+
+        Assert.That(okResult, Is.Not.Null);
+        var queryResult = okResult.Value as DatabaseQueryResult;
+        Assert.That(queryResult, Is.Not.Null);
+        Assert.That(queryResult.Success, Is.True);
+    }
+
     [TestCase("/* comment */ DELETE FROM Torrents")]
     [TestCase("-- comment\nDELETE FROM Torrents")]
     [TestCase("SELECT 1; DROP TABLE Torrents;")]
