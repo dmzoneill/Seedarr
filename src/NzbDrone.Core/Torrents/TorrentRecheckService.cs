@@ -525,7 +525,7 @@ public class TorrentRecheckService : ITorrentRecheckService
     {
         if (files == null || files.Count == 0)
         {
-            return torrent.Progress >= 1.0;
+            return false;
         }
 
         var pieceLength = torrent.PieceLength > 0 ? torrent.PieceLength : (int)Math.Max(1, torrent.TotalSize / pieceCount);

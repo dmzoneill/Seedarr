@@ -90,6 +90,40 @@ public class TorrentRecheckServiceTest
     }
 
     [Test]
+    public void Recheck_does_not_trust_progress_when_files_and_piece_hashes_missing()
+    {
+        var torrent = new Torrent
+        {
+            Id = 62,
+            InfoHash = "hash-no-metadata",
+            Name = "Stale Progress Torrent",
+            Status = TorrentStatus.Downloading,
+            Progress = 1.0,
+            PieceCount = 0,
+            TotalSize = 1000,
+            SourcePath = null
+        };
+
+        _torrentFileService.GetByTorrentId(62).Returns(new List<TorrentFile>());
+
+        _stateMachine.TransitionFromChecking(Arg.Any<Torrent>())
+            .Returns(callInfo =>
+            {
+                var t = callInfo.Arg<Torrent>();
+                t.Status = TorrentStatus.Downloading;
+                return TorrentStatus.Downloading;
+            });
+
+        var result = _service.Recheck(torrent);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Progress, Is.EqualTo(0.0));
+        Assert.That(result.Status, Is.EqualTo(TorrentStatus.Downloading));
+        _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 1 && !b[0]));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentHashCheckCompletedEvent>(e => e.Torrent == torrent && !e.IsSuccessful));
+    }
+
+    [Test]
     public void Recheck_presence_fallback_finds_files_under_torrent_name_subdirectory()
     {
         var saveRoot = Path.Combine(Path.GetTempPath(), "seedarr_recheck_" + Guid.NewGuid().ToString("N"));
