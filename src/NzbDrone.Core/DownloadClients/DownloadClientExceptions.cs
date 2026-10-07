@@ -40,3 +40,14 @@ public class DownloadClientUnavailableException : DownloadClientException
     {
     }
 }
+
+public class DownloadClientBackoffException : DownloadClientUnavailableException
+{
+    public DateTime? BackoffUntil { get; }
+
+    public DownloadClientBackoffException(string message, DateTime? backoffUntil = null)
+        : base(message)
+    {
+        BackoffUntil = backoffUntil;
+    }
+}

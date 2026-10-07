@@ -931,6 +931,48 @@ public class DownloadClientControllerTest
     }
 
     [Test]
+    public void GetItems_returns_service_unavailable_when_client_in_backoff()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+        _syncService.GetClientStatus(1).Returns(BackoffStatus(1));
+
+        var result = _controller.GetItems(1);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result.Result).StatusCode, Is.EqualTo(503));
+        _syncService.DidNotReceive().GetClientItems(Arg.Any<int>());
+    }
+
+    [Test]
+    public void GetItems_with_force_bypasses_backoff()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+        _syncService.GetClientStatus(1).Returns(BackoffStatus(1));
+        _syncService.GetClientItems(1).Returns(new List<DownloadClientRemoteItem>());
+
+        var result = _controller.GetItems(1, force: true);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _syncService.Received(1).GetClientItems(1);
+    }
+
+    [Test]
+    public void ImportTorrent_returns_service_unavailable_when_client_in_backoff()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+        _syncService.GetClientStatus(1).Returns(BackoffStatus(1));
+
+        var result = _controller.ImportTorrent(1, "hash123");
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result.Result).StatusCode, Is.EqualTo(503));
+        _syncService.DidNotReceive().ImportTorrent(Arg.Any<int>(), Arg.Any<string>());
+    }
+
+    [Test]
     public void PauseTorrent_returns_bad_request_when_client_pause_fails()
     {
         var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };

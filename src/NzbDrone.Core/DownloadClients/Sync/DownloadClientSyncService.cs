@@ -33,7 +33,6 @@ public interface IDownloadClientSyncService
     DownloadClientStatus GetClientStatus(int clientId);
     IReadOnlyDictionary<int, DownloadClientStatus> GetAllClientStatuses();
     void ResetClientStatus(int clientId);
-    void RecordConnectionTestResult(int clientId, DownloadClientTestResult result);
 }
 
 public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
@@ -74,24 +73,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         return TimeSpan.FromSeconds(seconds);
     }
 
-    public void RecordConnectionTestResult(int clientId, DownloadClientTestResult result)
-    {
-        if (result == null)
-        {
-            return;
-        }
-
-        if (result.Success)
-        {
-            RecordSuccess(clientId, result.Version);
-        }
-        else
-        {
-            RecordFailure(clientId, new Exception(result.Message ?? "Connection test failed"));
-        }
-    }
-
-    private void RecordSuccess(int clientId, string version = null)
+    private void RecordSuccess(int clientId)
     {
         var status = _clientStatuses.GetOrAdd(clientId, id => new DownloadClientStatus { ClientId = id });
         status.IsOnline = true;
@@ -99,28 +81,6 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         status.BackoffUntil = null;
         status.LastErrorMessage = null;
         status.LastSyncTime = DateTime.UtcNow;
-        if (!string.IsNullOrWhiteSpace(version))
-        {
-            status.Version = version.Trim();
-        }
-    }
-
-    private void RecordSuccessFromClient(int clientId, IDownloadClient provider)
-    {
-        string version = null;
-        if (provider != null)
-        {
-            try
-            {
-                version = provider.GetRemoteVersion();
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Failed to read version from download client {0}", clientId);
-            }
-        }
-
-        RecordSuccess(clientId, version);
     }
 
     private void RecordFailure(int clientId, Exception ex)
@@ -131,6 +91,30 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         status.LastErrorMessage = ex?.Message;
         status.LastSyncTime = DateTime.UtcNow;
         status.BackoffUntil = DateTime.UtcNow.Add(CalculateBackoff(status.ConsecutiveFailures));
+    }
+
+    private bool IsClientInBackoff(int clientId, out DownloadClientStatus status)
+    {
+        status = _clientStatuses.GetOrAdd(clientId, id => new DownloadClientStatus { ClientId = id });
+        return status.IsInBackoff;
+    }
+
+    private void EnsureClientNotInBackoff(int clientId, string clientName = null)
+    {
+        if (!IsClientInBackoff(clientId, out var status))
+        {
+            return;
+        }
+
+        var label = string.IsNullOrWhiteSpace(clientName) ? clientId.ToString() : clientName;
+        _logger.Warn(
+            "Download client {0} is in backoff until {1} UTC (failures: {2}). Skipping remote call.",
+            label,
+            status.BackoffUntil.Value,
+            status.ConsecutiveFailures);
+        throw new DownloadClientBackoffException(
+            $"Download client is in backoff until {status.BackoffUntil:O}.",
+            status.BackoffUntil);
     }
 
     public DownloadClientSyncService(
@@ -171,8 +155,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
             foreach (var definition in clients)
             {
-                var status = _clientStatuses.GetOrAdd(definition.Id, id => new DownloadClientStatus { ClientId = id });
-                if (status.IsInBackoff)
+                if (IsClientInBackoff(definition.Id, out var status))
                 {
                     _logger.Warn(
                         "Download client {0} is degraded and backing off until {1} UTC (failures: {2}). Skipping sync.",
@@ -186,22 +169,13 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 var provider = CreateClient(definition);
                 if (provider == null)
                 {
-                    var unsupportedTypeMessage =
-                        $"Could not create provider for client type {definition.ClientType}.";
-                    RecordFailure(definition.Id, new ArgumentException(unsupportedTypeMessage));
-                    _logger.Warn(
-                        "Skipping sync for download client {0} (id {1}): {2}",
-                        definition.Name,
-                        definition.Id,
-                        unsupportedTypeMessage);
-                    result.Failed++;
                     continue;
                 }
 
                 try
                 {
                     var items = provider.GetItems();
-                    RecordSuccessFromClient(definition.Id, provider);
+                    RecordSuccess(definition.Id);
                     foreach (var item in items)
                     {
                         if (string.IsNullOrEmpty(item.InfoHash))
@@ -402,6 +376,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new ArgumentException($"Download client with id {clientId} not found.");
         }
 
+        EnsureClientNotInBackoff(clientId, definition.Name);
+
         var provider = CreateClient(definition);
         if (provider == null)
         {
@@ -417,7 +393,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         try
         {
             items = provider.GetItems();
-            RecordSuccessFromClient(clientId, provider);
+            RecordSuccess(clientId);
         }
         catch (Exception ex)
         {
@@ -478,8 +454,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
         foreach (var client in clients)
         {
-            var status = _clientStatuses.GetOrAdd(client.Id, id => new DownloadClientStatus { ClientId = id });
-            if (status.IsInBackoff)
+            if (IsClientInBackoff(client.Id, out var status))
             {
                 _logger.Warn("Download client {0} is in backoff until {1}. Skipping item fetch.", client.Name, status.BackoffUntil);
                 result.ClientErrors.Add(CreateClientFetchError(
@@ -542,6 +517,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new ArgumentException($"Download client with id {clientId} not found.");
         }
 
+        EnsureClientNotInBackoff(clientId, definition.Name);
+
         var provider = CreateClient(definition);
         if (provider == null)
         {
@@ -555,11 +532,25 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
         }
 
+        try
+        {
+            var existing = _torrentService.GetAll()
+                .FirstOrDefault(t => string.Equals(t.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                return existing;
+            }
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
+
         DownloadClientItem matchingItem = null;
         try
         {
             var items = provider.GetItems();
-            RecordSuccessFromClient(clientId, provider);
+            RecordSuccess(clientId);
             matchingItem = items?.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception ex)
@@ -581,7 +572,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 .FirstOrDefault(t => string.Equals(t.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
             if (existing != null)
             {
-                return LinkExistingTorrentForImport(existing, definition, matchingItem);
+                return existing;
             }
 
             return ImportTorrentInternal(definition, provider, normalizedHash, matchingItem, torrentBytes);
@@ -724,73 +715,6 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         return torrent;
     }
 
-    private Torrent LinkExistingTorrentForImport(
-        Torrent existing,
-        DownloadClientDefinition definition,
-        DownloadClientItem matchingItem)
-    {
-        if (existing.DownloadClientId.HasValue && definition != null && existing.DownloadClientId.Value != definition.Id)
-        {
-            return existing;
-        }
-
-        var updated = false;
-
-        if (definition != null && definition.Id > 0 &&
-            (!existing.DownloadClientId.HasValue || existing.DownloadClientId.Value == definition.Id))
-        {
-            if (!existing.DownloadClientId.HasValue)
-            {
-                existing.DownloadClientId = definition.Id;
-                updated = true;
-            }
-        }
-
-        if (matchingItem != null)
-        {
-            if (!string.IsNullOrWhiteSpace(matchingItem.Category) && string.IsNullOrEmpty(existing.Category))
-            {
-                existing.Category = matchingItem.Category;
-                updated = true;
-            }
-
-            if (!string.IsNullOrWhiteSpace(matchingItem.OutputPath))
-            {
-                var remappedPath = RemapRemotePath(definition?.Host, matchingItem.OutputPath);
-                var resolvedExistingPath = !string.IsNullOrWhiteSpace(remappedPath)
-                    ? remappedPath
-                    : matchingItem.OutputPath;
-
-                if (string.IsNullOrEmpty(existing.SavePath))
-                {
-                    existing.SavePath = resolvedExistingPath;
-                    updated = true;
-                }
-
-                if (string.IsNullOrEmpty(existing.SourcePath))
-                {
-                    existing.SourcePath = resolvedExistingPath;
-                    updated = true;
-                }
-            }
-        }
-
-        if (string.IsNullOrEmpty(existing.Category) && !string.IsNullOrWhiteSpace(definition?.Category))
-        {
-            existing.Category = definition.Category;
-            updated = true;
-        }
-
-        existing.Category ??= string.Empty;
-
-        if (updated)
-        {
-            _torrentService.Update(existing);
-        }
-
-        return existing;
-    }
-
     private void SaveParsedTrackersAndFiles(int torrentId, ParsedTorrent parsed)
     {
         if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)
@@ -927,6 +851,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new ArgumentException($"Download client with id {clientId} not found.");
         }
 
+        EnsureClientNotInBackoff(clientId, definition.Name);
+
         var provider = CreateClient(definition);
         if (provider == null)
         {
@@ -937,7 +863,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         try
         {
             var items = provider.GetItems();
-            RecordSuccessFromClient(clientId, provider);
+            RecordSuccess(clientId);
             if (items != null)
             {
                 foreach (var item in items)
@@ -960,13 +886,13 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
         }
 
-        Dictionary<string, Torrent> existingTorrents;
+        HashSet<string> existingHashes;
         try
         {
-            existingTorrents = _torrentService.GetAll()
+            existingHashes = _torrentService.GetAll()
                 .Where(t => !string.IsNullOrEmpty(t.InfoHash))
-                .GroupBy(t => t.InfoHash.ToLowerInvariant())
-                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+                .Select(t => t.InfoHash.ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
         finally
         {
@@ -993,9 +919,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             clientItems.TryGetValue(hash, out var matchingItem);
             var title = matchingItem?.Title ?? hash;
 
-            if (existingTorrents.TryGetValue(hash, out var existingTorrent))
+            if (existingHashes.Contains(hash))
             {
-                LinkExistingTorrentForImport(existingTorrent, definition, matchingItem);
                 result.Skipped++;
                 result.Items.Add(new BatchImportItemResult
                 {
@@ -1023,16 +948,15 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
         try
         {
-            existingTorrents = _torrentService.GetAll()
+            existingHashes = _torrentService.GetAll()
                 .Where(t => !string.IsNullOrEmpty(t.InfoHash))
-                .GroupBy(t => t.InfoHash.ToLowerInvariant())
-                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+                .Select(t => t.InfoHash.ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             foreach (var pending in pendingImports)
             {
-                if (existingTorrents.TryGetValue(pending.Hash, out var existingTorrent))
+                if (existingHashes.Contains(pending.Hash))
                 {
-                    LinkExistingTorrentForImport(existingTorrent, definition, pending.MatchingItem);
                     result.Skipped++;
                     result.Items.Add(new BatchImportItemResult
                     {
@@ -1046,8 +970,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
                 try
                 {
-                    var imported = ImportTorrentInternal(definition, provider, pending.Hash, pending.MatchingItem, pending.TorrentBytes);
-                    existingTorrents[pending.Hash] = imported;
+                    ImportTorrentInternal(definition, provider, pending.Hash, pending.MatchingItem, pending.TorrentBytes);
+                    existingHashes.Add(pending.Hash);
                     result.Added++;
                     result.Items.Add(new BatchImportItemResult
                     {
@@ -1106,7 +1030,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     private byte[] SearchIndexersForTorrent(string infoHash)
     {
-        var indexers = _indexerFactory.All().Where(i => i.Enable && i.EnableSearch).ToList();
+        var indexers = _indexerFactory.All().Where(i => i.Enable).ToList();
         foreach (var indexerDef in indexers)
         {
             try
