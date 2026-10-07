@@ -299,6 +299,26 @@ public class IdentityProviderServiceTest
     }
 
     [Test]
+    public async Task TestConnectionAsync_WhenSocialProviderUsesIssuerUrl_ProbesOidcDiscoveryDocument()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.OK, "{\"issuer\":\"https://8.8.8.8\"}");
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "valid-social",
+            Name = "Valid Social",
+            ProviderType = IdentityProviderType.Social,
+            IssuerUrl = "https://8.8.8.8",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.LastRequest, Is.Not.Null);
+        Assert.That(_httpHandler.LastRequest.RequestUri.ToString(), Is.EqualTo("https://8.8.8.8/.well-known/openid-configuration"));
+    }
+
+    [Test]
     public async Task TestConnectionAsync_WhenValidHttpsUrlAlreadyContainsWellKnown_ReturnsTrue()
     {
         _httpHandler.Enqueue(HttpStatusCode.OK, "{\"issuer\":\"https://8.8.8.8\"}");
