@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:49:36Z",
+  "updatedAt": "2026-10-07T00:51:31Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,63 +14,63 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_883555dc",
+    "lastScheduleId": "sched_d5125676",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "lion",
-      "issue": 1145,
-      "worktree": "../seedarr_worktrees/issue-1145",
-      "area": "authentication"
+      "worker": "walrus",
+      "issue": 1281,
+      "worktree": "../seedarr_worktrees/issue-1281",
+      "area": "blocklist"
     },
     "host": {
       "status": "running",
-      "worker": "koala",
-      "issue": 955,
-      "worktree": "../seedarr_worktrees/issue-955",
-      "area": "host"
+      "worker": "panther",
+      "issue": 1279,
+      "worktree": "../seedarr_worktrees/issue-1279",
+      "area": "common"
     },
     "api": {
       "status": "running",
-      "worker": "crane",
-      "issue": 1135,
-      "worktree": "../seedarr_worktrees/issue-1135",
+      "worker": "eagle",
+      "issue": 1276,
+      "worktree": "../seedarr_worktrees/issue-1276",
       "area": "downloadclients"
     },
     "core-torrents": {
       "status": "running",
-      "worker": "trout",
-      "issue": 1284,
-      "worktree": "../seedarr_worktrees/issue-1284",
+      "worker": "bison",
+      "issue": 1283,
+      "worktree": "../seedarr_worktrees/issue-1283",
       "area": "torrents"
     },
     "http": {
       "status": "running",
-      "worker": "wolf",
-      "issue": 1277,
-      "worktree": "../seedarr_worktrees/issue-1277",
-      "area": "signalr"
+      "worker": "sparrow",
+      "issue": 1286,
+      "worktree": "../seedarr_worktrees/issue-1286",
+      "area": "jobs"
     }
   },
   "issueQueue": {
     "reservedComponents": [
-      "authentication",
-      "host",
+      "blocklist",
+      "common",
       "downloadclients",
       "torrents",
-      "signalr"
+      "jobs"
     ],
     "nextCandidates": [
-      1286,
-      1283,
-      1281,
       1280,
-      1279,
-      1276
+      1275,
+      1274,
+      1273,
+      1271,
+      1270
     ]
   },
-  "githubOpen": 405,
-  "lastMonitorNote": "fix monitor: batch #1144,#1272,#1274,#1287,#922 closed; rotated to #1145,#955,#1135,#1284,#1277"
+  "githubOpen": 400,
+  "lastMonitorNote": "fix monitor: batch #1145,#955,#1135,#1284,#1277 closed; rotated to #1281,#1279,#1276,#1283,#1286"
 }
