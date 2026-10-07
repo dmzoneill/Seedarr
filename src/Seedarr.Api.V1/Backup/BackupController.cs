@@ -88,6 +88,13 @@ public class BackupController : Controller
                 return NotFound();
             }
 
+            if (id >= 1 &&
+                BackupResourceId.TryResolveName(backups, id, out var idBackupName) &&
+                !string.Equals(idBackupName, matching.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "id and fileName refer to different backups" });
+            }
+
             targetFileName = matching.Name;
         }
         else
