@@ -102,10 +102,6 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
                     _lastBroadcastTimes.Remove(entityId);
                     _entityGenerations.Remove(entityId);
                 }
-                else
-                {
-                    _lastBroadcastTimes[entityId] = DateTime.UtcNow;
-                }
             }
 
             DispatchBroadcast(message.Action, model);
@@ -122,8 +118,6 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
             if (!_lastBroadcastTimes.TryGetValue(entityId, out var lastTime) || (now - lastTime) >= _coalesceWindow)
             {
-                _lastBroadcastTimes[entityId] = now;
-
                 if (_pendingTimers.Remove(entityId, out var timer))
                 {
                     timer.Dispose();
@@ -192,12 +186,6 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
             _pendingUpdates.Clear();
             _pendingUpdateGenerations.Clear();
-
-            var now = DateTime.UtcNow;
-            foreach (var (item, _) in toFlush)
-            {
-                _lastBroadcastTimes[item.Id] = now;
-            }
         }
 
         foreach (var (model, generation) in toFlush)
@@ -270,7 +258,6 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
                     ? gen
                     : GetEntityGeneration(entityId);
                 _pendingUpdateGenerations.Remove(entityId);
-                _lastBroadcastTimes[entityId] = DateTime.UtcNow;
                 modelToBroadcast = model;
             }
         }
@@ -323,11 +310,20 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
             if (resource != null)
             {
                 BroadcastResourceChange(action, resource);
+                RecordSuccessfulBroadcast(model.Id);
             }
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to broadcast SignalR model event for {0}", typeof(TModel).Name);
+        }
+    }
+
+    private void RecordSuccessfulBroadcast(int entityId)
+    {
+        lock (_syncLock)
+        {
+            _lastBroadcastTimes[entityId] = DateTime.UtcNow;
         }
     }
 
