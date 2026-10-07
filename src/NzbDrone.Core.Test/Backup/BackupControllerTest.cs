@@ -237,6 +237,22 @@ public class BackupControllerTest
         _backupService.Received(1).RestoreBackup(canonicalName);
     }
 
+
+    [Test]
+    public void RestoreBackup_with_orphan_zip_should_return_not_found_without_calling_service()
+    {
+        _backupService.GetBackups().Returns(new List<BackupInfo>
+        {
+            new() { Name = "seedarr_backup_1.0_2026-01-01.zip", Size = 100, Time = DateTime.UtcNow }
+        });
+        var request = new RestoreRequest { FileName = "manual_import.zip" };
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _backupService.DidNotReceive().RestoreBackup(Arg.Any<string>());
+    }
+
     [Test]
     public void RestoreBackup_with_nonexistent_fileName_should_return_not_found_without_calling_service()
     {
@@ -266,7 +282,7 @@ public class BackupControllerTest
     [Test]
     public void RestoreBackup_when_file_not_found_should_return_not_found()
     {
-        var fileName = "nonexistent.zip";
+        var fileName = "seedarr_backup_nonexistent.zip";
         _backupService.GetBackups().Returns(new List<BackupInfo>
         {
             new() { Name = fileName, Size = 100, Time = DateTime.UtcNow }

@@ -28,6 +28,7 @@ public interface IBackupService
 public class BackupService : IBackupService
 {
     private const string BackupFolderName = "Backups";
+    private const string ManagedBackupFilePrefix = "seedarr_backup_";
     private const string DbFileName = "seedarr.db";
     private const string ConfigFileName = "config.xml";
     private static readonly byte[] SqliteMagicHeader = { 0x53, 0x51, 0x4C, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6F, 0x72, 0x6D, 0x61, 0x74, 0x20, 0x33, 0x00 };
@@ -287,6 +288,12 @@ public class BackupService : IBackupService
 
     public void DeleteBackup(string fileName)
     {
+        if (!IsManagedBackupFileName(Path.GetFileName(fileName)))
+        {
+            _logger.Warn("Ignoring delete for non-managed backup file name: {0}", fileName);
+            return;
+        }
+
         var filePath = GetSafeBackupPath(fileName);
 
         if (!File.Exists(filePath))
@@ -301,6 +308,11 @@ public class BackupService : IBackupService
 
     public Stream GetBackupStream(string fileName)
     {
+        if (!IsManagedBackupFileName(Path.GetFileName(fileName)))
+        {
+            return null;
+        }
+
         var filePath = GetSafeBackupPath(fileName);
 
         if (!File.Exists(filePath))
@@ -313,6 +325,8 @@ public class BackupService : IBackupService
 
     public void RestoreBackup(string fileName)
     {
+        EnsureManagedBackupFileName(fileName);
+
         var filePath = GetSafeBackupPath(fileName);
 
         if (!File.Exists(filePath))
@@ -411,6 +425,21 @@ public class BackupService : IBackupService
     {
         var safeName = Path.GetFileName(fileName);
         return Path.Combine(GetBackupFolder(), safeName);
+    }
+
+    private static bool IsManagedBackupFileName(string fileName)
+    {
+        return !string.IsNullOrWhiteSpace(fileName)
+               && fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+               && fileName.StartsWith(ManagedBackupFilePrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void EnsureManagedBackupFileName(string fileName)
+    {
+        if (!IsManagedBackupFileName(Path.GetFileName(fileName)))
+        {
+            throw new FileNotFoundException("Backup file not found", fileName);
+        }
     }
 
     private void PruneBackups()
