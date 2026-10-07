@@ -48,14 +48,7 @@ public class BlocklistUpdateTask : IScheduledTask, IExecute<BlocklistUpdateComma
         }
 
         _logger.Info("Executing scheduled blocklist update");
-        try
-        {
-            _syncService.SyncAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Scheduled blocklist update failed");
-        }
+        RunBlocklistSync(force: false, failureLogMessage: "Scheduled blocklist update failed");
     }
 
     public void Execute(BlocklistUpdateCommand command)
@@ -68,14 +61,24 @@ public class BlocklistUpdateTask : IScheduledTask, IExecute<BlocklistUpdateComma
         }
 
         _logger.Info("Executing blocklist update via command queue (force: {0})", force);
+        RunBlocklistSync(force: force, failureLogMessage: "Blocklist update command failed");
+    }
+
+    private void RunBlocklistSync(bool force, string failureLogMessage)
+    {
         try
         {
-            _syncService.SyncAsync(force: force).GetAwaiter().GetResult();
+            var result = _syncService.SyncAsync(force: force).GetAwaiter().GetResult();
+            if (result != null && !result.Success)
+            {
+                _logger.Warn(
+                    "Blocklist sync finished unsuccessfully: {0}",
+                    result.Message ?? result.Status ?? "Unknown error");
+            }
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Blocklist update command failed");
-            throw;
+            _logger.Error(ex, failureLogMessage);
         }
     }
 }

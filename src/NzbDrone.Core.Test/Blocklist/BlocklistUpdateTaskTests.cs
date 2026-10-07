@@ -128,7 +128,7 @@ public class BlocklistUpdateTaskTests
     }
 
     [Test]
-    public void Execute_command_should_rethrow_exception_on_failure()
+    public void Execute_command_should_catch_exceptions_without_crashing()
     {
         _configService.BlocklistEnabled.Returns(true);
         _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -136,6 +136,36 @@ public class BlocklistUpdateTaskTests
 
         var command = new BlocklistUpdateCommand { Force = true };
 
-        Assert.Throws<HttpRequestException>(() => _task.Execute(command));
+        Assert.DoesNotThrow(() => _task.Execute(command));
+    }
+
+    [Test]
+    public void Execute_should_not_throw_when_sync_returns_unsuccessful_result()
+    {
+        _configService.BlocklistEnabled.Returns(true);
+        _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new BlocklistSyncResult
+            {
+                Success = false,
+                Message = "No blocklist URL configured"
+            }));
+
+        Assert.DoesNotThrow(() => _task.Execute());
+    }
+
+    [Test]
+    public void Execute_command_should_not_throw_when_sync_returns_unsuccessful_result()
+    {
+        _configService.BlocklistEnabled.Returns(true);
+        _syncService.SyncAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new BlocklistSyncResult
+            {
+                Success = false,
+                Message = "Sync deferred due to rate limit"
+            }));
+
+        var command = new BlocklistUpdateCommand { Force = false };
+
+        Assert.DoesNotThrow(() => _task.Execute(command));
     }
 }
