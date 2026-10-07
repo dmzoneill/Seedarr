@@ -1,9 +1,13 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
@@ -630,6 +634,29 @@ public class ArrConnectionControllerTest
         await controller.GetImageProxy(1, "/MediaCover/999/poster.jpg");
 
         Assert.That(responseMsg.WasDisposed, Is.True);
+    }
+
+    [Test]
+    public void ArrConnectionController_should_have_proper_authorization_policies()
+    {
+        var classAttr = typeof(ArrConnectionController).GetCustomAttribute<AuthorizeAttribute>();
+        Assert.That(classAttr.Policy, Is.EqualTo(Policies.Reader));
+
+        Assert.That(typeof(ArrConnectionController).GetMethod(nameof(ArrConnectionController.Create))!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+
+        var updateMethod = typeof(ArrConnectionController).GetMethods()
+            .Single(m => m.Name == nameof(ArrConnectionController.Update) && m.GetCustomAttribute<HttpPutAttribute>() != null);
+        Assert.That(updateMethod.GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+
+        Assert.That(typeof(ArrConnectionController).GetMethod(nameof(ArrConnectionController.Delete))!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(ArrConnectionController).GetMethod(nameof(ArrConnectionController.TestConnection))!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(ArrConnectionController).GetMethod(nameof(ArrConnectionController.TestDirect))!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
+        Assert.That(typeof(ArrConnectionController).GetMethod(nameof(ArrConnectionController.Sync))!
+            .GetCustomAttribute<AuthorizeAttribute>()!.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 
     private sealed class DisposableTrackingHttpResponseMessage : HttpResponseMessage
