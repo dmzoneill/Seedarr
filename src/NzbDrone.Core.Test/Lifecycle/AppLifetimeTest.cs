@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
@@ -65,6 +66,65 @@ public class AppLifetimeTest
     public void TearDown()
     {
         _subject.Dispose();
+    }
+
+    [Test]
+    public void EvaluateWatchdogMetrics_should_noop_when_shutting_down()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(100);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            DownloadSpeed = 200 * 1024
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        typeof(AppLifetime).GetField("_shuttingDown", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?.SetValue(_subject, true);
+
+        _subject.EvaluateWatchdogMetrics();
+
+        _diskSpaceService.DidNotReceive().CheckDiskSpaceThresholds();
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SpeedThresholdExceededEvent>());
+    }
+
+    [Test]
+    public async Task StopAsync_should_drain_watchdog_before_flush_when_host_stop_token_cancelled()
+    {
+        using var watchdogStarted = new ManualResetEventSlim(false);
+        using var releaseWatchdog = new ManualResetEventSlim(false);
+        var flushCalled = false;
+
+        _diskSpaceService.When(x => x.CheckDiskSpaceThresholds()).Do(_ =>
+        {
+            watchdogStarted.Set();
+            releaseWatchdog.Wait(TimeSpan.FromSeconds(30));
+        });
+
+        await _subject.StartAsync(CancellationToken.None);
+
+        var inFlightWatchdog = Task.Run(() => _subject.EvaluateWatchdogMetrics());
+        typeof(AppLifetime).GetField("_watchdogLoopTask", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?.SetValue(_subject, inFlightWatchdog);
+
+        Assert.True(watchdogStarted.Wait(TimeSpan.FromSeconds(10)), "Watchdog evaluation should be in flight");
+
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _pieceStorage.When(x => x.Flush()).Do(_ => flushCalled = true);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var stopTask = _subject.StopAsync(cts.Token);
+        await Task.Delay(200);
+        Assert.False(flushCalled, "Phase 2 flush must not run until watchdog work completes");
+
+        releaseWatchdog.Set();
+        await stopTask;
+
+        Assert.True(flushCalled);
     }
 
     [Test]
