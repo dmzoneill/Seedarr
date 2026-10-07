@@ -61,7 +61,7 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
         var fileLogLevel = _configService.FileLogLevel;
         var debugMode = _configService.DebugMode;
 
-        ConfigureFileLogging(config, logToFile, fileLogLevel);
+        ConfigureFileLogging(config, logToFile, fileLogLevel, debugMode);
         ConfigureRingBuffer(config, fileLogLevel, debugMode);
         ConfigureDebugMode(config, debugMode);
 
@@ -80,14 +80,14 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
         LogManager.ReconfigExistingLoggers();
     }
 
-    private void ConfigureFileLogging(LoggingConfiguration config, bool logToFile, string fileLogLevel)
+    private void ConfigureFileLogging(LoggingConfiguration config, bool logToFile, string fileLogLevel, bool debugMode)
     {
         var existingTarget = config.FindTargetByName<FileTarget>(FileTargetName);
 
         if (logToFile)
         {
             var logFilePath = Path.Combine(_appFolderInfo.AppDataFolder, "logs", "seedarr.txt");
-            var level = ParseLogLevel(fileLogLevel);
+            var level = GetEffectiveMinLevel(fileLogLevel, debugMode);
 
             if (existingTarget == null)
             {
@@ -121,11 +121,7 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
             return;
         }
 
-        var minLevel = ParseLogLevel(fileLogLevel);
-        if (debugMode && minLevel.Ordinal > LogLevel.Debug.Ordinal)
-        {
-            minLevel = LogLevel.Debug;
-        }
+        var minLevel = GetEffectiveMinLevel(fileLogLevel, debugMode);
 
         RemoveRulesForTarget(config, RingBufferTargetName);
         config.AddRule(minLevel, LogLevel.Fatal, ringBufferTarget);
@@ -155,6 +151,17 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
                 config.LoggingRules.RemoveAt(i);
             }
         }
+    }
+
+    private static LogLevel GetEffectiveMinLevel(string fileLogLevel, bool debugMode)
+    {
+        var minLevel = ParseLogLevel(fileLogLevel);
+        if (debugMode && minLevel.Ordinal > LogLevel.Debug.Ordinal)
+        {
+            minLevel = LogLevel.Debug;
+        }
+
+        return minLevel;
     }
 
     private static LogLevel ParseLogLevel(string level)

@@ -283,6 +283,49 @@ namespace NzbDrone.Core.Test.Configuration
             Assert.That(rules[0].Levels, Does.Contain(LogLevel.Debug));
         }
 
+        [Test]
+        public void ReconfigureLogging_should_lower_file_target_to_debug_when_debug_mode_enabled()
+        {
+            var config = CreateConfigWithConsoleAndRingBuffer();
+            LogManager.Configuration = config;
+
+            _configService.LogToFile.Returns(true);
+            _configService.FileLogLevel.Returns("Warn");
+            _configService.DebugMode.Returns(true);
+
+            _subject.ReconfigureLogging();
+
+            var fileTarget = LogManager.Configuration.FindTargetByName<FileTarget>("file");
+            var rules = LogManager.Configuration.LoggingRules
+                .Where(r => r.Targets.Contains(fileTarget))
+                .ToList();
+
+            Assert.That(rules, Has.Count.EqualTo(1));
+            Assert.That(rules[0].Levels, Does.Contain(LogLevel.Debug));
+            Assert.That(rules[0].Levels, Does.Not.Contain(LogLevel.Info));
+        }
+
+        [Test]
+        public void ReconfigureLogging_should_keep_trace_file_level_when_debug_mode_enabled()
+        {
+            var config = CreateConfigWithConsoleAndRingBuffer();
+            LogManager.Configuration = config;
+
+            _configService.LogToFile.Returns(true);
+            _configService.FileLogLevel.Returns("Trace");
+            _configService.DebugMode.Returns(true);
+
+            _subject.ReconfigureLogging();
+
+            var fileTarget = LogManager.Configuration.FindTargetByName<FileTarget>("file");
+            var rules = LogManager.Configuration.LoggingRules
+                .Where(r => r.Targets.Contains(fileTarget))
+                .ToList();
+
+            Assert.That(rules, Has.Count.EqualTo(1));
+            Assert.That(rules[0].Levels, Does.Contain(LogLevel.Trace));
+        }
+
         private static LoggingConfiguration CreateConfigWithConsoleAndRingBuffer()
         {
             var config = new LoggingConfiguration();
