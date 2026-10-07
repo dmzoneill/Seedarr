@@ -29,6 +29,7 @@ public class DownloadClientSyncServiceTest
     private class TestableDownloadClientSyncService : DownloadClientSyncService
     {
         public IDownloadClient InjectedClient { get; set; }
+        public Dictionary<int, IDownloadClient> InjectedClientsById { get; set; }
         public IIndexer InjectedIndexer { get; set; }
 
         public TestableDownloadClientSyncService(
@@ -43,6 +44,11 @@ public class DownloadClientSyncServiceTest
 
         protected override IDownloadClient CreateClient(DownloadClientDefinition definition)
         {
+            if (InjectedClientsById != null && InjectedClientsById.TryGetValue(definition.Id, out var clientById))
+            {
+                return clientById;
+            }
+
             return InjectedClient ?? base.CreateClient(definition);
         }
 
@@ -1507,11 +1513,69 @@ public class DownloadClientSyncServiceTest
 
         var allItems = _service.GetAllClientItems();
 
-        Assert.That(allItems, Has.Count.EqualTo(2));
-        Assert.That(allItems[0].ClientId, Is.EqualTo(1));
-        Assert.That(allItems[0].ClientName, Is.EqualTo("qBittorrent"));
-        Assert.That(allItems[1].ClientId, Is.EqualTo(2));
-        Assert.That(allItems[1].ClientName, Is.EqualTo("Transmission"));
+        Assert.That(allItems.Items, Has.Count.EqualTo(2));
+        Assert.That(allItems.ClientErrors, Is.Empty);
+        Assert.That(allItems.Items[0].ClientId, Is.EqualTo(1));
+        Assert.That(allItems.Items[0].ClientName, Is.EqualTo("qBittorrent"));
+        Assert.That(allItems.Items[1].ClientId, Is.EqualTo(2));
+        Assert.That(allItems.Items[1].ClientName, Is.EqualTo("Transmission"));
+    }
+
+    [Test]
+    public void GetAllClientItems_should_record_fetch_errors_without_dropping_other_clients()
+    {
+        var client1Def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true };
+        var client2Def = new DownloadClientDefinition { Id = 2, Name = "Transmission", ClientType = "Transmission", Enable = true };
+
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { client1Def, client2Def });
+        _downloadClientFactory.Get(1).Returns(client1Def);
+        _downloadClientFactory.Get(2).Returns(client2Def);
+
+        var healthyClient = Substitute.For<IDownloadClient>();
+        healthyClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { Title = "Linux ISO", InfoHash = "hash1", TotalSize = 1000 }
+        });
+
+        var failingClient = Substitute.For<IDownloadClient>();
+        failingClient.GetItems().Returns(x => throw new DownloadClientUnavailableException("Connection refused"));
+
+        _service.InjectedClientsById = new Dictionary<int, IDownloadClient>
+        {
+            { 1, healthyClient },
+            { 2, failingClient }
+        };
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var allItems = _service.GetAllClientItems();
+
+        Assert.That(allItems.Items, Has.Count.EqualTo(1));
+        Assert.That(allItems.Items[0].ClientName, Is.EqualTo("qBittorrent"));
+        Assert.That(allItems.ClientErrors, Has.Count.EqualTo(1));
+        Assert.That(allItems.ClientErrors[0].ClientId, Is.EqualTo(2));
+        Assert.That(allItems.ClientErrors[0].Code, Is.EqualTo("unavailable"));
+        Assert.That(allItems.ClientErrors[0].Message, Does.Contain("Connection refused"));
+    }
+
+    [Test]
+    public void GetAllClientItems_should_record_backoff_skips_in_client_errors()
+    {
+        var clientDef = new DownloadClientDefinition { Id = 1, Name = "Backoff qBit", ClientType = "QBitTorrent", Enable = true };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+        _downloadClientFactory.Get(1).Returns(clientDef);
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(x => throw new DownloadClientUnavailableException("Connection refused"));
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        _service.GetAllClientItems();
+
+        var result = _service.GetAllClientItems();
+
+        Assert.That(result.Items, Is.Empty);
+        Assert.That(result.ClientErrors, Has.Count.EqualTo(1));
+        Assert.That(result.ClientErrors[0].Code, Is.EqualTo("backoff"));
     }
 
     [Test]

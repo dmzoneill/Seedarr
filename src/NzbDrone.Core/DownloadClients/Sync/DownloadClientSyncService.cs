@@ -27,7 +27,7 @@ public interface IDownloadClientSyncService
 {
     SyncResult Sync();
     List<DownloadClientRemoteItem> GetClientItems(int clientId);
-    List<DownloadClientRemoteItem> GetAllClientItems();
+    DownloadClientAllItemsResult GetAllClientItems();
     Torrent ImportTorrent(int clientId, string infoHash);
     BatchImportResponse ImportTorrents(int clientId, List<string> infoHashes);
     DownloadClientStatus GetClientStatus(int clientId);
@@ -422,10 +422,10 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         return result;
     }
 
-    public List<DownloadClientRemoteItem> GetAllClientItems()
+    public DownloadClientAllItemsResult GetAllClientItems()
     {
         var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
-        var result = new List<DownloadClientRemoteItem>();
+        var result = new DownloadClientAllItemsResult();
 
         foreach (var client in clients)
         {
@@ -433,21 +433,51 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             if (status.IsInBackoff)
             {
                 _logger.Warn("Download client {0} is in backoff until {1}. Skipping item fetch.", client.Name, status.BackoffUntil);
+                result.ClientErrors.Add(CreateClientFetchError(
+                    client,
+                    "backoff",
+                    $"Download client is in backoff until {status.BackoffUntil:O}."));
                 continue;
             }
 
             try
             {
                 var items = GetClientItems(client.Id);
-                result.AddRange(items);
+                result.Items.AddRange(items);
             }
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Failed to retrieve items from download client {0} ({1}) for aggregated view", client.Name, client.Id);
+                result.ClientErrors.Add(CreateClientFetchError(client, ex));
             }
         }
 
         return result;
+    }
+
+    private static DownloadClientItemFetchError CreateClientFetchError(DownloadClientDefinition client, string code, string message)
+    {
+        return new DownloadClientItemFetchError
+        {
+            ClientId = client.Id,
+            ClientName = client.Name,
+            Code = code,
+            Message = message
+        };
+    }
+
+    private static DownloadClientItemFetchError CreateClientFetchError(DownloadClientDefinition client, Exception ex)
+    {
+        var code = ex switch
+        {
+            DownloadClientAuthenticationException => "authentication",
+            DownloadClientUnavailableException => "unavailable",
+            global::System.Net.Http.HttpRequestException => "unavailable",
+            ArgumentException => "configuration",
+            _ => "fetch_failed"
+        };
+
+        return CreateClientFetchError(client, code, ex.Message);
     }
 
     public Torrent ImportTorrent(int clientId, string infoHash)

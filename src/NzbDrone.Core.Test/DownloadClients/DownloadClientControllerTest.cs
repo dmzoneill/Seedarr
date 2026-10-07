@@ -601,21 +601,45 @@ public class DownloadClientControllerTest
     [Test]
     public void GetAllItems_returns_aggregated_items_from_sync_service()
     {
-        var items = new List<DownloadClientRemoteItem>
+        var payload = new DownloadClientAllItemsResult
         {
-            new() { DownloadId = "1", Title = "Torrent 1", InfoHash = "hash1", ClientId = 1, ClientName = "qBittorrent" },
-            new() { DownloadId = "2", Title = "Torrent 2", InfoHash = "hash2", ClientId = 2, ClientName = "Transmission" },
+            Items = new List<DownloadClientRemoteItem>
+            {
+                new() { DownloadId = "1", Title = "Torrent 1", InfoHash = "hash1", ClientId = 1, ClientName = "qBittorrent" },
+                new() { DownloadId = "2", Title = "Torrent 2", InfoHash = "hash2", ClientId = 2, ClientName = "Transmission" },
+            }
         };
-        _syncService.GetAllClientItems().Returns(items);
+        _syncService.GetAllClientItems().Returns(payload);
 
         var result = _controller.GetAllItems();
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         var okResult = (OkObjectResult)result.Result;
-        var returnedItems = (List<DownloadClientRemoteItem>)okResult.Value;
-        Assert.That(returnedItems, Has.Count.EqualTo(2));
-        Assert.That(returnedItems[0].ClientName, Is.EqualTo("qBittorrent"));
-        Assert.That(returnedItems[1].ClientName, Is.EqualTo("Transmission"));
+        var returned = (DownloadClientAllItemsResult)okResult.Value;
+        Assert.That(returned.Items, Has.Count.EqualTo(2));
+        Assert.That(returned.ClientErrors, Is.Empty);
+        Assert.That(returned.Items[0].ClientName, Is.EqualTo("qBittorrent"));
+        Assert.That(returned.Items[1].ClientName, Is.EqualTo("Transmission"));
+    }
+
+    [Test]
+    public void GetAllItems_strict_returns_first_client_error_status()
+    {
+        var payload = new DownloadClientAllItemsResult
+        {
+            Items = new List<DownloadClientRemoteItem>(),
+            ClientErrors = new List<DownloadClientItemFetchError>
+            {
+                new() { ClientId = 2, Code = "unavailable", Message = "Connection refused" }
+            }
+        };
+        _syncService.GetAllClientItems().Returns(payload);
+
+        var result = _controller.GetAllItems(strict: true);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result.Result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(503));
     }
 
     [Test]
