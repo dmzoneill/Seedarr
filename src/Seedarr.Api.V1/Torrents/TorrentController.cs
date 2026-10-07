@@ -578,7 +578,12 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         var pairs = request.Files.Select(f => (f.FileId, f.Priority));
         var success = _torrentFileService.SetPriorities(torrentId, pairs);
-        return Ok(new { success });
+        if (!success)
+        {
+            return NotFound("One or more files were not found or do not belong to the torrent.");
+        }
+
+        return Ok(new { success = true });
     }
 
     [HttpGet("{torrentId:int}/stream")]
