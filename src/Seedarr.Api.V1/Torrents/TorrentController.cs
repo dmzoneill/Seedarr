@@ -2209,7 +2209,22 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             count = 1000;
         }
 
-        var minimumRank = ParseLevelRank(level) ?? LevelRank.Debug;
+        int minimumRank;
+        if (string.IsNullOrWhiteSpace(level))
+        {
+            minimumRank = LevelRank.Debug;
+        }
+        else
+        {
+            var parsedLevel = ParseLevelRank(level);
+            if (!parsedLevel.HasValue)
+            {
+                return BadRequest(new { message = "Invalid log level." });
+            }
+
+            minimumRank = parsedLevel.Value;
+        }
+
         var entries = _eventLogService.GetByTorrentId(id, count, minimumRank);
 
         var resources = entries.Select(ToResource).ToList();
