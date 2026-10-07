@@ -420,6 +420,34 @@ public class ConfigControllerTests
     }
 
     [Test]
+    public void ToResource_defaults_watch_folder_scan_interval_when_config_returns_zero()
+    {
+        _configService.WatchFolderScanIntervalSeconds.Returns(0);
+        _configFileProvider.Port.Returns(8080);
+        _configFileProvider.SslPort.Returns(8443);
+
+        var resource = GeneralConfigResourceMapper.ToResource(_configService, _configFileProvider);
+
+        Assert.That(resource.WatchFolderScanIntervalSeconds, Is.EqualTo(GeneralConfigResourceMapper.DefaultWatchFolderScanIntervalSeconds));
+    }
+
+    [Test]
+    public void SaveConfig_accepts_round_trip_from_get_when_watch_folder_scan_interval_was_zero_in_config()
+    {
+        _configService.WatchFolderScanIntervalSeconds.Returns(0);
+        _configFileProvider.Port.Returns(8080);
+        _configFileProvider.SslPort.Returns(8443);
+        _configFileProvider.BindAddress.Returns("*");
+
+        var resource = GeneralConfigResourceMapper.ToResource(_configService, _configFileProvider);
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        _configFileProvider.Received(1).SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
+    }
+
+    [Test]
     public void SaveConfig_with_new_tmdb_api_key_containing_asterisks_saves_new_key()
     {
         _configService.TmdbApiKey.Returns("old_tmdb_key_value_12");
