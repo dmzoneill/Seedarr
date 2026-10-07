@@ -11,5 +11,5 @@ public class SpeedScheduleResource : RestResource
     public long? MaxUploadSpeed { get; set; }
     public long? MaxDownloadSpeed { get; set; }
     public bool? IsEnabled { get; set; }
-    public int Priority { get; set; }
+    public int? Priority { get; set; }
 }

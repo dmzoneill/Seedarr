@@ -184,7 +184,7 @@ public class SpeedScheduleController : Controller
             return BadRequest("Speed limit cannot be less than -1.");
         }
 
-        if (resource.Priority < 0)
+        if (resource.Priority is < 0)
         {
             return BadRequest("Priority cannot be negative.");
         }
@@ -214,7 +214,8 @@ public class SpeedScheduleController : Controller
             resource,
             resource.IsEnabled ?? true,
             resource.MaxUploadSpeed ?? SpeedLimits.Unlimited,
-            resource.MaxDownloadSpeed ?? SpeedLimits.Unlimited);
+            resource.MaxDownloadSpeed ?? SpeedLimits.Unlimited,
+            resource.Priority ?? 0);
     }
 
     private static SpeedSchedule ToModelForUpdate(SpeedScheduleResource resource, SpeedSchedule existing)
@@ -223,14 +224,16 @@ public class SpeedScheduleController : Controller
             resource,
             resource.IsEnabled ?? existing.IsEnabled,
             resource.MaxUploadSpeed ?? existing.MaxUploadSpeed,
-            resource.MaxDownloadSpeed ?? existing.MaxDownloadSpeed);
+            resource.MaxDownloadSpeed ?? existing.MaxDownloadSpeed,
+            resource.Priority ?? existing.Priority);
     }
 
     private static SpeedSchedule MapToModel(
         SpeedScheduleResource resource,
         bool isEnabled,
         long maxUploadSpeed,
-        long maxDownloadSpeed)
+        long maxDownloadSpeed,
+        int priority)
     {
         if (string.IsNullOrWhiteSpace(resource.StartTime))
         {
@@ -252,7 +255,7 @@ public class SpeedScheduleController : Controller
             MaxUploadSpeed = maxUploadSpeed,
             MaxDownloadSpeed = maxDownloadSpeed,
             IsEnabled = isEnabled,
-            Priority = resource.Priority
+            Priority = priority
         };
     }
 }
