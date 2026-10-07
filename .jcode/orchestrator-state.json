@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:07:06Z",
+  "updatedAt": "2026-10-07T02:08:10Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_f41cedcc",
+    "lastScheduleId": "sched_38f285f3",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -28,9 +28,9 @@
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 992,
-      "worktree": "../seedarr_worktrees/issue-992",
-      "area": "common"
+      "issue": 933,
+      "worktree": "../seedarr_worktrees/issue-933",
+      "area": "host"
     },
     "api": {
       "status": "running",
@@ -42,8 +42,8 @@
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "issue": 1038,
-      "worktree": "../seedarr_worktrees/issue-1038",
+      "issue": 1124,
+      "worktree": "../seedarr_worktrees/issue-1124",
       "area": "torrents"
     },
     "http": {
@@ -69,12 +69,12 @@
       1248,
       1235,
       1214,
-      1124,
       1062,
       982,
-      1027
+      1027,
+      1035
     ]
   },
-  "githubOpen": 241,
-  "lastMonitorNote": "fix monitor: 241 open; 3 restarts badger/hawk/sparrow (stream not_found); panther elk active; macaque #993 tigress #1037 ack"
+  "githubOpen": 239,
+  "lastMonitorNote": "fix monitor: 239 open; closed #992 #1038; dispatches panther #933 elk #1124; badger/hawk/sparrow active post-restart"
 }
