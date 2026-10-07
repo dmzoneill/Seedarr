@@ -31,7 +31,7 @@ public class ForwardAuthOptions : AuthenticationSchemeOptions
 
     /// <summary>
     /// Comma- or semicolon-separated list of trusted proxy IP addresses or CIDR ranges.
-    /// Default loopback addresses (127.0.0.1, ::1) are always trusted.
+    /// Loopback is trusted only when explicitly listed (for example 127.0.0.1 or ::1).
     /// </summary>
     public string TrustedProxies { get; set; } = string.Empty;
 
@@ -74,19 +74,24 @@ public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        string idpProxies = null;
+        IdentityProviderDefinition forwardAuthIdp = null;
         try
         {
             var idpRepo = _identityProviderRepository ?? Context.RequestServices?.GetService<IIdentityProviderRepository>();
-            var forwardAuthIdp = idpRepo?.GetEnabled()?.FirstOrDefault(p => p.ProviderType == IdentityProviderType.ForwardAuth && p.IsEnabled);
-            idpProxies = forwardAuthIdp?.TrustedProxies;
+            forwardAuthIdp = idpRepo?.GetEnabled()?.FirstOrDefault(p => p.ProviderType == IdentityProviderType.ForwardAuth && p.IsEnabled);
         }
         catch (Exception ex)
         {
             NLogLogger.Warn(ex, "Failed to resolve ForwardAuth identity provider trusted proxies.");
         }
 
-        var trustedProxies = CombineProxies(Options.TrustedProxies, _configFileProvider?.TrustedProxies, idpProxies);
+        if (forwardAuthIdp == null)
+        {
+            NLogLogger.Warn("ForwardAuth authentication rejected: no enabled ForwardAuth identity provider.");
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
+        var trustedProxies = CombineProxies(Options.TrustedProxies, _configFileProvider?.TrustedProxies, forwardAuthIdp.TrustedProxies);
         if (!IpSecurityHelper.IsTrustedProxy(remoteIp, trustedProxies))
         {
             NLogLogger.Warn("ForwardAuth authentication rejected: RemoteIpAddress {0} is not a trusted proxy.", remoteIp);
