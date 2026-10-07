@@ -9,6 +9,52 @@ public class CaseInsensitiveCategoryName : NzbDroneMigrationBase
     {
         if (Schema.Table("Categories").Exists())
         {
+            if (Schema.Table("RssRules").Exists())
+            {
+                Execute.Sql(
+                    """
+                    UPDATE "RssRules" rr
+                    SET "CategoryId" = (
+                        SELECT MIN(c."Id")
+                        FROM "Categories" c
+                        WHERE LOWER(TRIM(c."Name")) = LOWER(TRIM((
+                            SELECT c2."Name" FROM "Categories" c2 WHERE c2."Id" = rr."CategoryId"
+                        )))
+                    )
+                    WHERE rr."CategoryId" > 0;
+                    """);
+            }
+
+            if (Schema.Table("Torrents").Exists())
+            {
+                Execute.Sql(
+                    """
+                    UPDATE "Torrents" t
+                    SET "Category" = (
+                        SELECT c."Name"
+                        FROM "Categories" c
+                        WHERE c."Id" = (
+                            SELECT MIN(c2."Id")
+                            FROM "Categories" c2
+                            WHERE LOWER(TRIM(c2."Name")) = LOWER(TRIM(t."Category"))
+                        )
+                    )
+                    WHERE t."Category" IS NOT NULL AND TRIM(t."Category") != '';
+                    """);
+            }
+
+            Execute.Sql(
+                """
+                DELETE FROM "Categories"
+                WHERE "Id" NOT IN (
+                    SELECT MIN("Id")
+                    FROM "Categories"
+                    GROUP BY LOWER(TRIM("Name"))
+                );
+                """);
+
+            Execute.Sql("UPDATE \"Categories\" SET \"Name\" = LOWER(TRIM(\"Name\")) WHERE \"Name\" IS NOT NULL;");
+
             if (Schema.Table("Categories").Index("IX_Categories_Name").Exists())
             {
                 Delete.Index("IX_Categories_Name").OnTable("Categories");

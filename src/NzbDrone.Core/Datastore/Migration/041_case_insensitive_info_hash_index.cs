@@ -9,6 +9,111 @@ public class CaseInsensitiveInfoHashIndex : NzbDroneMigrationBase
     {
         if (Schema.Table("Torrents").Exists())
         {
+            if (Schema.Table("DownloadHistory").Exists())
+            {
+                Execute.Sql(
+                    """
+                    UPDATE "DownloadHistory" dh
+                    SET "TorrentId" = (
+                        SELECT MIN(t."Id")
+                        FROM "Torrents" t
+                        WHERE t."InfoHash" IS NOT NULL
+                          AND LOWER(TRIM(t."InfoHash")) = LOWER(TRIM((
+                              SELECT t2."InfoHash" FROM "Torrents" t2 WHERE t2."Id" = dh."TorrentId"
+                          )))
+                    )
+                    WHERE dh."TorrentId" IS NOT NULL;
+                    """);
+            }
+
+            if (Schema.Table("TorrentFiles").Exists())
+            {
+                Execute.Sql(
+                    """
+                    DELETE FROM "TorrentFiles"
+                    WHERE "TorrentId" IN (
+                        SELECT t."Id"
+                        FROM "Torrents" t
+                        WHERE t."InfoHash" IS NOT NULL
+                          AND t."Id" NOT IN (
+                              SELECT MIN(t2."Id")
+                              FROM "Torrents" t2
+                              WHERE t2."InfoHash" IS NOT NULL
+                              GROUP BY LOWER(TRIM(t2."InfoHash"))
+                          )
+                    );
+                    """);
+            }
+
+            if (Schema.Table("TrackerEntries").Exists())
+            {
+                Execute.Sql(
+                    """
+                    DELETE FROM "TrackerEntries"
+                    WHERE "TorrentId" IN (
+                        SELECT t."Id"
+                        FROM "Torrents" t
+                        WHERE t."InfoHash" IS NOT NULL
+                          AND t."Id" NOT IN (
+                              SELECT MIN(t2."Id")
+                              FROM "Torrents" t2
+                              WHERE t2."InfoHash" IS NOT NULL
+                              GROUP BY LOWER(TRIM(t2."InfoHash"))
+                          )
+                    );
+                    """);
+            }
+
+            if (Schema.Table("TorrentEventLogs").Exists())
+            {
+                Execute.Sql(
+                    """
+                    DELETE FROM "TorrentEventLogs"
+                    WHERE "TorrentId" IN (
+                        SELECT t."Id"
+                        FROM "Torrents" t
+                        WHERE t."InfoHash" IS NOT NULL
+                          AND t."Id" NOT IN (
+                              SELECT MIN(t2."Id")
+                              FROM "Torrents" t2
+                              WHERE t2."InfoHash" IS NOT NULL
+                              GROUP BY LOWER(TRIM(t2."InfoHash"))
+                          )
+                    );
+                    """);
+            }
+
+            if (Schema.Table("TorrentMediaMetadata").Exists())
+            {
+                Execute.Sql(
+                    """
+                    DELETE FROM "TorrentMediaMetadata"
+                    WHERE "TorrentId" IN (
+                        SELECT t."Id"
+                        FROM "Torrents" t
+                        WHERE t."InfoHash" IS NOT NULL
+                          AND t."Id" NOT IN (
+                              SELECT MIN(t2."Id")
+                              FROM "Torrents" t2
+                              WHERE t2."InfoHash" IS NOT NULL
+                              GROUP BY LOWER(TRIM(t2."InfoHash"))
+                          )
+                    );
+                    """);
+            }
+
+            Execute.Sql(
+                """
+                DELETE FROM "Torrents"
+                WHERE "InfoHash" IS NOT NULL
+                  AND "Id" NOT IN (
+                      SELECT MIN("Id")
+                      FROM "Torrents"
+                      WHERE "InfoHash" IS NOT NULL
+                      GROUP BY LOWER(TRIM("InfoHash"))
+                  );
+                """);
+
             Execute.Sql("UPDATE \"Torrents\" SET \"InfoHash\" = LOWER(TRIM(\"InfoHash\")) WHERE \"InfoHash\" IS NOT NULL;");
 
             if (Schema.Table("Torrents").Index("IX_Torrents_InfoHash").Exists())
