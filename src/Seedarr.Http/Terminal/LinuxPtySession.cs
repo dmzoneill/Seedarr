@@ -65,7 +65,7 @@ public sealed class LinuxPtySession : ITerminalSession
             pid = NativePty.Forkpty(out masterFd, IntPtr.Zero, IntPtr.Zero, ref ws);
             if (pid < 0)
             {
-                throw new InvalidOperationException($"Failed to fork pseudo-terminal (errno: {Marshal.GetLastWin32Error()})");
+                throw new InvalidOperationException($"Failed to fork pseudo-terminal (errno: {Marshal.GetLastPInvokeError()})");
             }
 
             if (pid == 0)
