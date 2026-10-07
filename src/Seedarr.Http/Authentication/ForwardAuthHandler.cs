@@ -41,9 +41,10 @@ public class ForwardAuthOptions : AuthenticationSchemeOptions
     public string AdminGroups { get; set; } = "admin;admins;administrator;administrators";
 
     /// <summary>
-    /// Default role for authenticated users who do not match AdminGroups. Defaults to "User".
+    /// Default role for authenticated users who do not match AdminGroups. Defaults to <see cref="Roles.ReadOnly"/> to match OIDC role-mapping fallbacks.
+    /// Set explicitly to <see cref="Roles.User"/> for operator-level API access.
     /// </summary>
-    public string DefaultRole { get; set; } = "User";
+    public string DefaultRole { get; set; } = Roles.ReadOnly;
 }
 
 public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
@@ -115,7 +116,7 @@ public class ForwardAuthHandler : AuthenticationHandler<ForwardAuthOptions>
             .Split(GroupDelimiters, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         var isAdmin = groups.Any(g => adminGroups.Contains(g, StringComparer.OrdinalIgnoreCase));
-        var role = isAdmin ? "Admin" : (!string.IsNullOrWhiteSpace(Options.DefaultRole) ? Options.DefaultRole : "User");
+        var role = isAdmin ? Roles.Admin : (!string.IsNullOrWhiteSpace(Options.DefaultRole) ? Options.DefaultRole : Roles.ReadOnly);
 
         var claims = new List<Claim>
         {
