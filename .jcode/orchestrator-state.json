@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:58:04Z",
+  "updatedAt": "2026-10-07T01:00:10Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,44 +14,44 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_3eb1efa9",
+    "lastScheduleId": "sched_3ca76948",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "badger",
-      "issue": 1261,
-      "worktree": "../seedarr_worktrees/issue-1261",
+      "worker": "hedgehog",
+      "issue": 1032,
+      "worktree": "../seedarr_worktrees/issue-1032",
       "area": "blocklist"
     },
     "host": {
       "status": "running",
-      "worker": "panther",
-      "issue": 1259,
-      "worktree": "../seedarr_worktrees/issue-1259",
+      "worker": "koala",
+      "issue": 953,
+      "worktree": "../seedarr_worktrees/issue-953",
       "area": "host"
     },
     "api": {
       "status": "running",
-      "worker": "eagle",
-      "issue": 1264,
-      "worktree": "../seedarr_worktrees/issue-1264",
+      "worker": "lion",
+      "issue": 1256,
+      "worktree": "../seedarr_worktrees/issue-1256",
       "area": "api"
     },
     "core-torrents": {
       "status": "running",
-      "worker": "bison",
-      "issue": 1267,
-      "worktree": "../seedarr_worktrees/issue-1267",
+      "worker": "moose",
+      "issue": 1265,
+      "worktree": "../seedarr_worktrees/issue-1265",
       "area": "torrents"
     },
     "http": {
       "status": "running",
-      "worker": "trout",
-      "issue": 1260,
-      "worktree": "../seedarr_worktrees/issue-1260",
-      "area": "signalr"
+      "worker": "sparrow",
+      "issue": 1258,
+      "worktree": "../seedarr_worktrees/issue-1258",
+      "area": "http"
     }
   },
   "issueQueue": {
@@ -60,16 +60,18 @@
       "host",
       "api",
       "torrents",
+      "http",
       "signalr"
     ],
     "nextCandidates": [
-      1265,
-      1258,
       1257,
-      1256,
-      1255
+      1255,
+      904,
+      905,
+      1006,
+      1158
     ]
   },
-  "githubOpen": 386,
-  "lastMonitorNote": "fix monitor: batch #1262,#1263,#1266,#1268,#1273 closed; rotated to #1261,#1259,#1264,#1267,#1260"
+  "githubOpen": 381,
+  "lastMonitorNote": "fix monitor: batch #1261,#1259,#1264,#1267,#1260 closed; rotated to #1032,#953,#1256,#1265,#1258"
 }
