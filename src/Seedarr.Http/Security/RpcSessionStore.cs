@@ -28,8 +28,6 @@ public interface IRpcSessionStore
 
 public class RpcSessionStore : IRpcSessionStore
 {
-    private static readonly Lazy<IRpcSessionStore> SharedInstance = new(() => new RpcSessionStore());
-
     private readonly ConcurrentDictionary<string, DateTime> _sessions = new();
     private readonly int _maxCapacity;
     private readonly object _pruneLock = new();
@@ -41,8 +39,6 @@ public class RpcSessionStore : IRpcSessionStore
         _maxCapacity = Math.Max(10, maxCapacity);
         _lastPruneTicks = DateTime.UtcNow.Ticks;
     }
-
-    public static IRpcSessionStore SharedSessionStore => SharedInstance.Value;
 
     public int Count => _sessions.Count;
 

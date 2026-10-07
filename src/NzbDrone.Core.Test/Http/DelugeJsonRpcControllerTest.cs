@@ -11,6 +11,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Deluge;
+using Seedarr.Http.Security;
 
 namespace NzbDrone.Core.Test.Http;
 
@@ -51,6 +52,7 @@ public class DelugeJsonRpcControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             categoryService: _categoryService,
             trackerService: _trackerService);
     }

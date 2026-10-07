@@ -165,7 +165,7 @@ public class DelugeJsonRpcController : ControllerBase
         _tagService = tagService;
         _configFileProvider = configFileProvider;
         _httpClient = httpClient ?? _sharedHttpClient;
-        _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
+        _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _remotePathMappingService = remotePathMappingService;
         _callerHostResolver = callerHostResolver;
         _categoryService = categoryService;

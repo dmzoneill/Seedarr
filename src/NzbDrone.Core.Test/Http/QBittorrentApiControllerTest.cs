@@ -15,6 +15,7 @@ using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.QBittorrent;
+using Seedarr.Http.Security;
 
 namespace NzbDrone.Core.Test.Http;
 
@@ -56,6 +57,7 @@ public class QBittorrentApiControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             categoryService: _categoryService);
     }
 
@@ -957,6 +959,7 @@ public class QBittorrentApiControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             categoryService: _categoryService,
             pieceStorage: pieceStorage,
             piecePicker: piecePicker);

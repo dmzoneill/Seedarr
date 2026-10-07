@@ -121,16 +121,6 @@ public class RpcSessionStoreTest
     }
 
     [Test]
-    public void SharedSessionStore_ReturnsSingletonInstance()
-    {
-        var instance1 = RpcSessionStore.SharedSessionStore;
-        var instance2 = RpcSessionStore.SharedSessionStore;
-
-        Assert.That(instance1, Is.Not.Null);
-        Assert.That(instance2, Is.SameAs(instance1));
-    }
-
-    [Test]
     public void ConcurrentOperations_AreThreadSafe()
     {
         var store = new RpcSessionStore(50);

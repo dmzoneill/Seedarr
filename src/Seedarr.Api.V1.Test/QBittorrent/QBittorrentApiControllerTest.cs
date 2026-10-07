@@ -14,6 +14,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.QBittorrent;
+using Seedarr.Http.Security;
 
 namespace Seedarr.Api.V1.Test.QBittorrent;
 
@@ -55,7 +56,23 @@ public class QBittorrentApiControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             categoryService: _categoryService);
+    }
+
+    [Test]
+    public void Constructor_Throws_When_SessionStore_Is_Null()
+    {
+        Assert.Throws<ArgumentNullException>(() => new QBittorrentApiController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _tagService,
+            _configFileProvider,
+            sessionStore: null));
     }
 
     [Test]
@@ -667,6 +684,7 @@ public class QBittorrentApiControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             remotePathMappingService: remotePathMappingService,
             categoryService: _categoryService);
 
@@ -711,6 +729,7 @@ public class QBittorrentApiControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             remotePathMappingService: remotePathMappingService,
             categoryService: _categoryService);
 
@@ -752,6 +771,7 @@ public class QBittorrentApiControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             relocationService: relocationService,
             remotePathMappingService: remotePathMappingService,
             categoryService: _categoryService);
@@ -1157,6 +1177,7 @@ public class QBittorrentApiControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             categoryService: _categoryService,
             pieceStorage: pieceStorage);
 
@@ -1193,6 +1214,7 @@ public class QBittorrentApiControllerTest
             _configService,
             _tagService,
             _configFileProvider,
+            sessionStore: new RpcSessionStore(),
             categoryService: _categoryService,
             piecePicker: piecePicker);
 
