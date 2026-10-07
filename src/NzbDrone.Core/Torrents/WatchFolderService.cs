@@ -193,8 +193,11 @@ public class WatchFolderService : BackgroundService
         try
         {
             await Task.Delay(500, newCts.Token);
-            _fileDebounceTokens.TryRemove(filePath, out _);
-            ProcessFile(filePath);
+
+            if (_fileDebounceTokens.TryRemove(new KeyValuePair<string, CancellationTokenSource>(filePath, newCts)))
+            {
+                ProcessFile(filePath);
+            }
         }
         catch (OperationCanceledException)
         {
