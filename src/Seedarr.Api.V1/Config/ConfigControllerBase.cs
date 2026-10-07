@@ -41,12 +41,20 @@ public abstract class ConfigController<TResource> : Controller
         return GetConfig();
     }
 
+    private const int ConfigResourceId = 1;
+
     [RestPutById]
     [Authorize(Policy = Policies.AdminOnly)]
     [Consumes("application/json")]
     [Produces("application/json")]
-    public virtual ActionResult<TResource> SaveConfig([FromBody] TResource resource)
+    public virtual ActionResult<TResource> SaveConfig(int? id, [FromBody] TResource resource)
     {
+        var idValidationError = ValidateSaveConfigId(id, resource);
+        if (idValidationError != null)
+        {
+            return idValidationError;
+        }
+
         if (resource == null)
         {
             return BadRequest("Request body cannot be empty.");
@@ -80,6 +88,31 @@ public abstract class ConfigController<TResource> : Controller
         }
 
         return Accepted(resource);
+    }
+
+    protected ActionResult<TResource>? ValidateSaveConfigId(int? routeId, TResource? resource)
+    {
+        if (routeId.HasValue && routeId.Value != ConfigResourceId)
+        {
+            return BadRequest($"Config resource id must be {ConfigResourceId}.");
+        }
+
+        if (resource == null)
+        {
+            return null;
+        }
+
+        if (resource.Id != 0 && resource.Id != ConfigResourceId)
+        {
+            return BadRequest($"Config resource id must be {ConfigResourceId}.");
+        }
+
+        if (routeId.HasValue && resource.Id != 0 && resource.Id != routeId.Value)
+        {
+            return BadRequest("Route id does not match resource id.");
+        }
+
+        return null;
     }
 
     protected abstract TResource ToResource(IConfigService model);

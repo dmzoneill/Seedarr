@@ -178,4 +178,52 @@ public class BitTorrentConfigControllerTest
         var objResult = (ObjectResult)result.Result;
         Assert.That(objResult.StatusCode, Is.EqualTo(500));
     }
+
+    [Test]
+    public void SaveConfig_should_reject_mismatched_route_id()
+    {
+        var resource = CreateValidResource();
+
+        var result = _controller.SaveConfig(999, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _configService.DidNotReceive().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
+    }
+
+    [Test]
+    public void SaveConfig_should_accept_canonical_route_id()
+    {
+        var resource = CreateValidResource();
+        resource.Id = 1;
+
+        var result = _controller.SaveConfig(1, resource);
+
+        Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void SaveConfig_should_reject_body_id_other_than_one()
+    {
+        var resource = CreateValidResource();
+        resource.Id = 999;
+
+        var result = _controller.SaveConfig(null, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _configService.DidNotReceive().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
+    }
+
+    private static BitTorrentConfigResource CreateValidResource()
+    {
+        return new BitTorrentConfigResource
+        {
+            EnableDht = true,
+            EnablePex = true,
+            EnableLpd = true,
+            EncryptionMode = "enabled",
+            AnnounceIntervalSeconds = 1800,
+            MinAnnounceIntervalSeconds = 300,
+            ScrapeIntervalSeconds = 900,
+        };
+    }
 }
