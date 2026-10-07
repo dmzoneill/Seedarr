@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using NzbDrone.Common.Serializer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
@@ -131,17 +133,53 @@ public class IndexerController : Controller
 
     [HttpPut("{id}")]
     [Authorize(Policy = Policies.AdminOnly)]
-    public ActionResult Update(int id, [FromBody] IndexerDefinition definition)
+    public ActionResult Update(int id, [FromBody] JsonElement body)
+    {
+        if (body.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            return BadRequest("Request body must be a JSON object");
+        }
+
+        var presentPropertyKeys = body.EnumerateObject()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var definition = JsonSerializer.Deserialize<IndexerDefinition>(body, STJson.GetSerializerSettings());
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        return UpdateIndexer(id, definition, presentPropertyKeys);
+    }
+
+    [NonAction]
+    public ActionResult Update(int id, IndexerDefinition definition) => UpdateIndexer(id, definition, null);
+
+    private ActionResult UpdateIndexer(int id, IndexerDefinition definition, IReadOnlySet<string> presentPropertyKeys)
     {
         if (definition == null)
         {
             return BadRequest("Request body cannot be null");
         }
 
+        definition.Id = id;
+
         var existing = _indexerFactory.Get(id);
         if (existing == null)
         {
             return NotFound();
+        }
+
+        if (presentPropertyKeys != null)
+        {
+            definition = IndexerUpdateMerger.Merge(existing, definition, presentPropertyKeys);
+            definition.Id = id;
         }
 
         if (string.IsNullOrWhiteSpace(definition.Url))
@@ -154,16 +192,16 @@ public class IndexerController : Controller
             return BadRequest("Target host/URL is not permitted.");
         }
 
-        definition.Id = id;
-
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
-            definition.Implementation = $"{definition.IndexerType}Indexer";
+            definition.Implementation = !string.IsNullOrWhiteSpace(definition.IndexerType)
+                ? $"{definition.IndexerType}Indexer"
+                : existing.Implementation ?? $"{existing.IndexerType}Indexer";
         }
 
         if (string.IsNullOrWhiteSpace(definition.ConfigContract))
         {
-            definition.ConfigContract = "IndexerDefinition";
+            definition.ConfigContract = existing.ConfigContract ?? "IndexerDefinition";
         }
 
         // If API key is omitted, empty, or masked, preserve existing value
