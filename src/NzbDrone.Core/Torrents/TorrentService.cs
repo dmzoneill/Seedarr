@@ -843,9 +843,13 @@ public class TorrentService : ITorrentService,
         _logger.Warn("[State Machine] VPN kill switch triggered on interface '{0}': halting {1} active torrents.", ifaceName, activeTorrents.Count);
         foreach (var torrent in activeTorrents)
         {
+            var oldStatus = torrent.Status;
+            torrent.Pause();
             torrent.IsVpnPaused = true;
+            var reason = $"VPN kill switch triggered on interface '{ifaceName}'";
             _logger.Warn("[State Machine] Torrent #{0} ('{1}') halted by VPN kill switch on interface '{2}'.", torrent.Id, torrent.Name, ifaceName);
-            _torrentEventLogService?.Warn(torrent.Id, "State Machine", $"Torrent halted: VPN kill switch triggered on interface '{ifaceName}'");
+            _torrentEventLogService?.Warn(torrent.Id, "State Machine", $"Torrent halted: {reason}");
+            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused, reason));
         }
 
         _repository.UpdateMany(activeTorrents);
@@ -880,9 +884,13 @@ public class TorrentService : ITorrentService,
         _logger.Info("[State Machine] VPN restored: unpausing {0} VPN-paused torrents.", pausedTorrents.Count);
         foreach (var torrent in pausedTorrents)
         {
+            var oldStatus = torrent.Status;
             torrent.IsVpnPaused = false;
+            torrent.Resume();
+            const string reason = "VPN interface restored";
             _logger.Info("[State Machine] Torrent #{0} ('{1}') resumed after VPN interface restored.", torrent.Id, torrent.Name);
-            _torrentEventLogService?.Info(torrent.Id, "State Machine", "Torrent resumed: VPN interface restored");
+            _torrentEventLogService?.Info(torrent.Id, "State Machine", $"Torrent resumed: {reason}");
+            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, torrent.Status, reason));
         }
 
         _repository.UpdateMany(pausedTorrents);

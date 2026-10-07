@@ -1426,8 +1426,8 @@ namespace NzbDrone.Core.Test.Torrents
         [Test]
         public void Handle_VpnKillSwitchTriggeredEvent_marks_active_torrents_IsVpnPaused_true()
         {
-            var downloading = new Torrent { Id = 1, Name = "DownloadingTorrent", Status = TorrentStatus.Downloading, IsVpnPaused = false };
-            var seeding = new Torrent { Id = 2, Name = "SeedingTorrent", Status = TorrentStatus.Seeding, IsVpnPaused = false };
+            var downloading = new Torrent { Id = 1, Name = "DownloadingTorrent", Status = TorrentStatus.Downloading, IsVpnPaused = false, Active = true, DownloadSpeed = 1024, UploadSpeed = 512 };
+            var seeding = new Torrent { Id = 2, Name = "SeedingTorrent", Status = TorrentStatus.Seeding, IsVpnPaused = false, Active = true, DownloadSpeed = 0, UploadSpeed = 2048 };
             var stopped = new Torrent { Id = 3, Name = "StoppedTorrent", Status = TorrentStatus.Stopped, IsVpnPaused = false };
             var alreadyVpnPaused = new Torrent { Id = 4, Name = "PausedTorrent", Status = TorrentStatus.Downloading, IsVpnPaused = true };
 
@@ -1436,11 +1436,20 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.Handle(new VpnKillSwitchTriggeredEvent("tun0"));
 
             Assert.That(downloading.IsVpnPaused, Is.True);
+            Assert.That(downloading.Status, Is.EqualTo(TorrentStatus.Paused));
+            Assert.That(downloading.Active, Is.False);
+            Assert.That(downloading.DownloadSpeed, Is.Zero);
+            Assert.That(downloading.UploadSpeed, Is.Zero);
             Assert.That(seeding.IsVpnPaused, Is.True);
+            Assert.That(seeding.Status, Is.EqualTo(TorrentStatus.Paused));
+            Assert.That(seeding.Active, Is.False);
+            Assert.That(seeding.UploadSpeed, Is.Zero);
             Assert.That(stopped.IsVpnPaused, Is.False);
             Assert.That(alreadyVpnPaused.IsVpnPaused, Is.True);
 
             _repository.Received(1).UpdateMany(Arg.Is<IList<Torrent>>(list => list.Count == 2 && list.Contains(downloading) && list.Contains(seeding)));
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == downloading && e.OldStatus == TorrentStatus.Downloading && e.NewStatus == TorrentStatus.Paused));
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == seeding && e.OldStatus == TorrentStatus.Seeding && e.NewStatus == TorrentStatus.Paused));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == downloading));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == seeding));
         }
@@ -1448,8 +1457,8 @@ namespace NzbDrone.Core.Test.Torrents
         [Test]
         public void Handle_VpnInterfaceRestoredEvent_unpauses_torrents()
         {
-            var vpnPaused1 = new Torrent { Id = 1, Name = "Torrent1", Status = TorrentStatus.Downloading, IsVpnPaused = true };
-            var vpnPaused2 = new Torrent { Id = 2, Name = "Torrent2", Status = TorrentStatus.Seeding, IsVpnPaused = true };
+            var vpnPaused1 = new Torrent { Id = 1, Name = "Torrent1", Status = TorrentStatus.Paused, Progress = 0.5, IsVpnPaused = true };
+            var vpnPaused2 = new Torrent { Id = 2, Name = "Torrent2", Status = TorrentStatus.Paused, Progress = 1.0, IsVpnPaused = true };
             var normalTorrent = new Torrent { Id = 3, Name = "Torrent3", Status = TorrentStatus.Stopped, IsVpnPaused = false };
 
             _repository.All().Returns(new List<Torrent> { vpnPaused1, vpnPaused2, normalTorrent }.AsQueryable());
@@ -1457,10 +1466,14 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.Handle(new VpnInterfaceRestoredEvent("tun0"));
 
             Assert.That(vpnPaused1.IsVpnPaused, Is.False);
+            Assert.That(vpnPaused1.Status, Is.EqualTo(TorrentStatus.Downloading));
             Assert.That(vpnPaused2.IsVpnPaused, Is.False);
+            Assert.That(vpnPaused2.Status, Is.EqualTo(TorrentStatus.Seeding));
             Assert.That(normalTorrent.IsVpnPaused, Is.False);
 
             _repository.Received(1).UpdateMany(Arg.Is<IList<Torrent>>(list => list.Count == 2 && list.Contains(vpnPaused1) && list.Contains(vpnPaused2)));
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == vpnPaused1 && e.OldStatus == TorrentStatus.Paused && e.NewStatus == TorrentStatus.Downloading));
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == vpnPaused2 && e.OldStatus == TorrentStatus.Paused && e.NewStatus == TorrentStatus.Seeding));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == vpnPaused1));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == vpnPaused2));
         }
