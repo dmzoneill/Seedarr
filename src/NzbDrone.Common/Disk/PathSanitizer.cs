@@ -223,6 +223,19 @@ public static class PathSanitizer
             }
         }
 
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            if (IsBlockedPath(fullPath))
+            {
+                return false;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
         return true;
     }
 

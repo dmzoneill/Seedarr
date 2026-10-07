@@ -101,6 +101,24 @@ public class PathSanitizerTests
         Assert.That(PathSanitizer.IsValidPath(path), Is.EqualTo(expected));
     }
 
+    [Test]
+    public void IsValidPath_rejects_blocked_system_directories()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.That(PathSanitizer.IsValidPath(@"C:\Windows\foo"), Is.False);
+            Assert.That(PathSanitizer.IsValidPath(@"C:\Program Files\App"), Is.False);
+            Assert.That(PathSanitizer.IsValidPath(@"D:\Windows\foo"), Is.True);
+        }
+        else
+        {
+            Assert.That(PathSanitizer.IsValidPath("/etc/seedarr-test"), Is.False);
+            Assert.That(PathSanitizer.IsValidPath("/etc"), Is.False);
+            Assert.That(PathSanitizer.IsValidPath("/proc/self"), Is.False);
+            Assert.That(PathSanitizer.IsValidPath("/tmp/seedarr"), Is.True);
+        }
+    }
+
     [TestCase("Season 1/Episode 01.mkv", "Season 1/Episode 01.mkv")]
     [TestCase("/Season 1/Episode 01.mkv", "Season 1/Episode 01.mkv")]
     [TestCase("///Season 1///Episode 01.mkv", "Season 1/Episode 01.mkv")]
