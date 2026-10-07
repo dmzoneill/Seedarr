@@ -195,7 +195,7 @@ public class IdentityProviderService : IIdentityProviderService
         }
     }
 
-    internal static bool LooksLikeDataProtectionPayload(string value)
+    public static bool LooksLikeDataProtectionPayload(string value)
     {
         if (string.IsNullOrEmpty(value))
         {
