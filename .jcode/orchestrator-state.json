@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:15:04Z",
+  "updatedAt": "2026-10-07T00:16:10Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_c3f61712"
+    "lastScheduleId": "sched_d01d51e1"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -32,7 +32,7 @@
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "sparrow"
+      "worker": "crane"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
@@ -61,6 +61,6 @@
     397,
     189
   ],
-  "githubOpenCount": 398,
-  "lastMonitorNote": "398 open (+1); kestrel idle >90s → raven Datastore"
+  "githubOpenCount": 399,
+  "lastMonitorNote": "399 open (+1); sparrow idle >90s after Ping → crane Security"
 }
