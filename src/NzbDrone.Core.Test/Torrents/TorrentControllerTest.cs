@@ -1611,6 +1611,92 @@ public class TorrentControllerTest
     }
 
     [Test]
+    public void Update_preserves_priority_and_limits_when_omitted_from_body()
+    {
+        const int torrentId = 42;
+        var existing = new Torrent
+        {
+            Id = torrentId,
+            Name = "Active Torrent",
+            Status = TorrentStatus.Downloading,
+            Priority = 5,
+            UploadLimit = 100,
+            DownloadLimit = 200,
+            SuperSeeding = true,
+            ForceStart = true,
+            SequentialDownload = true
+        };
+
+        _torrentService.Get(torrentId).Returns(existing);
+        _trackerEntryService.GetByTorrentId(torrentId).Returns(new List<TrackerEntry>());
+        _torrentService.UpdateUserFields(torrentId, Arg.Any<Torrent>()).Returns(callInfo =>
+        {
+            var updates = callInfo.Arg<Torrent>();
+            existing.ApplyUserFields(updates);
+            return existing;
+        });
+
+        var resource = new TorrentResource
+        {
+            Name = "Active Torrent",
+            Label = "new-label"
+        };
+
+        var result = _controller.Update(torrentId, resource);
+
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(existing.Priority, Is.EqualTo(5));
+        Assert.That(existing.UploadLimit, Is.EqualTo(100));
+        Assert.That(existing.DownloadLimit, Is.EqualTo(200));
+        Assert.That(existing.SuperSeeding, Is.True);
+        Assert.That(existing.ForceStart, Is.True);
+        Assert.That(existing.SequentialDownload, Is.True);
+        _torrentService.Received(1).UpdateUserFields(
+            torrentId,
+            Arg.Is<Torrent>(t =>
+                t.Priority == 5 &&
+                t.UploadLimit == 100 &&
+                t.DownloadLimit == 200 &&
+                t.SuperSeeding &&
+                t.ForceStart &&
+                t.SequentialDownload));
+    }
+
+    [Test]
+    public void ToModel_preserves_existing_priority_and_limits_when_resource_fields_are_null()
+    {
+        var existing = new Torrent
+        {
+            Id = 1,
+            Priority = 5,
+            UploadLimit = 100,
+            DownloadLimit = 200,
+            SuperSeeding = true,
+            ForceStart = true,
+            SequentialDownload = true,
+            SmallTorrentLimit = 1024,
+            Threshold = 75
+        };
+
+        var resource = new TorrentResource
+        {
+            Id = 1,
+            Name = "Test"
+        };
+
+        var model = TorrentResourceMapper.ToModel(resource, existing);
+
+        Assert.That(model.Priority, Is.EqualTo(5));
+        Assert.That(model.UploadLimit, Is.EqualTo(100));
+        Assert.That(model.DownloadLimit, Is.EqualTo(200));
+        Assert.That(model.SuperSeeding, Is.True);
+        Assert.That(model.ForceStart, Is.True);
+        Assert.That(model.SequentialDownload, Is.True);
+        Assert.That(model.SmallTorrentLimit, Is.EqualTo(1024));
+        Assert.That(model.Threshold, Is.EqualTo(75));
+    }
+
+    [Test]
     public void Upload_returns_BadRequest_when_all_files_are_zero_length()
     {
         using var ms = new MemoryStream();
