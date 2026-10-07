@@ -23,14 +23,9 @@ public static class CorsSecurityHelper
 
         if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
         {
-            if (uri.IsLoopback || uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
             if (string.IsNullOrWhiteSpace(allowedOrigins))
             {
-                return false;
+                return uri.IsLoopback || uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase);
             }
 
             var entries = allowedOrigins.Split(Separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
