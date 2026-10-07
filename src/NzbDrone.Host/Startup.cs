@@ -96,7 +96,12 @@ public class Startup
         services.AddSingleton<Seedarr.Http.Terminal.IPtyTerminalService, Seedarr.Http.Terminal.PtyTerminalService>();
 
         var configFileProvider = this._container.Resolve<IConfigFileProvider>();
-        if (configFileProvider.EnableSsl && configFileProvider.RedirectHttpToHttps)
+        var httpsListenerAvailability = this._container.IsRegistered<HttpsListenerAvailability>()
+            ? this._container.Resolve<HttpsListenerAvailability>()
+            : null;
+        if (configFileProvider.EnableSsl
+            && configFileProvider.RedirectHttpToHttps
+            && (httpsListenerAvailability == null || httpsListenerAvailability.IsActive))
         {
             services.AddHttpsRedirection(options =>
             {
@@ -419,7 +424,12 @@ public class Startup
             DefaultContentType = "application/octet-stream",
         });
 
-        if (configFileProvider.EnableSsl && configFileProvider.RedirectHttpToHttps)
+        var httpsListenerAvailability = this._container.IsRegistered<HttpsListenerAvailability>()
+            ? this._container.Resolve<HttpsListenerAvailability>()
+            : null;
+        if (configFileProvider.EnableSsl
+            && configFileProvider.RedirectHttpToHttps
+            && (httpsListenerAvailability == null || httpsListenerAvailability.IsActive))
         {
             app.UseHttpsRedirection();
         }

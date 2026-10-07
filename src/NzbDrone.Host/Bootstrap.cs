@@ -53,10 +53,18 @@ public static class Bootstrap
         var builder = WebApplication.CreateBuilder();
         var configProvider = container.Resolve<IConfigFileProvider>();
         var certManager = container.Resolve<ICertificateManager>();
+        var httpsListenerAvailability = new HttpsListenerAvailability();
+        container.RegisterInstance(httpsListenerAvailability);
+
+        if (configProvider.EnableSsl && urls == null)
+        {
+            httpsListenerAvailability.SetActive(
+                HttpsListenerAvailability.TryPrepareCertificate(configProvider, certManager));
+        }
 
         builder.WebHost.ConfigureKestrel(serverOptions =>
         {
-            ConfigureKestrel(serverOptions, configProvider, certManager, urls);
+            ConfigureKestrel(serverOptions, configProvider, certManager, urls, httpsListenerAvailability);
         });
 
         builder.Host.UseServiceProviderFactory(
@@ -98,7 +106,16 @@ public static class Bootstrap
             if (configProvider.EnableSsl)
             {
                 var httpsUrl = $"https://{configProvider.BindAddress}:{configProvider.SslPort}";
-                Logger.Info("Listening with SSL on {0}", httpsUrl);
+                if (httpsListenerAvailability.IsActive)
+                {
+                    Logger.Info("Listening with SSL on {0}", httpsUrl);
+                }
+                else
+                {
+                    Logger.Warn(
+                        "SSL is enabled in configuration but HTTPS is not active; HTTP will not redirect to {0}.",
+                        httpsUrl);
+                }
             }
         }
 
@@ -197,14 +214,15 @@ public static class Bootstrap
         KestrelServerOptions serverOptions,
         IConfigFileProvider configProvider,
         ICertificateManager certManager,
-        string[] urls = null)
+        string[] urls = null,
+        HttpsListenerAvailability httpsListenerAvailability = null)
     {
         serverOptions.AddServerHeader = false;
         ConfigureKestrelLimits(serverOptions);
 
         if (urls != null)
         {
-            ConfigureKestrelUrlOverrides(serverOptions, configProvider, certManager, urls);
+            ConfigureKestrelUrlOverrides(serverOptions, configProvider, certManager, urls, httpsListenerAvailability);
             return;
         }
 
@@ -235,10 +253,12 @@ public static class Bootstrap
                             ConfigureHttpsCertificate(httpsOptions, certManager, configProvider));
                     });
                     Logger.Info("Configured SSL dual-stack listener on port {0}", configProvider.SslPort);
+                    httpsListenerAvailability?.SetActive(true);
                 }
                 catch (Exception ex)
                 {
                     Logger.Error(ex, "Failed to initialize SSL listener on port {0}. HTTPS will not be active.", configProvider.SslPort);
+                    httpsListenerAvailability?.SetActive(false);
                 }
             }
         }
@@ -262,10 +282,12 @@ public static class Bootstrap
                             ConfigureHttpsCertificate(httpsOptions, certManager, configProvider));
                     });
                     Logger.Info("Configured SSL on {0}:{1}", ip, configProvider.SslPort);
+                    httpsListenerAvailability?.SetActive(true);
                 }
                 catch (Exception ex)
                 {
                     Logger.Error(ex, "Failed to initialize SSL listener on port {0}. HTTPS will not be active.", configProvider.SslPort);
+                    httpsListenerAvailability?.SetActive(false);
                 }
             }
         }
@@ -275,7 +297,8 @@ public static class Bootstrap
         KestrelServerOptions serverOptions,
         IConfigFileProvider configProvider,
         ICertificateManager certManager,
-        string[] urls)
+        string[] urls,
+        HttpsListenerAvailability httpsListenerAvailability = null)
     {
         foreach (var urlString in urls)
         {
@@ -294,10 +317,12 @@ public static class Bootstrap
                             ConfigureHttpsCertificate(httpsOptions, certManager, configProvider));
                     });
                     Logger.Info("Configured SSL listener for URL override {0}", urlString);
+                    httpsListenerAvailability?.SetActive(true);
                 }
                 catch (Exception ex)
                 {
                     Logger.Error(ex, "Failed to initialize SSL listener for URL override {0}", urlString);
+                    httpsListenerAvailability?.SetActive(false);
                 }
             }
             else
