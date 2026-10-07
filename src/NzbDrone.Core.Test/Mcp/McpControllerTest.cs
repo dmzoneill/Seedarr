@@ -1,13 +1,16 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Mcp;
 using Seedarr.Api.V1.Mcp;
 
@@ -130,5 +133,15 @@ public class McpControllerTest
 
         Assert.That(output, Does.Contain("event: endpoint"));
         Assert.That(output, Does.Contain("data: /seedarr/api/v1/mcp/message?sessionId="));
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_AdminOnly_attribute()
+    {
+        var type = typeof(McpController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 }
