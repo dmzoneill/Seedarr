@@ -59,9 +59,12 @@ public class DiskAllocationService : IDiskAllocationService
             var diskInfo = _diskSpaceService.GetDiskSpaceForPath(targetDirectory);
             if (diskInfo != null)
             {
-                var requiredSpace = torrent.TotalSize > 0
-                    ? (torrent.Downloaded > 0 ? Math.Max(0L, torrent.TotalSize - torrent.Downloaded) : torrent.TotalSize)
-                    : (fileList != null ? fileList.Where(f => f != null && !MultiFilePieceStorage.IsPadding(f)).Sum(f => f.Size) : 0L);
+                var contentSize = fileList != null && fileList.Count > 0
+                    ? fileList.Where(f => f != null && !MultiFilePieceStorage.IsPadding(f)).Sum(f => f.Size)
+                    : torrent.TotalSize;
+                var requiredSpace = torrent.Downloaded > 0
+                    ? Math.Max(0L, contentSize - torrent.Downloaded)
+                    : contentSize;
 
                 if (diskInfo.FreeSpace < requiredSpace)
                 {
