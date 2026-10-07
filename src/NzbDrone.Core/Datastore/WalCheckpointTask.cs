@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
@@ -18,10 +19,12 @@ public class WalCheckpointTask : IScheduledTask, IExecute<WalCheckpointCommand>
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.Info("Executing scheduled WAL checkpoint task");
         var result = _maintenanceService.CheckpointWal(WalCheckpointMode.Passive);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (result != null
             && result.Success
@@ -29,6 +32,7 @@ public class WalCheckpointTask : IScheduledTask, IExecute<WalCheckpointCommand>
             && string.Equals(result.DatabaseType, DatabaseType.SQLite.ToString(), StringComparison.OrdinalIgnoreCase))
         {
             _logger.Debug("Passive WAL checkpoint succeeded with no busy readers; executing RESTART checkpoint to reset WAL write pointer");
+            cancellationToken.ThrowIfCancellationRequested();
             _maintenanceService.CheckpointWal(WalCheckpointMode.Restart);
         }
     }

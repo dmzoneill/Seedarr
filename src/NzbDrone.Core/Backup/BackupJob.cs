@@ -1,3 +1,4 @@
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
@@ -17,8 +18,9 @@ public class BackupJob : IScheduledTask, IExecute<BackupCommand>
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.Info("Executing automated scheduled backup");
         _backupService.CreateBackup(BackupType.Scheduled);
     }

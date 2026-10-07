@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Jobs;
 
@@ -17,14 +18,19 @@ public class RssSyncTask : IScheduledTask
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.Info("Starting scheduled RSS sync task");
 
         try
         {
-            var grabbed = _rssSyncService?.Sync(isManual: false) ?? 0;
+            var grabbed = _rssSyncService?.Sync(isManual: false, cancellationToken) ?? 0;
             _logger.Info("Scheduled RSS sync task completed: {0} release(s) grabbed", grabbed);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

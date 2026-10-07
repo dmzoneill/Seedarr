@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Jobs;
 
@@ -17,8 +18,9 @@ public class MediaCoverMaintenanceTask : IScheduledTask
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             _logger.Info("Starting MediaCover cache maintenance and LRU eviction");

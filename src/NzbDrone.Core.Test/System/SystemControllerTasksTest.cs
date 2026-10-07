@@ -30,14 +30,18 @@ public class SystemControllerTasksTest
     private class SampleScheduledTask : IScheduledTask
     {
         public int DefaultInterval => 15;
-        public void Execute() { }
+        public void Execute(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
     }
 
     private class ThrowingScheduledTask : IScheduledTask
     {
         public int DefaultInterval => 15;
-        public void Execute()
+        public void Execute(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new InvalidOperationException("Task failed deliberately");
         }
     }
@@ -185,7 +189,11 @@ public class SystemControllerTasksTest
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         Assert.That(finishedSignal.Wait(TimeSpan.FromSeconds(5)), Is.True, "Background task did not finish in time");
 
-        _taskManager.Received(1).RecordTaskStarted(task.TypeName, ScheduledTaskTriggerSource.Manual);
+        _taskManager.Received(1).RecordTaskStarted(
+            task.TypeName,
+            Arg.Any<CancellationTokenSource>(),
+            Arg.Any<TimeSpan?>(),
+            ScheduledTaskTriggerSource.Manual);
         _taskManager.Received(1).RecordTaskFailed(task.TypeName, Arg.Any<DateTime>(), Arg.Is<string>(s => s.Contains("Task failed deliberately")));
         _taskManager.Received(1).RecordTaskFinished(task.TypeName, Arg.Any<DateTime>(), ScheduledTaskTriggerSource.Manual);
 

@@ -20,8 +20,9 @@ public class SchedulerTest
         public int DefaultInterval => 1;
         public int ExecuteCount { get; private set; }
 
-        public void Execute()
+        public void Execute(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ExecuteCount++;
         }
     }
@@ -30,8 +31,9 @@ public class SchedulerTest
     {
         public int DefaultInterval => 1;
 
-        public void Execute()
+        public void Execute(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             throw new InvalidOperationException("Task failed");
         }
     }

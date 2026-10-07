@@ -20,8 +20,9 @@ public class TaskManagerTest
     {
         public int DefaultInterval => 15;
 
-        public void Execute()
+        public void Execute(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 
@@ -29,8 +30,9 @@ public class TaskManagerTest
     {
         public int DefaultInterval => 30;
 
-        public void Execute()
+        public void Execute(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 

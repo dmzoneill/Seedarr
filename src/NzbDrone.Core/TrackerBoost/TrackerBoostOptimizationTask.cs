@@ -22,11 +22,6 @@ public class TrackerBoostOptimizationTask : IScheduledTask, IHandle<ApplicationS
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
-    {
-        RunOptimizationCycleSafelyAsync("background").GetAwaiter().GetResult();
-    }
-
     public void Execute(CancellationToken cancellationToken)
     {
         RunOptimizationCycleSafelyAsync("background", cancellationToken).GetAwaiter().GetResult();

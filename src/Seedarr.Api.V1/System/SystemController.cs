@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -424,9 +425,10 @@ public class SystemController : ControllerBase
         global::System.Threading.Tasks.Task.Run(() =>
         {
             var startTime = DateTime.UtcNow;
+            var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
             try
             {
-                _taskManager.RecordTaskStarted(task.TypeName, ScheduledTaskTriggerSource.Manual);
+                _taskManager.RecordTaskStarted(task.TypeName, cts, null, ScheduledTaskTriggerSource.Manual);
             }
             catch (Exception ex)
             {
@@ -456,7 +458,12 @@ public class SystemController : ControllerBase
             var failed = false;
             try
             {
-                taskInstance.Execute();
+                taskInstance.Execute(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                failed = true;
+                _logger.Warn("Scheduled task was canceled or timed out: {0}", task.TypeName);
             }
             catch (Exception ex)
             {

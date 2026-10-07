@@ -1,3 +1,4 @@
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Commands;
@@ -17,10 +18,12 @@ public class DatabaseVacuumTask : IScheduledTask, IExecute<DatabaseVacuumCommand
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Execute()
+    public void Execute(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.Info("Executing scheduled database maintenance task");
         var freelistCount = _maintenanceService.GetFreelistCount();
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (freelistCount > 0 || !_maintenanceService.IsIncrementalAutoVacuumEnabled())
         {
@@ -28,6 +31,7 @@ public class DatabaseVacuumTask : IScheduledTask, IExecute<DatabaseVacuumCommand
                 "Freelist has {0} pages (auto-vacuum enabled: {1}); running maintenance",
                 freelistCount,
                 _maintenanceService.IsIncrementalAutoVacuumEnabled());
+            cancellationToken.ThrowIfCancellationRequested();
             _maintenanceService.PerformMaintenance(5000);
         }
         else

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using NUnit.Framework;
 using NzbDrone.Core.Jobs;
 
@@ -11,8 +12,9 @@ public class ScheduledTaskTypeNameResolverTest
     {
         public int DefaultInterval => 1;
 
-        public void Execute()
+        public void Execute(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 
