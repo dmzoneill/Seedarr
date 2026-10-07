@@ -1,6 +1,6 @@
 {
   "slot": "http",
-  "updatedAt": "2026-10-07T00:35:00Z",
+  "updatedAt": "2026-10-07T01:30:00Z",
   "area": "src/Seedarr.Http",
   "rotation": [
     "src/Seedarr.Http/REST",
@@ -9,13 +9,13 @@
     "src/Seedarr.Http/Authentication",
     "src/Seedarr.Http/Terminal"
   ],
-  "currentSubfolder": "src/Seedarr.Http/Authentication",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "lastPass": {
-    "subfolder": "src/Seedarr.Http/Security",
-    "completedAt": "2026-10-07T00:35:00Z",
-    "issuesFiled": [],
+    "subfolder": "src/Seedarr.Http/Terminal",
+    "completedAt": "2026-10-07T01:30:00Z",
+    "issuesFiled": [1282],
     "issuesReopened": [],
     "taskId": "http-hunter",
-    "note": "Pass 32 (Security): Static review of 7 files — CorsSecurityHelper.cs, CsrfProtectionMiddleware.cs, HostHeaderValidationMiddleware.cs, IpSecurityHelper.cs, RpcAuthenticationHelper.cs, RpcSessionStore.cs, SecurityHeadersMiddleware.cs. Cross-checked Startup.cs middleware order (SecurityHeaders/HostHeader/CSRF before UsePathBase ~358-366), CORS wiring (~315-327), tests in Seedarr.Http.Test/Security and NzbDrone.Core.Test/Http/SecurityMiddlewareTest.cs. GitHub dedupe: existing open issues cover root causes (#876 UrlBase vs PathBase CSRF bypass paths; #1200 loopback trusted proxy X-Forwarded-Host CSRF; #1244 HostHeader ignores X-Forwarded-Host; #908/#909 Host allowlist bypass via private LAN/*.local/seedarr; #921 Cors loopback AllowedOrigins bypass; #934 CSRF loopback origin alias; #654 RpcSessionStore capacity/eviction). No additional Security-folder defects beyond tracked issues; no issues filed or reopened. Next: Authentication. No dotnet build/test."
+    "note": "Pass 34 (Terminal): Static review of 10 files — FallbackProcessSession.cs, IPtyTerminalService.cs, ITerminalSession.cs, LinuxPtySession.cs, NativePty.cs, PtyProcessSession.cs, PtyTerminalService.cs, TerminalEnvironmentSanitizer.cs, TerminalHub.cs, TerminalWebSocketHandler.cs. Cross-checked Seedarr.Http.Test/SignalR/TerminalHubAuthTest.cs, NzbDrone.Host/Startup.cs terminal WS wiring (~508-568), and existing GitHub terminal issues (#892 Admin RBAC/API-key paths, #902 cwd confinement, #956/#965 Linux env sanitization, #967 exception echo, #1027 python vs forkpty order, #1131 UTF-8 decoder, #1132 bash -i profile, #1173/#1174 forkpty errno/backpressure, #1223 cols/rows clamp, #1257/#1258 fallback geometry and cwd, #966 argv lifetime). Filed #1282: TerminalHub StartSession/WriteInput/Resize bypass TerminalAccessEnabled after OnConnectedAsync (TerminalController gates session start). No issues reopened. Next: REST. No dotnet build/test."
   }
 }
