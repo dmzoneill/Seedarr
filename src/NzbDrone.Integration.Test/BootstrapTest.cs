@@ -222,4 +222,40 @@ public class BootstrapTest
         var ex = Assert.Throws<ArgumentException>(() => Bootstrap.ValidateListenUrlOverrides(new[] { invalidUrl }));
         Assert.That(ex.ParamName, Is.EqualTo("urls"));
     }
+
+    [Test]
+    public void TryPrepareCertificate_should_return_false_when_certificate_load_fails()
+    {
+        var config = Substitute.For<IConfigFileProvider>();
+        config.EnableSsl.Returns(true);
+        var certManager = Substitute.For<ICertificateManager>();
+        certManager
+            .GetOrCreateCertificate(config)
+            .Returns(_ => throw new InvalidOperationException("cert unavailable"));
+
+        Assert.That(HttpsListenerAvailability.TryPrepareCertificate(config, certManager), Is.False);
+    }
+
+    [Test]
+    public void ConfigureKestrel_should_mark_https_inactive_when_certificate_load_fails()
+    {
+        var configProvider = Substitute.For<IConfigFileProvider>();
+        configProvider.BindAddress.Returns("127.0.0.1");
+        configProvider.Port.Returns(8687);
+        configProvider.SslPort.Returns(8443);
+        configProvider.EnableSsl.Returns(true);
+
+        var certManager = Substitute.For<ICertificateManager>();
+        certManager
+            .GetOrCreateCertificate(configProvider)
+            .Returns(_ => throw new InvalidOperationException("cert unavailable"));
+
+        var availability = new HttpsListenerAvailability();
+        availability.SetActive(HttpsListenerAvailability.TryPrepareCertificate(configProvider, certManager));
+        var serverOptions = new KestrelServerOptions();
+
+        Bootstrap.ConfigureKestrel(serverOptions, configProvider, certManager, null, availability);
+
+        Assert.That(availability.IsActive, Is.False);
+    }
 }
