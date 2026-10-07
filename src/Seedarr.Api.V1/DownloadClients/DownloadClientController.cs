@@ -180,14 +180,23 @@ public class DownloadClientController : Controller
 
     [HttpPost("test")]
     [Authorize(Policy = Policies.AdminOnly)]
-    public ActionResult<DownloadClientTestResult> TestDirect([FromBody] DownloadClientDefinition definition)
+    public ActionResult<DownloadClientTestResult> TestDirect([FromBody] DownloadClientDefinition definition, [FromQuery] bool force = false)
     {
         if (definition == null)
         {
             return BadRequest("Request body cannot be null");
         }
 
-        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}"))
+        if (definition.Id > 0)
+        {
+            var backoffResult = TryRejectClientBackoff(definition.Id, force);
+            if (backoffResult != null)
+            {
+                return backoffResult;
+            }
+        }
+
+        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
         {
             return BadRequest("Target host/URL is not permitted.");
         }
@@ -255,12 +264,18 @@ public class DownloadClientController : Controller
 
     [HttpPost("{id:int}/torrents/{infoHash}/pause")]
     [Authorize(Policy = Policies.Operator)]
-    public ActionResult PauseTorrent(int id, string infoHash)
+    public ActionResult PauseTorrent(int id, string infoHash, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
         }
 
         IDownloadClient client;
@@ -288,12 +303,18 @@ public class DownloadClientController : Controller
 
     [HttpPost("{id:int}/torrents/{infoHash}/resume")]
     [Authorize(Policy = Policies.Operator)]
-    public ActionResult ResumeTorrent(int id, string infoHash)
+    public ActionResult ResumeTorrent(int id, string infoHash, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
         }
 
         IDownloadClient client;
@@ -321,12 +342,18 @@ public class DownloadClientController : Controller
 
     [HttpDelete("{id:int}/torrents/{infoHash}")]
     [Authorize(Policy = Policies.Operator)]
-    public ActionResult DeleteTorrent(int id, string infoHash, [FromQuery] bool deleteData = false)
+    public ActionResult DeleteTorrent(int id, string infoHash, [FromQuery] bool deleteData = false, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
         }
 
         IDownloadClient client;
@@ -510,18 +537,19 @@ public class DownloadClientController : Controller
             return null;
         }
 
+        var enriched = definition.Clone();
         var status = _syncService.GetClientStatus(definition.Id);
         if (status != null)
         {
-            definition.IsOnline = status.IsOnline;
-            definition.Version = status.Version;
-            definition.LastSyncTime = status.LastSyncTime;
-            definition.LastErrorMessage = status.LastErrorMessage;
-            definition.ConsecutiveFailures = status.ConsecutiveFailures;
-            definition.BackoffUntil = status.BackoffUntil;
+            enriched.IsOnline = status.IsOnline;
+            enriched.Version = status.Version;
+            enriched.LastSyncTime = status.LastSyncTime;
+            enriched.LastErrorMessage = status.LastErrorMessage;
+            enriched.ConsecutiveFailures = status.ConsecutiveFailures;
+            enriched.BackoffUntil = status.BackoffUntil;
         }
 
-        return definition;
+        return enriched;
     }
 
     private static DownloadClientDefinition MaskPassword(DownloadClientDefinition definition)

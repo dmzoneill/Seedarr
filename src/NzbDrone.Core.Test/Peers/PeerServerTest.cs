@@ -53,7 +53,7 @@ public class PeerServerTest
         _configService.MaxGlobalConnections.Returns(200);
         _configService.ListeningPort.Returns(0);
         _configService.EncryptionMode.Returns("enabled");
-        _configService.HandshakeTimeoutSeconds.Returns(30);
+        _configService.HandshakeTimeoutSeconds.Returns(1);
         _configService.MessageReadTimeoutSeconds.Returns(60);
         _configService.KeepAliveIntervalSeconds.Returns(120);
         _configService.PeerRequestCount.Returns(200);

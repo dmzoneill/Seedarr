@@ -525,21 +525,25 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
         try
         {
-            var version = GetRemoteVersion();
-            if (version != null)
-            {
-                return DownloadClientTestResult.Ok(
-                    $"Successfully connected to Transmission v{version} at {RpcUrl}",
-                    version);
-            }
-
             using var doc = SendRequest("session-get", new { });
-            if (doc.RootElement.TryGetProperty("result", out var result) && result.GetString() == "success")
+            if (!doc.RootElement.TryGetProperty("result", out var result) || result.GetString() != "success")
             {
-                return DownloadClientTestResult.Ok($"Successfully connected to Transmission at {RpcUrl}");
+                return DownloadClientTestResult.Fail("Transmission session-get returned unexpected result");
             }
 
-            return DownloadClientTestResult.Fail("Transmission session-get returned unexpected result");
+            if (doc.RootElement.TryGetProperty("arguments", out var args) &&
+                args.TryGetProperty("version", out var versionElement))
+            {
+                var version = versionElement.GetString();
+                if (!string.IsNullOrWhiteSpace(version))
+                {
+                    return DownloadClientTestResult.Ok(
+                        $"Successfully connected to Transmission v{version} at {RpcUrl}",
+                        version);
+                }
+            }
+
+            return DownloadClientTestResult.Ok($"Successfully connected to Transmission at {RpcUrl}");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
