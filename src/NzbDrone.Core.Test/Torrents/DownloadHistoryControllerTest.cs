@@ -191,4 +191,41 @@ public class DownloadHistoryControllerTest
         Assert.That(_controller.Response.Headers["X-Total-Count"].ToString(), Is.EqualTo("125"));
         Assert.That(_controller.Response.Headers["X-Page-Count"].ToString(), Is.EqualTo("5"));
     }
+
+    [Test]
+    public void GetAll_with_page_and_limit_uses_limit_as_page_size_when_pageSize_omitted()
+    {
+        var entries = new List<DownloadHistory>
+        {
+            new() { Id = 1, Title = "First page item" }
+        };
+
+        _historyService.GetCount(null, null).Returns(100);
+        _historyService.GetAll(null, null, 10, 0).Returns(entries);
+
+        var result = _controller.GetAll(limit: 10, page: 1);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _historyService.Received(1).GetAll(null, null, 10, 0);
+        _historyService.Received(1).GetCount(null, null);
+        Assert.That(_controller.Response.Headers["X-Page-Count"].ToString(), Is.EqualTo("10"));
+    }
+
+    [Test]
+    public void GetAll_with_page_and_limit_calculates_offset_from_limit()
+    {
+        var entries = new List<DownloadHistory>
+        {
+            new() { Id = 11, Title = "Second page item" }
+        };
+
+        _historyService.GetCount(null, null).Returns(100);
+        _historyService.GetAll(null, null, 10, 10).Returns(entries);
+
+        var result = _controller.GetAll(limit: 10, page: 2);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _historyService.Received(1).GetAll(null, null, 10, 10);
+        Assert.That(_controller.Response.Headers["X-Page-Count"].ToString(), Is.EqualTo("10"));
+    }
 }
