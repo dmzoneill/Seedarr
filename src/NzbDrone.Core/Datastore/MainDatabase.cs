@@ -509,13 +509,18 @@ public class MainDatabase : IMainDatabase
         {
             _logger.Error(ex, "Failed to apply pending config restore from {0}; original config retained", configRestorePath);
 
-            try
+            if (File.Exists(configRestorePath))
             {
-                FileDeleteAction(configRestorePath);
-            }
-            catch
-            {
-                // best-effort cleanup
+                try
+                {
+                    var failedPath = configRestorePath + ".failed";
+                    FileMoveAction(configRestorePath, failedPath, true);
+                    _logger.Warn("Preserved failed config restore file at {0}", failedPath);
+                }
+                catch (Exception preserveEx)
+                {
+                    _logger.Warn(preserveEx, "Failed to rename {0} to .failed; retaining as is", configRestorePath);
+                }
             }
         }
     }
