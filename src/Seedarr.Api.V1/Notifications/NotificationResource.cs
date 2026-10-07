@@ -44,6 +44,8 @@ public class NotificationResource : RestResource
 
     public bool OnBackupFailed { get; set; } = true;
 
+    public int? FallbackNotificationId { get; set; }
+
     public List<int> Tags { get; set; } = new();
     public List<string> Categories { get; set; } = new();
 }
