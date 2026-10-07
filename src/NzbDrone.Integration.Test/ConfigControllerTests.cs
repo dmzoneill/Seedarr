@@ -314,6 +314,71 @@ public class ConfigControllerTests : IntegrationTestBase
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
+    [TestCase(0)]
+    [TestCase(-1)]
+    public async Task PutPeerProtocolConfig_with_invalid_peer_contact_interval_returns_400(int peerContactIntervalSeconds)
+    {
+        var body = ValidPeerProtocolConfigBody(peerContactIntervalSeconds: peerContactIntervalSeconds);
+
+        var response = await PutJsonAsync("/api/v1/config/peerprotocol/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public async Task PutPeerProtocolConfig_with_invalid_udp_tracker_timeout_returns_400(int udpTrackerTimeoutSeconds)
+    {
+        var body = ValidPeerProtocolConfigBody(udpTrackerTimeoutSeconds: udpTrackerTimeoutSeconds);
+
+        var response = await PutJsonAsync("/api/v1/config/peerprotocol/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public async Task PutPeerProtocolConfig_with_invalid_http_tracker_timeout_returns_400(int httpTrackerTimeoutSeconds)
+    {
+        var body = ValidPeerProtocolConfigBody(httpTrackerTimeoutSeconds: httpTrackerTimeoutSeconds);
+
+        var response = await PutJsonAsync("/api/v1/config/peerprotocol/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task PutPeerProtocolConfig_with_valid_timeout_fields_returns_202()
+    {
+        var body = ValidPeerProtocolConfigBody();
+
+        var response = await PutJsonAsync("/api/v1/config/peerprotocol/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+    }
+
+    private static object ValidPeerProtocolConfigBody(
+        int peerContactIntervalSeconds = 300,
+        int udpTrackerTimeoutSeconds = 5,
+        int httpTrackerTimeoutSeconds = 10)
+    {
+        return new
+        {
+            id = 1,
+            handshakeTimeoutSeconds = 30,
+            messageReadTimeoutSeconds = 60,
+            keepAliveIntervalSeconds = 120,
+            peerContactIntervalSeconds,
+            udpTrackerTimeoutSeconds,
+            httpTrackerTimeoutSeconds,
+            peerRequestCount = 200,
+            seederUploadActivityProbability = 0.85,
+            peerIdleChance = 0.3,
+            peerDropoutProbability = 0.1,
+            connectionRotationPercentage = 0.25
+        };
+    }
+
     [Test]
     public async Task PutGeneralConfig_persists_theme_accent_and_language()
     {
