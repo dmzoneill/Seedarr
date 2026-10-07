@@ -167,12 +167,18 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id}/test")]
-    public ActionResult<DownloadClientTestResult> TestConnection(int id)
+    public ActionResult<DownloadClientTestResult> TestConnection(int id, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
         }
 
         if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
@@ -199,11 +205,20 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("test")]
-    public ActionResult<DownloadClientTestResult> TestDirect([FromBody] DownloadClientDefinition definition)
+    public ActionResult<DownloadClientTestResult> TestDirect([FromBody] DownloadClientDefinition definition, [FromQuery] bool force = false)
     {
         if (definition == null)
         {
             return BadRequest("Request body cannot be null");
+        }
+
+        if (definition.Id > 0)
+        {
+            var backoffResult = TryRejectClientBackoff(definition.Id, force);
+            if (backoffResult != null)
+            {
+                return backoffResult;
+            }
         }
 
         if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
@@ -273,12 +288,18 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id:int}/torrents/{infoHash}/pause")]
-    public ActionResult PauseTorrent(int id, string infoHash)
+    public ActionResult PauseTorrent(int id, string infoHash, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
         }
 
         IDownloadClient client;
@@ -305,12 +326,18 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id:int}/torrents/{infoHash}/resume")]
-    public ActionResult ResumeTorrent(int id, string infoHash)
+    public ActionResult ResumeTorrent(int id, string infoHash, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
         }
 
         IDownloadClient client;
@@ -337,12 +364,18 @@ public class DownloadClientController : Controller
     }
 
     [HttpDelete("{id:int}/torrents/{infoHash}")]
-    public ActionResult DeleteTorrent(int id, string infoHash, [FromQuery] bool deleteData = false)
+    public ActionResult DeleteTorrent(int id, string infoHash, [FromQuery] bool deleteData = false, [FromQuery] bool force = false)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
         }
 
         IDownloadClient client;
@@ -442,6 +475,28 @@ public class DownloadClientController : Controller
         {
             return StatusCode(500, new { message = $"Failed to import torrents: {ex.Message}" });
         }
+    }
+
+    private ActionResult TryRejectClientBackoff(int clientId, bool force)
+    {
+        if (force)
+        {
+            return null;
+        }
+
+        var status = _syncService.GetClientStatus(clientId);
+        if (status?.IsInBackoff != true)
+        {
+            return null;
+        }
+
+        return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable, new
+        {
+            message = $"Download client is in backoff until {status.BackoffUntil:O}.",
+            code = "backoff",
+            clientId,
+            backoffUntil = status.BackoffUntil,
+        });
     }
 
     private DownloadClientDefinition EnrichWithStatus(DownloadClientDefinition definition)
