@@ -279,6 +279,48 @@ public class IdentityProviderServiceTest
     }
 
     [Test]
+    public async Task TestConnectionAsync_WhenSamlIssuerUrlSetAndMetadataEmpty_ProbesIssuerUrl()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.OK, "<EntityDescriptor></EntityDescriptor>");
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "saml-issuer-metadata",
+            Name = "SAML Issuer Metadata",
+            ProviderType = IdentityProviderType.Saml,
+            IssuerUrl = "https://8.8.8.8/saml/metadata.xml",
+            MetadataUrl = null,
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.LastRequest, Is.Not.Null);
+        Assert.That(_httpHandler.LastRequest.RequestUri.ToString(), Is.EqualTo("https://8.8.8.8/saml/metadata.xml"));
+    }
+
+    [Test]
+    public async Task TestConnectionAsync_WhenSamlMetadataUrlSet_ProbesMetadataUrlNotIssuer()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.OK, "<EntityDescriptor></EntityDescriptor>");
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "saml-custom-metadata",
+            Name = "SAML Custom Metadata",
+            ProviderType = IdentityProviderType.Saml,
+            IssuerUrl = "https://8.8.4.4/saml/metadata.xml",
+            MetadataUrl = "https://8.8.8.8/custom/saml/metadata.xml",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.LastRequest, Is.Not.Null);
+        Assert.That(_httpHandler.LastRequest.RequestUri.ToString(), Is.EqualTo("https://8.8.8.8/custom/saml/metadata.xml"));
+    }
+
+    [Test]
     public async Task TestConnectionAsync_WhenValidHttpsDiscoveryUrlAndEndpointReturnsOk_ReturnsTrue()
     {
         _httpHandler.Enqueue(HttpStatusCode.OK, "{\"issuer\":\"https://8.8.8.8\"}");
