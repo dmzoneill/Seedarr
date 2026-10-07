@@ -218,7 +218,7 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
         var arguments = new
         {
-            fields = new[] { "hashString", "name", "totalSize", "leftUntilDone", "status", "downloadDir", "labels", "isPrivate", "rateDownload", "rateUpload" },
+            fields = new[] { "id", "hashString", "name", "totalSize", "leftUntilDone", "status", "downloadDir", "labels", "isPrivate", "rateDownload", "rateUpload" },
         };
 
         using var doc = SendRequest("torrent-get", arguments);
@@ -248,8 +248,11 @@ public class TransmissionClient : IDownloadClient, IDisposable
                     (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
                     (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
 
+            var downloadId = t.TryGetProperty("id", out var idEl) ? idEl.GetInt32().ToString() : "";
+
             items.Add(new DownloadClientItem
             {
+                DownloadId = downloadId,
                 InfoHash = t.TryGetProperty("hashString", out var h) ? h.GetString() : "",
                 Title = t.TryGetProperty("name", out var n) ? n.GetString() : "",
                 TotalSize = t.TryGetProperty("totalSize", out var ts) ? ts.GetInt64() : 0,

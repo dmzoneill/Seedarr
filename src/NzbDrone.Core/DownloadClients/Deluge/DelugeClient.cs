@@ -347,6 +347,7 @@ public class DelugeClient : IDownloadClient, IDisposable
 
             items.Add(new DownloadClientItem
             {
+                DownloadId = prop.Name,
                 InfoHash = prop.Name,
                 Title = t.TryGetProperty("name", out var n) ? n.GetString() : "",
                 TotalSize = t.TryGetProperty("total_size", out var ts) ? ts.GetInt64() : 0,
