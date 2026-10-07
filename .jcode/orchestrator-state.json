@@ -1,5 +1,5 @@
 {
-  "updatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "updatedAt": "2026-10-07T06:20:32Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -61,5 +61,5 @@
     "nextCandidates": []
   },
   "githubOpen": 0,
-  "lastMonitorNote": "fix monitor: 0 open; all 5 slots idle; queue empty (~$(date -u +%Y-%m-%dT%H:%M:%SZ))"
+  "lastMonitorNote": "fix monitor: 0 open; all 5 slots idle; queue empty (~2026-10-07T06:20:32Z)"
 }
