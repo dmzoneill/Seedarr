@@ -2153,14 +2153,14 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             _eventLogService.Info(existing.Id, "Edit", "Marked as force-completed (100%)");
         }
 
-        if (resource.ForceStart != existing.ForceStart)
+        if (resource.ForceStart.HasValue && resource.ForceStart.Value != existing.ForceStart)
         {
-            _eventLogService.Info(existing.Id, "Edit", resource.ForceStart ? "Force start enabled" : "Force start disabled");
+            _eventLogService.Info(existing.Id, "Edit", resource.ForceStart.Value ? "Force start enabled" : "Force start disabled");
         }
 
-        if (resource.SuperSeeding != existing.SuperSeeding)
+        if (resource.SuperSeeding.HasValue && resource.SuperSeeding.Value != existing.SuperSeeding)
         {
-            _eventLogService.Info(existing.Id, "Edit", resource.SuperSeeding ? "Super seeding enabled" : "Super seeding disabled");
+            _eventLogService.Info(existing.Id, "Edit", resource.SuperSeeding.Value ? "Super seeding enabled" : "Super seeding disabled");
         }
 
         if (!string.IsNullOrEmpty(resource.Status) &&

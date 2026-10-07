@@ -106,6 +106,15 @@ public static class TorrentResourceMapper
             status = existing.Status;
         }
 
+        var priority = resource.Priority ?? existing?.Priority ?? 0;
+        var uploadLimit = resource.UploadLimit ?? existing?.UploadLimit ?? 0;
+        var downloadLimit = resource.DownloadLimit ?? existing?.DownloadLimit ?? 0;
+        var superSeeding = resource.SuperSeeding ?? existing?.SuperSeeding ?? false;
+        var forceStart = resource.ForceStart ?? existing?.ForceStart ?? false;
+        var sequentialDownload = resource.SequentialDownload ?? existing?.SequentialDownload ?? false;
+        var smallTorrentLimit = resource.SmallTorrentLimit ?? existing?.SmallTorrentLimit ?? 0;
+        var threshold = resource.Threshold ?? existing?.Threshold ?? 0;
+
         return new Torrent
         {
             Id = resource.Id,
@@ -127,23 +136,23 @@ public static class TorrentResourceMapper
             TrackerUrl = resource.TrackerUrl,
             DateAdded = resource.DateAdded,
             LastActive = resource.LastActive,
-            Priority = resource.Priority,
-            UploadLimit = resource.UploadLimit,
-            DownloadLimit = resource.DownloadLimit,
-            SuperSeeding = resource.SuperSeeding,
-            ForceStart = resource.ForceStart,
+            Priority = priority,
+            UploadLimit = uploadLimit,
+            DownloadLimit = downloadLimit,
+            SuperSeeding = superSeeding,
+            ForceStart = forceStart,
             Label = resource.Label,
             Category = resource.Category,
             SavePath = resource.SavePath,
             Progress = resource.Progress,
-            SequentialDownload = resource.SequentialDownload,
+            SequentialDownload = sequentialDownload,
             FirstLastPiecePrio = resource.FirstLastPiecePrio,
             AnnounceInterval = resource.AnnounceInterval,
             NextUpdate = resource.NextUpdate,
             SessionUploaded = resource.SessionUploaded,
             SessionDownloaded = resource.SessionDownloaded,
-            SmallTorrentLimit = resource.SmallTorrentLimit,
-            Threshold = resource.Threshold,
+            SmallTorrentLimit = smallTorrentLimit,
+            Threshold = threshold,
             UploadSpeed = resource.UploadSpeed,
             DownloadSpeed = resource.DownloadSpeed,
             Active = resource.Active,
