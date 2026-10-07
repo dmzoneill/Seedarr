@@ -74,6 +74,24 @@ public class AutomationServiceTest
     }
 
     [Test]
+    public void TestScript_should_fail_when_explicit_torrent_id_not_found()
+    {
+        _torrentRepository.Get(99999).Returns((Torrent)null);
+
+        var script = new AutomationScript
+        {
+            Name = "Test",
+            Language = AutomationLanguage.JavaScript,
+            Code = "console.log('ok');",
+        };
+
+        var result = _subject.TestScript(script, 99999);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Does.Contain("99999"));
+    }
+
+    [Test]
     public void ExecuteScript_should_truncate_LastExecutionLog_before_persisting()
     {
         var script = new AutomationScript

@@ -681,6 +681,14 @@ public class AutomationService : IAutomationService
         if (torrentId.HasValue && torrentId.Value > 0)
         {
             torrent = _torrentRepository.Get(torrentId.Value);
+            if (torrent == null)
+            {
+                return new AutomationExecutionResult
+                {
+                    Success = false,
+                    Error = $"Torrent with ID {torrentId.Value} not found.",
+                };
+            }
         }
         else
         {
