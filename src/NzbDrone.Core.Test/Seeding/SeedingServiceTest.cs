@@ -165,6 +165,26 @@ public class SeedingServiceTest
     }
 
     [Test]
+    public void Stop_should_not_update_or_publish_when_already_stopped()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test",
+            Status = TorrentStatus.Stopped,
+            Active = false,
+            ForceStart = false
+        };
+        _torrentService.Get(1).Returns(torrent);
+
+        _service.Stop(1);
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SeedingStoppedEvent>());
+    }
+
+    [Test]
     public void StartAll_should_enable_autostart_when_disabled()
     {
         _configService.AutoStart.Returns(false);

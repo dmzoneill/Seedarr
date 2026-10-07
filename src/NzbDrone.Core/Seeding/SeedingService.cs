@@ -67,6 +67,11 @@ public class SeedingService : ISeedingService
             return;
         }
 
+        if (torrent.Status == TorrentStatus.Stopped)
+        {
+            return;
+        }
+
         torrent.Stop();
         torrent.ForceStart = false;
         _torrentService.Update(torrent);
