@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 using DryIoc;
@@ -58,6 +59,14 @@ public static class Bootstrap
             ifAlreadyRegistered: IfAlreadyRegistered.Keep);
         container.RegisterDelegate<IDatabase>(r => r.Resolve<IMainDatabase>(), Reuse.Singleton, ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
+        // BasicRepository<T> is an open generic, so assembly scanning skips it.
+        // Closed repositories replace this fallback for their own model types.
+        container.Register(
+            typeof(IBasicRepository<>),
+            typeof(BasicRepository<>),
+            Reuse.Singleton,
+            ifAlreadyRegistered: IfAlreadyRegistered.Keep);
+
         var builder = WebApplication.CreateBuilder();
         var configProvider = container.Resolve<IConfigFileProvider>();
         var certManager = container.Resolve<ICertificateManager>();
@@ -80,6 +89,12 @@ public static class Bootstrap
 
         var startup = new Startup(container);
         startup.ConfigureServices(builder.Services);
+
+        var outputWwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+        if (Directory.Exists(outputWwwroot))
+        {
+            builder.Environment.WebRootPath = outputWwwroot;
+        }
 
         var app = builder.Build();
         startup.Configure(app);
