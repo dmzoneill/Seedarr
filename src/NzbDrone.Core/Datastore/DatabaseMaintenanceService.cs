@@ -31,7 +31,12 @@ public class DatabaseMaintenanceService : IDatabaseMaintenanceService
 
     public bool IsIncrementalAutoVacuumEnabled()
     {
-        if (_mainDatabase == null || _mainDatabase.DatabaseType != DatabaseType.SQLite)
+        if (_mainDatabase == null)
+        {
+            return false;
+        }
+
+        if (_mainDatabase.DatabaseType != DatabaseType.SQLite)
         {
             return true;
         }
