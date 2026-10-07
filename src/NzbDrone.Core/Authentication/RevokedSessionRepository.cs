@@ -20,6 +20,21 @@ public class RevokedSessionRepository : BasicRepository<RevokedSession>, IRevoke
                 new { UtcNow = utcNow }));
     }
 
+    public RevokedSession GetActiveBySessionKey(string sessionKey, DateTime utcNow)
+    {
+        if (string.IsNullOrWhiteSpace(sessionKey))
+        {
+            return null;
+        }
+
+        var key = sessionKey.Trim();
+
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<RevokedSession>(
+                $"SELECT * FROM \"{_table}\" WHERE \"SessionKey\" = @SessionKey AND \"ExpiresAtUtc\" > @UtcNow",
+                new { SessionKey = key, UtcNow = utcNow }));
+    }
+
     public void Upsert(string sessionKey, DateTime revokedAtUtc, DateTime expiresAtUtc)
     {
         if (string.IsNullOrWhiteSpace(sessionKey))

@@ -115,4 +115,20 @@ public class RevokedSessionRepositoryTest
 
         Assert.That(_subject.GetActive(DateTime.UtcNow.AddYears(1)), Is.Empty);
     }
+
+    [Test]
+    public void GetActiveBySessionKey_returns_active_row_only()
+    {
+        var revokedAt = DateTime.UtcNow.AddHours(-1);
+        var expiresAt = revokedAt.AddDays(30);
+        _subject.Upsert("session-lookup", revokedAt, expiresAt);
+
+        var active = _subject.GetActiveBySessionKey("session-lookup", DateTime.UtcNow);
+        Assert.That(active, Is.Not.Null);
+        Assert.That(active.SessionKey, Is.EqualTo("session-lookup"));
+
+        _subject.Upsert("session-expired", revokedAt.AddDays(-40), revokedAt.AddDays(-10));
+        Assert.That(_subject.GetActiveBySessionKey("session-expired", DateTime.UtcNow), Is.Null);
+        Assert.That(_subject.GetActiveBySessionKey("  ", DateTime.UtcNow), Is.Null);
+    }
 }
