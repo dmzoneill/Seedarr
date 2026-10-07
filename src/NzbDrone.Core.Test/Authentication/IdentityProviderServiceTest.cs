@@ -319,6 +319,48 @@ public class IdentityProviderServiceTest
     }
 
     [Test]
+    public async Task TestConnectionAsync_WhenOidcMetadataUrlSet_ProbesMetadataUrlNotIssuerDiscovery()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.OK, "{\"issuer\":\"https://8.8.8.8\"}");
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "oidc-custom-metadata",
+            Name = "OIDC Custom Metadata",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://8.8.4.4",
+            MetadataUrl = "https://8.8.8.8/custom/.well-known/openid-configuration",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.True);
+        Assert.That(_httpHandler.LastRequest, Is.Not.Null);
+        Assert.That(_httpHandler.LastRequest.RequestUri.ToString(), Is.EqualTo("https://8.8.8.8/custom/.well-known/openid-configuration"));
+    }
+
+    [Test]
+    public async Task TestConnectionAsync_WhenOidcMetadataUrlSetAndUnreachable_ReturnsFalseEvenIfIssuerWouldSucceed()
+    {
+        _httpHandler.Enqueue(HttpStatusCode.NotFound, "Not Found");
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "oidc-bad-metadata",
+            Name = "OIDC Bad Metadata",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://8.8.8.8",
+            MetadataUrl = "https://8.8.8.8/missing-metadata",
+        };
+
+        var result = await _service.TestConnectionAsync(provider);
+
+        Assert.That(result, Is.False);
+        Assert.That(_httpHandler.LastRequest, Is.Not.Null);
+        Assert.That(_httpHandler.LastRequest.RequestUri.ToString(), Is.EqualTo("https://8.8.8.8/missing-metadata"));
+    }
+
+    [Test]
     public async Task TestConnectionAsync_WhenValidHttpsUrlAlreadyContainsWellKnown_ReturnsTrue()
     {
         _httpHandler.Enqueue(HttpStatusCode.OK, "{\"issuer\":\"https://8.8.8.8\"}");
