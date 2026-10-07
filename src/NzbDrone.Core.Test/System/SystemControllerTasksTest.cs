@@ -626,4 +626,74 @@ public class SystemControllerTasksTest
         Assert.That(actionResult.Result, Is.InstanceOf<NotFoundObjectResult>());
         _taskManager.DidNotReceive().Update(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<bool>());
     }
+
+    [Test]
+    public void UpdateTask_preserves_is_enabled_when_only_interval_provided()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 3,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 15,
+            IsEnabled = true,
+            LastExecution = DateTime.UtcNow
+        };
+        var updatedTask = new ScheduledTask
+        {
+            Id = 3,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 30,
+            IsEnabled = true,
+            LastExecution = task.LastExecution
+        };
+
+        _taskManager.GetAll().Returns(
+            new List<ScheduledTask> { task },
+            new List<ScheduledTask> { updatedTask });
+
+        var request = new UpdateScheduledTaskRequest
+        {
+            Interval = 30
+        };
+
+        var actionResult = _controller.UpdateTask(3, request);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+        _taskManager.Received(1).Update(3, 30, true);
+    }
+
+    [Test]
+    public void UpdateTask_preserves_interval_when_only_is_enabled_provided()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 3,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 15,
+            IsEnabled = true,
+            LastExecution = DateTime.UtcNow
+        };
+        var updatedTask = new ScheduledTask
+        {
+            Id = 3,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 15,
+            IsEnabled = false,
+            LastExecution = task.LastExecution
+        };
+
+        _taskManager.GetAll().Returns(
+            new List<ScheduledTask> { task },
+            new List<ScheduledTask> { updatedTask });
+
+        var request = new UpdateScheduledTaskRequest
+        {
+            IsEnabled = false
+        };
+
+        var actionResult = _controller.UpdateTask(3, request);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+        _taskManager.Received(1).Update(3, 15, false);
+    }
 }

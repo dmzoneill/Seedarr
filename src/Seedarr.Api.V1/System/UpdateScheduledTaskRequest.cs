@@ -5,6 +5,6 @@ namespace Seedarr.Api.V1.System;
 /// </summary>
 public class UpdateScheduledTaskRequest
 {
-    public int Interval { get; set; }
-    public bool IsEnabled { get; set; }
+    public int? Interval { get; set; }
+    public bool? IsEnabled { get; set; }
 }
