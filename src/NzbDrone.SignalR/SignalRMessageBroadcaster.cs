@@ -326,6 +326,11 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
             }
         }
 
+        if (!IsConnected)
+        {
+            return false;
+        }
+
         if (_recentPayloads.Count >= MaxCacheSize && !_recentPayloads.ContainsKey(key))
         {
             PruneStalePayloads(now);
