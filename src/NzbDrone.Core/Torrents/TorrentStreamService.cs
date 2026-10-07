@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
@@ -26,7 +27,48 @@ public class TorrentStreamService : ITorrentStreamService
     private readonly IPieceStorage _pieceStorage;
     private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
-    private readonly ConcurrentDictionary<(int TorrentId, int PieceIndex), ConcurrentBag<TaskCompletionSource<bool>>> _waiters = new();
+    private readonly ConcurrentDictionary<(int TorrentId, int PieceIndex), PieceWaiterSet> _waiters = new();
+
+    private sealed class PieceWaiterSet
+    {
+        private readonly object _sync = new();
+        private readonly List<TaskCompletionSource<bool>> _waiters = new();
+
+        public void Add(TaskCompletionSource<bool> tcs)
+        {
+            lock (_sync)
+            {
+                _waiters.Add(tcs);
+            }
+        }
+
+        public void Remove(TaskCompletionSource<bool> tcs, Action whenEmpty)
+        {
+            lock (_sync)
+            {
+                _waiters.Remove(tcs);
+                if (_waiters.Count == 0)
+                {
+                    whenEmpty();
+                }
+            }
+        }
+
+        public IReadOnlyList<TaskCompletionSource<bool>> TakeAll()
+        {
+            lock (_sync)
+            {
+                if (_waiters.Count == 0)
+                {
+                    return Array.Empty<TaskCompletionSource<bool>>();
+                }
+
+                var snapshot = _waiters.ToArray();
+                _waiters.Clear();
+                return snapshot;
+            }
+        }
+    }
 
     public StreamingPiecePicker PiecePicker => _piecePicker;
     private ITorrentService TorrentService => _torrentService?.Value;
@@ -114,12 +156,14 @@ public class TorrentStreamService : ITorrentStreamService
 
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var key = (torrentId, pieceIndex);
-        var bag = _waiters.GetOrAdd(key, _ => new ConcurrentBag<TaskCompletionSource<bool>>());
-        bag.Add(tcs);
+        var waiterSet = _waiters.GetOrAdd(key, _ => new PieceWaiterSet());
+        waiterSet.Add(tcs);
+        void Unregister() => waiterSet.Remove(tcs, () => _waiters.TryRemove(key, out _));
 
         if (IsPieceAvailable(torrentId, pieceIndex))
         {
             tcs.TrySetResult(true);
+            Unregister();
             return true;
         }
 
@@ -141,7 +185,7 @@ public class TorrentStreamService : ITorrentStreamService
             }
             finally
             {
-                _waiters.TryRemove(key, out _);
+                Unregister();
             }
         }
     }
@@ -149,12 +193,14 @@ public class TorrentStreamService : ITorrentStreamService
     public void NotifyPieceCompleted(int torrentId, int pieceIndex)
     {
         var key = (torrentId, pieceIndex);
-        if (_waiters.TryRemove(key, out var bag))
+        if (!_waiters.TryRemove(key, out var waiterSet))
         {
-            foreach (var waiter in bag)
-            {
-                waiter.TrySetResult(true);
-            }
+            return;
+        }
+
+        foreach (var waiter in waiterSet.TakeAll())
+        {
+            waiter.TrySetResult(true);
         }
     }
 
