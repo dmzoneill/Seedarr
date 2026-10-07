@@ -152,6 +152,9 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
 
         model.Id = existing.Id;
         model.Name = name;
+        model.LastExecutedAt = existing.LastExecutedAt;
+        model.LastExecutionStatus = existing.LastExecutionStatus;
+        model.LastExecutionLog = existing.LastExecutionLog;
 
         var updated = _automationService.Update(model);
         return Ok(ToResource(updated));

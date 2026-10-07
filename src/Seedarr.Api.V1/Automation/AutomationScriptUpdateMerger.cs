@@ -39,11 +39,9 @@ internal static class AutomationScriptUpdateMerger
                 ? resource.TargetTagIds ?? new List<int>()
                 : new List<int>(existing.TargetTagIds ?? new List<int>()),
             CreatedAt = Present(presentPropertyKeys, "createdAt") ? resource.CreatedAt : existing.CreatedAt,
-            LastExecutedAt = Present(presentPropertyKeys, "lastExecutedAt") ? resource.LastExecutedAt : existing.LastExecutedAt,
-            LastExecutionStatus = Present(presentPropertyKeys, "lastExecutionStatus")
-                ? resource.LastExecutionStatus
-                : existing.LastExecutionStatus,
-            LastExecutionLog = Present(presentPropertyKeys, "lastExecutionLog") ? resource.LastExecutionLog : existing.LastExecutionLog,
+            LastExecutedAt = existing.LastExecutedAt,
+            LastExecutionStatus = existing.LastExecutionStatus,
+            LastExecutionLog = existing.LastExecutionLog,
         };
     }
 
