@@ -229,4 +229,26 @@ public class AutomationControllerTest
         Assert.That(attr, Is.Not.Null);
         Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
     }
+
+    [Test]
+    public void Delete_returns_NotFound_when_script_does_not_exist()
+    {
+        _automationService.Get(999).Returns((AutomationScript)null);
+
+        var result = _controller.Delete(999);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _automationService.DidNotReceive().Delete(Arg.Any<int>());
+    }
+
+    [Test]
+    public void Delete_returns_ok_and_deletes_when_script_exists()
+    {
+        _automationService.Get(1).Returns(new AutomationScript { Id = 1, Name = "Script" });
+
+        var result = _controller.Delete(1);
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        _automationService.Received(1).Delete(1);
+    }
 }
