@@ -55,6 +55,7 @@ public class TorrentService : ITorrentService,
     private readonly ITorrentMediaMetadataRepository _torrentMediaMetadataRepository;
     private readonly ITorrentEventLogService _torrentEventLogService;
     private readonly IConnectionManager _connectionManager;
+    private readonly IFastResumeService _fastResumeService;
     private readonly object _sortOrderLock = new();
     private readonly Logger _logger;
 
@@ -110,7 +111,8 @@ public class TorrentService : ITorrentService,
         ITorrentEventLogRepository torrentEventLogRepository = null,
         ITorrentMediaMetadataRepository torrentMediaMetadataRepository = null,
         ITorrentEventLogService torrentEventLogService = null,
-        IConnectionManager connectionManager = null)
+        IConnectionManager connectionManager = null,
+        IFastResumeService fastResumeService = null)
     {
         _repository = repository;
         _torrentFileService = torrentFileService;
@@ -123,6 +125,7 @@ public class TorrentService : ITorrentService,
         _torrentMediaMetadataRepository = torrentMediaMetadataRepository;
         _torrentEventLogService = torrentEventLogService;
         _connectionManager = connectionManager;
+        _fastResumeService = fastResumeService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -320,6 +323,12 @@ public class TorrentService : ITorrentService,
             DeleteTorrentFiles(torrent, files);
         }
 
+        if (torrent != null && !string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            _fastResumeService?.DeleteFastResume(torrent.InfoHash);
+            _pieceHashesByHash.TryRemove(torrent.InfoHash, out _);
+        }
+
         _eventAggregator.PublishEvent(new TorrentDeletedEvent(id, torrent));
         _torrentFileService?.DeleteByTorrentId(id);
         _trackerEntryService?.DeleteByTorrentId(id);
@@ -382,6 +391,12 @@ public class TorrentService : ITorrentService,
         foreach (var id in ids)
         {
             torrentMap.TryGetValue(id, out var torrent);
+            if (torrent != null && !string.IsNullOrWhiteSpace(torrent.InfoHash))
+            {
+                _fastResumeService?.DeleteFastResume(torrent.InfoHash);
+                _pieceHashesByHash.TryRemove(torrent.InfoHash, out _);
+            }
+
             _eventAggregator.PublishEvent(new TorrentDeletedEvent(id, torrent));
             _pieceHashesById.TryRemove(id, out _);
         }
