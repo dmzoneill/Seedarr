@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:17:47Z",
+  "updatedAt": "2026-10-07T01:18:54Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,30 +14,30 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_86b491ac",
+    "lastScheduleId": "sched_319c3736",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "issue": 1029,
-      "worktree": "../seedarr_worktrees/issue-1029",
+      "issue": 1022,
+      "worktree": "../seedarr_worktrees/issue-1022",
       "area": "blocklist"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1251,
-      "worktree": "../seedarr_worktrees/issue-1251",
+      "issue": 1208,
+      "worktree": "../seedarr_worktrees/issue-1208",
       "area": "host"
     },
     "api": {
       "status": "running",
       "worker": "eagle",
-      "issue": 1250,
-      "worktree": "../seedarr_worktrees/issue-1250",
-      "area": "automation"
+      "issue": 1207,
+      "worktree": "../seedarr_worktrees/issue-1207",
+      "area": "indexers"
     },
     "core-torrents": {
       "status": "running",
@@ -49,8 +49,8 @@
     "http": {
       "status": "running",
       "worker": "crane",
-      "issue": 921,
-      "worktree": "../seedarr_worktrees/issue-921",
+      "issue": 1092,
+      "worktree": "../seedarr_worktrees/issue-1092",
       "area": "http"
     }
   },
@@ -64,15 +64,14 @@
       "signalr"
     ],
     "nextCandidates": [
-      1220,
-      1225,
-      1135,
-      1277,
-      1284,
-      1286,
+      1024,
+      1130,
+      1252,
+      1235,
+      1214,
       957
     ]
   },
-  "githubOpen": 342,
-  "lastMonitorNote": "fix monitor: closed 1175/1221; dispatch badger 1029 trout 957; open 342"
+  "githubOpen": 340,
+  "lastMonitorNote": "fix monitor: closed 1029/1030/1251/1250/1253/921/1223; dispatch badger 1022 panther 1208 eagle 1207 crane 1092; trout 957"
 }
