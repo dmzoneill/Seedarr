@@ -528,6 +528,36 @@ public class TorrentRelocationServiceTests
     }
 
     [Test]
+    public async Task Preflight_disk_space_check_aborts_early_when_free_space_query_fails()
+    {
+        var fileName = "space_query_test.bin";
+        var sourceFilePath = Path.Combine(_sourceDir, fileName);
+        var testData = new byte[1024];
+        await File.WriteAllBytesAsync(sourceFilePath, testData);
+
+        var torrent = new Torrent
+        {
+            Id = 804,
+            Name = fileName,
+            SavePath = _sourceDir,
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Downloading,
+        };
+        _torrentService.Get(804).Returns(torrent);
+
+        var diskProvider = Substitute.For<IDiskProvider>();
+        diskProvider.GetAvailableFreeSpace(Arg.Any<string>()).Returns((long?)null);
+        diskProvider.CheckFolderWritable(Arg.Any<string>()).Returns(true);
+        _subject.DiskProvider = diskProvider;
+
+        var result = await _subject.RelocateTorrentAsync(804, _destDir);
+
+        Assert.That(result, Is.False);
+        _eventAggregator.Received().PublishEvent(Arg.Is<FileMoveFailedEvent>(e => e.ErrorMessage.Contains("Failed to query free disk space")));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+    }
+
+    [Test]
     public async Task Preflight_write_permission_check_aborts_early_when_directory_is_readonly()
     {
         var fileName = "perm_test.bin";

@@ -224,9 +224,17 @@ public class TorrentRelocationService : ITorrentRelocationService
             }
 
             var availableFreeSpace = DiskProvider.GetAvailableFreeSpace(targetDirectory);
-            if (availableFreeSpace < totalPayloadSize)
+            if (!availableFreeSpace.HasValue)
             {
-                var errorMsg = $"Insufficient free space on destination volume for torrent {torrentId}: required {totalPayloadSize} bytes, available {availableFreeSpace} bytes";
+                var errorMsg = $"Failed to query free disk space on destination volume for torrent {torrentId} at '{targetDirectory}'";
+                _logger.Error(errorMsg);
+                _eventAggregator?.PublishEvent(new FileMoveFailedEvent(torrent, currentPath, newSavePath, errorMsg));
+                return false;
+            }
+
+            if (availableFreeSpace.Value < totalPayloadSize)
+            {
+                var errorMsg = $"Insufficient free space on destination volume for torrent {torrentId}: required {totalPayloadSize} bytes, available {availableFreeSpace.Value} bytes";
                 _logger.Error(errorMsg);
                 _eventAggregator?.PublishEvent(new FileMoveFailedEvent(torrent, currentPath, newSavePath, errorMsg));
                 return false;

@@ -240,9 +240,22 @@ public class ArchiveExtractorService : IArchiveExtractorService
             // Pre-extraction disk space verification with safety margin
             var availableSpace = _diskProvider.GetAvailableFreeSpace(canonicalTargetDir);
             var requiredSpace = (long)Math.Ceiling(totalUncompressedSize * FreeSpaceSafetyMargin);
-            if (availableSpace < requiredSpace)
+            if (!availableSpace.HasValue)
             {
-                var spaceError = $"Insufficient free disk space on '{destDir}'. Required: {requiredSpace:N0} bytes (including {(FreeSpaceSafetyMargin - 1.0) * 100:0}% safety margin for {totalUncompressedSize:N0} bytes uncompressed), Available: {availableSpace:N0} bytes.";
+                var spaceError = $"Failed to query free disk space on '{destDir}' before extraction.";
+                _logger.Error(spaceError);
+                _eventAggregator.PublishEvent(new ArchiveExtractionFailedEvent(torrent, spaceError));
+                return Task.FromResult(new ArchiveExtractionResult
+                {
+                    Success = false,
+                    ErrorMessage = spaceError,
+                    DestinationPath = destDir,
+                });
+            }
+
+            if (availableSpace.Value < requiredSpace)
+            {
+                var spaceError = $"Insufficient free disk space on '{destDir}'. Required: {requiredSpace:N0} bytes (including {(FreeSpaceSafetyMargin - 1.0) * 100:0}% safety margin for {totalUncompressedSize:N0} bytes uncompressed), Available: {availableSpace.Value:N0} bytes.";
                 _logger.Error(spaceError);
                 _eventAggregator.PublishEvent(new ArchiveExtractionFailedEvent(torrent, spaceError));
                 return Task.FromResult(new ArchiveExtractionResult
@@ -620,9 +633,14 @@ public class ArchiveExtractorService : IArchiveExtractorService
 
         var availableSpace = _diskProvider.GetAvailableFreeSpace(canonicalTargetDir);
         var requiredSpace = (long)Math.Ceiling(totalUncompressedSize * FreeSpaceSafetyMargin);
-        if (availableSpace < requiredSpace)
+        if (!availableSpace.HasValue)
         {
-            throw new InvalidOperationException($"Insufficient free disk space on '{canonicalTargetDir}'. Required: {requiredSpace:N0} bytes (including {(FreeSpaceSafetyMargin - 1.0) * 100:0}% safety margin for {totalUncompressedSize:N0} bytes uncompressed), Available: {availableSpace:N0} bytes.");
+            throw new InvalidOperationException($"Failed to query free disk space on '{canonicalTargetDir}' before extraction.");
+        }
+
+        if (availableSpace.Value < requiredSpace)
+        {
+            throw new InvalidOperationException($"Insufficient free disk space on '{canonicalTargetDir}'. Required: {requiredSpace:N0} bytes (including {(FreeSpaceSafetyMargin - 1.0) * 100:0}% safety margin for {totalUncompressedSize:N0} bytes uncompressed), Available: {availableSpace.Value:N0} bytes.");
         }
 
         var archiveBytesWritten = 0L;
