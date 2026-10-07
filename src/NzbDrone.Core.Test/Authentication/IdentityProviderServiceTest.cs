@@ -467,6 +467,33 @@ public class IdentityProviderServiceTest
     }
 
     [Test]
+    public void Update_WhenCallerOmitsCreatedAt_PreservesExistingCreatedAt()
+    {
+        var originalCreatedAt = new DateTime(2020, 6, 15, 12, 0, 0, DateTimeKind.Utc);
+        var existing = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test_created",
+            Name = "Original",
+            CreatedAt = originalCreatedAt,
+        };
+
+        _repository.Get(1).Returns(existing);
+
+        var provider = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test_created",
+            Name = "Updated Name",
+        };
+
+        var result = _service.Update(provider);
+
+        Assert.That(result.CreatedAt, Is.EqualTo(originalCreatedAt));
+        _repository.Received(1).Update(Arg.Is<IdentityProviderDefinition>(p => p.CreatedAt == originalCreatedAt));
+    }
+
+    [Test]
     [TestCase(null)]
     [TestCase("")]
     [TestCase("   ")]
