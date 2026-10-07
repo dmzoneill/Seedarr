@@ -1,11 +1,14 @@
 // Copyright (c) FeedItOut. All rights reserved.
 
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Developer.Testing;
 using Seedarr.Api.V1.System;
 
@@ -217,5 +220,15 @@ public class DeveloperTestingControllerTest
         var actionResult = _controllerWithoutRunner.ClearHistory();
 
         Assert.That(actionResult, Is.InstanceOf<NoContentResult>());
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_AdminOnly_attribute()
+    {
+        var type = typeof(SystemDeveloperTestingController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 }

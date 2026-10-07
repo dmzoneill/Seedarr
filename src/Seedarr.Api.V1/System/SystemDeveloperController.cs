@@ -8,9 +8,11 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Developer;
@@ -27,6 +29,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.System;
 
 [V1ApiController("system/developer")]
+[Authorize(Policy = Policies.AdminOnly)]
 public class SystemDeveloperController : Controller
 {
     private const int MinRecentLimit = 1;
