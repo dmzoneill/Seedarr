@@ -22,7 +22,6 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
-using NzbDrone.Core.Security;
 using NzbDrone.SignalR;
 using Seedarr.Http.Authentication;
 using Seedarr.Http.Security;
@@ -89,11 +88,6 @@ public class Startup
             .SetApplicationName("Seedarr");
 
         services.AddHttpClient();
-        services.AddSingleton<ICertificateManager, CertificateManager>();
-        services.AddSingleton<IRpcSessionStore, RpcSessionStore>();
-        services.AddSingleton<ISessionRevocationService, SessionRevocationService>();
-        services.AddSingleton<ILoginRateLimiter, LoginRateLimiter>();
-        services.AddSingleton<Seedarr.Http.Terminal.IPtyTerminalService, Seedarr.Http.Terminal.PtyTerminalService>();
 
         var configFileProvider = this._container.Resolve<IConfigFileProvider>();
         var httpsListenerAvailability = this._container.IsRegistered<HttpsListenerAvailability>()
@@ -165,7 +159,6 @@ public class Startup
             ForwardAuthOptions.DefaultScheme, _ => { });
 
         services.AddOptions<OpenIdConnectOptions>();
-        services.AddSingleton<IDynamicAuthSchemeManager, DynamicAuthSchemeManager>();
 
         services.AddAuthorization(options =>
         {
