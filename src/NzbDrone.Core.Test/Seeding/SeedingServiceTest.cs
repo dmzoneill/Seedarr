@@ -31,7 +31,7 @@ public class SeedingServiceTest
         var torrent = new Torrent { Id = 1, Name = "Test", Status = TorrentStatus.Stopped, Progress = 1.0 };
         _torrentService.Get(1).Returns(torrent);
 
-        _service.Start(1);
+        Assert.That(_service.Start(1), Is.True);
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(torrent.Active, Is.True);
@@ -86,8 +86,9 @@ public class SeedingServiceTest
     {
         _torrentService.Get(99).Returns((Torrent)null);
 
-        _service.Start(99);
+        var result = _service.Start(99);
 
+        Assert.That(result, Is.False);
         _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
         _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SeedingStartedEvent>());
     }
@@ -158,7 +159,7 @@ public class SeedingServiceTest
     {
         _torrentService.Get(99).Returns((Torrent)null);
 
-        _service.Stop(99);
+        Assert.That(_service.Stop(99), Is.False);
 
         _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
         _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SeedingStoppedEvent>());
@@ -177,7 +178,7 @@ public class SeedingServiceTest
         };
         _torrentService.Get(1).Returns(torrent);
 
-        _service.Stop(1);
+        Assert.That(_service.Stop(1), Is.True);
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
         _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
