@@ -266,10 +266,13 @@ public class AppLifetimeTest
         // Phase 2: State and buffer serialization
         _pieceStorage.Received(1).Flush();
         _fastResumeService.Received(1).SaveAll();
-        _torrentService.Received(1).UpdateMany(Arg.Is<List<Torrent>>(list => list.Contains(torrent)));
 
-        // Phase 3: Connection teardown and database checkpoint
-        await _connectionManager.Received(1).DisconnectAllAsync();
+        // Phase 3: Disconnect peers before persisting stats, then database checkpoint
+        Received.InOrder(() =>
+        {
+            _connectionManager.Received(1).DisconnectAllAsync();
+            _torrentService.Received(1).UpdateMany(Arg.Is<List<Torrent>>(list => list.Contains(torrent)));
+        });
         _mainDatabase.Received(1).Optimize();
         _mainDatabase.Received(1).Checkpoint(WalCheckpointMode.Truncate);
     }
@@ -338,6 +341,35 @@ public class AppLifetimeTest
             Arg.Is<Torrent>(t => t.Id == 1),
             force: true,
             eventType: AnnounceEvent.Stopped);
+    }
+
+    [Test]
+    public async Task StopAsync_should_disconnect_peers_before_persisting_torrent_stats()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Uploaded = 100,
+            Downloaded = 200
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var disconnectCompleted = false;
+        _connectionManager.DisconnectAllAsync().Returns(_ =>
+        {
+            disconnectCompleted = true;
+            return Task.CompletedTask;
+        });
+
+        _torrentService
+            .When(x => x.UpdateMany(Arg.Any<List<Torrent>>()))
+            .Do(_ => Assert.True(disconnectCompleted, "Torrent stats must be persisted only after peer disconnect"));
+
+        await _subject.StopAsync(CancellationToken.None);
+
+        await _connectionManager.Received(1).DisconnectAllAsync();
+        _torrentService.Received(1).UpdateMany(Arg.Is<List<Torrent>>(list => list.Contains(torrent)));
     }
 
     [Test]

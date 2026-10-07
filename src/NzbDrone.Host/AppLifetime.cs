@@ -181,7 +181,7 @@ public class AppLifetime : IHostedService, IDisposable
         }
 
         // Phase 2: State & Buffer Serialization
-        _logger.Info("Executing phased shutdown phase 2: flushing piece buffers, saving FastResume, and persisting torrent stats");
+        _logger.Info("Executing phased shutdown phase 2: flushing piece buffers and saving FastResume");
         if (_pieceStorage != null)
         {
             try
@@ -206,6 +206,20 @@ public class AppLifetime : IHostedService, IDisposable
             }
         }
 
+        // Phase 3: Connection teardown, torrent stat persistence, and SQLite checkpoint
+        _logger.Info("Executing phased shutdown phase 3: disconnecting peer connections, persisting torrent stats, and executing database checkpoint");
+        if (_connectionManager != null)
+        {
+            try
+            {
+                await _connectionManager.DisconnectAllAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error disconnecting peer connections on shutdown");
+            }
+        }
+
         if (_torrentService != null)
         {
             try
@@ -219,20 +233,6 @@ public class AppLifetime : IHostedService, IDisposable
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Error persisting torrent statistics to database on shutdown");
-            }
-        }
-
-        // Phase 3: Connection Teardown & SQLite Checkpoint
-        _logger.Info("Executing phased shutdown phase 3: disconnecting peer connections and executing database checkpoint");
-        if (_connectionManager != null)
-        {
-            try
-            {
-                await _connectionManager.DisconnectAllAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Error disconnecting peer connections on shutdown");
             }
         }
 
