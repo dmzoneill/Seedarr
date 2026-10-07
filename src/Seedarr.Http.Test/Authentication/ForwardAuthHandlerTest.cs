@@ -249,7 +249,7 @@ public class ForwardAuthHandlerTest
     [TestCase("viewer")]
     [TestCase("readonly")]
     [TestCase("media-consumers")]
-    public async Task HandleAuthenticateAsync_WhenUserHasNonAdminGroup_AssignsUserRole(string groups)
+    public async Task HandleAuthenticateAsync_WhenUserHasNonAdminGroup_AssignsReadOnlyRole(string groups)
     {
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
@@ -260,11 +260,11 @@ public class ForwardAuthHandlerTest
 
         Assert.That(result.Succeeded, Is.True);
         var role = result.Principal?.FindFirst(ClaimTypes.Role)?.Value;
-        Assert.That(role, Is.EqualTo("User"));
+        Assert.That(role, Is.EqualTo(Roles.ReadOnly));
     }
 
     [Test]
-    public async Task HandleAuthenticateAsync_WhenUserHasNoGroupsHeader_DefaultsToUserRole()
+    public async Task HandleAuthenticateAsync_WhenUserHasNoGroupsHeader_DefaultsToReadOnlyRole()
     {
         var context = new DefaultHttpContext();
         context.Connection.RemoteIpAddress = IPAddress.Parse("127.0.0.1");
@@ -274,7 +274,16 @@ public class ForwardAuthHandlerTest
 
         Assert.That(result.Succeeded, Is.True);
         var role = result.Principal?.FindFirst(ClaimTypes.Role)?.Value;
-        Assert.That(role, Is.EqualTo("User"));
+        Assert.That(role, Is.EqualTo(Roles.ReadOnly));
+    }
+
+    [Test]
+    public void ForwardAuthDefaultRole_MatchesOidcUnmappedRoleDefault()
+    {
+        Assert.That(new ForwardAuthOptions().DefaultRole, Is.EqualTo(Roles.ReadOnly));
+
+        var oidcRoles = DynamicAuthSchemeManager.ResolveRoles([], null);
+        Assert.That(oidcRoles, Is.EqualTo(new[] { Roles.ReadOnly }));
     }
 
     [Test]
