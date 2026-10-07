@@ -229,7 +229,6 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             return NotFound();
         }
 
-        _providerService.Delete(id);
         try
         {
             await _dynamicAuthManager.RemoveProviderSchemeAsync(existing.ProviderId);
@@ -239,6 +238,8 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             _logger.Warn(ex, "Failed to remove dynamic authentication scheme for provider: {0}", existing.ProviderId);
             return BadRequest(new { message = $"Failed to remove authentication scheme: {ex.Message}" });
         }
+
+        _providerService.Delete(id);
 
         return NoContent();
     }

@@ -426,6 +426,7 @@ public class IdentityProviderConfigControllerTest
         var result = await _controller.Delete(1);
 
         Assert.That(result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.DidNotReceive().Delete(Arg.Any<int>());
     }
 
     [Test]
