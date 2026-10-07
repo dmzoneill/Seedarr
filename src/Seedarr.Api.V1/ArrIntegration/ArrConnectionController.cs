@@ -234,7 +234,7 @@ public class ArrConnectionController : Controller
         }
 
         var definition = _connectionFactory.Get(connectionId);
-        if (definition == null || string.IsNullOrWhiteSpace(definition.Url))
+        if (definition == null || string.IsNullOrWhiteSpace(definition.Url) || !definition.Enable)
         {
             return NotFound("Arr connection not found");
         }

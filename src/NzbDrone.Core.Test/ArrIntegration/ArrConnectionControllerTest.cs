@@ -301,6 +301,23 @@ public class ArrConnectionControllerTest
     }
 
     [Test]
+    public async Task GetImageProxy_returns_not_found_when_connection_disabled()
+    {
+        _connectionFactory.Get(1).Returns(new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "my-key",
+            Enable = false
+        });
+
+        var result = await _controller.GetImageProxy(1, "/MediaCover/1/poster.jpg");
+
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
     public async Task GetImageProxy_proxies_image_successfully()
     {
         var handler = new MockHttpMessageHandler();
