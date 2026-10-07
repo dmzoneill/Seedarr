@@ -146,6 +146,15 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 var provider = CreateClient(definition);
                 if (provider == null)
                 {
+                    var unsupportedTypeMessage =
+                        $"Could not create provider for client type {definition.ClientType}.";
+                    RecordFailure(definition.Id, new ArgumentException(unsupportedTypeMessage));
+                    _logger.Warn(
+                        "Skipping sync for download client {0} (id {1}): {2}",
+                        definition.Name,
+                        definition.Id,
+                        unsupportedTypeMessage);
+                    result.Failed++;
                     continue;
                 }
 
