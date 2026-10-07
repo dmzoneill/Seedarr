@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { Torrent } from "../api/types";
 import {
+  clearPieceBitInPlace,
   decodeBase64Bitfield,
   setPieceBitInPlace,
   setPieceBitsInPlace,
@@ -24,6 +25,7 @@ export interface TorrentTelemetry {
 
 export interface PieceMapData {
   bitfield: Uint8Array;
+  corruptedIndices?: number[];
   version: number;
   lastUpdated: number;
 }
@@ -33,6 +35,7 @@ export interface PieceMapUpdatePayload {
   pieceIndices?: number[];
   pieceIndexes?: number[];
   pieceIndex?: number;
+  pieceState?: number;
   bitfield?: string | Uint8Array;
   cleared?: boolean;
   [key: string]: unknown;
@@ -105,6 +108,15 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
       const cleared =
         data?.cleared === true ||
         (data as { Cleared?: boolean })?.Cleared === true;
+      const pieceStateRaw =
+        data?.pieceState ??
+        (data as { PieceState?: number })?.PieceState ??
+        (data as { state?: number })?.state ??
+        (data as { State?: number })?.State;
+      const pieceState =
+        typeof pieceStateRaw === "number" && pieceStateRaw >= 0
+          ? pieceStateRaw
+          : undefined;
 
       if (cleared) {
         return {
@@ -112,6 +124,7 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
             ...state.pieceMaps,
             [torrentId]: {
               bitfield: new Uint8Array(0),
+              corruptedIndices: [],
               version: prevVersion + 1,
               lastUpdated: Date.now(),
             },
@@ -120,6 +133,9 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
       }
 
       let bitfield = prevData?.bitfield;
+      let corruptedIndices = prevData?.corruptedIndices
+        ? [...prevData.corruptedIndices]
+        : [];
 
       // Determine required max piece index from data
       let maxIdx = -1;
@@ -186,7 +202,15 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
         setPieceBitsInPlace(bitfield, pieceIndices);
       }
       if (typeof pieceIndex === "number" && pieceIndex >= 0) {
-        setPieceBitInPlace(bitfield, pieceIndex);
+        if (pieceState === 3) {
+          clearPieceBitInPlace(bitfield, pieceIndex);
+          if (!corruptedIndices.includes(pieceIndex)) {
+            corruptedIndices.push(pieceIndex);
+          }
+        } else {
+          setPieceBitInPlace(bitfield, pieceIndex);
+          corruptedIndices = corruptedIndices.filter((i) => i !== pieceIndex);
+        }
       }
 
       return {
@@ -194,6 +218,7 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
           ...state.pieceMaps,
           [torrentId]: {
             bitfield,
+            corruptedIndices,
             version: prevVersion + 1,
             lastUpdated: Date.now(),
           },

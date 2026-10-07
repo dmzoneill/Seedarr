@@ -8,6 +8,7 @@ import React, {
 import { formatBytes } from "../utils/formatters";
 import { usePieceMap, useTorrentFiles } from "../api/hooks";
 import type { TorrentFileInfo } from "../api/types";
+import { useTorrentStore } from "../stores/useTorrentStore";
 
 export interface PieceMapProps {
   torrentId?: number;
@@ -225,6 +226,9 @@ export function PieceMap({
 
   // Fetch authentic piece map data and files
   const { data: pieceMapData } = usePieceMap(torrentId);
+  const corruptedOverlay = useTorrentStore((state) =>
+    torrentId ? state.pieceMaps[torrentId]?.corruptedIndices : undefined,
+  );
   const { data: fetchedFiles } = useTorrentFiles(torrentId ?? 0);
   const files = useMemo(
     () => propFiles || fetchedFiles || [],
@@ -258,8 +262,22 @@ export function PieceMap({
 
   // Decompress states array: 0=Missing, 1=In-flight, 2=Completed/Verified, 3=Corrupted
   const pieceStates = useMemo(() => {
-    return calculatePieceStates(totalPieces, progress, isSeeding, pieceMapData);
-  }, [pieceMapData, totalPieces, progress, isSeeding]);
+    const states = calculatePieceStates(
+      totalPieces,
+      progress,
+      isSeeding,
+      pieceMapData,
+    );
+    if (corruptedOverlay?.length) {
+      for (let i = 0; i < corruptedOverlay.length; i++) {
+        const idx = corruptedOverlay[i];
+        if (idx >= 0 && idx < states.length) {
+          states[idx] = 3;
+        }
+      }
+    }
+    return states;
+  }, [pieceMapData, totalPieces, progress, isSeeding, corruptedOverlay]);
 
   // Decompress rarity array (peer availability count)
   const pieceRarity = useMemo(() => {

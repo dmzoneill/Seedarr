@@ -148,6 +148,26 @@ public class PieceStorageTest
         Assert.That(_pieceStorage.IsPieceVerified(hash, 4), Is.False);
         Assert.That(_pieceStorage.IsPieceCorrupted(hash, 4), Is.True);
         Assert.That(_pieceStorage.GetCorruptedPieces(hash), Contains.Item(4));
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceCorruptedMessage>(m =>
+            m.InfoHash == hash &&
+            m.PieceIndex == 4 &&
+            m.PieceState == 3 &&
+            m.Name == "PieceCorrupted"));
+    }
+
+    [Test]
+    public void MarkPieceCorrupted_fans_out_to_torrent_group_when_torrent_service_resolves_hash()
+    {
+        const string hash = "419cb7d4838686ffb08c2a4f4e7c10d3f84898ec";
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.GetByInfoHash(hash).Returns(new Torrent { Id = 91, InfoHash = hash });
+
+        using var storage = new PieceStorage(_signalRBroadcaster, TimeSpan.Zero, torrentService);
+        storage.MarkPieceCorrupted(hash, 6);
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<PieceCorruptedMessage>(m => m.TorrentId == 91));
+        _signalRBroadcaster.Received(1).BroadcastToChannel("torrents", Arg.Any<PieceCorruptedMessage>());
+        _signalRBroadcaster.Received(1).BroadcastToTorrent(91, Arg.Any<PieceCorruptedMessage>());
     }
 
     [Test]

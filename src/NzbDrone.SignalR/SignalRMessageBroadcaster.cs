@@ -290,12 +290,22 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
         }
         else if (string.Equals(message.Name, "PieceCompleted", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "PieceBatchCompleted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "PieceCorrupted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "pieceCorrupted", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "piece_corrupted", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "pieceMapUpdated", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "piece_map_updated", StringComparison.OrdinalIgnoreCase))
         {
             list.Add(message.Name);
             list.Add("pieceMapUpdated");
             list.Add("piece_map_updated");
+            if (string.Equals(message.Name, "PieceCorrupted", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(message.Name, "pieceCorrupted", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(message.Name, "piece_corrupted", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add("pieceCorrupted");
+                list.Add("piece_corrupted");
+            }
         }
         else if (string.Equals(message.Name, "Tracker", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(message.Name, "Trackers", StringComparison.OrdinalIgnoreCase) ||
@@ -368,6 +378,11 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
         if (message is PieceCompletedMessage pcm)
         {
             return $"{prefix}{name}:{pcm.InfoHash}:{pcm.PieceIndex}";
+        }
+
+        if (message is PieceCorruptedMessage pcor)
+        {
+            return $"{prefix}{name}:{pcor.InfoHash}:{pcor.PieceIndex}";
         }
 
         if (message is PieceBatchCompletedMessage pbcm)

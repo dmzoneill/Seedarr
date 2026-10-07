@@ -66,10 +66,18 @@ export function normalizePieceMapWirePayload(
 
   const cleared = body.cleared === true || body.Cleared === true;
 
+  const pieceStateRaw =
+    body.pieceState ?? body.PieceState ?? body.state ?? body.State;
+  const pieceState =
+    typeof pieceStateRaw === "number" && pieceStateRaw >= 0
+      ? pieceStateRaw
+      : undefined;
+
   return {
     ...body,
     pieceIndices,
     pieceIndex,
     cleared,
+    pieceState,
   };
 }

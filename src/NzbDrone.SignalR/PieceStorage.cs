@@ -195,6 +195,13 @@ public class PieceStorage : IPieceStorage, IDisposable
 
             corrupted.Add(pieceIndex);
         }
+
+        if (_signalRBroadcaster == null)
+        {
+            return;
+        }
+
+        PublishPieceSignalR(infoHash, new PieceCorruptedMessage(infoHash, pieceIndex));
     }
 
     public bool IsPieceCorrupted(string infoHash, int pieceIndex)
@@ -532,6 +539,10 @@ public class PieceStorage : IPieceStorage, IDisposable
         else if (message is PieceMapUpdatedMessage mapMessage && torrentId.HasValue)
         {
             mapMessage.TorrentId = torrentId.Value;
+        }
+        else if (message is PieceCorruptedMessage corruptedMessage && torrentId.HasValue)
+        {
+            corruptedMessage.TorrentId = torrentId.Value;
         }
 
         SignalRBroadcastFanout.Broadcast(_signalRBroadcaster, message, "torrents", torrentId);

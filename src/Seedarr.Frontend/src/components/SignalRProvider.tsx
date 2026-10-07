@@ -224,9 +224,13 @@ export default function SignalRProvider({
       const torrents = queryClient.getQueryData<Torrent[]>(["torrents"]);
       const tid = resolvePieceMapTorrentId(wire, torrents);
       if (!tid) return;
-      useTorrentStore
-        .getState()
-        .updatePieceMap(tid, normalizePieceMapWirePayload(wire));
+      const normalized = normalizePieceMapWirePayload(wire);
+      useTorrentStore.getState().updatePieceMap(tid, normalized);
+      if (normalized.pieceState === 3) {
+        void queryClient.invalidateQueries({
+          queryKey: ["torrents", tid, "piecemap"],
+        });
+      }
     };
 
     const onSpeedPulse = (data: unknown) => {

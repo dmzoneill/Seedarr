@@ -40,4 +40,13 @@ describe("pieceMapSignalR", () => {
     assert.equal(normalized.pieceIndex, 3);
     assert.equal(normalized.cleared, true);
   });
+
+  it("normalizePieceMapWirePayload maps PieceState corruption", () => {
+    const normalized = normalizePieceMapWirePayload({
+      PieceIndex: 9,
+      PieceState: 3,
+    });
+    assert.equal(normalized.pieceIndex, 9);
+    assert.equal(normalized.pieceState, 3);
+  });
 });
