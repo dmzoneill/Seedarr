@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:53:30Z",
+  "updatedAt": "2026-10-07T00:55:10Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,37 +14,37 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_1dd9813e",
+    "lastScheduleId": "sched_b595dd0b",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
-      "worker": "moose",
-      "issue": 1280,
-      "worktree": "../seedarr_worktrees/issue-1280",
+      "worker": "badger",
+      "issue": 1262,
+      "worktree": "../seedarr_worktrees/issue-1262",
       "area": "blocklist"
     },
     "host": {
       "status": "running",
-      "worker": "koala",
-      "issue": 1275,
-      "worktree": "../seedarr_worktrees/issue-1275",
-      "area": "instrumentation"
+      "worker": "panther",
+      "issue": 1263,
+      "worktree": "../seedarr_worktrees/issue-1263",
+      "area": "host"
     },
     "api": {
       "status": "running",
-      "worker": "crane",
-      "issue": 1271,
-      "worktree": "../seedarr_worktrees/issue-1271",
-      "area": "notifications"
+      "worker": "eagle",
+      "issue": 1266,
+      "worktree": "../seedarr_worktrees/issue-1266",
+      "area": "api"
     },
     "core-torrents": {
       "status": "running",
-      "worker": "wolf",
-      "issue": 1270,
-      "worktree": "../seedarr_worktrees/issue-1270",
-      "area": "authentication"
+      "worker": "bison",
+      "issue": 1268,
+      "worktree": "../seedarr_worktrees/issue-1268",
+      "area": "torrents"
     },
     "http": {
       "status": "running",
@@ -57,19 +57,19 @@
   "issueQueue": {
     "reservedComponents": [
       "blocklist",
-      "instrumentation",
-      "notifications",
-      "authentication",
+      "host",
+      "api",
+      "torrents",
       "datastore"
     ],
     "nextCandidates": [
-      1269,
-      1268,
       1267,
-      1266,
-      1265
+      1265,
+      1264,
+      1261,
+      1260
     ]
   },
-  "githubOpen": 396,
-  "lastMonitorNote": "fix monitor: batch #1281,#1279,#1276,#1286,#1283 closed; rotated to #1280,#1275,#1271,#1270,#1273"
+  "githubOpen": 390,
+  "lastMonitorNote": "fix monitor: batch #1280,#1275,#1271,#1270 closed; trout still on #1273; rotated to #1262,#1263,#1266,#1268"
 }
