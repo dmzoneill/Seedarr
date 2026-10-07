@@ -8,11 +8,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.SignalR;
 using NLog;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Terminal;
 using Seedarr.Http;
+using Seedarr.Http.Terminal;
 
 namespace Seedarr.Api.V1.System;
 
@@ -27,12 +29,17 @@ public class TerminalController : ControllerBase
 
     private readonly ITerminalService _terminalService;
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly IHubContext<TerminalHub> _terminalHubContext;
     private readonly Logger _logger;
 
-    public TerminalController(ITerminalService terminalService = null, IConfigFileProvider configFileProvider = null)
+    public TerminalController(
+        ITerminalService terminalService = null,
+        IConfigFileProvider configFileProvider = null,
+        IHubContext<TerminalHub> terminalHubContext = null)
     {
         _terminalService = terminalService;
         _configFileProvider = configFileProvider;
+        _terminalHubContext = terminalHubContext;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -91,12 +98,24 @@ public class TerminalController : ControllerBase
 
         if (_terminalService != null)
         {
+            var hubContext = _terminalHubContext;
             await _terminalService.StartSessionAsync(
                 effectiveConnectionId,
                 effectiveCols,
                 effectiveRows,
-                _ => Task.CompletedTask,
-                null,
+                async output =>
+                {
+                    if (hubContext != null)
+                    {
+                        await hubContext.Clients.Client(effectiveConnectionId).SendAsync("ReceiveOutput", output);
+                    }
+                },
+                () =>
+                {
+                    _logger.Debug(
+                        "Terminal session exited for connection '{0}' (REST-initiated)",
+                        effectiveConnectionId);
+                },
                 HttpContext?.RequestAborted ?? default);
         }
 

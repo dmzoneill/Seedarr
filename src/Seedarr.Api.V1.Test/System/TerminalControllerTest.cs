@@ -12,12 +12,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.SignalR;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Terminal;
 using Seedarr.Api.V1.System;
+using Seedarr.Http.Terminal;
 
 namespace Seedarr.Api.V1.Test.System;
 
@@ -246,6 +248,39 @@ public class TerminalControllerTest
         await _terminalService.Received(1).StartSessionAsync(
             "my-conn", 120, 40,
             Arg.Any<Func<string, Task>>(), Arg.Any<Action>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartSession_should_forward_pty_output_to_signalr_client()
+    {
+        var hubContext = Substitute.For<IHubContext<TerminalHub>>();
+        var hubClients = Substitute.For<IHubClients>();
+        var clientProxy = Substitute.For<IClientProxy>();
+        hubContext.Clients.Returns(hubClients);
+        hubClients.Client("my-conn").Returns(clientProxy);
+        clientProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        _controller = new TerminalController(_terminalService, _configFileProvider, hubContext);
+        SetAdminUser("127.0.0.1", "adminUser");
+
+        Func<string, Task> outputCallback = null;
+        _terminalService.StartSessionAsync(
+                Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(),
+                Arg.Do<Func<string, Task>>(cb => outputCallback = cb),
+                Arg.Any<Action>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var request = new TerminalSessionRequest { ConnectionId = "my-conn", Cols = 80, Rows = 24 };
+        await _controller.StartSession(request);
+
+        Assert.That(outputCallback, Is.Not.Null);
+        await outputCallback!("hello from pty");
+
+        await clientProxy.Received(1).SendCoreAsync(
+            "ReceiveOutput",
+            Arg.Is<object[]>(args => args.Length == 1 && args[0] as string == "hello from pty"),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
