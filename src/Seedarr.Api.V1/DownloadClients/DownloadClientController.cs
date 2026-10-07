@@ -71,7 +71,7 @@ public class DownloadClientController : Controller
         }
 
         var created = _downloadClientFactory.Create(definition);
-        return Ok(MaskPassword(created));
+        return Ok(MaskPassword(EnrichWithStatus(created)));
     }
 
     [HttpPut("{id}")]
@@ -116,7 +116,7 @@ public class DownloadClientController : Controller
 
         _downloadClientFactory.Update(definition);
         _syncService.ResetClientStatus(id);
-        return Ok(MaskPassword(definition));
+        return Ok(MaskPassword(EnrichWithStatus(definition)));
     }
 
     [HttpDelete("{id}")]
