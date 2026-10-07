@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:33:27Z",
+  "updatedAt": "2026-10-07T02:35:04Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,29 +14,29 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_279d485a",
+    "lastScheduleId": "sched_97d3ac3f",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "issue": 986,
-      "worktree": "../seedarr_worktrees/issue-986",
+      "issue": 1160,
+      "worktree": "../seedarr_worktrees/issue-1160",
       "area": "authentication"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1199,
-      "worktree": "../seedarr_worktrees/issue-1199",
+      "issue": 1151,
+      "worktree": "../seedarr_worktrees/issue-1151",
       "area": "datastore"
     },
     "api": {
       "status": "running",
       "worker": "hawk",
-      "issue": 1178,
-      "worktree": "../seedarr_worktrees/issue-1178",
+      "issue": 1171,
+      "worktree": "../seedarr_worktrees/issue-1171",
       "area": "api"
     },
     "core-torrents": {
@@ -49,8 +49,8 @@
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "issue": 1203,
-      "worktree": "../seedarr_worktrees/issue-1203",
+      "issue": 1194,
+      "worktree": "../seedarr_worktrees/issue-1194",
       "area": "signalr"
     }
   },
@@ -69,6 +69,6 @@
       1236
     ]
   },
-  "githubOpen": 190,
-  "lastMonitorNote": "fix monitor: #960 closed; elk dispatched #947"
+  "githubOpen": 186,
+  "lastMonitorNote": "fix monitor: #986 #1199 #1178 #1203 closed; 4 dispatches"
 }
