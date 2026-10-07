@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T02:10:30Z",
+  "updatedAt": "2026-10-07T02:25:30Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,44 +14,44 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_d7f588ef",
+    "lastScheduleId": "sched_d55c61f0",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "issue": 1062,
-      "worktree": "../seedarr_worktrees/issue-1062",
+      "issue": 1064,
+      "worktree": "../seedarr_worktrees/issue-1064",
       "area": "authentication"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1157,
-      "worktree": "../seedarr_worktrees/issue-1157",
+      "issue": 883,
+      "worktree": "../seedarr_worktrees/issue-883",
       "area": "host"
     },
     "api": {
       "status": "running",
       "worker": "hawk",
-      "issue": 982,
-      "worktree": "../seedarr_worktrees/issue-982",
-      "area": "downloadclients"
+      "issue": 1181,
+      "worktree": "../seedarr_worktrees/issue-1181",
+      "area": "api"
     },
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "issue": 1188,
-      "worktree": "../seedarr_worktrees/issue-1188",
+      "issue": 949,
+      "worktree": "../seedarr_worktrees/issue-949",
       "area": "torrents"
     },
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "issue": 1027,
-      "worktree": "../seedarr_worktrees/issue-1027",
-      "area": "terminal"
+      "issue": 1209,
+      "worktree": "../seedarr_worktrees/issue-1209",
+      "area": "signalr"
     }
   },
   "issueQueue": {
@@ -64,16 +64,13 @@
       "signalr"
     ],
     "nextCandidates": [
-      1139,
-      1121,
-      1215,
-      1210,
-      1248,
-      1235,
-      1214,
-      1035
+      1195,
+      1180,
+      958,
+      1247,
+      1238
     ]
   },
-  "githubOpen": 232,
-  "lastMonitorNote": "fix monitor: 232 open; closed #933 #1124; dispatches panther #1157 elk #1188"
+  "githubOpen": 205,
+  "lastMonitorNote": "fix monitor: 205 open; closed #976 #959 #1182 #1234; dispatches badger#1064 hawk#1181 elk#949 sparrow#1209"
 }
