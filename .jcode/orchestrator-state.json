@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:55:53Z",
+  "updatedAt": "2026-10-07T01:57:07Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,22 +14,22 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_c30a64a7",
+    "lastScheduleId": "sched_9977b647",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "issue": 978,
-      "worktree": "../seedarr_worktrees/issue-978",
+      "issue": 917,
+      "worktree": "../seedarr_worktrees/issue-917",
       "area": "authentication"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1246,
-      "worktree": "../seedarr_worktrees/issue-1246",
+      "issue": 1020,
+      "worktree": "../seedarr_worktrees/issue-1020",
       "area": "common"
     },
     "api": {
@@ -49,8 +49,8 @@
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "issue": 1200,
-      "worktree": "../seedarr_worktrees/issue-1200",
+      "issue": 934,
+      "worktree": "../seedarr_worktrees/issue-934",
       "area": "http"
     }
   },
@@ -74,6 +74,6 @@
       1231
     ]
   },
-  "githubOpen": 259,
-  "lastMonitorNote": "fix monitor: #1012 #942 closed; hawk->#1011 elk->#1138; 259 open"
+  "githubOpen": 256,
+  "lastMonitorNote": "fix monitor: #978 #1246 #1200 closed; badger->#917 panther->#1020 sparrow->#934; 256 open"
 }
