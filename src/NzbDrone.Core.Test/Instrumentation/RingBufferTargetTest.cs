@@ -436,6 +436,13 @@ public class RingBufferTargetTest
             Does.Contain("\"apiKey\": \"[REDACTED]\""));
 
         Assert.That(
+            RingBufferTarget.Sanitize("body: {\"apiKey\": \"secret with spaces\"}"),
+            Is.EqualTo("body: {\"apiKey\": \"[REDACTED]\"}"));
+        Assert.That(
+            RingBufferTarget.Sanitize("body: {\"apiKey\": \"secret with spaces\"}"),
+            Does.Not.Contain(" with spaces"));
+
+        Assert.That(
             RingBufferTarget.Sanitize("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9"),
             Is.EqualTo("Authorization: Bearer [REDACTED]"));
     }
