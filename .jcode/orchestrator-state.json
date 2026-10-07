@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:41:00Z",
+  "updatedAt": "2026-10-07T00:41:35Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -55,9 +55,23 @@
     }
   },
   "issueQueue": {
-    "reservedComponents": ["authentication", "host", "downloadclients", "torrents", "terminal"],
-    "nextCandidates": [1290, 1285, 1277, 1286, 1274, 1272, 1269]
+    "reservedComponents": [
+      "authentication",
+      "host",
+      "downloadclients",
+      "torrents",
+      "terminal"
+    ],
+    "nextCandidates": [
+      1290,
+      1285,
+      1277,
+      1286,
+      1274,
+      1272,
+      1269
+    ]
   },
   "githubOpen": 421,
-  "lastMonitorNote": "fix-mode started; 5 agents on #1294 #1293 #1292 #1291 #1282"
+  "lastMonitorNote": "auto-poke: fix-mode; 5 agents active (fox/otter/hawk/beaver/owl); monitor sched_7fe654ae pending"
 }
