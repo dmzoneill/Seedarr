@@ -135,26 +135,31 @@ public class SystemDeveloperController : Controller
             return BadRequest("EventName cannot be empty.");
         }
 
-        var item = new DeveloperEventEntry
+        var payloadJson = string.IsNullOrWhiteSpace(request.PayloadJson) ? "{}" : request.PayloadJson;
+
+        if (!DeveloperSyntheticEventPublisher.TryCreateEvent(request.EventName, payloadJson, out var domainEvent, out var error))
+        {
+            return BadRequest(error);
+        }
+
+        if (_eventAggregator != null)
+        {
+            _eventAggregator.PublishEvent(domainEvent);
+        }
+        else
+        {
+            _eventStore?.RecordEvent(domainEvent);
+        }
+
+        var eventType = domainEvent.GetType();
+        return Ok(new DeveloperEventItem
         {
             Id = Guid.NewGuid().ToString("N"),
             TimestampUtc = DateTime.UtcNow,
-            EventName = request.EventName,
-            EventType = $"Synthetic.{request.EventName}",
-            SourceNamespace = "Seedarr.Developer.Synthetic",
-            PayloadJson = string.IsNullOrWhiteSpace(request.PayloadJson) ? "{}" : request.PayloadJson,
-        };
-
-        _eventStore?.RecordEvent(new DeveloperSyntheticEvent(request.EventName, item.PayloadJson));
-
-        return Ok(new DeveloperEventItem
-        {
-            Id = item.Id,
-            TimestampUtc = item.TimestampUtc,
-            EventName = item.EventName,
-            EventType = item.EventType,
-            SourceNamespace = item.SourceNamespace,
-            PayloadJson = item.PayloadJson,
+            EventName = eventType.Name,
+            EventType = eventType.FullName ?? eventType.Name,
+            SourceNamespace = eventType.Namespace ?? string.Empty,
+            PayloadJson = payloadJson,
         });
     }
 
@@ -718,15 +723,3 @@ public class SystemDeveloperController : Controller
     }
 }
 
-public class DeveloperSyntheticEvent : IEvent
-{
-    public string Name { get; }
-
-    public string Payload { get; }
-
-    public DeveloperSyntheticEvent(string name, string payload)
-    {
-        Name = name;
-        Payload = payload;
-    }
-}
