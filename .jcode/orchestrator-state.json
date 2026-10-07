@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T04:04:30Z",
+  "updatedAt": "2026-10-07T04:06:07Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,25 +14,25 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_8413aa4b",
+    "lastScheduleId": "sched_66f14475",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "session": "monkey",
-      "issue": 973,
-      "worktree": "../seedarr_worktrees/issue-973",
+      "session": "camel",
+      "issue": 924,
+      "worktree": "../seedarr_worktrees/issue-924",
       "area": "downloadclients"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "session": "jaguar",
-      "issue": 968,
-      "worktree": "../seedarr_worktrees/issue-968",
-      "area": "disk"
+      "session": "elephant",
+      "issue": 879,
+      "worktree": "../seedarr_worktrees/issue-879",
+      "area": "developer"
     },
     "api": {
       "status": "running",
@@ -69,12 +69,12 @@
       "signalr"
     ],
     "nextCandidates": [
+      884,
       1014,
       1025,
-      924,
       931
     ]
   },
-  "githubOpen": 39,
-  "lastMonitorNote": "fix monitor: turtle #929 lizard #954 ack; 39 open; all slots active"
+  "githubOpen": 37,
+  "lastMonitorNote": "fix monitor: #973 #968 closed; camel #924 elephant #879"
 }
