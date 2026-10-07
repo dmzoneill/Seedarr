@@ -143,6 +143,40 @@ public class RestControllerWithSignalRTest
         }
     }
 
+    private int GetLastBroadcastTimesCount()
+    {
+        var controllerType = typeof(RestControllerWithSignalR<TestResource, TestModel>);
+        var syncLock = controllerType.GetField("_syncLock", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(_controller);
+        var lastBroadcastTimes = (Dictionary<int, DateTime>)controllerType
+            .GetField("_lastBroadcastTimes", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(_controller);
+
+        lock (syncLock)
+        {
+            return lastBroadcastTimes.Count;
+        }
+    }
+
+    private void SeedStaleLastBroadcastTimes(int count)
+    {
+        var controllerType = typeof(RestControllerWithSignalR<TestResource, TestModel>);
+        var syncLock = controllerType.GetField("_syncLock", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(_controller);
+        var lastBroadcastTimes = (Dictionary<int, DateTime>)controllerType
+            .GetField("_lastBroadcastTimes", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(_controller);
+        var staleTime = DateTime.UtcNow - TimeSpan.FromMinutes(10);
+
+        lock (syncLock)
+        {
+            for (var i = 1; i <= count; i++)
+            {
+                lastBroadcastTimes[i] = staleTime;
+            }
+        }
+    }
+
     [Test]
     public void Distinct_entity_ids_are_all_broadcasted()
     {
@@ -303,6 +337,19 @@ public class RestControllerWithSignalRTest
         _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Action == ModelAction.Updated &&
             ((TestResource)m.Body).Value == 2));
+    }
+
+    [Test]
+    public void Created_event_prunes_stale_last_broadcast_times_without_updated_coalesce()
+    {
+        SeedStaleLastBroadcastTimes(1001);
+        Assert.That(GetLastBroadcastTimesCount(), Is.EqualTo(1001));
+
+        var model = new TestModel { Id = 5000, Name = "Imported", Value = 1 };
+        _controller.Handle(new ModelEvent<TestModel>(model, ModelAction.Created));
+
+        Assert.That(GetLastBroadcastTimesCount(), Is.EqualTo(0));
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Action == ModelAction.Created));
     }
 
     [Test]
