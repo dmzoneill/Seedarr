@@ -61,10 +61,12 @@ clean:
 
 test:
 	timeout 600 dotnet test $(UNIT_TEST) --configuration Release --no-build \
+		--blame-hang-timeout 90s \
 		--settings .runsettings \
 		--logger "console;verbosity=normal" \
 		--logger "trx;LogFileName=test-results.trx" \
-		--collect:"XPlat Code Coverage"
+		--collect:"XPlat Code Coverage" \
+		-- RunConfiguration.MaxCpuCount=1 NUnit.NumberOfTestWorkers=1
 
 # integration runs unit/integration tests without container orchestration
 integration:
@@ -252,5 +254,3 @@ bump-major:
 	echo "Bumping version: $$CURRENT -> $$NEW_VER"; \
 	echo "version=$$NEW_VER" > version; \
 	if [ -f $(FRONTEND)/package.json ]; then (cd $(FRONTEND) && npm version $$NEW_VER --no-git-tag-version --allow-same-version); fi
-
-

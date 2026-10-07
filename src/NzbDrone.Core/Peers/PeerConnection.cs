@@ -925,7 +925,7 @@ public class PeerConnection : IDisposable
             // Peek the first byte to detect whether this is an MSE or plain handshake.
             // A standard BT handshake starts with 0x13 (19); MSE starts with the DH public key.
             var peek = new byte[1];
-            var read = await _networkStream.ReadAsync(peek.AsMemory(0, 1), cancellationToken);
+            var read = await ReadFirstByteWithHandshakeTimeoutAsync(peek, cancellationToken);
             if (read == 0)
             {
                 return false;
@@ -950,7 +950,13 @@ public class PeerConnection : IDisposable
             // MSE/PE handshake - prefix the peeked byte back
             var prefixed = new PrefixedStream(peek, _networkStream, ownsStream: false);
             var handshake = new MseHandshake(Array.Empty<byte>(), mode, DhKeyPool);
-            _activeStream = await handshake.NegotiateIncomingAsync(prefixed, infoHashValidator, cancellationToken);
+            using var handshakeTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (HandshakeTimeoutMs > 0)
+            {
+                handshakeTimeout.CancelAfter(HandshakeTimeoutMs);
+            }
+
+            _activeStream = await handshake.NegotiateIncomingAsync(prefixed, infoHashValidator, handshakeTimeout.Token);
             EncryptionMethod = handshake.NegotiatedMethod;
             InitialApplicationData = handshake.InitialApplicationData;
             IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
@@ -963,6 +969,32 @@ public class PeerConnection : IDisposable
             _logger.Debug(ex, "MSE/PE incoming negotiation failed with {0}:{1}", RemoteIp, RemotePort);
             return false;
         }
+    }
+
+    private async Task<int> ReadFirstByteWithHandshakeTimeoutAsync(byte[] peek, CancellationToken cancellationToken)
+    {
+        if (HandshakeTimeoutMs <= 0)
+        {
+            return await _networkStream.ReadAsync(peek.AsMemory(0, 1), cancellationToken);
+        }
+
+        var readTask = Task.Run(() => _networkStream.Read(peek, 0, 1), cancellationToken);
+        var completed = await Task.WhenAny(readTask, Task.Delay(HandshakeTimeoutMs, cancellationToken));
+        if (completed != readTask)
+        {
+            try
+            {
+                _client?.Close();
+            }
+            catch (Exception ex)
+            {
+                _logger.Trace(ex, "Failed to close peer socket after handshake read timeout");
+            }
+
+            return 0;
+        }
+
+        return await readTask;
     }
 
     public bool NegotiateEncryptionIncoming(IMseSkeyRegistry skeyRegistry, EncryptionMode mode)
