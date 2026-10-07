@@ -19,6 +19,7 @@ public interface ILoggingReconfigurationService
 public class LoggingReconfigurationService : ILoggingReconfigurationService, IHandle<ConfigSavedEvent>, IHandle<ApplicationStartedEvent>
 {
     private const string FileTargetName = NzbDroneLogger.FileTargetName;
+    private const string RingBufferTargetName = "ringBuffer";
 
     private readonly IConfigService _configService;
     private readonly IAppFolderInfo _appFolderInfo;
@@ -61,6 +62,7 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
         var debugMode = _configService.DebugMode;
 
         ConfigureFileLogging(config, logToFile, fileLogLevel);
+        ConfigureRingBuffer(config, fileLogLevel, debugMode);
         ConfigureDebugMode(config, debugMode);
 
         LogManager.ReconfigExistingLoggers();
@@ -109,6 +111,24 @@ public class LoggingReconfigurationService : ILoggingReconfigurationService, IHa
                 config.RemoveTarget(FileTargetName);
             }
         }
+    }
+
+    private static void ConfigureRingBuffer(LoggingConfiguration config, string fileLogLevel, bool debugMode)
+    {
+        var ringBufferTarget = config.FindTargetByName(RingBufferTargetName);
+        if (ringBufferTarget == null)
+        {
+            return;
+        }
+
+        var minLevel = ParseLogLevel(fileLogLevel);
+        if (debugMode && minLevel.Ordinal > LogLevel.Debug.Ordinal)
+        {
+            minLevel = LogLevel.Debug;
+        }
+
+        RemoveRulesForTarget(config, RingBufferTargetName);
+        config.AddRule(minLevel, LogLevel.Fatal, ringBufferTarget);
     }
 
     private static void ConfigureDebugMode(LoggingConfiguration config, bool debugMode)

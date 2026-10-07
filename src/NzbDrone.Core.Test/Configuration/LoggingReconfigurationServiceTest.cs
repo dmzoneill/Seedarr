@@ -3,7 +3,9 @@ using System.Linq;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using NLog.Targets.Wrappers;
 using NSubstitute;
+using NzbDrone.Common.Instrumentation;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
@@ -235,6 +237,68 @@ namespace NzbDrone.Core.Test.Configuration
             var rules = LogManager.Configuration.LoggingRules.Where(r => r.Targets.Contains(fileTarget)).ToList();
             Assert.That(rules, Has.Count.EqualTo(1));
             Assert.That(rules[0].Levels, Does.Contain(LogLevel.Trace));
+        }
+
+        [Test]
+        public void ReconfigureLogging_should_align_ring_buffer_rule_with_file_log_level()
+        {
+            var config = CreateConfigWithConsoleAndRingBuffer();
+            LogManager.Configuration = config;
+
+            _configService.LogToFile.Returns(true);
+            _configService.FileLogLevel.Returns("Warn");
+            _configService.DebugMode.Returns(false);
+
+            _subject.ReconfigureLogging();
+
+            var ringBufferTarget = LogManager.Configuration.FindTargetByName("ringBuffer");
+            var rules = LogManager.Configuration.LoggingRules
+                .Where(r => r.Targets.Contains(ringBufferTarget))
+                .ToList();
+
+            Assert.That(rules, Has.Count.EqualTo(1));
+            Assert.That(rules[0].Levels, Does.Contain(LogLevel.Warn));
+            Assert.That(rules[0].Levels, Does.Not.Contain(LogLevel.Info));
+            Assert.That(rules[0].Levels, Does.Not.Contain(LogLevel.Trace));
+        }
+
+        [Test]
+        public void ReconfigureLogging_should_lower_ring_buffer_to_debug_when_debug_mode_enabled()
+        {
+            var config = CreateConfigWithConsoleAndRingBuffer();
+            LogManager.Configuration = config;
+
+            _configService.LogToFile.Returns(true);
+            _configService.FileLogLevel.Returns("Warn");
+            _configService.DebugMode.Returns(true);
+
+            _subject.ReconfigureLogging();
+
+            var ringBufferTarget = LogManager.Configuration.FindTargetByName("ringBuffer");
+            var rules = LogManager.Configuration.LoggingRules
+                .Where(r => r.Targets.Contains(ringBufferTarget))
+                .ToList();
+
+            Assert.That(rules, Has.Count.EqualTo(1));
+            Assert.That(rules[0].Levels, Does.Contain(LogLevel.Debug));
+        }
+
+        private static LoggingConfiguration CreateConfigWithConsoleAndRingBuffer()
+        {
+            var config = new LoggingConfiguration();
+            var consoleTarget = new ConsoleTarget("console");
+            config.AddTarget(consoleTarget);
+            config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget);
+
+            var ringBufferTarget = new RingBufferTarget(64) { Name = "ringBufferTarget" };
+            var asyncWrapper = new AsyncTargetWrapper(ringBufferTarget, 5000, AsyncTargetWrapperOverflowAction.Discard)
+            {
+                Name = "ringBuffer"
+            };
+            config.AddTarget(asyncWrapper);
+            config.AddRule(LogLevel.Trace, LogLevel.Fatal, asyncWrapper);
+
+            return config;
         }
     }
 }
