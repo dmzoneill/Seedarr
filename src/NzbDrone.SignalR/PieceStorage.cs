@@ -341,16 +341,18 @@ public class PieceStorage : IPieceStorage, IDisposable
             return;
         }
 
+        if (_pendingBatches.TryRemove(infoHash, out var batch))
+        {
+            batch.Dispose();
+        }
+
         lock (_stateLock)
         {
             _verifiedPieces.TryRemove(infoHash, out _);
             _corruptedPieces.TryRemove(infoHash, out _);
         }
 
-        if (_pendingBatches.TryRemove(infoHash, out var batch))
-        {
-            batch.Dispose();
-        }
+        PublishPieceMapClearedSignalR(infoHash);
     }
 
     public void Flush()
@@ -520,8 +522,22 @@ public class PieceStorage : IPieceStorage, IDisposable
         {
             batchMessage.TorrentId = torrentId.Value;
         }
+        else if (message is PieceMapUpdatedMessage mapMessage && torrentId.HasValue)
+        {
+            mapMessage.TorrentId = torrentId.Value;
+        }
 
         SignalRBroadcastFanout.Broadcast(_signalRBroadcaster, message, "torrents", torrentId);
+    }
+
+    private void PublishPieceMapClearedSignalR(string infoHash)
+    {
+        if (_signalRBroadcaster == null)
+        {
+            return;
+        }
+
+        PublishPieceSignalR(infoHash, new PieceMapUpdatedMessage(infoHash));
     }
 
     private int? ResolveTorrentId(string infoHash)

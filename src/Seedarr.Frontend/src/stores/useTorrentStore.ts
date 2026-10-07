@@ -87,8 +87,22 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
   updatePieceMap: (torrentId, data) =>
     set((state) => {
       const prevData = state.pieceMaps[torrentId];
-      let bitfield = prevData?.bitfield;
       const prevVersion = prevData?.version ?? 0;
+
+      if (data?.cleared === true) {
+        return {
+          pieceMaps: {
+            ...state.pieceMaps,
+            [torrentId]: {
+              bitfield: new Uint8Array(0),
+              version: prevVersion + 1,
+              lastUpdated: Date.now(),
+            },
+          },
+        };
+      }
+
+      let bitfield = prevData?.bitfield;
 
       // Determine required max piece index from data
       let maxIdx = -1;
