@@ -52,6 +52,26 @@ public class ContainerExtensionsTest
     {
     }
 
+    public interface IGenericCustomService<T>
+    {
+    }
+
+    public class OpenGenericCustomService<T> : IGenericCustomService<T>
+    {
+    }
+
+    [Test]
+    public void AutoAddServices_does_not_register_open_generic_type_definitions()
+    {
+        var container = new Container(rules => rules.WithNzbDroneRules());
+
+        container.AutoAddServices(new[] { typeof(OpenGenericCustomService<>) });
+
+        Assert.That(container.IsRegistered(typeof(OpenGenericCustomService<>)), Is.False);
+        Assert.That(container.IsRegistered(typeof(IGenericCustomService<>)), Is.False);
+        Assert.That(container.IsRegistered<IGenericCustomService<string>>(), Is.False);
+    }
+
     [Test]
     public void AutoAddServices_does_not_register_IDisposable_as_service_contract()
     {
