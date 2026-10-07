@@ -318,8 +318,11 @@ public static class PathSanitizer
                 : fullRoot + System.IO.Path.DirectorySeparatorChar;
 
             var fullTarget = System.IO.Path.GetFullPath(System.IO.Path.Combine(fullRoot, relativePath));
-            return fullTarget.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(fullTarget, fullRoot, StringComparison.OrdinalIgnoreCase);
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return fullTarget.StartsWith(rootWithSep, comparison) ||
+                   string.Equals(fullTarget, fullRoot, comparison);
         }
         catch
         {

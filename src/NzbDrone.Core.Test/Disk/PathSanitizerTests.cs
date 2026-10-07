@@ -154,6 +154,21 @@ public class PathSanitizerTests
     }
 
     [Test]
+    public void IsPathUnderRoot_rejects_case_mismatched_absolute_path_on_case_sensitive_platform()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Case-sensitive root checks apply on non-Windows platforms.");
+        }
+
+        var root = "/var/lib/seedarr/downloads";
+        Assert.That(
+            PathSanitizer.IsPathUnderRoot(root, "/var/lib/seedarr/Downloads/leak.mkv"),
+            Is.False,
+            "Sibling directory differing only by case must not count as under root.");
+    }
+
+    [Test]
     public void IsBlockedPath_detects_sensitive_system_directories()
     {
         if (OperatingSystem.IsWindows())
