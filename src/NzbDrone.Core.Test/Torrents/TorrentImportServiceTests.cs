@@ -263,7 +263,8 @@ public class TorrentImportServiceTests
         {
             Id = 88,
             Name = "Duplicate",
-            InfoHash = "0123456789abcdef0123456789abcdef01234567"
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            MagnetUrl = magnetUri
         };
 
         _torrentService.GetByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(existing);
@@ -280,6 +281,29 @@ public class TorrentImportServiceTests
             trackers.Any(t => t.TorrentId == 88 && t.Url == "http://tracker2.org/announce" && t.Tier == 1 && t.Enabled) &&
             !trackers.Any(t => t.Url == "http://tracker1.org/announce")));
         _eventLogService.Received(1).Info(88, "Update", Arg.Is<string>(msg => msg.Contains("Duplicate") && msg.Contains("updated with new trackers")));
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ImportFromMagnet_should_backfill_magnet_url_when_torrent_already_exists_without_one()
+    {
+        var magnetUri = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Duplicate";
+        var existing = new Torrent
+        {
+            Id = 88,
+            Name = "Duplicate",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            MagnetUrl = null
+        };
+
+        _torrentService.GetByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(existing);
+        _trackerEntryService.GetByTorrentId(88).Returns(new List<TrackerEntry>());
+        _torrentService.Update(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
+
+        var result = _subject.ImportFromMagnet("  " + magnetUri + "  ");
+
+        Assert.That(result.MagnetUrl, Is.EqualTo(magnetUri));
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 88 && t.MagnetUrl == magnetUri));
     }
 
     [Test]
@@ -302,7 +326,9 @@ public class TorrentImportServiceTests
         Assert.That(result.InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
         Assert.That(result.TrackerUrl, Is.EqualTo("http://tracker1.org/announce"));
         Assert.That(result.Status, Is.EqualTo(TorrentStatus.Queued));
+        Assert.That(result.MagnetUrl, Is.EqualTo(magnetUri));
 
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.MagnetUrl == magnetUri));
         _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(trackers =>
             trackers.Any(t => t.TorrentId == 77 && t.Url == "http://tracker1.org/announce" && t.Tier == 0 && t.Enabled) &&
             trackers.Any(t => t.TorrentId == 77 && t.Url == "http://tracker2.org/announce" && t.Tier == 1 && t.Enabled)));
