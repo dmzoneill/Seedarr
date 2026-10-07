@@ -229,6 +229,25 @@ public class AppLifetimeTest
     }
 
     [Test]
+    public void PortForwarding_should_rearm_when_upnp_disabled_and_reenabled()
+    {
+        _configService.ListeningPort.Returns(6881);
+
+        _configService.UpnpEnabled.Returns(true);
+        _upnpService.IsAvailable.Returns(false);
+        _subject.EvaluateWatchdogMetrics();
+
+        _configService.UpnpEnabled.Returns(false);
+        _subject.EvaluateWatchdogMetrics();
+
+        _configService.UpnpEnabled.Returns(true);
+        _upnpService.IsAvailable.Returns(false);
+        _subject.EvaluateWatchdogMetrics();
+
+        _eventAggregator.Received(2).PublishEvent(Arg.Is<PortForwardingFailedEvent>(e => e.Port == 6881));
+    }
+
+    [Test]
     public void PortForwarding_should_publish_PortForwardingFailedEvent_when_gateway_available_but_mapping_inactive()
     {
         _configService.UpnpEnabled.Returns(true);
