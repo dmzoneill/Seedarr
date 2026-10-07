@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Notifications;
@@ -1067,6 +1068,66 @@ public class NotificationControllerTest
         var badRequest = (BadRequestObjectResult)result.Result;
         Assert.That(badRequest.Value as string, Does.Contain("not permitted"));
         _repository.DidNotReceive().Insert(Arg.Any<NotificationDefinition>());
+    }
+
+    [Test]
+    public void Create_CustomScript_should_accept_path_under_configured_CustomScriptsDirectory()
+    {
+        var customDir = Path.Combine(Path.GetTempPath(), "seedarr-notify-scripts-1072");
+        var config = Substitute.For<IConfigService>();
+        config.CustomScriptsDirectory.Returns(customDir);
+        var controller = new NotificationController(
+            _repository,
+            _dispatcher,
+            _scriptService,
+            _factory,
+            config);
+
+        var scriptPath = Path.Combine(customDir, "notify.sh");
+        var resource = new NotificationResource
+        {
+            Name = "Custom Dir Script",
+            Implementation = "CustomScript",
+            OnGrab = true,
+            Settings = $"{{\"path\":\"{scriptPath.Replace("\\", "\\\\")}\"}}",
+        };
+
+        _repository.Insert(Arg.Any<NotificationDefinition>()).Returns(callInfo =>
+        {
+            var def = callInfo.Arg<NotificationDefinition>();
+            def.Id = 99;
+            return def;
+        });
+
+        var result = controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Insert(Arg.Any<NotificationDefinition>());
+    }
+
+    [Test]
+    public async Task TestDirect_CustomScript_under_scripts_root_should_fail_with_missing_file_not_allowlist()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Unix /scripts root is not in the Windows allowlist.");
+        }
+
+        var resource = new NotificationResource
+        {
+            Implementation = "CustomScript",
+            Settings = "{\"path\":\"/scripts/nonexistent_seedarr_test_1072.sh\"}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("does not exist"));
+        Assert.That(testResult.Message, Does.Not.Contain("not permitted"));
     }
 
     [Test]
