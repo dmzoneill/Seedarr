@@ -518,7 +518,7 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
 
     public void Handle(TrackerAnnounceEvent message)
     {
-        if (message == null || _hubContext == null)
+        if (message == null || _broadcaster == null)
         {
             return;
         }
@@ -539,12 +539,13 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
             errorMessage = message.ErrorMessage
         };
 
-        BroadcastTrackerPayload(payload, message.Torrent?.Id ?? 0);
+        BroadcastTrackerUpdated(payload, message.Torrent?.Id ?? 0);
+        BroadcastTrackerAnnounced(payload, message.Torrent?.Id ?? 0);
     }
 
     public void Handle(TrackerStatusChangedEvent message)
     {
-        if (message == null || _hubContext == null)
+        if (message == null || _broadcaster == null)
         {
             return;
         }
@@ -562,10 +563,10 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
         };
 
         var torrentId = message.Torrent?.Id ?? message.Tracker?.TorrentId ?? 0;
-        BroadcastTrackerPayload(payload, torrentId);
+        BroadcastTrackerUpdated(payload, torrentId);
     }
 
-    private void BroadcastTrackerPayload(object payload, int torrentId)
+    private void BroadcastTrackerUpdated(object payload, int torrentId)
     {
         if (_broadcaster == null)
         {
@@ -581,7 +582,22 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
                 Body = payload
             };
             SignalRBroadcastFanout.Broadcast(_broadcaster, updated, "trackers", torrentId > 0 ? torrentId : null);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to broadcast tracker update over SignalR");
+        }
+    }
 
+    private void BroadcastTrackerAnnounced(object payload, int torrentId)
+    {
+        if (_broadcaster == null)
+        {
+            return;
+        }
+
+        try
+        {
             var announced = new SignalRMessage
             {
                 Name = "TrackerAnnounced",
@@ -592,7 +608,7 @@ public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle
         }
         catch (Exception ex)
         {
-            _logger.Warn(ex, "Failed to broadcast tracker update over SignalR");
+            _logger.Warn(ex, "Failed to broadcast tracker announce over SignalR");
         }
     }
 }
