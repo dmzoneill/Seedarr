@@ -336,6 +336,53 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
+        public void Delete_should_evict_piece_hashes_cached_by_info_hash()
+        {
+            const string infoHash = "0123456789abcdef0123456789abcdef01234567";
+            var pieceHashes = new byte[] { 0xAA, 0xBB, 0xCC };
+
+            _repository.ExistsByInfoHash(infoHash).Returns(false);
+            _repository.GetNextSortOrder().Returns(0);
+            _repository.Insert(Arg.Any<Torrent>()).Returns(callInfo =>
+            {
+                var inserted = callInfo.Arg<Torrent>();
+                inserted.Id = 1;
+                return inserted;
+            });
+
+            _subject.Add(new Torrent { Name = "Cached", InfoHash = infoHash, PieceHashes = pieceHashes });
+
+            _repository.Get(1).Returns(new Torrent { Id = 1, InfoHash = infoHash });
+            _subject.Delete(1);
+
+            _repository.GetByInfoHash(infoHash).Returns(new Torrent { Id = 2, InfoHash = infoHash });
+            var reloaded = _subject.GetByInfoHash(infoHash);
+
+            Assert.That(reloaded.PieceHashes, Is.Null);
+        }
+
+        [Test]
+        public void DeleteMany_should_evict_piece_hashes_cached_by_info_hash()
+        {
+            const string infoHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+            var pieceHashes = new byte[] { 0x01, 0x02 };
+            var torrent = new Torrent { Id = 1, Name = "Bulk", InfoHash = infoHash, PieceHashes = pieceHashes };
+
+            _repository.ExistsByInfoHash(infoHash).Returns(false);
+            _repository.GetNextSortOrder().Returns(0);
+            _repository.Insert(Arg.Any<Torrent>()).Returns(torrent);
+            _subject.Add(torrent);
+
+            _repository.All().Returns(new List<Torrent> { torrent }.AsQueryable());
+            _subject.DeleteMany(new List<int> { 1 }, false);
+
+            _repository.GetByInfoHash(infoHash).Returns(new Torrent { Id = 2, InfoHash = infoHash });
+            var reloaded = _subject.GetByInfoHash(infoHash);
+
+            Assert.That(reloaded.PieceHashes, Is.Null);
+        }
+
+        [Test]
         public void Delete_should_call_DeleteByTorrentId_on_file_service()
         {
             _subject.Delete(1);
