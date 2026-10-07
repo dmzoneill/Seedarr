@@ -144,6 +144,23 @@ public class DownloadHistoryControllerTest
     }
 
     [Test]
+    public void EnrichAll_when_metadata_enricher_unavailable_returns_bad_request()
+    {
+        var controller = new DownloadHistoryController(_historyService)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext()
+            }
+        };
+
+        var result = controller.EnrichAll();
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        _metadataEnricherService.DidNotReceive().EnrichAll();
+    }
+
+    [Test]
     public void GetAll_passes_parameters_to_service()
     {
         var entries = new List<DownloadHistory>
