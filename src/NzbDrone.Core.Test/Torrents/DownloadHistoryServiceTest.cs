@@ -178,6 +178,39 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
+        public void ReAdd_should_assign_same_tier_to_all_magnet_tr_trackers()
+        {
+            var magnetUri = "magnet:?xt=urn:btih:0123456789012345678901234567890123456789&dn=Ubuntu&tr=http%3A%2F%2Ftracker1.example.com%2Fannounce&tr=http%3A%2F%2Ftracker2.example.com%2Fannounce";
+            var history = new DownloadHistory
+            {
+                Id = 9,
+                Title = "Ubuntu 24.04",
+                InfoHash = "abc123hash",
+                TotalSize = 1024000,
+                PrimaryTracker = "http://tracker1.example.com/announce",
+                Status = "Removed",
+                MagnetUrl = magnetUri
+            };
+
+            _historyRepository.Get(9).Returns(history);
+            _torrentRepository.ExistsByInfoHash("abc123hash").Returns(false);
+            _torrentRepository.All().Returns(new List<Torrent>().AsQueryable());
+            _torrentRepository.Insert(Arg.Any<Torrent>()).Returns(callInfo =>
+            {
+                var t = callInfo.Arg<Torrent>();
+                t.Id = 50;
+                return t;
+            });
+
+            _subject.ReAdd(9);
+
+            _trackerEntryRepository.Received(1).Insert(Arg.Is<TrackerEntry>(t =>
+                t.TorrentId == 50 && t.Url == "http://tracker1.example.com/announce" && t.Tier == 0));
+            _trackerEntryRepository.Received(1).Insert(Arg.Is<TrackerEntry>(t =>
+                t.TorrentId == 50 && t.Url == "http://tracker2.example.com/announce" && t.Tier == 0));
+        }
+
+        [Test]
         public void ReAdd_should_fallback_savepath_to_category_service()
         {
             var history = new DownloadHistory

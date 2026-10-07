@@ -278,7 +278,7 @@ public class TorrentImportServiceTests
         Assert.That(result, Is.SameAs(existing));
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
         _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(trackers =>
-            trackers.Any(t => t.TorrentId == 88 && t.Url == "http://tracker2.org/announce" && t.Tier == 1 && t.Enabled) &&
+            trackers.Any(t => t.TorrentId == 88 && t.Url == "http://tracker2.org/announce" && t.Tier == 0 && t.Enabled) &&
             !trackers.Any(t => t.Url == "http://tracker1.org/announce")));
         _eventLogService.Received(1).Info(88, "Update", Arg.Is<string>(msg => msg.Contains("Duplicate") && msg.Contains("updated with new trackers")));
         _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
@@ -331,7 +331,7 @@ public class TorrentImportServiceTests
         _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.MagnetUrl == magnetUri));
         _trackerEntryService.Received(1).AddMany(Arg.Is<IList<TrackerEntry>>(trackers =>
             trackers.Any(t => t.TorrentId == 77 && t.Url == "http://tracker1.org/announce" && t.Tier == 0 && t.Enabled) &&
-            trackers.Any(t => t.TorrentId == 77 && t.Url == "http://tracker2.org/announce" && t.Tier == 1 && t.Enabled)));
+            trackers.Any(t => t.TorrentId == 77 && t.Url == "http://tracker2.org/announce" && t.Tier == 0 && t.Enabled)));
 
         _eventLogService.Received(1).Info(77, "Add", Arg.Is<string>(msg => msg.Contains("My Linux Distro") && msg.Contains("magnet link")));
     }

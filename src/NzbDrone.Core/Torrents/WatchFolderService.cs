@@ -747,7 +747,6 @@ public class WatchFolderService : BackgroundService
         var existingTrackers = _trackerEntryService.GetByTorrentId(torrentId) ?? new List<TrackerEntry>();
         var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
 
-        var tier = existingTrackers.Count > 0 ? existingTrackers.Max(t => t.Tier) + 1 : 0;
         foreach (var url in trackers)
         {
             if (string.IsNullOrWhiteSpace(url) || !existingUrls.Add(url))
@@ -759,7 +758,7 @@ public class WatchFolderService : BackgroundService
             {
                 TorrentId = torrentId,
                 Url = url,
-                Tier = tier++,
+                Tier = 0,
                 Status = TrackerStatus.Unknown,
                 Enabled = true,
                 AnnounceInterval = _configService?.AnnounceIntervalSeconds ?? 1800,
@@ -775,7 +774,6 @@ public class WatchFolderService : BackgroundService
             return;
         }
 
-        var tier = 0;
         var urls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var url in trackers)
         {
@@ -788,7 +786,7 @@ public class WatchFolderService : BackgroundService
             {
                 TorrentId = torrentId,
                 Url = url,
-                Tier = tier++,
+                Tier = 0,
                 Status = TrackerStatus.Unknown,
                 Enabled = true,
                 AnnounceInterval = _configService.AnnounceIntervalSeconds,
