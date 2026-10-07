@@ -19,7 +19,7 @@ public static class ContainerExtensions
     public static void AutoAddServices(this IContainer container, List<string> assemblyNames)
     {
         var assemblies = AssemblyLoader.Load(assemblyNames);
-        var types = assemblies.SelectMany(a => a.GetExportedTypes()).ToList();
+        var types = assemblies.SelectMany(AssemblyTypeLoader.GetExportedTypes).ToList();
 
         AutoAddServices(container, types);
     }
