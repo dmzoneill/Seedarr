@@ -27,6 +27,8 @@ public class TestControllerWithSignalR : RestControllerWithSignalR<TestResource,
 {
     public int GetResourceByIdCallCount { get; private set; }
 
+    public HashSet<int> NullResourceIds { get; } = new();
+
     public ManualResetEventSlim BlockGetResourceById { get; set; }
 
     public TestControllerWithSignalR(IBroadcastSignalRMessage broadcaster, TimeSpan? coalesceWindow = null)
@@ -42,6 +44,11 @@ public class TestControllerWithSignalR : RestControllerWithSignalR<TestResource,
         }
 
         GetResourceByIdCallCount++;
+        if (NullResourceIds.Contains(model.Id))
+        {
+            return null;
+        }
+
         return new TestResource
         {
             Id = model.Id,
@@ -254,6 +261,26 @@ public class RestControllerWithSignalRTest
 
         Assert.That(_controller.GetResourceByIdCallCount, Is.EqualTo(0));
         _broadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void Failed_leading_edge_mapping_does_not_throttle_next_successful_update()
+    {
+        const int entityId = 88;
+        _controller.NullResourceIds.Add(entityId);
+
+        var failed = new TestModel { Id = entityId, Name = "Item", Value = 1 };
+        _controller.Handle(new ModelEvent<TestModel>(failed, ModelAction.Updated));
+        _broadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+
+        _controller.NullResourceIds.Remove(entityId);
+        var success = new TestModel { Id = entityId, Name = "Item", Value = 2 };
+        _controller.Handle(new ModelEvent<TestModel>(success, ModelAction.Updated));
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 2));
     }
 
     [Test]
