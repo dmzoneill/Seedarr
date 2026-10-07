@@ -7,9 +7,11 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.Serializer;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Notifications;
 using Seedarr.Http;
@@ -21,6 +23,7 @@ namespace Seedarr.Api.V1.Notifications;
 /// </summary>
 [V1ApiController("notifications")]
 [Route("api/v1/notification")]
+[Authorize(Policy = Policies.Reader)]
 public class NotificationController : Controller
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -92,6 +95,7 @@ public class NotificationController : Controller
     /// Creates a new notification definition.
     /// </summary>
     [HttpPost]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<NotificationResource> Create([FromBody] NotificationResource resource)
     {
         if (resource == null)
@@ -143,6 +147,7 @@ public class NotificationController : Controller
     /// Updates an existing notification configuration.
     /// </summary>
     [HttpPut("{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<NotificationResource> Update(int id, [FromBody] JsonElement body)
     {
         if (body.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
@@ -228,6 +233,7 @@ public class NotificationController : Controller
     /// Updates an existing notification configuration (body-based ID).
     /// </summary>
     [HttpPut]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<NotificationResource> UpdateWithoutId([FromBody] NotificationResource resource)
     {
         if (resource == null || resource.Id <= 0)
@@ -242,6 +248,7 @@ public class NotificationController : Controller
     /// Deletes a notification destination by its ID.
     /// </summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Delete(int id)
     {
         var referencing = _notificationRepository.All()
@@ -266,6 +273,7 @@ public class NotificationController : Controller
     /// Tests a saved notification configuration by sending a test payload.
     /// </summary>
     [HttpPost("{id:int}/test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<NotificationTestResult>> Test(int id)
     {
         var item = _notificationRepository.Get(id);
@@ -292,6 +300,7 @@ public class NotificationController : Controller
     /// Tests a transient notification configuration without saving it first.
     /// </summary>
     [HttpPost("test")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<NotificationTestResult>> TestDirect([FromBody] NotificationResource resource)
     {
         if (resource == null)
