@@ -122,6 +122,12 @@ public class DownloadClientController : Controller
     [HttpDelete("{id}")]
     public ActionResult Delete(int id)
     {
+        var existing = _downloadClientFactory.Get(id);
+        if (existing == null)
+        {
+            return NotFound(new { message = $"Download client {id} not found" });
+        }
+
         _downloadClientFactory.Delete(id);
         _syncService.ResetClientStatus(id);
         return Ok();
