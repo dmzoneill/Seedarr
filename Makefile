@@ -61,7 +61,6 @@ clean:
 
 test:
 	timeout 600 dotnet test $(UNIT_TEST) --configuration Release --no-build \
-		--blame-hang-timeout 90s \
 		--settings .runsettings \
 		--logger "console;verbosity=normal" \
 		--logger "trx;LogFileName=test-results.trx" \
