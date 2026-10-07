@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -115,6 +118,13 @@ public class SwaggerIntegrationTest : IntegrationTestBase
 
             var queryUiResponse = await unauthenticatedClient.GetAsync($"/swagger/index.html?apikey={ApiKey}");
             Assert.That(queryUiResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+            // 5. HTTP Basic (SmartAuth) allows swagger when authentication is enabled
+            using var basicClient = GlobalSetup.Factory.CreateClient();
+            var basicCredentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"admin:{ApiKey}"));
+            basicClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", basicCredentials);
+            var basicSwaggerResponse = await basicClient.GetAsync("/swagger/v1/swagger.json");
+            Assert.That(basicSwaggerResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         }
         finally
         {
