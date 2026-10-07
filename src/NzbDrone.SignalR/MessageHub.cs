@@ -444,7 +444,16 @@ public class MessageHub : Hub
         var httpContext = Context.GetHttpContext();
         var torrentService = _torrentService ?? (httpContext?.RequestServices?.GetService(typeof(ITorrentService)) as ITorrentService);
 
-        var torrents = torrentService?.GetAll() ?? new List<Torrent>();
+        List<Torrent> torrents;
+        try
+        {
+            torrents = torrentService?.GetAll() ?? new List<Torrent>();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to load torrents for state snapshot");
+            torrents = new List<Torrent>();
+        }
 
         long totalDownloadSpeed = 0;
         long totalUploadSpeed = 0;
