@@ -179,61 +179,69 @@ public class TorrentRecheckService : ITorrentRecheckService
 
     private async Task ProcessQueueAsync()
     {
-        if (!await _queueProcessingLock.WaitAsync(0).ConfigureAwait(false))
+        while (true)
         {
-            return;
-        }
-
-        try
-        {
-            while (_recheckQueue.TryDequeue(out var nextId))
+            if (!await _queueProcessingLock.WaitAsync(0).ConfigureAwait(false))
             {
-                if (!_queuedTorrentIds.TryRemove(nextId, out _))
+                return;
+            }
+
+            try
+            {
+                while (_recheckQueue.TryDequeue(out var nextId))
                 {
-                    RevertQueuedRecheck(nextId);
-                    continue;
-                }
+                    if (!_queuedTorrentIds.TryRemove(nextId, out _))
+                    {
+                        RevertQueuedRecheck(nextId);
+                        continue;
+                    }
 
-                _queuedPreviousStatus.TryRemove(nextId, out _);
+                    _queuedPreviousStatus.TryRemove(nextId, out _);
 
-                var torrent = _torrentRepository?.Get(nextId);
-                if (torrent == null)
-                {
-                    continue;
-                }
+                    var torrent = _torrentRepository?.Get(nextId);
+                    if (torrent == null)
+                    {
+                        continue;
+                    }
 
-                using var cts = new CancellationTokenSource();
-                _activeRechecks[nextId] = cts;
+                    using var cts = new CancellationTokenSource();
+                    _activeRechecks[nextId] = cts;
 
-                try
-                {
-                    await _recheckConcurrencySemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
                     try
                     {
-                        await ExecuteRecheckCoreAsync(torrent, null, cts.Token).ConfigureAwait(false);
+                        await _recheckConcurrencySemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
+                        try
+                        {
+                            await ExecuteRecheckCoreAsync(torrent, null, cts.Token).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            _recheckConcurrencySemaphore.Release();
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _logger.Info("Recheck canceled for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Error during recheck for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
                     }
                     finally
                     {
-                        _recheckConcurrencySemaphore.Release();
+                        _activeRechecks.TryRemove(nextId, out _);
                     }
                 }
-                catch (OperationCanceledException)
-                {
-                    _logger.Info("Recheck canceled for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error during recheck for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
-                }
-                finally
-                {
-                    _activeRechecks.TryRemove(nextId, out _);
-                }
             }
-        }
-        finally
-        {
-            _queueProcessingLock.Release();
+            finally
+            {
+                _queueProcessingLock.Release();
+            }
+
+            if (_recheckQueue.IsEmpty)
+            {
+                return;
+            }
         }
     }
 
