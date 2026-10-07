@@ -216,12 +216,16 @@ public class Startup
                 Description = "API Key authentication via apikey query parameter",
             });
 
+            // OpenAPI treats multiple schemes in one requirement as AND; header and query are alternatives (OR).
             c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
             {
                 {
                     new OpenApiSecuritySchemeReference("ApiKeyHeader", doc),
                     new List<string>()
                 },
+            });
+            c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+            {
                 {
                     new OpenApiSecuritySchemeReference("ApiKeyQuery", doc),
                     new List<string>()
