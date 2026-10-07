@@ -560,7 +560,7 @@ public class SystemControllerTasksTest
     }
 
     [Test]
-    public void ExecuteTask_broadcasts_task_started_when_queued()
+    public void ExecuteTask_does_not_broadcast_task_started_when_queued()
     {
         var task = new ScheduledTask
         {
@@ -577,9 +577,7 @@ public class SystemControllerTasksTest
         var result = _controller.ExecuteTask(1);
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
-        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
-            m.Name == "TaskStarted" &&
-            m.Action == NzbDrone.Core.Datastore.ModelAction.Created));
+        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskStarted"));
     }
 
     [Test]

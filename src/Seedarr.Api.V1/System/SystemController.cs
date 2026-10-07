@@ -412,13 +412,6 @@ public class SystemController : ControllerBase
                 },
                 CommandTrigger.Manual);
 
-            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
-            {
-                Name = "TaskStarted",
-                Action = ModelAction.Created,
-                Body = taskInfo
-            });
-
             return Ok(new { message = $"Task {task.TypeName} execution started", commandId = command?.Id ?? 0 });
         }
 
