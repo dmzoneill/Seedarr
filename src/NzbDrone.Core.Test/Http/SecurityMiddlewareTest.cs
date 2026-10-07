@@ -117,6 +117,11 @@ public class SecurityMiddlewareTest
 
     [TestCase("localhost", "seedarr.example.com", false)]
     [TestCase("127.0.0.1", "seedarr.example.com", false)]
+    [TestCase("192.168.1.50", "seedarr.example.com", false)]
+    [TestCase("192.168.1.50:8096", "seedarr.example.com", false)]
+    [TestCase("10.0.0.5", "seedarr.example.com", false)]
+    [TestCase("172.20.0.2", "seedarr.example.com", false)]
+    [TestCase("100.100.50.25", "seedarr.example.com", false)]
     [TestCase("rebind.evil.local", "seedarr.example.com", false)]
     [TestCase("rebind.evil.local:8096", "seedarr.example.com", false)]
     [TestCase("seedarr", "seedarr.example.com", false)]
@@ -227,6 +232,31 @@ public class SecurityMiddlewareTest
         var config = Substitute.For<IConfigService>();
         config.HostHeaderValidationEnabled.Returns(true);
         config.AllowedHosts.Returns(string.Empty);
+
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString(hostHeader);
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new HostHeaderValidationMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, config, null);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
+    }
+
+    [TestCase("192.168.1.50")]
+    [TestCase("10.0.0.5:8096")]
+    public async Task HostHeaderValidationMiddleware_BlocksPrivateNetworkHostWhenExplicitAllowlist(string hostHeader)
+    {
+        var config = Substitute.For<IConfigService>();
+        config.HostHeaderValidationEnabled.Returns(true);
+        config.AllowedHosts.Returns("seedarr.example.com");
 
         var context = new DefaultHttpContext();
         context.Request.Host = new HostString(hostHeader);
