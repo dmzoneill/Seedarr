@@ -72,6 +72,8 @@ public static class GeneralConfigResourceMapper
 {
     public const string SecretMask = "********";
 
+    public const int DefaultWatchFolderScanIntervalSeconds = 10;
+
     public static string GetMaskedApiKey(string apiKey)
     {
         return !string.IsNullOrEmpty(apiKey)
@@ -98,7 +100,7 @@ public static class GeneralConfigResourceMapper
             UiAccent = config?.UiAccent ?? config?.ColorScheme,
             WatchFolderEnabled = config?.WatchFolderEnabled ?? false,
             WatchFolderPath = config?.WatchFolderPath,
-            WatchFolderScanIntervalSeconds = config?.WatchFolderScanIntervalSeconds ?? 0,
+            WatchFolderScanIntervalSeconds = ResolveWatchFolderScanIntervalSeconds(config),
             WatchFolderAutoStartTorrents = config?.WatchFolderAutoStartTorrents ?? false,
             WatchFolderDeleteAddedTorrents = config?.WatchFolderDeleteAddedTorrents ?? false,
             Port = fileProvider?.Port ?? 0,
@@ -120,5 +122,11 @@ public static class GeneralConfigResourceMapper
             TerminalAccessEnabled = fileProvider?.TerminalAccessEnabled ?? true,
             TmdbApiKey = maskedTmdbApiKey,
         };
+    }
+
+    private static int ResolveWatchFolderScanIntervalSeconds(IConfigService config)
+    {
+        var seconds = config?.WatchFolderScanIntervalSeconds ?? DefaultWatchFolderScanIntervalSeconds;
+        return seconds >= 1 ? seconds : DefaultWatchFolderScanIntervalSeconds;
     }
 }
