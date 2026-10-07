@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:44:16Z",
+  "updatedAt": "2026-10-07T01:45:22Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_d17fa1e1",
+    "lastScheduleId": "sched_c57d67ba",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
@@ -35,8 +35,8 @@
     "api": {
       "status": "running",
       "worker": "hawk",
-      "issue": 1213,
-      "worktree": "../seedarr_worktrees/issue-1213",
+      "issue": 1137,
+      "worktree": "../seedarr_worktrees/issue-1137",
       "area": "downloadclients"
     },
     "core-torrents": {
@@ -49,8 +49,8 @@
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "issue": 1049,
-      "worktree": "../seedarr_worktrees/issue-1049",
+      "issue": 1047,
+      "worktree": "../seedarr_worktrees/issue-1047",
       "area": "http"
     }
   },
@@ -69,11 +69,9 @@
       1248,
       1235,
       1211,
-      1137,
-      1097,
-      1047
+      1097
     ]
   },
-  "githubOpen": 286,
-  "lastMonitorNote": "fix monitor: 286 open; closed #1004/#1123/#1133; dispatches #1196/#1233/#1049; poked badger"
+  "githubOpen": 285,
+  "lastMonitorNote": "fix monitor: 285 open; closed #1213/#1049; dispatches #1137/#1047; stopped snail/turkey"
 }
