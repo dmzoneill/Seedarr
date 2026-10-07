@@ -1,4 +1,3 @@
-using System;
 using System.Threading;
 using NLog;
 using NzbDrone.Core.Trackers;
@@ -27,14 +26,7 @@ public class TrackerScrapeJob : IScheduledTask
     {
         _logger.Info("Executing scheduled tracker scrape task");
 
-        try
-        {
-            var scrapedCount = _trackerScrapeService.ScrapeAllTorrentsAsync(cancellationToken).GetAwaiter().GetResult();
-            _logger.Info("Completed scheduled tracker scrape for {0} torrents", scrapedCount);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Failed to execute scheduled tracker scrape");
-        }
+        var scrapedCount = _trackerScrapeService.ScrapeAllTorrentsAsync(cancellationToken).GetAwaiter().GetResult();
+        _logger.Info("Completed scheduled tracker scrape for {0} torrents", scrapedCount);
     }
 }
