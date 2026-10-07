@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:51:08Z",
+  "updatedAt": "2026-10-07T01:52:00Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,43 +14,43 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_b60b3e83",
+    "lastScheduleId": "sched_7c6b294b",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "issue": 1240,
-      "worktree": "../seedarr_worktrees/issue-1240",
+      "issue": 979,
+      "worktree": "../seedarr_worktrees/issue-979",
       "area": "authentication"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1245,
-      "worktree": "../seedarr_worktrees/issue-1245",
+      "issue": 1190,
+      "worktree": "../seedarr_worktrees/issue-1190",
       "area": "host"
     },
     "api": {
       "status": "running",
       "worker": "hawk",
-      "issue": 974,
-      "worktree": "../seedarr_worktrees/issue-974",
+      "issue": 1012,
+      "worktree": "../seedarr_worktrees/issue-1012",
       "area": "downloadclients"
     },
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "issue": 1232,
-      "worktree": "../seedarr_worktrees/issue-1232",
+      "issue": 950,
+      "worktree": "../seedarr_worktrees/issue-950",
       "area": "torrents"
     },
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "issue": 966,
-      "worktree": "../seedarr_worktrees/issue-966",
+      "issue": 1093,
+      "worktree": "../seedarr_worktrees/issue-1093",
       "area": "http"
     }
   },
@@ -68,10 +68,10 @@
       1210,
       1248,
       1235,
-      1093,
-      1214
+      1214,
+      1246
     ]
   },
-  "githubOpen": 271,
-  "lastMonitorNote": "fix monitor: 271 open; all slots active; 0 dispatches; 1 poke badger #1240"
+  "githubOpen": 267,
+  "lastMonitorNote": "fix monitor: prior batch closed; 5 dispatches; 267 open"
 }
