@@ -117,6 +117,7 @@ public class BlocklistControllerTests
         Assert.That(savedDict["BlocklistUrl"], Is.EqualTo("https://example.com/blocklist.gz"));
         Assert.That(savedDict["BlocklistAutoUpdate"], Is.EqualTo(false));
         Assert.That(savedDict["BlocklistUpdateIntervalDays"], Is.EqualTo(3));
+        Assert.That(savedDict["BlocklistAutoUpdateIntervalDays"], Is.EqualTo(3));
     }
 
     [Test]
