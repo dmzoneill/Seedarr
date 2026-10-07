@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T01:45:22Z",
+  "updatedAt": "2026-10-07T01:46:30Z",
   "status": "running",
   "mode": "fix",
   "policy": {
@@ -14,43 +14,43 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_c57d67ba",
+    "lastScheduleId": "sched_b637a7a0",
     "startedAt": "2026-10-07T00:41:00Z"
   },
   "fixSlots": {
     "core-auth": {
       "status": "running",
       "worker": "badger",
-      "issue": 987,
-      "worktree": "../seedarr_worktrees/issue-987",
+      "issue": 1211,
+      "worktree": "../seedarr_worktrees/issue-1211",
       "area": "authentication"
     },
     "host": {
       "status": "running",
       "worker": "panther",
-      "issue": 1196,
-      "worktree": "../seedarr_worktrees/issue-1196",
+      "issue": 1141,
+      "worktree": "../seedarr_worktrees/issue-1141",
       "area": "host"
     },
     "api": {
       "status": "running",
       "worker": "hawk",
-      "issue": 1137,
-      "worktree": "../seedarr_worktrees/issue-1137",
+      "issue": 1097,
+      "worktree": "../seedarr_worktrees/issue-1097",
       "area": "downloadclients"
     },
     "core-torrents": {
       "status": "running",
       "worker": "elk",
-      "issue": 1233,
-      "worktree": "../seedarr_worktrees/issue-1233",
+      "issue": 1046,
+      "worktree": "../seedarr_worktrees/issue-1046",
       "area": "torrents"
     },
     "http": {
       "status": "running",
       "worker": "sparrow",
-      "issue": 1047,
-      "worktree": "../seedarr_worktrees/issue-1047",
+      "issue": 876,
+      "worktree": "../seedarr_worktrees/issue-876",
       "area": "http"
     }
   },
@@ -68,10 +68,10 @@
       1210,
       1248,
       1235,
-      1211,
-      1097
+      966,
+      1093
     ]
   },
-  "githubOpen": 285,
-  "lastMonitorNote": "fix monitor: 285 open; closed #1213/#1049; dispatches #1137/#1047; stopped snail/turkey"
+  "githubOpen": 279,
+  "lastMonitorNote": "fix monitor: 279 open; closed #987/#1196/#1233/#1137/#1047; 5 dispatches; stopped spider/t-rex/tiger/whale/turtle"
 }
