@@ -665,6 +665,48 @@ public class DownloadClientControllerTest
     }
 
     [Test]
+    public void GetAll_does_not_mutate_factory_cached_definition()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { def });
+
+        _syncService.GetClientStatus(1).Returns(new DownloadClientStatus
+        {
+            IsOnline = true,
+            Version = "4.6.0",
+            ConsecutiveFailures = 3,
+            BackoffUntil = new System.DateTime(2026, 1, 1, 12, 5, 0, System.DateTimeKind.Utc),
+        });
+
+        _controller.GetAll();
+
+        Assert.That(def.IsOnline, Is.Null);
+        Assert.That(def.Version, Is.Null);
+        Assert.That(def.ConsecutiveFailures, Is.EqualTo(0));
+        Assert.That(def.BackoffUntil, Is.Null);
+    }
+
+    [Test]
+    public void Get_does_not_mutate_factory_cached_definition()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+
+        _syncService.GetClientStatus(1).Returns(new DownloadClientStatus
+        {
+            IsOnline = false,
+            LastErrorMessage = "Connection timed out",
+            ConsecutiveFailures = 2,
+        });
+
+        _controller.Get(1);
+
+        Assert.That(def.IsOnline, Is.Null);
+        Assert.That(def.LastErrorMessage, Is.Null);
+        Assert.That(def.ConsecutiveFailures, Is.EqualTo(0));
+    }
+
+    [Test]
     public void GetAllItems_returns_aggregated_items_from_sync_service()
     {
         var payload = new DownloadClientAllItemsResult

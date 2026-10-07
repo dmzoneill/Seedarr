@@ -31,7 +31,7 @@ public class DownloadClientController : Controller
     public ActionResult<List<DownloadClientDefinition>> GetAll()
     {
         var definitions = _downloadClientFactory.All();
-        return Ok(definitions.Select(d => MaskPassword(EnrichWithStatus(d))).ToList());
+        return Ok(definitions.Select(d => EnrichWithStatus(MaskPassword(d))).ToList());
     }
 
     [HttpGet("{id}")]
@@ -43,7 +43,7 @@ public class DownloadClientController : Controller
             return NotFound(new { message = $"Download client {id} not found" });
         }
 
-        return Ok(MaskPassword(EnrichWithStatus(definition)));
+        return Ok(EnrichWithStatus(MaskPassword(definition)));
     }
 
     [HttpPost]
