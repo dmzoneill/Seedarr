@@ -346,6 +346,61 @@ public class RestControllerWithSignalRTest
     }
 
     [Test]
+    public void Coalesce_timer_retains_pending_update_when_hub_disconnects_before_flush()
+    {
+        const int entityId = 1;
+        var leading = new TestModel { Id = entityId, Name = "Item", Value = 1 };
+        _controller.Handle(new ModelEvent<TestModel>(leading, ModelAction.Updated));
+
+        var trailing = new TestModel { Id = entityId, Name = "Item", Value = 9 };
+        _controller.Handle(new ModelEvent<TestModel>(trailing, ModelAction.Updated));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+        _broadcaster.Received(1).BroadcastMessage(Arg.Any<SignalRMessage>());
+
+        _broadcaster.IsConnected.Returns(false);
+        Thread.Sleep(250);
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+        _broadcaster.Received(1).BroadcastMessage(Arg.Any<SignalRMessage>());
+
+        _broadcaster.IsConnected.Returns(true);
+        _controller.Flush();
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _broadcaster.Received(2).BroadcastMessage(Arg.Any<SignalRMessage>());
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 9));
+    }
+
+    [Test]
+    public void Flush_retains_pending_updates_when_broadcaster_is_not_connected()
+    {
+        const int entityId = 2;
+        var leading = new TestModel { Id = entityId, Name = "Item", Value = 1 };
+        _controller.Handle(new ModelEvent<TestModel>(leading, ModelAction.Updated));
+
+        var trailing = new TestModel { Id = entityId, Name = "Item", Value = 5 };
+        _controller.Handle(new ModelEvent<TestModel>(trailing, ModelAction.Updated));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+
+        _broadcaster.IsConnected.Returns(false);
+        _controller.Flush();
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+        _broadcaster.Received(1).BroadcastMessage(Arg.Any<SignalRMessage>());
+
+        _broadcaster.IsConnected.Returns(true);
+        _controller.Flush();
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _broadcaster.Received(2).BroadcastMessage(Arg.Any<SignalRMessage>());
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 5));
+    }
+
+    [Test]
     public void Failed_leading_edge_mapping_does_not_throttle_next_successful_update()
     {
         const int entityId = 88;
