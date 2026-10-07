@@ -662,3 +662,4 @@
   "note": "fix monitor: 0 open; all 5 slots idle; queue empty"
 }
 {"ts":"2026-10-07T07:17:58Z","kind":"fix_monitor_tick","scheduleId":"sched_3ea8b796","githubOpen":0,"slots":{"core-auth":"idle","host":"idle","api":"idle","core-torrents":"idle","http":"idle"},"queueLen":0,"dispatches":0,"pokes":0,"materialChange":false,"note":"fix monitor: 0 open; all 5 slots idle; queue empty; heartbeat","head":"779b3f03"}
+{"ts":"2026-10-07T07:19:03Z","scheduleId":"sched_5a7f031e","mode":"fix","status":"running","githubOpen":0,"fixSlots":{"core-auth":{"status":"idle","worker":"badger","issue":null},"host":{"status":"idle","worker":"panther","issue":null},"api":{"status":"idle","worker":"hawk","issue":null},"core-torrents":{"status":"idle","worker":"elk","issue":null},"http":{"status":"idle","worker":"sparrow","issue":null}},"actions":[],"materialChange":false,"gitHead":"a6a2777a","note":"fix monitor: 0 open; all 5 slots idle; queue empty; heartbeat (~2026-10-07T07:19:03Z)"}
