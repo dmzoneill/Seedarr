@@ -649,6 +649,45 @@ public class CsrfProtectionMiddlewareTest
         Assert.That(nextCalled, Is.True);
     }
 
+    [TestCase("http://127.0.0.1:3000", "localhost", 9898, false)]
+    [TestCase("http://127.0.0.1:9898", "localhost", 9898, false)]
+    [TestCase("http://localhost:9898", "127.0.0.1", 9898, false)]
+    [TestCase("http://[::1]:9898", "localhost", 9898, false)]
+    [TestCase("http://localhost:9898", "localhost", 9898, true)]
+    public void IsOriginAllowed_DoesNotTreatLoopbackAliasesAsEquivalent(
+        string origin,
+        string requestHostName,
+        int requestPort,
+        bool expectedAllowed)
+    {
+        var requestHost = new HostString($"{requestHostName}:{requestPort}");
+        Assert.That(CsrfProtectionMiddleware.IsOriginAllowed(origin, requestHost, "http"), Is.EqualTo(expectedAllowed));
+    }
+
+    [Test]
+    public async Task CrossLoopbackAliasOrigin_WithAmbientCookie_IsRejected403Forbidden()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Method = "POST";
+        context.Request.Path = "/api/v1/system/restart";
+        context.Request.Host = new HostString("localhost:9898");
+        context.Request.Headers["Cookie"] = "Seedarr_Auth=valid_session";
+        context.Request.Headers["Origin"] = "http://127.0.0.1:3000";
+        context.Response.Body = new MemoryStream();
+
+        var nextCalled = false;
+        var middleware = new CsrfProtectionMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        });
+
+        await middleware.InvokeAsync(context, _config, _configFileProvider);
+
+        Assert.That(nextCalled, Is.False);
+        Assert.That(context.Response.StatusCode, Is.EqualTo(StatusCodes.Status403Forbidden));
+    }
+
     [TestCase("/seedarr", "/seedarr/api/v1/auth/login", true)]
     [TestCase("seedarr", "/seedarr/api/v2/torrents/add", true)]
     [TestCase("/seedarr", "/api/v1/auth/login", false)]
