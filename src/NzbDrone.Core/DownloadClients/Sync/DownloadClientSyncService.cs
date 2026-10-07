@@ -353,11 +353,6 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new ArgumentException($"Download client with id {clientId} not found.");
         }
 
-        if (!definition.Enable)
-        {
-            throw new ArgumentException($"Download client with id {clientId} is disabled.");
-        }
-
         var provider = CreateClient(definition);
         if (provider == null)
         {
@@ -511,20 +506,6 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
         }
 
-        try
-        {
-            var existing = _torrentService.GetAll()
-                .FirstOrDefault(t => string.Equals(t.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
-            if (existing != null)
-            {
-                return existing;
-            }
-        }
-        finally
-        {
-            _syncLock.Release();
-        }
-
         DownloadClientItem matchingItem = null;
         try
         {
@@ -551,7 +532,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 .FirstOrDefault(t => string.Equals(t.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
             if (existing != null)
             {
-                return existing;
+                return LinkExistingTorrentForImport(existing, definition, matchingItem);
             }
 
             return ImportTorrentInternal(definition, provider, normalizedHash, matchingItem, torrentBytes);
@@ -692,6 +673,73 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
         _logger.Info("Imported torrent {0} from download client {1}", torrent.Name, definition.Name);
         return torrent;
+    }
+
+    private Torrent LinkExistingTorrentForImport(
+        Torrent existing,
+        DownloadClientDefinition definition,
+        DownloadClientItem matchingItem)
+    {
+        if (existing.DownloadClientId.HasValue && definition != null && existing.DownloadClientId.Value != definition.Id)
+        {
+            return existing;
+        }
+
+        var updated = false;
+
+        if (definition != null && definition.Id > 0 &&
+            (!existing.DownloadClientId.HasValue || existing.DownloadClientId.Value == definition.Id))
+        {
+            if (!existing.DownloadClientId.HasValue)
+            {
+                existing.DownloadClientId = definition.Id;
+                updated = true;
+            }
+        }
+
+        if (matchingItem != null)
+        {
+            if (!string.IsNullOrWhiteSpace(matchingItem.Category) && string.IsNullOrEmpty(existing.Category))
+            {
+                existing.Category = matchingItem.Category;
+                updated = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(matchingItem.OutputPath))
+            {
+                var remappedPath = RemapRemotePath(definition?.Host, matchingItem.OutputPath);
+                var resolvedExistingPath = !string.IsNullOrWhiteSpace(remappedPath)
+                    ? remappedPath
+                    : matchingItem.OutputPath;
+
+                if (string.IsNullOrEmpty(existing.SavePath))
+                {
+                    existing.SavePath = resolvedExistingPath;
+                    updated = true;
+                }
+
+                if (string.IsNullOrEmpty(existing.SourcePath))
+                {
+                    existing.SourcePath = resolvedExistingPath;
+                    updated = true;
+                }
+            }
+        }
+
+        if (string.IsNullOrEmpty(existing.Category) && !string.IsNullOrWhiteSpace(definition?.Category))
+        {
+            existing.Category = definition.Category;
+            updated = true;
+        }
+
+        existing.Category ??= string.Empty;
+
+        if (updated)
+        {
+            _torrentService.Update(existing);
+        }
+
+        return existing;
     }
 
     private void SaveParsedTrackersAndFiles(int torrentId, ParsedTorrent parsed)
@@ -863,13 +911,13 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
         }
 
-        HashSet<string> existingHashes;
+        Dictionary<string, Torrent> existingTorrents;
         try
         {
-            existingHashes = _torrentService.GetAll()
+            existingTorrents = _torrentService.GetAll()
                 .Where(t => !string.IsNullOrEmpty(t.InfoHash))
-                .Select(t => t.InfoHash.ToLowerInvariant())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .GroupBy(t => t.InfoHash.ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         }
         finally
         {
@@ -896,8 +944,9 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             clientItems.TryGetValue(hash, out var matchingItem);
             var title = matchingItem?.Title ?? hash;
 
-            if (existingHashes.Contains(hash))
+            if (existingTorrents.TryGetValue(hash, out var existingTorrent))
             {
+                LinkExistingTorrentForImport(existingTorrent, definition, matchingItem);
                 result.Skipped++;
                 result.Items.Add(new BatchImportItemResult
                 {
@@ -925,15 +974,16 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
         try
         {
-            existingHashes = _torrentService.GetAll()
+            existingTorrents = _torrentService.GetAll()
                 .Where(t => !string.IsNullOrEmpty(t.InfoHash))
-                .Select(t => t.InfoHash.ToLowerInvariant())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .GroupBy(t => t.InfoHash.ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
             foreach (var pending in pendingImports)
             {
-                if (existingHashes.Contains(pending.Hash))
+                if (existingTorrents.TryGetValue(pending.Hash, out var existingTorrent))
                 {
+                    LinkExistingTorrentForImport(existingTorrent, definition, pending.MatchingItem);
                     result.Skipped++;
                     result.Items.Add(new BatchImportItemResult
                     {
@@ -947,8 +997,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
                 try
                 {
-                    ImportTorrentInternal(definition, provider, pending.Hash, pending.MatchingItem, pending.TorrentBytes);
-                    existingHashes.Add(pending.Hash);
+                    var imported = ImportTorrentInternal(definition, provider, pending.Hash, pending.MatchingItem, pending.TorrentBytes);
+                    existingTorrents[pending.Hash] = imported;
                     result.Added++;
                     result.Items.Add(new BatchImportItemResult
                     {

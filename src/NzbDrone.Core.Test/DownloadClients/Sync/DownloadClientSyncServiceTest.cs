@@ -377,24 +377,6 @@ public class DownloadClientSyncServiceTest
     }
 
     [Test]
-    public void GetClientItems_should_throw_when_client_disabled_without_polling()
-    {
-        var mockClient = Substitute.For<IDownloadClient>();
-        _service.InjectedClient = mockClient;
-        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
-        {
-            Id = 1,
-            Name = "Disabled qBit",
-            ClientType = "QBitTorrent",
-            Enable = false
-        });
-
-        var ex = Assert.Throws<ArgumentException>(() => _service.GetClientItems(1));
-        Assert.That(ex.Message, Does.Contain("disabled"));
-        mockClient.DidNotReceive().GetItems();
-    }
-
-    [Test]
     public void ImportTorrent_should_add_torrent_and_return_instance()
     {
         var hash = "cccc111122223333444455556666777788889999";
@@ -436,6 +418,13 @@ public class DownloadClientSyncServiceTest
         var hash = "dddd111122223333444455556666777788889999";
         var existingTorrent = new Torrent { Id = 10, InfoHash = hash, Name = "Already Exists" };
 
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { Title = "Already Exists", InfoHash = hash, Category = "tv", OutputPath = "/downloads/tv" }
+        });
+
+        _service.InjectedClient = mockClient;
         _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
         _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
         {
@@ -448,6 +437,39 @@ public class DownloadClientSyncServiceTest
         var result = _service.ImportTorrent(1, hash);
 
         Assert.That(result, Is.SameAs(existingTorrent));
+        Assert.That(result.DownloadClientId, Is.EqualTo(1));
+        Assert.That(result.Category, Is.EqualTo("tv"));
+        Assert.That(result.SavePath, Is.EqualTo("/downloads/tv"));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+        _torrentService.Received(1).Update(existingTorrent);
+    }
+
+    [Test]
+    public void ImportTorrent_should_not_relink_existing_torrent_owned_by_another_client()
+    {
+        var hash = "eeee000022223333444455556666777788889999";
+        var existingTorrent = new Torrent { Id = 11, InfoHash = hash, Name = "Other Client", DownloadClientId = 2 };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { Title = "Other Client", InfoHash = hash }
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var result = _service.ImportTorrent(1, hash);
+
+        Assert.That(result.DownloadClientId, Is.EqualTo(2));
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
     }
 
@@ -582,6 +604,7 @@ public class DownloadClientSyncServiceTest
         mockClient.Received(1).GetItems();
         _torrentService.Received(1).GetAll();
         _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == newHash));
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.InfoHash == existingHash && t.DownloadClientId == 1));
     }
 
     [TestCase("qbittorrent")]
