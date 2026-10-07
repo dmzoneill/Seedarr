@@ -15,7 +15,9 @@ namespace NzbDrone.Core.Blocklist;
 
 public class PeerBlocklistSyncService : IPeerBlocklistSyncService
 {
-    private static readonly HttpClient DefaultClient = new();
+    public static readonly TimeSpan DefaultHttpClientTimeout = TimeSpan.FromSeconds(100);
+
+    private static readonly HttpClient DefaultClient = new() { Timeout = DefaultHttpClientTimeout };
     private static readonly TimeSpan DefaultBaseBackoff = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromHours(24);
 
@@ -309,23 +311,8 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         catch (Exception ex)
         {
             now = _nowProvider();
-            lock (_syncLock)
-            {
-                _metadata.ConsecutiveFailures++;
-                _metadata.LastCheckedUtc = now;
-                _metadata.LastSyncHttpStatus = null;
-                _metadata.LastSyncStatus = $"Failed: {ex.Message}";
-                _metadata.LastFailureMessage = ex.Message;
-            }
-
             _logger.Error(ex, "Failed to download blocklist from {0}", effectiveUrl);
-            return new BlocklistSyncResult
-            {
-                Success = false,
-                Status = $"Failed: {ex.Message}",
-                Message = ex.Message,
-                RuleCount = RuleCount
-            };
+            return RecordTransportFailure(ex, now, cancellationToken);
         }
 
         try
@@ -350,23 +337,8 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
                 catch (Exception ex)
                 {
                     now = _nowProvider();
-                    lock (_syncLock)
-                    {
-                        _metadata.ConsecutiveFailures++;
-                        _metadata.LastCheckedUtc = now;
-                        _metadata.LastSyncHttpStatus = null;
-                        _metadata.LastSyncStatus = $"Failed: {ex.Message}";
-                        _metadata.LastFailureMessage = ex.Message;
-                    }
-
                     _logger.Error(ex, "Failed to download blocklist fallback from {0}", effectiveUrl);
-                    return new BlocklistSyncResult
-                    {
-                        Success = false,
-                        Status = $"Failed: {ex.Message}",
-                        Message = ex.Message,
-                        RuleCount = RuleCount
-                    };
+                    return RecordTransportFailure(ex, now, cancellationToken);
                 }
             }
         }
@@ -630,6 +602,56 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
         {
             response?.Dispose();
         }
+    }
+
+    private BlocklistSyncResult RecordTransportFailure(Exception ex, DateTime now, CancellationToken cancellationToken)
+    {
+        DateTime? nextAllowedSyncUtc = null;
+        var isRateLimited = false;
+        string status;
+        lock (_syncLock)
+        {
+            _metadata.ConsecutiveFailures++;
+            _metadata.LastCheckedUtc = now;
+            _metadata.LastSyncHttpStatus = null;
+            _metadata.LastFailureMessage = ex.Message;
+
+            if (IsHttpClientTimeout(ex, cancellationToken))
+            {
+                var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
+                var retrySpan = CalculateExponentialBackoff(retryCount);
+                _metadata.NextAllowedSyncUtc = now.Add(retrySpan);
+                nextAllowedSyncUtc = _metadata.NextAllowedSyncUtc;
+                isRateLimited = true;
+                _metadata.LastSyncStatus = $"Timed Out (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
+                status = _metadata.LastSyncStatus;
+            }
+            else
+            {
+                _metadata.LastSyncStatus = $"Failed: {ex.Message}";
+                status = _metadata.LastSyncStatus;
+            }
+        }
+
+        return new BlocklistSyncResult
+        {
+            Success = false,
+            Status = status,
+            Message = ex.Message,
+            RuleCount = RuleCount,
+            NextAllowedSyncUtc = nextAllowedSyncUtc,
+            IsRateLimited = isRateLimited
+        };
+    }
+
+    private static bool IsHttpClientTimeout(Exception ex, CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        return ex is TaskCanceledException;
     }
 
     private static bool HasEnforceableIntervals(Ipv6IntervalTree tree)

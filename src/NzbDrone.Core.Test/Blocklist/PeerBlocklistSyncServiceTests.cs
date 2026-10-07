@@ -67,6 +67,32 @@ public class PeerBlocklistSyncServiceTests
     }
 
     [Test]
+    public void Default_http_client_timeout_should_be_bounded()
+    {
+        Assert.That(PeerBlocklistSyncService.DefaultHttpClientTimeout, Is.EqualTo(TimeSpan.FromSeconds(100)));
+    }
+
+    [Test]
+    public async Task SyncAsync_http_timeout_should_apply_exponential_backoff()
+    {
+        using var handler = new StallHttpMessageHandler();
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(100) };
+        var service = new PeerBlocklistSyncService(
+            client,
+            configService: null,
+            nowProvider: () => _currentTime);
+
+        var result = await service.SyncAsync("http://blocklist.test/rules.txt");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.IsRateLimited, Is.True);
+        Assert.That(service.NextAllowedSyncUtc, Is.EqualTo(_currentTime.AddMinutes(5)));
+        Assert.That(service.Metadata.LastSyncHttpStatus, Is.Null);
+        Assert.That(service.Metadata.LastSyncStatus, Does.Contain("Timed Out"));
+        Assert.That(service.IsSyncAllowed(), Is.False);
+    }
+
+    [Test]
     public async Task SyncAsync_should_dispose_http_response_on_success()
     {
         var response = new TrackDisposeHttpResponseMessage(HttpStatusCode.OK)
@@ -778,6 +804,15 @@ public class PeerBlocklistSyncServiceTests
         Assert.That(_service.IsBlocked("192.168.1.1"), Is.True);
         Assert.That(_service.IsBlocked("10.0.0.1"), Is.False);
         Assert.That(requestCount, Is.EqualTo(2));
+    }
+
+    private sealed class StallHttpMessageHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken).ConfigureAwait(false);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
     }
 
     private sealed class TrackDisposeHttpResponseMessage : HttpResponseMessage
