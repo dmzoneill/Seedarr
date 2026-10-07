@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T01:09:33Z",
+  "updatedAt": "2026-10-07T01:22:00Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Datastore",
+  "currentSubfolder": "src/NzbDrone.Core/Blocklist",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Authentication",
-    "completedAt": "2026-10-07T01:09:33Z",
-    "issuesFiled": [1269, 1270],
+    "subfolder": "src/NzbDrone.Core/DownloadClients",
+    "completedAt": "2026-10-07T01:22:00Z",
+    "issuesFiled": [1276],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Authentication pass: static review of 16 files (IdentityProvider*, LoginRateLimiter, SessionRevocation*, Policies/Roles). Filed #1269 (Update clears OIDC secret when ClientSecretEncrypted empty), #1270 (LoginRateLimiter stale failure count after lockout until IsRateLimited). Deduped open #987, #917, #986, #1058, #1062-#1064, #979, #1059, #1193, #1240 and related TestConnection/encrypt/revocation issues. No dotnet build/test."
+    "note": "DownloadClients pass: static review of 9 files (Factory, Repository, Models, IDownloadClient, Exceptions, Sync/DownloadClientSyncService, Deluge/QBitTorrent/Transmission clients). Filed #1276 (QBitTorrent GetItems reads total_size; real Web API uses size). Deduped open #923, #925, #924, #884, #1009, #1010-#1013, #1011, #1096-#1097, #1118-#1119, #1163-#1164, #1212-#1213, #1226-#1228, #1252-#1254 and related. No dotnet build/test."
   }
 }
