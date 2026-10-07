@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Common.Serializer;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.ArrIntegration.Webhook;
 using Seedarr.Http;
@@ -120,7 +122,35 @@ public class ArrConnectionController : Controller
     }
 
     [HttpPut("{id}")]
-    public ActionResult Update(int id, [FromBody] ArrConnectionDefinition definition)
+    public ActionResult Update(int id, [FromBody] JsonElement body)
+    {
+        if (body.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            return BadRequest("Request body must be a JSON object");
+        }
+
+        var presentPropertyKeys = body.EnumerateObject()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var definition = JsonSerializer.Deserialize<ArrConnectionDefinition>(body, STJson.GetSerializerSettings());
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        return UpdateConnection(id, definition, presentPropertyKeys);
+    }
+
+    [NonAction]
+    public ActionResult Update(int id, ArrConnectionDefinition definition) => UpdateConnection(id, definition, null);
+
+    private ActionResult UpdateConnection(int id, ArrConnectionDefinition definition, IReadOnlySet<string> presentPropertyKeys)
     {
         if (definition == null)
         {
@@ -133,6 +163,12 @@ public class ArrConnectionController : Controller
         if (existing == null)
         {
             return NotFound();
+        }
+
+        if (presentPropertyKeys != null)
+        {
+            definition = ArrConnectionUpdateMerger.Merge(existing, definition, presentPropertyKeys);
+            definition.Id = id;
         }
 
         if (string.IsNullOrWhiteSpace(definition.Name))

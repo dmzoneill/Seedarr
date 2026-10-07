@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -268,6 +270,45 @@ public class ArrConnectionControllerTest
         _webhookRegistration.DidNotReceive().UnregisterWebhook(Arg.Any<ArrConnectionDefinition>());
         _webhookRegistration.Received(1).RegisterWebhook(Arg.Any<ArrConnectionDefinition>());
         _connectionFactory.Received(1).Update(updated);
+    }
+
+    [Test]
+    public void Update_with_partial_json_body_preserves_omitted_flags_tags_and_metadata()
+    {
+        var existing = new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "api-key",
+            Enable = false,
+            WebhookEnabled = false,
+            SyncEnabled = false,
+            EnableAutomaticAdd = false,
+            Tags = new List<int> { 1 },
+            Category = "tv",
+            SavePath = "/data/tv",
+            WebhookHost = "http://hooks.local"
+        };
+        _connectionFactory.Get(1).Returns(existing);
+
+        using var doc = JsonDocument.Parse(
+            "{\"name\":\"renamed\",\"url\":\"http://sonarr:8989\",\"arrType\":\"Sonarr\"}");
+        var result = _controller.Update(1, doc.RootElement);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _connectionFactory.Received(1).Update(Arg.Is<ArrConnectionDefinition>(d =>
+            d.Name == "renamed"
+            && d.Enable == false
+            && d.WebhookEnabled == false
+            && d.SyncEnabled == false
+            && d.EnableAutomaticAdd == false
+            && d.Tags.Count == 1
+            && d.Tags[0] == 1
+            && d.Category == "tv"
+            && d.SavePath == "/data/tv"
+            && d.WebhookHost == "http://hooks.local"));
     }
 
     [Test]
