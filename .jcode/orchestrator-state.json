@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:10:29Z",
+  "updatedAt": "2026-10-07T00:11:54Z",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_3d249143"
+    "lastScheduleId": "sched_addf0611"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -27,22 +27,22 @@
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "osprey"
+      "worker": "vulture"
     },
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "swift"
+      "worker": "sparrow"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "mink"
+      "worker": "otter"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "oriole"
+      "worker": "pigeon"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 395,
-  "lastMonitorNote": "395 open; 0 restarts; kestrel active Authentication; osprey/swift/mink/oriole idle <90s"
+  "lastMonitorNote": "395 open; 4 restarts idle >90s: swift→sparrow Ping, mink→otter Disk, osprey→vulture Notifications, oriole→pigeon TorrentRecheck; kestrel active"
 }
