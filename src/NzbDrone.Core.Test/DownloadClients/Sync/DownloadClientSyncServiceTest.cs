@@ -2025,4 +2025,59 @@ public class DownloadClientSyncServiceTest
 
         _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == hash));
     }
+
+    [TestCase("unknown", 0, 10000, TorrentStatus.Seeding)]
+    [TestCase("unknown", 4000, 10000, TorrentStatus.Downloading)]
+    [TestCase("unknown", 10000, 10000, TorrentStatus.Queued)]
+    [TestCase("metadl", 5000, 10000, TorrentStatus.Downloading)]
+    public void MapClientStatus_should_infer_from_progress_for_unknown_or_unmapped_states(
+        string status,
+        long remaining,
+        long total,
+        TorrentStatus expected)
+    {
+        Assert.That(DownloadClientSyncService.MapClientStatus(status, remaining, total), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void Sync_should_not_clobber_seeding_when_client_reports_unknown_completed_state()
+    {
+        var hash = "abcd111122223333444455556666777788889999";
+        var existingTorrent = new Torrent
+        {
+            Id = 7,
+            InfoHash = hash,
+            Name = "Completed Torrent",
+            TotalSize = 10000,
+            Downloaded = 10000,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Completed Torrent",
+                InfoHash = hash,
+                TotalSize = 10000,
+                RemainingSize = 0,
+                Status = "unknown"
+            }
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        _service.Sync();
+
+        Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(existingTorrent.ForceCompleted, Is.True);
+        _torrentService.Received(1).Update(existingTorrent);
+    }
 }

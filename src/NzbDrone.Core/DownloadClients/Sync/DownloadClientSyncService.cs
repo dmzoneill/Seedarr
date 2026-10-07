@@ -1134,6 +1134,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         if (!string.IsNullOrWhiteSpace(status))
         {
             var s = status.Trim().ToLowerInvariant();
+            if (s == "unknown")
+            {
+                return InferStatusFromProgress(remainingSize, totalSize);
+            }
+
             switch (s)
             {
                 case "seeding" or "forcedup" or "stalledup" or "queuedup" or "uploading":
@@ -1150,10 +1155,27 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                     return TorrentStatus.Queued;
                 case "stopped":
                     return TorrentStatus.Stopped;
+                default:
+                    return InferStatusFromProgress(remainingSize, totalSize);
             }
         }
 
         return TorrentStatus.Stopped;
+    }
+
+    private static TorrentStatus InferStatusFromProgress(long remainingSize, long totalSize)
+    {
+        if (remainingSize <= 0)
+        {
+            return TorrentStatus.Seeding;
+        }
+
+        if (totalSize > 0 && remainingSize >= totalSize)
+        {
+            return TorrentStatus.Queued;
+        }
+
+        return TorrentStatus.Downloading;
     }
 
     public void Dispose()
