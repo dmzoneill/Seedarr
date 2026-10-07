@@ -310,15 +310,16 @@ public class AuthControllerTest
     }
 
     [Test]
-    public void SessionRevocationService_IsSessionRevoked_ReturnsFalse_WhenIssuedUtcMissing()
+    public void SessionRevocationService_IsSessionRevoked_WhenIssuedUtcMissing_TreatsRevokedSessionAsRevoked()
     {
         var service = new SessionRevocationService();
         var now = DateTime.UtcNow;
 
         service.RevokeSession("user-a", now);
 
-        Assert.That(service.IsSessionRevoked("user-a", DateTime.MinValue), Is.False);
-        Assert.That(service.IsSessionRevoked("user-a", default), Is.False);
+        Assert.That(service.IsSessionRevoked("user-a", DateTime.MinValue), Is.True);
+        Assert.That(service.IsSessionRevoked("user-a", default), Is.True);
+        Assert.That(service.IsSessionRevoked("user-b", DateTime.MinValue), Is.False);
     }
 
     [Test]
@@ -452,6 +453,48 @@ public class AuthControllerTest
         var context = new CookieValidatePrincipalContext(httpContext, scheme, options, ticket);
 
         var issuedUtc = context.Properties.IssuedUtc?.UtcDateTime ?? DateTime.MinValue;
+        var sessionId = context.Principal?.FindFirst("SessionId")?.Value;
+        var username = context.Principal?.Identity?.Name;
+
+        var isRevoked = (!string.IsNullOrWhiteSpace(sessionId) && revocationService.IsSessionRevoked(sessionId, issuedUtc)) ||
+                        (!string.IsNullOrWhiteSpace(username) && revocationService.IsSessionRevoked(username, issuedUtc));
+
+        if (isRevoked)
+        {
+            context.RejectPrincipal();
+            await context.HttpContext.SignOutAsync("Cookies");
+        }
+
+        Assert.That(context.Principal, Is.Null);
+        await authService.Received(1).SignOutAsync(httpContext, "Cookies", Arg.Any<AuthenticationProperties>());
+    }
+
+    [Test]
+    public async Task OnValidatePrincipal_WhenSessionIsRevokedAndIssuedUtcMissing_RejectsPrincipalAndSignsOut()
+    {
+        var revocationService = new SessionRevocationService();
+        revocationService.RevokeSession("session-123");
+
+        var httpContext = new DefaultHttpContext();
+        var authService = Substitute.For<IAuthenticationService>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(ISessionRevocationService)).Returns(revocationService);
+        serviceProvider.GetService(typeof(IAuthenticationService)).Returns(authService);
+        httpContext.RequestServices = serviceProvider;
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Name, "testuser"),
+            new("SessionId", "session-123"),
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "Cookies"));
+        var authProps = new AuthenticationProperties();
+        var ticket = new AuthenticationTicket(principal, authProps, "Cookies");
+        var scheme = new AuthenticationScheme("Cookies", "Cookies", typeof(CookieAuthenticationHandler));
+        var options = new CookieAuthenticationOptions();
+        var context = new CookieValidatePrincipalContext(httpContext, scheme, options, ticket);
+
+        var issuedUtc = context.Properties.IssuedUtc?.UtcDateTime ?? default;
         var sessionId = context.Principal?.FindFirst("SessionId")?.Value;
         var username = context.Principal?.Identity?.Name;
 
