@@ -329,16 +329,25 @@ public class DownloadClientSyncServiceTest
     }
 
     [Test]
-    public void Sync_should_fail_item_when_neither_client_nor_indexer_provides_torrent_bytes()
+    public void Sync_should_add_torrent_from_client_metadata_when_torrent_bytes_unavailable()
     {
         var hash = "99887766554433221100ffeeddccbbaa99887766";
 
         var mockClient = Substitute.For<IDownloadClient>();
         mockClient.GetItems().Returns(new List<DownloadClientItem>
         {
-            new() { Title = "Missing Torrent", InfoHash = hash }
+            new()
+            {
+                Title = "Client Metadata Torrent",
+                InfoHash = hash,
+                TotalSize = 5000,
+                RemainingSize = 0,
+                IsPrivate = true,
+                Status = "seeding"
+            }
         });
         mockClient.GetTorrentFile(hash).Returns((byte[])null);
+        mockClient.GetTrackers(hash).Returns(new List<string> { "http://tracker.example.com/announce" });
 
         _indexerFactory.All().Returns(new List<IndexerDefinition>());
 
@@ -351,10 +360,15 @@ public class DownloadClientSyncServiceTest
 
         var result = _service.Sync();
 
-        Assert.That(result.Added, Is.EqualTo(0));
+        Assert.That(result.Added, Is.EqualTo(1));
         Assert.That(result.Skipped, Is.EqualTo(0));
-        Assert.That(result.Failed, Is.EqualTo(1));
-        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+        Assert.That(result.Failed, Is.EqualTo(0));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.Name == "Client Metadata Torrent" &&
+            t.TotalSize == 5000 &&
+            t.IsPrivate &&
+            t.Status == TorrentStatus.Seeding));
     }
 
     [Test]
