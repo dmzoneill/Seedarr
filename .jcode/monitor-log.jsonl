@@ -204,3 +204,4 @@
 {"ts": "2026-10-07T00:10:29Z", "scheduleId": "sched_3d249143", "mode": "bug-hunt", "status": "running", "githubOpen": 395, "restarts": [], "note": "latest #1264-#1268; all slots healthy <90s idle"}
 {"ts":"2026-10-07T00:11:54Z","scheduleId":"sched_addf0611","head":"6094e0f0","openIssues":395,"restarts":4,"hunters":["kestrel","vulture","sparrow","otter","pigeon"],"note":"idle>90s: swift→sparrow(Ping), mink→otter(Disk), osprey→vulture(Notifications), oriole→pigeon(TorrentRecheck)"}
 {"ts":"2026-10-07T00:12:45Z","scheduleId":"sched_81a77b8c","head":"e21db5da","openIssues":397,"restarts":0,"hunters":["kestrel","vulture","sparrow","otter","pigeon"],"note":"397 open; +2 auth #1269/#1270; all active <90s"}
+{"ts":"2026-10-07T00:13:47Z","scheduleId":"sched_0232d904","head":"50b3b59d","openIssues":397,"restarts":0,"hunters":["kestrel","vulture","sparrow","otter","pigeon"],"note":"397 open unchanged; all active <90s"}
