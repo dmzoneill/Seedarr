@@ -9,6 +9,8 @@ public class BlocklistSyncMetadata
 
     public DateTimeOffset? BlocklistLastModified { get; set; }
 
+    public string BlocklistValidatorUrl { get; set; }
+
     public DateTime? LastCheckedUtc { get; set; }
 
     public string LastSyncStatus { get; set; } = "Never Run";

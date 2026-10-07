@@ -173,6 +173,43 @@ public class PeerBlocklistSyncServiceTests
     }
 
     [Test]
+    public async Task SyncAsync_after_blocklist_url_change_should_not_send_stale_conditional_headers()
+    {
+        var feedA = "http://blocklist-a.test/rules.txt";
+        var feedB = "http://blocklist-b.test/rules.txt";
+
+        var responseA = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("10.0.0.0/8\n")
+        };
+        responseA.Headers.ETag = new EntityTagHeaderValue("\"etag-feed-a\"");
+        _mockHandler.EnqueueResponse(responseA);
+
+        await _service.SyncAsync(feedA);
+        Assert.That(_service.IsBlocked("10.0.0.1"), Is.True);
+
+        var responseB = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("192.168.0.0/16\n")
+        };
+        responseB.Headers.ETag = new EntityTagHeaderValue("\"etag-feed-b\"");
+        _mockHandler.EnqueueResponse(responseB);
+
+        var result = await _service.SyncAsync(feedB);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(_service.IsBlocked("192.168.1.1"), Is.True);
+        Assert.That(_service.IsBlocked("10.0.0.1"), Is.False);
+        Assert.That(_mockHandler.Requests.Count, Is.EqualTo(2));
+
+        var secondRequest = _mockHandler.Requests[1];
+        Assert.That(secondRequest.RequestUri!.ToString(), Is.EqualTo(feedB));
+        Assert.That(secondRequest.Headers.Contains("If-None-Match"), Is.False);
+        Assert.That(secondRequest.Headers.IfModifiedSince, Is.Null);
+        Assert.That(_service.Metadata.BlocklistValidatorUrl, Is.EqualTo(feedB));
+    }
+
+    [Test]
     public async Task SyncAsync_should_transmit_conditional_headers_on_subsequent_request()
     {
         var response1 = new HttpResponseMessage(HttpStatusCode.OK)

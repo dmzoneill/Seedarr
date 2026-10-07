@@ -58,6 +58,14 @@ public class BlocklistController : Controller
             }
 
             updates["BlocklistUrl"] = trimmedUrl;
+
+            var previousUrl = _configService.BlocklistUrl ?? string.Empty;
+            if (!string.Equals(previousUrl.Trim(), trimmedUrl, StringComparison.Ordinal))
+            {
+                updates["BlocklistETag"] = string.Empty;
+                updates["BlocklistLastModified"] = string.Empty;
+                updates["BlocklistValidatorUrl"] = string.Empty;
+            }
         }
 
         if (request.AutoUpdateEnabled.HasValue)

@@ -265,6 +265,7 @@ public interface IConfigService
     int BlocklistAutoUpdateIntervalDays { get; }
     string BlocklistETag { get; set; }
     string BlocklistLastModified { get; set; }
+    string BlocklistValidatorUrl { get; set; }
 }
 
 public class ConfigModel : ModelBase
@@ -764,6 +765,12 @@ public class ConfigService : IConfigService
     {
         get => GetValue("BlocklistLastModified", string.Empty);
         set => SaveConfigDictionary(new Dictionary<string, object> { { "BlocklistLastModified", value } }, false);
+    }
+
+    public string BlocklistValidatorUrl
+    {
+        get => GetValue("BlocklistValidatorUrl", string.Empty);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "BlocklistValidatorUrl", value } }, false);
     }
 }
 
