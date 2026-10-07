@@ -240,7 +240,7 @@ public class IndexerController : Controller
             if (!ex.Data.Contains("Recorded") || !(bool)ex.Data["Recorded"])
             {
                 var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
-                if (definition.Id > 0 && !definition.ApiKey.Contains('*'))
+                if (ShouldRecordIndexerTestStatus(definition))
                 {
                     _indexerStatusService.RecordFailure(definition.Id, (int?)ex.StatusCode, ex.Message, ex, retryAfter);
                 }
@@ -250,7 +250,7 @@ public class IndexerController : Controller
         }
         catch (Exception ex)
         {
-            if (definition.Id > 0 && !definition.ApiKey.Contains('*'))
+            if (ShouldRecordIndexerTestStatus(definition))
             {
                 _indexerStatusService.RecordFailure(definition.Id, null, ex.Message, ex);
             }
@@ -258,7 +258,7 @@ public class IndexerController : Controller
             return Ok(new IndexerTestResult { Success = false, Message = ex.Message });
         }
 
-        if (definition.Id > 0 && !definition.ApiKey.Contains('*'))
+        if (ShouldRecordIndexerTestStatus(definition))
         {
             if (result.Success)
             {
@@ -730,6 +730,13 @@ public class IndexerController : Controller
         }
 
         return BadRequest("Neither DownloadUrl nor MagnetUrl was provided");
+    }
+
+    private static bool ShouldRecordIndexerTestStatus(IndexerDefinition definition)
+    {
+        return definition.Id > 0
+            && !string.IsNullOrEmpty(definition.ApiKey)
+            && !definition.ApiKey.Contains('*');
     }
 
     private static IndexerDefinition MaskApiKey(IndexerDefinition definition)
