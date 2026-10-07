@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -38,6 +40,26 @@ public class DelugeClientTest
         var field = typeof(DelugeClient).GetField("_client",
             BindingFlags.NonPublic | BindingFlags.Instance);
         field.SetValue(_client, httpClient);
+    }
+
+    [Test]
+    public void NextRequestId_should_return_unique_ids_under_concurrency()
+    {
+        var method = typeof(DelugeClient).GetMethod("NextRequestId",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        const int threads = 32;
+        const int perThread = 100;
+        var ids = new ConcurrentBag<int>();
+        Parallel.For(0, threads, _ =>
+        {
+            for (var i = 0; i < perThread; i++)
+            {
+                ids.Add((int)method.Invoke(_client, null));
+            }
+        });
+
+        Assert.That(ids, Has.Count.EqualTo(threads * perThread));
+        Assert.That(ids.Distinct().Count(), Is.EqualTo(threads * perThread));
     }
 
     [Test]
