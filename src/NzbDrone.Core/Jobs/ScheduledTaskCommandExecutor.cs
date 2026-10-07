@@ -98,6 +98,18 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
             completedSuccessfully = false;
             _logger.Error(ex, "Scheduled task failed: {0}", command.TaskName);
             _taskManager.RecordTaskFailed(command.TaskName, startTime, ex, command.TriggerSource);
+            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+            {
+                Name = "TaskFailed",
+                Action = Datastore.ModelAction.Updated,
+                Body = new
+                {
+                    taskInfo.TypeName,
+                    taskInfo.Name,
+                    taskInfo.TriggerSource,
+                    Error = ex.Message
+                }
+            });
             throw;
         }
         finally
