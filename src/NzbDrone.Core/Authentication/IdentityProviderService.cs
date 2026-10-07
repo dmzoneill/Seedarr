@@ -13,6 +13,8 @@ namespace NzbDrone.Core.Authentication;
 public class IdentityProviderService : IIdentityProviderService
 {
     public const string DataProtectionPurpose = "Seedarr.IdentityProvider.ClientSecret";
+    private const string MaskedClientSecret = "********";
+    private const string AlternateMaskedClientSecret = "******";
 
     public static readonly SocketsHttpHandler SharedHandler = new()
     {
@@ -74,7 +76,12 @@ public class IdentityProviderService : IIdentityProviderService
     {
         provider.UpdatedAt = DateTime.UtcNow;
 
-        if (!string.IsNullOrEmpty(provider.ClientSecretEncrypted))
+        var existing = _repository.Get(provider.Id);
+        if (existing != null && ShouldPreserveClientSecret(provider.ClientSecretEncrypted))
+        {
+            provider.ClientSecretEncrypted = existing.ClientSecretEncrypted;
+        }
+        else if (!string.IsNullOrEmpty(provider.ClientSecretEncrypted))
         {
             provider.ClientSecretEncrypted = EncryptClientSecret(provider.ClientSecretEncrypted);
         }
@@ -127,6 +134,13 @@ public class IdentityProviderService : IIdentityProviderService
             _logger.Trace(ex, "Failed to unprotect client secret, falling back to plaintext");
             return encryptedSecret;
         }
+    }
+
+    private static bool ShouldPreserveClientSecret(string clientSecret)
+    {
+        return string.IsNullOrWhiteSpace(clientSecret)
+            || clientSecret == MaskedClientSecret
+            || clientSecret == AlternateMaskedClientSecret;
     }
 
     private bool IsEncrypted(string value)
