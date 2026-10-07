@@ -124,11 +124,6 @@ export const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   AutomationTriggerEvaluated: [["automation", "scripts"], ["automation"]],
   TrackerUpdated: [["trackerboost"]],
   TrackerAnnounced: [["trackerboost"]],
-  trackerUpdated: [["trackerboost"]],
-  trackerAnnounced: [["trackerboost"]],
-  tracker_updated: [["trackerboost"]],
-  tracker_announced: [["trackerboost"]],
-  TrackerAnnounceEvent: [["trackerboost"]],
 };
 
 export const RECONNECT_QUERY_KEYS: string[][] = [
