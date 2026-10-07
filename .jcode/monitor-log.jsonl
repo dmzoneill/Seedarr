@@ -317,3 +317,4 @@
 }
 {"ts":"2026-10-07T02:05:30Z","mode":"fix","githubOpen":243,"restarts":0,"dispatches":0,"pokes":["elk","panther"],"scheduleId":"sched_1d8f0cea","issues":[1116,993,1008,1037,1132]}
 {"ts":"2026-10-07T02:06:30Z","mode":"fix","githubOpen":242,"dispatches":[{"slot":"core-torrents","worker":"elk","issue":1038,"reason":"#1037 closed"},{"slot":"host","worker":"panther","issue":992,"reason":"#993 closed"}],"pokes":["badger","hawk","sparrow"],"stopped":["tigress","macaque"],"scheduleId":"sched_e651f5e3"}
+{"ts":"2026-10-07T02:07:06Z","mode":"fix","open":241,"note":"3 restarts badger hawk sparrow failed not_found; elk panther active; DMs #993 #1037 ack","scheduleId":"sched_f41cedcc","actions":["restart:badger#1116","restart:hawk#1008","restart:sparrow#1132"]}
