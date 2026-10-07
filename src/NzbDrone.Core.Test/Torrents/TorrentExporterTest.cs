@@ -41,8 +41,10 @@ public class TorrentExporterTest
             Comment = "BEP 3 test",
             CreatedBy = "SeedarrExportTest",
             CreationDate = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            IsPrivate = false
+            IsPrivate = false,
+            PieceHashes = new byte[4 * 20]
         };
+        Array.Fill(torrent.PieceHashes, (byte)0x42);
 
         var bytes = _subject.ExportTorrent(torrent);
 
@@ -97,12 +99,14 @@ public class TorrentExporterTest
             PieceCount = 2,
             TrackerUrl = "http://tracker1.org/announce",
             IsPrivate = true,
+            PieceHashes = new byte[2 * 20],
             Files = new List<TorrentFile>
             {
                 new() { Path = "CoolAlbum/track01.flac", Size = 50000 },
                 new() { Path = "CoolAlbum/disc2/track02.flac", Size = 60000 }
             }
         };
+        Array.Fill(torrent.PieceHashes, (byte)0x55);
 
         var trackers = new List<TrackerEntry>
         {
@@ -204,5 +208,21 @@ public class TorrentExporterTest
         var pieces = ((BString)info["pieces"]).Value;
 
         Assert.That(pieces.ToArray(), Is.EqualTo(pieceHashes));
+    }
+
+    [Test]
+    public void ExportTorrent_ThrowsWhenPieceHashesMissing()
+    {
+        var torrent = new Torrent
+        {
+            Id = 5,
+            Name = "magnet_only",
+            TotalSize = 1048576,
+            PieceLength = 262144,
+            PieceCount = 4
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _subject.ExportTorrent(torrent));
+        Assert.That(ex.Message, Does.Contain("piece hashes"));
     }
 }

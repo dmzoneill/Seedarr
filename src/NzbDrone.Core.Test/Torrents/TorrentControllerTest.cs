@@ -1308,8 +1308,10 @@ public class TorrentControllerTest
             Id = 42,
             Name = "MyTestTorrent",
             InfoHash = "1122334455667788990011223344556677889900",
-            TotalSize = 12345
+            TotalSize = 12345,
+            PieceHashes = new byte[20]
         };
+        Array.Fill(torrent.PieceHashes, (byte)0x11);
 
         _torrentService.Get(42).Returns(torrent);
 
