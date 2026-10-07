@@ -1714,6 +1714,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
+        if (_trackerAnnounceService == null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Tracker announce service is not available");
+        }
+
         var results = TriggerAnnounceInternal(torrent);
 
         if (results.Count > 0 && results.All(r => !r.Success && r.RetryAfterSeconds > 0))
@@ -1734,11 +1739,13 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         var trackers = _trackerEntryService.GetByTorrentId(id);
+        var enabledTrackers = trackers.Count(t => t.Enabled);
         var successfulCount = results.Count(r => r.Success);
         var failedCount = results.Count(r => !r.Success);
+        var success = successfulCount > 0 || (results.Count == 0 && enabledTrackers == 0);
         return Ok(new
         {
-            success = results.Count == 0 || successfulCount > 0,
+            success,
             torrentId = id,
             torrentName = torrent.Name,
             trackersCount = trackers.Count(t => t.Enabled),
@@ -2173,6 +2180,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         if (target == null)
         {
             return NotFound();
+        }
+
+        if (_trackerAnnounceService == null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "Tracker announce service is not available");
         }
 
         var results = TriggerAnnounceInternal(torrent, target);
