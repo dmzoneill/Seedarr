@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Telemetry;
@@ -13,6 +15,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.Subsystems;
 
 [V1ApiController("subsystems")]
+[Authorize(Policy = Policies.Reader)]
 public class SubsystemsController : Controller
 {
     // Reserve GET .../metrics for aggregate telemetry; do not treat "metrics" as a subsystem id.
@@ -105,6 +108,7 @@ public class SubsystemsController : Controller
     }
 
     [HttpPost(SubsystemIdRoute + "/switch")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<SwitchSubsystemProviderResult> SwitchProvider(string subsystemId, [FromBody] SwitchSubsystemProviderRequest request)
     {
         if (request == null || string.IsNullOrWhiteSpace(request.ProviderId))
@@ -140,6 +144,7 @@ public class SubsystemsController : Controller
     }
 
     [HttpPost(SubsystemIdRoute + "/probe/{providerId}")]
+    [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<SubsystemProbeResult> ProbeProvider(string subsystemId, string providerId)
     {
         var normalized = NormalizeSubsystemId(subsystemId);

@@ -4,9 +4,11 @@ using System.Reflection;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Telemetry;
@@ -34,6 +36,24 @@ public class SubsystemsControllerTests
             _resourceService,
             _configService,
             _signalRBroadcaster);
+    }
+
+    [Test]
+    public void SubsystemsController_should_have_proper_authorization_policies()
+    {
+        var classAttr = typeof(SubsystemsController).GetCustomAttribute<AuthorizeAttribute>();
+        Assert.That(classAttr, Is.Not.Null);
+        Assert.That(classAttr!.Policy, Is.EqualTo(Policies.Reader));
+
+        var switchAttr = typeof(SubsystemsController).GetMethod(nameof(SubsystemsController.SwitchProvider))!
+            .GetCustomAttribute<AuthorizeAttribute>();
+        Assert.That(switchAttr, Is.Not.Null);
+        Assert.That(switchAttr!.Policy, Is.EqualTo(Policies.AdminOnly));
+
+        var probeAttr = typeof(SubsystemsController).GetMethod(nameof(SubsystemsController.ProbeProvider))!
+            .GetCustomAttribute<AuthorizeAttribute>();
+        Assert.That(probeAttr, Is.Not.Null);
+        Assert.That(probeAttr!.Policy, Is.EqualTo(Policies.AdminOnly));
     }
 
     [Test]
