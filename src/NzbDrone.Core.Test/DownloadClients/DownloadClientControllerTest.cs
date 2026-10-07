@@ -708,6 +708,111 @@ public class DownloadClientControllerTest
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
     }
 
+    private static DownloadClientStatus BackoffStatus(int clientId)
+    {
+        return new DownloadClientStatus
+        {
+            ClientId = clientId,
+            ConsecutiveFailures = 3,
+            BackoffUntil = System.DateTime.UtcNow.AddMinutes(5),
+        };
+    }
+
+    [Test]
+    public void TestConnection_returns_service_unavailable_when_client_in_backoff()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Host = "127.0.0.1", Port = 8080 };
+        _downloadClientFactory.Get(1).Returns(def);
+        _syncService.GetClientStatus(1).Returns(BackoffStatus(1));
+
+        var result = _controller.TestConnection(1);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result.Result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(503));
+        _downloadClientFactory.DidNotReceive().CreateClient(Arg.Any<DownloadClientDefinition>());
+    }
+
+    [Test]
+    public void TestConnection_with_force_bypasses_backoff()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Host = "127.0.0.1", Port = 8080 };
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.TestConnectionDetailed().Returns(DownloadClientTestResult.Ok("Connected"));
+
+        _downloadClientFactory.Get(1).Returns(def);
+        _syncService.GetClientStatus(1).Returns(BackoffStatus(1));
+        _downloadClientFactory.CreateClient(def).Returns(mockClient);
+
+        var result = _controller.TestConnection(1, force: true);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _downloadClientFactory.Received(1).CreateClient(def);
+    }
+
+    [Test]
+    public void TestDirect_returns_service_unavailable_when_saved_client_in_backoff()
+    {
+        var def = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Host = "8.8.8.8",
+            Port = 8080,
+        };
+        _syncService.GetClientStatus(1).Returns(BackoffStatus(1));
+
+        var result = _controller.TestDirect(def);
+
+        Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
+        var objectResult = (ObjectResult)result.Result;
+        Assert.That(objectResult.StatusCode, Is.EqualTo(503));
+        _downloadClientFactory.DidNotReceive().CreateClient(Arg.Any<DownloadClientDefinition>());
+    }
+
+    [Test]
+    public void PauseTorrent_returns_service_unavailable_when_client_in_backoff()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+        _syncService.GetClientStatus(1).Returns(BackoffStatus(1));
+
+        var result = _controller.PauseTorrent(1, "hash123");
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(503));
+        _downloadClientFactory.DidNotReceive().CreateClient(Arg.Any<DownloadClientDefinition>());
+    }
+
+    [Test]
+    public void ResumeTorrent_returns_service_unavailable_when_client_in_backoff()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+        _syncService.GetClientStatus(1).Returns(BackoffStatus(1));
+
+        var result = _controller.ResumeTorrent(1, "hash123");
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(503));
+        _downloadClientFactory.DidNotReceive().CreateClient(Arg.Any<DownloadClientDefinition>());
+    }
+
+    [Test]
+    public void DeleteTorrent_returns_service_unavailable_when_client_in_backoff()
+    {
+        var def = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent" };
+        _downloadClientFactory.Get(1).Returns(def);
+        _syncService.GetClientStatus(1).Returns(BackoffStatus(1));
+
+        var result = _controller.DeleteTorrent(1, "hash123", deleteData: false);
+
+        Assert.That(result, Is.InstanceOf<ObjectResult>());
+        Assert.That(((ObjectResult)result).StatusCode, Is.EqualTo(503));
+        _downloadClientFactory.DidNotReceive().CreateClient(Arg.Any<DownloadClientDefinition>());
+    }
+
     [Test]
     public void PauseTorrent_returns_bad_request_when_client_pause_fails()
     {
