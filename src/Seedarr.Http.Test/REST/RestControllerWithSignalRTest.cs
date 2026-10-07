@@ -60,6 +60,7 @@ public class RestControllerWithSignalRTest
     [SetUp]
     public void SetUp()
     {
+        MessageHub.ResetForTesting();
         _broadcaster = Substitute.For<IBroadcastSignalRMessage>();
         _broadcaster.IsConnected.Returns(true);
         _controller = new TestControllerWithSignalR(_broadcaster, TimeSpan.FromMilliseconds(200));
@@ -214,6 +215,33 @@ public class RestControllerWithSignalRTest
         _broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Action == ModelAction.Updated &&
             ((TestResource)m.Body).Value == 2));
+    }
+
+    [Test]
+    public void First_update_after_hub_reconnect_broadcasts_immediately_despite_recent_pre_disconnect_coalesce()
+    {
+        const int entityId = 42;
+        var leading = new TestModel { Id = entityId, Name = "Item", Value = 1 };
+        _controller.Handle(new ModelEvent<TestModel>(leading, ModelAction.Updated));
+
+        var coalesced = new TestModel { Id = entityId, Name = "Item", Value = 2 };
+        _controller.Handle(new ModelEvent<TestModel>(coalesced, ModelAction.Updated));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+
+        _broadcaster.IsConnected.Returns(false);
+        MessageHub.BumpConnectionEpochForTesting();
+        _controller.Handle(new ModelEvent<TestModel>(coalesced, ModelAction.Updated));
+
+        _broadcaster.IsConnected.Returns(true);
+        MessageHub.BumpConnectionEpochForTesting();
+        var afterReconnect = new TestModel { Id = entityId, Name = "Item", Value = 99 };
+        _controller.Handle(new ModelEvent<TestModel>(afterReconnect, ModelAction.Updated));
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _broadcaster.Received(2).BroadcastMessage(Arg.Any<SignalRMessage>());
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TestResource)m.Body).Value == 99));
     }
 
     [Test]

@@ -24,6 +24,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
     private readonly Dictionary<int, Timer> _pendingTimers = new();
     private readonly Dictionary<int, ulong> _entityGenerations = new();
     private readonly Dictionary<int, ulong> _pendingUpdateGenerations = new();
+    private long _observedConnectionEpoch = -1;
     private bool _disposed;
 
     protected RestControllerWithSignalR(IBroadcastSignalRMessage signalRBroadcaster)
@@ -62,7 +63,14 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
     [Microsoft.AspNetCore.Mvc.NonAction]
     public void Handle(ModelEvent<TModel> message)
     {
-        if (_disposed || !_signalRBroadcaster.IsConnected)
+        if (_disposed)
+        {
+            return;
+        }
+
+        RefreshCoalesceStateForHubEpoch();
+
+        if (!_signalRBroadcaster.IsConnected)
         {
             return;
         }
@@ -320,6 +328,34 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to broadcast SignalR model event for {0}", typeof(TModel).Name);
+        }
+    }
+
+    private void RefreshCoalesceStateForHubEpoch()
+    {
+        var epoch = MessageHub.ConnectionEpoch;
+        if (epoch == _observedConnectionEpoch)
+        {
+            return;
+        }
+
+        _observedConnectionEpoch = epoch;
+        ClearCoalesceThrottleState();
+    }
+
+    private void ClearCoalesceThrottleState()
+    {
+        lock (_syncLock)
+        {
+            foreach (var timer in _pendingTimers.Values)
+            {
+                timer.Dispose();
+            }
+
+            _pendingTimers.Clear();
+            _pendingUpdates.Clear();
+            _pendingUpdateGenerations.Clear();
+            _lastBroadcastTimes.Clear();
         }
     }
 
