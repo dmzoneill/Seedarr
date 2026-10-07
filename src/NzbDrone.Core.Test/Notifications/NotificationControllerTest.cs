@@ -231,6 +231,58 @@ public class NotificationControllerTest
     }
 
     [Test]
+    public void RestoreUrl_restores_password_style_query_params_masked_by_MaskUrl()
+    {
+        var existing = "https://example.com/hook?userKey=REALUSERKEY&password=secretpass";
+        var masked = NotificationController.MaskUrl(existing);
+
+        Assert.That(masked, Does.Contain("userKey=********"));
+        Assert.That(masked, Does.Contain("password=********"));
+
+        var restored = NotificationController.RestoreUrl(masked, existing);
+        Assert.That(restored, Is.EqualTo(existing));
+    }
+
+    [Test]
+    public void RestoreUrl_restores_userKey_and_token_query_params_together()
+    {
+        var existing = "https://example.com/hook?userKey=REALUSERKEY&token=REALTOKEN";
+        var masked = NotificationController.MaskUrl(existing);
+
+        var restored = NotificationController.RestoreUrl(masked, existing);
+        Assert.That(restored, Is.EqualTo(existing));
+    }
+
+    [Test]
+    public void Update_preserves_webhook_url_userKey_query_param_when_masked()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 11,
+            Name = "Webhook",
+            Implementation = "Webhook",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://example.com/hook?userKey=REALUSERKEY&token=REALTOKEN\"}"
+        };
+        _repository.Get(11).Returns(existing);
+
+        var updateResource = new NotificationResource
+        {
+            Id = 11,
+            Name = "Webhook",
+            Implementation = "Webhook",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://example.com/hook?userKey=********&token=********\"}"
+        };
+
+        var result = _controller.Update(11, updateResource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("REALUSERKEY") && d.Settings.Contains("REALTOKEN")));
+    }
+
+    [Test]
     public void ToResource_masks_basic_auth_in_url()
     {
         var definition = new NotificationDefinition

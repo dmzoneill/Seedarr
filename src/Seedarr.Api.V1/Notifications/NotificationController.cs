@@ -710,20 +710,8 @@ public class NotificationController : Controller
             }
         }
 
-        // Query parameters restoration
-        var existingParams = QueryParamSecretRegex.Match(existingUrl);
-        var incomingParams = QueryParamSecretRegex.Match(result);
-        if (existingParams.Success && incomingParams.Success)
-        {
-            var existingPrefix = existingParams.Groups[1].Value;
-            var incomingPrefix = incomingParams.Groups[1].Value;
-            if (string.Equals(existingPrefix, incomingPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                var existingToken = existingUrl.Substring(existingParams.Index + existingParams.Groups[1].Length).Split('&', '#')[0];
-                var incomingSuffix = result.Substring(incomingParams.Index + incomingParams.Length);
-                result = string.Concat(result.AsSpan(0, incomingParams.Index + incomingParams.Groups[1].Length), existingToken, incomingSuffix);
-            }
-        }
+        result = RestoreMaskedQueryParams(result, existingUrl, QueryParamSecretRegex);
+        result = RestoreMaskedQueryParams(result, existingUrl, QueryParamPasswordRegex);
 
         // Basic Auth restoration
         var existingAuth = UrlBasicAuthRegex.Match(existingUrl);
@@ -733,6 +721,46 @@ public class NotificationController : Controller
             var existingPass = existingAuth.Groups[2].Value;
             var incomingSuffix = result.Substring(incomingAuth.Groups[1].Length + incomingAuth.Groups[2].Length);
             result = string.Concat(result.AsSpan(0, incomingAuth.Groups[1].Length), existingPass, incomingSuffix);
+        }
+
+        return result;
+    }
+
+    private static string RestoreMaskedQueryParams(string incomingUrl, string existingUrl, Regex regex)
+    {
+        var result = incomingUrl;
+        var scanIndex = 0;
+        while (scanIndex < result.Length)
+        {
+            var incomingParams = regex.Match(result, scanIndex);
+            if (!incomingParams.Success)
+            {
+                break;
+            }
+
+            var incomingPrefix = incomingParams.Groups[1].Value;
+            var existingParams = regex.Match(existingUrl);
+            var restored = false;
+            while (existingParams.Success)
+            {
+                if (string.Equals(existingParams.Groups[1].Value, incomingPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    var existingToken = existingUrl.Substring(existingParams.Index + existingParams.Groups[1].Length).Split('&', '#')[0];
+                    var valueStart = incomingParams.Index + incomingParams.Groups[1].Length;
+                    var incomingSuffix = result.Substring(incomingParams.Index + incomingParams.Length);
+                    result = string.Concat(result.AsSpan(0, valueStart), existingToken, incomingSuffix);
+                    scanIndex = valueStart + existingToken.Length;
+                    restored = true;
+                    break;
+                }
+
+                existingParams = existingParams.NextMatch();
+            }
+
+            if (!restored)
+            {
+                scanIndex = incomingParams.Index + incomingParams.Length;
+            }
         }
 
         return result;
