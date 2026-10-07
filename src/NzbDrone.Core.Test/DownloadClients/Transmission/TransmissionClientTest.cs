@@ -756,6 +756,31 @@ public class TransmissionClientTest
     }
 
     [Test]
+    public async System.Threading.Tasks.Task GetSpeedLimitsAsync_should_send_empty_object_arguments_not_null()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""arguments"":{},""result"":""success""}");
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""arguments"":{},""result"":""success""}");
+        InjectMockClient(handler);
+
+        await _client.GetSpeedLimitsAsync();
+
+        Assert.That(handler.Requests, Has.Count.EqualTo(2));
+        var sessionGetBody = await handler.Requests[0].Content.ReadAsStringAsync();
+        var sessionStatsBody = await handler.Requests[1].Content.ReadAsStringAsync();
+        Assert.That(sessionGetBody, Does.Contain("\"session-get\""));
+        Assert.That(sessionGetBody, Does.Contain("\"arguments\":{}"));
+        Assert.That(sessionGetBody, Does.Not.Contain("\"arguments\":null"));
+        Assert.That(sessionStatsBody, Does.Contain("\"session-stats\""));
+        Assert.That(sessionStatsBody, Does.Contain("\"arguments\":{}"));
+        Assert.That(sessionStatsBody, Does.Not.Contain("\"arguments\":null"));
+    }
+
+    [Test]
     public async System.Threading.Tasks.Task GetSpeedLimitsAsync_should_return_parsed_speed_limits()
     {
         var handler = new MockHttpMessageHandler();
