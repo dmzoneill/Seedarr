@@ -118,10 +118,31 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
             using var transaction = connection.BeginTransaction();
             try
             {
-                connection.Execute(
-                    TableMapping.GetInsertSql<TModel>(_table),
-                    models,
-                    transaction);
+                if (_database.DatabaseType == DatabaseType.SQLite)
+                {
+                    connection.Execute(
+                        TableMapping.GetInsertSql<TModel>(_table),
+                        models,
+                        transaction);
+
+                    var lastId = connection.ExecuteScalar<long>(
+                        "SELECT last_insert_rowid();",
+                        transaction: transaction);
+                    var firstId = lastId - models.Count + 1;
+                    for (var i = 0; i < models.Count; i++)
+                    {
+                        models[i].Id = (int)(firstId + i);
+                    }
+                }
+                else
+                {
+                    var insertSql = TableMapping.GetInsertSql<TModel>(_table) + " RETURNING \"Id\"";
+                    for (var i = 0; i < models.Count; i++)
+                    {
+                        models[i].Id = connection.ExecuteScalar<int>(insertSql, models[i], transaction);
+                    }
+                }
+
                 transaction.Commit();
             }
             catch
