@@ -84,6 +84,24 @@ public class ArrConnectionController : Controller
         definition.Url = normalizedUrl;
         definition.SyncIntervalMinutes = Math.Max(1, definition.SyncIntervalMinutes);
 
+        if (!string.IsNullOrWhiteSpace(definition.ApiKey) && definition.ApiKey.Contains('*'))
+        {
+            if (definition.Id <= 0)
+            {
+                return BadRequest("ApiKey is masked; provide a full API key when creating a new connection.");
+            }
+
+            var source = _connectionFactory.Get(definition.Id);
+            if (source == null)
+            {
+                return BadRequest("ApiKey is masked; provide a full API key or a valid existing connection id to copy credentials from.");
+            }
+
+            definition.ApiKey = source.ApiKey;
+        }
+
+        definition.Id = 0;
+
         // Connectivity problems are not fatal on create: the arr instance may be
         // temporarily offline. Use the test-connection endpoint to validate.
         if (!_arrSyncService.TestConnectionDirect(definition))
