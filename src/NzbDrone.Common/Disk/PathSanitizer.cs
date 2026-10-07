@@ -293,6 +293,11 @@ public static class PathSanitizer
             return false;
         }
 
+        if (!System.IO.Path.IsPathFullyQualified(rootPath))
+        {
+            return false;
+        }
+
         try
         {
             var fullRoot = System.IO.Path.GetFullPath(rootPath);
