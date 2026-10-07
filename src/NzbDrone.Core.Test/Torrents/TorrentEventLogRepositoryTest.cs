@@ -244,4 +244,42 @@ public class TorrentEventLogRepositoryTest
     {
         Assert.DoesNotThrow(() => _subject.DeleteByTorrentId(9999));
     }
+
+    [Test]
+    public void GetByTorrentId_with_minimum_level_applies_count_after_level_filter()
+    {
+        var now = DateTime.UtcNow;
+        var logs = new List<TorrentEventLog>();
+
+        for (var i = 0; i < 120; i++)
+        {
+            logs.Add(new TorrentEventLog
+            {
+                TorrentId = 1,
+                TimeStamp = now.AddMinutes(i),
+                Level = "Info",
+                Source = "Sys",
+                Message = $"Info {i}"
+            });
+        }
+
+        for (var i = 0; i < 8; i++)
+        {
+            logs.Add(new TorrentEventLog
+            {
+                TorrentId = 1,
+                TimeStamp = now.AddMinutes(-10 - i),
+                Level = "Error",
+                Source = "Sys",
+                Message = $"Error {i}"
+            });
+        }
+
+        _subject.InsertMany(logs);
+
+        var errors = _subject.GetByTorrentId(1, 100, TorrentEventLogLevelRanks.Error);
+
+        Assert.That(errors, Has.Count.EqualTo(8));
+        Assert.That(errors.All(l => l.Level == "Error"), Is.True);
+    }
 }

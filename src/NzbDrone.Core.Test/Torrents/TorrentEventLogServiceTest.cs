@@ -156,6 +156,21 @@ public class TorrentEventLogServiceTest
     }
 
     [Test]
+    public void GetByTorrentId_with_minimum_level_delegates_to_repository()
+    {
+        var expected = new List<TorrentEventLog>
+        {
+            new() { Id = 2, TorrentId = 10, Level = "Error", Message = "Log 2" }
+        };
+        _repository.GetByTorrentId(10, 25, TorrentEventLogLevelRanks.Error).Returns(expected);
+
+        var result = _subject.GetByTorrentId(10, 25, TorrentEventLogLevelRanks.Error);
+
+        Assert.That(result, Is.SameAs(expected));
+        _repository.Received(1).GetByTorrentId(10, 25, TorrentEventLogLevelRanks.Error);
+    }
+
+    [Test]
     public async Task Invalid_inputs_are_ignored_and_not_enqueued()
     {
         _subject.Info(0, "System", "Invalid torrent ID");
