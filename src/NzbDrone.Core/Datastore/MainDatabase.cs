@@ -154,6 +154,12 @@ public class MainDatabase : IMainDatabase
 
     public void Optimize()
     {
+        if (DatabaseType == DatabaseType.PostgreSQL)
+        {
+            ExecutePostgreSqlMaintenanceCommand("ANALYZE;");
+            return;
+        }
+
         if (DatabaseType == DatabaseType.SQLite)
         {
             try
@@ -184,6 +190,26 @@ public class MainDatabase : IMainDatabase
             {
                 _logger.Warn(ex, "Failed to execute SQLite VACUUM");
             }
+        }
+        else if (DatabaseType == DatabaseType.PostgreSQL)
+        {
+            ExecutePostgreSqlMaintenanceCommand("VACUUM;");
+        }
+    }
+
+    private void ExecutePostgreSqlMaintenanceCommand(string commandText)
+    {
+        try
+        {
+            using var conn = _database.OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = commandText;
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to execute PostgreSQL maintenance ({0})", commandText.TrimEnd(';'));
+            throw;
         }
     }
 

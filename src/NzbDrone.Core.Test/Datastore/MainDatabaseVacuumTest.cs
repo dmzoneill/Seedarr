@@ -286,6 +286,42 @@ public class MainDatabaseVacuumTest
     }
 
     [Test]
+    public void Optimize_should_execute_analyze_for_postgres()
+    {
+        var mockDb = Substitute.For<IDatabase>();
+        mockDb.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        var mockConn = Substitute.For<IDbConnection>();
+        var mockCmd = Substitute.For<IDbCommand>();
+        mockConn.CreateCommand().Returns(mockCmd);
+        mockDb.OpenConnection().Returns(mockConn);
+        _dbFactory.Create(Arg.Any<DatabaseType>(), Arg.Any<string>()).Returns(mockDb);
+
+        var mainDb = new MainDatabase(_dbFactory, _connectionStringFactory, _appFolderInfo);
+        mainDb.Optimize();
+
+        Assert.That(mockCmd.CommandText, Is.EqualTo("ANALYZE;"));
+        mockCmd.Received(1).ExecuteNonQuery();
+    }
+
+    [Test]
+    public void Vacuum_should_execute_analyze_and_vacuum_for_postgres()
+    {
+        var mockDb = Substitute.For<IDatabase>();
+        mockDb.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        var mockConn = Substitute.For<IDbConnection>();
+        var mockCmd = Substitute.For<IDbCommand>();
+        mockConn.CreateCommand().Returns(mockCmd);
+        mockDb.OpenConnection().Returns(mockConn);
+        _dbFactory.Create(Arg.Any<DatabaseType>(), Arg.Any<string>()).Returns(mockDb);
+
+        var mainDb = new MainDatabase(_dbFactory, _connectionStringFactory, _appFolderInfo);
+        mainDb.Vacuum();
+
+        mockCmd.Received(2).ExecuteNonQuery();
+        Assert.That(mockCmd.CommandText, Is.EqualTo("VACUUM;"));
+    }
+
+    [Test]
     public void RealSqlite_should_create_wal_file_and_truncate_on_checkpoint()
     {
         var dbPath = Path.Combine(_tempDir, "real_wal.db");
