@@ -170,7 +170,7 @@ public class Scheduler : BackgroundService
                                 failed = true;
                                 var missingMessage = $"No task instance found for scheduled type: {next.TypeName}";
                                 _logger.Warn(missingMessage);
-                                _taskManager.RecordTaskFailed(next.TypeName, startTime, missingMessage);
+                                _taskManager.RecordTaskFailed(next.TypeName, startTime, missingMessage, null, ScheduledTaskTriggerSource.Scheduler);
                                 _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
                                 {
                                     Name = "TaskFailed",

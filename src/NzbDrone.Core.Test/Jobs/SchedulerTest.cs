@@ -170,6 +170,37 @@ public class SchedulerTest
     }
 
     [Test]
+    public async Task ExecuteAsync_should_broadcast_TaskFailed_not_TaskCompleted_when_task_instance_missing()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var scheduled = new ScheduledTask
+        {
+            TypeName = "NonExistent.TaskType",
+            Interval = 1,
+            LastExecution = DateTime.UtcNow.AddMinutes(-10)
+        };
+
+        _taskManager.GetNextScheduled().Returns(scheduled, (ScheduledTask)null);
+        _subject = new Scheduler(
+            _taskManager,
+            new List<IScheduledTask>(),
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.FromMilliseconds(10),
+            broadcaster);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await _subject.StartAsync(cts.Token);
+        await Task.Delay(500);
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskStarted"));
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskFailed"));
+        broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m => m.Name == "TaskCompleted"));
+    }
+
+    [Test]
     public async Task ExecuteAsync_should_record_task_finished_when_no_task_instance_found()
     {
         var scheduled = new ScheduledTask
