@@ -58,13 +58,15 @@ public class DelugeClient : IDownloadClient, IDisposable
 
     private string JsonUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}/json";
 
+    private int NextRequestId() => Interlocked.Increment(ref _requestId) - 1;
+
     private JsonDocument SendRequest(string method, object[] parameters)
     {
         var payload = new
         {
             method,
             @params = parameters,
-            id = _requestId++,
+            id = NextRequestId(),
         };
 
         var json = JsonSerializer.Serialize(payload);
@@ -107,7 +109,7 @@ public class DelugeClient : IDownloadClient, IDisposable
         {
             method,
             @params = parameters,
-            id = _requestId++,
+            id = NextRequestId(),
         };
 
         var json = JsonSerializer.Serialize(payload);
