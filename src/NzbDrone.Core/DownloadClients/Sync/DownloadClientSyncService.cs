@@ -156,7 +156,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 .GroupBy(t => t.InfoHash.ToLowerInvariant())
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
-            var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+            var clients = (_downloadClientFactory.All() ?? Enumerable.Empty<DownloadClientDefinition>()).Where(c => c.Enable).ToList();
 
             foreach (var definition in clients)
             {

@@ -1591,13 +1591,15 @@ public class DownloadClientSyncServiceTest
 
         _service.InjectedClient = mockClient;
         _torrentService.GetAll().Returns(new List<Torrent>());
-        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        var clientDef = new DownloadClientDefinition
         {
             Id = 1,
             Name = "Backoff qBit",
             ClientType = "QBitTorrent",
             Enable = true
-        });
+        };
+        _downloadClientFactory.Get(1).Returns(clientDef);
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
 
         _service.Sync();
         mockClient.ClearReceivedCalls();
