@@ -102,12 +102,13 @@ public static class TerminalWebSocketHandler
         }
         catch (Exception ex)
         {
-            var errPayload = JsonSerializer.Serialize(new { type = "output", data = $"\r\n\x1b[1;31m[Terminal session error: {ex.Message}]\x1b[0m\r\n" });
+            _logger.Warn(ex, "Failed to create terminal WebSocket session");
+            var errPayload = JsonSerializer.Serialize(new { type = "output", data = "\r\n\x1b[1;31m[Terminal session could not be started.]\x1b[0m\r\n" });
             var errBytes = Encoding.UTF8.GetBytes(errPayload);
             if (webSocket.State == WebSocketState.Open)
             {
                 await webSocket.SendAsync(new ArraySegment<byte>(errBytes), WebSocketMessageType.Text, true, CancellationToken.None);
-                await webSocket.CloseAsync(WebSocketCloseStatus.InternalServerError, ex.Message, CancellationToken.None);
+                await webSocket.CloseAsync(WebSocketCloseStatus.InternalServerError, "Terminal session failed", CancellationToken.None);
             }
 
             return;
