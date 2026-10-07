@@ -47,6 +47,13 @@ public class RingBufferTargetTest
     }
 
     [Test]
+    public void Constructor_should_reject_non_positive_capacity()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RingBufferTarget(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RingBufferTarget(-1));
+    }
+
+    [Test]
     public void GetEntries_should_return_empty_when_nothing_written()
     {
         var target = new RingBufferTarget();
