@@ -1,8 +1,8 @@
 {
   "slot": "core",
-  "updatedAt": "2026-10-07T01:30:00Z",
+  "updatedAt": "2026-10-07T01:09:33Z",
   "area": "src/NzbDrone.Core",
-  "currentSubfolder": "src/NzbDrone.Core/Authentication",
+  "currentSubfolder": "src/NzbDrone.Core/Datastore",
   "rotation": [
     "src/NzbDrone.Core/DownloadClients",
     "src/NzbDrone.Core/Blocklist",
@@ -11,11 +11,11 @@
     "src/NzbDrone.Core/Datastore"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Torrents",
-    "completedAt": "2026-10-07T01:30:00Z",
-    "issuesFiled": [1265, 1267, 1268],
+    "subfolder": "src/NzbDrone.Core/Authentication",
+    "completedAt": "2026-10-07T01:09:33Z",
+    "issuesFiled": [1269, 1270],
     "issuesReopened": [],
     "taskId": "core-hunter",
-    "note": "Torrents pass: static review of 64 files across root + Merkle/ + Package/. Filed #1265 (DiskSpaceRestored resumes without re-validating free space), #1267 (WatchFolder hot-loop on non-parse add failures), #1268 (MerkleTree FromLeafHashes FileLength overcount). Deduped open #945, #947, #949-#950, #963, #964, #1044, #1046, #1138-#1139, #1232-#1233, #1243 and related VPN/fastresume/recheck issues. No dotnet build/test."
+    "note": "Authentication pass: static review of 16 files (IdentityProvider*, LoginRateLimiter, SessionRevocation*, Policies/Roles). Filed #1269 (Update clears OIDC secret when ClientSecretEncrypted empty), #1270 (LoginRateLimiter stale failure count after lockout until IsRateLimited). Deduped open #987, #917, #986, #1058, #1062-#1064, #979, #1059, #1193, #1240 and related TestConnection/encrypt/revocation issues. No dotnet build/test."
   }
 }
