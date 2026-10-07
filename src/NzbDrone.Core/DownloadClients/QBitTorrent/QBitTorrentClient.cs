@@ -380,7 +380,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         catch (JsonException ex)
         {
             _logger.Error(ex, "Failed to parse qBittorrent items JSON");
-            return items;
+            throw new DownloadClientUnavailableException("qBittorrent returned an invalid torrent list response", ex);
         }
 
         using (torrents)

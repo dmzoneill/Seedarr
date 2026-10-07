@@ -487,17 +487,26 @@ public class QBitTorrentClientTest
     }
 
     [Test]
-    public void GetItems_should_return_empty_when_torrents_json_is_malformed()
+    public void GetItems_should_throw_when_torrents_json_is_malformed()
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, "Ok.");
         handler.Enqueue(HttpStatusCode.OK, "this is not valid json {{{");
         InjectMockClient(handler);
 
-        var result = _client.GetItems();
+        var ex = Assert.Throws<DownloadClientUnavailableException>(() => _client.GetItems());
+        Assert.That(ex.Message, Does.Contain("invalid torrent list"));
+    }
 
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+    [Test]
+    public void GetItems_should_throw_when_torrents_response_is_html()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(HttpStatusCode.OK, "<html><body>error</body></html>");
+        InjectMockClient(handler);
+
+        Assert.Throws<DownloadClientUnavailableException>(() => _client.GetItems());
     }
 
     [Test]
