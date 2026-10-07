@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerServer;
@@ -137,5 +139,15 @@ public class TrackerServerControllerTests
         var result = _controller.GetPeersForTorrent("hash1");
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
+    }
+
+    [Test]
+    public void Controller_should_have_Authorize_Reader_attribute()
+    {
+        var type = typeof(TrackerServerController);
+        var attr = type.GetCustomAttributes(typeof(AuthorizeAttribute), true).FirstOrDefault() as AuthorizeAttribute;
+
+        Assert.That(attr, Is.Not.Null);
+        Assert.That(attr.Policy, Is.EqualTo(Policies.Reader));
     }
 }
