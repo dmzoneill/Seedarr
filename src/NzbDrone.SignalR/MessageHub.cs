@@ -373,19 +373,21 @@ public class MessageHub : Hub
 
         var httpContext = Context?.GetHttpContext();
         var torrentService = _torrentService ?? (httpContext?.RequestServices?.GetService(typeof(ITorrentService)) as ITorrentService);
-        if (torrentService != null)
+        if (torrentService == null)
         {
-            try
-            {
-                if (torrentService.Get(torrentId) == null)
-                {
-                    return;
-                }
-            }
-            catch
+            return;
+        }
+
+        try
+        {
+            if (torrentService.Get(torrentId) == null)
             {
                 return;
             }
+        }
+        catch
+        {
+            return;
         }
 
         await Groups.AddToGroupAsync(Context.ConnectionId, $"torrent-{torrentId}");
