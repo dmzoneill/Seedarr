@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using NLog;
 using NLog.Config;
@@ -199,6 +200,21 @@ namespace NzbDrone.Core.Test.Configuration
 
             _subject.Initialize();
 
+            Assert.That(LogManager.Configuration.FindTargetByName<FileTarget>("file"), Is.Not.Null);
+        }
+
+        [Test]
+        public void ReconfigureLogging_should_add_provisional_file_target_before_reading_config()
+        {
+            var config = new LoggingConfiguration();
+            var consoleTarget = new ConsoleTarget("console");
+            config.AddTarget(consoleTarget);
+            config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget);
+            LogManager.Configuration = config;
+
+            _configService.When(x => x.LogToFile).Do(_ => throw new InvalidOperationException("config not ready"));
+
+            Assert.Throws<InvalidOperationException>(() => _subject.ReconfigureLogging());
             Assert.That(LogManager.Configuration.FindTargetByName<FileTarget>("file"), Is.Not.Null);
         }
 
