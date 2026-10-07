@@ -553,6 +553,36 @@ public class NotificationControllerTest
     }
 
     [Test]
+    public void Update_with_partial_json_preserves_existing_trigger_flags()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 5,
+            Name = "Webhook",
+            Implementation = "Webhook",
+            OnGrab = false,
+            OnMediaInspected = true,
+            OnDownloadComplete = false,
+            OnSeedGoalReached = false,
+            OnHealthIssue = false,
+            OnHealthRestored = false,
+            OnManualInteractionRequired = false,
+            OnBackupFailed = false,
+            Settings = "{\"url\":\"https://example.com/hook\"}",
+        };
+        _repository.Get(5).Returns(existing);
+
+        using var doc = JsonDocument.Parse("{\"name\":\"Renamed\"}");
+        var result = _controller.Update(5, doc.RootElement);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Name == "Renamed" &&
+            d.OnGrab == false &&
+            d.OnMediaInspected == true));
+    }
+
+    [Test]
     public void Update_with_no_active_triggers_returns_bad_request()
     {
         var resource = new NotificationResource
