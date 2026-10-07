@@ -259,20 +259,20 @@ public class ArrConnectionController : Controller
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 return StatusCode((int)response.StatusCode);
             }
 
             var contentType = response.Content.Headers.ContentType?.ToString() ?? "image/jpeg";
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
             if (Response != null)
             {
                 Response.Headers["Cache-Control"] = "public, max-age=86400";
             }
 
-            var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            return File(stream, contentType);
+            return File(bytes, contentType);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
