@@ -1,12 +1,15 @@
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Trackers.Metrics;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Trackers;
 
 [V1ApiController("trackermetrics")]
+[Authorize(Policy = Policies.Reader)]
 public class TrackerMetricsController : Controller
 {
     private readonly ITrackerMetricService _trackerMetricService;
@@ -65,6 +68,7 @@ public class TrackerMetricsController : Controller
     }
 
     [HttpPost("{id:int}/reset")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Reset(int id)
     {
         _trackerMetricService.ResetMetrics(id);
@@ -72,6 +76,7 @@ public class TrackerMetricsController : Controller
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = Policies.Operator)]
     public ActionResult Delete(int id)
     {
         _trackerMetricService.DeleteMetric(id);
