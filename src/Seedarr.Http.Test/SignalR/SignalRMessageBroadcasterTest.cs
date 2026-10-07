@@ -314,7 +314,7 @@ public class SignalRMessageBroadcasterTest
     }
 
     [Test]
-    public void TrackerSignalREventHandler_handles_TrackerStatusChangedEvent_and_broadcasts()
+    public void TrackerSignalREventHandler_handles_TrackerStatusChangedEvent_and_broadcasts_update_only()
     {
         var handler = new TrackerSignalREventHandler(_broadcaster);
         var torrent = new Torrent { Id = 11, Name = "Test Torrent 2" };
@@ -324,7 +324,7 @@ public class SignalRMessageBroadcasterTest
         handler.Handle(statusEvent);
 
         _clientProxy.Received(1).SendCoreAsync("trackerUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
-        _clientProxy.Received(1).SendCoreAsync("trackerAnnounced", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        _clientProxy.DidNotReceive().SendCoreAsync("trackerAnnounced", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
