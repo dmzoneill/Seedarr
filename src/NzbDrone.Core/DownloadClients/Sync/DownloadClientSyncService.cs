@@ -685,7 +685,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 TotalSize = matchingItem.TotalSize,
                 Downloaded = downloaded,
                 IsPrivate = matchingItem.IsPrivate,
-                TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
+                TrackerUrl = TrackerAnnounceUrl.FirstAnnounceUrl(clientTrackers),
                 DateAdded = DateTime.UtcNow,
                 Status = MapClientStatus(matchingItem.Status, remaining, total),
                 Category = resolvedCategory,
@@ -830,7 +830,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         foreach (var tr in clientTrackers)
         {
             var clean = tr.Trim();
-            if (!string.IsNullOrEmpty(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
+            if (TrackerAnnounceUrl.IsAnnounceUrl(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
             {
                 newTrackers.Add(new TrackerEntry
                 {

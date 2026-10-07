@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.DownloadClients.QBitTorrent;
 
@@ -469,7 +470,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 if (tr.TryGetProperty("url", out var urlProp))
                 {
                     var url = urlProp.GetString();
-                    if (!string.IsNullOrWhiteSpace(url))
+                    if (TrackerAnnounceUrl.IsAnnounceUrl(url))
                     {
                         trackers.Add(url.Trim());
                     }
