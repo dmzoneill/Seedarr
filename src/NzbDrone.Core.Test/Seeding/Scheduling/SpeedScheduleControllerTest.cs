@@ -389,6 +389,47 @@ public class SpeedScheduleControllerTest
     }
 
     [Test]
+    public void Update_with_omitted_optional_fields_preserves_existing_enabled_speeds_and_priority()
+    {
+        var existing = new SpeedSchedule
+        {
+            Id = 1,
+            Name = "Weekday",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(8, 0),
+            EndTime = new TimeOnly(17, 0),
+            IsEnabled = true,
+            MaxUploadSpeed = SpeedLimits.Unlimited,
+            MaxDownloadSpeed = SpeedLimits.Unlimited,
+            Priority = 5
+        };
+        _speedScheduler.Get(1).Returns(existing);
+        _speedScheduler.Update(Arg.Any<SpeedSchedule>()).Returns(callInfo => callInfo.Arg<SpeedSchedule>());
+
+        var resource = new SpeedScheduleResource
+        {
+            Name = "Renamed",
+            Days = 127,
+            StartTime = "08:00",
+            EndTime = "17:00"
+        };
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(result.Value.Name, Is.EqualTo("Renamed"));
+        Assert.That(result.Value.IsEnabled, Is.True);
+        Assert.That(result.Value.MaxUploadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
+        Assert.That(result.Value.MaxDownloadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
+        Assert.That(result.Value.Priority, Is.EqualTo(5));
+        _speedScheduler.Received(1).Update(Arg.Is<SpeedSchedule>(s =>
+            s.IsEnabled &&
+            s.MaxUploadSpeed == SpeedLimits.Unlimited &&
+            s.MaxDownloadSpeed == SpeedLimits.Unlimited &&
+            s.Priority == 5));
+    }
+
+    [Test]
     public void GetActiveLimits_when_schedule_is_active_with_speed_boost_does_not_clamp_to_base_config()
     {
         _configService.AlternativeSpeedEnabled.Returns(false);
