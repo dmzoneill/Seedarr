@@ -241,7 +241,7 @@ public class MessageHub : Hub
                                 {
                                     httpContext.Request.Headers["Authorization"] = originalAuth;
                                 }
-                                else if (!isAuth)
+                                else
                                 {
                                     httpContext.Request.Headers.Remove("Authorization");
                                 }

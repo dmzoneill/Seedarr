@@ -308,6 +308,8 @@ public class MessageHubSnapshotAndAuthTest
         _callerContext.DidNotReceive().Abort();
         Assert.That(MessageHub.IsConnected, Is.True);
         Assert.That(_httpContext.User?.Identity?.Name, Is.EqualTo("jwtuser"));
+        Assert.That(_httpContext.Request.Headers.ContainsKey("Authorization"), Is.False,
+            "Injected Authorization header must be removed after access_token scheme probing");
     }
 
     [Test]
