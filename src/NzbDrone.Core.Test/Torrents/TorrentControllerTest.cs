@@ -1696,6 +1696,20 @@ public class TorrentControllerTest
         Assert.That(model.Threshold, Is.EqualTo(75));
     }
 
+    [TestCase("/downloads/../../etc")]
+    [TestCase("../../etc")]
+    [TestCase("/downloads/\0bad")]
+    public void Upload_returns_BadRequest_when_save_path_is_invalid(string invalidPath)
+    {
+        using var ms = new MemoryStream(new byte[] { 1, 2, 3 });
+        var formFile = new FormFile(ms, 0, ms.Length, "file", "test.torrent");
+
+        var result = _controller.Upload([formFile], savePath: invalidPath);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        _torrentImportService.DidNotReceive().ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>());
+    }
+
     [Test]
     public void Upload_returns_BadRequest_when_all_files_are_zero_length()
     {

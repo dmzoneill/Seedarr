@@ -1523,6 +1523,18 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return BadRequest("No torrent file provided");
         }
 
+        if (!string.IsNullOrWhiteSpace(savePath))
+        {
+            try
+            {
+                CategoryService.ValidateSavePath(savePath);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         var added = new List<TorrentResource>();
         var failed = new List<TorrentUploadFailure>();
 
