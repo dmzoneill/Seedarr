@@ -1,6 +1,6 @@
 {
   "slot": "api",
-  "updatedAt": "2026-10-07T01:25:00Z",
+  "updatedAt": "2026-10-07T00:28:00Z",
   "area": "src/Seedarr.Api.V1",
   "rotation": [
     "src/Seedarr.Api.V1/Indexers",
@@ -14,13 +14,13 @@
     "src/Seedarr.Api.V1/Notifications",
     "src/Seedarr.Api.V1/ArrIntegration"
   ],
-  "currentSubfolder": "src/Seedarr.Api.V1/Indexers",
+  "currentSubfolder": "src/Seedarr.Api.V1/Torrents",
   "lastPass": {
-    "subfolder": "src/Seedarr.Api.V1/ArrIntegration",
-    "completedAt": "2026-10-07T01:25:00Z",
-    "issuesFiled": [1274],
+    "subfolder": "src/Seedarr.Api.V1/Indexers",
+    "completedAt": "2026-10-07T00:28:00Z",
+    "issuesFiled": [1278],
     "issuesReopened": [],
-    "taskId": "api-hunter-pelican",
-    "notes": "Static review: 3 files (ArrConnectionController.cs, ArrSyncController.cs, WebhookReceiverController.cs). Deduped against open issues (#1082–#1084, #1088–#1091, #1197–#1198, #886, etc.). Filed #1274 (GetImageProxy does not dispose HttpResponseMessage on failed upstream responses). No dotnet build/test."
+    "taskId": "api-hunter-albatross",
+    "notes": "Static review: 4 files (IndexerController.cs, RssRuleController.cs, RssRuleResource.cs, RssGrabHistoryResource.cs). Deduped against open indexer/rss issues (#913–#1207, #927–#1115, #958, etc.). Filed #1278 (GET /rssrules/history limit<=0 unbounded read). No dotnet build/test."
   }
 }
