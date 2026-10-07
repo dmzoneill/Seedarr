@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using NzbDrone.Common.Serializer;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
@@ -31,7 +29,7 @@ public class DownloadClientController : Controller
     public ActionResult<List<DownloadClientDefinition>> GetAll()
     {
         var definitions = _downloadClientFactory.All();
-        return Ok(definitions.Select(d => EnrichWithStatus(MaskPassword(d))).ToList());
+        return Ok(definitions.Select(d => MaskPassword(EnrichWithStatus(d))).ToList());
     }
 
     [HttpGet("{id}")]
@@ -43,7 +41,7 @@ public class DownloadClientController : Controller
             return NotFound(new { message = $"Download client {id} not found" });
         }
 
-        return Ok(EnrichWithStatus(MaskPassword(definition)));
+        return Ok(MaskPassword(EnrichWithStatus(definition)));
     }
 
     [HttpPost]
@@ -80,39 +78,17 @@ public class DownloadClientController : Controller
     }
 
     [HttpPut("{id}")]
-    public ActionResult Update(int id, [FromBody] JsonElement body)
+    public ActionResult Update(int id, [FromBody] DownloadClientDefinition definition)
     {
-        if (body.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        if (definition == null)
         {
             return BadRequest("Request body cannot be null");
         }
 
-        if (body.ValueKind != JsonValueKind.Object)
+        var validationError = ValidateDefinition(definition);
+        if (validationError != null)
         {
-            return BadRequest("Request body must be a JSON object");
-        }
-
-        var presentPropertyKeys = body.EnumerateObject()
-            .Select(property => property.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var incoming = JsonSerializer.Deserialize<DownloadClientDefinition>(body, STJson.GetSerializerSettings());
-        if (incoming == null)
-        {
-            return BadRequest("Request body cannot be null");
-        }
-
-        return UpdateDefinition(id, incoming, presentPropertyKeys);
-    }
-
-    [NonAction]
-    public ActionResult Update(int id, DownloadClientDefinition definition) => UpdateDefinition(id, definition, null);
-
-    private ActionResult UpdateDefinition(int id, DownloadClientDefinition incoming, IReadOnlySet<string> presentPropertyKeys)
-    {
-        if (incoming == null)
-        {
-            return BadRequest("Request body cannot be null");
+            return BadRequest(validationError);
         }
 
         var existing = _downloadClientFactory.Get(id);
@@ -121,17 +97,7 @@ public class DownloadClientController : Controller
             return NotFound(new { message = $"Download client {id} not found" });
         }
 
-        var definition = presentPropertyKeys == null
-            ? incoming
-            : DownloadClientUpdateMerger.Merge(existing, incoming, presentPropertyKeys);
-
         definition.Id = id;
-
-        var validationError = ValidateDefinition(definition);
-        if (validationError != null)
-        {
-            return BadRequest(validationError);
-        }
 
         if (!string.IsNullOrWhiteSpace(definition.ClientType))
         {
@@ -148,8 +114,8 @@ public class DownloadClientController : Controller
             definition.ConfigContract = $"{definition.ClientType}Settings";
         }
 
-        if (presentPropertyKeys == null &&
-            (string.IsNullOrWhiteSpace(definition.Password) || definition.Password == PasswordMask))
+        // If password is omitted, empty, or masked, preserve the existing value
+        if (string.IsNullOrWhiteSpace(definition.Password) || definition.Password == PasswordMask)
         {
             definition.Password = existing.Password;
         }
@@ -167,18 +133,12 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id}/test")]
-    public ActionResult<DownloadClientTestResult> TestConnection(int id, [FromQuery] bool force = false)
+    public ActionResult<DownloadClientTestResult> TestConnection(int id)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
-        }
-
-        var backoffResult = TryRejectClientBackoff(id, force);
-        if (backoffResult != null)
-        {
-            return backoffResult;
         }
 
         if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
@@ -201,28 +161,18 @@ public class DownloadClientController : Controller
         }
 
         var result = client.TestConnectionDetailed();
-        _syncService.RecordConnectionTestResult(id, result);
         return Ok(result);
     }
 
     [HttpPost("test")]
-    public ActionResult<DownloadClientTestResult> TestDirect([FromBody] DownloadClientDefinition definition, [FromQuery] bool force = false)
+    public ActionResult<DownloadClientTestResult> TestDirect([FromBody] DownloadClientDefinition definition)
     {
         if (definition == null)
         {
             return BadRequest("Request body cannot be null");
         }
 
-        if (definition.Id > 0)
-        {
-            var backoffResult = TryRejectClientBackoff(definition.Id, force);
-            if (backoffResult != null)
-            {
-                return backoffResult;
-            }
-        }
-
-        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
+        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}"))
         {
             return BadRequest("Target host/URL is not permitted.");
         }
@@ -251,11 +201,6 @@ public class DownloadClientController : Controller
         }
 
         var result = client.TestConnectionDetailed();
-        if (definition.Id > 0)
-        {
-            _syncService.RecordConnectionTestResult(definition.Id, result);
-        }
-
         return Ok(result);
     }
 
@@ -294,18 +239,12 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id:int}/torrents/{infoHash}/pause")]
-    public ActionResult PauseTorrent(int id, string infoHash, [FromQuery] bool force = false)
+    public ActionResult PauseTorrent(int id, string infoHash)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
-        }
-
-        var backoffResult = TryRejectClientBackoff(id, force);
-        if (backoffResult != null)
-        {
-            return backoffResult;
         }
 
         IDownloadClient client;
@@ -332,18 +271,12 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id:int}/torrents/{infoHash}/resume")]
-    public ActionResult ResumeTorrent(int id, string infoHash, [FromQuery] bool force = false)
+    public ActionResult ResumeTorrent(int id, string infoHash)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
-        }
-
-        var backoffResult = TryRejectClientBackoff(id, force);
-        if (backoffResult != null)
-        {
-            return backoffResult;
         }
 
         IDownloadClient client;
@@ -370,18 +303,12 @@ public class DownloadClientController : Controller
     }
 
     [HttpDelete("{id:int}/torrents/{infoHash}")]
-    public ActionResult DeleteTorrent(int id, string infoHash, [FromQuery] bool deleteData = false, [FromQuery] bool force = false)
+    public ActionResult DeleteTorrent(int id, string infoHash, [FromQuery] bool deleteData = false)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
         {
             return NotFound(new { message = $"Download client {id} not found" });
-        }
-
-        var backoffResult = TryRejectClientBackoff(id, force);
-        if (backoffResult != null)
-        {
-            return backoffResult;
         }
 
         IDownloadClient client;
@@ -408,8 +335,20 @@ public class DownloadClientController : Controller
     }
 
     [HttpGet("{id}/items")]
-    public ActionResult<List<DownloadClientRemoteItem>> GetItems(int id)
+    public ActionResult<List<DownloadClientRemoteItem>> GetItems(int id, [FromQuery] bool force = false)
     {
+        var definition = _downloadClientFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
+        }
+
         try
         {
             var items = _syncService.GetClientItems(id);
@@ -443,8 +382,20 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id}/import/{infoHash}")]
-    public ActionResult<Torrent> ImportTorrent(int id, string infoHash)
+    public ActionResult<Torrent> ImportTorrent(int id, string infoHash, [FromQuery] bool force = false)
     {
+        var definition = _downloadClientFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
+        }
+
         try
         {
             var torrent = _syncService.ImportTorrent(id, infoHash);
@@ -466,8 +417,20 @@ public class DownloadClientController : Controller
 
     [HttpPost("{id}/import")]
     [HttpPost("{id}/import-torrents")]
-    public ActionResult<BatchImportResponse> ImportTorrents(int id, [FromBody] DownloadClientImportRequest request)
+    public ActionResult<BatchImportResponse> ImportTorrents(int id, [FromBody] DownloadClientImportRequest request, [FromQuery] bool force = false)
     {
+        var definition = _downloadClientFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound(new { message = $"Download client {id} not found" });
+        }
+
+        var backoffResult = TryRejectClientBackoff(id, force);
+        if (backoffResult != null)
+        {
+            return backoffResult;
+        }
+
         try
         {
             var result = _syncService.ImportTorrents(id, request?.InfoHashes ?? new List<string>());
@@ -477,36 +440,10 @@ public class DownloadClientController : Controller
         {
             return BadRequest(new { message = ex.Message });
         }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
         catch (Exception ex)
         {
             return StatusCode(500, new { message = $"Failed to import torrents: {ex.Message}" });
         }
-    }
-
-    private ActionResult TryRejectClientBackoff(int clientId, bool force)
-    {
-        if (force)
-        {
-            return null;
-        }
-
-        var status = _syncService.GetClientStatus(clientId);
-        if (status?.IsInBackoff != true)
-        {
-            return null;
-        }
-
-        return StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status503ServiceUnavailable, new
-        {
-            message = $"Download client is in backoff until {status.BackoffUntil:O}.",
-            code = "backoff",
-            clientId,
-            backoffUntil = status.BackoffUntil,
-        });
     }
 
     private DownloadClientDefinition EnrichWithStatus(DownloadClientDefinition definition)
@@ -563,11 +500,6 @@ public class DownloadClientController : Controller
         if (definition.Port < 1 || definition.Port > 65535)
         {
             return "Port must be between 1 and 65535";
-        }
-
-        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
-        {
-            return "Target host/URL is not permitted.";
         }
 
         return null;

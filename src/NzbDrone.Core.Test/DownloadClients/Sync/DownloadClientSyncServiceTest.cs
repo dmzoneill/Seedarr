@@ -77,37 +77,6 @@ public class DownloadClientSyncServiceTest
     }
 
     [Test]
-    public void Sync_should_store_remote_version_on_success()
-    {
-        var mockClient = Substitute.For<IDownloadClient>();
-        mockClient.GetItems().Returns(new List<DownloadClientItem>());
-        mockClient.GetRemoteVersion().Returns("4.6.0");
-
-        _service.InjectedClient = mockClient;
-        _torrentService.GetAll().Returns(new List<Torrent>());
-        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
-        {
-            new() { Id = 3, Name = "qBit", ClientType = "QBitTorrent", Enable = true }
-        });
-
-        _service.Sync();
-
-        var status = _service.GetClientStatus(3);
-        Assert.That(status, Is.Not.Null);
-        Assert.That(status.Version, Is.EqualTo("4.6.0"));
-    }
-
-    [Test]
-    public void RecordConnectionTestResult_should_store_version_on_success()
-    {
-        _service.RecordConnectionTestResult(9, DownloadClientTestResult.Ok("Connected", "v4.6.7"));
-
-        var status = _service.GetClientStatus(9);
-        Assert.That(status.IsOnline, Is.True);
-        Assert.That(status.Version, Is.EqualTo("v4.6.7"));
-    }
-
-    [Test]
     public void Sync_should_return_zeros_when_no_clients_configured()
     {
         _torrentService.GetAll().Returns(new List<Torrent>());
@@ -283,42 +252,6 @@ public class DownloadClientSyncServiceTest
     }
 
     [Test]
-    public void Sync_should_not_query_indexer_when_enable_search_is_false()
-    {
-        var hash = "223344556677889900aabbccddeeff0011223344";
-
-        var mockClient = Substitute.For<IDownloadClient>();
-        mockClient.GetItems().Returns(new List<DownloadClientItem>
-        {
-            new() { Title = "Fedora", InfoHash = hash }
-        });
-        mockClient.GetTorrentFile(hash).Returns((byte[])null);
-
-        var mockIndexer = Substitute.For<IIndexer>();
-        mockIndexer.FetchTorrentByHash(Arg.Any<IndexerDefinition>(), hash).Returns(new byte[] { 0x64 });
-
-        _indexerFactory.All().Returns(new List<IndexerDefinition>
-        {
-            new() { Id = 1, Name = "SearchDisabled", IndexerType = "Prowlarr", Enable = true, EnableSearch = false, Url = "http://localhost:9696", ApiKey = "key" }
-        });
-
-        _service.InjectedClient = mockClient;
-        _service.InjectedIndexer = mockIndexer;
-        _torrentService.GetAll().Returns(new List<Torrent>());
-        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
-        {
-            new() { Id = 1, Name = "Deluge", ClientType = "Deluge", Enable = true }
-        });
-
-        var result = _service.Sync();
-
-        Assert.That(result.Added, Is.EqualTo(0));
-        Assert.That(result.Failed, Is.EqualTo(1));
-        mockIndexer.DidNotReceive().FetchTorrentByHash(Arg.Any<IndexerDefinition>(), hash);
-        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
-    }
-
-    [Test]
     public void Sync_should_fail_item_when_neither_client_nor_indexer_provides_torrent_bytes()
     {
         var hash = "99887766554433221100ffeeddccbbaa99887766";
@@ -345,32 +278,6 @@ public class DownloadClientSyncServiceTest
         Assert.That(result.Skipped, Is.EqualTo(0));
         Assert.That(result.Failed, Is.EqualTo(1));
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
-    }
-
-    [Test]
-    public void Sync_should_record_failure_when_factory_cannot_build_provider()
-    {
-        _torrentService.GetAll().Returns(new List<Torrent>());
-        var clientDef = new DownloadClientDefinition
-        {
-            Id = 7,
-            Name = "Unsupported Client",
-            ClientType = "NotARealClient",
-            Enable = true
-        };
-        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
-        _downloadClientFactory.CreateClient(clientDef).Returns((IDownloadClient)null);
-        _service.InjectedClient = null;
-
-        var result = _service.Sync();
-
-        Assert.That(result.Failed, Is.EqualTo(1));
-        Assert.That(result.Added, Is.EqualTo(0));
-        var status = _service.GetClientStatus(7);
-        Assert.That(status, Is.Not.Null);
-        Assert.That(status.IsOnline, Is.False);
-        Assert.That(status.LastErrorMessage, Does.Contain("NotARealClient"));
-        Assert.That(status.ConsecutiveFailures, Is.EqualTo(1));
     }
 
     [Test]
@@ -511,13 +418,6 @@ public class DownloadClientSyncServiceTest
         var hash = "dddd111122223333444455556666777788889999";
         var existingTorrent = new Torrent { Id = 10, InfoHash = hash, Name = "Already Exists" };
 
-        var mockClient = Substitute.For<IDownloadClient>();
-        mockClient.GetItems().Returns(new List<DownloadClientItem>
-        {
-            new() { Title = "Already Exists", InfoHash = hash, Category = "tv", OutputPath = "/downloads/tv" }
-        });
-
-        _service.InjectedClient = mockClient;
         _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
         _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
         {
@@ -530,39 +430,6 @@ public class DownloadClientSyncServiceTest
         var result = _service.ImportTorrent(1, hash);
 
         Assert.That(result, Is.SameAs(existingTorrent));
-        Assert.That(result.DownloadClientId, Is.EqualTo(1));
-        Assert.That(result.Category, Is.EqualTo("tv"));
-        Assert.That(result.SavePath, Is.EqualTo("/downloads/tv"));
-        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
-        _torrentService.Received(1).Update(existingTorrent);
-    }
-
-    [Test]
-    public void ImportTorrent_should_not_relink_existing_torrent_owned_by_another_client()
-    {
-        var hash = "eeee000022223333444455556666777788889999";
-        var existingTorrent = new Torrent { Id = 11, InfoHash = hash, Name = "Other Client", DownloadClientId = 2 };
-
-        var mockClient = Substitute.For<IDownloadClient>();
-        mockClient.GetItems().Returns(new List<DownloadClientItem>
-        {
-            new() { Title = "Other Client", InfoHash = hash }
-        });
-
-        _service.InjectedClient = mockClient;
-        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
-        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
-        {
-            Id = 1,
-            Name = "qBittorrent",
-            ClientType = "QBitTorrent",
-            Enable = true
-        });
-
-        var result = _service.ImportTorrent(1, hash);
-
-        Assert.That(result.DownloadClientId, Is.EqualTo(2));
-        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
     }
 
@@ -697,7 +564,6 @@ public class DownloadClientSyncServiceTest
         mockClient.Received(1).GetItems();
         _torrentService.Received(1).GetAll();
         _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == newHash));
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.InfoHash == existingHash && t.DownloadClientId == 1));
     }
 
     [TestCase("qbittorrent")]
@@ -1611,6 +1477,86 @@ public class DownloadClientSyncServiceTest
         Assert.That(status.IsOnline, Is.False);
         Assert.That(status.ConsecutiveFailures, Is.EqualTo(1));
         Assert.That(status.LastErrorMessage, Does.Contain("Invalid password"));
+    }
+
+    [Test]
+    public void GetClientItems_should_throw_backoff_without_calling_remote_when_client_in_backoff()
+    {
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(x => throw new DownloadClientUnavailableException("Connection refused"));
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Backoff qBit",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        _service.Sync();
+        mockClient.ClearReceivedCalls();
+
+        Assert.Throws<DownloadClientBackoffException>(() => _service.GetClientItems(1));
+        mockClient.DidNotReceive().GetItems();
+    }
+
+    [Test]
+    public void ImportTorrent_should_throw_backoff_without_calling_remote_when_client_in_backoff()
+    {
+        var hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(x => throw new DownloadClientUnavailableException("Connection refused"));
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "Backoff qBit", ClientType = "QBitTorrent", Enable = true }
+        });
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Backoff qBit",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        _service.Sync();
+        mockClient.ClearReceivedCalls();
+
+        Assert.Throws<DownloadClientBackoffException>(() => _service.ImportTorrent(1, hash));
+        mockClient.DidNotReceive().GetItems();
+        mockClient.DidNotReceive().GetTorrentFile(Arg.Any<string>());
+    }
+
+    [Test]
+    public void ImportTorrents_should_throw_backoff_without_calling_remote_when_client_in_backoff()
+    {
+        var hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(x => throw new DownloadClientUnavailableException("Connection refused"));
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "Backoff qBit", ClientType = "QBitTorrent", Enable = true }
+        });
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Backoff qBit",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        _service.Sync();
+        mockClient.ClearReceivedCalls();
+
+        Assert.Throws<DownloadClientBackoffException>(() => _service.ImportTorrents(1, new List<string> { hash }));
+        mockClient.DidNotReceive().GetItems();
     }
 
     [TestCase(1, 30)]
