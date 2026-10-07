@@ -209,9 +209,8 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
                 TorrentId = torrentId,
                 Success = result.Success,
                 ExecutionTimeMs = result.ExecutionTimeMs,
-                OutputLog = result.OutputLog,
-                Error = result.Error,
-                Result = result
+                OutputLog = TruncateLogPreview(result.OutputLog),
+                Error = result.Error
             }
         });
         return Ok(result);
@@ -245,9 +244,8 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
                 TorrentId = request.TorrentId,
                 Success = result.Success,
                 ExecutionTimeMs = result.ExecutionTimeMs,
-                OutputLog = result.OutputLog,
-                Error = result.Error,
-                Result = result
+                OutputLog = TruncateLogPreview(result.OutputLog),
+                Error = result.Error
             }
         });
         return Ok(result);
@@ -285,6 +283,16 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
         return ToResource(model);
     }
 
+    private static string? TruncateLogPreview(string? log)
+    {
+        if (log != null && log.Length > MaxListLogPreviewCharacters)
+        {
+            return string.Concat(log.AsSpan(0, MaxListLogPreviewCharacters), "...");
+        }
+
+        return log;
+    }
+
     private static AutomationScriptResource ToResource(AutomationScript model, bool truncateLog = false)
     {
         if (model == null)
@@ -292,11 +300,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
             return null!;
         }
 
-        var log = model.LastExecutionLog;
-        if (truncateLog && log != null && log.Length > MaxListLogPreviewCharacters)
-        {
-            log = string.Concat(log.AsSpan(0, MaxListLogPreviewCharacters), "...");
-        }
+        var log = truncateLog ? TruncateLogPreview(model.LastExecutionLog) : model.LastExecutionLog;
 
         return new AutomationScriptResource
         {

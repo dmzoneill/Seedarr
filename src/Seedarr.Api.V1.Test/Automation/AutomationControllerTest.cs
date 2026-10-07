@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -386,5 +387,80 @@ public class AutomationControllerTest
             Arg.Any<AutomationScript>(),
             Arg.Any<int?>(),
             Arg.Any<Dictionary<string, object>>());
+    }
+
+    [Test]
+    public void Run_broadcasts_slim_AutomationExecuted_without_nested_result()
+    {
+        var fullLog = new string('l', AutomationController.MaxListLogPreviewCharacters + 100);
+        var execution = new AutomationExecutionResult
+        {
+            Success = true,
+            ExecutionTimeMs = 42,
+            OutputLog = fullLog,
+        };
+        _automationService.Get(3).Returns(new AutomationScript { Id = 3, Name = "Script", IsEnabled = true });
+        _automationService.ExecuteScript(3, null).Returns(execution);
+
+        SignalRMessage? broadcast = null;
+        _signalRBroadcaster
+            .When(x => x.BroadcastMessage(Arg.Any<SignalRMessage>()))
+            .Do(call => broadcast = call.Arg<SignalRMessage>());
+
+        var result = _controller.Run(3);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(broadcast, Is.Not.Null);
+        Assert.That(broadcast!.Name, Is.EqualTo("AutomationExecuted"));
+        AssertBroadcastBodyHasNoResultProperty(broadcast.Body);
+        var outputLog = GetAnonymousBodyProperty<string>(broadcast.Body, "OutputLog");
+        Assert.That(outputLog, Is.EqualTo(string.Concat(fullLog.AsSpan(0, AutomationController.MaxListLogPreviewCharacters), "...")));
+        var ok = (OkObjectResult)result.Result!;
+        Assert.That(((AutomationExecutionResult)ok.Value!).OutputLog, Is.EqualTo(fullLog));
+    }
+
+    [Test]
+    public void Test_broadcasts_slim_AutomationTriggerEvaluated_without_nested_result()
+    {
+        var fullLog = new string('t', AutomationController.MaxListLogPreviewCharacters + 50);
+        var execution = new AutomationExecutionResult
+        {
+            Success = false,
+            ExecutionTimeMs = 9,
+            OutputLog = fullLog,
+            Error = "failed",
+        };
+        _automationService
+            .TestScript(Arg.Any<AutomationScript>(), Arg.Any<int?>(), Arg.Any<Dictionary<string, object>>())
+            .Returns(execution);
+
+        SignalRMessage? broadcast = null;
+        _signalRBroadcaster
+            .When(x => x.BroadcastMessage(Arg.Any<SignalRMessage>()))
+            .Do(call => broadcast = call.Arg<SignalRMessage>());
+
+        var result = _controller.Test(new AutomationTestRequestResource
+        {
+            Script = new AutomationScriptResource { Id = 7, Name = "Probe", Trigger = AutomationTrigger.Manual, Code = "x" },
+        });
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(broadcast, Is.Not.Null);
+        Assert.That(broadcast!.Name, Is.EqualTo("AutomationTriggerEvaluated"));
+        AssertBroadcastBodyHasNoResultProperty(broadcast.Body);
+        var outputLog = GetAnonymousBodyProperty<string>(broadcast.Body, "OutputLog");
+        Assert.That(outputLog, Is.EqualTo(string.Concat(fullLog.AsSpan(0, AutomationController.MaxListLogPreviewCharacters), "...")));
+    }
+
+    private static void AssertBroadcastBodyHasNoResultProperty(object body)
+    {
+        Assert.That(body.GetType().GetProperty("Result", BindingFlags.Public | BindingFlags.Instance), Is.Null);
+    }
+
+    private static T? GetAnonymousBodyProperty<T>(object body, string propertyName)
+    {
+        var property = body.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        Assert.That(property, Is.Not.Null);
+        return (T?)property!.GetValue(body);
     }
 }
