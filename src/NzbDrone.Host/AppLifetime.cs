@@ -32,7 +32,6 @@ public class AppLifetime : IHostedService, IDisposable
     private readonly IPeerServer _peerServer;
     private readonly IDatabaseMaintenanceService _databaseMaintenanceService;
     private readonly Logger _logger;
-    private readonly HashSet<int> _stalledTorrentIds = new();
     private bool _speedThresholdExceededState;
     private bool _portForwardingFailureEmitted;
     private CancellationTokenSource _cts;
@@ -365,35 +364,12 @@ public class AppLifetime : IHostedService, IDisposable
             }
         }
 
-        // 2. Evaluate Torrents: Stalled state, idle swarms, and speed limits
+        // 2. Evaluate Torrents: speed limits (stall events are owned by SeedingEngine)
         if (_torrentService != null)
         {
             try
             {
                 var torrents = _torrentService.GetAll() ?? new List<Torrent>();
-                var currentTorrentMap = torrents.ToDictionary(t => t.Id);
-
-                // Check previously stalled torrents that are now resolved or removed
-                var resolvedIds = new List<int>();
-                foreach (var stalledId in _stalledTorrentIds)
-                {
-                    if (!currentTorrentMap.TryGetValue(stalledId, out var torrent))
-                    {
-                        resolvedIds.Add(stalledId);
-                    }
-                    else if (torrent.DownloadSpeed > 0 || torrent.Progress >= 1.0 || torrent.Status != TorrentStatus.Downloading)
-                    {
-                        resolvedIds.Add(stalledId);
-                    }
-                }
-
-                foreach (var resolvedId in resolvedIds)
-                {
-                    _stalledTorrentIds.Remove(resolvedId);
-                    var torrent = currentTorrentMap.TryGetValue(resolvedId, out var t) ? t : new Torrent { Id = resolvedId };
-                    _eventAggregator.PublishEvent(new TorrentStallResolvedEvent(torrent));
-                }
-
                 var activeTorrents = torrents.Where(t => t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.Seeding).ToList();
                 long totalDownloadSpeed = 0;
                 long totalUploadSpeed = 0;
@@ -402,18 +378,6 @@ public class AppLifetime : IHostedService, IDisposable
                 {
                     totalDownloadSpeed += torrent.DownloadSpeed;
                     totalUploadSpeed += torrent.UploadSpeed;
-
-                    if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed == 0 && torrent.Progress < 1.0)
-                    {
-                        var minutesSinceAdd = (DateTime.UtcNow - torrent.DateAdded).TotalMinutes;
-                        if (minutesSinceAdd >= 5)
-                        {
-                            if (_stalledTorrentIds.Add(torrent.Id))
-                            {
-                                _eventAggregator.PublishEvent(new TorrentStalledEvent(torrent, (int)minutesSinceAdd));
-                            }
-                        }
-                    }
                 }
 
                 if (_configService != null)
