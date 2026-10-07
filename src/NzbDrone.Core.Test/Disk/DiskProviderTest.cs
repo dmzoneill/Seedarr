@@ -112,6 +112,25 @@ public class DiskProviderTest
     }
 
     [Test]
+    public void GetAvailableFreeSpace_does_not_fallback_to_root_when_mount_resolution_fails()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Non-Windows mount resolution");
+        }
+
+        var otherMount = new DriveInfo("/mnt/other");
+        var subject = new DiskProvider
+        {
+            DrivesProvider = () => new[] { otherMount },
+        };
+
+        Assert.That(
+            subject.GetAvailableFreeSpace("/mnt/nas/torrents/foo"),
+            Is.EqualTo(0));
+    }
+
+    [Test]
     public void CheckFolderWritable_returns_false_for_blank_path()
     {
         var subject = new DiskProvider();
