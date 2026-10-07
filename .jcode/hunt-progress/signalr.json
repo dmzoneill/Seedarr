@@ -1,8 +1,8 @@
 {
   "slot": "signalr",
-  "updatedAt": "2026-10-07T00:35:00Z",
+  "updatedAt": "2026-10-07T00:45:00Z",
   "area": "src/NzbDrone.SignalR",
-  "currentSubfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+  "currentSubfolder": "src/Seedarr.Http/REST",
   "rotation": [
     "src/NzbDrone.SignalR",
     "src/NzbDrone.Core/Jobs",
@@ -10,12 +10,12 @@
     "src/Seedarr.Http/REST"
   ],
   "lastPass": {
-    "subfolder": "src/NzbDrone.Core/Jobs",
-    "completedAt": "2026-10-07T00:35:00Z",
-    "issuesFiled": [1286],
+    "subfolder": "src/NzbDrone.Core/Torrents/TorrentRecheckService.cs",
+    "completedAt": "2026-10-07T00:45:00Z",
+    "issuesFiled": [1291],
     "issuesReopened": [],
     "taskId": "signalr-hunter",
-    "worker": "emu",
-    "note": "Static review (emu) of Jobs/: Scheduler.cs (due check vs CalculateNextExecution overlap #1125, startup grace, jitter, SignalR TaskStarted/Completed/Failed paths, missing IScheduledTask instance), TaskManager.cs (NormalizeTypeName, RecordTaskStarted/Finished/Failed history dedup, cancel status, GetNextScheduled ordering), ScheduledTaskCommandExecutor.cs (TaskCompleted on cancel/failure overlap #911/#985/#1236), ScheduledTask/CalculateNextExecution, ScheduledTaskHistoryRepository (PurgeOldHistory, GetByTypeName), DatabaseVacuumTask/TrackerScrapeJob (IJob token shim #821, swallowed errors #971). Cross-checked NzbDrone.Core.Test Jobs fixtures (SchedulerTest, TaskManagerTest, ScheduledTaskCommandExecutorTest, ScheduledTaskHistoryRepositoryTest). Deduped open GH: #821 #911 #952 #971 #985 #1026 #1125 #1162 #1202 #1203 #1235 #1236. Filed #1286 (Success task history inserted when Scheduler cannot resolve IScheduledTask). No issues reopened. Next: src/NzbDrone.Core/Torrents/TorrentRecheckService.cs. Static only; no dotnet build/test."
+    "worker": "elk",
+    "note": "Static review (elk) of TorrentRecheckService.cs and related recheck paths: TorrentService.QueueRecheck/Recheck, TorrentController recheck/bulk, FastResumeService.TriggerRecheckFallback, TorrentStateMachine checking transitions, TorrentRecheckProgressEvent/SignalR TorrentRecheckProgress, TorrentRecheckServiceTest. Deduped open GH: #912 #936 #951 #988 #991 #1036 #1038 #1048 #1172 #1209 #1210 #1242 #1243. Filed #1291 (recheck completion TransitionFromChecking overwrites user Paused during Checking; Pause does not call CancelRecheck). No issues reopened. Next: src/Seedarr.Http/REST. Static only; no dotnet build/test."
   }
 }
