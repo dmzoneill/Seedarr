@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -225,6 +226,42 @@ public class RssRuleControllerTest
         var updated = (RssRuleResource)okResult.Value;
         Assert.That(updated.Tags, Is.EquivalentTo(new[] { 5 }));
         _rssRuleRepository.Received(1).Update(Arg.Is<RssRule>(r => r.Id == 1 && r.Tags.Contains(5)));
+    }
+
+    [Test]
+    public void Update_with_partial_json_body_preserves_omitted_indexer_ids_tags_and_flags()
+    {
+        var existing = new RssRule
+        {
+            Id = 1,
+            Name = "Original",
+            IsEnabled = false,
+            MinSeeders = 5,
+            IndexerIds = new List<int> { 1 },
+            Tags = new List<int> { 2, 3 },
+            Priority = 7,
+        };
+
+        _rssRuleRepository.All().Returns(new List<RssRule> { existing });
+        _rssRuleRepository.Get(1).Returns(existing);
+        _indexerRepository.Get(1).Returns(new IndexerDefinition { Id = 1, Name = "Indexer" });
+
+        using var doc = JsonDocument.Parse(
+            "{\"id\":1,\"name\":\"renamed\",\"mustContain\":\"1080p\"}");
+        var result = _controller.Update(1, doc.RootElement);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _rssRuleRepository.Received(1).Update(Arg.Is<RssRule>(r =>
+            r.Name == "renamed"
+            && r.MustContain == "1080p"
+            && r.IsEnabled == false
+            && r.MinSeeders == 5
+            && r.IndexerIds.Count == 1
+            && r.IndexerIds[0] == 1
+            && r.Tags.Count == 2
+            && r.Tags.Contains(2)
+            && r.Tags.Contains(3)
+            && r.Priority == 7));
     }
 
     [Test]
