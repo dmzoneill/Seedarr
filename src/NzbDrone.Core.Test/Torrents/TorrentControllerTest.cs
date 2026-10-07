@@ -373,6 +373,29 @@ public class TorrentControllerTest
     }
 
     [Test]
+    public void Delete_returns_NotFound_when_torrent_does_not_exist()
+    {
+        _torrentService.Get(999).Returns((Torrent)null);
+
+        var result = _controller.Delete(999);
+
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _torrentService.DidNotReceive().Delete(Arg.Any<int>(), Arg.Any<bool>());
+    }
+
+    [Test]
+    public void Delete_calls_Delete_on_TorrentService_when_torrent_exists()
+    {
+        const int torrentId = 5;
+        _torrentService.Get(torrentId).Returns(new Torrent { Id = torrentId, InfoHash = "abc" });
+
+        var result = _controller.Delete(torrentId, deleteFiles: true);
+
+        Assert.That(result, Is.InstanceOf<OkResult>());
+        _torrentService.Received(1).Delete(torrentId, true);
+    }
+
+    [Test]
     public void BulkAction_delete_calls_DeleteMany_on_TorrentService_and_returns_success()
     {
         _torrentService.Get(1).Returns(new Torrent { Id = 1 });
