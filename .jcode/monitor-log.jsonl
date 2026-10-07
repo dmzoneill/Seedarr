@@ -197,3 +197,4 @@
   },
   "note": "latest #1256-#1260"
 }
+{"ts": "$NOW", "scheduleId": "sched_28310b90", "mode": "bug-hunt", "status": "running", "githubOpen": 389, "restarts": [{"slot": "core", "from": "wren", "to": "falcon", "partition": "src/NzbDrone.Core/Torrents", "reason": "idle>90s"}, {"slot": "api", "from": "pheasant", "to": "osprey", "partition": "src/Seedarr.Api.V1/System", "reason": "idle>90s"}, {"slot": "http", "from": "robin", "to": "swift", "partition": "src/Seedarr.Http/REST", "reason": "idle>90s"}, {"slot": "host", "from": "badger", "to": "mink", "partition": "src/NzbDrone.Host/AppLifetime.cs", "reason": "idle>90s"}, {"slot": "signalr", "from": "starling", "to": "oriole", "partition": "src/NzbDrone.Core/Jobs", "reason": "idle>90s"}], "note": "latest #1256-#1262"}

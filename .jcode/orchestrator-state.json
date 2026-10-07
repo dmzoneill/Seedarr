@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T00:05:33Z",
+  "updatedAt": "$NOW",
   "lastValidationAt": "2026-10-06T22:03:00Z",
   "lastValidationNote": "Feedback loop r3: 40 issues since bug-hunt start, 30 open; 5 hunters active; hunt-progress core #912/#915; host #910; #876 cites #718/#638; coord fix 2dc88431 (hunters off orchestrator-state); reopen path unproven; deduped monitor sched_9ce2d66f.",
   "status": "running",
@@ -8,7 +8,7 @@
     "cadenceSeconds": 60,
     "mechanism": "schedule.wake_at",
     "active": true,
-    "lastScheduleId": "sched_1f3be12c"
+    "lastScheduleId": "sched_28310b90"
   },
   "policy": {
     "pushTarget": "origin/main",
@@ -22,27 +22,27 @@
     "core": {
       "area": "src/NzbDrone.Core",
       "status": "running",
-      "worker": "wren"
+      "worker": "falcon"
     },
     "api": {
       "area": "src/Seedarr.Api.V1",
       "status": "running",
-      "worker": "pheasant"
+      "worker": "osprey"
     },
     "http": {
       "area": "src/Seedarr.Http",
       "status": "running",
-      "worker": "robin"
+      "worker": "swift"
     },
     "host": {
       "area": "src/NzbDrone.Host,src/NzbDrone.Common",
       "status": "running",
-      "worker": "badger"
+      "worker": "mink"
     },
     "signalr": {
       "area": "src/NzbDrone.SignalR",
       "status": "running",
-      "worker": "starling"
+      "worker": "oriole"
     }
   },
   "huntProgressDir": ".jcode/hunt-progress/",
@@ -62,5 +62,5 @@
     189
   ],
   "githubOpenCount": 389,
-  "lastMonitorNote": "389 open; 0 restarts; all hunters healthy (<90s idle)"
+  "lastMonitorNote": "389 open; 5 restarts (all idle >90s): wren\u2192falcon Torrents, pheasant\u2192osprey System, robin\u2192swift REST, badger\u2192mink AppLifetime, starling\u2192oriole Jobs"
 }
