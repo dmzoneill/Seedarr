@@ -503,23 +503,26 @@ public class ConfigControllerTests
             (string)d["SslCertPassword"] == "password123" &&
             (bool)d["RedirectHttpToHttps"] == true));
 
-        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
-            !d.ContainsKey("Port") &&
-            !d.ContainsKey("SslPort") &&
-            !d.ContainsKey("BindAddress") &&
-            !d.ContainsKey("UrlBase") &&
-            !d.ContainsKey("ApiKey") &&
-            !d.ContainsKey("EnableSsl") &&
-            !d.ContainsKey("AuthenticationEnabled") &&
-            !d.ContainsKey("TerminalAccessEnabled") &&
-            !d.ContainsKey("SslCertPath") &&
-            !d.ContainsKey("SslKeyPath") &&
-            !d.ContainsKey("SslCertPassword") &&
-            !d.ContainsKey("RedirectHttpToHttps") &&
-            (bool)d["AutoStart"] == true &&
-            (bool)d["WatchFolderEnabled"] == true &&
-            (string)d["WatchFolderPath"] == "/watch" &&
-            (int)d["WatchFolderScanIntervalSeconds"] == 15));
+        _configService.Received(1).SaveConfigDictionary(
+            Arg.Is<Dictionary<string, object>>(d =>
+                !d.ContainsKey("Port") &&
+                !d.ContainsKey("SslPort") &&
+                !d.ContainsKey("BindAddress") &&
+                !d.ContainsKey("UrlBase") &&
+                !d.ContainsKey("ApiKey") &&
+                !d.ContainsKey("EnableSsl") &&
+                !d.ContainsKey("AuthenticationEnabled") &&
+                !d.ContainsKey("TerminalAccessEnabled") &&
+                !d.ContainsKey("SslCertPath") &&
+                !d.ContainsKey("SslKeyPath") &&
+                !d.ContainsKey("SslCertPassword") &&
+                !d.ContainsKey("RedirectHttpToHttps") &&
+                (bool)d["AutoStart"] == true &&
+                (bool)d["WatchFolderEnabled"] == true &&
+                (string)d["WatchFolderPath"] == "/watch" &&
+                (int)d["WatchFolderScanIntervalSeconds"] == 15),
+            false);
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d => d.Count == 0));
     }
 
     [Test]
@@ -563,6 +566,29 @@ public class ConfigControllerTests
         Assert.That(result.Result, Is.InstanceOf<ObjectResult>());
         var objResult = (ObjectResult)result.Result;
         Assert.That(objResult.StatusCode, Is.EqualTo(500));
-        _configService.Received().SaveConfigDictionary(Arg.Any<Dictionary<string, object>>(), false);
+        _configService.Received(2).SaveConfigDictionary(Arg.Any<Dictionary<string, object>>(), false);
+        _configService.DidNotReceive().SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d => d.Count == 0));
+    }
+
+    [Test]
+    public void SaveConfig_publishes_ConfigSavedEvent_only_after_xml_save_succeeds()
+    {
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Received.InOrder(() =>
+        {
+            _configService.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>(), false);
+            _configFileProvider.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>());
+            _configService.SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d => d.Count == 0));
+        });
     }
 }
