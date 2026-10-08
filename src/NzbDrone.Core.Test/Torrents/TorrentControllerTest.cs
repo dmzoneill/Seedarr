@@ -543,6 +543,9 @@ public class TorrentControllerTest
     [Test]
     public void DeleteBulk_endpoint_executes_bulk_deletion()
     {
+        _torrentService.Get(5).Returns(new Torrent { Id = 5, Name = "Five" });
+        _torrentService.Get(6).Returns(new Torrent { Id = 6, Name = "Six" });
+
         var resource = new BulkTorrentActionResource
         {
             TorrentIds = new List<int> { 5, 6 },

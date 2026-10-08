@@ -900,7 +900,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             }
             else
             {
-                torrent.DownloadSpeed = 0;
+                // Keep instantaneous rate assigned during speed policy processing on first sample.
             }
 
             _prevUploaded[torrent.Id] = torrent.Uploaded;
