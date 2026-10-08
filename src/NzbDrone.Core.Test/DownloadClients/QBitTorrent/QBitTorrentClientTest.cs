@@ -373,7 +373,7 @@ public class QBitTorrentClientTest
         Assert.That(result[0].Status, Is.EqualTo("downloading"));
         Assert.That(result[1].Status, Is.EqualTo("checking"));
         Assert.That(result[2].Status, Is.EqualTo("seeding"));
-        Assert.That(result[3].Status, Is.EqualTo("unknown"));
+        Assert.That(result[3].Status, Is.EqualTo("error"));
     }
 
     [Test]
