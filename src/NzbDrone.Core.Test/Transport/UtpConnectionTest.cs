@@ -926,6 +926,7 @@ public class UtpConnectionTest
             serverUdp.Send(response, response.Length, ep);
 
             using var serverConn = new UtpConnection(serverUdp, synHeader.ConnectionId, ep, connectionTimeoutSeconds: 5);
+            InitializeServerUtpFromSyn(serverConn, synHeader);
             SetConnected(serverConn, true);
 
             var read = 0;
@@ -1013,6 +1014,7 @@ public class UtpConnectionTest
             serverUdp.Send(response, response.Length, ep);
 
             using var serverConn = new UtpConnection(serverUdp, synHeader.ConnectionId, ep, connectionTimeoutSeconds: 10);
+            InitializeServerUtpFromSyn(serverConn, synHeader);
             SetConnected(serverConn, true);
 
             var read = 0;
@@ -2476,6 +2478,18 @@ public class UtpConnectionTest
         }
 
         return packet;
+    }
+
+    private static void InitializeServerUtpFromSyn(UtpConnection connection, UtpHeader synHeader)
+    {
+        typeof(UtpConnection).GetField(
+            "_expectedSeqNr",
+            BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(connection, (ushort)(synHeader.SequenceNumber + 1));
+        typeof(UtpConnection).GetField(
+            "_hasReceivedFirstPacket",
+            BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(connection, true);
     }
 
     private static void SetConnected(UtpConnection connection, bool value)

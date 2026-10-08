@@ -537,13 +537,19 @@ public class NotificationControllerTest
     [Test]
     public void Create_with_masked_settings_and_valid_source_id_restores_secrets_and_inserts()
     {
+        var incomingSettings = "{\"url\":\"https://discord.com/api/webhooks/12345/********\",\"username\":\"Seedarr\"}";
+        var existingSettings = "{\"url\":\"https://discord.com/api/webhooks/12345/REAL_DISCORD_TOKEN\",\"username\":\"Seedarr\"}";
+        Assert.That(
+            NotificationController.RestoreSecrets(incomingSettings, existingSettings, "Discord"),
+            Does.Contain("REAL_DISCORD_TOKEN"));
+
         var source = new NotificationDefinition
         {
             Id = 3,
             Name = "Discord",
             Implementation = "Discord",
             OnGrab = true,
-            Settings = "{\"url\":\"https://discord.com/api/webhooks/12345/REAL_DISCORD_TOKEN\",\"username\":\"Seedarr\"}"
+            Settings = existingSettings
         };
         _repository.Get(3).Returns(source);
         _repository.Insert(Arg.Any<NotificationDefinition>()).Returns(callInfo =>
@@ -559,7 +565,7 @@ public class NotificationControllerTest
             Name = "Discord Copy",
             Implementation = "Discord",
             OnGrab = true,
-            Settings = "{\"url\":\"https://discord.com/api/webhooks/12345/********\",\"username\":\"Seedarr\"}"
+            Settings = incomingSettings
         };
 
         var result = _controller.Create(resource);

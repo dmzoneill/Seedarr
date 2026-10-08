@@ -255,10 +255,10 @@ public class TerminalControllerTest
     {
         var hubContext = Substitute.For<IHubContext<TerminalHub>>();
         var hubClients = Substitute.For<IHubClients>();
-        var clientProxy = Substitute.For<IClientProxy>();
+        var clientProxy = Substitute.For<ISingleClientProxy>();
         hubContext.Clients.Returns(hubClients);
         hubClients.Client("my-conn").Returns(clientProxy);
-        clientProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
+        clientProxy.SendAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         _controller = new TerminalController(_terminalService, _configFileProvider, hubContext);
@@ -277,9 +277,9 @@ public class TerminalControllerTest
         Assert.That(outputCallback, Is.Not.Null);
         await outputCallback!("hello from pty");
 
-        await clientProxy.Received(1).SendCoreAsync(
+        await clientProxy.Received(1).SendAsync(
             "ReceiveOutput",
-            Arg.Is<object[]>(args => args.Length == 1 && args[0] as string == "hello from pty"),
+            "hello from pty",
             Arg.Any<CancellationToken>());
     }
 

@@ -146,7 +146,12 @@ public class ProwlarrIndexerSyncService : IProwlarrIndexerSyncService
             return;
         }
 
-        if (!UrlValidator.IsSafeUrl(prowlarrDef.Url))
+        var isEphemeralInstance = prowlarrDef.Id == 0;
+        var urlIsPermitted = isEphemeralInstance
+            ? UrlValidator.IsSafeUrl(prowlarrDef.Url)
+            : UrlValidator.IsSafeUrl(prowlarrDef.Url, allowLoopback: true, allowInternal: true);
+
+        if (!urlIsPermitted)
         {
             result.Errors.Add($"Prowlarr instance '{prowlarrDef.Name}' URL is not permitted.");
             return;
