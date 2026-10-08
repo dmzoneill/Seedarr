@@ -20,7 +20,7 @@ echo "[watchdog] log=$LOG wall_timeout=${WALL_TIMEOUT_SEC}s stall=${STALL_SEC}s"
 		--no-build \
 		--settings .runsettings \
 		--blame-hang-timeout 90s \
-		--logger "console;verbosity=minimal" \
+		--logger "console;verbosity=normal" \
 		--logger "trx;LogFileName=test-results.trx" \
 		>"$LOG" 2>&1
 	echo "EXIT:$?" >>"$LOG"

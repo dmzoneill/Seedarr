@@ -174,28 +174,6 @@ public class Ipv6IntervalTree
             }
         }
 
-        // Handle PeerGuardian / labeled rules: e.g. "Spamhaus-DROP:2001:db8::1-2001:db8::10" or "Level-1:2001:db8::/32"
-        for (var colonIdx = trimmed.IndexOf(':'); colonIdx > 0; colonIdx = trimmed.IndexOf(':', colonIdx + 1))
-        {
-            var candidate = trimmed[(colonIdx + 1)..].Trim();
-            var candidateComma = candidate.IndexOf(',');
-            if (candidateComma > 0)
-            {
-                candidate = candidate[..candidateComma].Trim();
-            }
-
-            if (TryParseCleanIPv6(candidate, out range))
-            {
-                return true;
-            }
-
-            var prefix = trimmed[..colonIdx].Trim();
-            if (IPAddress.TryParse(prefix, out _))
-            {
-                break;
-            }
-        }
-
         // Space-separated label prefix: e.g. "Bad Organization 2001:db8::1 - 2001:db8::ff"
         for (var spaceIdx = trimmed.LastIndexOf(' '); spaceIdx > 0; spaceIdx = spaceIdx > 0 ? trimmed.LastIndexOf(' ', spaceIdx - 1) : -1)
         {
@@ -218,6 +196,28 @@ public class Ipv6IntervalTree
             if (TryParseCleanIPv6(candidate, out range))
             {
                 return true;
+            }
+        }
+
+        // Handle PeerGuardian / labeled rules: e.g. "Spamhaus-DROP:2001:db8::1-2001:db8::10" or "Level-1:2001:db8::/32"
+        for (var colonIdx = trimmed.IndexOf(':'); colonIdx > 0; colonIdx = trimmed.IndexOf(':', colonIdx + 1))
+        {
+            var candidate = trimmed[(colonIdx + 1)..].Trim();
+            var candidateComma = candidate.IndexOf(',');
+            if (candidateComma > 0)
+            {
+                candidate = candidate[..candidateComma].Trim();
+            }
+
+            if (TryParseCleanIPv6(candidate, out range))
+            {
+                return true;
+            }
+
+            var prefix = trimmed[..colonIdx].Trim();
+            if (IPAddress.TryParse(prefix, out _))
+            {
+                break;
             }
         }
 

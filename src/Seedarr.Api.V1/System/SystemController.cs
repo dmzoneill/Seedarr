@@ -250,6 +250,11 @@ public class SystemController : ControllerBase
             return BadRequest("Request body is required.");
         }
 
+        if (request.Interval is < 1)
+        {
+            return BadRequest("Interval must be at least 1 minute.");
+        }
+
         var existing = _taskManager.GetAll().FirstOrDefault(t => t.Id == id);
         if (existing == null)
         {
