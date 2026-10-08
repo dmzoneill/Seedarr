@@ -302,7 +302,7 @@ namespace NzbDrone.Core.Test.Configuration
 
             Assert.That(rules, Has.Count.EqualTo(1));
             Assert.That(rules[0].Levels, Does.Contain(LogLevel.Debug));
-            Assert.That(rules[0].Levels, Does.Not.Contain(LogLevel.Info));
+            Assert.That(rules[0].Levels, Does.Contain(LogLevel.Warn));
         }
 
         [Test]

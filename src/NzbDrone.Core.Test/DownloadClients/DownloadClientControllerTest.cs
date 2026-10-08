@@ -428,7 +428,7 @@ public class DownloadClientControllerTest
         {
             Id = 42,
             Name = "Client",
-            Host = "newhost",
+            Host = "127.0.0.1",
             Port = 9090,
             ClientType = "QBitTorrent",
             Password = "secret"
