@@ -207,11 +207,11 @@ public class TorrentRecheckService : ITorrentRecheckService
                     }
 
                     using var cts = new CancellationTokenSource();
+                    _activeRechecks[nextId] = cts;
 
                     try
                     {
                         await _recheckConcurrencySemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
-                        _activeRechecks[nextId] = cts;
                         try
                         {
                             await ExecuteRecheckCoreAsync(torrent, null, cts.Token).ConfigureAwait(false);
@@ -229,6 +229,10 @@ public class TorrentRecheckService : ITorrentRecheckService
                     catch (Exception ex)
                     {
                         _logger.Error(ex, "Error during recheck for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
+                        var statusBefore = _queuedPreviousStatus.TryRemove(nextId, out var previous)
+                            ? previous
+                            : torrent.Status;
+                        PublishRecheckFailure(torrent, statusBefore);
                     }
                     finally
                     {
@@ -357,7 +361,6 @@ public class TorrentRecheckService : ITorrentRecheckService
                     Body = torrent
                 };
                 _signalRBroadcaster.BroadcastMessage(updateMsg);
-                _signalRBroadcaster.BroadcastToTorrent(torrent.Id, updateMsg);
             }
 
             // 3. Resolve files and expected piece hashes
@@ -424,10 +427,14 @@ public class TorrentRecheckService : ITorrentRecheckService
 
                 try
                 {
-                    if (pieceHashes != null && pieceHashes.Length >= (i + 1) * 20 && files != null && files.Count > 0 && _pieceVerificationService != null)
+                    if (files != null && files.Count > 0 && _pieceVerificationService != null)
                     {
                         var expectedHash = new byte[20];
-                        Array.Copy(pieceHashes, i * 20, expectedHash, 0, 20);
+                        if (pieceHashes != null && pieceHashes.Length >= (i + 1) * 20)
+                        {
+                            Array.Copy(pieceHashes, i * 20, expectedHash, 0, 20);
+                        }
+
                         var verified = _pieceVerificationService.VerifyPieceFromStorage(
                             torrent,
                             files,

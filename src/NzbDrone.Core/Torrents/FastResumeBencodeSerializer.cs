@@ -174,20 +174,10 @@ public class FastResumeBencodeSerializer : IFastResumeBencodeSerializer
 
         dict["file_priority"] = fpList;
 
-        // 8. piece_priority
+        // 8. piece_priority (only when explicitly tracked; never infer from torrent queue priority)
         if (data.PiecePriority != null && data.PiecePriority.Length > 0)
         {
             dict["piece_priority"] = new BString(data.PiecePriority);
-        }
-        else if (data.Bitfield != null && data.Bitfield.Length > 0)
-        {
-            var pp = new byte[data.Bitfield.Length];
-            Array.Fill(pp, (byte)1);
-            dict["piece_priority"] = new BString(pp);
-        }
-        else
-        {
-            dict["piece_priority"] = new BString(Array.Empty<byte>());
         }
 
         // 9. sequential_download

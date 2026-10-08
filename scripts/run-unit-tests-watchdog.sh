@@ -17,7 +17,6 @@ echo "[watchdog] log=$LOG wall_timeout=${WALL_TIMEOUT_SEC}s stall=${STALL_SEC}s"
 (
 	timeout "$WALL_TIMEOUT_SEC" dotnet test "$UNIT_TEST" \
 		--configuration Release \
-		--no-build \
 		--settings .runsettings \
 		--blame-hang-timeout 90s \
 		--logger "console;verbosity=normal" \
