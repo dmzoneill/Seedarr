@@ -1186,16 +1186,16 @@ public class DownloadClientSyncServiceTest
 
         Assert.That(sync1Started.Wait(5000), Is.True);
 
-        allowSync1ToFinish.Set();
-
         var result2 = _service.Sync();
+
+        allowSync1ToFinish.Set();
         task1.GetAwaiter().GetResult();
 
         Assert.That(result2.Added, Is.EqualTo(0));
         Assert.That(result2.Skipped, Is.EqualTo(0));
         Assert.That(result2.Failed, Is.EqualTo(0));
 
-        _downloadClientFactory.Received(2).All();
+        _downloadClientFactory.Received(1).All();
     }
 
     [Test]

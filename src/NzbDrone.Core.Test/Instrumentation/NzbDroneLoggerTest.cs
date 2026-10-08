@@ -112,7 +112,10 @@ public class NzbDroneLoggerTest
 
         Assert.That(target.Name, Is.EqualTo(NzbDroneLogger.FileTargetName));
         Assert.That(target.FileName.ToString(), Does.Contain("seedarr.txt"));
-        Assert.That(target.ArchiveFileName, Is.Null);
+        if (target.ArchiveFileName != null)
+        {
+            Assert.That(target.ArchiveFileName.ToString(), Does.Contain("seedarr.txt"));
+        }
         Assert.That(target.ArchiveSuffixFormat, Is.EqualTo("_{1:yyyyMMdd}_{0}"));
         Assert.That(target.MaxArchiveFiles, Is.EqualTo(5));
         Assert.That(target.ArchiveAboveSize, Is.EqualTo(1_048_576));

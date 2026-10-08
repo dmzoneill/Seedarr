@@ -142,13 +142,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     public SyncResult Sync()
     {
-        if (!_syncLock.Wait(0) && !WaitForSyncLock())
+        if (!TryEnterSyncLockForSweep())
         {
-            if (SyncLockWaitMs != ImportLockWaitMs)
-            {
-                throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
-            }
-
             _logger.Warn("Download client sync sweep skipped because another sync or import is in progress.");
             return new SyncResult();
         }
@@ -1020,12 +1015,27 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     private bool WaitForImportLock()
     {
-        return WaitForSyncLock();
+        return _syncLock.Wait(SyncLockWaitMs);
     }
 
-    private bool WaitForSyncLock()
+    private bool TryEnterSyncLockForSweep()
     {
-        return _syncLock.Wait(SyncLockWaitMs);
+        if (_syncLock.Wait(0))
+        {
+            return true;
+        }
+
+        if (SyncLockWaitMs == ImportLockWaitMs)
+        {
+            return false;
+        }
+
+        if (_syncLock.Wait(SyncLockWaitMs))
+        {
+            return true;
+        }
+
+        throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
     }
 
     private byte[] FetchTorrentBytesFromClientAndIndexers(IDownloadClient provider, string normalizedHash)

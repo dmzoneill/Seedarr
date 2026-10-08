@@ -158,6 +158,12 @@ public class Ipv6IntervalTree
             return false;
         }
 
+        // Space-separated label prefix: e.g. "Bad Organization 2001:db8::1 - 2001:db8::ff"
+        if (TryParseSpaceSeparatedLabelPrefix(trimmed, out range))
+        {
+            return true;
+        }
+
         if (TryParseCleanIPv6(trimmed, out range))
         {
             return true;
@@ -169,31 +175,6 @@ public class Ipv6IntervalTree
         {
             var beforeComma = trimmed[..commaIdx].Trim();
             if (TryParseCleanIPv6(beforeComma, out range))
-            {
-                return true;
-            }
-        }
-
-        // Space-separated label prefix: e.g. "Bad Organization 2001:db8::1 - 2001:db8::ff"
-        for (var spaceIdx = trimmed.LastIndexOf(' '); spaceIdx > 0; spaceIdx = spaceIdx > 0 ? trimmed.LastIndexOf(' ', spaceIdx - 1) : -1)
-        {
-            var candidate = trimmed[(spaceIdx + 1)..].Trim();
-            if (candidate.Length == 0)
-            {
-                continue;
-            }
-
-            var candidateComma = candidate.IndexOf(',');
-            if (candidateComma > 0)
-            {
-                var candidateBeforeComma = candidate[..candidateComma].Trim();
-                if (TryParseCleanIPv6(candidateBeforeComma, out range))
-                {
-                    return true;
-                }
-            }
-
-            if (TryParseCleanIPv6(candidate, out range))
             {
                 return true;
             }
@@ -222,6 +203,57 @@ public class Ipv6IntervalTree
         }
 
         return false;
+    }
+
+    private static bool TryParseSpaceSeparatedLabelPrefix(string trimmed, out Ipv6Range range)
+    {
+        range = default;
+        Ipv6Range? best = null;
+
+        for (var spaceIdx = trimmed.IndexOf(' '); spaceIdx >= 0; spaceIdx = trimmed.IndexOf(' ', spaceIdx + 1))
+        {
+            var candidate = trimmed[(spaceIdx + 1)..].Trim();
+            if (candidate.Length == 0)
+            {
+                continue;
+            }
+
+            var candidateComma = candidate.IndexOf(',');
+            if (candidateComma > 0)
+            {
+                candidate = candidate[..candidateComma].Trim();
+            }
+
+            if (!TryParseCleanIPv6(candidate, out var parsed))
+            {
+                continue;
+            }
+
+            if (best == null || IsBetterIpv6ParseCandidate(parsed, best.Value))
+            {
+                best = parsed;
+            }
+        }
+
+        if (best == null)
+        {
+            return false;
+        }
+
+        range = best.Value;
+        return true;
+    }
+
+    private static bool IsBetterIpv6ParseCandidate(Ipv6Range candidate, Ipv6Range currentBest)
+    {
+        var candidateIsRange = candidate.Start != candidate.End;
+        var currentIsRange = currentBest.Start != currentBest.End;
+        if (candidateIsRange != currentIsRange)
+        {
+            return candidateIsRange;
+        }
+
+        return candidate.End - candidate.Start > currentBest.End - currentBest.Start;
     }
 
     private static bool TryParseCleanIPv6(string trimmed, out Ipv6Range range)
