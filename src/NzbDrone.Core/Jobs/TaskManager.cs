@@ -46,6 +46,8 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         public ScheduledTaskTriggerSource TriggerSource { get; set; }
         public CancellationTokenSource Cts { get; set; }
         public bool HistoryRecorded { get; set; }
+
+        public bool FailureHistoryInsertAttempted { get; set; }
     }
 
     private readonly IBasicRepository<ScheduledTask> _repository;
@@ -295,7 +297,7 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 
             var historyStatus = isCanceled
                 ? ScheduledTaskHistoryStatus.Canceled
-                : (status == "Failed" ? ScheduledTaskHistoryStatus.Failed : ScheduledTaskHistoryStatus.Success);
+                : (isFailed ? ScheduledTaskHistoryStatus.Failed : ScheduledTaskHistoryStatus.Success);
 
             var history = new ScheduledTaskHistory
             {
@@ -376,6 +378,10 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to record task failure history for '{0}'", key);
+            if (execInfo != null)
+            {
+                execInfo.FailureHistoryInsertAttempted = true;
+            }
         }
 
         if (execInfo != null && historyRecorded)

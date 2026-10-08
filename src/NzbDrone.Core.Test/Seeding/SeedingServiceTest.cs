@@ -143,7 +143,7 @@ public class SeedingServiceTest
     [Test]
     public void Stop_should_publish_stopped_event()
     {
-        var torrent = new Torrent { Id = 1, Name = "Test" };
+        var torrent = new Torrent { Id = 1, Name = "Test", Status = TorrentStatus.Seeding };
         _torrentService.Get(1).Returns(torrent);
 
         _service.Stop(1);

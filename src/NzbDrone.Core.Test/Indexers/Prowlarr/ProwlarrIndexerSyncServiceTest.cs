@@ -34,7 +34,7 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
                 Id = 1,
                 Name = "Prowlarr",
                 IndexerType = "Prowlarr",
-                Url = "http://8.8.8.8:9696",
+                Url = "http://prowlarr:9696",
                 ApiKey = "prowlarr-api-key",
                 Enable = true
             };

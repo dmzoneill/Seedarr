@@ -1024,10 +1024,17 @@ public class NotificationController : Controller
 
                     if (!string.IsNullOrEmpty(incomingStr) && (incomingStr.Contains('*') || incomingStr == PasswordMask))
                     {
-                        var restoredUrl = RestoreUrl(incomingStr, existingStr);
-                        if (restoredUrl != incomingStr)
+                        if (MaskUrl(existingStr) == incomingStr)
                         {
-                            incomingObj[key] = restoredUrl;
+                            incomingObj[key] = existingStr;
+                        }
+                        else
+                        {
+                            var restoredUrl = RestoreUrl(incomingStr, existingStr);
+                            if (restoredUrl != incomingStr)
+                            {
+                                incomingObj[key] = restoredUrl;
+                            }
                         }
                     }
                 }

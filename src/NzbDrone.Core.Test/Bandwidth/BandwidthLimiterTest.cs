@@ -264,7 +264,7 @@ public class BandwidthLimiterTest
             _limiter.GlobalDownloadBucket.Refund(10_000);
         };
 
-        _limiter.ConsumeDownload(null, null, 25_000);
+        _limiter.ConsumeDownload(null, null, 50_000);
 
         Assert.That(refillCount, Is.GreaterThanOrEqualTo(2));
     }

@@ -478,7 +478,7 @@ public class TaskManagerTest
         _subject.RecordTaskFinished("TestTask", startTime);
 
         historyRepo.Received(2).Insert(Arg.Any<ScheduledTaskHistory>());
-        historyRepo.Received(1).Insert(Arg.Is<ScheduledTaskHistory>(h =>
+        historyRepo.Received(2).Insert(Arg.Is<ScheduledTaskHistory>(h =>
             h.Status == ScheduledTaskHistoryStatus.Failed &&
             h.ErrorMessage == "Simulated failure"));
     }

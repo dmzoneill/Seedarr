@@ -245,12 +245,13 @@ public class TorrentRecheckService : ITorrentRecheckService
             finally
             {
                 _queueProcessingLock.Release();
+                if (!_recheckQueue.IsEmpty)
+                {
+                    _ = Task.Run(ProcessQueueAsync);
+                }
             }
 
-            if (_recheckQueue.IsEmpty)
-            {
-                return;
-            }
+            return;
         }
     }
 
@@ -429,25 +430,23 @@ public class TorrentRecheckService : ITorrentRecheckService
 
                 try
                 {
-                    if (files != null && files.Count > 0 && _pieceVerificationService != null)
+                    if (files != null && files.Count > 0 &&
+                        _pieceVerificationService != null &&
+                        pieceHashes != null &&
+                        pieceHashes.Length >= (i + 1) * 20)
                     {
                         var expectedHash = new byte[20];
-                        if (pieceHashes != null && pieceHashes.Length >= (i + 1) * 20)
-                        {
-                            Array.Copy(pieceHashes, i * 20, expectedHash, 0, 20);
-                        }
+                        Array.Copy(pieceHashes, i * 20, expectedHash, 0, 20);
 
-                        var verified = _pieceVerificationService.VerifyPieceFromStorage(
+                        bitfield[i] = _pieceVerificationService.VerifyPieceFromStorage(
                             torrent,
                             files,
                             i,
                             expectedHash,
                             _multiFilePieceStorage,
                             torrent.SavePath);
-
-                        bitfield[i] = verified;
                     }
-                    else
+                    else if (files != null && files.Count > 0)
                     {
                         bitfield[i] = VerifyPiecePresenceFallback(torrent, files, i, pieceCount);
                     }
@@ -602,7 +601,7 @@ public class TorrentRecheckService : ITorrentRecheckService
 
     private void PublishRecheckFailure(Torrent torrent, TorrentStatus statusBeforeChecking)
     {
-        if (torrent.Status != TorrentStatus.Checking)
+        if (torrent.Status != TorrentStatus.Checking && torrent.Status != TorrentStatus.QueuedForChecking)
         {
             return;
         }

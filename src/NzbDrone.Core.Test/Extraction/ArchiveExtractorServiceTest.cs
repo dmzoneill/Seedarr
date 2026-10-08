@@ -296,7 +296,7 @@ public class ArchiveExtractorServiceTest
         diskMock.GetAvailableFreeSpace(Arg.Any<string>()).Returns(_ =>
         {
             spaceChecks++;
-            return spaceChecks <= 2 ? 1_000_000L : 50L;
+            return spaceChecks <= 2 ? 1_000_000L : 1L;
         });
 
         var subject = new ArchiveExtractorService(_eventAggregator, diskMock);
