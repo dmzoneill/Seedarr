@@ -281,6 +281,12 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         else
         {
             var elapsedSeconds = (double)(now - _lastTickTimestamp) / Stopwatch.Frequency;
+            var tickSeconds = TickInterval.TotalSeconds;
+            if (tickSeconds > 0 && elapsedSeconds < tickSeconds * 0.5)
+            {
+                elapsedSeconds = tickSeconds;
+            }
+
             elapsedSeconds = Math.Clamp(elapsedSeconds, 0.001, 60.0);
             actualDelta = TimeSpan.FromSeconds(elapsedSeconds);
         }

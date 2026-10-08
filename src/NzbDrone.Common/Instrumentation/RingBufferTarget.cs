@@ -27,7 +27,15 @@ public class RingBufferTarget : TargetWithLayout
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex SensitiveParamRegex = new(
-        @"((?:^|[?&,\s""';])(?:api[_-]?key|bot[_-]?token|token|passkey|secret|password|access[_-]?token|client[_-]?secret|refresh[_-]?token|auth|key)=)[^&\s""';]+",
+        @"((?:^|[?&,\s""';]|\b(?:and|with)\s+)(?:api[_-]?key|bot[_-]?token|token|passkey|secret|password|access[_-]?token|client[_-]?secret|refresh[_-]?token|auth)=)[^&\s""';]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex StandalonePasskeyRegex = new(
+        @"\bpasskey=[^\s&""';]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex StandaloneTokenRegex = new(
+        @"\btoken=[^\s&""';]+",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex SensitiveJsonRegex = new(
@@ -89,6 +97,8 @@ public class RingBufferTarget : TargetWithLayout
         result = DiscordWebhookRegex.Replace(result, "/api/webhooks/${id}/[REDACTED]");
         result = SlackWebhookRegex.Replace(result, "/services/[REDACTED]");
         result = SensitiveParamRegex.Replace(result, "$1[REDACTED]");
+        result = StandalonePasskeyRegex.Replace(result, "passkey=[REDACTED]");
+        result = StandaloneTokenRegex.Replace(result, "token=[REDACTED]");
         result = SensitiveJsonRegex.Replace(result, "$1[REDACTED]$2");
         result = BearerTokenRegex.Replace(result, "Bearer [REDACTED]");
         result = AuthorizationHeaderCredentialRegex.Replace(result, "${1}${2} [REDACTED]");
@@ -198,6 +208,11 @@ public class RingBufferTarget : TargetWithLayout
             return minimumLevel <= LogLevel.Trace;
         }
 
+        if (!IsStandardLogLevelName(level))
+        {
+            return minimumLevel <= LogLevel.Trace;
+        }
+
         try
         {
             return LogLevel.FromString(level) >= minimumLevel;
@@ -206,6 +221,16 @@ public class RingBufferTarget : TargetWithLayout
         {
             return minimumLevel <= LogLevel.Trace;
         }
+    }
+
+    private static bool IsStandardLogLevelName(string level)
+    {
+        return level.Equals("Trace", StringComparison.OrdinalIgnoreCase)
+               || level.Equals("Debug", StringComparison.OrdinalIgnoreCase)
+               || level.Equals("Info", StringComparison.OrdinalIgnoreCase)
+               || level.Equals("Warn", StringComparison.OrdinalIgnoreCase)
+               || level.Equals("Error", StringComparison.OrdinalIgnoreCase)
+               || level.Equals("Fatal", StringComparison.OrdinalIgnoreCase);
     }
 
     public static RingBufferTarget Instance { get; set; }

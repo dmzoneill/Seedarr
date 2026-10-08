@@ -158,17 +158,6 @@ public class Ipv6IntervalTree
             return false;
         }
 
-        // Space-separated label prefix: e.g. "Bad Organization 2001:db8::1 - 2001:db8::ff"
-        if (TryParseSpaceSeparatedLabelPrefix(trimmed, out range))
-        {
-            return true;
-        }
-
-        if (TryParseCleanIPv6(trimmed, out range))
-        {
-            return true;
-        }
-
         // Handle eMule trailing comma metadata (e.g. "2001:db8::1 - 2001:db8::ff , 000 , Bad IPv6")
         var commaIdx = trimmed.IndexOf(',');
         if (commaIdx > 0)
@@ -178,6 +167,17 @@ public class Ipv6IntervalTree
             {
                 return true;
             }
+        }
+
+        if (TryParseCleanIPv6(trimmed, out range))
+        {
+            return true;
+        }
+
+        // Space-separated label prefix: e.g. "Bad Organization 2001:db8::1 - 2001:db8::ff"
+        if (TryParseSpaceSeparatedLabelPrefix(trimmed, out range))
+        {
+            return true;
         }
 
         // Handle PeerGuardian / labeled rules: e.g. "Spamhaus-DROP:2001:db8::1-2001:db8::10" or "Level-1:2001:db8::/32"
