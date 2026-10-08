@@ -142,9 +142,9 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     public SyncResult Sync()
     {
-        if (!WaitForImportLock())
+        if (!TryEnterSyncLockForSweep())
         {
-            throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
+            return new SyncResult();
         }
 
         try

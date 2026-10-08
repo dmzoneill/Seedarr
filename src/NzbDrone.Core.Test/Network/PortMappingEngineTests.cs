@@ -286,7 +286,8 @@ public class PortMappingEngineTests
             _upnpService,
             udpProber: (_, _) => Task.FromResult(PortMappingProtocol.NatPmp),
             upnpProber: _ => Task.FromResult(false),
-            _pcpClient);
+            _pcpClient,
+            _natPmpClient);
 
         var protocol = await engine.DetectProtocolAsync();
 
@@ -393,7 +394,8 @@ public class PortMappingEngineTests
             _upnpService,
             udpProber: (_, _) => Task.FromResult(PortMappingProtocol.NatPmp),
             upnpProber: _ => Task.FromResult(false),
-            _pcpClient);
+            _pcpClient,
+            _natPmpClient);
 
         var protocol = engine.DetectProtocol();
 
@@ -641,7 +643,8 @@ public class PortMappingEngineTests
             _upnpService,
             udpProber: (_, _) => Task.FromResult(PortMappingProtocol.NatPmp),
             upnpProber: _ => Task.FromResult(false),
-            _pcpClient);
+            _pcpClient,
+            _natPmpClient);
 
         var status = await engine.RefreshAsync();
 

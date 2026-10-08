@@ -179,12 +179,6 @@ public class FastResumeBencodeSerializer : IFastResumeBencodeSerializer
         {
             dict["piece_priority"] = new BString(data.PiecePriority);
         }
-        else if (data.Bitfield != null && data.Bitfield.Length > 0)
-        {
-            var defaultPiecePriority = new byte[data.Bitfield.Length];
-            Array.Fill(defaultPiecePriority, (byte)1);
-            dict["piece_priority"] = new BString(defaultPiecePriority);
-        }
 
         // 9. sequential_download
         dict["sequential_download"] = new BNumber(data.SequentialDownload ? 1 : 0);

@@ -39,7 +39,7 @@ public class RingBufferTarget : TargetWithLayout
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex SensitiveJsonRegex = new(
-        "(\"?(?:passkey|api[_-]?key|password|token|secret|access[_-]?token|client[_-]?secret|refresh[_-]?token|bot[_-]?token|auth|(?<![a-z_-])key)\"?\\s*[:=]\\s*\"?)(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^\"',&}\\s]+)(\"?)",
+        "(\"?(?:passkey|api[_-]?key|password|token|secret|access[_-]?token|client[_-]?secret|refresh[_-]?token|bot[_-]?token|auth|(?<![a-z_-])key)\"?\\s*[:=]\\s*)(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^\"',&}\\s]+)(\"?)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex BearerTokenRegex = new(
