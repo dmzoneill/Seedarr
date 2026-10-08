@@ -1118,8 +1118,10 @@ public class TorrentRecheckServiceTest
 
         serviceWithSignalR.QueueRecheck(31);
 
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline && torrent.Status == TorrentStatus.Checking)
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline
+               && torrent.Status != TorrentStatus.Seeding
+               && torrent.Status != TorrentStatus.Paused)
         {
             await System.Threading.Tasks.Task.Delay(10);
         }

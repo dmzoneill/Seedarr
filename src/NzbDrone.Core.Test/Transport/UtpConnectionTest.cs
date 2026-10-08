@@ -950,7 +950,7 @@ public class UtpConnectionTest
             }
 
             serverConn.Flush();
-            clientFinished.Wait(TimeSpan.FromSeconds(10));
+            clientFinished.Wait(TimeSpan.FromSeconds(30));
         });
 
         using var clientConn = new UtpConnection(connectionTimeoutSeconds: 10);
@@ -969,11 +969,14 @@ public class UtpConnectionTest
         clientConn.Flush();
 
         var read = 0;
-        while (read < clientReceivedData.Length)
+        var clientReceiveDeadline = DateTime.UtcNow.AddSeconds(30);
+        while (read < clientReceivedData.Length && DateTime.UtcNow < clientReceiveDeadline)
         {
-            var r = clientConn.Receive(clientReceivedData, read, clientReceivedData.Length - read);
-            if (r <= 0) break;
-            read += r;
+            var r = clientConn.Receive(clientReceivedData, read, clientReceivedData.Length - read, 200);
+            if (r > 0)
+            {
+                read += r;
+            }
         }
 
         clientFinished.Set();

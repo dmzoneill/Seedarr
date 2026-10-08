@@ -477,7 +477,7 @@ public class UtpConnection : IUtpConnection
                         _ackNumber = header.SequenceNumber;
                         _connectionId = (ushort)(header.ConnectionId + 1);
                         _remoteWindowSize = header.WindowSize > 0 ? header.WindowSize : DefaultWindowSize;
-                        _expectedSeqNr = (ushort)(header.SequenceNumber + 1);
+                        _expectedSeqNr = header.SequenceNumber;
                         _hasReceivedFirstPacket = true;
                         IsConnected = true;
                         _sequenceNumber = (ushort)(synSeq + 1);

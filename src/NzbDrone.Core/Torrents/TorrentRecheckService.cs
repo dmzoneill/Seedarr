@@ -187,10 +187,7 @@ public class TorrentRecheckService : ITorrentRecheckService
     {
         while (true)
         {
-            if (!await _queueProcessingLock.WaitAsync(0).ConfigureAwait(false))
-            {
-                return;
-            }
+            await _queueProcessingLock.WaitAsync().ConfigureAwait(false);
 
             try
             {
@@ -231,10 +228,13 @@ public class TorrentRecheckService : ITorrentRecheckService
                     catch (Exception ex)
                     {
                         _logger.Error(ex, "Error during recheck for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
-                        var statusBefore = _queuedPreviousStatus.TryRemove(nextId, out var previous)
-                            ? previous
-                            : torrent.Status;
-                        PublishRecheckFailure(torrent, statusBefore);
+                        if (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking)
+                        {
+                            var statusBefore = _queuedPreviousStatus.TryRemove(nextId, out var previous)
+                                ? previous
+                                : torrent.Status;
+                            PublishRecheckFailure(torrent, statusBefore);
+                        }
                     }
                     finally
                     {
