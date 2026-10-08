@@ -169,13 +169,13 @@ public class Ipv6IntervalTree
             }
         }
 
-        if (TryParseCleanIPv6(trimmed, out range))
+        // Space-separated label prefix: e.g. "Bad Organization 2001:db8::1 - 2001:db8::ff"
+        if (TryParseSpaceSeparatedLabelPrefix(trimmed, out range))
         {
             return true;
         }
 
-        // Space-separated label prefix: e.g. "Bad Organization 2001:db8::1 - 2001:db8::ff"
-        if (TryParseSpaceSeparatedLabelPrefix(trimmed, out range))
+        if (TryParseCleanIPv6(trimmed, out range))
         {
             return true;
         }
@@ -530,16 +530,6 @@ public class Ipv6IntervalTree
             return true;
         }
 
-        // Try stripping label before colons (e.g. "Bad:Peer:2001:db8::")
-        for (var colonIdx = s.IndexOf(':'); colonIdx > 0 && colonIdx < s.Length - 1; colonIdx = s.IndexOf(':', colonIdx + 1))
-        {
-            var candidate = s[(colonIdx + 1)..].Trim();
-            if (IPAddress.TryParse(candidate, out ip))
-            {
-                return true;
-            }
-        }
-
         // Try stripping label before whitespace (e.g. "Bad Peer 2001:db8::")
         for (var spaceIdx = s.IndexOf(' '); spaceIdx > 0 && spaceIdx < s.Length - 1; spaceIdx = s.IndexOf(' ', spaceIdx + 1))
         {
@@ -548,6 +538,42 @@ public class Ipv6IntervalTree
             {
                 return true;
             }
+        }
+
+        // Try stripping label before colons (e.g. "Spammer:192.168.1.1", "Spamhaus-DROP:2001:db8::1")
+        for (var colonIdx = s.IndexOf(':'); colonIdx > 0 && colonIdx < s.Length - 1; colonIdx = s.IndexOf(':', colonIdx + 1))
+        {
+            if (s[..colonIdx].Contains(':'))
+            {
+                continue;
+            }
+
+            var candidate = s[(colonIdx + 1)..].Trim();
+            if (!IPAddress.TryParse(candidate, out ip))
+            {
+                continue;
+            }
+
+            var label = s[..colonIdx];
+            if (candidate.Contains("::", StringComparison.Ordinal))
+            {
+                var labelHasLetter = false;
+                foreach (var c in label)
+                {
+                    if (char.IsLetter(c))
+                    {
+                        labelHasLetter = true;
+                        break;
+                    }
+                }
+
+                if (!labelHasLetter)
+                {
+                    continue;
+                }
+            }
+
+            return true;
         }
 
         return false;

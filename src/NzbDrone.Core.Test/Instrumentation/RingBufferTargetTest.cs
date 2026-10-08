@@ -391,6 +391,15 @@ public class RingBufferTargetTest
     }
 
     [Test]
+    public void Sanitize_should_redact_freeform_passkey_and_token()
+    {
+        var msg = "Connecting to https://indexer.com/api?apikey=my-secret-key-123&other=val with token=tok_abc and passkey=pass_xyz";
+        var sanitized = RingBufferTarget.Sanitize(msg);
+        Assert.That(sanitized, Does.Contain("passkey=[REDACTED]"));
+        Assert.That(sanitized, Does.Contain("token=[REDACTED]"));
+    }
+
+    [Test]
     public void Write_should_redact_sensitive_tokens_in_exception()
     {
         var target = new RingBufferTarget();

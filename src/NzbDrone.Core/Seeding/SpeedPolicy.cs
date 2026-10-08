@@ -274,6 +274,8 @@ public class SpeedPolicy : ISpeedPolicy,
 
             torrent.Downloaded += bytesThisTick;
 
+            torrent.DownloadSpeed = bytesPerSecond;
+
             UpdateDownloadProgress(torrent);
 
             torrent.UpdateRatio();

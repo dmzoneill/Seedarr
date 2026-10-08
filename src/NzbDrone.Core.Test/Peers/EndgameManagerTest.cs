@@ -371,6 +371,10 @@ public class EndgameManagerTest
         Assert.That(picker.ActivePieces[0].GetBlock(0).IsCompleted, Is.True);
         Assert.That(picker.ActivePieces[0].GetBlock(0).IsRequested, Is.False);
 
+        var duplicateRequest = client2.ReceiveMessage();
+        Assert.That(duplicateRequest, Is.Not.Null);
+        Assert.That(duplicateRequest.Type, Is.EqualTo(PeerMessageType.Request));
+
         var cancelMsg = client2.ReceiveMessage();
         Assert.That(cancelMsg, Is.Not.Null);
         Assert.That(cancelMsg.Type, Is.EqualTo(PeerMessageType.Cancel));

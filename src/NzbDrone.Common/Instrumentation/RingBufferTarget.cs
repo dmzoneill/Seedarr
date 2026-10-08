@@ -27,7 +27,7 @@ public class RingBufferTarget : TargetWithLayout
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex SensitiveParamRegex = new(
-        @"((?:^|[?&,\s""';]|\b(?:and|with)\s+)(?:api[_-]?key|bot[_-]?token|token|passkey|secret|password|access[_-]?token|client[_-]?secret|refresh[_-]?token|auth)=)[^&\s""';]+",
+        @"((?:^|[?&,\s""';]|\b(?:and|with)\s+)(?:passkey|api[_-]?key|bot[_-]?token|token|secret|password|access[_-]?token|client[_-]?secret|refresh[_-]?token|auth)=)[^&\s""';]+",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex StandalonePasskeyRegex = new(
@@ -39,7 +39,7 @@ public class RingBufferTarget : TargetWithLayout
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex SensitiveJsonRegex = new(
-        "(\"?(?:api[_-]?key|passkey|password|token|secret|access[_-]?token|client[_-]?secret|refresh[_-]?token|bot[_-]?token|auth|key)\"?\\s*[:=]\\s*\"?)(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^\"',&}]+)(\"?)",
+        "(\"?(?:passkey|api[_-]?key|password|token|secret|access[_-]?token|client[_-]?secret|refresh[_-]?token|bot[_-]?token|auth|(?<![a-z_-])key)\"?\\s*[:=]\\s*\"?)(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^\"',&}\\s]+)(\"?)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex BearerTokenRegex = new(
@@ -96,9 +96,9 @@ public class RingBufferTarget : TargetWithLayout
         result = TelegramBotTokenRegex.Replace(result, "bot[REDACTED]");
         result = DiscordWebhookRegex.Replace(result, "/api/webhooks/${id}/[REDACTED]");
         result = SlackWebhookRegex.Replace(result, "/services/[REDACTED]");
-        result = SensitiveParamRegex.Replace(result, "$1[REDACTED]");
         result = StandalonePasskeyRegex.Replace(result, "passkey=[REDACTED]");
         result = StandaloneTokenRegex.Replace(result, "token=[REDACTED]");
+        result = SensitiveParamRegex.Replace(result, "$1[REDACTED]");
         result = SensitiveJsonRegex.Replace(result, "$1[REDACTED]$2");
         result = BearerTokenRegex.Replace(result, "Bearer [REDACTED]");
         result = AuthorizationHeaderCredentialRegex.Replace(result, "${1}${2} [REDACTED]");
