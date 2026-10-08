@@ -430,13 +430,13 @@ public class TorrentRecheckService : ITorrentRecheckService
 
                 try
                 {
-                    if (files != null && files.Count > 0 &&
-                        _pieceVerificationService != null &&
-                        pieceHashes != null &&
-                        pieceHashes.Length >= (i + 1) * 20)
+                    if (files != null && files.Count > 0 && _pieceVerificationService != null)
                     {
                         var expectedHash = new byte[20];
-                        Array.Copy(pieceHashes, i * 20, expectedHash, 0, 20);
+                        if (pieceHashes != null && pieceHashes.Length >= (i + 1) * 20)
+                        {
+                            Array.Copy(pieceHashes, i * 20, expectedHash, 0, 20);
+                        }
 
                         bitfield[i] = _pieceVerificationService.VerifyPieceFromStorage(
                             torrent,

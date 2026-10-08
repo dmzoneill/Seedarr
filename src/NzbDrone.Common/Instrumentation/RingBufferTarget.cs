@@ -99,7 +99,18 @@ public class RingBufferTarget : TargetWithLayout
         result = StandalonePasskeyRegex.Replace(result, "passkey=[REDACTED]");
         result = StandaloneTokenRegex.Replace(result, "token=[REDACTED]");
         result = SensitiveParamRegex.Replace(result, "$1[REDACTED]");
-        result = SensitiveJsonRegex.Replace(result, "$1[REDACTED]$2");
+        result = SensitiveJsonRegex.Replace(result, match =>
+        {
+            var prefix = match.Groups[1].Value;
+            var suffix = match.Groups[2].Value;
+            var matchedValue = match.Value.Substring(prefix.Length, match.Value.Length - prefix.Length - suffix.Length);
+            if (matchedValue.StartsWith('"') && matchedValue.EndsWith('"'))
+            {
+                return prefix + "\"[REDACTED]\"" + suffix;
+            }
+
+            return prefix + "[REDACTED]" + suffix;
+        });
         result = BearerTokenRegex.Replace(result, "Bearer [REDACTED]");
         result = AuthorizationHeaderCredentialRegex.Replace(result, "${1}${2} [REDACTED]");
         result = BasicAuthRegex.Replace(result, "$1[REDACTED]$3");

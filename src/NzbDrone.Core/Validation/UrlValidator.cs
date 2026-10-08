@@ -71,9 +71,20 @@ public static class UrlValidator
         }
         catch
         {
-            if (allowInternal && (trimmedHost.EndsWith(".local", StringComparison.OrdinalIgnoreCase) || trimmedHost.EndsWith(".internal", StringComparison.OrdinalIgnoreCase) || trimmedHost.EndsWith(".lan", StringComparison.OrdinalIgnoreCase)))
+            if (allowInternal)
             {
-                return true;
+                if (trimmedHost.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+                    trimmedHost.EndsWith(".internal", StringComparison.OrdinalIgnoreCase) ||
+                    trimmedHost.EndsWith(".lan", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                // Docker Compose / Kubernetes service names (single-label, non-IP)
+                if (!trimmedHost.Contains('.') && !IPAddress.TryParse(trimmedHost, out _))
+                {
+                    return true;
+                }
             }
 
             return false;
