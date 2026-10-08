@@ -255,11 +255,10 @@ public class TerminalControllerTest
     {
         var hubContext = Substitute.For<IHubContext<TerminalHub>>();
         var hubClients = Substitute.For<IHubClients>();
-        var clientProxy = Substitute.For<IClientProxy>();
+        var clientProxy = Substitute.For<ISingleClientProxy>();
         hubContext.Clients.Returns(hubClients);
         hubClients.Client("my-conn").Returns(clientProxy);
-        clientProxy.SendCoreAsync(Arg.Any<string>(), Arg.Any<object[]>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+        clientProxy.SendAsync(default!, default!, default).ReturnsForAnyArgs(Task.CompletedTask);
 
         _controller = new TerminalController(_terminalService, _configFileProvider, hubContext);
         SetAdminUser("127.0.0.1", "adminUser");
@@ -269,7 +268,7 @@ public class TerminalControllerTest
                 Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(),
                 Arg.Do<Func<string, Task>>(cb => outputCallback = cb),
                 Arg.Any<Action>(), Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+            .Returns(Task.FromResult(new TerminalSession("my-conn", Substitute.For<IPtyProcess>())));
 
         var request = new TerminalSessionRequest { ConnectionId = "my-conn", Cols = 80, Rows = 24 };
         await _controller.StartSession(request);
@@ -277,10 +276,7 @@ public class TerminalControllerTest
         Assert.That(outputCallback, Is.Not.Null);
         await outputCallback!("hello from pty");
 
-        await clientProxy.Received(1).SendCoreAsync(
-            "ReceiveOutput",
-            Arg.Is<object[]>(args => args.Length == 1 && args[0] as string == "hello from pty"),
-            Arg.Any<CancellationToken>());
+        await clientProxy.Received(1).SendAsync("ReceiveOutput", "hello from pty", Arg.Any<CancellationToken>());
     }
 
     [Test]

@@ -930,11 +930,15 @@ public class UtpConnectionTest
             SetConnected(serverConn, true);
 
             var read = 0;
-            while (read < serverReceivedData.Length)
+            var receiveDeadline = DateTime.UtcNow.AddSeconds(20);
+            while (read < serverReceivedData.Length && DateTime.UtcNow < receiveDeadline)
             {
-                var r = serverConn.Receive(serverReceivedData, read, serverReceivedData.Length - read);
-                if (r <= 0) break;
-                read += r;
+                PumpAvailablePackets(serverUdp, serverConn);
+                var r = serverConn.Receive(serverReceivedData, read, serverReceivedData.Length - read, 50);
+                if (r > 0)
+                {
+                    read += r;
+                }
             }
 
             var written = 0;
@@ -1018,11 +1022,15 @@ public class UtpConnectionTest
             SetConnected(serverConn, true);
 
             var read = 0;
-            while (read < serverReceivedData.Length)
+            var receiveDeadline = DateTime.UtcNow.AddSeconds(20);
+            while (read < serverReceivedData.Length && DateTime.UtcNow < receiveDeadline)
             {
-                var r = serverConn.Receive(serverReceivedData, read, serverReceivedData.Length - read);
-                if (r <= 0) break;
-                read += r;
+                PumpAvailablePackets(serverUdp, serverConn);
+                var r = serverConn.Receive(serverReceivedData, read, serverReceivedData.Length - read, 50);
+                if (r > 0)
+                {
+                    read += r;
+                }
             }
         });
 
@@ -2478,6 +2486,21 @@ public class UtpConnectionTest
         }
 
         return packet;
+    }
+
+    private static void PumpAvailablePackets(UdpClient udp, UtpConnection connection)
+    {
+        if (udp.Client == null)
+        {
+            return;
+        }
+
+        while (udp.Client.Available > 0)
+        {
+            var endpoint = new IPEndPoint(IPAddress.Any, 0);
+            var packet = udp.Receive(ref endpoint);
+            connection.HandleIncomingPacket(packet, endpoint);
+        }
     }
 
     private static void InitializeServerUtpFromSyn(UtpConnection connection, UtpHeader synHeader)
