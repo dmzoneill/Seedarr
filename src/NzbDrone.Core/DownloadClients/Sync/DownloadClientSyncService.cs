@@ -142,10 +142,9 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     public SyncResult Sync()
     {
-        if (!_syncLock.Wait(0))
+        if (!WaitForSyncLock())
         {
-            _logger.Warn("Download client sync sweep skipped because another sync or import is in progress.");
-            return new SyncResult();
+            throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
         }
 
         try
