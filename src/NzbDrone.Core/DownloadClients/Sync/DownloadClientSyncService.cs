@@ -962,26 +962,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
         try
         {
-            existingHashes = _torrentService.GetAll()
-                .Where(t => !string.IsNullOrEmpty(t.InfoHash))
-                .Select(t => t.InfoHash.ToLowerInvariant())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
             foreach (var pending in pendingImports)
             {
-                if (existingHashes.Contains(pending.Hash))
-                {
-                    result.Skipped++;
-                    result.Items.Add(new BatchImportItemResult
-                    {
-                        InfoHash = pending.Hash,
-                        Title = pending.Title,
-                        Success = true,
-                        ErrorMessage = null
-                    });
-                    continue;
-                }
-
                 try
                 {
                     ImportTorrentInternal(definition, provider, pending.Hash, pending.MatchingItem, pending.TorrentBytes);

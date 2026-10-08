@@ -61,7 +61,8 @@ public class BasicRepositoryRetryTest
             );
             CREATE TABLE ""Torrents"" (
                 ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
-                ""InfoHash"" TEXT NOT NULL
+                ""InfoHash"" TEXT NOT NULL,
+                ""InfoHashV2"" TEXT NULL
             );
             CREATE TABLE ""DownloadHistory"" (
                 ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,

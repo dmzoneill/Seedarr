@@ -56,7 +56,7 @@ public class RevokedSessionRepositoryTest
 
         _subject.Upsert("session-a", revokedAt, expiresAt);
 
-        var active = _subject.GetActive(DateTime.UtcNow.AddYears(1)).ToList();
+        var active = _subject.GetActive(DateTime.UtcNow).ToList();
         Assert.That(active, Has.Count.EqualTo(1));
         Assert.That(active[0].SessionKey, Is.EqualTo("session-a"));
         Assert.That(active[0].RevokedAtUtc, Is.EqualTo(revokedAt).Within(TimeSpan.FromSeconds(1)));
@@ -73,14 +73,14 @@ public class RevokedSessionRepositoryTest
         _subject.Upsert("session-b", first, expiresFirst);
         _subject.Upsert("session-b", second, expiresSecond);
 
-        var row = _subject.GetActive(DateTime.UtcNow.AddYears(1)).Single();
+        var row = _subject.GetActive(DateTime.UtcNow).Single();
         Assert.That(row.RevokedAtUtc, Is.EqualTo(second).Within(TimeSpan.FromSeconds(1)));
         Assert.That(row.ExpiresAtUtc, Is.EqualTo(expiresSecond).Within(TimeSpan.FromSeconds(1)));
 
         var older = first.AddMinutes(-30);
         _subject.Upsert("session-b", older, older.AddDays(30));
 
-        row = _subject.GetActive(DateTime.UtcNow.AddYears(1)).Single();
+        row = _subject.GetActive(DateTime.UtcNow).Single();
         Assert.That(row.RevokedAtUtc, Is.EqualTo(second).Within(TimeSpan.FromSeconds(1)));
     }
 
@@ -104,7 +104,7 @@ public class RevokedSessionRepositoryTest
         });
 
         Assert.That(errors, Is.EqualTo(0));
-        var rows = _subject.GetActive(DateTime.UtcNow.AddYears(1)).ToList();
+        var rows = _subject.GetActive(DateTime.UtcNow).ToList();
         Assert.That(rows, Has.Count.EqualTo(1));
         Assert.That(rows[0].SessionKey, Is.EqualTo("session-race"));
     }
@@ -114,7 +114,7 @@ public class RevokedSessionRepositoryTest
     {
         _subject.Upsert("  ", DateTime.UtcNow, DateTime.UtcNow.AddDays(30));
 
-        Assert.That(_subject.GetActive(DateTime.UtcNow.AddYears(1)), Is.Empty);
+        Assert.That(_subject.GetActive(DateTime.UtcNow), Is.Empty);
     }
 
     [Test]
@@ -139,7 +139,7 @@ public class RevokedSessionRepositoryTest
         _subject.Upsert("admin", revokedAt, expiresAt);
         _subject.Upsert("Admin", revokedAt.AddMinutes(5), expiresAt);
 
-        var rows = _subject.GetActive(DateTime.UtcNow.AddYears(1)).ToList();
+        var rows = _subject.GetActive(DateTime.UtcNow).ToList();
         Assert.That(rows, Has.Count.EqualTo(1));
         Assert.That(rows[0].SessionKey, Is.EqualTo("admin"));
         Assert.That(rows[0].RevokedAtUtc, Is.EqualTo(revokedAt.AddMinutes(5)).Within(TimeSpan.FromSeconds(1)));
