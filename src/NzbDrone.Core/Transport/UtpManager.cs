@@ -323,6 +323,11 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
             {
                 listener = new UdpClient();
                 listener.Client.BindToNetworkInterface(_configService.BindInterface, IPAddress.Any, listenPort);
+                if (!listener.Client.IsBound)
+                {
+                    listener.Dispose();
+                    throw new SocketException((int)SocketError.AddressAlreadyInUse);
+                }
             }
             catch (SocketException ex)
             {
@@ -333,16 +338,7 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
                     _logger.Info("TCP fallback is enabled, continuing without uTP");
                 }
 
-                try
-                {
-                    await WaitUntilRestoredOrCancelledAsync(stoppingToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-
-                continue;
+                return;
             }
             catch (Exception ex)
             {
