@@ -117,8 +117,9 @@ public class TorrentRecheckService : ITorrentRecheckService
     public void CancelRecheck(int id)
     {
         var wasQueued = _queuedTorrentIds.TryRemove(id, out _);
+        var hadActive = _activeRechecks.TryGetValue(id, out var cts);
 
-        if (_activeRechecks.TryGetValue(id, out var cts))
+        if (hadActive)
         {
             try
             {
@@ -128,14 +129,15 @@ public class TorrentRecheckService : ITorrentRecheckService
             {
                 _logger.Trace(ex, "Cancellation token already disposed for recheck torrent {0}", id);
             }
-
-            var activeTorrent = _torrentRepository?.Get(id);
-            if (activeTorrent?.Status == TorrentStatus.QueuedForChecking)
-            {
-                RevertQueuedRecheck(id);
-            }
         }
-        else if (wasQueued)
+
+        if (!wasQueued && !hadActive)
+        {
+            return;
+        }
+
+        var torrent = _torrentRepository?.Get(id);
+        if (torrent?.Status == TorrentStatus.QueuedForChecking)
         {
             RevertQueuedRecheck(id);
         }
