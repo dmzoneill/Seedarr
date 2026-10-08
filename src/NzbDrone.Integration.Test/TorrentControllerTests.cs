@@ -135,12 +135,11 @@ public class TorrentControllerTests : IntegrationTestBase
     }
 
     [Test]
-    public async Task DeleteTorrent_unknown_returns_200()
+    public async Task DeleteTorrent_unknown_returns_not_found()
     {
-        // The delete endpoint calls Delete and returns Ok() regardless of whether the id exists
         var response = await DeleteAsync("/api/v1/torrent/99999");
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]

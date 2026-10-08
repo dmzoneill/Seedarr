@@ -207,11 +207,11 @@ public class TorrentRecheckService : ITorrentRecheckService
                     }
 
                     using var cts = new CancellationTokenSource();
-                    _activeRechecks[nextId] = cts;
 
                     try
                     {
                         await _recheckConcurrencySemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
+                        _activeRechecks[nextId] = cts;
                         try
                         {
                             await ExecuteRecheckCoreAsync(torrent, null, cts.Token).ConfigureAwait(false);

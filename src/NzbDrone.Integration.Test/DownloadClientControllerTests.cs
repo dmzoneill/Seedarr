@@ -163,10 +163,10 @@ public class DownloadClientControllerTests : IntegrationTestBase
     }
 
     [Test]
-    public async Task ImportTorrent_for_nonexistent_client_returns_bad_request()
+    public async Task ImportTorrent_for_nonexistent_client_returns_not_found()
     {
         var response = await PostJsonAsync("/api/v1/downloadclients/999999/import/deadbeef", new { });
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]

@@ -38,7 +38,8 @@ public class MultiTrackerManagerTest
 
         _manager = new MultiTrackerManager(
             new List<ITrackerProvider> { _httpTracker, _udpTracker },
-            _configService);
+            _configService,
+            serviceFactory: null);
     }
 
     [Test]

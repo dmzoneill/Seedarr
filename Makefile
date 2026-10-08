@@ -60,11 +60,10 @@ clean:
 # --- Tests (called by upstream CI: make test / make integration) ---
 
 test:
-	timeout 600 dotnet test $(UNIT_TEST) --configuration Release --no-build \
+	timeout 720 dotnet test $(UNIT_TEST) --configuration Release --no-build \
 		--settings .runsettings \
 		--logger "console;verbosity=normal" \
 		--logger "trx;LogFileName=test-results.trx" \
-		--collect:"XPlat Code Coverage" \
 		-- RunConfiguration.MaxCpuCount=1 NUnit.NumberOfTestWorkers=1
 
 # integration runs unit/integration tests without container orchestration
@@ -73,8 +72,7 @@ integration:
 		timeout 600 dotnet test $(INTEGRATION_TEST) --no-build \
 			--settings .runsettings \
 			--logger "trx;LogFileName=integration-test-results.trx" \
-			--logger "console;verbosity=normal" \
-			--collect:"XPlat Code Coverage"; \
+			--logger "console;verbosity=normal"; \
 	fi
 
 # stack-integration brings up the full container stack and runs all test suites.

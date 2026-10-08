@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net;
 using System.Threading.Tasks;
 using DryIoc;
@@ -204,11 +205,38 @@ public static class Bootstrap
             "*" or "+" or "0.0.0.0" => IPAddress.Any,
             "localhost" or "127.0.0.1" => IPAddress.Loopback,
             "::1" => IPAddress.IPv6Loopback,
+            _ when cleanAddress.Contains('.') && !IsValidIpv4Literal(cleanAddress) => throw new ArgumentException(
+                $"Invalid BindAddress '{bindAddress}'. Allowed values are '*', '+', '0.0.0.0', '::', 'localhost', or a valid IP address.",
+                nameof(bindAddress)),
             _ when IPAddress.TryParse(cleanAddress, out var parsed) => parsed,
             _ => throw new ArgumentException(
                 $"Invalid BindAddress '{bindAddress}'. Allowed values are '*', '+', '0.0.0.0', '::', 'localhost', or a valid IP address.",
                 nameof(bindAddress)),
         };
+    }
+
+    private static bool IsValidIpv4Literal(string host)
+    {
+        var parts = host.Split('.');
+        if (parts.Length != 4)
+        {
+            return false;
+        }
+
+        foreach (var part in parts)
+        {
+            if (part.Length == 0 || (part.Length > 1 && part[0] == '0'))
+            {
+                return false;
+            }
+
+            if (!int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out var octet) || octet < 0 || octet > 255)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static bool HasPortCollision(bool enableSsl, int port, int sslPort)

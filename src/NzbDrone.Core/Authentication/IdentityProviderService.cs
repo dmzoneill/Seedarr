@@ -116,10 +116,22 @@ public class IdentityProviderService : IIdentityProviderService
             return secret;
         }
 
-        if (LooksLikeDataProtectionPayload(secret))
+        try
         {
-            throw new InvalidOperationException(
-                "Identity provider client secret cannot be decrypted with the current data protection key ring. Re-enter the client secret.");
+            _protector.Unprotect(secret);
+            return secret;
+        }
+        catch (CryptographicException)
+        {
+            if (LooksLikeDataProtectionPayload(secret))
+            {
+                throw new InvalidOperationException(
+                    "Identity provider client secret cannot be decrypted with the current data protection key ring. Re-enter the client secret.");
+            }
+        }
+        catch (FormatException)
+        {
+            // Plaintext secret; protect below.
         }
 
         try
@@ -202,23 +214,41 @@ public class IdentityProviderService : IIdentityProviderService
             return false;
         }
 
-        byte[] data;
+        if (!TryDecodeProtectedPayload(value, out var data))
+        {
+            return false;
+        }
+
+        // ASP.NET data protection payloads are non-trivial binary blobs (base64).
+        return data.Length >= 16;
+    }
+
+    private static bool TryDecodeProtectedPayload(string value, out byte[] data)
+    {
+        data = null;
+        if (string.IsNullOrEmpty(value))
+        {
+            return false;
+        }
+
         try
         {
             data = Convert.FromBase64String(PadBase64(value));
+            return true;
         }
         catch (FormatException)
         {
-            return false;
+            try
+            {
+                var normalized = value.Replace('-', '+').Replace('_', '/');
+                data = Convert.FromBase64String(PadBase64(normalized));
+                return true;
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
         }
-
-        if (data.Length < 10)
-        {
-            return false;
-        }
-
-        // Default ASP.NET Core data protection payload header.
-        return data[0] == 0x09 && data[1] == 0xF0 && data[2] == 0xC9 && data[3] == 0xF0;
     }
 
     private static string PadBase64(string value)

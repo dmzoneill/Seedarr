@@ -5,9 +5,12 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using NLog;
+using NzbDrone.Common;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers.Http;
+using NzbDrone.Core.Trackers.Udp;
 
 namespace NzbDrone.Core.Trackers.MultiTracker;
 
@@ -21,34 +24,84 @@ public interface IMultiTrackerManager
 
 public class MultiTrackerManager : IMultiTrackerManager
 {
-    private readonly ITrackerProvider _httpTracker;
-    private readonly ITrackerProvider _udpTracker;
+    private readonly List<ITrackerProvider> _registeredTrackerProviders;
+    private readonly ITrackerProviderFactory _trackerProviderFactory;
+    private readonly IServiceFactory _serviceFactory;
     private readonly IConfigService _configService;
     private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, TrackerFailureState> _failureStates = new();
     private readonly ConcurrentDictionary<string, TrackerPerformanceState> _performanceStates = new();
+    private ITrackerProvider _httpTracker;
+    private ITrackerProvider _udpTracker;
 
     public MultiTrackerManager(
         IEnumerable<ITrackerProvider> trackerProviders,
         IConfigService configService,
+        IServiceFactory serviceFactory,
         ITrackerProviderFactory trackerProviderFactory = null,
         IVpnKillSwitchService vpnKillSwitchService = null)
     {
-        var providers = trackerProviders?.ToList() ?? new List<ITrackerProvider>();
-        _httpTracker = providers.FirstOrDefault(p => p.Name == "HTTP");
-        _udpTracker = providers.FirstOrDefault(p => p.Name == "UDP");
-
-        if ((_httpTracker == null || _udpTracker == null) && trackerProviderFactory != null)
-        {
-            var factoryProviders = trackerProviderFactory.GetAvailableProviders();
-            _httpTracker ??= factoryProviders.FirstOrDefault(p => p.Name == "HTTP");
-            _udpTracker ??= factoryProviders.FirstOrDefault(p => p.Name == "UDP");
-        }
+        _registeredTrackerProviders = trackerProviders?.ToList() ?? new List<ITrackerProvider>();
+        _httpTracker = _registeredTrackerProviders.FirstOrDefault(p => p.Name == "HTTP");
+        _udpTracker = _registeredTrackerProviders.FirstOrDefault(p => p.Name == "UDP");
+        _serviceFactory = serviceFactory;
+        _trackerProviderFactory = trackerProviderFactory;
 
         _configService = configService;
         _vpnKillSwitchService = vpnKillSwitchService;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    private void EnsureTrackerProviders()
+    {
+        if (_httpTracker != null && _udpTracker != null)
+        {
+            return;
+        }
+
+        var providers = new List<ITrackerProvider>(_registeredTrackerProviders);
+
+        if (_trackerProviderFactory != null)
+        {
+            providers.AddRange(_trackerProviderFactory.GetAvailableProviders());
+        }
+
+        if (_serviceFactory != null &&
+            (!providers.Any(p => p.Name == "HTTP") || !providers.Any(p => p.Name == "UDP")))
+        {
+            providers.AddRange(_serviceFactory.BuildAll<ITrackerProvider>());
+        }
+
+        if (_serviceFactory != null)
+        {
+            if (!providers.Any(p => p.Name == "HTTP"))
+            {
+                var http = _serviceFactory.Build<HttpTrackerProvider>();
+                if (http != null)
+                {
+                    providers.Add(http);
+                }
+            }
+
+            if (!providers.Any(p => p.Name == "UDP"))
+            {
+                var udp = _serviceFactory.Build<UdpTrackerProvider>();
+                if (udp != null)
+                {
+                    providers.Add(udp);
+                }
+            }
+        }
+
+        var distinctProviders = providers
+            .Where(p => p != null)
+            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+
+        _httpTracker ??= distinctProviders.FirstOrDefault(p => p.Name == "HTTP");
+        _udpTracker ??= distinctProviders.FirstOrDefault(p => p.Name == "UDP");
     }
 
     public static void ShuffleTier<T>(IList<T> list, Random random = null)
@@ -732,6 +785,8 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     private ITrackerProvider GetProvider(string url)
     {
+        EnsureTrackerProviders();
+
         if (url.StartsWith("udp://", StringComparison.OrdinalIgnoreCase))
         {
             return _udpTracker;
