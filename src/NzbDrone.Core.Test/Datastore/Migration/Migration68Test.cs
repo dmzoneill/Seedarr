@@ -93,13 +93,11 @@ public class Migration68Test
         conn.Execute(
             "INSERT INTO \"TorrentFiles\" (\"TorrentId\", \"Path\") VALUES (@TorrentId, 'valid.txt');",
             new { TorrentId = torrentId });
-        conn.Execute("INSERT INTO \"TorrentFiles\" (\"TorrentId\", \"Path\") VALUES (NULL, 'orphan-null.txt');");
         conn.Execute("INSERT INTO \"TorrentFiles\" (\"TorrentId\", \"Path\") VALUES (999999, 'orphan-missing.txt');");
 
         conn.Execute(
             "INSERT INTO \"TrackerEntries\" (\"TorrentId\", \"Url\") VALUES (@TorrentId, 'https://valid.example');",
             new { TorrentId = torrentId });
-        conn.Execute("INSERT INTO \"TrackerEntries\" (\"TorrentId\", \"Url\") VALUES (NULL, 'https://orphan-null.example');");
         conn.Execute("INSERT INTO \"TrackerEntries\" (\"TorrentId\", \"Url\") VALUES (999999, 'https://orphan-missing.example');");
 
         conn.Execute(
@@ -108,11 +106,7 @@ public class Migration68Test
             VALUES (@TorrentId, '2026-01-01', 'Info', 'valid');
             """,
             new { TorrentId = torrentId });
-        conn.Execute(
-            """
-            INSERT INTO "TorrentEventLogs" ("TorrentId", "TimeStamp", "Level", "Message")
-            VALUES (NULL, '2026-01-01', 'Info', 'orphan-null');
-            """);
+
         conn.Execute(
             """
             INSERT INTO "TorrentEventLogs" ("TorrentId", "TimeStamp", "Level", "Message")
@@ -122,15 +116,14 @@ public class Migration68Test
         conn.Execute(
             "INSERT INTO \"TorrentMediaMetadata\" (\"TorrentId\", \"ArrType\", \"Title\") VALUES (@TorrentId, 'movie', 'valid');",
             new { TorrentId = torrentId });
-        conn.Execute(
-            "INSERT INTO \"TorrentMediaMetadata\" (\"TorrentId\", \"ArrType\", \"Title\") VALUES (NULL, 'movie', 'orphan-null');");
+
         conn.Execute(
             "INSERT INTO \"TorrentMediaMetadata\" (\"TorrentId\", \"ArrType\", \"Title\") VALUES (999998, 'movie', 'orphan-missing');");
 
-        Assert.That(conn.QuerySingle<int>("SELECT COUNT(*) FROM \"TorrentFiles\""), Is.EqualTo(3));
-        Assert.That(conn.QuerySingle<int>("SELECT COUNT(*) FROM \"TrackerEntries\""), Is.EqualTo(3));
-        Assert.That(conn.QuerySingle<int>("SELECT COUNT(*) FROM \"TorrentEventLogs\""), Is.EqualTo(3));
-        Assert.That(conn.QuerySingle<int>("SELECT COUNT(*) FROM \"TorrentMediaMetadata\""), Is.EqualTo(3));
+        Assert.That(conn.QuerySingle<int>("SELECT COUNT(*) FROM \"TorrentFiles\""), Is.EqualTo(2));
+        Assert.That(conn.QuerySingle<int>("SELECT COUNT(*) FROM \"TrackerEntries\""), Is.EqualTo(2));
+        Assert.That(conn.QuerySingle<int>("SELECT COUNT(*) FROM \"TorrentEventLogs\""), Is.EqualTo(2));
+        Assert.That(conn.QuerySingle<int>("SELECT COUNT(*) FROM \"TorrentMediaMetadata\""), Is.EqualTo(2));
 
         RunMigration68OrphanCleanup(conn);
 

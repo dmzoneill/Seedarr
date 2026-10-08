@@ -216,7 +216,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Failed to update dynamic authentication scheme for provider: {0}", updated.ProviderId);
-                await RollbackProviderUpdateAsync(existing);
+                await RollbackProviderUpdateAsync(existing, restoreDynamicScheme: false);
                 return BadRequest(new { message = $"Failed to update authentication scheme: {ex.Message}" });
             }
         }
@@ -351,7 +351,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         }
     }
 
-    private async Task RollbackProviderUpdateAsync(IdentityProviderDefinition previous)
+    private async Task RollbackProviderUpdateAsync(IdentityProviderDefinition previous, bool restoreDynamicScheme = true)
     {
         try
         {
@@ -363,7 +363,10 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             return;
         }
 
-        await TryRestoreProviderSchemeAsync(previous);
+        if (restoreDynamicScheme)
+        {
+            await TryRestoreProviderSchemeAsync(previous);
+        }
     }
 
     private async Task TryRestoreProviderSchemeAsync(IdentityProviderDefinition provider)
