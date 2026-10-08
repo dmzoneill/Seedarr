@@ -440,7 +440,9 @@ public class RssRuleControllerTest
     {
         RssRuleController.ResetSyncCooldown();
         var rssSyncService = Substitute.For<IRssSyncService>();
-        rssSyncService.Sync(true).Returns<int>(_ => throw new InvalidOperationException("indexer down"));
+        rssSyncService.Sync(true).Returns(
+            _ => throw new InvalidOperationException("indexer down"),
+            _ => 2);
 
         var controller = new RssRuleController(
             _rssRuleRepository,
@@ -453,7 +455,6 @@ public class RssRuleControllerTest
         Assert.That(failed.Result, Is.InstanceOf<ObjectResult>());
         Assert.That(((ObjectResult)failed.Result).StatusCode, Is.EqualTo(500));
 
-        rssSyncService.Sync(true).Returns(2);
         var retry = controller.SyncRss();
 
         Assert.That(retry.Result, Is.InstanceOf<OkObjectResult>());
