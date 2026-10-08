@@ -30,7 +30,7 @@ public class IndexerControllerTests : IntegrationTestBase
         {
             name = "Test Prowlarr Integration",
             indexerType = "Prowlarr",
-            url = "http://localhost:9696",
+            url = "http://198.51.100.2:9696",
             apiKey = "secretapikey",
             apiPath = "/api",
             enableRss = true,

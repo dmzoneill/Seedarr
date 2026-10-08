@@ -168,11 +168,6 @@ public class TorznabIndexer : IIndexer
 
     private HttpClient GetHttpClient()
     {
-        if (_httpClient != null)
-        {
-            return _httpClient;
-        }
-
         if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
         {
             EnsureProxyClient();
@@ -182,7 +177,12 @@ public class TorznabIndexer : IIndexer
             }
         }
 
-        return _httpClient ?? DefaultClient;
+        if (_httpClient != null)
+        {
+            return _httpClient;
+        }
+
+        return DefaultClient;
     }
 
     private void EnsureProxyClient()

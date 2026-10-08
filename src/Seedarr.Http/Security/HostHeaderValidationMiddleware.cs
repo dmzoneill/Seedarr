@@ -154,8 +154,8 @@ public class HostHeaderValidationMiddleware
             }
         }
 
-        // Allow local LAN IPs when no explicit allowlist is configured
-        if (!hasExplicitAllowedHosts && IPAddress.TryParse(cleanHost, out var ip))
+        // Allow local LAN IPs when no explicit allowlist is configured, or when the allowlist uses wildcards
+        if ((!hasExplicitAllowedHosts || AllowsImplicitPrivateHosts(allowedHostsConfig)) && IPAddress.TryParse(cleanHost, out var ip))
         {
             if (ip.IsIPv4MappedToIPv6)
             {
@@ -213,6 +213,25 @@ public class HostHeaderValidationMiddleware
                 {
                     return true;
                 }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool AllowsImplicitPrivateHosts(string allowedHostsConfig)
+    {
+        if (string.IsNullOrWhiteSpace(allowedHostsConfig))
+        {
+            return true;
+        }
+
+        foreach (var pattern in allowedHostsConfig.Split(HostSeparators, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = pattern.Trim();
+            if (trimmed == "*" || trimmed.StartsWith("*.", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
             }
         }
 

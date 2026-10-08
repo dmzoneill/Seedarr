@@ -712,8 +712,8 @@ public class IdentityProviderServiceTest
         var dataProtection = Substitute.For<IDataProtectionProvider>();
         var protector = Substitute.For<IDataProtector>();
         dataProtection.CreateProtector(IdentityProviderService.DataProtectionPurpose).Returns(protector);
-        protector.Protect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("key ring unavailable"));
-        protector.Unprotect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("not encrypted"));
+        protector.Protect(Arg.Any<byte[]>()).Returns(_ => throw new CryptographicException("key ring unavailable"));
+        protector.Unprotect(Arg.Any<byte[]>()).Returns(_ => throw new CryptographicException("not encrypted"));
 
         var service = new IdentityProviderService(_repository, null, dataProtection);
 
@@ -727,8 +727,8 @@ public class IdentityProviderServiceTest
         var dataProtection = Substitute.For<IDataProtectionProvider>();
         var protector = Substitute.For<IDataProtector>();
         dataProtection.CreateProtector(IdentityProviderService.DataProtectionPurpose).Returns(protector);
-        protector.Protect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("key ring unavailable"));
-        protector.Unprotect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("not encrypted"));
+        protector.Protect(Arg.Any<byte[]>()).Returns(_ => throw new CryptographicException("key ring unavailable"));
+        protector.Unprotect(Arg.Any<byte[]>()).Returns(_ => throw new CryptographicException("not encrypted"));
 
         var service = new IdentityProviderService(_repository, null, dataProtection);
         var provider = new IdentityProviderDefinition
@@ -814,8 +814,8 @@ public class IdentityProviderServiceTest
         var dataProtection = Substitute.For<IDataProtectionProvider>();
         var protector = Substitute.For<IDataProtector>();
         dataProtection.CreateProtector(IdentityProviderService.DataProtectionPurpose).Returns(protector);
-        protector.Protect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("key ring unavailable"));
-        protector.Unprotect(Arg.Any<string>()).Returns(_ => throw new CryptographicException("not encrypted"));
+        protector.Protect(Arg.Any<byte[]>()).Returns(_ => throw new CryptographicException("key ring unavailable"));
+        protector.Unprotect(Arg.Any<byte[]>()).Returns(_ => throw new CryptographicException("not encrypted"));
 
         var service = new IdentityProviderService(_repository, null, dataProtection);
         var provider = new IdentityProviderDefinition

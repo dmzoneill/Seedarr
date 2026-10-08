@@ -112,7 +112,7 @@ public class IndexerController : Controller
             return BadRequest("URL cannot be empty.");
         }
 
-        if (!UrlValidator.IsSafeUrl(definition.Url, allowLoopback: true, allowInternal: true))
+        if (!UrlValidator.IsSafeUrl(definition.Url))
         {
             return BadRequest("Target host/URL is not permitted.");
         }
@@ -205,7 +205,7 @@ public class IndexerController : Controller
             return BadRequest("URL cannot be empty.");
         }
 
-        if (!UrlValidator.IsSafeUrl(definition.Url, allowLoopback: true, allowInternal: true))
+        if (!UrlValidator.IsSafeUrl(definition.Url))
         {
             return BadRequest("Target host/URL is not permitted.");
         }
@@ -359,7 +359,7 @@ public class IndexerController : Controller
             return NotFound();
         }
 
-        if (!UrlValidator.IsSafeUrl(definition.Url, allowLoopback: true, allowInternal: true))
+        if (!UrlValidator.IsSafeUrl(definition.Url))
         {
             return BadRequest("Target host/URL is not permitted.");
         }
@@ -899,11 +899,6 @@ public class IndexerController : Controller
 
     private HttpClient GetHttpClient()
     {
-        if (_httpClient != null)
-        {
-            return _httpClient;
-        }
-
         if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
         {
             EnsureProxyClient(_proxySettingsProvider);
@@ -913,7 +908,12 @@ public class IndexerController : Controller
             }
         }
 
-        return _httpClient ?? DefaultClient;
+        if (_httpClient != null)
+        {
+            return _httpClient;
+        }
+
+        return DefaultClient;
     }
 
     private static void EnsureProxyClient(IProxySettingsProvider proxySettingsProvider)

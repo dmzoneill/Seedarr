@@ -214,6 +214,10 @@ public class PluginManagerAndLoaderTests
     [Test]
     public void ValidateAndResolveEntrypoint_with_relative_path_should_resolve_under_plugin_dir()
     {
+        var entrypoint = Path.Combine(_tempAppData, "scripts", "main.sh");
+        Directory.CreateDirectory(Path.GetDirectoryName(entrypoint)!);
+        File.WriteAllText(entrypoint, "#!/bin/sh\nexit 0");
+
         var manifest = new PluginManifest
         {
             Id = "sample",
@@ -252,6 +256,7 @@ public class PluginManagerAndLoaderTests
         Directory.CreateDirectory(targetDir);
 
         var insidePath = Path.Combine(targetDir, "run.sh");
+        File.WriteAllText(insidePath, "#!/bin/sh\nexit 0");
         var manifest = new PluginManifest
         {
             Id = "sample",

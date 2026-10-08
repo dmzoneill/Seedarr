@@ -492,6 +492,10 @@ public class DownloadClientController : Controller
         {
             return FromSyncArgumentException(ex);
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("sync is busy", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(ex.Message);
+        }
         catch (Exception ex)
         {
             return StatusCode(500, new { message = $"Failed to import torrents: {ex.Message}" });
@@ -596,6 +600,11 @@ public class DownloadClientController : Controller
         if (normalizedClientType != "QBitTorrent" && normalizedClientType != "Transmission" && normalizedClientType != "Deluge")
         {
             return "ClientType must be QBitTorrent, Transmission, or Deluge";
+        }
+
+        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}", allowLoopback: true, allowInternal: true))
+        {
+            return "Target host/URL is not permitted.";
         }
 
         return null;

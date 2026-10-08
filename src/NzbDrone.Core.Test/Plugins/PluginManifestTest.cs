@@ -94,6 +94,10 @@ public class PluginManifestTest
     [Test]
     public void ValidateAndResolveEntrypoint_should_resolve_path_within_plugin_dir()
     {
+        var entrypoint = Path.Combine(_tempDir, "bin", "start.sh");
+        Directory.CreateDirectory(Path.GetDirectoryName(entrypoint)!);
+        File.WriteAllText(entrypoint, "#!/bin/sh\nexit 0");
+
         var manifest = new PluginManifest
         {
             Id = "test-plugin",
