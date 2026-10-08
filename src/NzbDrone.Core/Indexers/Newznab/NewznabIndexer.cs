@@ -103,11 +103,6 @@ public class NewznabIndexer : IIndexer
 
     private HttpClient GetHttpClient()
     {
-        if (_httpClient != null)
-        {
-            return _httpClient;
-        }
-
         if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
         {
             EnsureProxyClient();
@@ -117,7 +112,12 @@ public class NewznabIndexer : IIndexer
             }
         }
 
-        return _httpClient ?? DefaultClient;
+        if (_httpClient != null)
+        {
+            return _httpClient;
+        }
+
+        return DefaultClient;
     }
 
     private void EnsureProxyClient()
