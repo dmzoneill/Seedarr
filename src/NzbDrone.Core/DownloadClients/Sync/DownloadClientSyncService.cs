@@ -1019,7 +1019,22 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     private bool TryEnterSyncLockForSweep()
     {
-        return _syncLock.Wait(SyncLockWaitMs);
+        if (_syncLock.Wait(0))
+        {
+            return true;
+        }
+
+        if (SyncLockWaitMs == ImportLockWaitMs)
+        {
+            return false;
+        }
+
+        if (_syncLock.Wait(SyncLockWaitMs))
+        {
+            return true;
+        }
+
+        throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
     }
 
     private byte[] FetchTorrentBytesFromClientAndIndexers(IDownloadClient provider, string normalizedHash)
