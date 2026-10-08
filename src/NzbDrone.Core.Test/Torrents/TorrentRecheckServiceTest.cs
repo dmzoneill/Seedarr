@@ -724,6 +724,7 @@ public class TorrentRecheckServiceTest
             Name = "Blocking Recheck",
             Status = TorrentStatus.Downloading,
             PieceCount = 1,
+            PieceHashes = new byte[20],
             TotalSize = 1000
         };
         var waitingTorrent = new Torrent
@@ -732,6 +733,7 @@ public class TorrentRecheckServiceTest
             Name = "Waiting Recheck",
             Status = TorrentStatus.Seeding,
             PieceCount = 1,
+            PieceHashes = new byte[20],
             TotalSize = 1000
         };
 
@@ -1103,6 +1105,7 @@ public class TorrentRecheckServiceTest
             Name = "Queued Failing Recheck",
             Status = TorrentStatus.Seeding,
             PieceCount = 1,
+            PieceHashes = new byte[20],
             TotalSize = 1000
         };
 

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 
 namespace Seedarr.Api.V1.Torrents;
 
