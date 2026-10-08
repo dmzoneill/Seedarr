@@ -913,13 +913,17 @@ public class UtpConnection : IUtpConnection
                     if (!_hasReceivedFirstPacket)
                     {
                         _hasReceivedFirstPacket = true;
-                        if (_expectedSeqNr == 0)
-                        {
-                            _expectedSeqNr = header.SequenceNumber;
-                        }
-                    }
+                        _expectedSeqNr = (ushort)(header.SequenceNumber + 1);
+                        _ackNumber = header.SequenceNumber;
 
-                    if (header.SequenceNumber == _expectedSeqNr)
+                        for (var i = 0; i < payloadLen; i++)
+                        {
+                            _receiveQueue.Enqueue(payload[i]);
+                        }
+
+                        Monitor.PulseAll(_receiveLock);
+                    }
+                    else if (header.SequenceNumber == _expectedSeqNr)
                     {
                         _expectedSeqNr = (ushort)(_expectedSeqNr + 1);
                         _ackNumber = header.SequenceNumber;
