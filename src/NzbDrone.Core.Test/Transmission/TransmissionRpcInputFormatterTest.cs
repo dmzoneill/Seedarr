@@ -237,7 +237,7 @@ public class TransmissionRpcInputFormatterTest
         var req = result.Model as TransmissionRpcRequest;
         Assert.That(req, Is.Not.Null);
         Assert.That(req.Method, Is.EqualTo("session-get"));
-        Assert.That(req.Tag, Is.EqualTo(123));
+        Assert.That(req.Tag.GetInt32(), Is.EqualTo(123));
     }
 
     private class TestableTransmissionRpcInputFormatter : TransmissionRpcInputFormatter

@@ -142,7 +142,7 @@ public class PathSanitizerTests
         var isUnc = input.Length >= 2 && input[0] == '\\' && input[1] == '\\';
         var rooted = input.StartsWith('/') || (input.StartsWith('\\') && !isUnc);
         var expected = rooted
-            ? sep + string.Join(sep, expectedSegments)
+            ? string.Concat(sep, string.Join(sep, expectedSegments))
             : string.Join(sep, expectedSegments);
 
         Assert.That(PathSanitizer.SanitizePath(input), Is.EqualTo(expected));
@@ -156,7 +156,7 @@ public class PathSanitizerTests
         var tail = expectedSegments.Length > 2
             ? sep + string.Join(sep, expectedSegments.Skip(2))
             : string.Empty;
-        var expected = sep + sep + expectedSegments[0] + sep + expectedSegments[1] + tail;
+        var expected = string.Concat(sep, sep, expectedSegments[0], sep, expectedSegments[1], tail);
 
         Assert.That(PathSanitizer.SanitizePath(input), Is.EqualTo(expected));
     }

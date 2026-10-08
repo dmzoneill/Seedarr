@@ -30,6 +30,7 @@ namespace NzbDrone.Core.Test.Torrents
         [SetUp]
         public void Setup()
         {
+            TorrentService.ClearPieceHashCaches();
             _repository = Substitute.For<ITorrentRepository>();
             _torrentFileService = Substitute.For<ITorrentFileService>();
             _trackerEntryService = Substitute.For<ITrackerEntryService>();

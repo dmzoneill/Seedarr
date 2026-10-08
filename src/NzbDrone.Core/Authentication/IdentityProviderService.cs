@@ -219,8 +219,8 @@ public class IdentityProviderService : IIdentityProviderService
             return false;
         }
 
-        // ASP.NET data protection payloads are non-trivial binary blobs (base64).
-        return data.Length >= 16;
+        // ASP.NET data protection payloads are binary blobs with a 0x09 format marker.
+        return data.Length >= 16 && data[0] == 0x09;
     }
 
     private static bool TryDecodeProtectedPayload(string value, out byte[] data)

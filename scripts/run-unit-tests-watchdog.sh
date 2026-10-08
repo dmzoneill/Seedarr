@@ -54,4 +54,10 @@ done
 wait "$TEST_PID"
 exit_code=$?
 tail -20 "$LOG" || true
+if grep -q '^EXIT:' "$LOG" 2>/dev/null; then
+  logged_exit="$(grep '^EXIT:' "$LOG" | tail -1 | cut -d: -f2)"
+  if [[ -n "$logged_exit" ]]; then
+    exit_code="$logged_exit"
+  fi
+fi
 exit "$exit_code"
