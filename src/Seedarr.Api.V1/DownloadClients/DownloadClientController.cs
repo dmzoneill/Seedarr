@@ -96,7 +96,7 @@ public class DownloadClientController : Controller
         var existing = _downloadClientFactory.Get(id);
         if (existing == null)
         {
-            return NotFound();
+            return NotFound(new { message = $"Download client {id} not found" });
         }
 
         definition.Id = id;
