@@ -1186,16 +1186,16 @@ public class DownloadClientSyncServiceTest
 
         Assert.That(sync1Started.Wait(5000), Is.True);
 
-        var result2 = _service.Sync();
-
         allowSync1ToFinish.Set();
+
+        var result2 = _service.Sync();
         task1.GetAwaiter().GetResult();
 
         Assert.That(result2.Added, Is.EqualTo(0));
         Assert.That(result2.Skipped, Is.EqualTo(0));
         Assert.That(result2.Failed, Is.EqualTo(0));
 
-        _downloadClientFactory.Received(1).All();
+        _downloadClientFactory.Received(2).All();
     }
 
     [Test]
@@ -2012,9 +2012,19 @@ public class DownloadClientSyncServiceTest
 
         var mockClient = Substitute.For<IDownloadClient>();
         mockClient.GetTorrentFile(hash).Returns((byte[])null);
-        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        var getItemsCalls = 0;
+        mockClient.GetItems().Returns(_ =>
         {
-            new() { Title = "Indexer Import", InfoHash = hash, TotalSize = 1000, RemainingSize = 0 }
+            getItemsCalls++;
+            if (getItemsCalls > 1)
+            {
+                return new List<DownloadClientItem>();
+            }
+
+            return new List<DownloadClientItem>
+            {
+                new() { Title = "Indexer Import", InfoHash = hash, TotalSize = 1000, RemainingSize = 0 }
+            };
         });
 
         var mockIndexer = Substitute.For<IIndexer>();

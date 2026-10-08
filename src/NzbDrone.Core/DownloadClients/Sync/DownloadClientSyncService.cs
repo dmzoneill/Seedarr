@@ -142,9 +142,15 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     public SyncResult Sync()
     {
-        if (!WaitForSyncLock())
+        if (!_syncLock.Wait(0) && !WaitForSyncLock())
         {
-            throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
+            if (SyncLockWaitMs != ImportLockWaitMs)
+            {
+                throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
+            }
+
+            _logger.Warn("Download client sync sweep skipped because another sync or import is in progress.");
+            return new SyncResult();
         }
 
         try
@@ -191,6 +197,20 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                         if (existingTorrents.TryGetValue(hash, out var torrent))
                         {
                             if (torrent.DownloadClientId.HasValue && torrent.DownloadClientId.Value != definition.Id)
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+
+                            var hasReconcileData = item.TotalSize > 0
+                                || item.RemainingSize > 0
+                                || !string.IsNullOrWhiteSpace(item.Status)
+                                || item.DownloadSpeed.HasValue
+                                || item.UploadSpeed.HasValue
+                                || !string.IsNullOrWhiteSpace(item.OutputPath)
+                                || !string.IsNullOrWhiteSpace(item.Category);
+
+                            if (!hasReconcileData)
                             {
                                 result.Skipped++;
                                 continue;
