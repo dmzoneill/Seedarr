@@ -95,7 +95,9 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
             .Select(property => property.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var resource = JsonSerializer.Deserialize<AutomationScriptResource>(body, STJson.GetSerializerSettings());
+        var jsonOptions = STJson.GetSerializerSettings();
+        jsonOptions.PropertyNameCaseInsensitive = true;
+        var resource = JsonSerializer.Deserialize<AutomationScriptResource>(body.GetRawText(), jsonOptions);
         if (resource == null)
         {
             return BadRequest("Request body cannot be null");

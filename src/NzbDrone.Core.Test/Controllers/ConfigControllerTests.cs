@@ -769,7 +769,7 @@ public class ConfigControllerTests
     [Test]
     public void SaveConfig_when_config_service_throws_returns_problem_and_does_not_save_xml()
     {
-        _configService.When(x => x.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>()))
+        _configService.When(x => x.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>(), Arg.Any<bool>()))
             .Do(_ => throw new InvalidOperationException("DB connection error"));
 
         var resource = new GeneralConfigResource

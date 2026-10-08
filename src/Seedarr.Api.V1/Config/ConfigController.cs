@@ -230,12 +230,16 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             ? xmlValues.Keys.ToDictionary(k => k, k => typeof(IConfigFileProvider).GetProperty(k)?.GetValue(_configFileProvider, null))
             : new Dictionary<string, object>();
 
+        var dbSaved = false;
+        var xmlSaved = false;
         try
         {
             _configService.SaveConfigDictionary(dbDictionary, publishEvent: false);
+            dbSaved = true;
             if (_configFileProvider != null)
             {
                 _configFileProvider.SaveConfigDictionary(xmlValues);
+                xmlSaved = true;
             }
 
             _configService.SaveConfigDictionary(new Dictionary<string, object>());
@@ -244,10 +248,14 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         {
             try
             {
-                _configService.SaveConfigDictionary(existingDbValues, false);
-                if (_configFileProvider != null)
+                if (xmlSaved && _configFileProvider != null)
                 {
                     _configFileProvider.SaveConfigDictionary(existingXmlValues);
+                }
+
+                if (dbSaved)
+                {
+                    _configService.SaveConfigDictionary(existingDbValues, false);
                 }
             }
             catch
@@ -260,10 +268,14 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         {
             try
             {
-                _configService.SaveConfigDictionary(existingDbValues, false);
-                if (_configFileProvider != null)
+                if (xmlSaved && _configFileProvider != null)
                 {
                     _configFileProvider.SaveConfigDictionary(existingXmlValues);
+                }
+
+                if (dbSaved)
+                {
+                    _configService.SaveConfigDictionary(existingDbValues, false);
                 }
             }
             catch
