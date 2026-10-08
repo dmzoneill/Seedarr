@@ -204,8 +204,12 @@ public class UtpManagerTest
     [Test]
     public async Task ExecuteAsync_should_handle_port_bind_failure_gracefully()
     {
+        const int port = 37655;
+        using var blocker = new UdpClient(AddressFamily.InterNetwork);
+        blocker.Client.Bind(new IPEndPoint(IPAddress.Any, port));
+
         _configService.UtpEnabled.Returns(true);
-        _configService.ListeningPort.Returns(1);
+        _configService.ListeningPort.Returns(port);
         _configService.TcpFallback.Returns(true);
 
         var method = typeof(UtpManager).GetMethod("ExecuteAsync", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -218,8 +222,12 @@ public class UtpManagerTest
     [Test]
     public async Task ExecuteAsync_should_handle_port_bind_failure_without_tcp_fallback()
     {
+        const int port = 37656;
+        using var blocker = new UdpClient(AddressFamily.InterNetwork);
+        blocker.Client.Bind(new IPEndPoint(IPAddress.Any, port));
+
         _configService.UtpEnabled.Returns(true);
-        _configService.ListeningPort.Returns(1);
+        _configService.ListeningPort.Returns(port);
         _configService.TcpFallback.Returns(false);
 
         var method = typeof(UtpManager).GetMethod("ExecuteAsync", BindingFlags.NonPublic | BindingFlags.Instance);

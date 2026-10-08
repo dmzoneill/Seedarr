@@ -717,6 +717,7 @@ public class TorrentRecheckServiceTest
             signalR);
 
         var blockingGate = new ManualResetEventSlim(false);
+        var blockingVerifyStarted = new ManualResetEventSlim(false);
         var blockingTorrent = new Torrent
         {
             Id = 28,
@@ -755,16 +756,16 @@ public class TorrentRecheckServiceTest
                 Arg.Any<string>())
             .Returns(_ =>
             {
+                blockingVerifyStarted.Set();
                 blockingGate.Wait();
                 return true;
             });
 
-        var activeRechecks = typeof(TorrentRecheckService)
-            .GetField("_activeRechecks", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .GetValue(serviceWithSignalR) as ConcurrentDictionary<int, CancellationTokenSource>;
-
         var blockingRecheck = serviceWithSignalR.RecheckAsync(blockingTorrent);
-        SpinWait.SpinUntil(() => blockingTorrent.Status == TorrentStatus.Checking, TimeSpan.FromSeconds(2));
+        Assert.That(
+            SpinWait.SpinUntil(() => blockingVerifyStarted.IsSet, TimeSpan.FromSeconds(5)),
+            Is.True,
+            "Expected blocking recheck to enter piece verification");
 
         serviceWithSignalR.QueueRecheck(29);
         SpinWait.SpinUntil(() => waitingTorrent.Status == TorrentStatus.QueuedForChecking, TimeSpan.FromSeconds(2));
@@ -858,8 +859,14 @@ public class TorrentRecheckServiceTest
 
         var racer = System.Threading.Tasks.Task.Run(() =>
         {
-            SpinWait.SpinUntil(() => activeRechecks!.ContainsKey(firstId));
-            SpinWait.SpinUntil(() => !activeRechecks!.ContainsKey(firstId));
+            Assert.That(
+                SpinWait.SpinUntil(() => activeRechecks!.ContainsKey(firstId), TimeSpan.FromSeconds(5)),
+                Is.True,
+                "Expected first queued recheck to become active");
+            Assert.That(
+                SpinWait.SpinUntil(() => !activeRechecks!.ContainsKey(firstId), TimeSpan.FromSeconds(5)),
+                Is.True,
+                "Expected first queued recheck to finish");
             for (var i = 0; i < 10_000; i++)
             {
                 _service.QueueRecheck(tailId);
