@@ -24,6 +24,15 @@ public class DownloadClientControllerTest
     public void SetUp()
     {
         _downloadClientFactory = Substitute.For<IDownloadClientFactory>();
+        _downloadClientFactory.Get(Arg.Any<int>()).Returns(callInfo => new DownloadClientDefinition
+        {
+            Id = callInfo.Arg<int>(),
+            Name = "Test Client",
+            ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
+            Enable = true
+        });
         _syncService = Substitute.For<IDownloadClientSyncService>();
         _controller = new DownloadClientController(_downloadClientFactory, _syncService);
     }

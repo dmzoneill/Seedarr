@@ -31,8 +31,8 @@ public class DynamicAuthSchemeManagerTest
         Assert.That(DynamicAuthSchemeManager.BuildOidcCallbackPath("myid", urlBase), Is.EqualTo(expected));
     }
 
-    [TestCase("corp.google", "corp_2egoogle")]
-    [TestCase("corp/google", "corp_2fgoogle")]
+    [TestCase("corp.google", "corp_002egoogle")]
+    [TestCase("corp/google", "corp_002fgoogle")]
     [TestCase("my-idp", "my-idp")]
     public void SanitizeProviderId_encodes_disallowed_characters_without_collapsing_distinct_ids(string providerId, string expected)
     {
@@ -74,8 +74,8 @@ public class DynamicAuthSchemeManagerTest
         await manager.RegisterOrUpdateOidcProviderAsync(slashProvider);
 
         var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
-        var dotScheme = await schemeProvider.GetSchemeAsync("Oidc_corp_2egoogle");
-        var slashScheme = await schemeProvider.GetSchemeAsync("Oidc_corp_2fgoogle");
+        var dotScheme = await schemeProvider.GetSchemeAsync("Oidc_corp_002egoogle");
+        var slashScheme = await schemeProvider.GetSchemeAsync("Oidc_corp_002fgoogle");
 
         Assert.That(dotScheme, Is.Not.Null);
         Assert.That(slashScheme, Is.Not.Null);
@@ -83,8 +83,8 @@ public class DynamicAuthSchemeManagerTest
         Assert.That(slashScheme.DisplayName, Is.EqualTo("Corp Slash Google"));
 
         var cache = sp.GetRequiredService<IOptionsMonitorCache<OpenIdConnectOptions>>();
-        Assert.That(cache.GetOrAdd("Oidc_corp_2egoogle", () => new OpenIdConnectOptions()).ClientId, Is.EqualTo("client-dot"));
-        Assert.That(cache.GetOrAdd("Oidc_corp_2fgoogle", () => new OpenIdConnectOptions()).ClientId, Is.EqualTo("client-slash"));
+        Assert.That(cache.GetOrAdd("Oidc_corp_002egoogle", () => new OpenIdConnectOptions()).ClientId, Is.EqualTo("client-dot"));
+        Assert.That(cache.GetOrAdd("Oidc_corp_002fgoogle", () => new OpenIdConnectOptions()).ClientId, Is.EqualTo("client-slash"));
     }
 
     [Test]

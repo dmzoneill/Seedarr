@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Authentication;
@@ -50,6 +51,12 @@ public class AuthControllerTest
             _rpcSessionStore,
             _configService,
             _localAdminCredentialService);
+
+        var httpContext = new DefaultHttpContext();
+        var services = new ServiceCollection();
+        services.AddSingleton(Substitute.For<IAuthenticationService>());
+        httpContext.RequestServices = services.BuildServiceProvider();
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
     }
 
     [Test]
@@ -231,7 +238,7 @@ public class AuthControllerTest
         Assert.That(capturedPrincipal.Claims.Any(c => c.Value.Contains("super-secret-api-key-999")), Is.False);
     }
 
-    [TestCase("corp.google", "Oidc_corp_2egoogle")]
+    [TestCase("corp.google", "Oidc_corp_002egoogle")]
     [TestCase("my-idp", "Oidc_my-idp")]
     public void ChallengeProvider_UsesSanitizedOidcSchemeName(string providerId, string expectedScheme)
     {
@@ -793,10 +800,14 @@ public class AuthControllerTest
     {
         _configFileProvider.AuthenticationEnabled.Returns(true);
         _configFileProvider.ApiKey.Returns("master-api-key");
+        _configFileProvider.TrustedProxies.Returns("10.0.0.1");
 
         var httpContext = new DefaultHttpContext();
         httpContext.Connection.RemoteIpAddress = IPAddress.Parse("10.0.0.1");
         httpContext.Request.Headers["X-Forwarded-For"] = "203.0.113.50, 10.0.0.1";
+        var services = new ServiceCollection();
+        services.AddSingleton(Substitute.For<IAuthenticationService>());
+        httpContext.RequestServices = services.BuildServiceProvider();
         _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         var badRequest = new LoginRequestResource { Username = "admin", Password = "wrong-password" };

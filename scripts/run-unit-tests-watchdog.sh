@@ -22,7 +22,6 @@ echo "[watchdog] log=$LOG wall_timeout=${WALL_TIMEOUT_SEC}s stall=${STALL_SEC}s"
 		--blame-hang-timeout 90s \
 		--logger "console;verbosity=minimal" \
 		--logger "trx;LogFileName=test-results.trx" \
-		--collect:"XPlat Code Coverage" \
 		>"$LOG" 2>&1
 	echo "EXIT:$?" >>"$LOG"
 ) &

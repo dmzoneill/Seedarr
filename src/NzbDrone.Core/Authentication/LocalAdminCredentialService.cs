@@ -29,8 +29,7 @@ public class LocalAdminCredentialService : ILocalAdminCredentialService
             return false;
         }
 
-        return AdminPasswordHasher.FixedTimeEquals(password, apiKey)
-            || AdminPasswordHasher.FixedTimeEquals(username, apiKey);
+        return AdminPasswordHasher.FixedTimeEquals(password, apiKey);
     }
 
     public bool IsAdminPasswordCredential(string username, string password, IConfigService configService)

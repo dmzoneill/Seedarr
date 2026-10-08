@@ -767,7 +767,7 @@ public class TorrentRecheckServiceTest
         SpinWait.SpinUntil(() => blockingTorrent.Status == TorrentStatus.Checking, TimeSpan.FromSeconds(2));
 
         serviceWithSignalR.QueueRecheck(29);
-        SpinWait.SpinUntil(() => activeRechecks!.ContainsKey(29), TimeSpan.FromSeconds(2));
+        SpinWait.SpinUntil(() => waitingTorrent.Status == TorrentStatus.QueuedForChecking, TimeSpan.FromSeconds(2));
         Assert.That(waitingTorrent.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
 
         serviceWithSignalR.CancelRecheck(29);

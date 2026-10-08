@@ -348,7 +348,7 @@ public class ArrConnectionControllerTest
 
         var result = _controller.Create(definition);
 
-        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         _connectionFactory.DidNotReceive().Create(Arg.Any<ArrConnectionDefinition>());
     }
 
@@ -368,7 +368,7 @@ public class ArrConnectionControllerTest
 
         var result = _controller.Create(definition);
 
-        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         _connectionFactory.DidNotReceive().Create(Arg.Any<ArrConnectionDefinition>());
     }
 
@@ -398,7 +398,7 @@ public class ArrConnectionControllerTest
 
         var result = _controller.Create(definition);
 
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _connectionFactory.Received(1).Create(Arg.Is<ArrConnectionDefinition>(d =>
             d.Id == 0 && d.ApiKey == "stored-secret-key" && d.Name == "Sonarr Copy"));
     }
@@ -427,7 +427,7 @@ public class ArrConnectionControllerTest
 
         var result = _controller.TestDirect(definition);
 
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _arrSyncService.Received(1).TestConnectionDetailedDirect(Arg.Is<ArrConnectionDefinition>(d =>
             d.ApiKey == "stored-secret-key"));
     }
@@ -457,7 +457,7 @@ public class ArrConnectionControllerTest
 
         var result = _controller.TestDirect(definition);
 
-        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _arrSyncService.Received(1).TestConnectionDetailedDirect(Arg.Is<ArrConnectionDefinition>(d =>
             d.ApiKey == "stored-secret-key"));
     }

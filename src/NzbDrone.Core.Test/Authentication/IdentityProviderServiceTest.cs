@@ -26,7 +26,8 @@ public class IdentityProviderServiceTest
         _repository = Substitute.For<IIdentityProviderRepository>();
         _httpHandler = new MockHttpMessageHandler();
         var httpClient = new HttpClient(_httpHandler);
-        _service = new IdentityProviderService(_repository, httpClient);
+        var dataProtection = new EphemeralDataProtectionProvider();
+        _service = new IdentityProviderService(_repository, httpClient, dataProtection);
     }
 
     [Test]

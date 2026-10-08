@@ -77,7 +77,7 @@ public class WebhookControllerTests : IntegrationTestBase
     {
         var (status, result) = await PostWebhookAsync(new { eventType = "Download", instanceName = "Sonarr" });
 
-        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(status, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(result["message"].ToString(), Does.Contain("No downloadId"));
     }
 
@@ -93,7 +93,7 @@ public class WebhookControllerTests : IntegrationTestBase
 
         var (status, result) = await PostWebhookAsync(payload);
 
-        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(status, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(result["message"].ToString(), Does.Contain("No downloadId"));
     }
 
