@@ -757,34 +757,45 @@ public class TorrentRecheckServiceTest
             .Returns(_ =>
             {
                 blockingVerifyStarted.Set();
-                blockingGate.Wait();
+                if (!blockingGate.Wait(TimeSpan.FromSeconds(30)))
+                {
+                    throw new TimeoutException("Blocking recheck did not release within 30s");
+                }
+
                 return true;
             });
 
-        var blockingRecheck = serviceWithSignalR.RecheckAsync(blockingTorrent);
-        Assert.That(
-            SpinWait.SpinUntil(() => blockingVerifyStarted.IsSet, TimeSpan.FromSeconds(5)),
-            Is.True,
-            "Expected blocking recheck to enter piece verification");
-
-        serviceWithSignalR.QueueRecheck(29);
-        SpinWait.SpinUntil(() => waitingTorrent.Status == TorrentStatus.QueuedForChecking, TimeSpan.FromSeconds(2));
-        Assert.That(waitingTorrent.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
-
-        serviceWithSignalR.CancelRecheck(29);
-
-        var deadline = DateTime.UtcNow.AddSeconds(2);
-        while (DateTime.UtcNow < deadline && waitingTorrent.Status == TorrentStatus.QueuedForChecking)
+        try
         {
-            await System.Threading.Tasks.Task.Delay(10);
+            var blockingRecheck = serviceWithSignalR.RecheckAsync(blockingTorrent);
+            Assert.That(
+                SpinWait.SpinUntil(() => blockingVerifyStarted.IsSet, TimeSpan.FromSeconds(5)),
+                Is.True,
+                "Expected blocking recheck to enter piece verification");
+
+            serviceWithSignalR.QueueRecheck(29);
+            SpinWait.SpinUntil(() => waitingTorrent.Status == TorrentStatus.QueuedForChecking, TimeSpan.FromSeconds(2));
+            Assert.That(waitingTorrent.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
+
+            serviceWithSignalR.CancelRecheck(29);
+
+            var deadline = DateTime.UtcNow.AddSeconds(2);
+            while (DateTime.UtcNow < deadline && waitingTorrent.Status == TorrentStatus.QueuedForChecking)
+            {
+                await System.Threading.Tasks.Task.Delay(10);
+            }
+
+            Assert.That(waitingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+            signalR.Received().BroadcastMessage(Arg.Is<NzbDrone.SignalR.SignalRMessage>(m =>
+                m.Name == "TorrentUpdated" && m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
+
+            blockingGate.Set();
+            await blockingRecheck;
         }
-
-        blockingGate.Set();
-        await blockingRecheck;
-
-        Assert.That(waitingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
-        signalR.Received().BroadcastMessage(Arg.Is<NzbDrone.SignalR.SignalRMessage>(m =>
-            m.Name == "TorrentUpdated" && m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
+        finally
+        {
+            blockingGate.Set();
+        }
     }
 
     [Test]
