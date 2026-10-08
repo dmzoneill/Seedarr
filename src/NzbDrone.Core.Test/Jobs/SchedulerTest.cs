@@ -290,7 +290,9 @@ public class SchedulerTest
         _taskManager.Received().RecordTaskFailed(
             "NonExistent.TaskType",
             Arg.Any<DateTime>(),
-            "No task instance found for scheduled type: NonExistent.TaskType");
+            "No task instance found for scheduled type: NonExistent.TaskType",
+            null,
+            ScheduledTaskTriggerSource.Scheduler);
         _taskManager.Received().RecordTaskFinished("NonExistent.TaskType", Arg.Any<DateTime>(), ScheduledTaskTriggerSource.Scheduler);
         _taskManager.DidNotReceive().UpdateLastExecution(Arg.Any<string>());
     }
@@ -323,7 +325,9 @@ public class SchedulerTest
         _taskManager.Received().RecordTaskFailed(
             "NonExistent.TaskType",
             Arg.Any<DateTime>(),
-            "No task instance found for scheduled type: NonExistent.TaskType");
+            "No task instance found for scheduled type: NonExistent.TaskType",
+            null,
+            ScheduledTaskTriggerSource.Scheduler);
         _taskManager.Received().RecordTaskFinished("NonExistent.TaskType", Arg.Any<DateTime>(), ScheduledTaskTriggerSource.Scheduler);
         _taskManager.DidNotReceive().UpdateLastExecution(Arg.Any<string>());
     }

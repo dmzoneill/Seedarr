@@ -222,7 +222,11 @@ public class DiskProvider : IDiskProvider
                 if (mountPath.Length > longestMatchLength)
                 {
                     longestMatchLength = mountPath.Length;
-                    bestMatch = mountPath;
+                    bestMatch = mountPoint.TrimEnd('\\', '/');
+                    if (string.IsNullOrEmpty(bestMatch))
+                    {
+                        bestMatch = mountPoint;
+                    }
                 }
             }
         }

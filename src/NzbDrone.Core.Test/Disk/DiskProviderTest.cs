@@ -68,8 +68,19 @@ public class DiskProviderTest
     [Test]
     public void GetAvailableFreeSpace_uses_longest_drive_prefix_from_drives_provider()
     {
+        DriveInfo mediaDrive;
+        try
+        {
+            mediaDrive = new DriveInfo("/mnt/media");
+            _ = mediaDrive.AvailableFreeSpace;
+        }
+        catch (Exception ex) when (ex is DriveNotFoundException or IOException or UnauthorizedAccessException)
+        {
+            Assert.Ignore("Requires accessible /mnt/media drive for multi-mount free space test");
+            return;
+        }
+
         var rootDrive = new DriveInfo("/");
-        var mediaDrive = new DriveInfo("/mnt/media");
         var subject = new DiskProvider
         {
             DrivesProvider = () => new[] { rootDrive, mediaDrive },

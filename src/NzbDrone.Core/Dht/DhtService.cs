@@ -818,8 +818,11 @@ public class DhtService : BackgroundService, IDhtService,
                 break;
         }
 
-        // Add querying node to routing table
-        if (args.ContainsKey("id") && args["id"] is BString idStr && idStr.Value.Length == 20)
+        // Add querying node to routing table (skip when the query was rejected)
+        var skipRoutingTableAdd = string.Equals(queryType, "find_node", StringComparison.Ordinal) &&
+            (!args.ContainsKey("target") || args["target"] is not BString targetCheck || targetCheck.Value.Length != 20);
+
+        if (!skipRoutingTableAdd && args.ContainsKey("id") && args["id"] is BString idStr && idStr.Value.Length == 20)
         {
             var nodeId = idStr.Value.ToArray();
             if (IsNodeIdValidForEndpoint(nodeId, sender))
@@ -1117,8 +1120,7 @@ public class DhtService : BackgroundService, IDhtService,
                 }
                 else
                 {
-                    SendErrorResponse(sender, transactionId, 203, "Protocol Error");
-                    return;
+                    port = sender.Port;
                 }
             }
         }
@@ -1134,8 +1136,7 @@ public class DhtService : BackgroundService, IDhtService,
         }
         else
         {
-            SendErrorResponse(sender, transactionId, 203, "Protocol Error");
-            return;
+            port = sender.Port;
         }
 
         if (port < 1 || port > 65535)
