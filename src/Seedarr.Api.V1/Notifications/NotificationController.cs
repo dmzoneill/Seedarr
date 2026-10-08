@@ -822,9 +822,9 @@ public class NotificationController : Controller
             var incomingPrefix = incomingDiscord.Groups[1].Value;
             if (string.Equals(prefix, incomingPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                var existingToken = existingUrl.Substring(existingDiscord.Groups[1].Length).Split('?', '#', '/')[0];
+                var existingToken = existingUrl.Substring(existingDiscord.Index + existingDiscord.Groups[1].Length).Split('?', '#', '/')[0];
                 var incomingSuffix = result.Substring(incomingDiscord.Index + incomingDiscord.Length);
-                result = string.Concat(result.AsSpan(0, incomingDiscord.Groups[1].Length), existingToken, incomingSuffix);
+                result = string.Concat(result.AsSpan(0, incomingDiscord.Index + incomingDiscord.Groups[1].Length), existingToken, incomingSuffix);
             }
         }
 
@@ -837,9 +837,9 @@ public class NotificationController : Controller
             var incomingPrefix = incomingSlack.Groups[1].Value;
             if (string.Equals(prefix, incomingPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                var existingToken = existingUrl.Substring(existingSlack.Groups[1].Length).Split('?', '#', '/')[0];
+                var existingToken = existingUrl.Substring(existingSlack.Index + existingSlack.Groups[1].Length).Split('?', '#', '/')[0];
                 var incomingSuffix = result.Substring(incomingSlack.Index + incomingSlack.Length);
-                result = string.Concat(result.AsSpan(0, incomingSlack.Groups[1].Length), existingToken, incomingSuffix);
+                result = string.Concat(result.AsSpan(0, incomingSlack.Index + incomingSlack.Groups[1].Length), existingToken, incomingSuffix);
             }
         }
 

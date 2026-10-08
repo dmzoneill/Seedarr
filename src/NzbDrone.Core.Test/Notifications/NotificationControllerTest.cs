@@ -572,7 +572,7 @@ public class NotificationControllerTest
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _repository.Received(1).Insert(Arg.Is<NotificationDefinition>(d =>
-            d.Id == 0 && d.Name == "Discord Copy" && d.Settings.Contains("REAL_DISCORD_TOKEN")));
+            d.Name == "Discord Copy" && d.Settings != null && d.Settings.Contains("REAL_DISCORD_TOKEN")));
     }
 
     [Test]

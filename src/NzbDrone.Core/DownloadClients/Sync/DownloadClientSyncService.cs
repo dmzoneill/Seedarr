@@ -1024,14 +1024,14 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             return true;
         }
 
-        if (SyncLockWaitMs == ImportLockWaitMs)
-        {
-            return false;
-        }
-
         if (_syncLock.Wait(SyncLockWaitMs))
         {
             return true;
+        }
+
+        if (SyncLockWaitMs == ImportLockWaitMs)
+        {
+            return false;
         }
 
         throw new InvalidOperationException("Download client sync is busy. Try again shortly.");
