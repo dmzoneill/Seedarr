@@ -335,7 +335,11 @@ public class DownloadClientControllerTest
 
         var result = _controller.Update(999, def);
 
-        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+        var notFound = (NotFoundObjectResult)result;
+        var json = JsonSerializer.Serialize(notFound.Value);
+        using var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetProperty("message").GetString(), Does.Contain("999"));
     }
 
     [Test]
