@@ -1,11 +1,16 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.Composition;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Security;
+using NzbDrone.Core.Seeding;
 using NzbDrone.Host;
 
 namespace NzbDrone.Integration.Test;
@@ -320,5 +325,29 @@ public class BootstrapTest
 
         Assert.DoesNotThrow(() => Bootstrap.ConfigureKestrel(serverOptions, configProvider, certManager, null, availability));
         Assert.That(availability.IsActive, Is.False);
+    }
+
+    [Test]
+    public void RegisterBackgroundHostedServices_registers_seeding_engine()
+    {
+        var assemblies = new List<string>
+        {
+            "Seedarr.Host",
+            "Seedarr.Core",
+            "Seedarr.Common",
+            "Seedarr.SignalR",
+            "Seedarr.Http",
+            "Seedarr.Api.V1",
+        };
+        var container = new global::DryIoc.Container(rules => rules.WithNzbDroneRules());
+        container.AutoAddServices(assemblies);
+
+        var services = new ServiceCollection();
+        Startup.RegisterBackgroundHostedServices(services);
+
+        Assert.That(
+            services.Any(d => d.ImplementationType == typeof(SeedingEngine)),
+            Is.True,
+            "SeedingEngine must be registered as a hosted service so simulation ticks run");
     }
 }
