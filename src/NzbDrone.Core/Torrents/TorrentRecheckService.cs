@@ -193,8 +193,15 @@ public class TorrentRecheckService : ITorrentRecheckService
             {
                 while (_recheckQueue.TryDequeue(out var nextId))
                 {
+                    using var cts = new CancellationTokenSource();
+                    if (!_activeRechecks.TryAdd(nextId, cts))
+                    {
+                        continue;
+                    }
+
                     if (!_queuedTorrentIds.TryRemove(nextId, out _))
                     {
+                        _activeRechecks.TryRemove(nextId, out _);
                         RevertQueuedRecheck(nextId);
                         continue;
                     }
@@ -202,15 +209,14 @@ public class TorrentRecheckService : ITorrentRecheckService
                     var torrent = _torrentRepository?.Get(nextId);
                     if (torrent == null)
                     {
+                        _activeRechecks.TryRemove(nextId, out _);
                         continue;
                     }
-
-                    using var cts = new CancellationTokenSource();
-                    _activeRechecks[nextId] = cts;
 
                     try
                     {
                         await _recheckConcurrencySemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
+                        cts.Token.ThrowIfCancellationRequested();
                         try
                         {
                             await ExecuteRecheckCoreAsync(torrent, null, cts.Token).ConfigureAwait(false);
