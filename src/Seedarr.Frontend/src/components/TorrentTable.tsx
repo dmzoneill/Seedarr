@@ -7,7 +7,12 @@ import React, {
 } from "react";
 import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { useTranslation } from "../i18n";
-import { useTorrentStore, applyTelemetry } from "../stores/useTorrentStore";
+import {
+  useTorrentStore,
+  applyTelemetry,
+  resolveTelemetryStatus,
+  isTelemetryStale,
+} from "../stores/useTorrentStore";
 import {
   useTorrents,
   useStartSeeding,
@@ -154,7 +159,7 @@ export const TorrentSpeedCell: React.FC<{
 }> = React.memo(({ torrentId, fallbackSpeed = 0, type }) => {
   const speed = useTorrentStore((state) => {
     const tel = state.telemetry[torrentId];
-    if (!tel) return fallbackSpeed;
+    if (!tel || isTelemetryStale(tel)) return fallbackSpeed;
     const effectiveStatus = (tel.status || "").toLowerCase();
     const isInactive =
       effectiveStatus === "paused" ||
@@ -196,8 +201,11 @@ export const TorrentProgressCell: React.FC<{
     const progress = useTorrentStore(
       (state) => state.telemetry[torrentId]?.progress ?? fallbackProgress,
     );
-    const status = useTorrentStore(
-      (state) => state.telemetry[torrentId]?.status ?? fallbackStatus,
+    const status = useTorrentStore((state) =>
+      resolveTelemetryStatus(
+        state.telemetry[torrentId],
+        fallbackStatus,
+      ),
     );
     const ratio = useTorrentStore(
       (state) => state.telemetry[torrentId]?.ratio ?? fallbackRatio,
@@ -281,8 +289,11 @@ export const TorrentStatusCell: React.FC<{
     isVpnPaused = false,
   }) => {
     const { t } = useTranslation();
-    const rawStatus = useTorrentStore(
-      (state) => state.telemetry[torrentId]?.status ?? fallbackStatus,
+    const rawStatus = useTorrentStore((state) =>
+      resolveTelemetryStatus(
+        state.telemetry[torrentId],
+        fallbackStatus,
+      ),
     );
     const progress = useTorrentStore(
       (state) => state.telemetry[torrentId]?.progress ?? fallbackProgress,
@@ -376,8 +387,10 @@ export const TorrentEtaCell: React.FC<{
     );
     const downloadSpeed = useTorrentStore((state) => {
       const tel = state.telemetry[torrentId];
-      if (!tel) return fallbackSpeed;
-      const st = (tel.status || fallbackStatus || "").toLowerCase();
+      if (!tel || isTelemetryStale(tel)) return fallbackSpeed;
+      const st = (
+        resolveTelemetryStatus(tel, fallbackStatus) || ""
+      ).toLowerCase();
       const isInactive =
         st === "paused" ||
         st === "stopped" ||
@@ -385,8 +398,11 @@ export const TorrentEtaCell: React.FC<{
         st === "queued";
       return isInactive ? 0 : (tel.downloadSpeed ?? fallbackSpeed);
     });
-    const status = useTorrentStore(
-      (state) => state.telemetry[torrentId]?.status ?? fallbackStatus,
+    const status = useTorrentStore((state) =>
+      resolveTelemetryStatus(
+        state.telemetry[torrentId],
+        fallbackStatus,
+      ),
     );
 
     if (progress >= 1.0) {
