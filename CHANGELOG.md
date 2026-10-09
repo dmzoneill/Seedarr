@@ -6,6 +6,1487 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.4](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.4) - 2026-10-09
+
+### 🐛 Bug Fixes
+- fix(recheck): always revert on cancel when queued or active
+- fix(recheck): keep queued prior status until cancel or recheck completes
+- fix(ci): editorconfig padding in recheck cancel spin wait
+- fix(ci): stabilize sync serialize lock wait and recheck cancel race
+- fix(ci): sync lock serialize test, recheck cancel while checking, fastresume tests
+- fix(ci): editorconfig padding in TorrentRecheckServiceTest while loop
+- fix(ci): green unit tests for sync lock, recheck queue, UTP, and notifications
+- fix(ci): restore sync lock, recheck queue, and test mocks for green CICD
+- fix(ci): clear remaining Core unit test failures for CICD
+- fix(tests): terminal hub mocks, sync lock, UTP first packet, notifications
+- fix(api): return message body for missing download client on PUT
+- fix(ci): shfmt tabs in unit test watchdog script
+- fix(tests): align sync, UTP, redaction, and notification fixes for CI
+- fix(tests): clear remaining Core unit failures for CI
+- fix(api): return message body for missing download client on PUT
+- fix(tests): prevent TorrentRecheck cancel test from hanging testhost
+- fix(tests): redaction JSON regex, sync lock, fastresume, SignalR coalesce
+- fix(tests): redaction, IPv6 parse order, recheck queue, fastresume piece_priority
+- fix(tests): QBitTorrent missingFiles status and RSS sync mock sequence
+- fix(tests): DHT announce/find_node, disk mounts, scheduler mocks
+- fix(tests): sync lock skip, IPv6 labels, log sanitize, migration orphans
+- fix(tests): config save, tasks, automation JSON, ipv6 parse order
+- fix(tests): sync lock, OIDC legacy secrets, path test concat
+- fix(sync): wait for sweep lock and throw when busy
+- fix(tests): correct revocation queries and batch import GetAll usage
+- fix(ci): tighten SSRF validation, sync locking, and test alignment
+- fix(tests): stop UTP listener hang on failed bind
+- fix(ci): stabilize tests and align integration API expectations
+- fix(ci): satisfy editorconfig on migration SQL and drop blame-hang
+- fix(host): resolve IDatabase via MainDatabase for DryIoc bootstrap
+- fix(ci): shfmt-format unit test watchdog script
+- fix(di): align ConnectionManager with Lazy<ITorrentService> in tests
+- fix(tests): stop unit suite hangs and add watchdog tooling
+- fix(test): repair Transmission category filter mock JSON
+- fix(tests): download client backoff, enrichment, and Transmission RPC
+- fix(di): break TorrentService cycle in PieceStorage for host startup
+- fix(ci): stop unit tests from hanging on real network I/O
+- fix(ci): restore SaveConfig(null, resource) after rebase
+- fix(ci): restore Release build for test projects and CICD
+- fix(ci): restore Release build for Api.V1 and Http.Test
+- fix-monitor: correct lastScheduleId sched_94c4b931
+- fix-monitor: heartbeat sched_94c4b931 (0 open, idle slots)
+- fix-monitor: heartbeat sched_db307da0 (0 open, slots idle)
+- fix-monitor: heartbeat sched_e92bb9e7 (0 open, slots idle)
+- fix-monitor: heartbeat sched_9b90370a (0 open, slots idle)
+- fix-monitor: heartbeat sched_19d4a6f0 (0 open, slots idle)
+- fix-monitor: heartbeat sched_d21b9e49 (0 open, slots idle)
+- fix-monitor: heartbeat sched_5b007436 (0 open, slots idle)
+- fix monitor heartbeat: sched_fdf7dc12
+- fix-monitor: heartbeat sched_6170ffd7 (0 open, slots idle)
+- fix-monitor heartbeat: 0 open, slots idle, queue empty
+- fix-monitor: heartbeat sched_570468a3 (0 open, slots idle)
+- fix-monitor: heartbeat sched_dab5fc2d (0 open, slots idle)
+- fix-monitor: heartbeat sched_e7bc6602 (0 open, slots idle)
+- fix-monitor: heartbeat sched_ac514ff2 (0 open, slots idle)
+- fix-monitor: heartbeat sched_fd6f3a22 (0 open, idle slots)
+- fix-monitor: heartbeat sched_eed1d167
+- fix-monitor: heartbeat sched_45f722c3 (0 open, slots idle)
+- fix-monitor: heartbeat sched_36fcf590 (0 open, slots idle)
+- fix(orchestrator): correct monitor scheduleId sched_edd2bda6
+- fix-monitor: heartbeat sched_f1a24b1c (0 open, slots idle)
+- fix-monitor: heartbeat sched_8a28384f (0 open, slots idle)
+- fix-monitor heartbeat: sched_8423d937
+- fix-monitor: heartbeat 2026-10-07T08:14:16Z (sched_af7618b6)
+- fix-monitor: heartbeat sched_72c950e1 (0 open, slots idle)
+- fix-monitor: heartbeat sched_bac5a071 (0 open, slots idle)
+- fix-monitor: heartbeat cycle (sched_4ed73979)
+- fix-monitor: heartbeat 2026-10-07T08:03:09Z (sched_5bf60aad)
+- fix-monitor: heartbeat 2026-10-07T08:01Z; next sched_7bf0188b
+- fix-monitor: heartbeat sched_4ee01a14 (0 open, idle slots)
+- fix-monitor: sync orchestrator state sched_48c779ae
+- fix-monitor: heartbeat sched_48c779ae (0 open, slots idle)
+- fix-monitor: heartbeat sched_25ea4a65 (0 open, slots idle)
+- fix-monitor: heartbeat sched_003cd4d4 (0 open, slots idle)
+- fix monitor heartbeat: sched_d474960a, 0 open, slots idle.
+- fix monitor: heartbeat sched_fae85b02 (0 open, slots idle)
+- fix-monitor: heartbeat sched_28a89ba2 (0 open, slots idle)
+- fix-monitor: heartbeat sched_2f10cd13 (0 open, slots idle)
+- fix-monitor: heartbeat 07:23Z sched_71455b29
+- fix-monitor: heartbeat sched_af8c5e46 (0 open, idle slots)
+- fix monitor: heartbeat tick sched_c367fda2
+- fix monitor tick: heartbeat sched_3ea8b796
+- fix-monitor: heartbeat tick sched_c8d77b7a
+- fix-monitor: heartbeat tick sched_8c1a86cb
+- fix-monitor: heartbeat tick sched_7b771411
+- fix monitor: heartbeat tick sched_3cab7298
+- fix monitor tick: heartbeat sched_e66fac93
+- fix-monitor: heartbeat tick (0 open, idle slots).
+- fix-monitor: heartbeat tick (0 open, idle slots).
+- fix-monitor: heartbeat tick (0 open, idle slots)
+- fix-monitor: heartbeat tick sched_9e8fa606
+- fix-monitor: heartbeat 07:02Z, next sched_319017d5
+- fix-monitor: heartbeat 07:00Z (sched_6d07b400)
+- fix(orchestrator): record sched_fb43e303 as last monitor wake
+- fix-monitor: heartbeat tick sched_bfac4e8e
+- fix-monitor: heartbeat 06:52Z (0 open, idle slots)
+- fix monitor: heartbeat sched_f3dfc5d3
+- fix monitor: heartbeat (~06:43Z), next sched_1124d372
+- fix monitor: heartbeat sched_f7222ca0 (0 open, idle slots)
+- fix monitor: heartbeat sched_291b4669 (0 open, slots idle)
+- fix-monitor: heartbeat tick sched_a2d8703b (0 open, idle slots).
+- fix monitor: heartbeat sched_77ebf373, 0 open, slots idle
+- fix(orchestrator): correct monitor tick timestamps
+- fix-monitor: heartbeat sched_c4451de2, 0 open, slots idle
+- fix-monitor: heartbeat (~05:52 UTC); schedule sched_ebd045c2.
+- fix monitor: heartbeat (~05:47 UTC); schedule sched_b760fd56
+- fix monitor: heartbeat 0 open, sched_8e60851f
+- fix-monitor: heartbeat 0 open, idle slots
+- fix monitor: heartbeat 0 open, idle slots
+- fix monitor: heartbeat 0 open, idle slots (~05:42 UTC).
+- fix-monitor: heartbeat 0 open, idle slots
+- fix monitor: heartbeat 0 open, idle slots
+- fix-monitor: heartbeat 0 open, idle slots (sched_1f1f5fd1)
+- fix monitor: heartbeat 0 open, idle slots
+- fix(orchestrator): align monitor lastScheduleId with sched_4142c78f
+- fix(orchestrator): monitor state sched_2ef009f1 heartbeat
+- fix(orchestrator): monitor heartbeat — 0 open, idle slots
+- fix(orchestrator): monitor heartbeat 0 open idle slots
+- fix monitor: heartbeat 0 open, idle slots (sched_80633952)
+- fix(orchestrator): monitor heartbeat — 0 open, slots idle
+- fix monitor: heartbeat 0 open, all slots idle
+- fix monitor: heartbeat at 0 open issues, all slots idle
+- fix monitor: heartbeat at 0 open issues, all slots idle
+- fix monitor: #654 closed; 0 open issues; all slots idle
+- fix(http): revoke RPC sessions on setup password change (Closes #654)
+- fix(security): enforce RBAC on TrackerBoostController mutations
+- fix(notifications): enforce RBAC on NotificationController (Closes #888)
+- fix(security): enforce RBAC on FileSystemController browse and mkdir (Closes #891)
+- fix(notifications): regression test for CustomScript dispatch allowlist (closes #1071)
+- fix(signalr): gate CommandCompleted and emit CommandFailed for command queue terminals
+- fix(backup): restrict restore/stream/delete to managed seedarr_backup archives (closes #1001)
+- fix(security): enforce RBAC on Arr integration management APIs (#886)
+- fix(notifications): regression tests for CustomScriptsDirectory allowlist (closes #1072)
+- fix(security): require AdminOnly for subsystem switch and probe (#881)
+- fix(signalr): broadcast piece corruption via PieceCorruptedMessage (#918)
+- fix(notifications): accept secrets containing asterisk on update (#1074)
+- fix(security): enforce RBAC on DownloadHistoryController (#896)
+- fix(subsystems): constrain subsystem routes so /metrics stays aggregate (#880)
+- fix(automation): return 404 for unknown marketplace template (closes #1156)
+- fix(signalr): broadcast pieceMapUpdated after SetVerifiedPieces bulk commit
+- fix(downloadclients): enforce RBAC on download client APIs (closes #885)
+- fix(http): add HttpRequest using for API key extraction helper
+- fix(subsystems): constrain subsystem routes so /metrics stays aggregate (#880)
+- fix(automation): slim SignalR execution broadcasts (#1155)
+- fix(signalr): deliver RequestStateSnapshot only via RPC return (closes #940)
+- fix(downloadclients): apply UrlBase to client HTTP URLs (closes #923)
+- fix(automation): reject manual run when script is disabled
+- fix(automation): return 404 when run/execute script id is missing
+- fix(downloadclients): count reconciled torrents as Updated only
+- fix(automation): return 404 when run/test torrentId is missing (closes #1025)
+- fix(downloadclients): surface busy state when sync lock is contended (Closes #931)
+- fix monitor: poke idle workers on open batch (#880–#940)
+- fix(signalr): stop double-firing recheck events on All and torrent group (Closes #951)
+- fix(downloadclients): infer torrent status when client state is unknown
+- fix(automation): preserve execution log on PUT when list preview is round-tripped
+- fix(core): restore build after logging and session revocation changes
+- fix monitor: #973/#968 closed; dispatch camel #924, elephant #879
+- fix(downloadclients): copy PieceHashes when sync auto-adds torrents (Closes #924)
+- fix(signalr): align pieceMapUpdated payloads with frontend store (closes #887)
+- fix monitor: 39 open, turtle/lizard acks, schedule sched_8413aa4b
+- fix(automation): return 404 when deleting unknown script id (closes #1015)
+- fix(downloadclients): return 404 on import when sync reports missing client
+- fix(disk): reject blocked system paths in IsValidPath (#968)
+- fix(signalr): broadcast pieceMapUpdated when PieceStorage.Clear runs (closes #954)
+- fix(rssrules): apply manual sync cooldown after sync completes (#929)
+- fix(downloadclients): return 404 when deleting unknown client id (closes #970)
+- fix(signalr): emit one canonical tracker event per update (closes #961)
+- fix(downloadclients): enrich Create/Update responses with sync status
+- fix(disk): return 0 when Linux mount match fails (#969)
+- fix(backup): stable sort when backup timestamps tie (#1148)
+- fix(disk): return null when free space query fails (#977)
+- fix(signalr): broadcast terminal TorrentUpdated when recheck fails (Closes #988)
+- fix(downloadclients): align TestConnection errors with TestDirect (closes #983)
+- fix(rssrules): return 404 when deleting unknown rule id
+- fix(backup): reject DELETE when id and fileName disagree (#1149)
+- fix(backup): derive stable API ids from archive file names (closes #928)
+- fix(downloadclients): reject batch import without info hashes
+- fix(torrents): broadcast TorrentUpdated on early recheck cancel (#991)
+- fix(rssrules): return 400 when RSS sync service is unavailable (closes #1114)
+- fix(disk): block Windows system dirs on any drive letter (#980)
+- fix(rssrules): merge omitted fields on PUT /rssrules/{id} (closes #1103)
+- fix(signalr): clear coalesced updates on lifecycle events while hub offline (Closes #1003)
+- fix(terminal): harden TerminalHub OnConnectedAsync auth and Admin RBAC (#892)
+- fix(seeding): stop bulk start/stop from toggling AutoStart (#990)
+- fix(downloadclients): pass empty object for Transmission async session RPC args
+- fix(signalr): only broadcast trackerAnnounced on announce events (#919)
+- fix(seeding): align GetStats active torrent scope with history (#995)
+- fix(downloadclients): validate qBittorrent credentials after version probe
+- fix(signalr): emit TaskFailed on scheduler task cancel/timeout (#911)
+- fix(api): persist AI settings via AiConfigResource (#1033)
+- fix(indexers): recompute implementation when indexer type changes on PUT (#1104)
+- fix(host): register HTTPS redirection before static files (#920)
+- fix(downloadclients): surface Deluge JSON-RPC errors during sync (#1163)
+- fix(signalr): clear dedup cache when receiveMessage send faults
+- fix(downloadclients): filter qBittorrent placeholder tracker URLs (#1164)
+- fix(signalr): flatten piece event Body to avoid circular JSON (#1019)
+- fix(api): roll back identity provider DB when OIDC scheme sync fails (#1034)
+- fix(disk): resolve Windows volume mount points in GetAvailableFreeSpace (#1081)
+- fix(indexers): reject masked ApiKey on POST create
+- fix(downloadclients): make Deluge JSON-RPC request ids thread-safe
+- fix(signalr): revert queued recheck cancel during semaphore wait (#1036)
+- fix(api): remove stale OIDC scheme when ProviderId is renamed (#1041)
+- fix(disk): guard CheckFolderWritable with path canonicalization
+- fix(indexers): return 404 on test when stored indexer id is missing
+- fix(downloadclients): sync auto-add uses metadata-only import fallback
+- fix(indexers): allow loopback URLs in POST /indexer/test
+- fix(signalr): emit single TaskStarted for queued manual tasks
+- fix(disk): preserve UNC server/share in SanitizePath (#1166)
+- fix(api): mask secrets in GeneralConfig SaveConfig 202 response
+- fix(signalr): invalidate system tasks on TaskFailed hub events (#903)
+- fix(signalr): broadcast TaskFailed for manual scheduled task exceptions (#985)
+- fix(indexers): recompute Implementation when IndexerType changes on PUT
+- fix(signalr): coalesce MarkPiecesVerified SignalR broadcasts
+- fix(notifications): mask JSON webhook URLs using logical string values
+- fix(disk): use case-sensitive IsPathUnderRoot on Linux (#1167)
+- fix(indexers): merge omitted fields on PUT /indexer/{id} (closes #1100)
+- fix(signalr): retain coalesced pending updates when hub is offline
+- fix(jobs): treat missing scheduled task instance as failure (#952)
+- fix(datastore): run scheduled vacuum on PostgreSQL (#882)
+- fix(notifications): clear FallbackNotificationId when deleting fallback channel
+- fix(jobs): propagate cancellation tokens through scheduled tasks
+- fix(signalr): flush REST coalesce pending updates on shutdown and dispose
+- fix(host): HTTP fallback when port-collision HTTPS init fails (Closes #901)
+- fix(indexers): return 404 when DELETE targets missing indexer id
+- fix(api): enforce CustomScript path allowlist on save, test-by-id, and dispatch (#1075)
+- fix(indexers): return errors from GET indexer caps when construction fails
+- fix(datastore): run ANALYZE and VACUUM on PostgreSQL database maintenance (Closes #915)
+- fix(api): reject invalid log level query on GET /api/v1/log
+- fix(api): publish developer synthetic events through IEventAggregator (#1057)
+- fix(indexers): allow category-only indexer search queries
+- fix(datastore): skip pre-migration snapshot when WAL checkpoint fails
+- fix(jobs): propagate TrackerScrapeJob failures to scheduler
+- fix(datastore): preserve config.xml.restore on failed pending restore (#998)
+- fix(api): cap system task history limit query parameter
+- fix(instrumentation): flush NLog targets during AppLifetime shutdown (closes #994)
+- fix(indexers): apply global limit/offset after multi-indexer search merge
+- fix(datastore): run incremental_vacuum after auto_vacuum conversion
+- fix(api): merge partial PUT bodies for notification updates
+- fix(jobs): align scheduler due check with CalculateNextExecution (Closes #1125)
+- fix(indexers): validate Prowlarr sync URLs with UrlValidator (#1206)
+- fix(disk): match Linux mount prefixes case-insensitively (#1229)
+- fix(instrumentation): redact OAuth client_secret and refresh_token in logs
+- fix(api): merge partial PUT bodies for system scheduled tasks (#1052)
+- fix(instrumentation): redact Authorization Basic and ApiKey in ring buffer logs
+- fix(disk): collapse .. segments in SanitizePath (#1090)
+- fix(jobs): persist exception stack when scheduler task fails
+- fix(indexers): reuse proxy HttpClient in DownloadRelease (#913)
+- fix(api): reject masked notification secrets on POST create (closes #1076)
+- fix(datastore): warn when embedded JSON deserialization fails (#999)
+- fix(jobs): keep HistoryRecorded false when failure history insert fails (#1202)
+- fix(instrumentation): apply DebugMode to file log minlevel (#1120)
+- fix(api): merge omitted fields on PUT /arrconnections/{id} (closes #1082)
+- fix(jobs): fail command queue when scheduled task cancels (#1236)
+- fix(seeding): return 404 for per-torrent history on unknown id (#916)
+- fix(instrumentation): reconfigure ring buffer NLog rule with FileLogLevel
+- fix(datastore): guard TimeOnlyTypeHandler against null and malformed values
+- fix(api): reject masked ApiKey on POST arrconnections create
+- fix(instrumentation): redact auth= and key= in RingBufferTarget.Sanitize
+- fix(seeding): return 404 when start/stop targets missing torrent (#914)
+- fix(datastore): map NULL to zero in SqliteDoubleTypeHandler.Parse
+- fix(auth): validate setup wizard AdminPassword on login (#1050)
+- fix(api): restore stored ApiKey on POST arrconnections/test when omitted
+- fix(instrumentation): reject non-positive RingBufferTarget capacity
+- fix(seeding): set ForceStart in StartAll to match per-torrent start
+- fix(api): recompute Implementation on PUT when ArrType changes (#1089)
+- fix(instrumentation): redact path-embedded tracker passkeys in logs (#1237)
+- fix(datastore): index RevokedSessions.ExpiresAtUtc for cleanup deletes (#1080)
+- fix(auth): default ForwardAuth non-admin role to ReadOnly (#895)
+- fix(api): return HTTP 400 when arr webhook processing fails
+- fix(seeding): skip stop event when torrent already stopped
+- fix(signalr): route domain broadcasts to hub groups (#878)
+- fix(datastore): wrap legacy scalar TagIds as JSON arrays (#1086)
+- fix(auth): OIDC challenge uses sanitized provider scheme name (#906)
+- fix(torrents): require Operator RBAC for file priority mutations
+- fix(api): preserve omitted speed schedule fields on PUT
+- fix(signalr): remove injected Authorization after access_token auth
+- fix(api): default omitted speed schedule fields on POST
+- fix(datastore): prune pre-migration snapshots by file age (#1087)
+- fix(auth): lossless SanitizeProviderId to avoid OIDC scheme collisions (#893)
+- fix(torrents): resolve subtitle files from SourcePath when SavePath is empty
+- fix(signalr): dedupe coalesced piece indexes in pending batch
+- fix(signalr): tail-drain recheck queue after lock release (Closes #1172)
+- fix(datastore): migration 068 orphan cleanup handles NULL TorrentId (#1085)
+- fix(torrents): return empty piecemap when piece metadata is missing (#943)
+- fix(api): remove OIDC scheme before deleting identity provider row (#1168)
+- fix monitor: rotate host/api after #1153 and #1170 close (178 open).
+- fix monitor: steady state at 180 open issues
+- fix monitor: rotate all five slots after batch close (180 open).
+- fix(authentication): persist IdentityProvider TrustedProxies column (#1063)
+- fix(torrents): fail relocation when payload missing on disk (Closes #945)
+- fix(api): return 404 for config GET with non-singleton id
+- fix(datastore): skip WAL RESTART escalation on non-SQLite checkpoints
+- fix(signalr): share torrent broadcast enrichment cache via DI singleton
+- fix(authentication): harden ForwardAuth against loopback header spoofing (Closes #1109)
+- fix(torrents): restore status when canceling queued recheck (#912)
+- fix(datastore): no-op UpdateMany when models is null (#1153)
+- fix(signalr): degrade gracefully when RequestStateSnapshot GetAll fails (Closes #1194)
+- fix monitor: sync orchestrator state for elk #947 dispatch.
+- fix monitor: rotate elk to #947 after #960 closed (190 open).
+- fix(torrents): omit queue Priority from fastresume piece_priority (Closes #946)
+- fix(api): align general config watch folder scan interval default with validation
+- fix(authentication): map OIDC Operator role rules to User for RBAC (Closes #1160)
+- fix(datastore): build Postgres connection string with NpgsqlConnectionStringBuilder
+- fix(torrents): pause torrent status on VPN kill switch (#947)
+- fix(datastore): dedupe case-colliding rows before migrations 041/042
+- fix(signalr): normalize scheduler task lifecycle SignalR TypeName (#1203)
+- fix(authentication): normalize RevokedSessions SessionKey case (Closes #986)
+- fix(api): report database engine version on system status (Closes #1178)
+- fix(torrents): match subtitle GET numeric id by track id only (Closes #960)
+- fix(api): wire developer simulation endpoint to engine telemetry (#1179)
+- fix(authentication): fail closed when OIDC client secret cannot be decrypted (#1161)
+- fix(torrents): snapshot TorrentFiles before bulk delete for payload cleanup (#962)
+- fix(datastore): treat whitespace-only PostgresHost as unset (#1201)
+- fix(torrents): clamp download history list limit to safe bounds (#958)
+- fix(signalr): trim channel names in BroadcastToChannel
+- fix(api): forward REST terminal PTY output to SignalR clients (#1180)
+- fix(authentication): fall through invalid API key to cookie SmartAuth routing
+- fix(datastore): populate model Id after InsertMany bulk insert
+- fix(automation): delegate ShouldRecheck to ITorrentRecheckService
+- fix(api): return 503 when developer test runner is unavailable
+- fix(host): stop duplicate DryIoc singletons from Startup.ConfigureServices
+- fix(signalr): canonicalize PieceBatchCompleted dedup keys (#1234)
+- fix(api): return HTTP 500 when database vacuum maintenance fails
+- fix(authentication): enforce case-insensitive identity ProviderId uniqueness (#976)
+- fix(torrents): validate savePath on multipart upload (#959)
+- fix(signalr): prune stale broadcast times on Created/Deleted paths (#1214)
+- fix(host): configure file logging before database bootstrap (#932)
+- fix(api): gate setup HasAdminUser on completed setup and auth
+- fix(authentication): schedule LoginRateLimiter expired IP cleanup (closes #1058)
+- fix(torrents): stop Recheck fallback from zeroing partial progress (#963)
+- fix(signalr): skip torrent group join when ITorrentService unavailable
+- fix(host): reject unparseable BindAddress at startup (#1056)
+- fix(api): reject image-proxy for disabled Arr connections
+- fix(torrents): assign magnet tr trackers to same announce tier
+- fix(api): re-register webhooks when arrType changes on PUT
+- fix(torrents): preserve priority and limits on partial PUT (closes #1121)
+- fix(host): prefix cookie LoginPath with UrlBase (#894)
+- fix(api): expose FallbackNotificationId on notification API (closes #1073)
+- fix(signalr): fail closed on recheck when file list and piece hashes missing (Closes #1210)
+- fix(authentication): stable OIDC NameIdentifier when sub claim missing
+- fix(torrents): use num_pieces to detect packed fastresume bitfields (closes #1139)
+- fix(api): mask TmdbApiKey on general config GET (#1035)
+- fix(signalr): do not start coalesce window on Created broadcasts
+- fix(datastore): return false for auto-vacuum when database unavailable
+- fix monitor: restart failed fix agents badger hawk sparrow.
+- fix-orchestrator: dispatch panther/hawk/sparrow after #1065 #1226 #876 closed
+- fix-orchestrator: dispatch elk on #1232 after #1046 closed
+- fix orchestrator: dispatch after #1084/#1126 closed
+- fix orchestrator: dispatch after #939/#944/#902 closed
+- fix orchestrator: rotate slots after 1024/910/1252/1068 closed
+- fix(torrents): skip BEP47 padding in recheck presence fallback
+- fix(host): reset port-forward failure latch when UPnP disabled (#1157)
+- fix(authentication): extend session revocation retention for sliding cookies (#1062)
+- fix(terminal): prefer LinuxPtySession over python PTY on Linux (#1027)
+- fix(downloadclients): reset sync status on client Update (#982)
+- fix(torrents): return 404 when bulk file priority update fails
+- fix(host): use ListenAnyIP when BindAddress is ::
+- fix(http): harden LinuxPtySession bash startup argv (Closes #1132)
+- fix(authentication): dedupe DynamicAuthSchemeManager OIDC retry loops
+- fix(downloadclients): surface qBittorrent malformed torrent list as sync failure (#1008)
+- fix(torrents): align recheck presence fallback with fastresume disk paths
+- fix(common): stop setting ArchiveFileName on file log target (#992)
+- fix(common): tolerate unknown log levels in RingBufferTarget.GetEntries
+- fix(torrents): only process watch-folder debounce when handler still owns CTS
+- fix(http): accept API key in Basic auth username (#877)
+- fix(authentication): SAML TestConnection falls back to IssuerUrl
+- fix(downloadclients): resolve hash fallback indexers via DI providers
+- fix(common): keep existing DryIoc registrations on repeat AutoAddServices
+- fix(torrents): return 400 from enrich-all when metadata enricher missing
+- fix(authentication): honor MetadataUrl in OIDC TestConnectionAsync
+- fix(common): dedupe assembly names in AssemblyLoader.Load
+- fix(torrents): persist InfoHashV2 to database (Closes #1231)
+- fix(downloadclients): require supported ClientType on create and update
+- fix(auth): reject revoked cookies when IssuedUtc is missing
+- fix(http): reject CSRF Origin on loopback host alias mismatch (Closes #934)
+- fix(common): fail registration when lifetime attributes conflict
+- fix(torrents): refuse export synthesis without piece hashes (#1138)
+- fix(downloadclients): merge Deluge trackers on AddTrackers
+- fix(http): require TrustedProxies before honoring loopback as proxy
+- fix(authentication): probe OIDC discovery URL for Social IdP test connection (Closes #978)
+- fix(common): skip interface-less types in AutoAddServices scan
+- fix(downloadclients): honor sync backoff on items and import APIs
+- fix(http): invalidate emulated client RPC sessions on logout and API key change
+- fix(common): load assemblies in default context when DLL is beside host
+- fix(authentication): preserve CreatedAt on IdentityProviderService.Update (Closes #979)
+- fix(http): free fork argv/env only in LinuxPtySession parent
+- fix(common): reject null or whitespace assembly names in AssemblyLoader
+- fix(downloadclients): validate host/port with UrlValidator on create/update
+- fix(torrents): hash pieces in FastResume background fallback (Closes #1232)
+- fix(authentication): refuse to re-wrap client secrets after key ring change (Closes #1240)
+- fix(host): stop watchdog from duplicating SeedingEngine speed-limit events (#1065)
+- fix(downloadclients): map sync-busy batch import to 400 like single import
+- fix(http): honor UrlBase in CSRF path bypass before UsePathBase
+- fix(torrents): unregister single WaitForPieceAsync waiter on timeout (#1046)
+- fix(host): express ApiKey header/query as OR in OpenAPI security
+- fix(downloadclients): case-insensitive Transmission category label filter (Closes #1097)
+- fix(authentication): parse Keycloak resource_access client roles for OIDC mapping (Closes #1211)
+- fix(http): advance SignalR coalesce throttle only after successful broadcast (Closes #1047)
+- fix(downloadclients): enrich cloned definitions on GET to avoid mutating factory cache (Closes #1137)
+- fix(host): allow anonymous SPA MapFallback when auth enabled (Closes #1196)
+- fix(authentication): consult repository on session revocation cache miss
+- fix(torrents): enforce PieceCache MaxCacheSize when all entries are unflushed (Closes #1233)
+- fix(http): use invariant culture for RestResource.ResourceName (Closes #1049)
+- fix(downloadclients): persist remote client version in sync status (#1213)
+- fix(torrents): return 503 when manual announce service is unavailable (Closes #1123)
+- fix(http): fall back to PTY for unhandled terminal WebSocket JSON (Closes #1133)
+- fix(host): fail startup when bootstrap assemblies cannot load
+- fix(torrents): delete fastresume files when torrents are removed (Closes #964)
+- fix(authentication): fail closed when client secret encryption fails (Closes #1059)
+- fix(http): bind RestPutById route id in config SaveConfig
+- fix(downloadclients): honor sync backoff on test and torrent control APIs
+- fix(host): route swagger auth gate through SmartAuth default scheme (Closes #1028)
+- fix(torrents): use PieceHashes and cache during recheck (#1242)
+- fix(authentication): prefer Seedarr_Auth cookie over ForwardAuth in SmartAuth
+- fix(http): report POSIX errno when Linux forkpty fails (Closes #1174)
+- fix(torrents): publish TorrentHashCheckCompletedEvent after recheck
+- fix(downloadclients): respect EnableSearch in indexer hash fallback
+- fix(host): require authentication for /fixtures when auth enabled (Closes #907)
+- fix(http): reset SignalR coalesce state after hub reconnect (Closes #1187)
+- fix(blocklist): skip semicolon-prefixed comment lines at ingest
+- fix(torrents): return 400 for invalid MoveQueue position tokens
+- fix(downloadclients): allow loopback/internal hosts in TestDirect (Closes #972)
+- fix(blocklist): trim IP string in IsBlocked before TryParse (Closes #1021)
+- fix(host): sum speed watchdog totals over active torrents only
+- fix(torrents): reject invalid level on torrent event log query (Closes #1126)
+- fix(security/api): restrict arr image-proxy to cover path allowlist
+- fix(host): drain AppLifetime watchdog before shutdown persistence (Closes #944)
+- fix(terminal): confine WebSocket terminal cwd to configured save paths
+- fix(blocklist): apply exponential backoff on 5xx and transport sync failures (Closes #939)
+- fix(downloadclients): record sync failure when client factory returns null
+- fix(torrents): persist InfoHashV2 on watch-folder .torrent import (Closes #1043)
+- fix(blocklist): bound default HttpClient timeout and backoff on sync timeout (Closes #938)
+- fix(downloadclients): link DownloadClientId when ImportTorrent hits existing library torrent (Closes #1010)
+- fix(http): retain UTF-8 state across PTY reads in terminal paths (Closes #1131)
+- fix(torrents): exclude BEP47 padding from disk preallocation space check (Closes #1039)
+- fix(host): skip HTTPS redirect when SSL listener cannot start (Closes #1150)
+- fix(http): sanitize Linux PTY child environment (Closes #965)
+- fix(torrents): cancel superseded watch-folder debounce without double-dispose (Closes #1045)
+- fix(downloadclients): reject item fetch for disabled clients (#1228)
+- fix(blocklist): merge all rule files from multi-entry zip archives
+- fix(host): persist torrent stats after DisconnectAllAsync on shutdown (Closes #1159)
+- fix(http): stop leaking CreateSession errors on terminal WebSocket (Closes #967)
+- fix(downloadclients): merge omitted PUT fields from existing client (Closes #1134)
+- fix(torrents): skip BEP47 padding files in disk preallocation (Closes #1189)
+- fix(host): exclude transmission and ws from SPA MapFallback (closes #1031)
+- fix(blocklist): serialize PeerBlocklistSyncService.SyncAsync lifecycle (Closes #1130)
+- fix(http): probe config DB in PingController for liveness (closes #1068)
+- fix(downloadclients): map qBittorrent metaDL, allocating, and moving states (Closes #1252)
+- fix(blocklist): align scheduled interval with API config key
+- fix(host): publish ApplicationStartedEvent after FastResume LoadAll
+- fix(http): unify RpcSessionStore on DI injection (#1092)
+- fix(host): wire ICertificateManager for HTTPS urls override (closes #1208)
+- fix(indexers): guard null ApiKey when recording indexer test status
+- fix(blocklist): backoff when blocklist quota exceeded on sync
+- fix(torrents): return 404 when DELETE targets missing torrent
+- fix(blocklist): update LastCheckedUtc on local backoff deferral (Closes #1029)
+- fix(http): clamp terminal cols/rows on WebSocket and SignalR paths (#1223)
+- fix(host): register wwwroot static files once in Startup (closes #1030)
+- fix(downloadclients): use one tier for Deluge AddTrackers batch (Closes #1253)
+- fix(torrents): honor limit as page size on download history list (#1221)
+- fix(blocklist): parse space-separated IPv6 label prefixes in TryParse
+- fix(torrents): reject multipart upload when every file is empty
+- fix(host): use alt speed limits for speed threshold events (#1067)
+- fix(blocklist): scope conditional validators to blocklist URL
+- fix(torrents): reconcile Downloaded after recheck from verified bitfield
+- fix(host): align UPnP watchdog with PortForwardCheck mapping state (#1216)
+- fix(http): prefer pending SignalR coalesce on window expiry (Closes #1230)
+- fix(downloadclients): populate DownloadId in qBittorrent, Transmission, Deluge GetItems
+- fix(host): delegate stall watchdog events to SeedingEngine (Closes #1217)
+- fix(torrents): index piecemap lookup by infohash via GetByInfoHash (Closes #1220)
+- fix(api): reject negative SpeedSchedule priority on create/update
+- fix(host): register dynamic OIDC schemes during bootstrap before Run
+- fix(torrents): persist MagnetUrl in ImportFromMagnet
+- fix(blocklist): dispose HttpResponseMessage after blocklist sync
+- fix(http): honor AllowedOrigins for loopback CORS origins
+- fix orchestrator: sync monitor schedule sched_14113bd2.
+- fix orchestrator: monitor health check (376 open, 5 agents active).
+- fix(automation): merge omitted fields on PUT /automation/{id} (Closes #1250)
+- fix(http): prevent FallbackProcessSession pipe deadlock on slow consumers (Closes #1173)
+- fix(blocklist): honor Content-Encoding deflate and br in archive provider
+- fix(torrents): batch download history lookup on GET /torrents
+- fix(host): stop peer listener before ApplicationShutdownRequested (Closes #1158)
+- fix(rssrules): clamp RSS grab history limit to prevent unbounded reads (Closes #1278)
+- fix(torrents): block tracker merge on duplicate POST for private torrents
+- fix(blocklist): honor BlocklistAutoUpdate in scheduled update task
+- fix(host): tolerate ReflectionTypeLoadException during AutoAddServices scan
+- fix(api): reject zero peer contact and tracker timeouts on PeerProtocol config
+- fix(blocklist): refuse HTTP 200 sync that clears enforceable rules
+- fix(http): honor WebSocket cols/rows on fallback terminal sessions
+- fix(torrents): resolve v2-only info hashes in AddTorrentCommandExecutor (Closes #948)
+- fix(torrents): re-validate disk space before DiskSpaceRestored auto-resume
+- fix(http): validate terminal cwd exists before PTY spawn (#1258)
+- fix(api): publish ConfigSavedEvent after general config.xml save (Closes #1256)
+- fix(blocklist): reject manual sync when enforcement is disabled
+- fix(api): block mutating PRAGMA and ANALYZE in database safe mode (Closes #1264)
+- fix(host): treat BindAddress '+' like '*' for dual-stack ListenAnyIP
+- fix(torrents): quarantine watch folder files when add fails after parse
+- fix(blocklist): clear LastSyncHttpStatus on transport sync failures
+- fix(signalr): drain PieceStorage pending batches during Flush/Dispose
+- fix(blocklist): drop unparsable feed lines from ActiveRules and RuleCount
+- fix(api): clamp developer wiretap limit query to 5000 (#1266)
+- fix(torrents): require file length when building MerkleTree from leaf hashes
+- fix(host): await in-flight stopped announces before later StopAsync phases
+- fix(datastore): enforce unique RemotePathMappings per host and remote path
+- fix(instrumentation): redact full quoted JSON secret values with spaces
+- fix(notifications): restore password-style query params in webhook URLs (closes #1271)
+- fix(authentication): reset expired lockout in RecordFailedAttempt
+- fix(blocklist): fail sync when fallback still returns 304 with empty tree
+- fix(torrents): apply log level filter before count limit (#1283)
+- fix(jobs): record failed history when scheduled task type is missing (#1286)
+- fix(downloadclients): read qBittorrent torrent size from Web API field size
+- fix(blocklist): align BlocklistUpdateTask scheduled and command sync failure handling
+- fix(common): skip open generic types in AutoAddServices
+- fix(downloadclients): return 400 when GetItems cannot create provider
+- fix(torrents): reject download history offset without SQL LIMIT (#1284)
+- fix(signalr): skip dedup cache when no hub clients connected (closes #1277)
+- fix(authentication): follow safe HTTPS redirect in IdP connection test
+- fix(host): honor startup CancellationToken in AppLifetime.StartAsync
+- fix(api): dispose arr image-proxy HttpResponseMessage on all paths
+- fix(http): prefix OIDC CallbackPath with UrlBase for subpath hosting
+- fix(torrents): case-insensitive DownloadHistory infohash lookups (#1287)
+- fix(auth): skip HTTP probe for ForwardAuth test connection
+- fix(disk): reject relative root in IsPathUnderRoot
+- fix(downloadclients): surface per-client errors on aggregated items API
+- fix(host): gate forwarded headers and strict AllowHosts (Closes #1285)
+- fix(http): drop stale coalesced Updated after Deleted on SignalR hub
+- fix(torrents): synchronize TorrentEventLogService flush with processor batch
+- fix(authentication): atomic RevokedSession upsert under concurrency
+- fix(auth): preserve OIDC client secret on IdentityProviderService.Update
+- fix(torrents): keep Paused status when recheck finishes after mid-check pause
+- fix(host): validate Bootstrap listen URL overrides before build
+- fix(terminal): re-check TerminalAccessEnabled on SignalR hub methods
+- fix(downloadclients): return JSON message on CRUD 404 (Closes #1292)
+- fix(auth): persist session revocation before updating in-memory cache (#1294)
+- bug-hunt monitor: restart core/http hunters idle >90s
+- bug-hunt monitor: restart host hunter lynx -> panther (Bootstrap).
+- bug-hunt monitor: restart http hunter on REST rotation
+- bug-hunt monitor: restart api/host hunters idle >90s
+- bug-hunt monitor: restart host hunter walrus → manatee (Composition).
+- bug-hunt monitor: restart api and signalr hunters idle >90s
+- bug-hunt monitor: restart 5 idle hunters (>90s) on current partitions.
+- bug-hunt monitor: 389 open, hunters healthy (sched_1f3be12c)
+- bug-hunt monitor: 385 open, all hunters healthy (00:01 UTC)
+- bug-hunt monitor: sync orchestrator state after hunter restarts.
+- bug-hunt monitor: restart api/http/signalr hunters idle >90s.
+- bug-hunt monitor: state 376 open, core crow, sched_74271278.
+- bug-hunt monitor: restart idle core hunter bat to crow (DownloadClients).
+- bug-hunt monitor: fix open issue count (375)
+- bug-hunt monitor: host platypus→owl (Startup), sync core bat
+- bug-hunt monitor: restart http/api/signalr hunters idle >90s.
+- bug-hunt monitor: mole→anteater on Core/Datastore; 370 open
+- bug-hunt monitor: restart http/signalr hunters idle >90s (jay/heron, 368 open)
+- bug-hunt monitor: 363 open, all hunters healthy (sched_2e32f2af).
+- bug-hunt monitor: restart api/http/host hunters idle >90s
+- bug-hunt monitor: 360 open, hunters healthy
+- bug-hunt monitor: 23:38 UTC healthy cycle, sched_b1daaabe
+- bug-hunt monitor: set lastScheduleId sched_7335f571
+- bug-hunt monitor: 352 open, 0 restarts, sched_7335f571
+- bug-hunt monitor: restart idle core/http hunters (342 open)
+- bug-hunt monitor: 340 open, 0 restarts, stop orphan puppy
+- bug-hunt monitor: restart signalr slot after puppy pass
+- bug-hunt monitor: restart core/http hunters idle >90s
+- bug-hunt monitor: restart signalr/host/api hunters (330 open).
+- bug-hunt monitor: tick 23:21Z, 328 open, restart signalr
+- bug-hunt monitor: tick 23:20Z, 322 open, 0 restarts
+- bug-hunt monitor: restart core/api/http idle hunters
+- bug-hunt monitor: restart host hunter dragon->hatchling
+- bug-hunt monitor: restart core hunter after Torrents pass (#1188-#1189).
+- bug-hunt monitor: note 0 restarts, hunters healthy.
+- bug-hunt monitor: tick 23:11Z, 312 open, 0 restarts.
+- bug-hunt monitor: restart http hunter octopus -> kitten (idle>90s)
+- bug-hunt monitor: sync orchestrator state with stallion/dromedary slots.
+- bug-hunt monitor: restart idle api/host hunters (stallion, dromedary).
+- bug-hunt monitor: restart api/host hunters idle >90s
+- bug-hunt monitor: restart core hunter raccoon, 286 open
+- fix: orchestrator lastScheduleId sched_0623e900
+- bug-hunt monitor: 277 open, 0 restarts, sched_0623e900
+- bug-hunt monitor: 276 open, 0 restarts, sched_fbf50c43
+- bug-hunt monitor: restart idle core hunter (monkey -> boar).
+- fix(orchestrator): set monitor lastScheduleId sched_b4134b4b
+- bug-hunt monitor: restart idle core/http hunters (walrus, yak)
+- bug-hunt monitor: restart SignalR slot rat->rooster
+- fix(orchestrator): monitor log ts for tick sched_b6e91edc
+- bug-hunt monitor: restart all five hunters after completed passes
+- fix(orchestrator): per-slot hunt-progress files to stop hunter races
+- fix(orchestrator): hunters use hunt-progress, not coordinator state
+- fix(logging): sanitize file and console log output (closes #189)
+- fix(terminal): enforce Admin RBAC on TerminalHub SignalR (closes #397)
+- fix(transmission): stop arbitrary torrent-duplicate fallback (#186)
+- fix(orchestrator): validate 30s monitor via schedule wake_at
+- fix(test): restore Core.Test compile on main
+- fix(extraction): bound streaming decompress and rollback partial extracts (closes #492)
+- fix(diskspace): restore network mount probe timeout for DiskSpaceService (Closes #755)
+- fix(torrents): harden DeleteMany bulk delete ordering (#841)
+- fix(downloadclients): stop cross-client sync thrashing and tighten import locking (#869)
+- fix(auth): persist session revocations to SQLite (#863)
+- fix(disk): resolve Linux mount points in DiskProvider (#815)
+- fix(security): block sensitive paths in directory validation (#814)
+- fix(update): require SHA-256 verification before install (#811)
+- fix(auth): add missing System.Threading using directive in DynamicAuthSchemeManager
+- fix(signalr): prevent ghost connection leak and guard broadcast exceptions (#857)
+- fix(health): consolidate duplicate health checks and fix build warning (#809)
+- fix(storage): resolve handle eviction race and excessive write locking in FileHandlePool (#813)
+- fix(transport): dispose unhandled inbound peer connections in PeerServer (#827)
+- fix(storage): call PieceCache.ClearTorrent on deletion and protect unflushed pieces (#829)
+- fix(endgame): decrement PendingRequestCount on SendCancel and call MarkBlockCompleted (#826)
+- fix(utp): prevent UtpConnection.Receive from stealing shared socket datagrams (#830)
+- fix(jobs): normalize task type names in TaskManager and synchronize BackupService staging (#820)
+- fix(jobs): set TaskExecutionStatus.Canceled when task is canceled (#821)
+- fix(categories): eliminate unbatched transactions during rename and deletion (closes #710)
+- fix(categories): prevent unsetting default category via Update (closes #712)
+- fix(upnp): handle ConfigSavedEvent and synchronize mapping mutations (closes #797)
+- fix(indexers): compute PieceOffset and PieceCount during DownloadRelease (closes #801)
+- fix(mcp): resolve Request.PathBase in SSE endpoint announcement (closes #793)
+- fix(deluge): protect active seeding torrents during Arr deletion (closes #798)
+- fix(prowlarr): clean orphaned indexer references in RssRule when pruning (closes #803)
+- fix(qbittorrent): correct form parameter mapping in setPiecePriority (closes #799)
+- fix(qbittorrent): guard sync/maindata against null or whitespace InfoHash (closes #800)
+- fix(seeding): respect explicit unlimited ratio and seeding time limits (closes #804)
+- fix(downloadclients): map error and missingFiles states in QBitTorrentClient (closes #802)
+- fix(health): resolve DefaultSavePath in HardlinkCapabilityCheck (closes #805)
+- fix(thingiprovider): match provider name in ProviderFactory.GetAvailableProviders (closes #808)
+- fix(mediacover): prepend UrlBase to poster and backdrop URLs (closes #806)
+- fix(trackerserver): catch transient SocketException in ReceiveLoop and AcceptLoop (closes #817)
+- fix(scripts): drain pipe buffer in ReadBoundedAsync and stderr in PtyProcessSession (closes #818)
+- fix(dht): validate mandatory KRPC arguments and prevent typecast exceptions (closes #819)
+- fix(trackers): parse BEP 7 compact peers6 and guard dictionary peer deserialization (closes #825)
+- fix(dht): normalize IPv4-mapped IPv6 addresses in DhtSecurity (closes #822)
+- fix(network): resolve dual-stack endpoint mismatch and handle binding errors (closes #839)
+- fix(storage): prune empty PendingBatch and bound SignalR deduplication cache (closes #859)
+- fix(transmission): handle form-encoded RPC payloads and validate integer bounds (closes #866)
+- fix(portmapping): serialize shared socket requests, add renewal retry, and wire NatPmpClient (closes #840)
+- fix(bandwidth): chunk transfer bytes in BandwidthLimiter (closes #832)
+- fix(qbittorrent): resolve tag splitting, isolate sync sessions, and fix pieceStates (closes #867)
+- fix(blocklist): require loaded tree before sending conditional headers (closes #871)
+- fix(indexers): reset failure status in IndexerStatusService on indexer update (closes #836)
+- fix(torrents): prevent accidental stop on partial update and validate magnet URI (closes #847)
+- fix(bencode): guard timestamp bounds and overflow in serializer and parser (closes #838)
+- fix(telegram): synchronize polling service and add backoff delay (closes #858)
+- fix(blocklist): strip label prefix before range splitting in Ipv6IntervalTree (closes #872)
+- fix(discord): resolve request body stream draining in DiscordInteractionsController (closes #853)
+- fix(health): prevent unobserved exceptions and handle cancellation (closes #843)
+- fix(config): conditionally validate ProxyPort and guard rate limit overflow (closes #850)
+- fix(mediaenrichment): handle final retry exceptions and use monotonic clock (closes #846)
+- fix(deluge): implement system.multicall and header authentication (closes #868)
+- fix(telegram): catch webhook exceptions and restrict group authorization (closes #856)
+- fix(datastore): eliminate SQLite-specific COLLATE NOCASE for Postgres compatibility (closes #873)
+- fix(vpn): support OperationalStatus.Unknown on Linux tunnel interfaces and sync UtpManager (closes #851)
+- fix(blocklist): buffer non-seekable streams in BlocklistArchiveStreamProvider (closes #870)
+- fix(datastore): dispose database connection on post-open initialization failure (closes #874)
+- fix(simulation): guard against NaN propagation and remove artificial leech clamping (closes #849)
+- fix(mediaenrichment): enforce trailing separator in PruneCacheDirForFilePath (closes #848)
+- fix(tags): cascade delete orphaned AutoTaggerRules and validate TagId (closes #855)
+- fix(indexers): support DDP and Dolby Digital Plus patterns in ReleaseQualityParser (closes #835)
+- fix(webseed): correct BEP 17 range query parameter in HoffmanWebSeedClient (closes #828)
+
+### 🔧 Maintenance & Improvements
+- chore(orchestrator): log skipped monitor wake while stopped
+- Stop fix-mode orchestrator monitor on user request.
+- chore(orchestrator): fix monitor heartbeat sched_4685e12f
+- chore(orchestrator): fix monitor heartbeat sched_6dc9d775
+- chore(orchestrator): fix monitor heartbeat sched_b6f9ecd1
+- chore(orchestrator): fix monitor heartbeat sched_2a28e556
+- chore(orchestrator): fix monitor heartbeat sched_6e548528
+- chore(orchestrator): fix monitor heartbeat 08:47Z
+- chore(orchestrator): fix monitor heartbeat sched_9490dc9f
+- chore(orchestrator): fix monitor heartbeat sched_eb45f9e8
+- chore(orchestrator): fix monitor heartbeat sched_210f3f6c
+- chore(orchestrator): fix monitor heartbeat sched_6ff4ea84
+- chore(orchestrator): fix monitor heartbeat sched_498e6b99
+- chore(orchestrator): fix monitor heartbeat 08:43Z
+- chore(orchestrator): fix monitor heartbeat
+- chore(orchestrator): fix monitor heartbeat sched_b5e38629
+- chore(orchestrator): fix monitor heartbeat sched_40ba10e4
+- chore(orchestrator): fix monitor heartbeat sched_0a6b1b71
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T08:38:20Z
+- chore(orchestrator): fix monitor heartbeat sched_061e05d5
+- chore(orchestrator): fix monitor heartbeat sched_f7563603
+- chore(orchestrator): fix monitor heartbeat sched_a8abed94
+- chore(orchestrator): fix monitor heartbeat sched_c023f6c0
+- chore(orchestrator): fix monitor heartbeat sched_73c65bbd
+- orchestrator: fix monitor heartbeat (0 open, slots idle)
+- chore(orchestrator): fix monitor heartbeat sched_3e75bafe
+- chore(orchestrator): fix monitor heartbeat sched_cedd20b2
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T08:29Z
+- chore(orchestrator): fix monitor heartbeat sched_c4b54c96
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T08:27:08Z
+- chore(orchestrator): fix monitor heartbeat tick
+- chore(orchestrator): fix monitor heartbeat sched_67c0e18b
+- chore(orchestrator): fix monitor heartbeat sched_5cabe98c
+- chore(orchestrator): fix monitor heartbeat sched_f6452f61
+- chore(orchestrator): fix monitor heartbeat sched_b075443c
+- chore(orchestrator): fix monitor heartbeat
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T08:19:27Z
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T08:16:20Z
+- chore(orchestrator): fix monitor heartbeat 08:15:47Z
+- chore(orchestrator): fix monitor heartbeat sched_62c0c455
+- chore(orchestrator): fix monitor heartbeat sched_db91f76e
+- chore(orchestrator): fix monitor heartbeat 08:13Z
+- chore(orchestrator): fix monitor heartbeat sched_ff1611f2
+- chore(orchestrator): fix monitor heartbeat sched_6f961f63
+- chore(monitor): fix orchestrator heartbeat cycle.
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T08:08:35Z
+- chore(orchestrator): fix monitor heartbeat 08:07:45Z
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T08:06Z
+- chore(orchestrator): fix monitor heartbeat
+- chore(orchestrator): fix monitor heartbeat sched_467d26c6
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T08:04:33Z
+- chore(orchestrator): update monitor state for sched_faf67306
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T08:03:32Z
+- chore(monitor): fix orchestrator heartbeat tick.
+- chore(orchestrator): fix monitor heartbeat (0 open, slots idle).
+- chore(orchestrator): fix monitor heartbeat
+- chore(orchestrator): fix monitor heartbeat sched_03b3c384
+- chore(monitor): fix orchestrator heartbeat sched_5cea8494
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T07:59:14Z
+- chore(orchestrator): fix monitor heartbeat sched_e10f0610
+- chore(orchestrator): fix-monitor heartbeat sched_5f043da6
+- chore(orchestrator): fix monitor heartbeat sched_5f9982ee
+- chore(orchestrator): fix monitor heartbeat at 07:52Z
+- chore(orchestrator): fix monitor heartbeat sched_7234d32c
+- chore(orchestrator): fix monitor heartbeat sched_45b2d54a
+- chore(orchestrator): fix monitor heartbeat 07:50:25Z
+- chore(orchestrator): fix monitor heartbeat at 07:49:52Z
+- chore(orchestrator): fix monitor heartbeat sched_2b746954
+- chore(orchestrator): fix monitor heartbeat sched_98e03cf2
+- chore(orchestrator): fix monitor heartbeat sched_4175e5c5
+- chore(orchestrator): fix monitor heartbeat sched_46114d00
+- chore(orchestrator): fix monitor heartbeat sched_0e6bea06
+- chore(orchestrator): fix monitor heartbeat sched_361b4359
+- chore(orchestrator): fix monitor heartbeat sched_3774efad
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T07:44:30Z
+- chore(orchestrator): fix monitor heartbeat sched_8339b7a2
+- chore(orchestrator): fix monitor heartbeat sched_f60a8e83
+- chore(orchestrator): fix monitor heartbeat sched_e924fff6
+- chore(orchestrator): fix monitor heartbeat sched_18843119
+- chore(orchestrator): fix monitor heartbeat sched_a1ea8d67
+- chore(orchestrator): fix monitor heartbeat sched_bfb3aeab
+- chore(orchestrator): fix-monitor heartbeat sched_1c1d24b4
+- chore(orchestrator): fix monitor heartbeat sched_a1d93d11
+- chore(orchestrator): fix monitor heartbeat sched_c6a98602
+- chore(orchestrator): fix monitor heartbeat sched_a68348ca
+- chore(orchestrator): fix monitor heartbeat sched_722a9769
+- chore(orchestrator): fix monitor heartbeat sched_a2bcd096
+- chore(orchestrator): fix monitor heartbeat sched_05c7ec1f
+- chore(orchestrator): fix monitor heartbeat sched_4e860254
+- chore(orchestrator): fix monitor heartbeat sched_a5ace3ba
+- chore(orchestrator): fix monitor heartbeat sched_72d9f4f1
+- chore(orchestrator): fix monitor heartbeat sched_8a03b534
+- chore(orchestrator): fix monitor heartbeat sched_4727ae72
+- chore(orchestrator): fix monitor heartbeat sched_f425f3d3
+- chore(orchestrator): fix monitor heartbeat sched_c11d75bd
+- chore(orchestrator): fix monitor heartbeat sched_0e0d0521
+- chore(orchestrator): fix monitor heartbeat sched_17a5e2bf
+- chore(orchestrator): fix monitor heartbeat sched_dccdf787
+- chore(orchestrator): fix monitor heartbeat sched_81ce2dbe
+- chore(orchestrator): fix monitor heartbeat sched_c1c02961
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T07:21:13Z
+- chore(orchestrator): fix monitor heartbeat (idle slots, queue empty).
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T07:16:59Z
+- chore(orchestrator): fix monitor heartbeat sched_18b9e8d5
+- chore(orchestrator): fix monitor heartbeat (~07:15Z)
+- chore(orchestrator): fix monitor heartbeat sched_ff7f6ffc
+- chore(orchestrator): fix monitor heartbeat sched_ba22aeb2
+- chore(orchestrator): fix monitor heartbeat sched_4e077db6
+- chore(orchestrator): fix monitor heartbeat sched_c3ee9e27
+- chore(orchestrator): fix monitor heartbeat sched_d548ab67
+- chore(orchestrator): fix monitor heartbeat sched_b4fc3abc
+- chore(orchestrator): fix monitor heartbeat (~07:03Z)
+- chore(orchestrator): fix monitor heartbeat (~07:02Z)
+- chore(orchestrator): fix monitor heartbeat (~07:01Z)
+- chore(orchestrator): fix monitor heartbeat sched_0a9e4a67
+- chore(orchestrator): fix monitor heartbeat sched_519ba447
+- chore(orchestrator): fix-monitor heartbeat 06:59Z
+- chore(orchestrator): fix monitor heartbeat (~06:58Z)
+- chore(orchestrator): fix monitor heartbeat (~06:57Z).
+- chore(orchestrator): fix monitor heartbeat (~06:56Z)
+- chore(orchestrator): record sched_820dca16 as last monitor wake
+- chore(orchestrator): fix monitor heartbeat (~06:56Z)
+- chore(orchestrator): fix monitor heartbeat sched_e1ee1742
+- chore(orchestrator): sync monitor lastScheduleId sched_a700a467
+- chore(orchestrator): fix monitor heartbeat (~06:54Z)
+- chore(orchestrator): fix monitor heartbeat (~06:53Z).
+- chore(orchestrator): fix monitor heartbeat (~06:51Z)
+- chore(orchestrator): fix monitor heartbeat (~06:50Z).
+- chore(orchestrator): fix monitor heartbeat sched_37d4fce2
+- chore(orchestrator): fix monitor heartbeat 06:48Z
+- chore(orchestrator): fix monitor heartbeat 06:47Z
+- chore(orchestrator): fix monitor heartbeat (~06:47Z)
+- chore(orchestrator): fix monitor heartbeat (~06:46Z)
+- chore(orchestrator): fix monitor heartbeat (~06:46Z)
+- chore(orchestrator): fix monitor heartbeat ~06:45Z
+- chore(orchestrator): fix-monitor heartbeat (~06:45Z)
+- chore(orchestrator): fix monitor heartbeat (~06:44Z)
+- chore(orchestrator): fix monitor heartbeat sched_42dda549
+- chore(orchestrator): fix monitor heartbeat (~06:41Z).
+- chore(orchestrator): fix monitor heartbeat ~06:40Z
+- chore(orchestrator): fix monitor heartbeat (~06:40Z)
+- chore(orchestrator): fix monitor heartbeat at 06:39Z.
+- chore(orchestrator): fix monitor heartbeat (~06:39Z)
+- chore(orchestrator): fix monitor heartbeat 06:37
+- chore(orchestrator): fix monitor heartbeat (~06:37Z)
+- chore(orchestrator): fix monitor heartbeat (~06:36Z)
+- chore(orchestrator): fix monitor heartbeat (~06:35 UTC).
+- chore(orchestrator): fix monitor heartbeat (~06:34Z)
+- chore(orchestrator): fix monitor heartbeat 06:33Z
+- chore(orchestrator): fix monitor heartbeat (~06:32Z)
+- chore(orchestrator): fix monitor heartbeat (~06:31Z)
+- chore(orchestrator): fix monitor heartbeat (~06:31Z)
+- chore(orchestrator): fix monitor heartbeat sched_837e12ae
+- chore(orchestrator): fix monitor heartbeat (~06:29 UTC)
+- chore(orchestrator): fix monitor heartbeat sched_9f7d3fd0
+- chore(orchestrator): sync monitor lastScheduleId and heartbeat
+- chore(orchestrator): fix monitor heartbeat tick
+- chore(orchestrator): fix monitor heartbeat (~06:27Z)
+- chore(orchestrator): fix monitor heartbeat (~06:26 UTC)
+- chore(orchestrator): fix monitor heartbeat tick
+- chore(orchestrator): fix monitor heartbeat sched_957cbf89
+- chore(orchestrator): fix monitor heartbeat 2026-10-07T06:24:05Z
+- chore(orchestrator): fix monitor heartbeat 06:23Z
+- chore(orchestrator): fix monitor heartbeat sched_7e6b7c2c
+- chore(orchestrator): align monitor log with sched_3a654914
+- chore(orchestrator): fix monitor heartbeat sched_3a654914
+- chore(orchestrator): fix monitor tick — idle swarm, queue empty
+- chore(orchestrator): fix monitor heartbeat sched_9be0361d
+- chore(orchestrator): fix monitor heartbeat (~06:19Z).
+- chore(orchestrator): fix monitor heartbeat (~06:18Z)
+- chore(orchestrator): fix monitor tick ~06:18 UTC
+- chore(orchestrator): fix monitor heartbeat (~06:17Z)
+- chore(orchestrator): fix monitor heartbeat (~06:17Z)
+- chore(orchestrator): fix monitor heartbeat ~06:16Z
+- chore(orchestrator): fix monitor heartbeat sched_894411e9
+- chore(orchestrator): fix monitor heartbeat (~06:16 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:15 UTC).
+- chore(orchestrator): fix monitor heartbeat (~06:14 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:13 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:13 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:12 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:12Z)
+- chore(orchestrator): fix monitor heartbeat (~06:11 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:11 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:11 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:10 UTC)
+- chore(orchestrator): fix monitor heartbeat ~06:09Z
+- chore(orchestrator): fix monitor heartbeat (~06:09 UTC)
+- chore(orchestrator): fix monitor heartbeat ~06:08 UTC
+- chore(orchestrator): fix monitor heartbeat (~06:08 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:07 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:07 UTC)
+- chore(orchestrator): fix monitor heartbeat ~06:06 UTC
+- chore(orchestrator): fix monitor heartbeat (~06:06 UTC)
+- chore(orchestrator): fix monitor heartbeat ~06:05 UTC
+- chore(orchestrator): fix monitor heartbeat (~06:05 UTC)
+- chore(monitor): fix heartbeat 2026-10-07T06:04:44Z
+- chore(orchestrator): fix monitor heartbeat 06:04 UTC
+- chore(orchestrator): fix monitor heartbeat ~06:03Z
+- chore(orchestrator): fix monitor heartbeat 06:03Z
+- chore(orchestrator): fix monitor heartbeat (~06:02 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:02 UTC).
+- chore(orchestrator): fix monitor heartbeat ~06:01 UTC
+- chore(orchestrator): fix monitor heartbeat (~06:01 UTC)
+- chore(orchestrator): fix monitor heartbeat (~06:00 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:59 UTC)
+- chore(orchestrator): fix monitor heartbeat ~05:59 UTC
+- chore(orchestrator): fix monitor heartbeat (~05:59 UTC)
+- chore(orchestrator): fix monitor heartbeat ~05:58 UTC
+- chore(orchestrator): fix monitor heartbeat (~05:58Z)
+- chore(orchestrator): fix monitor heartbeat (~05:58 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:56 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:56 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:55 UTC)
+- chore(orchestrator): sync fix monitor lastScheduleId
+- chore(orchestrator): fix monitor heartbeat (~05:54 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:54 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:54 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:53 UTC).
+- chore(orchestrator): fix monitor heartbeat (~05:52 UTC).
+- chore(orchestrator): fix monitor heartbeat (~05:52 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:51 UTC)
+- chore(orchestrator): align lastScheduleId with sched_f0cccfad
+- chore(orchestrator): fix monitor heartbeat (~05:51 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:50 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:50 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:49 UTC).
+- chore(orchestrator): fix monitor heartbeat (~05:49 UTC).
+- chore(orchestrator): fix monitor heartbeat (~05:48 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:47 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:47 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:47 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:45 UTC).
+- chore(orchestrator): fix monitor heartbeat (~05:45 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:45 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:44 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:44 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:43 UTC)
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat (~05:41 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:40 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:40 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:39 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:38 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:37 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:37 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:37 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:36 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:35 UTC)
+- chore(orchestrator): align monitor log with sched_32fd7490.
+- chore(orchestrator): fix monitor heartbeat at 0 open issues.
+- chore(orchestrator): fix monitor heartbeat (~05:34 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:34 UTC)
+- chore(orchestrator): fix monitor heartbeat (0 open, idle slots)
+- chore(orchestrator): fix monitor heartbeat (2026-10-07T05:33:11Z)
+- chore(orchestrator): fix monitor heartbeat (~05:32 UTC)
+- chore(orchestrator): fix monitor heartbeat (0 open, idle slots)
+- chore(orchestrator): fix monitor heartbeat (~05:31 UTC)
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat (~05:30 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:29 UTC)
+- chore(orchestrator): fix monitor heartbeat (0 open, idle slots)
+- chore(orchestrator): fix monitor heartbeat (0 open, idle slots)
+- chore(orchestrator): fix monitor heartbeat (~05:28 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:28 UTC).
+- chore(orchestrator): fix monitor heartbeat at 0 open
+- chore(orchestrator): fix monitor heartbeat (~05:26 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:26 UTC)
+- chore(orchestrator): sync state with sched_6382fe7a heartbeat
+- chore(orchestrator): fix monitor heartbeat (~05:25 UTC)
+- chore(orchestrator): fix monitor heartbeat (0 open, idle slots)
+- chore(orchestrator): fix monitor heartbeat (~05:24 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:24 UTC)
+- chore(orchestrator): fix monitor heartbeat — 0 open, idle slots
+- chore(orchestrator): fix monitor heartbeat (~05:22 UTC)
+- chore(orchestrator): fix monitor heartbeat (0 open, idle slots)
+- chore(orchestrator): fix monitor heartbeat (~05:20 UTC)
+- chore(orchestrator): fix monitor heartbeat (0 open, idle slots)
+- chore(orchestrator): fix monitor heartbeat (~05:18 UTC)
+- chore(orchestrator): fix monitor heartbeat — 0 open, slots idle
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat — 0 open, idle slots
+- chore(orchestrator): append fix monitor log (~05:11 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:11 UTC)
+- chore(orchestrator): fix monitor heartbeat at 0 open issues.
+- chore(orchestrator): fix monitor heartbeat (0 open, idle slots).
+- chore(orchestrator): fix monitor heartbeat (~05:04 UTC)
+- chore(orchestrator): fix monitor heartbeat (~05:02 UTC)
+- chore(orchestrator): fix monitor heartbeat 05:00 UTC
+- chore(orchestrator): fix monitor heartbeat at 04:58 UTC
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): record monitor schedule sched_77903269
+- chore(orchestrator): fix monitor heartbeat — 0 open, all slots idle
+- chore(orchestrator): fix monitor heartbeat — 0 open, slots idle
+- chore(orchestrator): fix monitor heartbeat at 0 open issues
+- chore(orchestrator): fix monitor heartbeat at queue drain
+- chore(orchestrator): monitor #899 closed, host idle, 1 open
+- chore(orchestrator): rotate after #891 #888 #889 #897 #890 closed
+- security(trackermetrics): enforce RBAC on reset and delete endpoints
+- security(packages): enforce RBAC on package import and export endpoints
+- security(mcp): require AdminOnly for MCP SSE and JSON-RPC endpoints
+- security(trackerserver): require Reader RBAC on diagnostics API
+- chore(orchestrator): fix monitor heartbeat 22 open, all agents active
+- chore(orchestrator): fix monitor log ~04:20 UTC
+- chore(orchestrator): rotate after #923 #940 #1155 closed
+- chore(orchestrator): fix monitor heartbeat ~04:12 UTC
+- chore(orchestrator): fix monitor heartbeat @ 30 open
+- chore(orchestrator): fix monitor heartbeat (~04:09 UTC)
+- chore(orchestrator): fix monitor rotate after #879 #1007 #884 #1014 #951
+- chore(orchestrator): sync fix slots rhino/hippo/boar sched_c0115e3d
+- chore(orchestrator): monitor dispatch rhino/hippo/boar after #924 #1015 #887
+- security(api): require AdminOnly on developer system endpoints (#879)
+- chore(orchestrator): fix monitor rotate after #970 #929 #954 (40 open)
+- chore(orchestrator): monitor dispatch batch @ 58 open after 5 closes
+- test(http): regression for LinuxPtySession env whitelist (Closes #956)
+- Restrict log file API to Seedarr log naming patterns (#1054).
+- chore(orchestrator): fix monitor rotate to #1063 #945 #1172 (175 open)
+- test(api): regression for empty/null TmdbApiKey on general config PUT (#1170)
+- chore(orchestrator): sync state for elk on #946
+- chore(orchestrator): rotate elk to #946 after #947 landed on main
+- chore(orchestrator): fix monitor dispatches after four slot completions
+- chore(orchestrator): fix monitor tick — all agents active on current issues.
+- chore(orchestrator): fix monitor full slot rotation at 191 open
+- chore(orchestrator): fix monitor dispatches after 4 closures
+- chore(orchestrator): sync fix slot state after #949/#1209 closes
+- chore(orchestrator): fix monitor — rotate elk/sparrow after #949/#1209 closed
+- chore(orchestrator): rotate fix slots after #1064 #883 #1181 closed
+- chore(orchestrator): fix monitor — rotate four closed slots
+- test(torrents): assert PieceHashes cache eviction on delete (Closes #949)
+- chore(orchestrator): sync lastScheduleId
+- chore(orchestrator): fix monitor rotate host/torrents slots
+- chore(orchestrator): fix monitor rotate auth/api/terminal slots
+- chore(orchestrator): fix monitor — rotate #992/#1038, 239 open
+- chore(orchestrator): rotate #1037/#993 to #1038/#992
+- chore(orchestrator): fix monitor poke idle elk/panther
+- chore(orchestrator): fix monitor tick — 243 open, all agents healthy
+- chore(orchestrator): fix monitor tick — all agents healthy (243 open)
+- chore(orchestrator): fix monitor dispatches after #1146 #1119 #877 closed
+- chore(orchestrator): trim issue queue after monitor dispatch
+- chore(orchestrator): fix monitor dispatch #993 #1037
+- chore(orchestrator): fix monitor dispatch auth common http slots
+- chore(orchestrator): fix monitor dispatches for #1119 and #1127
+- chore(orchestrator): rotate fix agents after #917 #1020 #934 closed
+- chore(orchestrator): fix monitor dispatch #975 #1231
+- chore(orchestrator): fix monitor dispatch #917 #1020 #934
+- chore(orchestrator): rotate hawk/elk after #1012 and #942 closed
+- chore(orchestrator): dispatch after #979 #1190 #1093 closed
+- chore(orchestrator): state elk on #942, sched_205f9446
+- chore(orchestrator): fix monitor — elk #942 after #950 closed
+- orchestrator: fix monitor dispatch batch after #1240-#966 closed
+- chore(orchestrator): fix monitor 271 open, poke badger on #1240
+- chore(orchestrator): fix monitor 277 open, dispatch auth/host/api issues
+- chore(orchestrator): fix monitor 279 open, 5 dispatches after 5 closes
+- chore(orchestrator): update fix slots after #1213/#1049 closed
+- chore(orchestrator): fix monitor — rotate api/http after #1213/#1049 closed
+- chore(orchestrator): fix monitor — 3 dispatches after closed host/torrents/http issues
+- chore(orchestrator): fix monitor — 288 open, agents healthy
+- chore(orchestrator): fix monitor dispatch #1004 #1123
+- chore(orchestrator): fix monitor dispatch #987 #1213 #1133
+- chore(orchestrator): rotate fix agents after auth/host/torrents closes
+- chore(orchestrator): dispatch sparrow on #1140 after #1174 close
+- chore(orchestrator): update fix slots after monitor cycle
+- chore(orchestrator): fix monitor dispatch after #907 #1118 #1048 closed
+- chore(orchestrator): dispatch after #1023/#1187 close
+- chore(orchestrator): update fix slots hawk#1118 elk#1048
+- chore(orchestrator): fix monitor dispatches after #972/#1122 close
+- chore(orchestrator): fix monitor dispatches after #1021/#1066/#909 close
+- chore(orchestrator): sync fix slots to #1084 and #1126
+- chore(orchestrator): dispatch api #1084 and torrents #1126 after completions
+- chore(orchestrator): fix monitor tick — healthy, 315 open
+- chore(orchestrator): fix monitor dispatch after five issue closures
+- chore(orchestrator): fix monitor tick — all agents active (320 open)
+- chore(orchestrator): sync fix slots after monitor rotation
+- chore(orchestrator): fix monitor dispatch batch (open 320)
+- chore(orchestrator): fix monitor dispatch host #1150 after #1159 closed
+- chore(orchestrator): sync fix slots after monitor dispatches
+- chore(orchestrator): fix monitor dispatches after 5 issue closures
+- chore(orchestrator): fix monitor tick — all agents active (330 open).
+- chore(orchestrator): fix monitor tick — 330 open, all agents active
+- chore(orchestrator): append fix monitor log line
+- chore(orchestrator): fix monitor poke elk on #1189
+- chore(orchestrator): fix monitor dispatch after four closes
+- chore(orchestrator): sync state after elk dispatch on #1189
+- chore(orchestrator): fix monitor rotate torrents slot after #957
+- chore(orchestrator): fix monitor dispatch batch (open 340)
+- chore(orchestrator): fix monitor dispatch 1029/957 after 1175/1221 closed
+- test(http): reject private-network Host when AllowedHosts is explicit (Closes #908)
+- chore(test): remove duplicate using in ConfigControllerTests
+- test(http): reject .local and seedarr when AllowedHosts is restrictive (#909)
+- test(host): cover AppLifetime watchdog drain on shutdown (#944)
+- test(host): avoid X509 substitute in Bootstrap HTTPS override test
+- chore(orchestrator): fix monitor rotate after 4 closes (#1176 #1158 #1219 #1173)
+- chore(orchestrator): fix monitor tick — 367 open, 5 agents active
+- chore(orchestrator): fix monitor rotate batch (#905-#1244 closed)
+- chore(orchestrator): fix monitor dispatch batch (372 open)
+- chore(orchestrator): fix monitor rotate batch #1032-#1258 -> #904-#1257
+- orchestrator: fix monitor rotate after #1261-#1260 closed
+- chore(orchestrator): update fix slots after monitor rotation
+- chore(orchestrator): fix monitor dispatch #1261,#1259,#1264,#1267,#1260
+- chore(orchestrator): fix monitor rotate after #1280 batch closed
+- test(host): cover stopped announces when host stop token is pre-cancelled
+- chore(orchestrator): fix monitor rotate batch closed 1281-1283
+- chore(orchestrator): fix monitor rotate batch #1145-#1277 closed
+- chore(orchestrator): fix monitor rotate after #1144-#922 batch closed
+- orchestrator: rotate fix slots after five issues closed
+- chore(orchestrator): fix monitor tick sched_65d41d97
+- orchestrator: record fix monitor sched_41ae598b
+- orchestrator: verify fix-mode outcomes; rotate five slots to next issues
+- orchestrator: dispatch #1269 after #1294; reschedule fix monitor
+- orchestrator: auto-poke fix-mode agents; refresh state note
+- orchestrator: document fix-mode as active; record monitor schedule
+- orchestrator: switch to fix-mode; dispatch 5 issue agents
+- chore(hunt): core slot completes Authentication static pass
+- chore(hunt): host pass on Bootstrap.cs (#1293)
+- Stop bug-hunt orchestrator and hunters on user request.
+- chore(hunt): advance api slot past DownloadClients pass
+- chore(hunt): signalr slot pass on TorrentRecheckService (elk)
+- chore(bug-hunt): monitor tick 416 open, hunters healthy
+- chore(monitor): api hawk to eagle DownloadClients
+- chore(hunt): http slot REST pass — file #1289, rotate to Ping
+- chore(hunt): record core Torrents static pass in core.json
+- chore(monitor): signalr goat to elk after Jobs pass; 415 open
+- chore(hunt): signalr slot completes Jobs static pass (emu)
+- chore(bug-hunt): host slot pass Startup.cs (#1285)
+- chore(bug-hunt): monitor tick 411 open, hunters healthy
+- chore(hunt): api slot completed Torrents static pass (hawk)
+- chore(orchestrator): monitor tick — core/signalr hunter restarts
+- chore(hunt): http slot completes Terminal pass (#1282)
+- chore(orchestrator): monitor tick — gannet to cormorant (Jobs), 408 open
+- chore(hunt): complete core Blocklist pass (#1280, #1281)
+- chore(orchestrator): monitor tick 00:26 UTC — 406 open, hunters healthy
+- chore(hunt): host pass #21 Composition, file #1279 open-generic DI
+- chore(orchestrator): monitor tick — core/http hunter restarts
+- chore(hunt): api slot completed Indexers pass (albatross)
+- hunt(signalr): gannet pass on NzbDrone.SignalR hub
+- chore(monitor): restart api hunter on Indexers after pelican idle.
+- hunt(core): DownloadClients pass, file #1276, rotate to Blocklist
+- chore(monitor): restart signalr hunter nightingale → gannet (402 open).
+- monitor: crane→quail http Authentication (idle >90s)
+- chore(hunt): complete host Instrumentation pass (#1275)
+- chore(monitor): core raven→moose after Datastore pass (#1273)
+- chore(hunt): record api ArrIntegration pass (pelican)
+- hunt(signalr): complete static pass on Seedarr.Http/REST
+- chore(monitor): sync orchestrator state walrus host slot
+- chore(monitor): restart host hunter otter → walrus (Instrumentation)
+- chore(hunt): complete http Security pass (crane)
+- chore(orchestrator): monitor wake — sparrow idle → crane (Http/Security)
+- chore(orchestrator): monitor wake — raven replaces idle kestrel (Datastore)
+- chore(hunt): host pass #19 NzbDrone.Common/Disk complete
+- chore(hunt): signalr slot pass on TorrentRecheckService
+- chore(hunt): record api Notifications pass (vulture)
+- monitor: bug-hunt tick 00:13 UTC, 397 open, 0 restarts
+- chore(hunt): http pass 31 Ping static review complete
+- chore(monitor): tick 397 open, auth issues #1269/#1270
+- chore(hunt): record core Authentication bug-hunt pass
+- monitor: restart 4 idle hunters (>90s); chain sched_addf0611
+- chore(monitor): append monitor log for sched_3d249143
+- chore(monitor): bug-hunt tick 00:10 UTC, 395 open, 0 restarts
+- chore(monitor): core falcon->kestrel after Torrents pass
+- chore(hunt): complete core Torrents pass, rotate to Authentication
+- chore(hunt): complete api System pass, rotate to Notifications
+- chore(hunt): complete http REST static review pass 30
+- chore(hunt): host pass #18 AppLifetime.cs, rotate to Common/Disk
+- chore(hunt): complete signalr Jobs partition pass
+- chore(monitor): bug-hunt tick ~00:08 UTC, 0 restarts, 389 open
+- chore(orchestrator): bug-hunt monitor tick sched_8cdfc086 (389 open, 0 restarts)
+- chore(hunt): complete core Blocklist pass (wren)
+- chore(hunt): signalr pass on NzbDrone.SignalR, file #1260
+- chore(hunt): complete host pass on Bootstrap.cs (#1259)
+- chore(hunt): complete http Terminal pass (issues #1257 #1258)
+- chore(monitor): sync orchestrator state (wren, sched_ff80bf3c)
+- chore(hunt): complete api Config partition pass (pheasant)
+- chore(monitor): restart core hunter crow→wren (Blocklist)
+- monitor: host owl->badger after Startup pass idle
+- chore(bug-hunt): monitor ~23:57 UTC — 380 open, 0 restarts
+- chore(hunt): complete core DownloadClients bug-hunt pass
+- chore(hunt): host pass #16 Startup.cs complete
+- chore(hunt): record signalr slot pass on Seedarr.Http REST
+- chore(bug-hunt): monitor cycle ~23:56 UTC, 377 open, 0 restarts
+- chore(hunt): record api Automation pass and rotate to Config
+- chore(hunt): http pass 28 Authentication static review
+- chore(hunt): complete core Datastore pass, rotate to DownloadClients
+- chore(bug-hunt): monitor tick 23:51 UTC — 373 open, hunters healthy
+- chore(hunt): host pass #15 Composition complete, rotate to Startup
+- chore(orchestrator): bug-hunt monitor ~23:50 UTC — 371 open, 0 restarts
+- chore(hunt): http pass 27 Security complete, next Authentication
+- chore(hunt): complete api Backup static review pass (ibis)
+- chore(hunt): signalr slot TorrentRecheckService pass (#1242, #1243)
+- chore(orchestrator): monitor ~23:48 UTC — restart api/host hunters idle >90s
+- chore(hunt): complete core Authentication bug-hunt pass
+- chore(orchestrator): bug-hunt monitor ~23:46 UTC healthy cycle
+- chore(hunt): record api pass on Seedarr.Api.V1/Seeding
+- chore(hunt): host pass #14 Instrumentation complete, rotate to Composition
+- chore(hunt): complete http pass 26 on Ping slot
+- monitor: restart Core hunter mole on Authentication after Torrents pass
+- monitor: restart signalr hunter after canary hub pass
+- chore(hunt): complete signalr slot pass on NzbDrone.SignalR
+- chore(hunt): core Torrents pass complete, rotate to Authentication
+- chore(hunt): record http pass 25 on Seedarr.Http/REST
+- chore(hunt): complete host pass on NzbDrone.Common/Disk
+- monitor: sync orchestrator state sched_1e290dd5, 355 open
+- monitor: bug-hunt 355 open, hunters healthy (~23:39 UTC)
+- chore(bug-hunt): complete api DownloadClients pass
+- monitor: restart 5 hunters idle >90s at current subfolders
+- chore(hunt): complete core Blocklist pass, rotate to Torrents
+- chore(bug-hunt): monitor restart SignalR slot (retriever→spaniel)
+- chore(hunt): complete http Terminal static review pass
+- chore(monitor): bug-hunt tick 347 open, 0 restarts
+- chore(hunt): advance api slot after Torrents pass
+- chore(hunt): host pass #12 AppLifetime.cs progress
+- chore(hunt): signalr slot REST pass progress (#1214, #1215)
+- chore(bug-hunt): monitor cycle restart api/host idle hunters
+- chore(hunt): record core DownloadClients bug-hunt pass
+- chore(bug-hunt): complete http Authentication pass (issue #1211)
+- chore(hunt): signalr slot complete TorrentRecheck pass
+- chore(hunt): host pass Bootstrap.cs, rotate to AppLifetime
+- chore(bug-hunt): sync orchestrator state sched_0c074d7e
+- chore(bug-hunt): monitor tick 23:26 UTC — 334 open, 0 restarts
+- chore(hunt): advance api slot after Indexers pass
+- chore(hunt): signalr slot Jobs pass progress (#1202, #1203)
+- chore(hunt): complete core Datastore pass (#1199, #1201)
+- chore(hunt): complete http Security pass, rotate to Authentication
+- chore(hunt): record api ArrIntegration pass in api.json
+- chore(hunt): complete api ArrIntegration pass (#1197, #1198)
+- chore(hunt): complete host Startup.cs pass, rotate to Bootstrap
+- chore(hunt): complete signalr slot pass on NzbDrone.SignalR hub layer.
+- chore(bug-hunt): sync orchestrator state after http hunter restart
+- chore(bug-hunt): monitor tick — restart idle http hunter hare→nautilus
+- chore(hunt): complete core Authentication pass, rotate to Datastore
+- chore(orchestrator): bug-hunt monitor tick ~23:15 UTC
+- chore(hunt): complete host pass on NzbDrone.Common/Composition
+- chore(bug-hunt): monitor tick — hog→guppy on SignalR slot
+- chore(hunt): complete http Ping pass 21, rotate to Security
+- chore(hunt): complete core Torrents pass, rotate to Authentication
+- monitor: append log for sched_41dc3567 tick
+- monitor: 3 hunter restarts at 314 open issues (#1183-#1187)
+- chore(hunt): complete http REST pass, rotate to Ping (#1187)
+- chore(hunt): complete signalr REST pass, file #1186, rotate to SignalR
+- chore(bug-hunt): monitor tick — 312 open, core zebra→poodle restart
+- chore(hunt): record host Instrumentation pass (issues 1184, 1185)
+- chore(hunt): advance api slot after System pass
+- chore(orchestrator): bug-hunt monitor tick — restart SignalR hunter hog
+- chore(hunt): complete core Blocklist bug-hunt pass
+- chore(orchestrator): sync state sched_54feac60, 301 open issues
+- chore(orchestrator): bug-hunt monitor tick 301 open, 0 restarts
+- chore(hunt): complete http Terminal pass and rotate to REST
+- chore(hunt): signalr pass TorrentRecheckService (#1172)
+- chore(orchestrator): bug-hunt monitor tick — restart core hunter, 298 open issues
+- chore(hunt): complete Api.V1 Config pass, advance to System
+- chore(hunt): advance host slot after Common/Disk pass
+- orchestrator: bug-hunt monitor tick (~23:03 UTC), 0 restarts
+- chore(orchestrator): bug-hunt monitor ~23:02 UTC
+- chore(hunt): complete core DownloadClients pass (#1163, #1164)
+- chore(orchestrator): bug-hunt monitor tick — 289 open, 0 restarts
+- chore(hunt): signalr slot completes NzbDrone.Core/Jobs pass
+- chore(hunt): record http Authentication pass (#1160, #1161)
+- chore(hunt): host slot pass AppLifetime.cs (#1157-1159)
+- chore(hunt): advance api slot past Automation subfolder
+- chore(orchestrator): bug-hunt monitor tick ~22:57 UTC
+- chore(orchestrator): sync hunt slot workers after monitor restarts
+- chore(orchestrator): bug-hunt monitor — 4 hunter restarts
+- chore(hunt): complete core Datastore pass and rotate to DownloadClients
+- chore(hunt): record host Bootstrap.cs pass (#1150)
+- chore(hunt): http pass 17 Security static review deduped
+- chore(hunt): api slot completes Backup pass, rotate to Automation
+- hunt(signalr): NzbDrone.SignalR pass, file #1147 coalesce dup indexes
+- orchestrator: record sched_3210765f on monitor tick
+- orchestrator: bug-hunt monitor restart 4 idle hunters
+- chore(orchestrator): bug-hunt monitor tick (~22:50 UTC)
+- chore(hunt): record core Authentication pass in hunt-progress
+- orchestrator: bug-hunt monitor tick (270 open, 0 restarts)
+- chore(hunt): advance api slot past Seeding pass
+- chore(hunt): host pass Startup.cs, rotate to Bootstrap (#1141)
+- chore(hunt): signalr slot completes Seedarr.Http/REST pass
+- chore(hunt): http pass 16 Ping complete, next Security
+- chore(orchestrator): bug-hunt monitor tick (~22:48 UTC)
+- chore(orchestrator): bug-hunt monitor tick 22:47 UTC
+- chore(orchestrator): bug-hunt monitor tick — restart signalr/host hunters
+- chore(hunt): signalr slot pass on TorrentRecheckService
+- chore(orchestrator): bug-hunt monitor tick (~22:45 UTC)
+- chore(hunt): complete Http REST pass, rotate to Ping
+- chore(hunt): complete core Torrents pass and rotate to Authentication
+- chore(hunt): record api DownloadClients pass in hunt-progress
+- chore(orchestrator): bug-hunt monitor tick (~22:44 UTC)
+- chore(hunt): host slot completes Composition pass, rotates to Startup
+- chore(orchestrator): sync state after bug-hunt monitor tick.
+- chore(orchestrator): bug-hunt monitor tick (0 restarts, 260 open).
+- chore(orchestrator): bug-hunt monitor tick — 4 hunter restarts
+- chore(orchestrator): bug-hunt monitor tick (~22:40 UTC)
+- chore(hunt): record http Terminal pass (#1131-#1133)
+- chore(orchestrator): bug-hunt monitor tick — 30 open, 0 restarts
+- chore(hunt): complete Core Blocklist pass in core.json
+- chore(hunt): Instrumentation pass 2 - ring buffer FileLogLevel (#1128)
+- chore(hunt): complete Api.V1 Torrents pass and rotate to DownloadClients
+- chore(hunt): record Jobs pass in signalr slot progress
+- chore(orchestrator): set monitor lastScheduleId sched_382922f0
+- chore(orchestrator): bug-hunt monitor tick 22:38 — 0 restarts, hunters healthy
+- chore(orchestrator): bug-hunt monitor tick ~22:36 UTC
+- chore(hunt): complete Instrumentation pass for host slot
+- chore(orchestrator): bug-hunt monitor tick ~22:35 UTC
+- chore(bug-hunt): consolidate Api.V1 Indexers pass in api.json
+- chore(hunt): record http Authentication pass (#1116, #1117)
+- chore(orchestrator): bug-hunt monitor tick (~22:34 UTC)
+- chore(hunt): record http Authentication bug-hunt pass
+- chore(hunt): record Api.V1 Indexers pass in api.json
+- chore(hunt): record Instrumentation pass in host slot
+- chore(hunt): record Core DownloadClients pass in core.json
+- chore(hunt): signalr pass file #1094 #1095 rotate to Core/Jobs
+- chore(orchestrator): bug-hunt monitor — restart host/api hunters
+- chore(hunt): advance signalr slot after NzbDrone.Core/Jobs pass
+- chore(orchestrator): bug-hunt monitor — restart core+http hunters
+- chore(hunt): complete ArrIntegration API bug-hunt pass
+- chore(hunt): record http Security pass (#1093)
+- chore(hunt): record host Disk pass (#1090)
+- chore(hunt): complete http Security pass (#1092, reopen #654)
+- chore(hunt): record Core Datastore pass issues and rotate hunter
+- orchestrator: bug-hunt monitor tick (0 restarts, 30 open)
+- chore(hunt): record ArrIntegration API pass in api.json
+- hunt(signalr): complete NzbDrone.SignalR pass, rotate to Jobs
+- chore(hunt): advance host slot after Common/Disk pass (#1081)
+- orchestrator: bug-hunt monitor tick 22:29 UTC (restarts snail/snake)
+- chore(hunt): record Core Datastore bug-hunt pass
+- chore(orchestrator): bug-hunt monitor tick (~22:29 UTC)
+- chore(hunt): record Notifications API pass in api.json
+- chore(orchestrator): bug-hunt monitor tick (~22:28 UTC)
+- chore(hunt): record http Ping pass (#1068)
+- hunt(http): complete Ping pass, file #1069, rotate to Security
+- chore(hunt): host slot AppLifetime pass, file #1067, rotate to Disk
+- chore(hunt): advance host slot past AppLifetime.cs pass
+- chore(hunt): complete signalr REST pass in hunt-progress
+- chore(orchestrator): bug-hunt monitor; llama->rabbit on Core Datastore
+- orchestrator: bug-hunt monitor restart api/host hunters
+- chore(hunt): core Authentication pass complete
+- chore(hunt): complete Bootstrap.cs host pass (#1061)
+- chore(hunt): signalr REST pass — file #1060, rotate to NzbDrone.SignalR
+- orchestrator: bug-hunt monitor tick; restart http slot (lion -> panda)
+- chore(hunt): record Api.V1 System bug-hunt pass in api.json
+- chore(hunt): record Bootstrap.cs pass in host.json
+- chore(hunt): advance api slot past System pass
+- chore(hunt): record http REST pass in hunt-progress
+- orchestrator: update bug-hunt monitor schedule sched_c93b886a
+- orchestrator: bug-hunt monitor tick — 0 restarts, sync slot workers
+- chore(orchestrator): align hunt slot worker names with swarm sessions
+- chore(orchestrator): bug-hunt monitor tick — restart core/host/signalr hunters
+- chore(hunt): signalr TorrentRecheckService pass, file #1048
+- orchestrator: bug-hunt monitor tick — restart api hunter (goat→koala)
+- chore(hunt): advance http slot past REST subfolder pass
+- chore(hunt): complete Core Torrents pass and rotate to Authentication
+- chore(hunt): record Host Startup.cs pass in host.json
+- chore(hunt): record Core Torrents pass in core.json
+- chore(hunt): record api Config pass and rotate to System
+- chore(hunt): signalr pass TorrentRecheckService, rotate to REST
+- chore(orchestrator): bug-hunt monitor tick ~22:22 UTC
+- chore(orchestrator): bug-hunt monitor tick — 3 hunter restarts
+- chore(hunt): api slot Config pass — file issues #1033-#1035
+- chore(hunt): complete core Blocklist pass and rotate to Torrents
+- chore(hunt): http Terminal pass, file #1027, rotate to REST
+- chore(hunt): host pass on Startup.cs (#1028 #1030 #1031)
+- chore(hunt): signalr slot pass on NzbDrone.Core/Jobs
+- orchestrator: bug-hunt monitor tick (30 open, 0 restarts)
+- chore(orchestrator): sync hunt slot api to goat after bear pass
+- chore(orchestrator): bug-hunt monitor tick — restart api hunter goat
+- chore(hunt): http pass 9 Terminal complete, rotate to REST
+- chore(hunt): record Core Blocklist pass issues #1021-#1024
+- chore(bug-hunt): api hunter completed Automation pass (#1025)
+- chore(orchestrator): bug-hunt monitor tick ~22:19 UTC
+- chore(hunt): complete Core Blocklist pass, rotate to Torrents
+- chore(hunt): record Composition pass for host slot
+- hunt(signalr): complete NzbDrone.SignalR pass, file #1019
+- chore(hunt): http pass 8 Authentication, rotate to Terminal
+- chore(orchestrator): bug-hunt monitor tick ~22:18 UTC
+- chore(orchestrator): bug-hunt monitor — buffalo to crab on core
+- chore(hunt): record SignalR pass and rotate to Core/Jobs
+- chore(hunt): api hunter Automation pass (#1014, #1015)
+- chore(hunt): advance http slot past Authentication pass
+- chore(hunt): record core DownloadClients pass (#1012, #1013)
+- orchestrator: bug-hunt monitor; api slot sauropod->bear (136 open)
+- chore(hunt): complete Core DownloadClients bug-hunt pass
+- chore(orchestrator): bug-hunt monitor — restart http and signalr hunters
+- chore(hunt): record host Composition pass (#1004-1006)
+- chore(hunt): record SignalR REST pass in signalr.json
+- chore(hunt): complete Http Security bug-hunt pass
+- chore(orchestrator): bug-hunt monitor tick 127 open 0 restarts
+- chore(hunt): http pass 7 Security subfolder complete
+- chore(orchestrator): bug-hunt monitor tick — restart core hunter
+- chore(hunt): advance signalr slot after Seedarr.Http/REST pass
+- chore(hunt): advance api hunter past Backup pass
+- chore(hunt): record core Datastore pass (#999, #1000)
+- orchestrator: record sauropod and blowfish hunt slot workers
+- orchestrator: bug-hunt monitor restart api/host hunters
+- chore(hunt): complete Core Datastore pass (#997, #998)
+- chore(orchestrator): bug-hunt monitor tick (~22:13 UTC)
+- chore(hunt): record Instrumentation pass in host slot
+- chore(hunt): record api pass on Seeding subfolder
+- chore(hunt): http pass 6 REST and Ping review
+- chore(hunt): record Host/Common Instrumentation pass in host.json
+- chore(hunt): signalr TorrentRecheckService pass, issue #991
+- chore(hunt): advance api hunter past Seeding folder
+- chore(orchestrator): bug-hunt monitor — restart core hunter (mosquito->ram)
+- chore(hunt): advance signalr slot after TorrentRecheckService pass
+- chore(orchestrator): bug-hunt monitor tick ~22:10 UTC
+- chore(hunt): complete Core Authentication pass (#986, #987)
+- chore(orchestrator): bug-hunt monitor — restarts ox pig rat, sched_f396c98d
+- chore(hunt): signalr slot Jobs pass, file #985
+- chore(hunt): complete API DownloadClients pass, rotate to Seeding
+- chore(hunt): complete host pass on NzbDrone.Common/Disk
+- chore(hunt): record Core Authentication bug-hunt pass
+- chore(hunt): advance api hunter to Seeding after DownloadClients pass
+- chore(hunt): record signalr slot Jobs pass (#971)
+- chore(hunt): record host pass on NzbDrone.Common/Disk
+- chore(hunt): http pass 6 Terminal review progress
+- chore(orchestrator): bug-hunt monitor tick (~22:08 UTC)
+- chore(orchestrator): bug-hunt monitor tick ~22:08 UTC
+- chore(hunt): record http pass 5 progress (issue #965)
+- chore(hunt): record Core Torrents pass issues #962-964.
+- chore(hunt): restore signalr rotation queue after pass
+- chore(hunt): signalr pass — file #961 tracker event fan-out
+- chore(orchestrator): restart host hunter hamster after fox pass
+- chore(hunt): complete Api.V1 Torrents bug-hunt pass
+- chore(hunt): http pass 5 — file LinuxPty env leak (#956)
+- chore(hunt): complete AppLifetime.cs host slot pass
+- chore(hunt): signalr pass — file recheck duplicate, scheduler, Clear gaps
+- chore(orchestrator): bug-hunt monitor tick 77 open, 0 restarts
+- chore(hunt): record NzbDrone.Core/Torrents bug hunt pass
+- chore(orchestrator): bug-hunt monitor tick (~22:05 UTC)
+- chore(host-hunter): AppLifetime pass watchdog shutdown race (#944)
+- chore(hunt): signalr verification pass after piglet slot write
+- chore(hunt): api Torrents pass issues 941-943, rotate to DownloadClients
+- chore(hunt): signalr pass — file #940 duplicate stateSnapshot
+- chore(hunt): record NzbDrone.Core Blocklist pass in core.json
+- chore(hunt): signalr pass — file #935 #936, update slot progress
+- chore(hunt): record http partition pass 4 (issue #934).
+- chore(bug-hunt): host-hunter Bootstrap pass (#932, #933)
+- chore(hunt): record DownloadClients pass and issue #931
+- chore(hunt): api pass issues 928-930, rotate to Torrents
+- chore(orchestrator): point monitor to sched_a40ce03c
+- chore(orchestrator): bug-hunt monitor tick (~22:02 UTC)
+- chore(hunt): api-hunter Indexers pass (#926, #927)
+- chore(hunt): record core-hunter DownloadClients pass (#923-925)
+- chore(bug-hunt): host-hunter Startup pass (#920)
+- chore(orchestrator): append bug-hunt monitor log line
+- chore(orchestrator): bug-hunt monitor tick 21:59 UTC
+- chore(hunt): record signalr-hunter pass (#918, #919)
+- chore(bug-hunt): api-hunter Api.V1 pass — #913 #914 #916
+- chore(orchestrator): bug-hunt feedback loop validation r3
+- chore(bug-hunt): core-hunter Datastore pass filed #915
+- chore(orchestrator): bug-hunt monitor tick 21:58Z
+- chore(orchestrator): bug-hunt monitor — restart core hunter (cat->cow)
+- chore(bug-hunt): core-hunter Torrents pass, file #912
+- chore(bug-hunt): log host-hunter pass filing #910
+- chore(orchestrator): bug-hunt monitor tick 34 open, 0 restarts
+- chore(orchestrator): sync bug-hunt state sched_8c743019
+- chore(orchestrator): bug-hunt monitor tick 33 open issues
+- chore(orchestrator): bug-hunt monitor restart idle hunters
+- chore(orchestrator): bug-hunt monitor tick 21:52Z
+- chore(orchestrator): bug-hunt monitor tick 21:51Z (30 open, 0 restarts)
+- chore(orchestrator): bug-hunt monitor — restart http hunter (bug)
+- chore(orchestrator): sync state after bug-hunt monitor 21:49Z
+- chore(orchestrator): bug-hunt monitor tick 21:49Z
+- chore(orchestrator): bug-hunt monitor tick 21:48Z
+- chore(orchestrator): bug-hunt monitor tick 21:47Z
+- chore(orchestrator): bug-hunt monitor tick 21:46Z (16 open issues)
+- chore(orchestrator): close bh6 with hunter and GitHub filing evidence
+- orchestrator: bug-hunt monitor tick (8 open, 0 restarts)
+- chore(orchestrator): bug-hunt monitor tick 21:44 UTC
+- chore(orchestrator): bug-hunt monitor tick — restart stale http hunter
+- chore(orchestrator): bug-hunt monitor tick 21:42 UTC
+- chore(orchestrator): bug-hunt monitor tick 21:42 UTC
+- chore(orchestrator): bug-hunt monitor tick, 7 open issues, sched_4947e4e9
+- chore(orchestrator): close bug-hunt feedback loop audit
+- chore(orchestrator): validate bug-hunt commit push (bh4)
+- orchestrator: switch to continuous backend bug-hunt mode
+- chore(orchestrator): re-validate stopped state (round 3)
+- chore(orchestrator): re-validate stopped state (round 2)
+- chore(orchestrator): record post-stop validation audit line
+- Handle stale 30s monitor wake after orchestrator stop.
+- Document orchestrator auto-stop when issue queue is empty.
+- Stop orchestrator: no open GitHub issues.
+- orchestrator: reconcile closed #397/#189, stop workers, chain monitor
+- chore(orchestrator): monitor cycle 186 closed stop maple
+- chore(orchestrator): record monitor schedule id
+- chore(orchestrator): batch 2 done, dispatch batch 3
+- chore(orchestrator): batch 2 workers in progress
+- docs(orchestrator): never leave worker slots idle
+- chore(orchestrator): dispatch batch 2 and enable continuous queue
+- chore(orchestrator): track GitHub issue swarm slots and queue
+- style(signalr): fix indentation in SignalRMessageBroadcaster to satisfy editorconfig
+- security(api): enforce AdminOnly RBAC and validate BlocklistUrl (#810)
+- security(storage): prevent path traversal in ResolveFilePath (#812)
+- security(customscript): enforce AdminOnly authorization and path restriction on test endpoint (closes #790)
+- security(automation): enforce RBAC on automation endpoints (closes #791)
+- security(signalr): eliminate client-callable tracker broadcast methods (closes #792)
+- security(auth): validate reverse proxy trust in AuthController.GetClientIpAddress (closes #794)
+- security(database): enforce AdminOnly RBAC and fix safe mode write filter (closes #795)
+- security(developer): enforce AdminOnly RBAC and sandbox CLR in Developer REPL (closes #796)
+- security(mediacover): enforce Operator RBAC on MediaCoverController.Delete (closes #807)
+- security(packages): sanitize torrent name and file paths in PackageExportService (closes #816)
+- security(auth): enforce thread-safe synchronization and remove reflection in DynamicAuthSchemeManager (closes #862)
+- security(plugins): enforce AdminOnly RBAC on PluginController, prevent symlink bypass, and dispose process handles (closes #837)
+- security(api): enforce RBAC authorization on SeedingController, SpeedScheduleController, and RssRuleController (closes #833)
+- security(api): enforce RBAC authorization on NetworkController and PortMappingController (closes #845)
+- security(api): enforce RBAC authorization policies on CategoryController, TagController, and AutoTaggerController (closes #852)
+- security(peerlog): enforce RBAC authorization on PeerConnectionLogController (closes #831)
+- security(setup): enforce AdminOnly RBAC on setup complete reconfiguration (closes #823)
+- security(indexers): validate indexer URL in Create and Update (closes #834)
+- security(logging): enforce AdminOnly RBAC on log deletion in LogFileController (closes #824)
+- security(subtitles): prevent symlink traversal and bound memory allocation (closes #842)
+- perf(blocklist): eliminate redundant tree parsing and object allocations (closes #875)
+- security(auth): enforce ForwardAuth activation check and synchronize trusted proxies (closes #864)
+- security(signalr): enforce authorization policy on MessageHub and validate subscriptions (closes #860)
+- security(csrf): validate Referer and Origin, and support API key query aliases (closes #865)
+- security(discord): enforce replay protection and bounded timestamps (closes #854)
+- security(host): validate bracketed IPv6 host literals in HostHeaderValidationMiddleware (closes #861)
+- security(mediainspection): prevent command-line argument option injection in FFprobeMediaInspector (closes #844)
+
 ## [v2.3.3](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.3) - 2026-10-04
 
 ### 🔧 Maintenance & Improvements
