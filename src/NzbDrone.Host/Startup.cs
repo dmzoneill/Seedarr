@@ -18,7 +18,9 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi;
+using NzbDrone.Common.Composition;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Authentication;
@@ -249,6 +251,23 @@ public class Startup
         });
 
         services.AddHostedService<AppLifetime>();
+
+        RegisterBackgroundHostedServices(services);
+    }
+
+    public static void RegisterBackgroundHostedServices(IServiceCollection services)
+    {
+        foreach (var type in KnownTypes.GetImplementations(typeof(BackgroundService)))
+        {
+            var addMethod = typeof(ServiceCollectionHostedServiceExtensions)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .First(m =>
+                    m.Name == nameof(ServiceCollectionHostedServiceExtensions.AddHostedService)
+                    && m.IsGenericMethodDefinition
+                    && m.GetParameters().Length == 1);
+
+            addMethod.MakeGenericMethod(type).Invoke(null, new object[] { services });
+        }
     }
 
     public static bool IsOriginAllowed(string origin, IConfigFileProvider configFileProvider)
