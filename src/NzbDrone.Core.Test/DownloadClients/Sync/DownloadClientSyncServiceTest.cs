@@ -1058,7 +1058,7 @@ public class DownloadClientSyncServiceTest
 
         _service.InjectedClient = mockClient;
         _torrentService.GetAll().Returns(new List<Torrent>());
-        _service.OverrideSyncLockWaitMs = 50;
+        _service.OverrideSyncLockWaitMs = 5_000;
         _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
         {
             new() { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true }
