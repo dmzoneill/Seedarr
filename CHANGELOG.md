@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.5](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.5) - 2026-10-09
+
+### 🐛 Bug Fixes
+- fix(torrents): close recheck cancel race during queue dequeue
+- fix(ui): stop stale SignalR telemetry from pinning torrent status to Paused
+- fix(host): register BackgroundService types as hosted services
+
+### 🔧 Maintenance & Improvements
+- chore(orchestrator): fix monitor heartbeat — 0 open, slots idle
+
 ## [v2.3.4](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.4) - 2026-10-09
 
 ### 🐛 Bug Fixes
