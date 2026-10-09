@@ -120,7 +120,8 @@ public class FastResumeBencodeSerializerTests
     {
         var data = new FastResumeData
         {
-            Bitfield = new[] { true, false, true, true, false }
+            Bitfield = new[] { true, false, true, true, false },
+            PiecePriority = new byte[] { 1, 1, 1, 1, 1 }
         };
 
         var bytes = _serializer.Serialize(data);
