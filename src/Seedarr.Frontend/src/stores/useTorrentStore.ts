@@ -63,6 +63,7 @@ export interface TorrentStoreState {
   telemetry: Record<number, TorrentTelemetry>;
   updateTelemetry: (updates: Array<TorrentTelemetryUpdate>) => void;
   clearTelemetry: () => void;
+  clearTorrentTelemetry: (id: number) => void;
   purgeStaleTelemetry: (maxAgeMs?: number) => void;
 
   // Real-time piece map updates per torrent ID (from pieceMapUpdated SignalR events)
@@ -256,6 +257,13 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
       return changed ? { telemetry: nextTelemetry } : state;
     }),
   clearTelemetry: () => set({ telemetry: {} }),
+  clearTorrentTelemetry: (id) =>
+    set((state) => {
+      if (!state.telemetry[id]) return state;
+      const nextTelemetry = { ...state.telemetry };
+      delete nextTelemetry[id];
+      return { telemetry: nextTelemetry };
+    }),
   purgeStaleTelemetry: (maxAgeMs = 5000) =>
     set((state) => {
       const now = Date.now();
@@ -332,14 +340,34 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
     }),
 }));
 
+export const TELEMETRY_STATUS_STALE_MS = 10000;
+
+export function isTelemetryStale(
+  telemetry?: TorrentTelemetry,
+  maxAgeMs = TELEMETRY_STATUS_STALE_MS,
+): boolean {
+  return Boolean(
+    telemetry?.lastUpdated && Date.now() - telemetry.lastUpdated > maxAgeMs,
+  );
+}
+
+/** Prefer live SignalR status; fall back to REST when telemetry is missing or stale. */
+export function resolveTelemetryStatus(
+  telemetry?: TorrentTelemetry,
+  fallbackStatus?: string,
+): string | undefined {
+  if (!telemetry || isTelemetryStale(telemetry)) {
+    return fallbackStatus;
+  }
+  return telemetry.status ?? fallbackStatus;
+}
+
 export function applyTelemetry(
   torrent: Torrent,
   telemetry?: TorrentTelemetry,
   optimistic?: Partial<Torrent>,
 ): Torrent {
-  const isStale = Boolean(
-    telemetry?.lastUpdated && Date.now() - telemetry.lastUpdated > 10000,
-  );
+  const isStale = isTelemetryStale(telemetry);
 
   const effectiveStatus = (
     optimistic?.status

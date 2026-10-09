@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
+import { useTorrentStore } from "../stores/useTorrentStore";
 import { trackTorrentAction } from "../utils/analytics";
 import type {
   Torrent,
@@ -463,6 +464,7 @@ export function useStartSeeding() {
   return useMutation({
     mutationFn: (id: number) => apiClient.post(`/seeding/start/${id}`),
     onSuccess: (_, id) => {
+      useTorrentStore.getState().clearTorrentTelemetry(id);
       trackTorrentAction("start_seeding", id);
       void queryClient.invalidateQueries({ queryKey: ["torrents"] });
       void queryClient.invalidateQueries({ queryKey: ["seeding"] });
@@ -475,6 +477,7 @@ export function useStopSeeding() {
   return useMutation({
     mutationFn: (id: number) => apiClient.post(`/seeding/stop/${id}`),
     onSuccess: (_, id) => {
+      useTorrentStore.getState().clearTorrentTelemetry(id);
       trackTorrentAction("stop_seeding", id);
       void queryClient.invalidateQueries({ queryKey: ["torrents"] });
       void queryClient.invalidateQueries({ queryKey: ["seeding"] });
