@@ -328,7 +328,7 @@ public class TorrentRecheckService : ITorrentRecheckService
         cancellationToken.ThrowIfCancellationRequested();
 
         var statusBeforeChecking = torrent.Status;
-        if (_queuedPreviousStatus.TryRemove(torrent.Id, out var queuedPreviousStatus))
+        if (_queuedPreviousStatus.TryGetValue(torrent.Id, out var queuedPreviousStatus))
         {
             statusBeforeChecking = queuedPreviousStatus;
         }
@@ -564,16 +564,19 @@ public class TorrentRecheckService : ITorrentRecheckService
                 pieceCount,
                 torrent.Status);
 
+            _queuedPreviousStatus.TryRemove(torrent.Id, out _);
             return Task.FromResult(torrent);
         }
         catch (OperationCanceledException)
         {
             _logger.Info("Hash verification cancelled for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
+            _queuedPreviousStatus.TryRemove(torrent.Id, out _);
             PublishRecheckCancellation(torrent, torrent.Status);
             throw;
         }
         catch (Exception)
         {
+            _queuedPreviousStatus.TryRemove(torrent.Id, out _);
             PublishRecheckFailure(torrent, statusBeforeChecking);
             throw;
         }
