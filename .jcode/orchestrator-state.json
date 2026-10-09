@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-07T08:53:40Z",
+  "updatedAt": "2026-10-07T04:35:56Z",
   "status": "stopped",
   "mode": "fix",
   "policy": {
@@ -14,7 +14,7 @@
     "cadenceSeconds": 120,
     "mechanism": "schedule.wake_at",
     "active": false,
-    "lastScheduleId": "sched_4685e12f",
+    "lastScheduleId": "sched_4e332309",
     "startedAt": "2026-10-07T00:41:00Z",
     "stoppedAt": "2026-10-07T08:53:04Z",
     "stopReason": "user said stop"
@@ -63,5 +63,5 @@
     "nextCandidates": []
   },
   "githubOpen": 0,
-  "lastMonitorNote": "skipped wake (stopped); no reschedule"
+  "lastMonitorNote": "fix monitor: 0 open; all 5 slots idle; queue empty; heartbeat (04:36 UTC)"
 }
