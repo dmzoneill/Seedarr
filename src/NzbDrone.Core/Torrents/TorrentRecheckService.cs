@@ -137,7 +137,7 @@ public class TorrentRecheckService : ITorrentRecheckService
         }
 
         var torrent = _torrentRepository?.Get(id);
-        if (torrent?.Status == TorrentStatus.QueuedForChecking)
+        if (torrent?.Status == TorrentStatus.QueuedForChecking || torrent?.Status == TorrentStatus.Checking)
         {
             RevertQueuedRecheck(id);
         }
@@ -156,7 +156,8 @@ public class TorrentRecheckService : ITorrentRecheckService
         }
 
         var torrent = _torrentRepository?.Get(id);
-        if (torrent == null || torrent.Status != TorrentStatus.QueuedForChecking)
+        if (torrent == null
+            || (torrent.Status != TorrentStatus.QueuedForChecking && torrent.Status != TorrentStatus.Checking))
         {
             return;
         }
