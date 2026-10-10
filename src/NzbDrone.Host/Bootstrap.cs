@@ -52,12 +52,6 @@ public static class Bootstrap
         var container = new Container(rules => rules.WithNzbDroneRules());
         container.RegisterInstance(startupContext);
         container.AutoAddServices(Assemblies);
-        container.Register(
-            typeof(IBasicRepository<>),
-            typeof(BasicRepository<>),
-            Reuse.Singleton,
-            ifAlreadyRegistered: IfAlreadyRegistered.Keep);
-        container.RegisterDelegate<IDatabase>(r => r.Resolve<IMainDatabase>(), Reuse.Singleton, ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
         // BasicRepository<T> is an open generic, so assembly scanning skips it.
         // Closed repositories replace this fallback for their own model types.
@@ -66,6 +60,7 @@ public static class Bootstrap
             typeof(BasicRepository<>),
             Reuse.Singleton,
             ifAlreadyRegistered: IfAlreadyRegistered.Keep);
+        container.RegisterDelegate<IDatabase>(r => r.Resolve<IMainDatabase>(), Reuse.Singleton, ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
         var builder = WebApplication.CreateBuilder();
         var configProvider = container.Resolve<IConfigFileProvider>();
