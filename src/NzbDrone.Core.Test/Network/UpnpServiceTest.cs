@@ -592,7 +592,7 @@ public class UpnpServiceTest
     [Test]
     public void UpnpService_implements_IHandle_ConfigSavedEvent()
     {
-        Assert.That(_subject is IHandle<ConfigSavedEvent>, Is.True);
+        Assert.That(_subject, Is.AssignableTo<IHandle<ConfigSavedEvent>>());
     }
 
     [Test]

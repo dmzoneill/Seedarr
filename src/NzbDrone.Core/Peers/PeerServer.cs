@@ -538,7 +538,6 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     public void OnTorrentCompleted(Torrent torrent)
     {
-        torrent ??= GetCachedTorrent(torrent?.InfoHash);
         if (torrent == null || string.IsNullOrEmpty(torrent.InfoHash))
         {
             return;

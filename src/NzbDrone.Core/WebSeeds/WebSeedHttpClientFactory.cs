@@ -18,11 +18,11 @@ public class WebSeedHttpClientFactory : IWebSeedHttpClientFactory, IDisposable
 
     public WebSeedHttpClientFactory()
     {
-        _handler = new Lazy<SocketsHttpHandler>(CreateHandler);
+        _handler = new Lazy<SocketsHttpHandler>(CreateDefaultHandler);
         _client = new Lazy<HttpClient>(() => CreateClient(_handler.Value));
     }
 
-    public virtual SocketsHttpHandler CreateHandler()
+    private static SocketsHttpHandler CreateDefaultHandler()
     {
         return new SocketsHttpHandler
         {
@@ -32,6 +32,11 @@ public class WebSeedHttpClientFactory : IWebSeedHttpClientFactory, IDisposable
             EnableMultipleHttp2Connections = true,
             AllowAutoRedirect = false
         };
+    }
+
+    public virtual SocketsHttpHandler CreateHandler()
+    {
+        return CreateDefaultHandler();
     }
 
     public virtual HttpClient CreateClient()

@@ -749,7 +749,7 @@ public class PluginManagerAndLoaderTests
 
         for (var i = 1; i <= 4; i++)
         {
-            var backoff = host.RecordCrash(now.AddSeconds(i * 2));
+            var backoff = host.RecordCrash(now.AddSeconds(i * 2.0));
             Assert.That(host.PluginInfo.CrashCount, Is.EqualTo(i));
             Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Crashed));
             Assert.That(backoff, Is.GreaterThan(TimeSpan.Zero));

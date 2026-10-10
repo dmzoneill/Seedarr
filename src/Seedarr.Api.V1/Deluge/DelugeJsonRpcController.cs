@@ -525,6 +525,7 @@ public class DelugeJsonRpcController : ControllerBase
             var cookieOptions = new CookieOptions
             {
                 HttpOnly = true,
+                Secure = HttpContext?.Request.IsHttps == true,
                 SameSite = SameSiteMode.Lax,
                 Path = "/",
             };
