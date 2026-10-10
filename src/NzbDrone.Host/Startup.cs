@@ -565,6 +565,6 @@ public class Startup
         }
 
         context.Response.ContentType = "text/html; charset=utf-8";
-        await context.Response.SendFileAsync(indexPath);
+        await context.Response.SendFileAsync(indexPath, context.RequestAborted);
     }
 }
