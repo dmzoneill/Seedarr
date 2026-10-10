@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.7](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.7) - 2026-10-10
+
+### 🔧 Maintenance & Improvements
+- chore(frontend): consolidate Dependabot transitive dependency bumps
+
 ## [v2.3.6](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.6) - 2026-10-10
 
 ### 🔧 Maintenance & Improvements
