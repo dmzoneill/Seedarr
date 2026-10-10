@@ -8,11 +8,11 @@ export function isHtmlElement(el: unknown): el is HTMLElement {
   if (typeof HTMLElement !== "undefined") {
     return el instanceof HTMLElement;
   }
-  return (
-    typeof el === "object" &&
-    el !== null &&
-    typeof (el as { focus?: unknown }).focus === "function"
-  );
+  if (typeof el !== "object" || el === null) {
+    return false;
+  }
+
+  return typeof (el as { focus?: unknown }).focus === "function";
 }
 
 export function isElementConnected(el: HTMLElement): boolean {

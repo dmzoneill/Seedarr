@@ -37,7 +37,8 @@ public class ContainerExtensionsTest
 
         public bool Equals(ComparableService other) => other != null;
 
-        public override bool Equals(object obj) => obj is ComparableService other && Equals(other);
+        public override bool Equals(object obj) =>
+            obj != null && obj.GetType() == typeof(ComparableService) && Equals((ComparableService)obj);
 
         public override int GetHashCode() => 0;
     }
