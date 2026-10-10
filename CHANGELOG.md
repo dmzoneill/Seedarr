@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.9](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.9) - 2026-10-10
+
+### 🐛 Bug Fixes
+- fix(frontend): satisfy CodeQL null comparison in isHtmlElement
+- fix(lint): align PeerServer continuation indent for editorconfig
+- fix(security): clear remaining CodeQL alerts in tests and focus trap
+- fix(security): resolve open CodeQL code scanning alerts
+
 ## [v2.3.8](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.8) - 2026-10-10
 
 ### 🐛 Bug Fixes
