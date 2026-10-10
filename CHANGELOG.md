@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.8](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.8) - 2026-10-10
+
+### 🐛 Bug Fixes
+- fix(host): pass request cancellation to SPA index sendfile
+- fix(host): dedupe repository registration after rebase onto main
+- fix(host): start Seedarr against a fresh SQLite database
+
 ## [v2.3.7](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.7) - 2026-10-10
 
 ### 🔧 Maintenance & Improvements
