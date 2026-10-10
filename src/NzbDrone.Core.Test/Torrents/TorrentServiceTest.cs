@@ -310,7 +310,7 @@ namespace NzbDrone.Core.Test.Torrents
             _repository.Get(1).Returns(torrent);
             var fastResumeService = Substitute.For<IFastResumeService>();
             var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
-                fastResumeService: fastResumeService);
+                fastResumeService: new Lazy<IFastResumeService>(() => fastResumeService));
 
             subject.Delete(1);
 
@@ -328,7 +328,7 @@ namespace NzbDrone.Core.Test.Torrents
             _repository.All().Returns(torrents.AsQueryable());
             var fastResumeService = Substitute.For<IFastResumeService>();
             var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator,
-                fastResumeService: fastResumeService);
+                fastResumeService: new Lazy<IFastResumeService>(() => fastResumeService));
 
             subject.DeleteMany(new List<int> { 1, 2 }, false);
 
@@ -904,7 +904,7 @@ namespace NzbDrone.Core.Test.Torrents
         public void DeleteMany_should_disconnect_peers_before_repository_delete_when_deleteFiles_is_true()
         {
             var connectionManager = Substitute.For<IConnectionManager>();
-            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator, connectionManager: connectionManager);
+            var subject = new TorrentService(_repository, _torrentFileService, _trackerEntryService, _eventAggregator, connectionManager: new Lazy<IConnectionManager>(() => connectionManager));
 
             var torrent = new Torrent
             {

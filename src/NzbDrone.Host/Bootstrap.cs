@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Net;
 using System.Threading.Tasks;
 using DryIoc;
@@ -51,6 +52,9 @@ public static class Bootstrap
         var container = new Container(rules => rules.WithNzbDroneRules());
         container.RegisterInstance(startupContext);
         container.AutoAddServices(Assemblies);
+
+        // BasicRepository<T> is an open generic, so assembly scanning skips it.
+        // Closed repositories replace this fallback for their own model types.
         container.Register(
             typeof(IBasicRepository<>),
             typeof(BasicRepository<>),
@@ -80,6 +84,12 @@ public static class Bootstrap
 
         var startup = new Startup(container);
         startup.ConfigureServices(builder.Services);
+
+        var outputWwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+        if (Directory.Exists(outputWwwroot))
+        {
+            builder.Environment.WebRootPath = outputWwwroot;
+        }
 
         var app = builder.Build();
         startup.Configure(app);
