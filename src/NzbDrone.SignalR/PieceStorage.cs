@@ -572,7 +572,7 @@ public class PieceStorage : IPieceStorage, IDisposable
 
         try
         {
-            var torrent = _torrentService.Value.GetByInfoHash(infoHash);
+            var torrent = _torrentService.Value?.GetByInfoHash(infoHash);
             return torrent?.Id > 0 ? torrent.Id : null;
         }
         catch

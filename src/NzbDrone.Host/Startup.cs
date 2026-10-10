@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using DryIoc;
 using Microsoft.AspNetCore.Authentication;
@@ -543,7 +544,27 @@ public class Startup
 
         app.MapGet("/swagger-custom.css", () => Microsoft.AspNetCore.Http.Results.Content(SwaggerTheme.Css, "text/css")).AllowAnonymous();
 
-        app.MapFallbackToFile($"{{*path:nonfile:regex({SpaFallbackExcludePathRegex})}}", "index.html")
-            .AllowAnonymous();
+        // MapFallbackToFile resolves index.html through WebRootPath. dotnet run sets the
+        // content root to the repo, so that path is empty even when the build copied the
+        // SPA into the console output directory that static files already use.
+        app.MapFallback(ServeSpaIndexAsync).AllowAnonymous();
+    }
+
+    private static async Task ServeSpaIndexAsync(HttpContext context)
+    {
+        var path = context.Request.Path.Value?.TrimStart('/') ?? string.Empty;
+        var lastSegment = path.Length == 0 ? string.Empty : path.Split('/').Last();
+        var looksLikeFile = lastSegment.Contains('.');
+        var isUiRoute = !looksLikeFile
+            && Regex.IsMatch(path, SpaFallbackExcludePathRegex, RegexOptions.CultureInvariant);
+        var indexPath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "index.html");
+        if (!isUiRoute || !File.Exists(indexPath))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        context.Response.ContentType = "text/html; charset=utf-8";
+        await context.Response.SendFileAsync(indexPath);
     }
 }
