@@ -8,7 +8,7 @@ export function isHtmlElement(el: unknown): el is HTMLElement {
   if (typeof HTMLElement !== "undefined") {
     return el instanceof HTMLElement;
   }
-  if (typeof el !== "object" || el === null) {
+  if (typeof el !== "object") {
     return false;
   }
 
