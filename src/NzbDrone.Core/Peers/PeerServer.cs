@@ -1321,7 +1321,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
             var isNicOperational = nic != null && (nic.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up ||
                 (nic.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Unknown &&
-                 nic.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Tunnel));
+                    nic.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Tunnel));
 
             if (!isNicOperational)
             {
