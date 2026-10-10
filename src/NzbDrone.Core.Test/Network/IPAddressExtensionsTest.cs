@@ -59,8 +59,7 @@ public class IPAddressExtensionsTest
     [Test]
     public void IsLocalSubnet_handles_null_and_empty()
     {
-        IPAddress nullIp = null;
-        Assert.That(nullIp.IsLocalSubnet(), Is.False);
+        Assert.That(IPAddressExtensions.IsLocalSubnet((IPAddress)null), Is.False);
         Assert.That(IPAddressExtensions.IsLocalSubnet((string)null), Is.False);
         Assert.That(IPAddressExtensions.IsLocalSubnet(string.Empty), Is.False);
         Assert.That(IPAddressExtensions.IsLocalSubnet("invalid-ip"), Is.False);

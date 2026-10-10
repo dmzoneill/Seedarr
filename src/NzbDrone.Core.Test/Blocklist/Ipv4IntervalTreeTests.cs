@@ -241,6 +241,7 @@ public class Ipv4IntervalTreeTests
         Assert.That(r1.CompareTo(r2), Is.LessThan(0));
         Assert.That(r2.CompareTo(r1), Is.GreaterThan(0));
         Assert.That(r1.CompareTo(r3), Is.LessThan(0));
-        Assert.That(r1.CompareTo(r1), Is.EqualTo(0));
+        var r1Equal = new Ipv4Range(10, 50);
+        Assert.That(r1.CompareTo(r1Equal), Is.EqualTo(0));
     }
 }

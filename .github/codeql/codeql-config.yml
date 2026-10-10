@@ -60,3 +60,5 @@ query-filters:
         - cs/command-line-injection
         - cs/web/missing-function-level-access-control
         - cs/web/insecure-direct-object-reference
+        - cs/class-name-matches-base-class
+        - cs/complex-block
