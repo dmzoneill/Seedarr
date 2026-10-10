@@ -4,7 +4,7 @@ export const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function isHtmlElement(el: unknown): el is HTMLElement {
-  if (!el) return false;
+  if (el == null) return false;
   if (typeof HTMLElement !== "undefined") {
     return el instanceof HTMLElement;
   }

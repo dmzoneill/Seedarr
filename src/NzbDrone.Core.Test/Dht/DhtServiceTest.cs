@@ -1073,9 +1073,8 @@ public class DhtServiceTest
 
         Assert.That(pendingDict.Count, Is.GreaterThanOrEqualTo(1));
 
-        foreach (var key in pendingDict.Keys)
+        foreach (var txKeyHex in pendingDict.Keys.Cast<string>())
         {
-            var txKeyHex = (string)key;
             var txBytes = Convert.FromHexString(txKeyHex);
             Assert.That(txBytes.Length, Is.EqualTo(4), "Transaction ID should be exactly 4 bytes (32 bits of entropy)");
         }

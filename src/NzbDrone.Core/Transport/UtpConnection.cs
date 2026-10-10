@@ -610,7 +610,7 @@ public class UtpConnection : IUtpConnection
             }
 
             var elapsedMs = (DateTime.UtcNow - sendStart).TotalMilliseconds;
-            var remainingTimeoutMs = (_connectionTimeoutSeconds * 1000) - elapsedMs;
+            var remainingTimeoutMs = (_connectionTimeoutSeconds * 1000.0) - elapsedMs;
             if (remainingTimeoutMs <= 0)
             {
                 break;

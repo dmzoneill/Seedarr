@@ -44,7 +44,7 @@ public class ScheduledTask : ModelBase
 
         var missedMinutes = (now - lastUtc).TotalMinutes;
         var intervalsPassed = (int)Math.Floor(missedMinutes / interval);
-        var next = lastUtc.AddMinutes((intervalsPassed + 1) * interval);
+        var next = lastUtc.AddMinutes((intervalsPassed + 1) * (double)interval);
         if (next <= now)
         {
             next = now.AddMinutes(interval);

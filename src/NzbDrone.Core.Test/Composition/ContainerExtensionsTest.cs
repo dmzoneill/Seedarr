@@ -31,9 +31,15 @@ public class ContainerExtensionsTest
 
     public class ComparableService : ICustomService, IComparable, IComparable<ComparableService>, IEquatable<ComparableService>
     {
-        public int CompareTo(object obj) => 0;
-        public int CompareTo(ComparableService other) => 0;
-        public bool Equals(ComparableService other) => true;
+        public int CompareTo(object obj) => obj is ComparableService other ? CompareTo(other) : 1;
+
+        public int CompareTo(ComparableService other) => other == null ? 1 : 0;
+
+        public bool Equals(ComparableService other) => other != null;
+
+        public override bool Equals(object obj) => obj is ComparableService other && Equals(other);
+
+        public override int GetHashCode() => 0;
     }
 
     public class OnlyDisposableService : IDisposable
