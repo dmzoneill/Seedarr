@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.6](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.6) - 2026-10-10
+
+### 🔧 Maintenance & Improvements
+- test: guard hosted services and stale telemetry regressions
+
 ## [v2.3.5](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.5) - 2026-10-09
 
 ### 🐛 Bug Fixes
