@@ -5,6 +5,7 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.Composition;
@@ -328,8 +329,10 @@ public class BootstrapTest
     }
 
     [Test]
-    public void RegisterBackgroundHostedServices_registers_seeding_engine()
+    public void RegisterBackgroundHostedServices_registers_all_known_background_services()
     {
+        KnownTypes.Clear();
+
         var assemblies = new List<string>
         {
             "Seedarr.Host",
@@ -342,12 +345,31 @@ public class BootstrapTest
         var container = new global::DryIoc.Container(rules => rules.WithNzbDroneRules());
         container.AutoAddServices(assemblies);
 
+        var expected = KnownTypes.GetImplementations(typeof(BackgroundService));
+        Assert.That(expected, Does.Contain(typeof(SeedingEngine)),
+            "SeedingEngine must be discovered so simulation ticks can run");
+        Assert.That(expected.Count, Is.GreaterThan(1),
+            "Multiple background workers are expected; a missing registration would freeze the UI");
+
         var services = new ServiceCollection();
         Startup.RegisterBackgroundHostedServices(services);
 
-        Assert.That(
-            services.Any(d => d.ImplementationType == typeof(SeedingEngine)),
-            Is.True,
-            "SeedingEngine must be registered as a hosted service so simulation ticks run");
+        var registeredImplementationTypes = services
+            .Where(d => d.ImplementationType != null)
+            .Select(d => d.ImplementationType)
+            .ToHashSet();
+
+        foreach (var backgroundServiceType in expected)
+        {
+            Assert.That(
+                registeredImplementationTypes,
+                Does.Contain(backgroundServiceType),
+                $"{backgroundServiceType.Name} must be registered as a hosted service");
+        }
+
+        var hostedServiceDescriptors = services
+            .Where(d => typeof(IHostedService).IsAssignableFrom(d.ServiceType))
+            .ToList();
+        Assert.That(hostedServiceDescriptors.Count, Is.GreaterThanOrEqualTo(expected.Count));
     }
 }
