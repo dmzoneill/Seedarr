@@ -217,4 +217,31 @@ public class BasicAuthenticationHandlerTest
         var longResult = await AuthenticateAsync(longContext);
         Assert.That(longResult.Succeeded, Is.False);
     }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenAuthorizationHeaderMalformed_FailsWithParseMessage()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Headers["Authorization"] = "Basic not-valid-base64!!!";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.Failure?.Message, Does.StartWith("Failed to parse Basic authentication header:"));
+    }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenAuthenticationDisabled_SucceedsEvenWithInvalidCredentials()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(false);
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var context = new DefaultHttpContext();
+        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes("user:wrong"));
+        context.Request.Headers["Authorization"] = $"Basic {credentials}";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+    }
 }
