@@ -30,4 +30,14 @@ public class ForwardedHeadersSecurityHelperTest
         Assert.That(options.KnownProxies, Does.Contain(IPAddress.Parse("198.51.100.2")));
         Assert.That(options.KnownIPNetworks, Has.Count.EqualTo(1));
     }
+
+    [Test]
+    public void ApplyTrustedProxyConfiguration_IgnoresInvalidEntriesAndMapsIpv4MappedIpv6()
+    {
+        var options = new ForwardedHeadersOptions();
+        ForwardedHeadersSecurityHelper.ApplyTrustedProxyConfiguration(options, "not-an-ip, 10.0.0.0/8, ::ffff:192.0.2.1");
+
+        Assert.That(options.KnownProxies, Does.Contain(IPAddress.Parse("192.0.2.1")));
+        Assert.That(options.KnownIPNetworks, Has.Count.EqualTo(1));
+    }
 }
