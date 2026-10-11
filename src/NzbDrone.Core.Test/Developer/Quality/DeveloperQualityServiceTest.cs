@@ -53,7 +53,7 @@ public class DeveloperQualityServiceTest
             CallCount++;
             if (_failAll)
             {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+                throw new HttpRequestException("simulated upstream failure");
             }
 
             var path = request.RequestUri?.AbsolutePath ?? string.Empty;
