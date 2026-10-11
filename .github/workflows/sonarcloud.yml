@@ -30,8 +30,12 @@ jobs:
             echo "has_token=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_token=false" >> "$GITHUB_OUTPUT"
-            echo "::notice ::SONAR_TOKEN secret is not set. Add SONAR_TOKEN in repository secrets to activate SonarCloud analysis."
+            echo "::error ::SONAR_TOKEN secret is not set. Add SONAR_TOKEN in repository secrets so SonarCloud receives analysis uploads."
           fi
+
+      - name: Require SonarCloud token
+        if: steps.check_token.outputs.has_token != 'true'
+        run: exit 1
 
       - name: Setup Java
         if: steps.check_token.outputs.has_token == 'true'

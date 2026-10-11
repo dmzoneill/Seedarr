@@ -422,6 +422,8 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
                 {
                     if (ReferenceEquals(_listener, listener))
                     {
+                        _listenerCts?.Dispose();
+                        _listenerCts = null;
                         _listener = null;
                     }
 
