@@ -55,6 +55,44 @@ public class NotificationUpdateMergerTest
     }
 
     [Test]
+    public void Merge_implementation_present_with_null_defaults_to_webhook_when_existing_null()
+    {
+        var existing = new NotificationDefinition { Name = "n", Implementation = null };
+        var incoming = new NotificationResource { Implementation = null };
+
+        var merged = NotificationUpdateMerger.Merge(
+            existing,
+            incoming,
+            new HashSet<string> { "implementation" });
+
+        Assert.That(merged.Implementation, Is.EqualTo("Webhook"));
+    }
+
+    [Test]
+    public void Merge_config_contract_settings_and_enable_present_applies_incoming()
+    {
+        var existing = new NotificationDefinition
+        {
+            ConfigContract = "OldContract",
+            Settings = "{}",
+            Enable = false,
+        };
+        var incoming = new NotificationResource
+        {
+            ConfigContract = "NewContract",
+            Settings = "{\"x\":1}",
+            Enable = true,
+        };
+        var present = new HashSet<string> { "configContract", "settings", "enable" };
+
+        var merged = NotificationUpdateMerger.Merge(existing, incoming, present);
+
+        Assert.That(merged.ConfigContract, Is.EqualTo("NewContract"));
+        Assert.That(merged.Settings, Is.EqualTo("{\"x\":1}"));
+        Assert.That(merged.Enable, Is.True);
+    }
+
+    [Test]
     public void Merge_with_present_keys_applies_incoming_and_defaults_lists()
     {
         var existing = new NotificationDefinition
