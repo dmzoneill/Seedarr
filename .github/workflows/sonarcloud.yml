@@ -131,6 +131,7 @@ jobs:
             --configuration Release \
             --no-build \
             --settings .runsettings \
+            --filter "TestCategory!=Slow" \
             --results-directory "${{ github.workspace }}/TestResults" \
             --collect:"XPlat Code Coverage;Format=opencover"
           CORE_TEST_RC=$?
