@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.17](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.17) - 2026-10-11
+
+### 🐛 Bug Fixes
+- fix(sonar): raise new-code coverage for quality gate
+
+### 🔧 Maintenance & Improvements
+- test(sonar): cover remaining API update mergers for quality gate
+
 ## [v2.3.16](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.16) - 2026-10-11
 
 ### ✨ Features
