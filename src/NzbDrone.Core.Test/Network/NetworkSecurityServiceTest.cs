@@ -80,4 +80,16 @@ public class NetworkSecurityServiceTest
         var subject = new NetworkSecurityService(_configService);
         Assert.That(subject.CheckVpnKillSwitch(), Is.False);
     }
+
+    [Test]
+    public void IsInterfaceActive_matches_loopback_ip_when_present()
+    {
+        Assert.That(_subject.IsInterfaceActive("127.0.0.1"), Is.True);
+    }
+
+    [Test]
+    public void IsInterfaceActive_returns_false_for_unknown_ip()
+    {
+        Assert.That(_subject.IsInterfaceActive("192.0.2.199"), Is.False);
+    }
 }

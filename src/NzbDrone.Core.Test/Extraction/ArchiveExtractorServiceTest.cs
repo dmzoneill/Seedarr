@@ -550,4 +550,41 @@ public class ArchiveExtractorServiceTest
         var actual = ArchiveExtractorService.IsArchiveFile(filePath);
         Assert.That(actual, Is.EqualTo(expected), $"Failed classification for {fileName}");
     }
+
+    [Test]
+    public void GetTorrentDirectory_prefers_save_path_subfolder_when_present()
+    {
+        var root = Path.Combine(_tempDir, "SaveRoot");
+        var torrentFolder = Path.Combine(root, "My.Release");
+        Directory.CreateDirectory(torrentFolder);
+
+        var torrent = new Torrent { SavePath = root, Name = "My.Release" };
+        Assert.That(ArchiveExtractorService.GetTorrentDirectory(torrent), Is.EqualTo(torrentFolder));
+    }
+
+    [Test]
+    public void GetTorrentDirectory_falls_back_to_save_path_directory()
+    {
+        var root = Path.Combine(_tempDir, "FlatSave");
+        Directory.CreateDirectory(root);
+
+        var torrent = new Torrent { SavePath = root, Name = "Missing.Subfolder" };
+        Assert.That(ArchiveExtractorService.GetTorrentDirectory(torrent), Is.EqualTo(root));
+    }
+
+    [Test]
+    public void GetTorrentDirectory_uses_source_path_when_save_path_missing()
+    {
+        var source = Path.Combine(_tempDir, "SourceOnly");
+        Directory.CreateDirectory(source);
+
+        var torrent = new Torrent { SourcePath = source };
+        Assert.That(ArchiveExtractorService.GetTorrentDirectory(torrent), Is.EqualTo(source));
+    }
+
+    [Test]
+    public void GetTorrentDirectory_returns_null_for_null_torrent()
+    {
+        Assert.That(ArchiveExtractorService.GetTorrentDirectory(null), Is.Null);
+    }
 }
