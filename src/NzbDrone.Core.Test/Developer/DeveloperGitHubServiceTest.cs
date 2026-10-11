@@ -149,4 +149,19 @@ public class DeveloperGitHubServiceTest
 
         Assert.That(handler.Requests.Count, Is.EqualTo(1));
     }
+
+    [Test]
+    public async Task GetIssuesAsync_uses_cache_on_second_call()
+    {
+        var json = "[]";
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, json);
+        var client = new HttpClient(handler);
+        var service = new DeveloperGitHubService(client);
+
+        await service.GetIssuesAsync("open", CancellationToken.None);
+        await service.GetIssuesAsync("open", CancellationToken.None);
+
+        Assert.That(handler.Requests.Count, Is.EqualTo(1));
+    }
 }
