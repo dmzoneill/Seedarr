@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.18](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.18) - 2026-10-11
+
+### 🐛 Bug Fixes
+- fix(sonar): use wildcard OpenCover paths instead of ReportGenerator merge
+- fix(ci): keep Sonar scan running when unit tests flake
+- fix(sonar): merge coverage reports and expand API test coverage
+
+### 🔧 Maintenance & Improvements
+- test(sonar): extend partial-update coverage for quality gate
+- test: stabilize CancelRecheck concurrency test for CI
+
 ## [v2.3.17](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.17) - 2026-10-11
 
 ### 🐛 Bug Fixes
