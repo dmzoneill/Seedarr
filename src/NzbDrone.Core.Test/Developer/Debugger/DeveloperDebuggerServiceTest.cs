@@ -204,4 +204,39 @@ public class DeveloperDebuggerServiceTest
         Assert.That(response.Exists, Is.False);
         Assert.That(response.Content, Does.Contain("was not found"));
     }
+
+    [Test]
+    public void GetStatus_reports_tracepoints_sessions_and_dap_probe()
+    {
+        _subject.AddTracepoint(new TracepointDefinition { Id = "on", IsEnabled = true });
+        _subject.AddTracepoint(new TracepointDefinition { Id = "off", IsEnabled = false });
+        _subject.RegisterSession("session-a");
+        _subject.RecordSnapshot(new TracepointSnapshot());
+
+        var status = _subject.GetStatus();
+
+        Assert.That(status.ActiveTracepointsCount, Is.EqualTo(1));
+        Assert.That(status.AttachedSessionCount, Is.EqualTo(1));
+        Assert.That(status.CapturedSnapshotsCount, Is.EqualTo(1));
+        Assert.That(status.ServerTimestampUtc, Is.Not.EqualTo(default(System.DateTime)));
+        Assert.That(status.IsDapAvailable, Is.TypeOf<bool>());
+    }
+
+    [Test]
+    public void CaptureSnapshot_serializes_object_variables_as_json()
+    {
+        var snapshot = _subject.CaptureSnapshot(null, new { count = 3, label = "ok" }, "vars.cs", 4);
+
+        Assert.That(snapshot, Is.Not.Null);
+        Assert.That(snapshot.VariablesJson, Does.Contain("count"));
+        Assert.That(snapshot.VariablesJson, Does.Contain("3"));
+    }
+
+    [Test]
+    public void RegisterSession_ignores_blank_ids()
+    {
+        _subject.RegisterSession("  ");
+        _subject.UnregisterSession(null);
+        Assert.That(_subject.GetStatus().AttachedSessionCount, Is.EqualTo(0));
+    }
 }
