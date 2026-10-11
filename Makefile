@@ -1,7 +1,7 @@
 .PHONY: setup test-setup test integration build clean restore frontend \
        stack-init stack-build stack-up stack-down stack-configure stack-healthy stack-rebuild stack-clean \
        test-unit test-integration test-integration-rerun test-integration-only test-all \
-       coverage-report quality-report container-build container-build-test lint format \
+       coverage-report quality-report sonar-scan container-build container-build-test lint format \
        bump-patch bump-minor bump-major
 
 SOLUTION := src/Seedarr.sln
@@ -215,6 +215,10 @@ container-build:
 
 container-build-test:
 	podman build --target test --build-arg COVERAGE_TOOLS=true -t seedarr:test -f Containerfile .
+
+sonar-scan:
+	@chmod +x scripts/run-sonarcloud.sh
+	@./scripts/run-sonarcloud.sh
 
 quality-report:
 	@mkdir -p _reports/jscpd _reports/coverage
