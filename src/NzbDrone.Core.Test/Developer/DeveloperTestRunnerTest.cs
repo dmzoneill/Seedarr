@@ -145,6 +145,7 @@ public class DeveloperTestRunnerTest
     }
 
     [Test]
+    [Category("Slow")]
     public async Task Should_execute_full_diagnostic_catalog_when_run_all_requested()
     {
         var catalogSize = _runner.DiscoverTests().Count;
@@ -157,6 +158,7 @@ public class DeveloperTestRunnerTest
     }
 
     [Test]
+    [Category("Slow")]
     public async Task Should_run_each_diagnostic_category_batch()
     {
         foreach (var category in new[] { "Database", "Storage", "BitTorrent", "Network", "Scheduler", "Messaging", "System", "Configuration" })
