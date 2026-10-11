@@ -110,4 +110,31 @@ public class DeveloperDebuggerServiceTest
         Assert.That(_subject.GetTracepoints(), Is.Empty);
         Assert.That(_subject.GetSnapshots(), Is.Empty);
     }
+
+    [Test]
+    public void GetSourceCode_rejects_path_traversal()
+    {
+        var response = _subject.GetSourceCode("../etc/passwd");
+
+        Assert.That(response.Exists, Is.False);
+        Assert.That(response.Content, Does.Contain("forbidden"));
+    }
+
+    [Test]
+    public void GetKnownSourceFiles_includes_reflected_types()
+    {
+        var files = _subject.GetKnownSourceFiles();
+
+        Assert.That(files, Is.Not.Empty);
+        Assert.That(files.Any(f => f.FilePath.EndsWith("DeveloperDebuggerService.cs", StringComparison.OrdinalIgnoreCase)), Is.True);
+    }
+
+    [Test]
+    public void GetSourceCode_for_known_type_returns_metadata_when_file_missing()
+    {
+        var response = _subject.GetSourceCode("src/NzbDrone.Core/Developer/Debugger/DeveloperDebuggerService.cs");
+
+        Assert.That(response.Exists, Is.True);
+        Assert.That(response.Content, Is.Not.Empty);
+    }
 }
