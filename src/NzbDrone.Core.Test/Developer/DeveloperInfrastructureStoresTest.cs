@@ -28,6 +28,27 @@ public class DeveloperInfrastructureStoresTest
     }
 
     [Test]
+    public void EventStore_trims_to_max_entries_and_clamps_limit()
+    {
+        var store = new DeveloperEventStore();
+        for (var i = 0; i < 260; i++)
+        {
+            store.RecordEvent(new DeveloperSyntheticEvent("Loop", i.ToString()));
+        }
+
+        Assert.That(store.GetRecentEvents(500), Has.Count.EqualTo(250));
+        Assert.That(store.GetRecentEvents(0), Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void HttpTrafficStore_ignores_null_request()
+    {
+        var store = new DeveloperHttpTrafficStore();
+        store.Record(null, null, 0, "None");
+        Assert.That(store.GetRecent(), Is.Empty);
+    }
+
+    [Test]
     public void HttpTrafficStore_redacts_sensitive_headers_and_truncates_body()
     {
         var store = new DeveloperHttpTrafficStore();
@@ -83,6 +104,20 @@ public class DeveloperInfrastructureStoresTest
 
         store.Clear();
         Assert.That(store.GetRecent(), Is.Empty);
+    }
+
+    [Test]
+    public void WebhookStore_trims_to_max_entries_and_clamps_limit()
+    {
+        var store = new DeveloperWebhookStore();
+        for (var i = 0; i < 110; i++)
+        {
+            store.Record("Src", $"evt-{i}", "1.1.1.1", "ua", 200, "{}", "ok", true);
+        }
+
+        Assert.That(store.GetRecent(200), Has.Count.EqualTo(100));
+        Assert.That(store.GetRecent(0), Has.Count.EqualTo(1));
+        Assert.That(store.GetRecent(5), Has.Count.EqualTo(5));
     }
 
     [Test]
