@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.16](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.16) - 2026-10-11
+
+### ✨ Features
+- Add or update GitHub Actions workflows
+
+### 🐛 Bug Fixes
+- fix(sonar): restore hardened pip/curl in ai-responder workflow
+
 ## [v2.3.15](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.15) - 2026-10-11
 
 ### ✨ Features
