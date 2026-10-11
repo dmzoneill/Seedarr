@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -88,5 +89,58 @@ public class DeveloperTestRunnerTest
         _runner.ClearHistory();
         var emptyHistory = _runner.GetRecentResults();
         Assert.That(emptyHistory.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task Should_execute_bitTorrent_and_network_smoke_checks()
+    {
+        var engine = await _runner.RunTestAsync("engine-status");
+        Assert.That(engine.Status, Is.EqualTo("Passed"));
+        Assert.That(engine.Output, Is.Not.Empty);
+
+        var dns = await _runner.RunTestAsync("network-dns");
+        Assert.That(dns.Status, Is.EqualTo("Passed"));
+        Assert.That(dns.Output, Does.Contain("DNS").Or.Contain("dns"));
+
+        var interfaces = await _runner.RunTestAsync("network-interfaces");
+        Assert.That(interfaces.Status, Is.EqualTo("Passed"));
+    }
+
+    [Test]
+    public async Task Should_execute_messaging_and_scheduler_checks()
+    {
+        var signalR = await _runner.RunTestAsync("signalr-hub");
+        Assert.That(signalR.Status, Is.EqualTo("Passed"));
+
+        var scheduler = await _runner.RunTestAsync("scheduler-queue");
+        Assert.That(scheduler.Status, Is.EqualTo("Passed"));
+
+        var eventBus = await _runner.RunTestAsync("event-bus");
+        Assert.That(eventBus.Status, Is.EqualTo("Passed"));
+    }
+
+    [Test]
+    public async Task Should_run_tests_by_explicit_ids()
+    {
+        var response = await _runner.RunTestsAsync(new TestExecutionRequest
+        {
+            TestIds = new List<string> { "thread-pool", "gc-memory-info", "process-telemetry" },
+        });
+
+        Assert.That(response.TotalTests, Is.EqualTo(3));
+        Assert.That(response.Passed, Is.EqualTo(3));
+        Assert.That(response.Results.All(r => r.Status == "Passed"), Is.True);
+    }
+
+    [Test]
+    public async Task Should_cap_recent_history_limit()
+    {
+        for (var i = 0; i < 5; i++)
+        {
+            await _runner.RunTestAsync("cpu-affinity");
+        }
+
+        var limited = _runner.GetRecentResults(2);
+        Assert.That(limited.Count, Is.EqualTo(2));
     }
 }
