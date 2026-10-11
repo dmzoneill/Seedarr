@@ -36,7 +36,9 @@ jobs:
         run: echo "$GOOGLE_CREDS" > /tmp/gcloud-credentials.json
 
       - name: Install Python dependencies
-        run: python3 -m pip install --only-binary :all: --no-deps --require-hashes -r .github/ai-responder-requirements.txt
+        run: >-
+          python3 -m pip install --only-binary :all: --no-deps
+          --require-hashes -r .github/ai-responder-requirements.txt
 
       - name: Download AI responder script
         run: |
