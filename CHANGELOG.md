@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.22](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.22) - 2026-10-11
+
+### ✨ Features
+- Add or update GitHub Actions workflows
+
+### 🐛 Bug Fixes
+- fix(sonar): finish scans without cancel and extend store coverage tests
+- fix(ci): checkout repo before ai-responder install scripts
+- fix(sonar): clear ai-responder workflow issues and extend developer coverage
+
+### 🔧 Maintenance & Improvements
+- test(sonar): raise developer sandbox coverage for quality gate
+
 ## [v2.3.21](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.21) - 2026-10-11
 
 ### 🐛 Bug Fixes
