@@ -36,12 +36,10 @@ jobs:
         run: echo "$GOOGLE_CREDS" > /tmp/gcloud-credentials.json
 
       - name: Install Python dependencies
-        run: pip install requests
+        run: bash .github/scripts/ai-responder-install-deps.sh
 
       - name: Download AI responder script
-        run: |
-          curl -sSL "https://raw.githubusercontent.com/dmzoneill/dmzoneill/main/ai-responder.py" -o ai-responder.py
-          chmod +x ai-responder.py
+        run: bash .github/scripts/ai-responder-download.sh
 
       - name: Run AI responder
         env:
