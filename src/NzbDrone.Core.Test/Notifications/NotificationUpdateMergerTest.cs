@@ -96,4 +96,62 @@ public class NotificationUpdateMergerTest
         Assert.That(merged.OnDownloadComplete, Is.True);
         Assert.That(merged.OnHealthIssue, Is.False);
     }
+
+    [Test]
+    public void Merge_with_all_event_flags_and_fallback_applies_incoming()
+    {
+        var existing = new NotificationDefinition
+        {
+            Name = "n",
+            FallbackNotificationId = 1,
+            OnMediaInspected = false,
+            OnExtractComplete = false,
+            OnSeedGoalReached = false,
+            OnTorrentDeleted = false,
+            OnHealthRestored = false,
+            OnManualInteractionRequired = false,
+            OnApplicationUpdate = false,
+            OnBackupComplete = false,
+            OnBackupFailed = false,
+        };
+        var incoming = new NotificationResource
+        {
+            FallbackNotificationId = 9,
+            OnMediaInspected = true,
+            OnExtractComplete = true,
+            OnSeedGoalReached = true,
+            OnTorrentDeleted = true,
+            OnHealthRestored = true,
+            OnManualInteractionRequired = true,
+            OnApplicationUpdate = true,
+            OnBackupComplete = true,
+            OnBackupFailed = true,
+        };
+        var present = new HashSet<string>
+        {
+            "fallbackNotificationId",
+            "onMediaInspected",
+            "onExtractComplete",
+            "onSeedGoalReached",
+            "onTorrentDeleted",
+            "onHealthRestored",
+            "onManualInteractionRequired",
+            "onApplicationUpdate",
+            "onBackupComplete",
+            "onBackupFailed",
+        };
+
+        var merged = NotificationUpdateMerger.Merge(existing, incoming, present);
+
+        Assert.That(merged.FallbackNotificationId, Is.EqualTo(9));
+        Assert.That(merged.OnMediaInspected, Is.True);
+        Assert.That(merged.OnExtractComplete, Is.True);
+        Assert.That(merged.OnSeedGoalReached, Is.True);
+        Assert.That(merged.OnTorrentDeleted, Is.True);
+        Assert.That(merged.OnHealthRestored, Is.True);
+        Assert.That(merged.OnManualInteractionRequired, Is.True);
+        Assert.That(merged.OnApplicationUpdate, Is.True);
+        Assert.That(merged.OnBackupComplete, Is.True);
+        Assert.That(merged.OnBackupFailed, Is.True);
+    }
 }

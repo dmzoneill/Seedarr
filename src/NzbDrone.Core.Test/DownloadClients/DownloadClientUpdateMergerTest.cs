@@ -128,4 +128,57 @@ public class DownloadClientUpdateMergerTest
 
         Assert.That(merged.Tags, Is.Empty);
     }
+
+    [Test]
+    public void Merge_with_extended_fields_applies_incoming_values()
+    {
+        var existing = new DownloadClientDefinition
+        {
+            Implementation = "OldImpl",
+            ConfigContract = "OldContract",
+            Settings = "{\"a\":1}",
+            ClientType = "qbittorrent",
+            UseSsl = false,
+            UrlBase = "/old",
+            Username = "old-user",
+            Category = "old-cat",
+            Priority = 1,
+        };
+        var incoming = new DownloadClientDefinition
+        {
+            Implementation = "NewImpl",
+            ConfigContract = "NewContract",
+            Settings = "{\"b\":2}",
+            ClientType = "deluge",
+            UseSsl = true,
+            UrlBase = "/new",
+            Username = "new-user",
+            Category = "new-cat",
+            Priority = 5,
+        };
+        var present = new HashSet<string>
+        {
+            "implementation",
+            "configContract",
+            "settings",
+            "clientType",
+            "useSsl",
+            "urlBase",
+            "username",
+            "category",
+            "priority",
+        };
+
+        var merged = DownloadClientUpdateMerger.Merge(existing, incoming, present);
+
+        Assert.That(merged.Implementation, Is.EqualTo("NewImpl"));
+        Assert.That(merged.ConfigContract, Is.EqualTo("NewContract"));
+        Assert.That(merged.Settings, Is.EqualTo("{\"b\":2}"));
+        Assert.That(merged.ClientType, Is.EqualTo("deluge"));
+        Assert.That(merged.UseSsl, Is.True);
+        Assert.That(merged.UrlBase, Is.EqualTo("/new"));
+        Assert.That(merged.Username, Is.EqualTo("new-user"));
+        Assert.That(merged.Category, Is.EqualTo("new-cat"));
+        Assert.That(merged.Priority, Is.EqualTo(5));
+    }
 }

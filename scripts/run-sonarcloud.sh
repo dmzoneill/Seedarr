@@ -31,7 +31,7 @@ dotnet-sonarscanner begin \
   /d:sonar.host.url="https://sonarcloud.io" \
   /d:sonar.scanner.skipJreProvisioning=true \
   /d:sonar.cs.roslyn.ignoreIssues=false \
-  /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml,**/coverage.opencover.xml,src/**/coverage.opencover.xml" \
+  /d:sonar.cs.opencover.reportsPaths="${ROOT}/TestResults/merged/OpenCover.xml" \
   /d:sonar.javascript.lcov.reportPaths="src/Seedarr.Frontend/coverage/lcov.info" \
   /d:sonar.projectBaseDir="${ROOT}"
 
@@ -59,6 +59,13 @@ if [[ -f src/Seedarr.Frontend/package.json ]]; then
     npm run test:coverage || true
   )
 fi
+
+command -v reportgenerator >/dev/null 2>&1 || dotnet tool install --global dotnet-reportgenerator-globaltool
+reportgenerator \
+  "-reports:${ROOT}/TestResults/**/coverage.opencover.xml" \
+  "-targetdir:${ROOT}/TestResults/merged" \
+  "-reporttypes:OpenCover" \
+  "-filefilters:-*Test*"
 
 dotnet-sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
 
