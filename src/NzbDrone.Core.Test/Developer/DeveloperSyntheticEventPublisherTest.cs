@@ -37,4 +37,49 @@ public class DeveloperSyntheticEventPublisherTest
             Is.True);
         Assert.That(evt, Is.TypeOf<ConfigSavedEvent>());
     }
+
+    [Test]
+    public void TryCreateEvent_should_reject_empty_name()
+    {
+        Assert.That(
+            DeveloperSyntheticEventPublisher.TryCreateEvent("  ", "{}", out _, out var error),
+            Is.False);
+        Assert.That(error, Does.Contain("cannot be empty"));
+    }
+
+    [Test]
+    public void TryCreateEvent_should_reject_unknown_event()
+    {
+        Assert.That(
+            DeveloperSyntheticEventPublisher.TryCreateEvent("NotARealEventType", "{}", out _, out var error),
+            Is.False);
+        Assert.That(error, Does.Contain("Unknown event type"));
+    }
+
+    [Test]
+    public void TryCreateEvent_should_block_shutdown_event()
+    {
+        Assert.That(
+            DeveloperSyntheticEventPublisher.TryCreateEvent("ApplicationShutdownRequested", "{}", out _, out var error),
+            Is.False);
+        Assert.That(error, Does.Contain("not allowed"));
+    }
+
+    [Test]
+    public void TryCreateEvent_should_reject_invalid_payload_json()
+    {
+        Assert.That(
+            DeveloperSyntheticEventPublisher.TryCreateEvent("ConfigSavedEvent", "not-json", out _, out var error),
+            Is.False);
+        Assert.That(error, Does.Contain("Invalid payload JSON"));
+    }
+
+    [Test]
+    public void TryCreateEvent_should_resolve_event_name_with_event_suffix()
+    {
+        Assert.That(
+            DeveloperSyntheticEventPublisher.TryCreateEvent("TorrentImportedEvent", "{}", out var evt, out _),
+            Is.True);
+        Assert.That(evt, Is.TypeOf<TorrentImportedEvent>());
+    }
 }
