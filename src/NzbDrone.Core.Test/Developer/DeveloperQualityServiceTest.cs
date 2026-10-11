@@ -99,4 +99,25 @@ public class DeveloperQualityServiceTest
         Assert.That(report.Metrics.ReliabilityRating, Is.EqualTo("A"));
         Assert.That(report.RecentPipelines, Is.Not.Empty);
     }
+
+    [Test]
+    public async Task GetQualityReportAsync_uses_cache_on_second_call()
+    {
+        var qualityGateJson = "{\"projectStatus\":{\"status\":\"OK\",\"conditions\":[]}}";
+        var measuresJson = "{\"component\":{\"measures\":[]}}";
+        var workflowsJson = "{\"workflow_runs\":[]}";
+
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, qualityGateJson);
+        handler.Enqueue(HttpStatusCode.OK, measuresJson);
+        handler.Enqueue(HttpStatusCode.OK, workflowsJson);
+
+        var client = new HttpClient(handler);
+        var service = new DeveloperQualityService(client);
+
+        await service.GetQualityReportAsync(CancellationToken.None);
+        await service.GetQualityReportAsync(CancellationToken.None);
+
+        Assert.That(handler.Requests.Count, Is.EqualTo(3));
+    }
 }

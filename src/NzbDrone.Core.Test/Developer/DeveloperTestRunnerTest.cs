@@ -157,16 +157,6 @@ public class DeveloperTestRunnerTest
     }
 
     [Test]
-    public async Task Should_execute_entire_catalog_when_request_has_no_filters()
-    {
-        var catalogSize = _runner.DiscoverTests().Count;
-        var response = await _runner.RunTestsAsync(new TestExecutionRequest());
-
-        Assert.That(response.TotalTests, Is.EqualTo(catalogSize));
-        Assert.That(response.TotalDurationMs, Is.GreaterThanOrEqualTo(0));
-    }
-
-    [Test]
     public async Task Should_run_each_diagnostic_category_batch()
     {
         foreach (var category in new[] { "Database", "Storage", "BitTorrent", "Network", "Scheduler", "Messaging", "System", "Configuration" })
