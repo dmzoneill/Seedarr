@@ -85,7 +85,7 @@ jobs:
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.scanner.skipJreProvisioning=true \
             /d:sonar.cs.roslyn.ignoreIssues=false \
-            /d:sonar.cs.opencover.reportsPaths="${{ github.workspace }}/TestResults/merged/OpenCover.xml" \
+            /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml,**/coverage.opencover.xml,src/**/coverage.opencover.xml" \
             /d:sonar.javascript.lcov.reportPaths="src/Seedarr.Frontend/coverage/lcov.info" \
             /d:sonar.projectBaseDir="${{ github.workspace }}" \
             /d:sonar.coverage.exclusions="**/libtorrent_daemon.py,src/NzbDrone.Core/BitTorrent/libtorrent_daemon.py,**/AiCopilotDrawer.tsx,**/SpeedSchedule.tsx,**/ThemeContext.tsx,**/TorrentDetailPanel.tsx,**/*Test*/**,**/Datastore/Migration/**,.github/**,scripts/**,Makefile,src/Seedarr.Frontend/src/pages/**,src/Seedarr.Frontend/src/components/**,src/Seedarr.Frontend/src/App.tsx,src/Seedarr.Frontend/src/api/**,src/Seedarr.Frontend/src/store/**,src/Seedarr.Frontend/src/hooks/**,src/Seedarr.Frontend/src/context/**,src/NzbDrone.Host/**" \
@@ -148,16 +148,6 @@ jobs:
           mkdir -p coverage
           npm run test:coverage || true
           cd ../..
-
-      - name: Merge OpenCover reports
-        if: steps.check_token.outputs.has_token == 'true'
-        run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-          reportgenerator \
-            "-reports:${{ github.workspace }}/TestResults/**/coverage.opencover.xml" \
-            "-targetdir:${{ github.workspace }}/TestResults/merged" \
-            "-reporttypes:OpenCover" \
-            "-filefilters:-*Test*"
 
       - name: End SonarCloud Scanner
         if: steps.check_token.outputs.has_token == 'true'
