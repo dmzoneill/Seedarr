@@ -174,4 +174,34 @@ public class DeveloperDebuggerServiceTest
         _subject.RecordSnapshot(null);
         Assert.That(_subject.GetSnapshots(), Is.Empty);
     }
+
+    [Test]
+    public void RecordSnapshot_trims_to_max_snapshots()
+    {
+        for (var i = 0; i < 505; i++)
+        {
+            _subject.RecordSnapshot(new TracepointSnapshot { FilePath = $"f{i}.cs" });
+        }
+
+        Assert.That(_subject.GetSnapshots(600), Has.Count.EqualTo(500));
+        Assert.That(_subject.GetSnapshots(1)[0].FilePath, Is.EqualTo("f504.cs"));
+    }
+
+    [Test]
+    public void CaptureSnapshot_serializes_string_variables()
+    {
+        var snapshot = _subject.CaptureSnapshot(null, "raw-json", "vars.cs", 9);
+
+        Assert.That(snapshot, Is.Not.Null);
+        Assert.That(snapshot.VariablesJson, Is.EqualTo("raw-json"));
+    }
+
+    [Test]
+    public void GetSourceCode_unknown_file_returns_not_found_message()
+    {
+        var response = _subject.GetSourceCode("src/NzbDrone.Core/Does/Not/Exist.cs");
+
+        Assert.That(response.Exists, Is.False);
+        Assert.That(response.Content, Does.Contain("was not found"));
+    }
 }
