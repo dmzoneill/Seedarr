@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -356,12 +357,17 @@ public class TmdbMetadataProviderTest
         var limiter = new TokenBucketRateLimiter(2, 20);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
-        // Consume initial burst
+        var burstStopwatch = Stopwatch.StartNew();
         await limiter.WaitForTokenAsync(cts.Token);
         await limiter.WaitForTokenAsync(cts.Token);
+        burstStopwatch.Stop();
 
-        // Third call waits for refill and completes without hanging
+        var refillStopwatch = Stopwatch.StartNew();
         await limiter.WaitForTokenAsync(cts.Token);
+        refillStopwatch.Stop();
+
+        Assert.That(burstStopwatch.Elapsed, Is.LessThan(TimeSpan.FromMilliseconds(200)));
+        Assert.That(refillStopwatch.Elapsed, Is.GreaterThan(TimeSpan.FromMilliseconds(25)));
     }
 
     private class FakeHttpMessageHandler : HttpMessageHandler
