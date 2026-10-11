@@ -775,25 +775,21 @@ public class TorrentRecheckServiceTest
                 Is.True,
                 "Expected blocking recheck to enter piece verification");
 
-            serviceWithSignalR.QueueRecheck(29);
-            Assert.That(
-                SpinWait.SpinUntil(
-                    () => waitingTorrent.Status == TorrentStatus.QueuedForChecking,
-                    TimeSpan.FromSeconds(10)),
-                Is.True,
-                "Expected waiting torrent to enter QueuedForChecking before cancel");
+            var queuedTorrent = serviceWithSignalR.QueueRecheck(29);
+            Assert.That(queuedTorrent, Is.Not.Null);
+            Assert.That(queuedTorrent.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
 
             serviceWithSignalR.CancelRecheck(29);
 
             var deadline = DateTime.UtcNow.AddSeconds(5);
             while (DateTime.UtcNow < deadline
-                && waitingTorrent.Status != TorrentStatus.Seeding
-                && waitingTorrent.Status != TorrentStatus.Paused)
+                && queuedTorrent.Status != TorrentStatus.Seeding
+                && queuedTorrent.Status != TorrentStatus.Paused)
             {
                 await System.Threading.Tasks.Task.Delay(10);
             }
 
-            Assert.That(waitingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+            Assert.That(queuedTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
             signalR.Received().BroadcastMessage(Arg.Is<NzbDrone.SignalR.SignalRMessage>(m =>
                 m.Name == "TorrentUpdated" && m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
 
