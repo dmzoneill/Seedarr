@@ -41,12 +41,61 @@ public class DeveloperQualityServiceTest
         Assert.That(report.RecentPipelines, Has.Count.GreaterThan(0));
     }
 
+    [Test]
+    public async Task GetQualityReportAsync_maps_sonar_rating_grades_and_technical_debt()
+    {
+        var handler = new QualityApiHandler(measuresJson: """
+            {"component":{"measures":[
+              {"metric":"reliability_rating","value":"2.0"},
+              {"metric":"security_rating","value":"3.0"},
+              {"metric":"sqale_rating","value":"4.5"},
+              {"metric":"sqale_index","value":"90"}
+            ]}}
+            """);
+        var service = new DeveloperQualityService(new HttpClient(handler));
+
+        var report = await service.GetQualityReportAsync();
+
+        Assert.That(report.Metrics.ReliabilityRating, Is.EqualTo("B"));
+        Assert.That(report.Metrics.SecurityRating, Is.EqualTo("C"));
+        Assert.That(report.Metrics.MaintainabilityRating, Is.EqualTo("E"));
+        Assert.That(report.Metrics.TechnicalDebtFormatted, Is.EqualTo("90 min"));
+    }
+
+    [Test]
+    public async Task GetQualityReportAsync_uses_fallback_pipelines_when_github_fails()
+    {
+        var handler = new QualityApiHandler(failGitHub: true);
+        var service = new DeveloperQualityService(new HttpClient(handler));
+
+        var report = await service.GetQualityReportAsync();
+
+        Assert.That(report.RecentPipelines, Has.Count.GreaterThanOrEqualTo(4));
+        Assert.That(report.RecentPipelines[0].Name, Does.Contain("SonarCloud"));
+    }
+
+    [Test]
+    public void Default_constructor_builds_service()
+    {
+        var service = new DeveloperQualityService();
+        Assert.That(service, Is.Not.Null);
+    }
+
     private sealed class QualityApiHandler : HttpMessageHandler
     {
         private readonly bool _failAll;
+        private readonly bool _failGitHub;
+        private readonly string _measuresJson;
+        private readonly string _workflowsJson;
         public int CallCount { get; private set; }
 
-        public QualityApiHandler(bool failAll = false) => _failAll = failAll;
+        public QualityApiHandler(bool failAll = false, bool failGitHub = false, string measuresJson = null, string workflowsJson = null)
+        {
+            _failAll = failAll;
+            _failGitHub = failGitHub;
+            _measuresJson = measuresJson;
+            _workflowsJson = workflowsJson;
+        }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -69,7 +118,7 @@ public class DeveloperQualityServiceTest
 
             if (path.Contains("measures", StringComparison.OrdinalIgnoreCase))
             {
-                return Task.FromResult(JsonResponse("""
+                var measures = _measuresJson ?? """
                     {"component":{"measures":[
                       {"metric":"coverage","value":"70.5"},
                       {"metric":"bugs","value":"0"},
@@ -81,16 +130,23 @@ public class DeveloperQualityServiceTest
                       {"metric":"sqale_rating","value":"1.0"},
                       {"metric":"sqale_index","value":"42"}
                     ]}}
-                    """));
+                    """;
+                return Task.FromResult(JsonResponse(measures));
             }
 
             if (path.Contains("actions/runs", StringComparison.OrdinalIgnoreCase))
             {
-                return Task.FromResult(JsonResponse("""
+                if (_failGitHub)
+                {
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+                }
+
+                var workflows = _workflowsJson ?? """
                     {"workflow_runs":[
                       {"name":"SonarCloud Analysis","status":"completed","conclusion":"success","run_number":99,"html_url":"https://example/run","created_at":"2026-10-11T18:00:00Z"}
                     ]}
-                    """));
+                    """;
+                return Task.FromResult(JsonResponse(workflows));
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
