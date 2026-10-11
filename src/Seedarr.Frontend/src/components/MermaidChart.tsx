@@ -129,8 +129,8 @@ export const MermaidChart: React.FC<MermaidChartProps> = ({ chart, id, title }) 
         let vbWidth = 0;
         let vbHeight = 0;
         if (vbMatch) {
-          vbWidth = parseFloat(vbMatch[3]);
-          vbHeight = parseFloat(vbMatch[4]);
+          vbWidth = Number.parseFloat(vbMatch[3]);
+          vbHeight = Number.parseFloat(vbMatch[4]);
         }
         vbWidthRef.current = vbWidth;
         vbHeightRef.current = vbHeight;
@@ -271,6 +271,35 @@ export const MermaidChart: React.FC<MermaidChartProps> = ({ chart, id, title }) 
       fitToScreen();
     } else {
       resetActualSize();
+    }
+  };
+
+  const handleViewportKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 40 : 16;
+    switch (e.key) {
+      case "ArrowLeft":
+        e.preventDefault();
+        setPan((current) => ({ ...current, x: current.x + step }));
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        setPan((current) => ({ ...current, x: current.x - step }));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setPan((current) => ({ ...current, y: current.y + step }));
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        setPan((current) => ({ ...current, y: current.y - step }));
+        break;
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        handleDoubleClick();
+        break;
+      default:
+        break;
     }
   };
 
@@ -473,6 +502,10 @@ export const MermaidChart: React.FC<MermaidChartProps> = ({ chart, id, title }) 
           <div
             ref={viewportRef}
             className="mermaid-viewport"
+            role="application"
+            tabIndex={0}
+            aria-label="Diagram viewport. Drag to pan, double-click or press Enter to toggle zoom, arrow keys to pan."
+            onKeyDown={handleViewportKeyDown}
             onMouseDown={handleMouseDown}
             onDoubleClick={handleDoubleClick}
             style={{

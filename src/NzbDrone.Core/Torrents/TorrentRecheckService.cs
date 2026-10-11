@@ -185,14 +185,12 @@ public class TorrentRecheckService : ITorrentRecheckService
 
     private async Task ProcessQueueAsync()
     {
-        while (true)
-        {
-            await _queueProcessingLock.WaitAsync().ConfigureAwait(false);
+        await _queueProcessingLock.WaitAsync().ConfigureAwait(false);
 
-            try
+        try
+        {
+            while (_recheckQueue.TryDequeue(out var nextId))
             {
-                while (_recheckQueue.TryDequeue(out var nextId))
-                {
                     using var cts = new CancellationTokenSource();
                     if (!_activeRechecks.TryAdd(nextId, cts))
                     {
@@ -246,18 +244,15 @@ public class TorrentRecheckService : ITorrentRecheckService
                     {
                         _activeRechecks.TryRemove(nextId, out _);
                     }
-                }
             }
-            finally
+        }
+        finally
+        {
+            _queueProcessingLock.Release();
+            if (!_recheckQueue.IsEmpty)
             {
-                _queueProcessingLock.Release();
-                if (!_recheckQueue.IsEmpty)
-                {
-                    _ = Task.Run(ProcessQueueAsync);
-                }
+                _ = Task.Run(ProcessQueueAsync);
             }
-
-            return;
         }
     }
 

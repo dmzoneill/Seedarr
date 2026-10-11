@@ -371,7 +371,7 @@ public class PieceStorage : IPieceStorage, IDisposable
 
     public void Flush()
     {
-        while (_pendingBatches.Count > 0)
+        while (!_pendingBatches.IsEmpty)
         {
             foreach (var key in _pendingBatches.Keys.ToArray())
             {
