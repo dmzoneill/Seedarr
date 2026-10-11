@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.11](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.11) - 2026-10-11
+
+### 🐛 Bug Fixes
+- fix(ci): quote pip only-binary target for yaml
+- fix(ci): quote curl proto flag for valid workflow yaml
+- fix(quality): clear SonarCloud open issues on main
+
 ## [v2.3.10](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.10) - 2026-10-10
 
 ### 🐛 Bug Fixes
