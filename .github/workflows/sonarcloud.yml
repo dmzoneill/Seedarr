@@ -30,12 +30,14 @@ jobs:
             echo "has_token=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_token=false" >> "$GITHUB_OUTPUT"
-            echo "::error ::SONAR_TOKEN secret is not set. Add SONAR_TOKEN in repository secrets so SonarCloud receives analysis uploads."
+            echo "::warning ::SONAR_TOKEN secret is not set. SonarCloud scan will be skipped until the token is added."
           fi
 
-      - name: Require SonarCloud token
+      - name: Skip SonarCloud when token missing
         if: steps.check_token.outputs.has_token != 'true'
-        run: exit 1
+        run: |
+          echo "SonarCloud scan skipped: SONAR_TOKEN is not configured in repository secrets."
+          echo "Add SONAR_TOKEN from SonarCloud (My Account → Security) to enable uploads."
 
       - name: Setup Java
         if: steps.check_token.outputs.has_token == 'true'
@@ -133,7 +135,7 @@ jobs:
           cd ../..
 
       - name: End SonarCloud Scanner
-        if: always()
+        if: steps.check_token.outputs.has_token == 'true'
         continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
