@@ -137,4 +137,41 @@ public class DeveloperDebuggerServiceTest
         Assert.That(response.Exists, Is.True);
         Assert.That(response.Content, Is.Not.Empty);
     }
+
+    [Test]
+    public void RemoveTracepoint_existing_id_returns_true()
+    {
+        var tp = _subject.AddTracepoint(new TracepointDefinition { Id = "remove-me" });
+        Assert.That(_subject.RemoveTracepoint(tp.Id), Is.True);
+        Assert.That(_subject.GetTracepoints(), Is.Empty);
+    }
+
+    [Test]
+    public void GetSourceCode_empty_path_returns_not_found_message()
+    {
+        var response = _subject.GetSourceCode("  ");
+        Assert.That(response.Exists, Is.False);
+        Assert.That(response.Content, Does.Contain("No file path"));
+    }
+
+    [Test]
+    public void CaptureSnapshot_invalid_condition_defaults_to_capture()
+    {
+        var tracepoint = _subject.AddTracepoint(new TracepointDefinition
+        {
+            Id = "bad-cond",
+            Condition = "this is not valid js",
+            IsEnabled = true,
+        });
+
+        var snapshot = _subject.CaptureSnapshot(tracepoint.Id, null, "f.cs", 3);
+        Assert.That(snapshot, Is.Not.Null);
+    }
+
+    [Test]
+    public void RecordSnapshot_null_is_ignored()
+    {
+        _subject.RecordSnapshot(null);
+        Assert.That(_subject.GetSnapshots(), Is.Empty);
+    }
 }
