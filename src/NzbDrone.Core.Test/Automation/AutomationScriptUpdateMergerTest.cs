@@ -109,4 +109,34 @@ public class AutomationScriptUpdateMergerTest
         Assert.That(merged.LastExecutionStatus, Is.EqualTo("ok"));
         Assert.That(merged.LastExecutionLog, Is.EqualTo("done"));
     }
+
+    [Test]
+    public void Merge_with_description_trigger_language_and_inputs_applies_incoming()
+    {
+        var existing = new AutomationScript
+        {
+            Description = "old-desc",
+            Trigger = AutomationTrigger.TorrentAdded,
+            Language = AutomationLanguage.JavaScript,
+            InputsJson = "{}",
+            CreatedAt = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var incoming = new AutomationScriptResource
+        {
+            Description = "new-desc",
+            Trigger = AutomationTrigger.TorrentCompleted,
+            Language = AutomationLanguage.Yaml,
+            InputsJson = "{\"x\":1}",
+            CreatedAt = new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+        };
+        var present = new HashSet<string> { "description", "trigger", "language", "inputsJson", "createdAt" };
+
+        var merged = AutomationScriptUpdateMerger.Merge(existing, incoming, present);
+
+        Assert.That(merged.Description, Is.EqualTo("new-desc"));
+        Assert.That(merged.Trigger, Is.EqualTo(AutomationTrigger.TorrentCompleted));
+        Assert.That(merged.Language, Is.EqualTo(AutomationLanguage.Yaml));
+        Assert.That(merged.InputsJson, Is.EqualTo("{\"x\":1}"));
+        Assert.That(merged.CreatedAt, Is.EqualTo(incoming.CreatedAt));
+    }
 }
