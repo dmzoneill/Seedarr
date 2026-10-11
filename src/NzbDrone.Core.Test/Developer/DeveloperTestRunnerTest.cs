@@ -143,4 +143,37 @@ public class DeveloperTestRunnerTest
         var limited = _runner.GetRecentResults(2);
         Assert.That(limited.Count, Is.EqualTo(2));
     }
+
+    [Test]
+    public async Task Should_execute_full_diagnostic_catalog_when_run_all_requested()
+    {
+        var catalogSize = _runner.DiscoverTests().Count;
+        var response = await _runner.RunTestsAsync(new TestExecutionRequest { RunAll = true });
+
+        Assert.That(response.TotalTests, Is.EqualTo(catalogSize));
+        Assert.That(response.Results, Has.Count.EqualTo(catalogSize));
+        Assert.That(response.Passed + response.Failed + response.Skipped, Is.EqualTo(catalogSize));
+        Assert.That(response.Results.All(r => !string.IsNullOrWhiteSpace(r.Status)), Is.True);
+    }
+
+    [Test]
+    public async Task Should_execute_entire_catalog_when_request_has_no_filters()
+    {
+        var catalogSize = _runner.DiscoverTests().Count;
+        var response = await _runner.RunTestsAsync(new TestExecutionRequest());
+
+        Assert.That(response.TotalTests, Is.EqualTo(catalogSize));
+        Assert.That(response.TotalDurationMs, Is.GreaterThanOrEqualTo(0));
+    }
+
+    [Test]
+    public async Task Should_run_each_diagnostic_category_batch()
+    {
+        foreach (var category in new[] { "Database", "Storage", "BitTorrent", "Network", "Scheduler", "Messaging", "System", "Configuration" })
+        {
+            var response = await _runner.RunTestsAsync(new TestExecutionRequest { Category = category });
+            Assert.That(response.TotalTests, Is.GreaterThan(0), $"Expected tests in category {category}");
+            Assert.That(response.Results.All(r => r.Category == category), Is.True);
+        }
+    }
 }
