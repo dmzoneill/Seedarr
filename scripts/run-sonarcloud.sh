@@ -42,7 +42,14 @@ dotnet test src/NzbDrone.Core.Test/Seedarr.Core.Test.csproj \
   --no-build \
   --settings .runsettings \
   --results-directory "${ROOT}/TestResults" \
-  --collect:"XPlat Code Coverage;Format=opencover" || true
+  --collect:"XPlat Code Coverage;Format=opencover"
+
+dotnet test src/Seedarr.Http.Test/Seedarr.Http.Test.csproj \
+  --configuration Release \
+  --no-build \
+  --settings .runsettings \
+  --results-directory "${ROOT}/TestResults" \
+  --collect:"XPlat Code Coverage;Format=opencover"
 
 if [[ -f src/Seedarr.Frontend/package.json ]]; then
   (
