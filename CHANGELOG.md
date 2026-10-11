@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.12](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.12) - 2026-10-11
+
+### 🐛 Bug Fixes
+- fix(ci): fail SonarCloud workflow when SONAR_TOKEN is missing
+
 ## [v2.3.11](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.11) - 2026-10-11
 
 ### 🐛 Bug Fixes
