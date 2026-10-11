@@ -40,7 +40,7 @@ jobs:
 
       - name: Download AI responder script
         run: |
-          curl -fsSL --proto '=https' --tlsv1.2 "https://raw.githubusercontent.com/dmzoneill/dmzoneill/main/ai-responder.py" -o ai-responder.py
+          curl -fsSL --proto "=https" --tlsv1.2 "https://raw.githubusercontent.com/dmzoneill/dmzoneill/main/ai-responder.py" -o ai-responder.py
           chmod +x ai-responder.py
 
       - name: Run AI responder
