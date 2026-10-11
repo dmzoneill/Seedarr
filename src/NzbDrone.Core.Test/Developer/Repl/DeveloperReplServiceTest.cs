@@ -1,6 +1,11 @@
 using System;
+using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Developer.Repl;
+using NzbDrone.Core.Seeding;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Developer.Repl;
 
@@ -92,5 +97,71 @@ public class DeveloperReplServiceTest
         Assert.That(response.Success, Is.True);
         Assert.That(response.ResultType, Is.EqualTo("string"));
         Assert.That(response.ResultJson, Does.Contain("undefined"));
+    }
+
+    [Test]
+    public void Execute_serializes_boolean_and_null_results()
+    {
+        var boolResult = _subject.Execute(new ReplExecutionRequest { Code = "true" });
+        var nullResult = _subject.Execute(new ReplExecutionRequest { Code = "null" });
+
+        Assert.That(boolResult.Success, Is.True);
+        Assert.That(boolResult.ResultType, Is.EqualTo("boolean"));
+        Assert.That(boolResult.ResultJson, Is.EqualTo("true"));
+
+        Assert.That(nullResult.Success, Is.True);
+        Assert.That(nullResult.ResultType, Is.EqualTo("null"));
+        Assert.That(nullResult.ResultJson, Is.EqualTo("null"));
+    }
+
+    [Test]
+    public void GetHistory_clamps_limit_to_valid_range()
+    {
+        for (var i = 0; i < 3; i++)
+        {
+            _subject.Execute(new ReplExecutionRequest { Code = $"{i}" });
+        }
+
+        Assert.That(_subject.GetHistory(0), Has.Count.EqualTo(1));
+        Assert.That(_subject.GetHistory(2), Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public void Execute_with_injected_services_exposes_host_objects_in_repl()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var seedingService = Substitute.For<ISeedingService>();
+        var configService = Substitute.For<IConfigService>();
+        var configFileProvider = Substitute.For<IConfigFileProvider>();
+        var mainDatabase = Substitute.For<IMainDatabase>();
+
+        var subject = new DeveloperReplService(
+            torrentService: torrentService,
+            seedingService: seedingService,
+            configService: configService,
+            configFileProvider: configFileProvider,
+            mainDatabase: mainDatabase);
+
+        var torrentsType = subject.Execute(new ReplExecutionRequest { Code = "typeof torrents" });
+        var engineType = subject.Execute(new ReplExecutionRequest { Code = "typeof engine" });
+        var configType = subject.Execute(new ReplExecutionRequest { Code = "typeof config" });
+        var dbType = subject.Execute(new ReplExecutionRequest { Code = "typeof db" });
+
+        Assert.That(torrentsType.Success, Is.True);
+        Assert.That(torrentsType.ResultJson, Does.Contain("object"));
+        Assert.That(engineType.ResultJson, Does.Contain("object"));
+        Assert.That(configType.ResultJson, Does.Contain("object"));
+        Assert.That(dbType.ResultJson, Does.Contain("object"));
+    }
+
+    [Test]
+    public void Execute_reinitializes_engine_when_timeout_changes()
+    {
+        var first = _subject.Execute(new ReplExecutionRequest { Code = "var marker = 1", TimeoutSeconds = 5 });
+        var second = _subject.Execute(new ReplExecutionRequest { Code = "2 + 2", TimeoutSeconds = 30 });
+
+        Assert.That(first.Success, Is.True);
+        Assert.That(second.Success, Is.True);
+        Assert.That(second.ResultJson, Does.Contain("4"));
     }
 }

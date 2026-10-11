@@ -120,4 +120,33 @@ public class DeveloperGitHubServiceTest
         Assert.That(result.IsRateLimited, Is.True);
         Assert.That(result.Items, Is.Not.Empty);
     }
+
+    [Test]
+    public async Task GetPullRequestsAsync_when_rate_limited_sets_flag()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue((HttpStatusCode)429, "Too Many Requests");
+        var client = new HttpClient(handler);
+        var service = new DeveloperGitHubService(client);
+
+        var result = await service.GetPullRequestsAsync("open", CancellationToken.None);
+
+        Assert.That(result.IsRateLimited, Is.True);
+        Assert.That(result.Message, Does.Contain("rate limit"));
+    }
+
+    [Test]
+    public async Task GetPullRequestsAsync_uses_cache_on_second_call()
+    {
+        var json = "[]";
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, json);
+        var client = new HttpClient(handler);
+        var service = new DeveloperGitHubService(client);
+
+        await service.GetPullRequestsAsync("open", CancellationToken.None);
+        await service.GetPullRequestsAsync("open", CancellationToken.None);
+
+        Assert.That(handler.Requests.Count, Is.EqualTo(1));
+    }
 }
