@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.21](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.21) - 2026-10-11
+
+### 🐛 Bug Fixes
+- fix(ci): align DeveloperQualityServiceTest indentation for editorconfig
+- fix(ci): quote ai-responder pip step for valid YAML
+- fix(sonar): clear ai-responder workflow issues and dedupe scans
+
+### 🔧 Maintenance & Improvements
+- test(developer): extend quality service coverage for Sonar gate
+- test(developer): fix quality service fallback test
+- test(developer): cover quality service Sonar/GitHub parsing
+- test(sonar): cover developer stores, REPL, and debugger paths
+- test(developer): extend debugger service coverage for Sonar gate
+
 ## [v2.3.20](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.20) - 2026-10-11
 
 ### 🔧 Maintenance & Improvements
