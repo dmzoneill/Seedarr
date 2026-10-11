@@ -38,10 +38,7 @@ jobs:
         run: |
           echo "SonarCloud scan skipped: SONAR_TOKEN is not configured in repository secrets."
           echo "Add SONAR_TOKEN from SonarCloud (My Account → Security) to enable uploads."
-          OPEN=$(curl -fsS "https://sonarcloud.io/api/issues/search?componentKeys=dmzoneill_Seedarr&resolved=false&ps=1" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("total","?"))' 2>/dev/null || echo "?")
-          ANALYSIS=$(curl -fsS "https://sonarcloud.io/api/navigation/component?component=dmzoneill_Seedarr" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("analysisDate","unknown"))' 2>/dev/null || echo "unknown")
-          echo "Dashboard shows ${OPEN} open issues from analysis ${ANALYSIS} (stale until a full scan runs)."
-          echo "Quality fixes on main since f07a015: run 'make sonar-scan' locally or add SONAR_TOKEN and re-run this workflow."
+          echo "Re-run this workflow after adding the secret to refresh the dashboard."
 
       - name: Setup Java
         if: steps.check_token.outputs.has_token == 'true'

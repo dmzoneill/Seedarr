@@ -502,7 +502,7 @@ export const MermaidChart: React.FC<MermaidChartProps> = ({ chart, id, title }) 
           <div
             ref={viewportRef}
             className="mermaid-viewport"
-            role="application"
+            role="button"
             tabIndex={0}
             aria-label="Diagram viewport. Drag to pan, double-click or press Enter to toggle zoom, arrow keys to pan."
             onKeyDown={handleViewportKeyDown}
