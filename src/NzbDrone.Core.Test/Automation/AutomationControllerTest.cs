@@ -177,6 +177,38 @@ public class AutomationControllerTest
     }
 
     [Test]
+    public void Update_with_partial_json_body_preserves_omitted_fields()
+    {
+        var existing = new AutomationScript
+        {
+            Id = 1,
+            Name = "keep-name",
+            Code = "old-code",
+            IsEnabled = false,
+            Language = AutomationLanguage.Yaml,
+        };
+        _automationService.Get(1).Returns(existing);
+        _automationService.Update(Arg.Any<AutomationScript>()).Returns(callInfo => callInfo.Arg<AutomationScript>());
+
+        using var doc = JsonDocument.Parse("{\"id\":1,\"code\":\"new-code\"}");
+        var result = _controller.Update(doc.RootElement, 1);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _automationService.Received(1).Update(Arg.Is<AutomationScript>(s =>
+            s.Name == "keep-name" && s.Code == "new-code" && s.IsEnabled == false));
+    }
+
+    [Test]
+    public void Update_with_non_object_json_body_returns_bad_request()
+    {
+        using var doc = JsonDocument.Parse("[]");
+        var result = _controller.Update(doc.RootElement, 1);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        _automationService.DidNotReceive().Update(Arg.Any<AutomationScript>());
+    }
+
+    [Test]
     public void Update_with_null_resource_returns_bad_request()
     {
         var result = _controller.Update(1, null!);
