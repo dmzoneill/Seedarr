@@ -46,10 +46,10 @@ public class DeveloperQualityServiceTest
     {
         var handler = new QualityApiHandler(measuresJson: """
             {"component":{"measures":[
-              {"metric":"reliability_rating","value":"2.0"},
-              {"metric":"security_rating","value":"3.0"},
-              {"metric":"sqale_rating","value":"4.5"},
-              {"metric":"sqale_index","value":"90"}
+            {"metric":"reliability_rating","value":"2.0"},
+            {"metric":"security_rating","value":"3.0"},
+            {"metric":"sqale_rating","value":"4.5"},
+            {"metric":"sqale_index","value":"90"}
             ]}}
             """);
         var service = new DeveloperQualityService(new HttpClient(handler));
@@ -110,8 +110,8 @@ public class DeveloperQualityServiceTest
             {
                 return Task.FromResult(JsonResponse("""
                     {"projectStatus":{"status":"OK","conditions":[
-                      {"metricKey":"new_coverage","status":"OK","actualValue":"88.2","errorThreshold":"80","comparator":"LT"},
-                      {"metricKey":"new_duplicated_lines_density","status":"OK","actualValue":"1.1","errorThreshold":"3","comparator":"GT"}
+                    {"metricKey":"new_coverage","status":"OK","actualValue":"88.2","errorThreshold":"80","comparator":"LT"},
+                    {"metricKey":"new_duplicated_lines_density","status":"OK","actualValue":"1.1","errorThreshold":"3","comparator":"GT"}
                     ]}}
                     """));
             }
@@ -120,15 +120,15 @@ public class DeveloperQualityServiceTest
             {
                 var measures = _measuresJson ?? """
                     {"component":{"measures":[
-                      {"metric":"coverage","value":"70.5"},
-                      {"metric":"bugs","value":"0"},
-                      {"metric":"vulnerabilities","value":"0"},
-                      {"metric":"code_smells","value":"2"},
-                      {"metric":"security_hotspots_reviewed","value":"100"},
-                      {"metric":"reliability_rating","value":"1.0"},
-                      {"metric":"security_rating","value":"1.0"},
-                      {"metric":"sqale_rating","value":"1.0"},
-                      {"metric":"sqale_index","value":"42"}
+                    {"metric":"coverage","value":"70.5"},
+                    {"metric":"bugs","value":"0"},
+                    {"metric":"vulnerabilities","value":"0"},
+                    {"metric":"code_smells","value":"2"},
+                    {"metric":"security_hotspots_reviewed","value":"100"},
+                    {"metric":"reliability_rating","value":"1.0"},
+                    {"metric":"security_rating","value":"1.0"},
+                    {"metric":"sqale_rating","value":"1.0"},
+                    {"metric":"sqale_index","value":"42"}
                     ]}}
                     """;
                 return Task.FromResult(JsonResponse(measures));
@@ -143,7 +143,7 @@ public class DeveloperQualityServiceTest
 
                 var workflows = _workflowsJson ?? """
                     {"workflow_runs":[
-                      {"name":"SonarCloud Analysis","status":"completed","conclusion":"success","run_number":99,"html_url":"https://example/run","created_at":"2026-10-11T18:00:00Z"}
+                    {"name":"SonarCloud Analysis","status":"completed","conclusion":"success","run_number":99,"html_url":"https://example/run","created_at":"2026-10-11T18:00:00Z"}
                     ]}
                     """;
                 return Task.FromResult(JsonResponse(workflows));
