@@ -776,10 +776,12 @@ public class TorrentRecheckServiceTest
                 "Expected blocking recheck to enter piece verification");
 
             serviceWithSignalR.QueueRecheck(29);
-            SpinWait.SpinUntil(
-                () => waitingTorrent.Status == TorrentStatus.QueuedForChecking
-                    || waitingTorrent.Status == TorrentStatus.Checking,
-                TimeSpan.FromSeconds(5));
+            Assert.That(
+                SpinWait.SpinUntil(
+                    () => waitingTorrent.Status == TorrentStatus.QueuedForChecking,
+                    TimeSpan.FromSeconds(10)),
+                Is.True,
+                "Expected waiting torrent to enter QueuedForChecking before cancel");
 
             serviceWithSignalR.CancelRecheck(29);
 
