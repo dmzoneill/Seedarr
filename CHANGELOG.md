@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.29](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.29) - 2026-10-11
+
+### 🔧 Maintenance & Improvements
+- chore(deps): bump requests from 2.32.3 to 2.33.0 in /.github
+
 ## [v2.3.28](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.28) - 2026-10-11
 
 ### 🔧 Maintenance & Improvements
