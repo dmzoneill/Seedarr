@@ -130,7 +130,7 @@ jobs:
           dotnet test src/NzbDrone.Core.Test/Seedarr.Core.Test.csproj \
             --configuration Release \
             --no-build \
-            --settings .runsettings \
+            --settings .github/runsettings.ci.xml \
             --filter "TestCategory!=Slow" \
             --results-directory "${{ github.workspace }}/TestResults" \
             --collect:"XPlat Code Coverage;Format=opencover"
@@ -139,7 +139,8 @@ jobs:
           dotnet test src/Seedarr.Http.Test/Seedarr.Http.Test.csproj \
             --configuration Release \
             --no-build \
-            --settings .runsettings \
+            --settings .github/runsettings.ci.xml \
+            --filter "TestCategory!=Slow" \
             --results-directory "${{ github.workspace }}/TestResults" \
             --collect:"XPlat Code Coverage;Format=opencover"
           HTTP_TEST_RC=$?

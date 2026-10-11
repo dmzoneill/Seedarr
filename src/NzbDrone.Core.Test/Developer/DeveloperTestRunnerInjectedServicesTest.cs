@@ -189,6 +189,41 @@ public class DeveloperTestRunnerInjectedServicesTest
         }
     }
 
+    [Test]
+    public async Task Should_execute_storage_network_and_engine_catalog_checks()
+    {
+        var appFolderInfo = Substitute.For<IAppFolderInfo>();
+        appFolderInfo.AppDataFolder.Returns(_tempDir);
+
+        var runner = new DeveloperTestRunner(
+            mainDatabase: CreateSqliteMainDatabaseMock(),
+            appFolderInfo: appFolderInfo);
+
+        var catalogIds = new[]
+        {
+            "disk-permissions",
+            "disk-quota",
+            "disk-temp-dir",
+            "disk-path-traversal",
+            "network-socket",
+            "network-ssrf",
+            "network-http-client",
+            "event-wiretap",
+            "command-catalog",
+            "event-handlers",
+            "engine-piece-picker",
+            "engine-encryption",
+            "engine-capabilities",
+        };
+
+        foreach (var testId in catalogIds)
+        {
+            var result = await runner.RunTestAsync(testId);
+            Assert.That(result.Status, Is.EqualTo("Passed"), $"{testId}: {result.ErrorMessage}");
+            Assert.That(result.Output, Is.Not.Null.And.Not.Empty, testId);
+        }
+    }
+
     private static IMainDatabase CreateSqliteMainDatabaseMock()
     {
         var mainDatabase = Substitute.For<IMainDatabase>();
