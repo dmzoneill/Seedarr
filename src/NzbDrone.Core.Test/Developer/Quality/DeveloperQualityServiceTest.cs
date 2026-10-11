@@ -75,6 +75,25 @@ public class DeveloperQualityServiceTest
     }
 
     [Test]
+    public async Task GetQualityReportAsync_maps_failing_quality_gate_conditions()
+    {
+        var handler = new QualityApiHandler(gateJson: """
+            {"projectStatus":{"status":"ERROR","conditions":[
+            {"metricKey":"new_coverage","status":"ERROR","actualValue":"71.2","errorThreshold":"80","comparator":"LT"},
+            {"metricKey":"new_duplicated_lines_density","status":"OK","actualValue":"2.5","errorThreshold":"3","comparator":"GT"}
+            ]}}
+            """);
+        var service = new DeveloperQualityService(new HttpClient(handler));
+
+        var report = await service.GetQualityReportAsync();
+
+        Assert.That(report.QualityGate.Status, Is.EqualTo("ERROR"));
+        Assert.That(report.Metrics.NewCodeCoverage, Is.EqualTo(71.2));
+        Assert.That(report.Metrics.DuplicationDensity, Is.EqualTo(2.5));
+        Assert.That(report.QualityGate.Conditions, Has.Count.EqualTo(2));
+    }
+
+    [Test]
     public void Default_constructor_builds_service()
     {
         var service = new DeveloperQualityService();
@@ -87,14 +106,21 @@ public class DeveloperQualityServiceTest
         private readonly bool _failGitHub;
         private readonly string _measuresJson;
         private readonly string _workflowsJson;
+        private readonly string _gateJson;
         public int CallCount { get; private set; }
 
-        public QualityApiHandler(bool failAll = false, bool failGitHub = false, string measuresJson = null, string workflowsJson = null)
+        public QualityApiHandler(
+            bool failAll = false,
+            bool failGitHub = false,
+            string measuresJson = null,
+            string workflowsJson = null,
+            string gateJson = null)
         {
             _failAll = failAll;
             _failGitHub = failGitHub;
             _measuresJson = measuresJson;
             _workflowsJson = workflowsJson;
+            _gateJson = gateJson;
         }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -108,12 +134,13 @@ public class DeveloperQualityServiceTest
             var path = request.RequestUri?.AbsolutePath ?? string.Empty;
             if (path.Contains("qualitygates", StringComparison.OrdinalIgnoreCase))
             {
-                return Task.FromResult(JsonResponse("""
+                var gate = _gateJson ?? """
                     {"projectStatus":{"status":"OK","conditions":[
                     {"metricKey":"new_coverage","status":"OK","actualValue":"88.2","errorThreshold":"80","comparator":"LT"},
                     {"metricKey":"new_duplicated_lines_density","status":"OK","actualValue":"1.1","errorThreshold":"3","comparator":"GT"}
                     ]}}
-                    """));
+                    """;
+                return Task.FromResult(JsonResponse(gate));
             }
 
             if (path.Contains("measures", StringComparison.OrdinalIgnoreCase))

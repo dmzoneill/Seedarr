@@ -164,4 +164,19 @@ public class DeveloperReplServiceTest
         Assert.That(second.Success, Is.True);
         Assert.That(second.ResultJson, Does.Contain("4"));
     }
+
+    [Test]
+    public void Execute_serializes_function_and_number_results()
+    {
+        var number = _subject.Execute(new ReplExecutionRequest { Code = "3.5" });
+        var functionType = _subject.Execute(new ReplExecutionRequest { Code = "typeof (function add(a,b) { return a + b; })" });
+
+        Assert.That(number.Success, Is.True);
+        Assert.That(number.ResultType, Is.EqualTo("number"));
+        Assert.That(number.ResultJson, Does.Contain("3.5"));
+
+        Assert.That(functionType.Success, Is.True);
+        Assert.That(functionType.ResultType, Is.EqualTo("string"));
+        Assert.That(functionType.ResultJson, Does.Contain("function"));
+    }
 }

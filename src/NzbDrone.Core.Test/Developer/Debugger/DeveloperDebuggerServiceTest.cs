@@ -239,4 +239,18 @@ public class DeveloperDebuggerServiceTest
         _subject.UnregisterSession(null);
         Assert.That(_subject.GetStatus().AttachedSessionCount, Is.EqualTo(0));
     }
+
+    [Test]
+    public void CaptureSnapshot_evaluates_condition_with_anonymous_variables()
+    {
+        var tracepoint = _subject.AddTracepoint(new TracepointDefinition
+        {
+            Id = "anon",
+            Condition = "!!variables",
+            IsEnabled = true,
+        });
+
+        var snapshot = _subject.CaptureSnapshot(tracepoint.Id, new { variables = 2 }, "f.cs", 1);
+        Assert.That(snapshot, Is.Not.Null);
+    }
 }
