@@ -146,16 +146,22 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
     {
         lock (_listenerLock)
         {
-            if (_listenerCts != null && !_listenerCts.IsCancellationRequested)
+            if (_listenerCts != null)
             {
                 try
                 {
-                    _listenerCts.Cancel();
+                    if (!_listenerCts.IsCancellationRequested)
+                    {
+                        _listenerCts.Cancel();
+                    }
                 }
                 catch (Exception ex)
                 {
                     _logger.Trace(ex, "Failed to cancel uTP listener CTS");
                 }
+
+                _listenerCts.Dispose();
+                _listenerCts = null;
             }
 
             if (_listener != null)
@@ -365,6 +371,7 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
                 }
 
                 _listener = listener;
+                _listenerCts?.Dispose();
                 _listenerCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                 linkedToken = _listenerCts.Token;
             }

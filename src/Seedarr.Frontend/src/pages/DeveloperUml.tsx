@@ -92,10 +92,14 @@ export const DeveloperUml: React.FC = () => {
       >
         <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "center" }}>
           <div>
-            <label style={{ display: "block", fontSize: "0.8rem", color: "var(--text-dim, #a8a29e)", marginBottom: "4px" }}>
+            <label
+              htmlFor="developer-uml-diagram-type"
+              style={{ display: "block", fontSize: "0.8rem", color: "var(--text-dim, #a8a29e)", marginBottom: "4px" }}
+            >
               Diagram Type
             </label>
             <select
+              id="developer-uml-diagram-type"
               className="form-control"
               value={diagramType}
               onChange={(e) => setDiagramType(e.target.value)}
@@ -116,10 +120,14 @@ export const DeveloperUml: React.FC = () => {
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: "0.8rem", color: "var(--text-dim, #a8a29e)", marginBottom: "4px" }}>
+            <label
+              htmlFor="developer-uml-subsystem"
+              style={{ display: "block", fontSize: "0.8rem", color: "var(--text-dim, #a8a29e)", marginBottom: "4px" }}
+            >
               Subsystem
             </label>
             <select
+              id="developer-uml-subsystem"
               className="form-control"
               value={subsystem}
               onChange={(e) => setSubsystem(e.target.value)}
