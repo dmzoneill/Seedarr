@@ -189,4 +189,36 @@ public class SidecarProcessHostTest
         Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
         Assert.That(host.PluginInfo.ProcessId, Is.Null);
     }
+
+    [Test]
+    public void SendRequestAsync_should_throw_when_plugin_is_not_running()
+    {
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await host.SendRequestAsync("ping"));
+        Assert.That(ex.Message, Does.Contain("not running"));
+    }
+
+    [Test]
+    public async Task SendNotificationAsync_should_noop_when_plugin_is_not_running()
+    {
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        await host.SendNotificationAsync("notify", new { ok = true });
+        Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
+    }
+
+    [Test]
+    public void Dispose_should_not_throw_when_never_started()
+    {
+        var host = new SidecarProcessHost(_manifest, _tempDir);
+        host.Dispose();
+        Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
+    }
+
+    [Test]
+    public void StartAsync_should_throw_when_disposed()
+    {
+        var host = new SidecarProcessHost(_manifest, _tempDir);
+        host.Dispose();
+        Assert.Throws<ObjectDisposedException>(() => host.StartAsync());
+    }
 }
