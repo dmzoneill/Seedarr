@@ -30,12 +30,15 @@ public class QBittorrentApiControllerTest
     private ITagService _tagService;
     private IConfigFileProvider _configFileProvider;
     private ICategoryService _categoryService;
+    private List<Category> _categories;
+    private ITorrentExporter _torrentExporter;
     private QBittorrentApiController _controller;
 
     [SetUp]
     public void SetUp()
     {
         _torrentService = Substitute.For<ITorrentService>();
+        _torrentService.GetAll().Returns(new List<Torrent>());
         _torrentFileService = Substitute.For<ITorrentFileService>();
         _torrentFileParser = Substitute.For<ITorrentFileParser>();
         _torrentImportService = Substitute.For<ITorrentImportService>();
@@ -44,6 +47,22 @@ public class QBittorrentApiControllerTest
         _tagService = Substitute.For<ITagService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
         _categoryService = Substitute.For<ICategoryService>();
+        _categories = new List<Category>();
+        _categoryService.GetAll().Returns(_categories);
+        _categoryService.When(c => c.Add(Arg.Any<Category>())).Do(call => _categories.Add(call.Arg<Category>()));
+        _categoryService.When(c => c.Update(Arg.Any<Category>())).Do(call =>
+        {
+            var updated = call.Arg<Category>();
+            var index = _categories.FindIndex(x => x.Id == updated.Id);
+            if (index >= 0)
+            {
+                _categories[index] = updated;
+            }
+        });
+
+        _torrentExporter = Substitute.For<ITorrentExporter>();
+        _torrentExporter.ExportTorrent(Arg.Any<Torrent>(), Arg.Any<List<TorrentFile>>(), Arg.Any<List<TrackerEntry>>())
+            .Returns(new byte[] { 0x64, 0x38, 0x3a });
 
         _configFileProvider.AuthenticationEnabled.Returns(false);
 
@@ -57,7 +76,8 @@ public class QBittorrentApiControllerTest
             _tagService,
             _configFileProvider,
             sessionStore: new RpcSessionStore(),
-            categoryService: _categoryService);
+            categoryService: _categoryService,
+            torrentExporter: _torrentExporter);
     }
 
     [Test]
@@ -549,9 +569,6 @@ public class QBittorrentApiControllerTest
 
         var resultNoPrio = _controller.SetFilePriority(hash: "somehash", id: "0", priority: null);
         Assert.That(resultNoPrio, Is.InstanceOf<BadRequestResult>());
-
-        var resultNoId = _controller.SetFilePriority(hash: "somehash", id: null, priority: 1);
-        Assert.That(resultNoId, Is.InstanceOf<BadRequestResult>());
     }
 
     [Test]

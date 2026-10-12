@@ -584,7 +584,7 @@ public class DelugeJsonRpcControllerTest
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
-        var doc = JsonDocument.Parse("{"method":"core.get_torrents_status","params":[{},["save_path","download_location"]],"id":1}");
+        var doc = JsonDocument.Parse("""{"method":"core.get_torrents_status","params":[{},["save_path","download_location"]],"id":1}""");
         var actionResult = controller.HandleJsonRpc(doc.RootElement);
         var okResult = actionResult as OkObjectResult;
         Assert.That(okResult, Is.Not.Null);
@@ -632,7 +632,7 @@ public class DelugeJsonRpcControllerTest
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
-        var doc = JsonDocument.Parse("{"method":"core.move_storage","params":[["abcdefabcdefabcdefabcdefabcdefabcdefabcd"],"M:\\Downloads\\music"],"id":2}");
+        var doc = JsonDocument.Parse("""{"method":"core.move_storage","params":[["abcdefabcdefabcdefabcdefabcdefabcdefabcd"],"M:\\Downloads\\music"],"id":2}""");
         var actionResult = controller.HandleJsonRpc(doc.RootElement);
         Assert.That(actionResult, Is.InstanceOf<OkObjectResult>());
         Assert.That(torrent.SourcePath, Is.EqualTo("/downloads/music"));
