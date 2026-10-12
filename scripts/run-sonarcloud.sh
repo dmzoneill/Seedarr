@@ -51,6 +51,14 @@ dotnet test src/Seedarr.Http.Test/Seedarr.Http.Test.csproj \
   --results-directory "${ROOT}/TestResults" \
   --collect:"XPlat Code Coverage;Format=opencover"
 
+dotnet test src/NzbDrone.Integration.Test/Seedarr.Integration.Test.csproj \
+  --configuration Release \
+  --no-build \
+  --settings .runsettings \
+  --filter "TestCategory!=Slow" \
+  --results-directory "${ROOT}/TestResults" \
+  --collect:"XPlat Code Coverage;Format=opencover" || true
+
 if [[ -f src/Seedarr.Frontend/package.json ]]; then
   (
     cd src/Seedarr.Frontend

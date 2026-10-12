@@ -411,4 +411,85 @@ public class YamlScriptRunnerTest
             Assert.That(result.TagsToAdd, Does.Not.Contain("LtMet"));
         }
     }
+
+    [TestCase("${torrent.ratio} >= 1.5", true)]
+    [TestCase("${torrent.ratio} >= 2.0", false)]
+    public void ShouldEvaluateGreaterThanOrEqualCondition(string condition, bool expectedApplied)
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "GTE.Test",
+            Ratio = 1.5,
+        };
+
+        var yaml = "name: 'GTE Check'\n" +
+            "steps:\n" +
+            $"  - name: 'Check Condition'\n" +
+            $"    condition: \"{condition}\"\n" +
+            "    actions:\n" +
+            "      - addTag: 'GteMet'\n";
+
+        var script = new AutomationScript
+        {
+            Name = "GTE Script",
+            Code = yaml,
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        if (expectedApplied)
+        {
+            Assert.That(result.TagsToAdd, Contains.Item("GteMet"));
+        }
+        else
+        {
+            Assert.That(result.TagsToAdd, Does.Not.Contain("GteMet"));
+        }
+    }
+
+    [Test]
+    public void ShouldTreatEmptyWorkflowAsSuccess()
+    {
+        var script = new AutomationScript
+        {
+            Name = "Empty",
+            Code = "name: 'Empty'\nsteps: []\n",
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, new Torrent { Id = 1, Name = "x" });
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.OutputLog, Does.Contain("Empty YAML workflow"));
+    }
+
+    [Test]
+    public void ShouldApplyRemoveTagAndSetPriorityActions()
+    {
+        var torrent = new Torrent { Id = 1, Name = "Tagged" };
+        var yaml = "name: 'Tag and priority'\n" +
+            "steps:\n" +
+            "  - name: 'Adjust'\n" +
+            "    actions:\n" +
+            "      - removeTag: 'old'\n" +
+            "      - addTag: 'new'\n" +
+            "      - setPriority: 7\n";
+
+        var script = new AutomationScript
+        {
+            Name = "Adjust",
+            Code = yaml,
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TagsToAdd, Contains.Item("new"));
+        Assert.That(result.TagsToRemove, Contains.Item("old"));
+        Assert.That(result.NewPriority, Is.EqualTo(7));
+    }
 }
