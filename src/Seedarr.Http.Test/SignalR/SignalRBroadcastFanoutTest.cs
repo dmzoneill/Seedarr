@@ -101,5 +101,27 @@ public class SignalRBroadcastFanoutTest
         Assert.That(SignalRBroadcastFanout.TryGetPositiveInt(new { Id = 0 }, "Id"), Is.Null);
         Assert.That(SignalRBroadcastFanout.TryGetPositiveInt(null, "Id"), Is.Null);
         Assert.That(SignalRBroadcastFanout.TryGetPositiveInt(new { Id = 1 }, ""), Is.Null);
+        Assert.That(SignalRBroadcastFanout.TryGetPositiveInt(new { Id = (long)int.MaxValue + 1L }, "Id"), Is.Null);
+    }
+
+    [Test]
+    public void TryResolveScope_should_cover_remaining_resource_aliases()
+    {
+        Assert.That(SignalRBroadcastFanout.TryResolveScope("torrents", new { Id = 7 }, out var ch, out var id), Is.True);
+        Assert.That(ch, Is.EqualTo("torrents"));
+        Assert.That(id, Is.EqualTo(7));
+
+        Assert.That(SignalRBroadcastFanout.TryResolveScope("tracker", new { torrentId = 11 }, out ch, out id), Is.True);
+        Assert.That(ch, Is.EqualTo("trackers"));
+        Assert.That(id, Is.EqualTo(11));
+
+        Assert.That(SignalRBroadcastFanout.TryResolveScope("command", null, out ch, out _), Is.True);
+        Assert.That(ch, Is.EqualTo("system"));
+
+        Assert.That(SignalRBroadcastFanout.TryResolveScope("category", null, out ch, out _), Is.True);
+        Assert.That(ch, Is.EqualTo("activity"));
+
+        Assert.That(SignalRBroadcastFanout.TryResolveScope("seeding", null, out ch, out _), Is.True);
+        Assert.That(ch, Is.EqualTo("speeds"));
     }
 }
