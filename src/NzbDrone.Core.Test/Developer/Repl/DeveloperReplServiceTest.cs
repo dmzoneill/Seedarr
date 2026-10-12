@@ -179,4 +179,32 @@ public class DeveloperReplServiceTest
         Assert.That(functionType.ResultType, Is.EqualTo("string"));
         Assert.That(functionType.ResultJson, Does.Contain("function"));
     }
+
+    [Test]
+    public void Execute_string_literal_result_serializes_as_json_string()
+    {
+        var response = _subject.Execute(new ReplExecutionRequest { Code = "'hello repl'" });
+
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.ResultType, Is.EqualTo("string"));
+        Assert.That(response.ResultJson, Does.Contain("hello repl"));
+    }
+
+    [Test]
+    public void Execute_resolveService_is_available_without_provider()
+    {
+        var response = _subject.Execute(new ReplExecutionRequest { Code = "typeof resolveService('missing')" });
+
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.ResultJson, Does.Contain("object"));
+    }
+
+    [Test]
+    public void Execute_returning_function_serializes_as_function_type()
+    {
+        var response = _subject.Execute(new ReplExecutionRequest { Code = "(function add(a,b) { return a + b; })" });
+
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.ResultType, Is.EqualTo("function"));
+    }
 }
