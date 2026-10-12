@@ -86,6 +86,15 @@ public class ArchiveExtractorServiceTest
     }
 
     [Test]
+    public async Task ExtractTorrentArchiveAsync_null_torrent_returns_error()
+    {
+        var result = await _subject.ExtractTorrentArchiveAsync(null!);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("null"));
+    }
+
+    [Test]
     public async Task ExtractTorrentArchiveAsync_extracts_zip_and_preserves_source_archive()
     {
         var torrentDir = Path.Combine(_tempDir, "TorrentData");
