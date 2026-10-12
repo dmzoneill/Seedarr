@@ -189,4 +189,33 @@ public class ApiKeyAuthenticationHandlerTest
         Assert.That(result.Succeeded, Is.False);
         Assert.That(result.Failure?.Message, Is.EqualTo("Invalid API Key"));
     }
+
+    [Test]
+    public async Task HandleAuthenticateAsync_WhenValidApiKeyInAlternateHeader_Succeeds()
+    {
+        _configFileProvider.ApiKey.Returns("configured-secret-key");
+
+        var context = new DefaultHttpContext();
+        context.Request.Headers["ApiKey"] = "configured-secret-key";
+
+        var result = await AuthenticateAsync(context);
+
+        Assert.That(result.Succeeded, Is.True);
+    }
+
+    [Test]
+    public void GetProvidedApiKey_should_read_alternate_header_when_x_api_key_missing()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Headers["ApiKey"] = "from-alt-header";
+
+        Assert.That(ApiKeyAuthenticationHandler.GetProvidedApiKey(context.Request), Is.EqualTo("from-alt-header"));
+    }
+
+    [Test]
+    public void IsValidApiKey_should_handle_null_arguments()
+    {
+        Assert.That(ApiKeyAuthenticationHandler.IsValidApiKey(null, "key"), Is.False);
+        Assert.That(ApiKeyAuthenticationHandler.IsValidApiKey("key", null), Is.False);
+    }
 }

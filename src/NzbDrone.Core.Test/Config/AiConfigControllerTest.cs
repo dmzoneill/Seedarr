@@ -120,4 +120,79 @@ public class AiConfigControllerTest
         _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             (string)d["GeminiApiKey"] == "AIza-secret"));
     }
+
+    [Test]
+    public void SaveConfig_should_return_bad_request_when_body_is_null()
+    {
+        var result = _controller.SaveConfig(1, null);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        Assert.That(((BadRequestObjectResult)result.Result).Value, Is.EqualTo("Request body cannot be empty."));
+    }
+
+    [Test]
+    public void SaveConfig_should_preserve_existing_gemini_key_when_unchanged_sent()
+    {
+        _configService.GetValue("GeminiApiKey", string.Empty).Returns("AIza-secret");
+
+        var resource = new AiConfigResource
+        {
+            Id = 1,
+            ActiveAiProvider = "Gemini",
+            OllamaHost = "http://127.0.0.1:11434",
+            OllamaModel = "llama3",
+            GeminiApiKey = "(unchanged)",
+            GeminiModel = "gemini-2.0-flash",
+            OnnxModelPath = "/config/models/seedarr-ai.onnx",
+        };
+
+        var result = _controller.SaveConfig(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["GeminiApiKey"] == "AIza-secret"));
+    }
+
+    [Test]
+    public void SaveConfig_should_mask_gemini_key_in_accepted_response()
+    {
+        var resource = new AiConfigResource
+        {
+            Id = 1,
+            ActiveAiProvider = "Gemini",
+            OllamaHost = "http://127.0.0.1:11434",
+            OllamaModel = "llama3",
+            GeminiApiKey = "AIza-visible-key",
+            GeminiModel = "gemini-2.0-flash",
+            OnnxModelPath = "/config/models/seedarr-ai.onnx",
+        };
+
+        var result = _controller.SaveConfig(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        var accepted = (AcceptedResult)result.Result;
+        var body = (AiConfigResource)accepted.Value;
+        Assert.That(body.GeminiApiKey,
+            Is.EqualTo(GeneralConfigResourceMapper.GetMaskedApiKey("AIza-visible-key")));
+    }
+
+    [Test]
+    public void SaveConfig_should_reject_invalid_ollama_host()
+    {
+        var resource = new AiConfigResource
+        {
+            Id = 1,
+            ActiveAiProvider = "Ollama",
+            OllamaHost = "not-a-valid-url",
+            OllamaModel = "llama3",
+            GeminiModel = "gemini-2.0-flash",
+            OnnxModelPath = "/config/models/seedarr-ai.onnx",
+        };
+
+        var result = _controller.SaveConfig(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var errors = (IList<ValidationFailure>)((BadRequestObjectResult)result.Result).Value;
+        Assert.That(errors, Has.Some.Matches<ValidationFailure>(e => e.PropertyName == nameof(AiConfigResource.OllamaHost)));
+    }
 }
