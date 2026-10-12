@@ -25,7 +25,6 @@
     <Compile Remove="Config/**" />
     <Compile Remove="System/**" />
     <Compile Remove="Torrents/**" />
-    <Compile Remove="Deluge/**" />
     <Compile Remove="ArrIntegration/**" />
   </ItemGroup>
 </Project>
