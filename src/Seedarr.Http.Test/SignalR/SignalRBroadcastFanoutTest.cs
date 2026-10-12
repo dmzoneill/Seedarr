@@ -62,6 +62,19 @@ public class SignalRBroadcastFanoutTest
     }
 
     [Test]
+    public void Broadcast_should_target_channel_without_torrent_when_id_missing()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var message = new SignalRMessage { Name = "health", Action = ModelAction.Sync };
+
+        SignalRBroadcastFanout.Broadcast(broadcaster, message, channel: "health", torrentId: null);
+
+        broadcaster.Received(1).BroadcastMessage(message);
+        broadcaster.Received(1).BroadcastToChannel("health", message);
+        broadcaster.DidNotReceive().BroadcastToTorrent(Arg.Any<int>(), Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
     public void TryResolveScope_should_map_known_resources()
     {
         Assert.That(SignalRBroadcastFanout.TryResolveScope("trackers", new { TorrentId = 3 }, out var ch, out var id), Is.True);
