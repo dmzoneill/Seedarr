@@ -305,4 +305,42 @@ public class DeveloperDebuggerServiceTest
         Assert.That(snapshot.TimestampUtc, Is.Not.EqualTo(default(DateTime)));
         Assert.That(snapshot.VariablesJson, Is.EqualTo("{}"));
     }
+
+    [Test]
+    public void GetStatus_detects_dap_executable_on_path()
+    {
+        var dapDir = Path.Combine(Path.GetTempPath(), "dap_probe_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dapDir);
+        var dapPath = Path.Combine(dapDir, "netcoredbg");
+        File.WriteAllText(dapPath, string.Empty);
+        var oldPath = Environment.GetEnvironmentVariable("PATH");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PATH", dapDir + Path.PathSeparator + (oldPath ?? string.Empty));
+            var subject = new DeveloperDebuggerService();
+            var status = subject.GetStatus();
+
+            Assert.That(status.IsDapAvailable, Is.True);
+            Assert.That(status.DapPath, Is.EqualTo(dapPath));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", oldPath);
+            if (Directory.Exists(dapDir))
+            {
+                Directory.Delete(dapDir, true);
+            }
+        }
+    }
+
+    [Test]
+    public void GetSourceCode_for_known_type_without_physical_file_returns_metadata_outline()
+    {
+        var response = _subject.GetSourceCode("src/NzbDrone.Core/Torrents/Torrent.cs");
+
+        Assert.That(response.Exists, Is.True);
+        Assert.That(response.Content, Does.Contain("Torrent"));
+        Assert.That(response.LineCount, Is.GreaterThan(1));
+    }
 }

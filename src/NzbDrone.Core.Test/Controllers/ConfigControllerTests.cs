@@ -832,4 +832,17 @@ public class ConfigControllerTests
             _configService.SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d => d.Count == 0));
         });
     }
+
+    [Test]
+    public void GetApiKey_returns_configured_key()
+    {
+        _configFileProvider.ApiKey.Returns("configured-api-key-value");
+
+        var result = _controller.GetApiKey();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result.Result!;
+        var resource = (ApiKeyResource)ok.Value!;
+        Assert.That(resource.ApiKey, Is.EqualTo("configured-api-key-value"));
+    }
 }
