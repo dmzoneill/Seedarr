@@ -899,4 +899,123 @@ public class FastResumeServiceTest
         Assert.That(loaded.Progress, Is.EqualTo(1.0));
         _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 2 && b[0] && b[1]));
     }
+
+    [Test]
+    public void SaveFastResume_should_load_files_from_torrent_file_service_and_skip_padding()
+    {
+        var torrentFileService = Substitute.For<ITorrentFileService>();
+        var service = new FastResumeService(
+            new Lazy<ITorrentService>(() => _torrentService),
+            _pieceStorage,
+            _appFolderInfo,
+            torrentFileService,
+            null,
+            _pieceVerificationService,
+            _multiFilePieceStorage);
+
+        var releaseDir = Path.Combine(_tempAppDataFolder, "release");
+        Directory.CreateDirectory(releaseDir);
+        var wantedPath = Path.Combine(releaseDir, "wanted.dat");
+        File.WriteAllBytes(wantedPath, new byte[128]);
+
+        var torrent = new Torrent
+        {
+            Id = 9,
+            Name = "release",
+            InfoHash = "feedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+            SavePath = _tempAppDataFolder,
+            Progress = 1.0,
+            PieceCount = 1,
+            Status = TorrentStatus.Seeding,
+            Files = new List<TorrentFile>()
+        };
+
+        torrentFileService.GetByTorrentId(9).Returns(new List<TorrentFile>
+        {
+            new() { Path = "release/wanted.dat", Size = 128, Wanted = true, Priority = 7, IsPaddingFile = false },
+            new() { Path = "release/padding.dat", Size = 64, Wanted = true, Priority = 1, IsPaddingFile = true }
+        });
+
+        service.SaveFastResume(torrent);
+
+        var loaded = service.LoadFastResume(torrent.InfoHash);
+        Assert.That(loaded, Is.Not.Null);
+        Assert.That(loaded.Files, Has.Count.EqualTo(1));
+        Assert.That(loaded.Files[0].Path, Is.EqualTo("release/wanted.dat"));
+        Assert.That(loaded.FilePriority, Is.EqualTo(new List<int> { 7 }));
+        Assert.That(loaded.FinishedTime, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void SaveFastResume_should_record_zero_priority_for_unwanted_files()
+    {
+        var torrentFileService = Substitute.For<ITorrentFileService>();
+        var service = new FastResumeService(
+            new Lazy<ITorrentService>(() => _torrentService),
+            _pieceStorage,
+            _appFolderInfo,
+            torrentFileService,
+            null,
+            _pieceVerificationService,
+            _multiFilePieceStorage);
+
+        var torrent = new Torrent
+        {
+            Id = 11,
+            Name = "release",
+            InfoHash = "dededededededededededededededededededede",
+            SavePath = _tempAppDataFolder,
+            Progress = 1.0,
+            PieceCount = 1,
+            Status = TorrentStatus.Seeding,
+            Files = new List<TorrentFile>()
+        };
+
+        torrentFileService.GetByTorrentId(11).Returns(new List<TorrentFile>
+        {
+            new() { Path = "skip.me", Size = 10, Wanted = false, Priority = 5, IsPaddingFile = false }
+        });
+
+        service.SaveFastResume(torrent);
+
+        var resumePath = Path.Combine(_tempAppDataFolder, "fastresume", $"{torrent.InfoHash.ToLowerInvariant()}.fastresume");
+        Assert.That(File.Exists(resumePath), Is.True);
+        var loaded = FastResumeBencodeSerializer.DeserializeFromBytes(File.ReadAllBytes(resumePath));
+        Assert.That(loaded.FilePriority, Is.EqualTo(new List<int> { 0 }));
+    }
+
+    [Test]
+    public void LoadFastResume_by_info_hash_uses_FindByInfoHash_when_GetByInfoHash_missing()
+    {
+        var torrent = new Torrent
+        {
+            Id = 4,
+            InfoHash = "cccccccccccccccccccccccccccccccccccccccc",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 1,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns((Torrent)null);
+        _torrentService.FindByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        _service.SaveFastResume(torrent);
+        _pieceStorage.ClearReceivedCalls();
+
+        _service.LoadFastResume(torrent.InfoHash);
+
+        _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 1 && b[0]));
+    }
+
+    [Test]
+    public void SaveAll_and_LoadAll_should_noop_when_torrent_service_is_null()
+    {
+        var service = new FastResumeService(null, _pieceStorage, _appFolderInfo);
+
+        service.SaveAll();
+        service.LoadAll();
+
+        _pieceStorage.DidNotReceive().SetVerifiedPieces(Arg.Any<string>(), Arg.Any<bool[]>());
+    }
 }

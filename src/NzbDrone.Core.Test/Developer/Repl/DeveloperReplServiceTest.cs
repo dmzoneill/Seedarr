@@ -281,4 +281,63 @@ public class DeveloperReplServiceTest
         Assert.That(history, Has.Count.EqualTo(3));
         Assert.That(history[0].Code, Is.EqualTo("4"));
     }
+
+    [Test]
+    public void Execute_exposes_injected_domain_services_as_globals()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var seedingService = Substitute.For<ISeedingService>();
+        var configService = Substitute.For<IConfigService>();
+        var database = Substitute.For<IMainDatabase>();
+        var subject = new DeveloperReplService(
+            torrentService: torrentService,
+            seedingService: seedingService,
+            configService: configService,
+            mainDatabase: database);
+
+        var response = subject.Execute(new ReplExecutionRequest
+        {
+            Code = "typeof torrents !== 'undefined' && typeof engine !== 'undefined' && typeof config !== 'undefined' && typeof db !== 'undefined'",
+        });
+
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.ResultJson, Is.EqualTo("true"));
+    }
+
+    [Test]
+    public void Execute_console_log_formats_js_objects_and_multiple_arguments()
+    {
+        var response = _subject.Execute(new ReplExecutionRequest
+        {
+            Code = "console.log('a', 'b');",
+        });
+
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.Output, Does.Contain("a"));
+        Assert.That(response.Output, Does.Contain("b"));
+    }
+
+    [Test]
+    public void Execute_array_and_object_results_serialize_to_json()
+    {
+        var arrayResponse = _subject.Execute(new ReplExecutionRequest { Code = "[1, 2, 3]" });
+        Assert.That(arrayResponse.Success, Is.True);
+        Assert.That(arrayResponse.ResultType, Is.EqualTo("array"));
+        Assert.That(arrayResponse.ResultJson, Does.Contain("1"));
+
+        var objectResponse = _subject.Execute(new ReplExecutionRequest { Code = "({ ok: true, count: 2 })" });
+        Assert.That(objectResponse.Success, Is.True);
+        Assert.That(objectResponse.ResultType, Is.EqualTo("object"));
+        Assert.That(objectResponse.ResultJson, Does.Contain("ok"));
+    }
+
+    [Test]
+    public void Execute_null_result_serializes_as_null_type()
+    {
+        var response = _subject.Execute(new ReplExecutionRequest { Code = "null" });
+
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.ResultType, Is.EqualTo("null"));
+        Assert.That(response.ResultJson, Is.EqualTo("null"));
+    }
 }
