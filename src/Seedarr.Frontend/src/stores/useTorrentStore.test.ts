@@ -227,7 +227,11 @@ describe("useTorrentStore actions", () => {
     const store = useTorrentStore.getState();
     store.updateTelemetry([{ id: 1, status: "Seeding" }]);
     const snap = useTorrentStore.getState().telemetry;
-    store.updateTelemetry([null as unknown as { id: number }, { id: NaN }]);
+    store.updateTelemetry([
+      null as unknown as { id: number },
+      {} as { id: number },
+      { id: "bad" as unknown as number },
+    ]);
     assert.deepEqual(useTorrentStore.getState().telemetry, snap);
     store.selectAllIds([5, 6]);
     assert.deepEqual([...useTorrentStore.getState().selectedIds], [5, 6]);
