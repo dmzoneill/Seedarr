@@ -142,6 +142,45 @@ public class ExtendedConfigControllersTest
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
     }
 
+    [Test]
+    public void BitTorrent_SaveConfig_rejects_relative_script_path()
+    {
+        var controller = new BitTorrentConfigController(_configService);
+        var resource = ValidBitTorrentResource();
+        resource.OnDownloadCompleteScript = "scripts/on-complete.sh";
+
+        var result = controller.SaveConfig(null, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void BitTorrent_SaveConfig_accepts_absolute_script_path()
+    {
+        var controller = new BitTorrentConfigController(_configService);
+        var resource = ValidBitTorrentResource();
+        resource.OnDownloadCompleteScript = "/usr/local/bin/on-complete.sh";
+
+        var result = controller.SaveConfig(null, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+    }
+
+    [Test]
+    public void Network_SaveConfig_preserves_masked_proxy_password()
+    {
+        _configService.ProxyPassword.Returns("stored-proxy-secret");
+        var controller = new NetworkConfigController(_configService);
+        var resource = ValidNetworkResource();
+        resource.ProxyPassword = NetworkConfigResourceMapper.SecretMask;
+
+        var result = controller.SaveConfig(null, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        _configService.Received().SaveConfigDictionary(
+            Arg.Is<Dictionary<string, object>>(d => (string)d[nameof(NetworkConfigResource.ProxyPassword)] == "stored-proxy-secret"));
+    }
+
     private static PeerProtocolConfigResource ValidPeerProtocolResource()
     {
         return new PeerProtocolConfigResource
@@ -183,6 +222,34 @@ public class ExtendedConfigControllersTest
             SwarmPeerAnalysisDepth = 10,
             PrimaryClient = "qbittorrent",
             TrafficPatternProfile = "balanced",
+        };
+    }
+
+    private static BitTorrentConfigResource ValidBitTorrentResource()
+    {
+        return new BitTorrentConfigResource
+        {
+            EncryptionMode = "enabled",
+            AnnounceIntervalSeconds = 1800,
+            MinAnnounceIntervalSeconds = 60,
+            ScrapeIntervalSeconds = 900,
+            CustomScriptTimeoutSeconds = 60,
+        };
+    }
+
+    private static NetworkConfigResource ValidNetworkResource()
+    {
+        return new NetworkConfigResource
+        {
+            ListeningPort = 6881,
+            MaxGlobalConnections = 200,
+            MaxPerTorrentConnections = 50,
+            MaxUploadSlots = 4,
+            MaxConnectionsPerIp = 5,
+            MaximumHalfOpenConnections = 50,
+            PeerDscp = 0,
+            PeerTos = 0,
+            ProxyPort = 0,
         };
     }
 }
