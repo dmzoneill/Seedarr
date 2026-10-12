@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using NUnit.Framework;
 using NzbDrone.Core.Developer.Debugger;
 
@@ -252,5 +253,56 @@ public class DeveloperDebuggerServiceTest
 
         var snapshot = _subject.CaptureSnapshot(tracepoint.Id, new { variables = 2 }, "f.cs", 1);
         Assert.That(snapshot, Is.Not.Null);
+    }
+
+    [Test]
+    public void GetSourceCode_rejects_rooted_paths()
+    {
+        var response = _subject.GetSourceCode("/etc/passwd");
+
+        Assert.That(response.Exists, Is.False);
+        Assert.That(response.Content, Does.Contain("forbidden"));
+    }
+
+    [Test]
+    public void GetSourceCode_reads_physical_file_when_present_under_src()
+    {
+        var rel = "src/_debugger_source_probe/ProbeType.cs";
+        var full = Path.Combine(Directory.GetCurrentDirectory(), rel);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, "// probe line 1\n// probe line 2\n");
+
+        try
+        {
+            var response = _subject.GetSourceCode(rel);
+
+            Assert.That(response.Exists, Is.True);
+            Assert.That(response.Content, Does.Contain("probe line 1"));
+            Assert.That(response.LineCount, Is.GreaterThanOrEqualTo(2));
+        }
+        finally
+        {
+            if (File.Exists(full))
+            {
+                File.Delete(full);
+            }
+
+            var dir = Path.GetDirectoryName(full);
+            if (dir != null && Directory.Exists(dir))
+            {
+                Directory.Delete(dir, true);
+            }
+        }
+    }
+
+    [Test]
+    public void CaptureSnapshot_assigns_snapshot_id_and_timestamp_when_missing()
+    {
+        var snapshot = _subject.CaptureSnapshot(null, null, "auto.cs", 12);
+
+        Assert.That(snapshot, Is.Not.Null);
+        Assert.That(snapshot.SnapshotId, Is.Not.Empty);
+        Assert.That(snapshot.TimestampUtc, Is.Not.EqualTo(default(DateTime)));
+        Assert.That(snapshot.VariablesJson, Is.EqualTo("{}"));
     }
 }
