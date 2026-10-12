@@ -46,7 +46,7 @@ public class ConfigControllerTest
             ProxyPort = 8080,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>().Or.InstanceOf<BadRequestResult>());
     }
@@ -67,7 +67,7 @@ public class ConfigControllerTest
             ProxyPort = 8080,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>().Or.InstanceOf<BadRequestResult>());
     }
@@ -88,7 +88,7 @@ public class ConfigControllerTest
             ProxyPort = 8080,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>().Or.InstanceOf<BadRequestResult>());
     }
@@ -109,7 +109,7 @@ public class ConfigControllerTest
             ProxyPort = 8080,
         };
 
-        var result = _controller.SaveConfig(resource);
+        var result = _controller.SaveConfig(null, resource);
 
         Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
     }

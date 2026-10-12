@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using System.Linq;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -72,8 +73,9 @@ public class TorrentFilePriorityFixture
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
         var ok = (OkObjectResult)result;
         Assert.That(ok.Value, Is.Not.Null);
-        dynamic body = ok.Value!;
-        Assert.That(body.success, Is.True);
+        var successProp = ok.Value!.GetType().GetProperty("success", BindingFlags.Instance | BindingFlags.Public);
+        Assert.That(successProp, Is.Not.Null);
+        Assert.That(successProp!.GetValue(ok.Value), Is.True);
     }
 
     [Test]

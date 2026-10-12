@@ -19,12 +19,4 @@
     <PackageReference Include="NSubstitute" Version="6.2.0" />
   </ItemGroup>
 
-  <!-- Stale or duplicate of Core.Test / integration fixtures; enable incrementally -->
-  <ItemGroup>
-    <Compile Remove="Automation/**" />
-    <Compile Remove="Config/**" />
-    <Compile Remove="System/**" />
-    <Compile Remove="Torrents/**" />
-    <Compile Remove="ArrIntegration/**" />
-  </ItemGroup>
 </Project>
