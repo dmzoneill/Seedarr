@@ -642,6 +642,129 @@ public class TrackerBoostServiceTest
         _trackerRepository.Received(1).Delete(77);
     }
 
+    [Test]
+    public async Task HarvestFromProwlarrAsync_harvests_public_tracker_urls_from_indexer_api()
+    {
+        var prowlarrJson = """
+            [
+              {
+                "name": "PublicIndexer",
+                "privacy": "public",
+                "indexerUrls": ["udp://tracker.from.prowlarr.org:1337/announce"]
+              },
+              {
+                "name": "PrivateIndexer",
+                "privacy": "private",
+                "indexerUrls": ["udp://tracker.private.org:1337/announce"]
+              }
+            ]
+            """;
+
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            Assert.That(req.RequestUri!.AbsoluteUri, Does.EndWith("/api/v1/indexer"));
+            Assert.That(req.Headers.Contains("X-Api-Key"), Is.True);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(prowlarrJson) };
+        });
+        using var client = new HttpClient(handler);
+        TrackerBoostService.HttpClient = client;
+
+        _indexerRepository.All().Returns(new List<IndexerDefinition>
+        {
+            new() { Id = 1, Name = "Prowlarr", Url = "http://prowlarr.local:9696", ApiKey = "test-key" },
+        });
+        _trackerRepository.FindByUrl(Arg.Any<string>()).Returns((TrackerBoostTracker)null);
+        _trackerRepository.Insert(Arg.Any<TrackerBoostTracker>()).Returns(callInfo =>
+        {
+            var t = callInfo.Arg<TrackerBoostTracker>();
+            t.Id = 500;
+            return t;
+        });
+
+        var harvested = await _service.HarvestFromProwlarrAsync();
+
+        Assert.That(harvested, Is.EqualTo(1));
+        _trackerRepository.Received(1).Insert(Arg.Is<TrackerBoostTracker>(t =>
+            t.Url == "udp://tracker.from.prowlarr.org:1337/announce" && t.Source == TrackerSourceType.Prowlarr));
+        _trackerRepository.DidNotReceive().Insert(Arg.Is<TrackerBoostTracker>(t => t.Url.Contains("private.org")));
+    }
+
+    [Test]
+    public void InjectIntoDownloadClients_returns_success_count_from_enabled_clients()
+    {
+        const string infoHash = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd";
+        var clientDef = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", Enable = true, ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        downloadClient.AddTrackers(infoHash, Arg.Any<IEnumerable<string>>()).Returns(true);
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        var injected = _service.InjectIntoDownloadClients(infoHash, new[] { "udp://tracker.public.org:1337/announce" });
+
+        Assert.That(injected, Is.EqualTo(1));
+        downloadClient.Received(1).AddTrackers(infoHash, Arg.Any<IEnumerable<string>>());
+    }
+
+    [Test]
+    public async Task RecoverMissingTrackersAsync_adds_trackers_from_download_client_when_torrent_has_none()
+    {
+        var torrent = new Torrent
+        {
+            Id = 9,
+            Name = "Needs Trackers",
+            InfoHash = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            IsPrivate = false,
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _trackerEntryService.GetByTorrentId(9).Returns(new List<TrackerEntry>());
+
+        var clientDef = new DownloadClientDefinition { Id = 2, Name = "Deluge", Enable = true, ClientType = "Deluge" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        downloadClient.GetTrackers(torrent.InfoHash).Returns(new List<string> { "udp://recovered.tracker.org:1337/announce" });
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        var recovered = await _service.RecoverMissingTrackersAsync();
+
+        Assert.That(recovered, Is.EqualTo(1));
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(e =>
+            e.TorrentId == 9 && e.Url == "udp://recovered.tracker.org:1337/announce"));
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.TrackerUrl == "udp://recovered.tracker.org:1337/announce"));
+    }
+
+    [Test]
+    public async Task GetCrossMatrixAsync_includes_torrent_and_tracker_rows()
+    {
+        var torrent = new Torrent { Id = 3, Name = "Matrix Torrent", InfoHash = "1111222233334444555566667777888899990000", IsPrivate = false };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentService.Get(3).Returns(torrent);
+
+        var tracker = new TrackerBoostTracker
+        {
+            Id = 5,
+            Url = "udp://matrix.tracker.org:1337/announce",
+            Host = "matrix.tracker.org",
+            Port = 1337,
+            Protocol = TrackerProtocol.Udp,
+            Enabled = true,
+            Status = TrackerHealthStatus.Alive,
+        };
+        _trackerRepository.All().Returns(new List<TrackerBoostTracker> { tracker });
+        _trackerEntryService.GetByTorrentId(3).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 3, Url = tracker.Url },
+        });
+
+        var matrix = await _service.GetCrossMatrixAsync();
+
+        Assert.That(matrix.Torrents, Has.Count.EqualTo(1));
+        Assert.That(matrix.Torrents[0].TorrentName, Is.EqualTo("Matrix Torrent"));
+        Assert.That(matrix.Trackers, Has.Count.EqualTo(1));
+        Assert.That(matrix.Trackers[0].TrackerUrl, Is.EqualTo(tracker.Url));
+    }
+
     private sealed class FakeHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
