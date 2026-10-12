@@ -157,6 +157,14 @@ public class SidecarProcessHostTest
     }
 
     [Test]
+    public void CalculateBackoff_should_follow_exponential_steps_before_cap()
+    {
+        Assert.That(SidecarProcessHost.CalculateBackoff(1), Is.EqualTo(TimeSpan.FromSeconds(1)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(3), Is.EqualTo(TimeSpan.FromSeconds(4)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(5), Is.EqualTo(TimeSpan.FromSeconds(16)));
+    }
+
+    [Test]
     public void ProcessStdoutLine_should_ignore_blank_lines_and_invalid_json()
     {
         using var host = new SidecarProcessHost(_manifest, _tempDir);

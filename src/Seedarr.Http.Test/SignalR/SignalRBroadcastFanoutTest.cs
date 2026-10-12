@@ -137,4 +137,24 @@ public class SignalRBroadcastFanoutTest
         Assert.That(SignalRBroadcastFanout.TryResolveScope("seeding", null, out ch, out _), Is.True);
         Assert.That(ch, Is.EqualTo("speeds"));
     }
+
+    [Test]
+    public void Broadcast_should_skip_torrent_fanout_when_id_is_not_positive()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var message = new SignalRMessage { Name = "torrent", Action = ModelAction.Updated };
+
+        SignalRBroadcastFanout.Broadcast(broadcaster, message, channel: "torrents", torrentId: -3);
+
+        broadcaster.Received(1).BroadcastMessage(message);
+        broadcaster.Received(1).BroadcastToChannel("torrents", message);
+        broadcaster.DidNotReceive().BroadcastToTorrent(Arg.Any<int>(), Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void TryGetPositiveInt_should_ignore_negative_values()
+    {
+        Assert.That(SignalRBroadcastFanout.TryGetPositiveInt(new { Id = -1 }, "Id"), Is.Null);
+        Assert.That(SignalRBroadcastFanout.TryGetPositiveInt(new { Id = -5L }, "id"), Is.Null);
+    }
 }
