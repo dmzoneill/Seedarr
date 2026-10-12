@@ -583,6 +583,65 @@ public class TrackerBoostServiceTest
         _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 43 && t.Url == "udp://tracker.newtrackr.org:1337/announce"));
     }
 
+    [Test]
+    public void LogActivity_and_GetLogs_filter_by_category_and_level()
+    {
+        TrackerBoostService.ResetMetricsAndHistory();
+        _service.ClearLogs();
+
+        _service.LogActivity("info", "harvest", "harvested trackers");
+        _service.LogActivity("warn", "boost", "slow tracker", trackerUrl: "udp://example.com:80/announce");
+        _service.LogActivity("error", "harvest", "failed");
+
+        var all = _service.GetLogs(10, category: "harvest")
+            .Concat(_service.GetLogs(10, category: "boost"))
+            .ToList();
+        Assert.That(all.Count, Is.EqualTo(3));
+
+        var harvestOnly = _service.GetLogs(10, category: "harvest");
+        Assert.That(harvestOnly, Has.All.Matches<TrackerBoostLogEntry>(e => e.Category == "harvest"));
+
+        var warnings = _service.GetLogs(10, level: "warn");
+        Assert.That(warnings.Count, Is.EqualTo(1));
+        Assert.That(warnings[0].TrackerUrl, Does.Contain("example.com"));
+    }
+
+    [Test]
+    public void ClearLogs_removes_buffered_entries()
+    {
+        TrackerBoostService.ResetMetricsAndHistory();
+        _service.LogActivity("info", "test", "hello");
+        Assert.That(_service.GetLogs(5).Count, Is.GreaterThan(0));
+        _service.ClearLogs();
+        var remaining = _service.GetLogs(5);
+        Assert.That(remaining.Count, Is.EqualTo(1));
+        Assert.That(remaining[0].Message, Does.Contain("logs cleared"));
+    }
+
+    [Test]
+    public void UpdateSettings_persists_via_repository()
+    {
+        var settings = new TrackerBoostSettings
+        {
+            AutoHarvestEnabled = true,
+            AutoBoostEnabled = false,
+            MaxTrackersPerTorrent = 12,
+        };
+
+        _service.UpdateSettings(settings);
+
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (bool)d["TrackerBoostAutoHarvestEnabled"] && (int)d["TrackerBoostMaxTrackersPerTorrent"] == 12));
+    }
+
+    [Test]
+    public void DeleteTracker_removes_from_repository()
+    {
+        _trackerRepository.Get(77).Returns(new TrackerBoostTracker { Id = 77, Url = "udp://delete.me:1337/announce" });
+        _service.DeleteTracker(77);
+        _trackerRepository.Received(1).Delete(77);
+    }
+
     private sealed class FakeHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
