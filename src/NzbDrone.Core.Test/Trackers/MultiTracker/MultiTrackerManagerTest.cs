@@ -5,6 +5,8 @@ using System.Reflection;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network.Vpn;
+using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Core.Trackers.MultiTracker;
 
@@ -867,6 +869,63 @@ public class MultiTrackerManagerTest
         // Third sample: 0.2 * 50 + 0.8 * 120 = 10 + 96 = 106
         ema = MultiTrackerManager.CalculateResponseTimeEma(50.0, ema, 0.2);
         Assert.That(ema, Is.EqualTo(106.0).Within(0.001));
+    }
+
+    [Test]
+    public void Announce_should_defer_when_vpn_kill_switch_is_active()
+    {
+        var vpn = Substitute.For<IVpnKillSwitchService>();
+        vpn.IsFailClosedActive.Returns(true);
+        var manager = new MultiTrackerManager(
+            new List<ITrackerProvider> { _httpTracker, _udpTracker },
+            _configService,
+            serviceFactory: null,
+            vpnKillSwitchService: vpn);
+
+        var result = manager.Announce(
+            CreateRequest(),
+            new List<List<string>> { new() { "http://tracker.com/announce" } });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("VPN outage"));
+        _httpTracker.DidNotReceive().Announce(Arg.Any<TrackerAnnounceRequest>());
+    }
+
+    [Test]
+    public void Scrape_should_defer_when_vpn_kill_switch_is_active()
+    {
+        var vpn = Substitute.For<IVpnKillSwitchService>();
+        vpn.IsFailClosedActive.Returns(true);
+        var manager = new MultiTrackerManager(
+            new List<ITrackerProvider> { _httpTracker, _udpTracker },
+            _configService,
+            serviceFactory: null,
+            vpnKillSwitchService: vpn);
+
+        var result = manager.Scrape(
+            "abcd",
+            new List<List<string>> { new() { "http://tracker.com/announce" } });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("VPN outage"));
+    }
+
+    [Test]
+    public void Scrape_with_entry_should_return_invalid_when_url_missing()
+    {
+        var result = _manager.Scrape(new TrackerEntry { Url = "  " }, "abcd");
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo("Invalid tracker entry"));
+    }
+
+    [Test]
+    public void IsAuthorizedPrivateTrackerDomain_should_allow_subdomain_on_same_root()
+    {
+        Assert.That(
+            MultiTrackerManager.IsAuthorizedPrivateTrackerDomain(
+                "https://tracker.example.org/announce",
+                "https://mirror.tracker.example.org/announce"),
+            Is.True);
     }
 
     private static TrackerAnnounceRequest CreateRequest()

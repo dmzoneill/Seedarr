@@ -75,4 +75,22 @@ describe("normalizePieceMapWirePayload", () => {
     assert.equal(normalized.pieceIndex, undefined);
     assert.equal(normalized.pieceState, undefined);
   });
+
+  it("reads pieceIndices and State aliases", () => {
+    const normalized = normalizePieceMapWirePayload({
+      pieceIndices: [3, 4],
+      State: 1,
+      pieceIndex: 2,
+    });
+    assert.deepEqual(normalized.pieceIndices, [3, 4]);
+    assert.equal(normalized.pieceState, 1);
+    assert.equal(normalized.pieceIndex, 2);
+  });
+});
+
+describe("resolvePieceMapTorrentId InfoHash", () => {
+  it("reads PascalCase InfoHash for lookup", () => {
+    const id = resolvePieceMapTorrentId({ InfoHash: "ABCDEF" }, torrents);
+    assert.equal(id, 42);
+  });
 });

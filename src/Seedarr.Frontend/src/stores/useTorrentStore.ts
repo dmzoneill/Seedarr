@@ -455,120 +455,129 @@ export interface TorrentMetricsStats {
   uploadSpeed?: number | string;
 }
 
+export function computeAggregatedTorrentMetrics(
+  torrents: Torrent[] | undefined,
+  telemetry: Record<number, TorrentTelemetry>,
+  stats?: TorrentMetricsStats | null,
+): AggregatedTorrentMetrics {
+  let dl = 0;
+  let ul = 0;
+  let downloading = 0;
+  let seeding = 0;
+  let paused = 0;
+  let active = 0;
+  let seeders = 0;
+  let leechers = 0;
+  let uploadedSum = 0;
+  let downloadedSum = 0;
+  let ratioSum = 0;
+
+  const list = torrents ?? [];
+
+  for (const t of list) {
+    const tel = telemetry[t.id];
+    const effectiveDl = tel?.downloadSpeed ?? t.downloadSpeed ?? 0;
+    const effectiveUl = tel?.uploadSpeed ?? t.uploadSpeed ?? 0;
+    const effectiveStatus = (tel?.status ?? t.status ?? "").toLowerCase();
+    const effectiveRatio = tel?.ratio ?? t.ratio ?? 0;
+    const effectiveSeeders = tel?.seeders ?? t.seeders ?? 0;
+    const effectiveLeechers = tel?.leechers ?? t.leechers ?? 0;
+    const effectiveUploaded = tel?.uploaded ?? t.uploaded ?? 0;
+    const effectiveDownloaded = tel?.downloaded ?? t.downloaded ?? 0;
+
+    dl += effectiveDl;
+    ul += effectiveUl;
+    seeders += effectiveSeeders;
+    leechers += effectiveLeechers;
+    uploadedSum += effectiveUploaded;
+    downloadedSum += effectiveDownloaded;
+    ratioSum += effectiveRatio;
+
+    if (effectiveStatus === "downloading") {
+      downloading++;
+      active++;
+    } else if (
+      effectiveStatus === "seeding" ||
+      effectiveStatus === "completed"
+    ) {
+      seeding++;
+      if (effectiveStatus === "seeding") {
+        active++;
+      }
+    } else if (
+      effectiveStatus === "paused" ||
+      effectiveStatus === "stopped" ||
+      effectiveStatus === "idle"
+    ) {
+      paused++;
+    } else if (
+      effectiveStatus === "checking" ||
+      effectiveStatus === "allocating" ||
+      effectiveStatus === "metadata" ||
+      effectiveStatus === "active"
+    ) {
+      active++;
+    }
+  }
+
+  const calculatedAvgRatio =
+    list.length > 0
+      ? ratioSum / list.length
+      : (stats?.averageRatio ?? stats?.globalRatio ?? 0);
+
+  const statUl =
+    stats?.uploadSpeed !== undefined
+      ? Number(stats.uploadSpeed) || 0
+      : undefined;
+  const statDl =
+    stats?.downloadSpeed !== undefined
+      ? Number(stats.downloadSpeed) || 0
+      : undefined;
+
+  const resolvedUl = ul > 0 || statUl === undefined ? ul : statUl;
+  const resolvedDl = dl > 0 || statDl === undefined ? dl : statDl;
+  const resolvedActive =
+    list.length > 0 ? active : (stats?.activeTorrents ?? 0);
+
+  const totalUploaded = Math.max(stats?.totalUploaded ?? 0, uploadedSum);
+  const totalDownloaded = Math.max(
+    stats?.totalDownloaded ?? 0,
+    downloadedSum,
+  );
+  const averageRatio = stats?.averageRatio ?? calculatedAvgRatio;
+
+  return {
+    totalDlSpeed: dl,
+    totalUlSpeed: ul,
+    downloadSpeed: resolvedDl,
+    uploadSpeed: resolvedUl,
+    activeCount: resolvedActive,
+    activeTorrents: resolvedActive,
+    downloadingCount: downloading,
+    seedingCount: seeding,
+    pausedCount: paused,
+    totalSeeders: seeders,
+    totalLeechers: leechers,
+    peerConnections: seeders + leechers,
+    totalUploaded,
+    totalDownloaded,
+    averageRatio,
+    avgRatio: calculatedAvgRatio,
+    ratio: calculatedAvgRatio,
+    networkActivity: resolvedUl + resolvedDl,
+  };
+}
+
 export function useAggregatedTorrentMetrics(
   torrents?: Torrent[],
   stats?: TorrentMetricsStats | null,
 ): AggregatedTorrentMetrics {
   const telemetry = useTorrentStore((state) => state.telemetry);
 
-  return useMemo(() => {
-    let dl = 0;
-    let ul = 0;
-    let downloading = 0;
-    let seeding = 0;
-    let paused = 0;
-    let active = 0;
-    let seeders = 0;
-    let leechers = 0;
-    let uploadedSum = 0;
-    let downloadedSum = 0;
-    let ratioSum = 0;
-
-    const list = torrents ?? [];
-
-    for (const t of list) {
-      const tel = telemetry[t.id];
-      const effectiveDl = tel?.downloadSpeed ?? t.downloadSpeed ?? 0;
-      const effectiveUl = tel?.uploadSpeed ?? t.uploadSpeed ?? 0;
-      const effectiveStatus = (tel?.status ?? t.status ?? "").toLowerCase();
-      const effectiveRatio = tel?.ratio ?? t.ratio ?? 0;
-      const effectiveSeeders = tel?.seeders ?? t.seeders ?? 0;
-      const effectiveLeechers = tel?.leechers ?? t.leechers ?? 0;
-      const effectiveUploaded = tel?.uploaded ?? t.uploaded ?? 0;
-      const effectiveDownloaded = tel?.downloaded ?? t.downloaded ?? 0;
-
-      dl += effectiveDl;
-      ul += effectiveUl;
-      seeders += effectiveSeeders;
-      leechers += effectiveLeechers;
-      uploadedSum += effectiveUploaded;
-      downloadedSum += effectiveDownloaded;
-      ratioSum += effectiveRatio;
-
-      if (effectiveStatus === "downloading") {
-        downloading++;
-        active++;
-      } else if (
-        effectiveStatus === "seeding" ||
-        effectiveStatus === "completed"
-      ) {
-        seeding++;
-        if (effectiveStatus === "seeding") {
-          active++;
-        }
-      } else if (
-        effectiveStatus === "paused" ||
-        effectiveStatus === "stopped" ||
-        effectiveStatus === "idle"
-      ) {
-        paused++;
-      } else if (
-        effectiveStatus === "checking" ||
-        effectiveStatus === "allocating" ||
-        effectiveStatus === "metadata" ||
-        effectiveStatus === "active"
-      ) {
-        active++;
-      }
-    }
-
-    const calculatedAvgRatio =
-      list.length > 0
-        ? ratioSum / list.length
-        : (stats?.averageRatio ?? stats?.globalRatio ?? 0);
-
-    const statUl =
-      stats?.uploadSpeed !== undefined
-        ? Number(stats.uploadSpeed) || 0
-        : undefined;
-    const statDl =
-      stats?.downloadSpeed !== undefined
-        ? Number(stats.downloadSpeed) || 0
-        : undefined;
-
-    const resolvedUl = ul > 0 || statUl === undefined ? ul : statUl;
-    const resolvedDl = dl > 0 || statDl === undefined ? dl : statDl;
-    const resolvedActive =
-      list.length > 0 ? active : (stats?.activeTorrents ?? 0);
-
-    const totalUploaded = Math.max(stats?.totalUploaded ?? 0, uploadedSum);
-    const totalDownloaded = Math.max(
-      stats?.totalDownloaded ?? 0,
-      downloadedSum,
-    );
-    const averageRatio = stats?.averageRatio ?? calculatedAvgRatio;
-
-    return {
-      totalDlSpeed: dl,
-      totalUlSpeed: ul,
-      downloadSpeed: resolvedDl,
-      uploadSpeed: resolvedUl,
-      activeCount: resolvedActive,
-      activeTorrents: resolvedActive,
-      downloadingCount: downloading,
-      seedingCount: seeding,
-      pausedCount: paused,
-      totalSeeders: seeders,
-      totalLeechers: leechers,
-      peerConnections: seeders + leechers,
-      totalUploaded,
-      totalDownloaded,
-      averageRatio,
-      avgRatio: calculatedAvgRatio,
-      ratio: calculatedAvgRatio,
-      networkActivity: resolvedUl + resolvedDl,
-    };
-  }, [torrents, telemetry, stats]);
+  return useMemo(
+    () => computeAggregatedTorrentMetrics(torrents, telemetry, stats),
+    [torrents, telemetry, stats],
+  );
 }
 
 export function useHydratedTorrents(torrents?: Torrent[]): Torrent[] {

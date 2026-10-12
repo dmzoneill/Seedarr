@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { Torrent } from "../api/types";
 import {
   applyTelemetry,
+  computeAggregatedTorrentMetrics,
   isTelemetryStale,
   resolveTelemetryStatus,
   safeGetStorage,
@@ -302,5 +303,129 @@ describe("useTorrentStore edge cases", () => {
     store.updatePieceMap(6, { ranges: [[0, 3]] });
     store.updatePieceMap(6, { Cleared: true });
     assert.equal(useTorrentStore.getState().pieceMaps[6]?.bitfield.length, 0);
+  });
+
+  it("applies pieceIndices batches and ignores malformed ranges", () => {
+    const store = useTorrentStore.getState();
+    store.updatePieceMap(8, {
+      ranges: [[0, 1], ["bad" as unknown as number, 2]],
+      pieceIndices: [5, 6],
+    });
+    const map = useTorrentStore.getState().pieceMaps[8]!;
+    assert.ok(map.bitfield.length >= 1);
+  });
+});
+
+describe("computeAggregatedTorrentMetrics", () => {
+  it("aggregates speeds, status buckets, and peer counts", () => {
+    const torrents: Torrent[] = [
+      {
+        ...baseTorrent(),
+        id: 1,
+        status: "Downloading",
+        downloadSpeed: 100,
+        uploadSpeed: 10,
+        seeders: 2,
+        leechers: 1,
+        ratio: 1.5,
+      },
+      {
+        ...baseTorrent(),
+        id: 2,
+        status: "Seeding",
+        downloadSpeed: 0,
+        uploadSpeed: 500,
+        seeders: 4,
+        leechers: 0,
+        ratio: 2,
+      },
+      {
+        ...baseTorrent(),
+        id: 3,
+        status: "Paused",
+        downloadSpeed: 999,
+        uploadSpeed: 999,
+      },
+      {
+        ...baseTorrent(),
+        id: 4,
+        status: "Checking",
+        downloadSpeed: 50,
+        uploadSpeed: 5,
+      },
+    ];
+
+    const metrics = computeAggregatedTorrentMetrics(torrents, {
+      1: { status: "Downloading", downloadSpeed: 200, uploadSpeed: 20 },
+    });
+
+    assert.equal(metrics.downloadingCount, 1);
+    assert.equal(metrics.seedingCount, 1);
+    assert.equal(metrics.pausedCount, 1);
+    assert.equal(metrics.activeCount, 3);
+    assert.equal(metrics.totalDlSpeed, 1249);
+    assert.equal(metrics.totalUlSpeed, 1524);
+    assert.equal(metrics.peerConnections, 15);
+    assert.equal(metrics.networkActivity, metrics.uploadSpeed + metrics.downloadSpeed);
+  });
+
+  it("falls back to stats when torrent list is empty", () => {
+    const metrics = computeAggregatedTorrentMetrics([], {}, {
+      activeTorrents: 9,
+      downloadSpeed: "1200",
+      uploadSpeed: "800",
+      averageRatio: 3.5,
+      totalUploaded: 50_000,
+      totalDownloaded: 40_000,
+    });
+
+    assert.equal(metrics.activeTorrents, 9);
+    assert.equal(metrics.downloadSpeed, 1200);
+    assert.equal(metrics.uploadSpeed, 800);
+    assert.equal(metrics.averageRatio, 3.5);
+    assert.equal(metrics.totalUploaded, 50_000);
+  });
+});
+
+describe("applyTelemetry inactive branches", () => {
+  it("zeros speeds for fresh stopped and error statuses", () => {
+    const torrent = baseTorrent();
+    const stopped: TorrentTelemetry = {
+      status: "Stopped",
+      uploadSpeed: 100,
+      downloadSpeed: 200,
+      lastUpdated: Date.now(),
+    };
+    const mergedStopped = applyTelemetry(torrent, stopped);
+    assert.equal(mergedStopped.uploadSpeed, 0);
+    assert.equal(mergedStopped.downloadSpeed, 0);
+
+    const errorTel: TorrentTelemetry = {
+      status: "Error",
+      uploadSpeed: 50,
+      downloadSpeed: 50,
+      lastUpdated: Date.now(),
+    };
+    const mergedError = applyTelemetry(torrent, errorTel);
+    assert.equal(mergedError.uploadSpeed, 0);
+  });
+
+  it("merges progress and ratio from fresh telemetry", () => {
+    const torrent = baseTorrent();
+    torrent.progress = 0.1;
+    torrent.ratio = 0.5;
+    const fresh: TorrentTelemetry = {
+      status: "Seeding",
+      progress: 0.99,
+      ratio: 2.2,
+      uploaded: 500,
+      downloaded: 400,
+      lastUpdated: Date.now(),
+    };
+    const merged = applyTelemetry(torrent, fresh);
+    assert.equal(merged.progress, 0.99);
+    assert.equal(merged.ratio, 2.2);
+    assert.equal(merged.uploaded, 500);
+    assert.equal(merged.downloaded, 400);
   });
 });
