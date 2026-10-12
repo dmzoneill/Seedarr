@@ -1485,6 +1485,175 @@ public class NotificationControllerTest
     }
 
     [Test]
+    public void GetSchema_returns_factory_defaults_as_resources()
+    {
+        var definition = new NotificationDefinition
+        {
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+        };
+        _factory.GetDefaultDefinitions().Returns(new List<NotificationDefinition> { definition });
+
+        var result = _controller.GetSchema();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var resources = ((OkObjectResult)result.Result!).Value as List<NotificationResource>;
+        Assert.That(resources, Has.Count.EqualTo(1));
+        Assert.That(resources![0].Implementation, Is.EqualTo("Discord"));
+    }
+
+    [Test]
+    public void GetSchema_without_factory_returns_empty_list()
+    {
+        var controller = new NotificationController(_repository, _dispatcher, _scriptService, notificationFactory: null);
+
+        var result = controller.GetSchema();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var resources = ((OkObjectResult)result.Result!).Value as List<NotificationResource>;
+        Assert.That(resources, Is.Empty);
+    }
+
+    [Test]
+    public void Update_with_json_element_rejects_non_object_body()
+    {
+        using var doc = JsonDocument.Parse("\"not-an-object\"");
+        var result = _controller.Update(1, doc.RootElement);
+        Assert.That(result.Result, Is.InstanceOf<BadRequestResult>());
+    }
+
+    [Test]
+    public void Update_with_json_element_merges_partial_properties()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 7,
+            Name = "Webhook",
+            Implementation = "Webhook",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://example.com/hook\"}",
+        };
+        _repository.Get(7).Returns(existing);
+
+        using var doc = JsonDocument.Parse("{\"name\":\"Webhook Renamed\"}");
+        var result = _controller.Update(7, doc.RootElement);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Id == 7 && d.Name == "Webhook Renamed" && d.OnGrab));
+    }
+
+    [Test]
+    public void UpdateWithoutId_returns_bad_request_when_id_missing()
+    {
+        var result = _controller.UpdateWithoutId(new NotificationResource { Name = "x", OnGrab = true });
+        Assert.That(result.Result, Is.InstanceOf<BadRequestResult>());
+    }
+
+    [Test]
+    public void UpdateWithoutId_delegates_to_update_by_body_id()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 9,
+            Name = "Slack",
+            Implementation = "Slack",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://example.com/slack\"}",
+        };
+        _repository.Get(9).Returns(existing);
+
+        var resource = new NotificationResource
+        {
+            Id = 9,
+            Name = "Slack Renamed",
+            Implementation = "Slack",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://example.com/slack\"}",
+        };
+
+        var result = _controller.UpdateWithoutId(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d => d.Name == "Slack Renamed"));
+    }
+
+    [Test]
+    public async Task Test_returns_not_found_when_notification_missing()
+    {
+        _repository.Get(404).Returns((NotificationDefinition)null);
+
+        var result = await _controller.Test(404);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public async Task Test_dispatches_discord_webhook_and_returns_result()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 3,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+            Settings = "{\"webhookUrl\":\"https://example.com/discord\"}",
+        };
+        _repository.Get(3).Returns(existing);
+        _dispatcher.DispatchDetailedAsync(
+                Arg.Is("https://example.com/discord"),
+                Arg.Any<object>(),
+                Arg.Any<string>())
+            .Returns(Task.FromResult(new WebhookDispatchResult
+            {
+                Success = true,
+                Message = "ok",
+                StatusCode = HttpStatusCode.OK,
+            }));
+
+        var result = await _controller.Test(3);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var testResult = ((OkObjectResult)result.Result!).Value as NotificationTestResult;
+        Assert.That(testResult!.Success, Is.True);
+        await _dispatcher.Received(1).DispatchDetailedAsync(
+            Arg.Is("https://example.com/discord"),
+            Arg.Any<object>(),
+            Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task TestDirect_returns_bad_request_for_null_resource()
+    {
+        var result = await _controller.TestDirect(null);
+        Assert.That(result.Result, Is.InstanceOf<BadRequestResult>());
+    }
+
+    [Test]
+    public async Task TestDirect_routes_telegram_payload_through_webhook_dispatcher()
+    {
+        var resource = new NotificationResource
+        {
+            Name = "Telegram",
+            Implementation = "Telegram",
+            OnGrab = true,
+            Settings = "{\"botToken\":\"token\",\"chat_id\":\"12345\",\"url\":\"https://example.com/tg\"}",
+        };
+        _dispatcher.DispatchDetailedAsync(
+                Arg.Is("https://example.com/tg"),
+                Arg.Any<object>(),
+                Arg.Any<string>())
+            .Returns(Task.FromResult(new WebhookDispatchResult { Success = true, Message = "sent" }));
+
+        var result = await _controller.TestDirect(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var testResult = ((OkObjectResult)result.Result!).Value as NotificationTestResult;
+        Assert.That(testResult!.Success, Is.True);
+    }
+
+    [Test]
     public void NotificationController_should_have_proper_authorization_policies()
     {
         var classAttr = typeof(NotificationController).GetCustomAttribute<AuthorizeAttribute>();
