@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.31](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.31) - 2026-10-12
+
+### 🐛 Bug Fixes
+- fix(test): unblock Sonar Http tests stuck on SignalR coalesce
+
 ## [v2.3.30](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.30) - 2026-10-11
 
 ### 🔧 Maintenance & Improvements
