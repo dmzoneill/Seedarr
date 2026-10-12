@@ -299,7 +299,6 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
             if (action == ModelAction.Deleted)
             {
                 _lastBroadcastTimes.Remove(entityId);
-                _entityGenerations.Remove(entityId);
             }
         }
     }

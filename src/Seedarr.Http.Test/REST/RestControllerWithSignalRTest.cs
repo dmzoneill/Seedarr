@@ -57,6 +57,8 @@ public class TestControllerWithSignalR : RestControllerWithSignalR<TestResource,
 
     public ManualResetEventSlim BlockGetResourceById { get; set; }
 
+    public ManualResetEventSlim CoalesceMappingEntered { get; set; }
+
     public TestControllerWithSignalR(IBroadcastSignalRMessage broadcaster, TimeSpan? coalesceWindow = null)
         : base(broadcaster, null, coalesceWindow)
     {
@@ -66,6 +68,7 @@ public class TestControllerWithSignalR : RestControllerWithSignalR<TestResource,
     {
         if (BlockGetResourceById != null && model.Value == 2)
         {
+            CoalesceMappingEntered?.Set();
             BlockGetResourceById.Wait();
         }
 
@@ -279,7 +282,9 @@ public class RestControllerWithSignalRTest
     public void Coalesce_timer_does_not_emit_updated_after_deleted_while_broadcast_is_in_flight()
     {
         using var blockBroadcast = new ManualResetEventSlim(false);
+        using var mappingEntered = new ManualResetEventSlim(false);
         _controller.BlockGetResourceById = blockBroadcast;
+        _controller.CoalesceMappingEntered = mappingEntered;
 
         var first = new TestModel { Id = 50, Name = "Item", Value = 1 };
         var second = new TestModel { Id = 50, Name = "Item", Value = 2 };
@@ -287,9 +292,9 @@ public class RestControllerWithSignalRTest
         _controller.Handle(new ModelEvent<TestModel>(second, ModelAction.Updated));
         Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
 
-        Thread.Sleep(250);
+        Assert.That(mappingEntered.Wait(TimeSpan.FromSeconds(5)), Is.True, "Coalesce timer should start mapping before delete");
 
-        var deleteModel = new TestModel { Id = 50, Name = "DeletedItem", Value = 2 };
+        var deleteModel = new TestModel { Id = 50, Name = "DeletedItem", Value = 3 };
         _controller.Handle(new ModelEvent<TestModel>(deleteModel, ModelAction.Deleted));
 
         blockBroadcast.Set();
@@ -515,7 +520,7 @@ public class RestControllerWithSignalRTest
     {
         var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
         broadcaster.IsConnected.Returns(true);
-        var controller = new TestControllerWithSignalR(broadcaster, TimeSpan.FromMilliseconds(500));
+        using var controller = new TestControllerWithSignalR(broadcaster, TimeSpan.FromMilliseconds(500));
 
         var leading = new TestModel { Id = 2, Name = "Item", Value = 1 };
         controller.Handle(new ModelEvent<TestModel>(leading, ModelAction.Updated));
