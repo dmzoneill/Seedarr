@@ -116,6 +116,21 @@ public class FastResumeBencodeSerializerTests
     }
 
     [Test]
+    public void Serialize_falls_back_to_utf8_when_40_char_infohash_is_not_valid_hex()
+    {
+        var invalidHex = "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz";
+        var data = new FastResumeData { InfoHash = invalidHex };
+
+        var bytes = _serializer.Serialize(data);
+        var dict = new BencodeParser().Parse<BDictionary>(bytes);
+        var hashBytes = ((BString)dict["info-hash"]).Value.ToArray();
+
+        Assert.That(hashBytes.Length, Is.EqualTo(20));
+        var expectedPrefix = Encoding.UTF8.GetBytes(invalidHex)[..20];
+        Assert.That(hashBytes, Is.EqualTo(expectedPrefix));
+    }
+
+    [Test]
     public void Serialize_encodes_bitfield_and_piece_priorities()
     {
         var data = new FastResumeData

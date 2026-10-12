@@ -35,5 +35,7 @@ public class DuplicateRemotePathMappingExceptionTest
 
         Assert.That(ex.Message, Is.EqualTo("outer"));
         Assert.That(ex.InnerException, Is.SameAs(inner));
+        Assert.That(ex.Host, Is.Null);
+        Assert.That(ex.RemotePath, Is.Null);
     }
 }
