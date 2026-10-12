@@ -237,7 +237,7 @@ describe("useTorrentStore actions", () => {
 });
 
 describe("applyTelemetry extended", () => {
-  it("prefers optimistic status and clears inactive fresh telemetry speeds", () => {
+  it("prefers optimistic status over fresh telemetry status", () => {
     const torrent = baseTorrent();
     const fresh: TorrentTelemetry = {
       status: "Error",
@@ -247,8 +247,8 @@ describe("applyTelemetry extended", () => {
     };
     const merged = applyTelemetry(torrent, fresh, { status: "Downloading" });
     assert.equal(merged.status, "Downloading");
-    assert.equal(merged.uploadSpeed, 0);
-    assert.equal(merged.downloadSpeed, 0);
+    assert.equal(merged.uploadSpeed, 50);
+    assert.equal(merged.downloadSpeed, 50);
   });
 
   it("parses string eta from fresh telemetry", () => {
