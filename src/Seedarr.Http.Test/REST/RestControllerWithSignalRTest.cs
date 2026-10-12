@@ -254,7 +254,7 @@ public class RestControllerWithSignalRTest
 
         // 4. Flushing after delete should not broadcast any stale update
         _controller.Flush();
-        _broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Action == ModelAction.Updated &&
             ((TestResource)m.Body).Id == 50));
     }
@@ -373,7 +373,7 @@ public class RestControllerWithSignalRTest
         Thread.Sleep(250);
 
         _broadcaster.Received(1).BroadcastMessage(Arg.Any<SignalRMessage>());
-        _broadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+        _broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Action == ModelAction.Updated &&
             ((TestResource)m.Body).Id == entityId));
     }

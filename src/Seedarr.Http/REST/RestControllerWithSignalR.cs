@@ -350,7 +350,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
             if (resource != null)
             {
                 BroadcastResourceChange(action, resource);
-                if (action is ModelAction.Updated or ModelAction.Created)
+                if (action == ModelAction.Updated)
                 {
                     RecordSuccessfulBroadcast(model.Id);
                 }
