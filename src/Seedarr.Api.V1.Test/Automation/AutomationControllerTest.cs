@@ -149,7 +149,8 @@ public class AutomationControllerTest
             Name = "Updated Without Route ID"
         };
 
-        var result = _controller.Update(resource);
+        var body = JsonSerializer.SerializeToElement(new { id = resource.Id, name = resource.Name });
+        var result = _controller.Update(body);
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _automationService.Received(1).Update(Arg.Is<AutomationScript>(s => s.Id == 5));
@@ -166,7 +167,8 @@ public class AutomationControllerTest
             Name = "NonExistent Script"
         };
 
-        var result = _controller.Update(resource);
+        var body = JsonSerializer.SerializeToElement(new { id = resource.Id, name = resource.Name });
+        var result = _controller.Update(body);
 
         Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
         var notFoundResult = (NotFoundObjectResult)result.Result;
