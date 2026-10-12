@@ -598,4 +598,87 @@ public class ArchiveExtractorServiceTest
     {
         Assert.That(ArchiveExtractorService.GetTorrentDirectory(null), Is.Null);
     }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public void IsPrimaryArchive_blank_path_returns_false(string path)
+    {
+        Assert.That(_subject.IsPrimaryArchive(path), Is.False);
+    }
+
+    [Test]
+    public async Task ExtractTorrentArchiveAsync_no_primary_archives_returns_success_with_empty_list()
+    {
+        var torrentDir = Path.Combine(_tempDir, "NoArchives");
+        Directory.CreateDirectory(torrentDir);
+        File.WriteAllText(Path.Combine(torrentDir, "movie.mkv"), "video");
+
+        var torrent = new Torrent
+        {
+            Id = 100,
+            Name = "Plain.Video",
+            SavePath = torrentDir,
+        };
+
+        var result = await _subject.ExtractTorrentArchiveAsync(torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ExtractedFiles, Is.Empty);
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<ArchiveExtractionCompletedEvent>());
+    }
+
+    [Test]
+    public async Task ExtractTorrentArchiveAsync_fails_when_free_space_cannot_be_queried()
+    {
+        var torrentDir = Path.Combine(_tempDir, "TorrentDataUnknownSpace");
+        Directory.CreateDirectory(torrentDir);
+
+        var zipPath = Path.Combine(torrentDir, "Payload.zip");
+        CreateSampleZip(zipPath, "media.mkv", "payload");
+
+        var diskMock = Substitute.For<IDiskProvider>();
+        diskMock.GetAvailableFreeSpace(Arg.Any<string>()).Returns((long?)null);
+
+        var subject = new ArchiveExtractorService(_eventAggregator, diskMock);
+
+        var torrent = new Torrent
+        {
+            Id = 101,
+            Name = "Unknown.Space.Release",
+            SavePath = torrentDir,
+        };
+
+        var result = await subject.ExtractTorrentArchiveAsync(torrent);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("Failed to query free disk space"));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<ArchiveExtractionFailedEvent>(e => e.ErrorMessage.Contains("Failed to query free disk space")));
+    }
+
+    [Test]
+    public void ExtractArchiveFile_throws_when_free_space_cannot_be_queried()
+    {
+        var extractDir = Path.Combine(_tempDir, "DirectExtractUnknownSpace");
+        Directory.CreateDirectory(extractDir);
+
+        var zipPath = Path.Combine(_tempDir, "Direct.zip");
+        CreateSampleZip(zipPath, "inside.txt", "hello");
+
+        var diskMock = Substitute.For<IDiskProvider>();
+        diskMock.GetAvailableFreeSpace(Arg.Any<string>()).Returns((long?)null);
+
+        var subject = new ArchiveExtractorService(_eventAggregator, diskMock);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => subject.ExtractArchiveFile(zipPath, extractDir));
+        Assert.That(ex!.Message, Does.Contain("Failed to query free disk space"));
+    }
+
+    [TestCase("Release.zip.001", true)]
+    [TestCase("Release.zip.002", false)]
+    public void IsPrimaryArchive_classifies_split_zip_volumes(string fileName, bool expected)
+    {
+        var filePath = Path.Combine(_tempDir, fileName);
+        Assert.That(_subject.IsPrimaryArchive(filePath), Is.EqualTo(expected));
+    }
 }
