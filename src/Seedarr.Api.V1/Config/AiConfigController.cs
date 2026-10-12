@@ -64,10 +64,9 @@ public class AiConfigController : ConfigController<AiConfigResource>
         }
 
         var actionResult = base.SaveConfig(id, resource);
-        if (actionResult.Value != null)
+        if (actionResult.Result is AcceptedResult accepted && accepted.Value is AiConfigResource saved)
         {
-            actionResult.Value.GeminiApiKey =
-                GeneralConfigResourceMapper.GetMaskedApiKey(actionResult.Value.GeminiApiKey);
+            saved.GeminiApiKey = GeneralConfigResourceMapper.GetMaskedApiKey(saved.GeminiApiKey);
         }
 
         return actionResult;
