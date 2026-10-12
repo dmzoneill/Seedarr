@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { Torrent } from "../api/types";
 import {
@@ -6,8 +6,19 @@ import {
   isTelemetryStale,
   resolveTelemetryStatus,
   TELEMETRY_STATUS_STALE_MS,
+  useTorrentStore,
   type TorrentTelemetry,
 } from "./useTorrentStore";
+
+function resetTorrentStore(): void {
+  const state = useTorrentStore.getState();
+  state.clearTelemetry();
+  state.clearPieceMaps();
+  state.clearSelection();
+  state.clearOptimisticUpdates();
+}
+
+beforeEach(() => resetTorrentStore());
 
 describe("resolveTelemetryStatus", () => {
   it("uses REST status when telemetry is stale", () => {
@@ -108,5 +119,77 @@ describe("applyTelemetry", () => {
     const merged = applyTelemetry(torrent, fresh);
     assert.equal(merged.downloadSpeed, 5000);
     assert.equal(merged.uploadSpeed, 10);
+  });
+
+  it("zeros speeds for stale inactive torrents", () => {
+    const torrent = baseTorrent();
+    torrent.status = "Queued";
+    const stale: TorrentTelemetry = {
+      status: "Queued",
+      uploadSpeed: 100,
+      downloadSpeed: 200,
+      lastUpdated: Date.now() - 60_000,
+    };
+    const merged = applyTelemetry(torrent, stale);
+    assert.equal(merged.uploadSpeed, 0);
+    assert.equal(merged.downloadSpeed, 0);
+  });
+});
+
+describe("useTorrentStore actions", () => {
+  it("updateTelemetry merges speed aliases and purge removes stale entries", () => {
+    const store = useTorrentStore.getState();
+    store.updateTelemetry([
+      { id: 1, upSpeed: 11, downSpeed: 22, status: "Downloading" },
+    ]);
+    assert.equal(useTorrentStore.getState().telemetry[1]?.uploadSpeed, 11);
+    assert.equal(useTorrentStore.getState().telemetry[1]?.downloadSpeed, 22);
+
+    useTorrentStore.setState({
+      telemetry: {
+        1: { status: "Paused", lastUpdated: Date.now() - 10_000 },
+        2: { status: "Seeding", lastUpdated: Date.now() },
+      },
+    });
+    store.purgeStaleTelemetry(1000);
+    assert.equal(useTorrentStore.getState().telemetry[1], undefined);
+    assert.equal(useTorrentStore.getState().telemetry[2]?.status, "Seeding");
+  });
+
+  it("updatePieceMap applies ranges, corruption, and cleared resets", () => {
+    const store = useTorrentStore.getState();
+    store.updatePieceMap(9, { ranges: [[0, 2]] });
+    let map = useTorrentStore.getState().pieceMaps[9];
+    assert.ok(map);
+    assert.equal(map.version, 1);
+
+    store.updatePieceMap(9, { pieceIndex: 4, pieceState: 3 });
+    map = useTorrentStore.getState().pieceMaps[9]!;
+    assert.deepEqual(map.corruptedIndices, [4]);
+
+    store.updatePieceMap(9, { cleared: true });
+    map = useTorrentStore.getState().pieceMaps[9]!;
+    assert.equal(map.bitfield.length, 0);
+    assert.deepEqual(map.corruptedIndices, []);
+    assert.equal(map.version, 3);
+  });
+
+  it("selection, optimistic updates, and removeTorrent clean related state", () => {
+    const store = useTorrentStore.getState();
+    store.setSelectedIds([1, 2]);
+    store.toggleSelectedId(2);
+    assert.deepEqual([...useTorrentStore.getState().selectedIds], [1]);
+
+    store.setSelectedTorrentId(1);
+    store.updateTorrentOptimistic(1, { status: "Paused" });
+    store.updateTelemetry([{ id: 1, status: "Seeding" }]);
+    store.updatePieceMap(1, { pieceIndex: 0, pieceState: 1 });
+
+    store.removeTorrent(1);
+    const state = useTorrentStore.getState();
+    assert.equal(state.selectedTorrentId, null);
+    assert.equal(state.telemetry[1], undefined);
+    assert.equal(state.pieceMaps[1], undefined);
+    assert.equal(state.optimisticUpdates[1], undefined);
   });
 });
