@@ -213,4 +213,43 @@ public class DiscordSecurityServiceTest
             Assert.That(isValid, Is.False);
         });
     }
+
+    [Test]
+    public void VerifySignature_should_accept_millisecond_unix_timestamp()
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
+        var bodyBytes = Encoding.UTF8.GetBytes("{\"type\":1}");
+        var signatureHex = _service.GenerateSignature(_privateKeyHex, timestamp, bodyBytes);
+
+        var isValid = _service.VerifySignature(signatureHex, timestamp, bodyBytes, _publicKeyHex);
+
+        Assert.That(isValid, Is.True);
+    }
+
+    [Test]
+    public void VerifySignature_should_accept_null_body()
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        var signatureHex = _service.GenerateSignature(_privateKeyHex, timestamp, null);
+
+        Assert.That(_service.VerifySignature(signatureHex, timestamp, null, _publicKeyHex), Is.True);
+    }
+
+    [Test]
+    public void GenerateSignature_should_throw_when_private_key_or_timestamp_missing()
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        var bodyBytes = Encoding.UTF8.GetBytes("{\"type\":1}");
+
+        Assert.Throws<ArgumentException>(() => _service.GenerateSignature(null, timestamp, bodyBytes));
+        Assert.Throws<ArgumentException>(() => _service.GenerateSignature("  ", timestamp, bodyBytes));
+        Assert.Throws<ArgumentException>(() => _service.GenerateSignature(_privateKeyHex, null, bodyBytes));
+    }
+
+    [Test]
+    public void PurgeExpired_should_return_zero_when_cache_empty()
+    {
+        Assert.That(_service.ReplayCacheCount, Is.EqualTo(0));
+        Assert.That(_service.PurgeExpired(), Is.EqualTo(0));
+    }
 }
