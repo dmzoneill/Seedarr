@@ -1,4 +1,5 @@
 using System;
+using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -206,5 +207,78 @@ public class DeveloperReplServiceTest
 
         Assert.That(response.Success, Is.True);
         Assert.That(response.ResultType, Is.EqualTo("function"));
+    }
+
+    [Test]
+    public void Execute_console_levels_and_empty_log_capture_output()
+    {
+        var response = _subject.Execute(new ReplExecutionRequest
+        {
+            Code = "console.log(); console.info('i'); console.warn('w'); console.error('e');",
+        });
+
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.Output, Does.Contain("[INFO] i"));
+        Assert.That(response.Output, Does.Contain("[WARN] w"));
+        Assert.That(response.Output, Does.Contain("[ERROR] e"));
+    }
+
+    [Test]
+    public void Execute_resolveService_resolves_registered_service_by_name()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var services = new ServiceCollection();
+        services.AddSingleton(torrentService);
+        var provider = services.BuildServiceProvider();
+        var subject = new DeveloperReplService(serviceProvider: provider);
+
+        var response = subject.Execute(new ReplExecutionRequest
+        {
+            Code = "resolveService('ITorrentService') !== null && getService('ITorrentService') !== null",
+        });
+
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.ResultType, Is.EqualTo("boolean"));
+        Assert.That(response.ResultJson, Is.EqualTo("true"));
+    }
+
+    [Test]
+    public void Execute_timeout_returns_timeout_result_and_resets_session()
+    {
+        var response = _subject.Execute(new ReplExecutionRequest
+        {
+            Code = "while (true) { }",
+            TimeoutSeconds = 1,
+        });
+
+        Assert.That(response.Success, Is.False);
+        Assert.That(response.ResultType, Is.EqualTo("timeout"));
+        Assert.That(response.ErrorMessage, Does.Contain("timed out").IgnoreCase);
+
+        var afterReset = _subject.Execute(new ReplExecutionRequest { Code = "1 + 1", TimeoutSeconds = 5 });
+        Assert.That(afterReset.Success, Is.True);
+        Assert.That(afterReset.ResultJson, Does.Contain("2"));
+    }
+
+    [Test]
+    public void Execute_clamps_timeout_seconds_to_supported_range()
+    {
+        var response = _subject.Execute(new ReplExecutionRequest { Code = "40 + 2", TimeoutSeconds = 120 });
+
+        Assert.That(response.Success, Is.True);
+        Assert.That(response.ResultJson, Does.Contain("42"));
+    }
+
+    [Test]
+    public void GetHistory_returns_most_recent_entries_up_to_limit()
+    {
+        for (var i = 0; i < 5; i++)
+        {
+            _subject.Execute(new ReplExecutionRequest { Code = $"{i}" });
+        }
+
+        var history = _subject.GetHistory(3);
+        Assert.That(history, Has.Count.EqualTo(3));
+        Assert.That(history[0].Code, Is.EqualTo("4"));
     }
 }
