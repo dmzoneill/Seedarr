@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Reflection;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Mcp;
 using NzbDrone.Core.Plugins;
@@ -122,6 +124,68 @@ public class SidecarProcessHostTest
         using var host = new SidecarProcessHost(_manifest, _tempDir);
         host.Kill();
 
+        Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
+        Assert.That(host.PluginInfo.ProcessId, Is.Null);
+    }
+
+    [Test]
+    public void Constructor_should_require_manifest_and_directory()
+    {
+        Assert.Throws<ArgumentNullException>(() => new SidecarProcessHost(null, _tempDir));
+        Assert.Throws<ArgumentNullException>(() => new SidecarProcessHost(_manifest, null));
+    }
+
+    [Test]
+    public void IsRunning_should_be_false_when_not_started()
+    {
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        Assert.That(host.IsRunning, Is.False);
+    }
+
+    [Test]
+    public void CalculateBackoff_should_return_zero_for_non_positive_counts()
+    {
+        Assert.That(SidecarProcessHost.CalculateBackoff(0), Is.EqualTo(TimeSpan.Zero));
+        Assert.That(SidecarProcessHost.CalculateBackoff(-1), Is.EqualTo(TimeSpan.Zero));
+    }
+
+    [Test]
+    public void CalculateBackoff_should_cap_at_30_seconds()
+    {
+        Assert.That(SidecarProcessHost.CalculateBackoff(6), Is.EqualTo(TimeSpan.FromSeconds(30)));
+        Assert.That(SidecarProcessHost.CalculateBackoff(10), Is.EqualTo(TimeSpan.FromSeconds(30)));
+    }
+
+    [Test]
+    public void ProcessStdoutLine_should_ignore_blank_lines_and_invalid_json()
+    {
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        host.ProcessStdoutLine("   ");
+        host.ProcessStdoutLine("not-json");
+        Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
+    }
+
+    [Test]
+    public async Task ProcessStdoutLine_should_complete_pending_json_rpc_request()
+    {
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        var pendingField = typeof(SidecarProcessHost).GetField("_pendingRequests", BindingFlags.Instance | BindingFlags.NonPublic);
+        var pending = pendingField.GetValue(host) as System.Collections.Concurrent.ConcurrentDictionary<string, TaskCompletionSource<JsonRpcResponse>>;
+        var tcs = new TaskCompletionSource<JsonRpcResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        pending["42"] = tcs;
+
+        host.ProcessStdoutLine("{\"jsonrpc\":\"2.0\",\"id\":\"42\",\"result\":{\"ok\":true}}");
+
+        var response = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task StopAsync_should_mark_stopped_when_no_process_is_running()
+    {
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        await host.StopAsync();
         Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
         Assert.That(host.PluginInfo.ProcessId, Is.Null);
     }
