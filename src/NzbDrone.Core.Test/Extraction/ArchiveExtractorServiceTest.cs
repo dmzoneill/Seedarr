@@ -64,6 +64,8 @@ public class ArchiveExtractorServiceTest
     [TestCase("Release.Name.mp4", false)]
     [TestCase("Release.Name.nfo", false)]
     [TestCase("Release.Name.txt", false)]
+    [TestCase("Release.Name.tar.gz", true)]
+    [TestCase("Release.Name.tgz", true)]
     public void IsPrimaryArchive_correctly_classifies_archives(string fileName, bool expected)
     {
         var filePath = Path.Combine(_tempDir, fileName);
