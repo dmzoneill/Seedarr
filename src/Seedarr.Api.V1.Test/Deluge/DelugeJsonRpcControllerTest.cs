@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using NzbDrone.Core.RemotePathMappings;
 using System;
@@ -436,6 +437,7 @@ public class DelugeJsonRpcControllerTest
     [Test]
     public async Task WebUpdateUi_ReturnsDynamicFreeSpaceFromDiskSpaceService()
     {
+        _torrentService.GetAll().Returns(new List<Torrent>());
         _configService.DefaultSavePath.Returns("/downloads");
         _diskSpaceService.GetDiskSpaceForPath("/downloads").Returns(new DiskSpaceInfo
         {
@@ -549,7 +551,7 @@ public class DelugeJsonRpcControllerTest
     }
 
     [Test]
-    public void CoreGetTorrentsStatus_Remaps_SavePath_And_DownloadLocation_Outbound()
+    public async Task CoreGetTorrentsStatus_Remaps_SavePath_And_DownloadLocation_Outbound()
     {
         var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
         remotePathMappingService.RemapLocalToRemote("192.168.1.70", "/downloads/music")
@@ -585,11 +587,11 @@ public class DelugeJsonRpcControllerTest
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
         var doc = JsonDocument.Parse("""{"method":"core.get_torrents_status","params":[{},["save_path","download_location"]],"id":1}""");
-        var actionResult = controller.HandleJsonRpc(doc.RootElement);
-        var okResult = actionResult as OkObjectResult;
-        Assert.That(okResult, Is.Not.Null);
+        var actionResult = await controller.HandleRpc(doc.RootElement);
+        var jsonResult = actionResult as JsonResult;
+        Assert.That(jsonResult, Is.Not.Null);
 
-        var json = JsonSerializer.Serialize(okResult.Value);
+        var json = JsonSerializer.Serialize(jsonResult.Value);
         using var resDoc = JsonDocument.Parse(json);
         var resObj = resDoc.RootElement.GetProperty("result");
         var torrentObj = resObj.GetProperty("abcdefabcdefabcdefabcdefabcdefabcdefabcd");
@@ -598,7 +600,7 @@ public class DelugeJsonRpcControllerTest
     }
 
     [Test]
-    public void CoreMoveStorage_Remaps_Inbound_NewPath()
+    public async Task CoreMoveStorage_Remaps_Inbound_NewPath()
     {
         var remotePathMappingService = Substitute.For<IRemotePathMappingService>();
         remotePathMappingService.RemapRemoteToLocal("192.168.1.70", @"M:\Downloads\music")
@@ -633,8 +635,8 @@ public class DelugeJsonRpcControllerTest
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
         var doc = JsonDocument.Parse("""{"method":"core.move_storage","params":[["abcdefabcdefabcdefabcdefabcdefabcdefabcd"],"M:\\Downloads\\music"],"id":2}""");
-        var actionResult = controller.HandleJsonRpc(doc.RootElement);
-        Assert.That(actionResult, Is.InstanceOf<OkObjectResult>());
+        var actionResult = await controller.HandleRpc(doc.RootElement);
+        Assert.That(actionResult, Is.InstanceOf<JsonResult>());
         Assert.That(torrent.SourcePath, Is.EqualTo("/downloads/music"));
         Assert.That(torrent.SavePath, Is.EqualTo("/downloads/music"));
         _torrentService.Received(1).Update(torrent);
