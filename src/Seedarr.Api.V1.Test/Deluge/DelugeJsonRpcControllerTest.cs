@@ -664,7 +664,7 @@ public class DelugeJsonRpcControllerTest
         _torrentService.GetAll().Returns(new List<Torrent> { t1, t2 });
 
         // Filter by id array (case-insensitive)
-        var jsonIdArray = "{"method": "core.get_torrents_status", "params": [{"id": ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]}, ["name"]], "id": 101}";
+        var jsonIdArray = "{\"method\": \"core.get_torrents_status\", \"params\": [{\"id\": [\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"]}, [\"name\"]], \"id\": 101}";
         using (var doc = JsonDocument.Parse(jsonIdArray))
         {
             var actionResult = await _controller.HandleRpc(doc.RootElement);
@@ -678,7 +678,7 @@ public class DelugeJsonRpcControllerTest
         }
 
         // Filter by single string id
-        var jsonIdSingle = "{"method": "core.get_torrents_status", "params": [{"id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, ["name"]], "id": 102}";
+        var jsonIdSingle = "{\"method\": \"core.get_torrents_status\", \"params\": [{\"id\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}, [\"name\"]], \"id\": 102}";
         using (var doc = JsonDocument.Parse(jsonIdSingle))
         {
             var actionResult = await _controller.HandleRpc(doc.RootElement);
@@ -692,7 +692,7 @@ public class DelugeJsonRpcControllerTest
         }
 
         // Filter by hash array
-        var jsonHashArray = "{"method": "core.get_torrents_status", "params": [{"hash": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]}, ["name"]], "id": 103}";
+        var jsonHashArray = "{\"method\": \"core.get_torrents_status\", \"params\": [{\"hash\": [\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}, [\"name\"]], \"id\": 103}";
         using (var doc = JsonDocument.Parse(jsonHashArray))
         {
             var actionResult = await _controller.HandleRpc(doc.RootElement);
@@ -706,7 +706,7 @@ public class DelugeJsonRpcControllerTest
         }
 
         // Filter by empty id array -> returns 0 torrents
-        var jsonEmptyId = "{"method": "core.get_torrents_status", "params": [{"id": []}, ["name"]], "id": 104}";
+        var jsonEmptyId = "{\"method\": \"core.get_torrents_status\", \"params\": [{\"id\": []}, [\"name\"]], \"id\": 104}";
         using (var doc = JsonDocument.Parse(jsonEmptyId))
         {
             var actionResult = await _controller.HandleRpc(doc.RootElement);
@@ -750,7 +750,7 @@ public class DelugeJsonRpcControllerTest
         _torrentService.GetAll().Returns(new List<Torrent> { t1, t2, t3 });
 
         // Filter by category string
-        var jsonCat = "{"method": "core.get_torrents_status", "params": [{"category": "tv-sonarr"}, ["name"]], "id": 201}";
+        var jsonCat = "{\"method\": \"core.get_torrents_status\", \"params\": [{\"category\": \"tv-sonarr\"}, [\"name\"]], \"id\": 201}";
         using (var doc = JsonDocument.Parse(jsonCat))
         {
             var actionResult = await _controller.HandleRpc(doc.RootElement);
@@ -764,7 +764,7 @@ public class DelugeJsonRpcControllerTest
         }
 
         // Filter by category array
-        var jsonCatArray = "{"method": "core.get_torrents_status", "params": [{"category": ["tv-sonarr", "radarr"]}, ["name"]], "id": 202}";
+        var jsonCatArray = "{\"method\": \"core.get_torrents_status\", \"params\": [{\"category\": [\"tv-sonarr\", \"radarr\"]}, [\"name\"]], \"id\": 202}";
         using (var doc = JsonDocument.Parse(jsonCatArray))
         {
             var actionResult = await _controller.HandleRpc(doc.RootElement);
@@ -779,7 +779,7 @@ public class DelugeJsonRpcControllerTest
         }
 
         // Filter by label "None"
-        var jsonNone = "{"method": "core.get_torrents_status", "params": [{"label": "None"}, ["name"]], "id": 203}";
+        var jsonNone = "{\"method\": \"core.get_torrents_status\", \"params\": [{\"label\": \"None\"}, [\"name\"]], \"id\": 203}";
         using (var doc = JsonDocument.Parse(jsonNone))
         {
             var actionResult = await _controller.HandleRpc(doc.RootElement);
@@ -835,7 +835,7 @@ public class DelugeJsonRpcControllerTest
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
         _torrentFileService.GetByTorrentId(99).Returns(new List<TorrentFile> { file1, file2 });
 
-        var json = "{"method": "core.get_torrents_status", "params": [{}, ["total_done", "total_remaining", "is_finished", "num_files", "files", "file_progress", "file_priorities"]], "id": 301}";
+        var json = "{\"method\": \"core.get_torrents_status\", \"params\": [{}, [\"total_done\", \"total_remaining\", \"is_finished\", \"num_files\", \"files\", \"file_progress\", \"file_priorities\"]], \"id\": 301}";
         using var doc = JsonDocument.Parse(json);
 
         var actionResult = await _controller.HandleRpc(doc.RootElement);
