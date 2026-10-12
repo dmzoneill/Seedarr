@@ -81,4 +81,26 @@ public class FallbackProcessSessionBackpressureTest
         Assert.That(read, Is.EqualTo(0));
         Assert.That(session.IsActive, Is.False);
     }
+
+    [Test]
+    [CancelAfter(10000)]
+    public async Task WriteAsync_and_resize_are_noop_after_kill()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Assert.Ignore("Fallback shell test targets Unix redirect pipes");
+        }
+
+        var cwd = Environment.GetEnvironmentVariable("HOME") ?? "/tmp";
+        var session = FallbackProcessSession.Start(cwd, 80, 24);
+        session.Kill();
+        session.Kill();
+
+        var payload = Encoding.UTF8.GetBytes("echo noop\n");
+        await session.WriteAsync(payload, CancellationToken.None);
+        session.Resize(120, 40);
+        await session.DisposeAsync();
+
+        Assert.That(session.IsActive, Is.False);
+    }
 }
