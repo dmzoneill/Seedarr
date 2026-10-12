@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);SA1203;SA1208;SA1210;SA1501;SA1502;SA1503;SA1315;SA1316;SA1515;IDE0005;CA1869;CA2012;CS4014;CS8632</NoWarn>
+    <EnableAnalyzers>false</EnableAnalyzers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NzbDrone.Core\Seedarr.Core.csproj" />
+    <ProjectReference Include="..\Seedarr.Api.V1\Seedarr.Api.V1.csproj" />
+    <ProjectReference Include="..\Seedarr.Http\Seedarr.Http.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSubstitute" Version="6.2.0" />
+  </ItemGroup>
+
+  <!-- Stale or duplicate of Core.Test / integration fixtures; enable incrementally -->
+  <ItemGroup>
+    <Compile Remove="Automation/**" />
+    <Compile Remove="Config/**" />
+    <Compile Remove="System/**" />
+    <Compile Remove="Torrents/**" />
+    <Compile Remove="Deluge/**" />
+    <Compile Remove="ArrIntegration/**" />
+  </ItemGroup>
+</Project>

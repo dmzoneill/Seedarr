@@ -158,6 +158,16 @@ jobs:
             --blame-hang-timeout 5min \
             --results-directory "${{ github.workspace }}/TestResults" \
             --collect:"XPlat Code Coverage;Format=opencover" || true
+
+          dotnet test src/Seedarr.Api.V1.Test/Seedarr.Api.V1.Test.csproj \
+            --configuration Release \
+            --no-build \
+            --settings .github/runsettings.ci.xml \
+            --filter "TestCategory!=Slow" \
+            --blame-hang \
+            --blame-hang-timeout 5min \
+            --results-directory "${{ github.workspace }}/TestResults" \
+            --collect:"XPlat Code Coverage;Format=opencover" || true
           set -e
           if [ "$CORE_TEST_RC" -ne 0 ] || [ "$HTTP_TEST_RC" -ne 0 ]; then
             echo "::warning::Unit tests failed (Core=$CORE_TEST_RC Http=$HTTP_TEST_RC); continuing Sonar upload for coverage."

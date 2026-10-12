@@ -677,7 +677,7 @@ public class TransmissionRpcControllerTest
             Method = "torrent-get",
             Arguments = new Dictionary<string, JsonElement>
             {
-                ["fields"] = JsonDocument.Parse("["id", "downloadDir"]").RootElement,
+                ["fields"] = JsonDocument.Parse("[\"id\", \"downloadDir\"]").RootElement,
             },
         };
 
@@ -714,7 +714,7 @@ public class TransmissionRpcControllerTest
             Method = "torrent-get",
             Arguments = new Dictionary<string, JsonElement>
             {
-                ["fields"] = JsonDocument.Parse("["id", "labels"]").RootElement,
+                ["fields"] = JsonDocument.Parse("[\"id\", \"labels\"]").RootElement,
             },
         };
 
@@ -878,7 +878,7 @@ public class TransmissionRpcControllerTest
             Method = "torrent-get",
             Arguments = new Dictionary<string, JsonElement>
             {
-                ["fields"] = JsonDocument.Parse("["id", "name", "downloadDir"]").RootElement,
+                ["fields"] = JsonDocument.Parse("[\"id\", \"name\", \"downloadDir\"]").RootElement,
             },
         };
 
@@ -934,7 +934,7 @@ public class TransmissionRpcControllerTest
             Arguments = new Dictionary<string, JsonElement>
             {
                 ["ids"] = JsonDocument.Parse("[10]").RootElement,
-                ["location"] = JsonDocument.Parse(""Z:\\Downloads\\tv"").RootElement,
+                ["location"] = JsonSerializer.SerializeToElement(@"Z:\Downloads\tv"),
                 ["move"] = JsonDocument.Parse("false").RootElement,
             },
         };
