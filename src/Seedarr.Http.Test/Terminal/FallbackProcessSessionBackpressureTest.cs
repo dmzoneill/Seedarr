@@ -62,4 +62,23 @@ public class FallbackProcessSessionBackpressureTest
             session.Kill();
         }
     }
+
+    [Test]
+    [CancelAfter(10000)]
+    public async Task ReadAsync_returns_zero_after_kill()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Assert.Ignore("Fallback shell test targets Unix redirect pipes");
+        }
+
+        var cwd = Environment.GetEnvironmentVariable("HOME") ?? "/tmp";
+        var session = FallbackProcessSession.Start(cwd, 80, 24);
+        session.Kill();
+
+        var buffer = new byte[16];
+        var read = await session.ReadAsync(buffer, CancellationToken.None);
+        Assert.That(read, Is.EqualTo(0));
+        Assert.That(session.IsActive, Is.False);
+    }
 }

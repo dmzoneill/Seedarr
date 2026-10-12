@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using NUnit.Framework;
 using NzbDrone.Common.Composition;
@@ -85,5 +86,27 @@ public class AssemblyLoaderTest
 
         Assert.Throws<HostStartupException>(() =>
             container.AutoAddServices(new List<string> { "Seedarr.Missing.Assembly.ForTests" }));
+    }
+
+    [Test]
+    public void Load_throws_HostStartupException_when_dll_on_disk_is_not_a_valid_assembly()
+    {
+        var assemblyName = "Seedarr.Invalid.Assembly.ForLoaderTests";
+        var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, assemblyName + ".dll");
+        File.WriteAllText(path, "not a managed assembly");
+        try
+        {
+            var ex = Assert.Throws<HostStartupException>(() =>
+                AssemblyLoader.Load(new List<string> { assemblyName }));
+
+            Assert.That(ex!.Message, Does.Contain(assemblyName));
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
     }
 }

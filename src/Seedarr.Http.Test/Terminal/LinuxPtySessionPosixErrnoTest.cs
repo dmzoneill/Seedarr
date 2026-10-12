@@ -23,7 +23,8 @@ public class LinuxPtySessionPosixErrnoTest
             Assert.That(NativePty.Chdir(missing), Is.EqualTo(-1));
             var pinvokeErrno = Marshal.GetLastPInvokeError();
             Assert.That(pinvokeErrno, Is.GreaterThan(0), "ENOENT or similar POSIX errno expected");
-            Assert.That(Marshal.GetLastWin32Error(), Is.EqualTo(0), "GetLastWin32Error is not reliable for libc on Linux");
+            // Some .NET runtimes mirror libc errno into GetLastWin32Error; production code must use GetLastPInvokeError.
+            _ = Marshal.GetLastWin32Error();
         }
         finally
         {
