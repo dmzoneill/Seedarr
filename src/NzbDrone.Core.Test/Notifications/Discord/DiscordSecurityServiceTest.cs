@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Reflection;
 using System.Text;
 using NUnit.Framework;
 using NzbDrone.Core.Notifications.Discord;
@@ -251,5 +253,41 @@ public class DiscordSecurityServiceTest
     {
         Assert.That(_service.ReplayCacheCount, Is.EqualTo(0));
         Assert.That(_service.PurgeExpired(), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void PurgeExpired_should_remove_only_expired_replay_entries()
+    {
+        var cache = GetReplayCache();
+        cache["expired-sig"] = DateTimeOffset.UtcNow.AddMinutes(-1);
+        cache["fresh-sig"] = DateTimeOffset.UtcNow.AddMinutes(10);
+
+        var purged = _service.PurgeExpired();
+
+        Assert.That(purged, Is.EqualTo(1));
+        Assert.That(_service.ReplayCacheCount, Is.EqualTo(1));
+        Assert.That(cache.ContainsKey("fresh-sig"), Is.True);
+    }
+
+    [Test]
+    public void VerifySignature_should_replace_expired_replay_entry_with_fresh_signature()
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        var bodyBytes = Encoding.UTF8.GetBytes("{\"type\":1}");
+        var signatureHex = _service.GenerateSignature(_privateKeyHex, timestamp, bodyBytes);
+
+        var cache = GetReplayCache();
+        cache[signatureHex] = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        var isValid = _service.VerifySignature(signatureHex, timestamp, bodyBytes, _publicKeyHex);
+
+        Assert.That(isValid, Is.True);
+        Assert.That(_service.ReplayCacheCount, Is.EqualTo(1));
+    }
+
+    private ConcurrentDictionary<string, DateTimeOffset> GetReplayCache()
+    {
+        var field = typeof(DiscordSecurityService).GetField("_replayCache", BindingFlags.Instance | BindingFlags.NonPublic);
+        return (ConcurrentDictionary<string, DateTimeOffset>)field!.GetValue(_service)!;
     }
 }
