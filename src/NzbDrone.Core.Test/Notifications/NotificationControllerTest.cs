@@ -1638,10 +1638,10 @@ public class NotificationControllerTest
             Name = "Telegram",
             Implementation = "Telegram",
             OnGrab = true,
-            Settings = "{\"botToken\":\"token\",\"chat_id\":\"12345\",\"url\":\"https://example.com/tg\"}",
+            Settings = "{\"botToken\":\"token\",\"chat_id\":\"12345\"}",
         };
         _dispatcher.DispatchDetailedAsync(
-                Arg.Is("https://example.com/tg"),
+                Arg.Is("https://api.telegram.org/bottoken/sendMessage"),
                 Arg.Any<object>(),
                 Arg.Any<string>())
             .Returns(Task.FromResult(new WebhookDispatchResult { Success = true, Message = "sent" }));
