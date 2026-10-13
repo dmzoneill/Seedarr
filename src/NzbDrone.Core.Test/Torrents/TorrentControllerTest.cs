@@ -914,7 +914,16 @@ public class TorrentControllerTest
             m.Action == ModelAction.Created &&
             ((TorrentResource)m.Body).Id == 42));
 
+        // First update after create broadcasts immediately (Created does not start coalesce window)
         _controller.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TorrentResource)m.Body).Id == 42));
+
+        // Rapid second update within coalesce window is queued
+        var secondUpdate = new Torrent { Id = 42, Name = "Lifecycle Torrent", Downloaded = 1024 };
+        _controller.Handle(new ModelEvent<Torrent>(secondUpdate, ModelAction.Updated));
         Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
 
         _controller.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
@@ -924,7 +933,7 @@ public class TorrentControllerTest
         Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
 
         _controller.Flush();
-        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Action == ModelAction.Updated &&
             ((TorrentResource)m.Body).Id == 42));
     }

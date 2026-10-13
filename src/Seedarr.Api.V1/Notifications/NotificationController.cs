@@ -532,6 +532,16 @@ public class NotificationController : Controller
             var result = httpMethod == HttpMethod.Put
                 ? await _webhookDispatcher.DispatchDetailedAsync(targetUrl, payload, customHeaders, httpMethod)
                 : await _webhookDispatcher.DispatchDetailedAsync(targetUrl, payload, customHeaders);
+
+            if (result == null)
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = "Webhook dispatcher returned no result.",
+                });
+            }
+
             return Ok(new NotificationTestResult
             {
                 Success = result.Success,
