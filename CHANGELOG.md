@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v2.3.32](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.32) - 2026-10-13
+
+### ✨ Features
+- Add or update GitHub Actions workflows
+- Add or update GitHub Actions workflows
+
+### 🐛 Bug Fixes
+- fix(test): correct Telegram endpoint mock and SignalR coalesce assertions
+- fix(ci): restore hardened ai-responder workflow after sync
+- fix(ai-config): mask Gemini key on accepted save response
+- fix(test): ignore non-numeric telemetry update rows in store test
+- fix(test): correct applyTelemetry optimistic status expectation
+
+### 🔧 Maintenance & Improvements
+- test(coverage): expand TrackerBoost service paths for overall Sonar 80%
+- test(coverage): enable full Api.V1.Test suite in Sonar job
+- test(coverage): enable Deluge emulator API tests in Sonar job
+- test(coverage): wire Seedarr.Api.V1.Test into Sonar for overall 80%
+- test(coverage): emulator lifecycle integration for overall Sonar 80%
+- test(coverage): emulator APIs and Deluge filters for overall Sonar 80%
+- test(coverage): raise overall Sonar coverage toward 80%
+- test(coverage): cover Discord replay cache purge and expiry paths
+- test(coverage): cover Discord timestamp branches and terminal teardown
+- test(coverage): add fanout and sidecar backoff branch tests
+- test(coverage): close Sonar new-code gap and stabilize PTY errno test
+- test(coverage): cover DuplicateRemotePathMappingException constructors
+- test(coverage): cover Broadcast channel-only fanout path
+- test(coverage): cover remaining SignalRBroadcastFanout branches
+- test(coverage): raise new-code branch coverage for Sonar gate
+- test(coverage): extend FastResume and REPL tests for Sonar gate
+- test(repl): cover console levels, resolver, and timeout paths
+- test(sonar): fix stores coverage exclusion and hash tests
+- test(sonar): raise new-code coverage toward 80% gate
+- test(sonar): extend useTorrentStore coverage for piece maps and telemetry
+- test(sonar): raise frontend coverage for torrent store and piece map wire
+- test(sonar): cover archive edge cases and config save paths
+- test(sonar): cover debugger DAP probe, archive null torrent, and API key
+- test(sonar): cover extended config controllers and repl edge cases
+- test(sonar): cover ConfigController base paths and debugger source IO
+- test(sonar): extend CustomScriptController path and event coverage
+- test(sonar): cover NotificationController schema, JSON update, and test APIs
+- test(sonar): fix SignalR coalesce assertions and extend sidecar coverage
+
 ## [v2.3.31](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.31) - 2026-10-12
 
 ### 🐛 Bug Fixes
