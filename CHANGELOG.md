@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.0](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.0) - 2026-10-14
+
+### 🔧 Maintenance & Improvements
+- release: [bump:major] promote Seedarr to version 3.0.0
+- release: [bump:major] promote Seedarr to version 3.0.0
+
 ## [v2.3.32](https://github.com/dmzoneill/Seedarr/releases/tag/v2.3.32) - 2026-10-13
 
 ### ✨ Features
