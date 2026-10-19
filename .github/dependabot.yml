@@ -1,0 +1,51 @@
+---
+# Managed by https://github.com/dmzoneill/dmzoneill setup.sh.
+# Entries follow manifests detected in this repository.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+  - package-ecosystem: "npm"
+    directory: "/src/Seedarr.Frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      npm:
+        patterns:
+          - "*"
+  - package-ecosystem: "nuget"
+    directories:
+      - "/src"
+      - "/src/NzbDrone.Automation.Test"
+      - "/src/NzbDrone.Common"
+      - "/src/NzbDrone.Console"
+      - "/src/NzbDrone.Core"
+      - "/src/NzbDrone.Core.Test"
+      - "/src/NzbDrone.Host"
+      - "/src/NzbDrone.Integration.Test"
+      - "/src/NzbDrone.SignalR"
+      - "/src/Seedarr.Api.V1"
+      - "/src/Seedarr.Api.V1.Test"
+      - "/src/Seedarr.Http"
+      - "/src/Seedarr.Http.Test"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      nuget:
+        patterns:
+          - "*"
