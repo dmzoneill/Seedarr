@@ -1,7 +1,6 @@
-using System.Net;
-using NzbDrone.Core.RemotePathMappings;
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -10,6 +9,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Transmission;

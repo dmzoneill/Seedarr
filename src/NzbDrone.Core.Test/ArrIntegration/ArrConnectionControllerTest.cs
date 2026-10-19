@@ -7,11 +7,11 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using NzbDrone.Core.Authentication;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.ArrIntegration.Webhook;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Test.TestHelpers;
 using Seedarr.Api.V1.ArrIntegration;
 

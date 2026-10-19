@@ -647,20 +647,81 @@ public class ArchiveExtractorService : IArchiveExtractorService
 
         try
         {
-        if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-        {
-            using var zipArchive = ZipFile.OpenRead(archivePath);
-            foreach (var entry in zipArchive.Entries)
+            if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrEmpty(entry.Name))
+                using var zipArchive = ZipFile.OpenRead(archivePath);
+                foreach (var entry in zipArchive.Entries)
                 {
-                    continue;
+                    if (string.IsNullOrEmpty(entry.Name))
+                    {
+                        continue;
+                    }
+
+                    var fullDestinationPath = Path.GetFullPath(Path.Combine(canonicalTargetDir, entry.FullName));
+                    if (!fullDestinationPath.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new SecurityException($"Zip-Slip path traversal detected: {entry.FullName}");
+                    }
+
+                    var parentDir = Path.GetDirectoryName(fullDestinationPath);
+                    if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
+                    {
+                        Directory.CreateDirectory(parentDir);
+                    }
+
+                    using (var entryStream = entry.Open())
+                    {
+                        WriteBoundedDecompressedStream(
+                            entryStream,
+                            fullDestinationPath,
+                            entry.FullName,
+                            entry.Length,
+                            entry.CompressedLength,
+                            totalUncompressedSize,
+                            ref archiveBytesWritten);
+                    }
+
+                    var fileInfo = new FileInfo(fullDestinationPath);
+                    if (fileInfo.LinkTarget != null)
+                    {
+                        var resolvedLink = Path.IsPathRooted(fileInfo.LinkTarget)
+                            ? Path.GetFullPath(fileInfo.LinkTarget)
+                            : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(fullDestinationPath) ?? canonicalTargetDir, fileInfo.LinkTarget));
+
+                        if (!resolvedLink.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            try
+                            {
+                                File.Delete(fullDestinationPath);
+                            }
+                            catch
+                            {
+                                // Ignore deletion failure
+                            }
+
+                            throw new SecurityException($"Zip-Slip path traversal detected: {entry.FullName} -> {fileInfo.LinkTarget}");
+                        }
+                    }
+
+                    extractedFiles.Add(fullDestinationPath);
                 }
 
-                var fullDestinationPath = Path.GetFullPath(Path.Combine(canonicalTargetDir, entry.FullName));
+                return extractedFiles;
+            }
+
+            using var archive = ArchiveFactory.OpenArchive(archivePath);
+            foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
+            {
+                var entryKey = entry.Key;
+                if (string.IsNullOrEmpty(entryKey))
+                {
+                    entryKey = Path.GetFileName(archivePath);
+                }
+
+                var fullDestinationPath = Path.GetFullPath(Path.Combine(canonicalTargetDir, entryKey));
                 if (!fullDestinationPath.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new SecurityException($"Zip-Slip path traversal detected: {entry.FullName}");
+                    throw new SecurityException($"Zip-Slip path traversal detected: {entryKey}");
                 }
 
                 var parentDir = Path.GetDirectoryName(fullDestinationPath);
@@ -669,14 +730,14 @@ public class ArchiveExtractorService : IArchiveExtractorService
                     Directory.CreateDirectory(parentDir);
                 }
 
-                using (var entryStream = entry.Open())
+                using (var entryStream = entry.OpenEntryStream())
                 {
                     WriteBoundedDecompressedStream(
                         entryStream,
                         fullDestinationPath,
-                        entry.FullName,
-                        entry.Length,
-                        entry.CompressedLength,
+                        entryKey,
+                        entry.Size,
+                        entry.CompressedSize,
                         totalUncompressedSize,
                         ref archiveBytesWritten);
                 }
@@ -699,73 +760,12 @@ public class ArchiveExtractorService : IArchiveExtractorService
                             // Ignore deletion failure
                         }
 
-                        throw new SecurityException($"Zip-Slip path traversal detected: {entry.FullName} -> {fileInfo.LinkTarget}");
+                        throw new SecurityException($"Zip-Slip path traversal detected: {entryKey} -> {fileInfo.LinkTarget}");
                     }
                 }
 
                 extractedFiles.Add(fullDestinationPath);
             }
-
-            return extractedFiles;
-        }
-
-        using var archive = ArchiveFactory.OpenArchive(archivePath);
-        foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
-        {
-            var entryKey = entry.Key;
-            if (string.IsNullOrEmpty(entryKey))
-            {
-                entryKey = Path.GetFileName(archivePath);
-            }
-
-            var fullDestinationPath = Path.GetFullPath(Path.Combine(canonicalTargetDir, entryKey));
-            if (!fullDestinationPath.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new SecurityException($"Zip-Slip path traversal detected: {entryKey}");
-            }
-
-            var parentDir = Path.GetDirectoryName(fullDestinationPath);
-            if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
-            {
-                Directory.CreateDirectory(parentDir);
-            }
-
-            using (var entryStream = entry.OpenEntryStream())
-            {
-                WriteBoundedDecompressedStream(
-                    entryStream,
-                    fullDestinationPath,
-                    entryKey,
-                    entry.Size,
-                    entry.CompressedSize,
-                    totalUncompressedSize,
-                    ref archiveBytesWritten);
-            }
-
-            var fileInfo = new FileInfo(fullDestinationPath);
-            if (fileInfo.LinkTarget != null)
-            {
-                var resolvedLink = Path.IsPathRooted(fileInfo.LinkTarget)
-                    ? Path.GetFullPath(fileInfo.LinkTarget)
-                    : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(fullDestinationPath) ?? canonicalTargetDir, fileInfo.LinkTarget));
-
-                if (!resolvedLink.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        File.Delete(fullDestinationPath);
-                    }
-                    catch
-                    {
-                        // Ignore deletion failure
-                    }
-
-                    throw new SecurityException($"Zip-Slip path traversal detected: {entryKey} -> {fileInfo.LinkTarget}");
-                }
-            }
-
-            extractedFiles.Add(fullDestinationPath);
-        }
         }
         catch
         {

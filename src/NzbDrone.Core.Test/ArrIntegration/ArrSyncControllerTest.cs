@@ -2,8 +2,8 @@ using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using NSubstitute;
 using NUnit.Framework;
-using NzbDrone.Core.Authentication;
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.Authentication;
 using Seedarr.Api.V1.ArrIntegration;
 
 namespace NzbDrone.Core.Test.ArrIntegration;

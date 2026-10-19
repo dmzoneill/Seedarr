@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.IO.Compression;
+using System.Linq;
 using Microsoft.Data.Sqlite;
 using NSubstitute;
 using NUnit.Framework;

@@ -1,12 +1,12 @@
 using System.Collections.Generic;
-using System.Reflection;
 using System.Linq;
+using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using NzbDrone.Core.Authentication;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -1133,13 +1133,13 @@ public class IndexerControllerTest
 
         var xml = @"<?xml version=""1.0""?>
 <rss version=""2.0"">
-  <channel>
-    <item>
-      <title>Ubuntu Linux 24.04</title>
-      <guid>http://example.com/item/1</guid>
-      <torznab:attr name=""seeders"" value=""50"" xmlns:torznab=""http://torznab.com/schemas/2015/feed""/>
-    </item>
-  </channel>
+    <channel>
+        <item>
+            <title>Ubuntu Linux 24.04</title>
+            <guid>http://example.com/item/1</guid>
+            <torznab:attr name=""seeders"" value=""50"" xmlns:torznab=""http://torznab.com/schemas/2015/feed""/>
+        </item>
+    </channel>
 </rss>";
 
         var handler = new FakeRoutingHttpMessageHandler(req =>
@@ -1212,9 +1212,9 @@ public class IndexerControllerTest
 
         string ItemXml(string title, int seeders) => $@"
     <item>
-      <title>{title}</title>
-      <guid>http://example.com/{title}</guid>
-      <torznab:attr name=""seeders"" value=""{seeders}"" xmlns:torznab=""http://torznab.com/schemas/2015/feed""/>
+        <title>{title}</title>
+        <guid>http://example.com/{title}</guid>
+        <torznab:attr name=""seeders"" value=""{seeders}"" xmlns:torznab=""http://torznab.com/schemas/2015/feed""/>
     </item>";
 
         var xmlA = $"<?xml version=\"1.0\"?>\n<rss version=\"2.0\">\n  <channel>\n{ItemXml("Release-A-100", 100)}\n{ItemXml("Release-A-90", 90)}\n{ItemXml("Release-A-80", 80)}\n  </channel>\n</rss>";

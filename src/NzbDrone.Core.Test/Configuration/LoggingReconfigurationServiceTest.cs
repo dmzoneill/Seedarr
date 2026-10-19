@@ -5,9 +5,9 @@ using NLog.Config;
 using NLog.Targets;
 using NLog.Targets.Wrappers;
 using NSubstitute;
-using NzbDrone.Common.Instrumentation;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Common.Instrumentation;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Lifecycle;
 

@@ -647,16 +647,16 @@ public class TrackerBoostServiceTest
     {
         var prowlarrJson = """
             [
-              {
-                "name": "PublicIndexer",
-                "privacy": "public",
-                "indexerUrls": ["udp://tracker.from.prowlarr.org:1337/announce"]
-              },
-              {
-                "name": "PrivateIndexer",
-                "privacy": "private",
-                "indexerUrls": ["udp://tracker.private.org:1337/announce"]
-              }
+                {
+                    "name": "PublicIndexer",
+                    "privacy": "public",
+                    "indexerUrls": ["udp://tracker.from.prowlarr.org:1337/announce"]
+                },
+                {
+                    "name": "PrivateIndexer",
+                    "privacy": "private",
+                    "indexerUrls": ["udp://tracker.private.org:1337/announce"]
+                }
             ]
             """;
 
