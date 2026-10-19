@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.8](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.8) - 2026-10-19
+
+### 🐛 Bug Fixes
+- fix: correct Super-linter whitespace, import order, and shell formatting
+
 ## [v3.0.7](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.7) - 2026-10-19
 
 ### ✨ Features
