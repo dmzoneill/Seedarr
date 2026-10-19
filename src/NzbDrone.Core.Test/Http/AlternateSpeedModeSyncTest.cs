@@ -11,9 +11,9 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Deluge;
-using Seedarr.Http.Security;
 using Seedarr.Api.V1.QBittorrent;
 using Seedarr.Api.V1.Transmission;
+using Seedarr.Http.Security;
 
 namespace NzbDrone.Core.Test.Http;
 

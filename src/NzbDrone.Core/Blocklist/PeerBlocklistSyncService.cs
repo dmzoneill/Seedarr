@@ -319,302 +319,302 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
 
         try
         {
-        if (response.StatusCode == HttpStatusCode.NotModified)
-        {
-            bool hasLoadedTree;
-            lock (_syncLock)
-            {
-                hasLoadedTree = _tree != null && _rules.Count > 0;
-            }
-
-            if (!hasLoadedTree)
-            {
-                _logger.Warn("Blocklist at {0} returned 304 Not Modified but in-memory tree is empty. Retrying with unconditional request.", effectiveUrl);
-                response.Dispose();
-                var fallbackRequest = new HttpRequestMessage(HttpMethod.Get, effectiveUrl);
-                try
-                {
-                    response = await _httpClient.SendAsync(fallbackRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    now = _nowProvider();
-                    _logger.Error(ex, "Failed to download blocklist fallback from {0}", effectiveUrl);
-                    return RecordTransportFailure(ex, now, cancellationToken);
-                }
-            }
-        }
-
-        now = _nowProvider();
-
-        lock (_syncLock)
-        {
-            _metadata.LastCheckedUtc = now;
-            _metadata.LastSyncHttpStatus = response.StatusCode;
-
             if (response.StatusCode == HttpStatusCode.NotModified)
             {
-                var hasLoadedTree = _tree != null && _rules.Count > 0;
+                bool hasLoadedTree;
+                lock (_syncLock)
+                {
+                    hasLoadedTree = _tree != null && _rules.Count > 0;
+                }
+
                 if (!hasLoadedTree)
                 {
-                    _metadata.ConsecutiveFailures++;
-                    _metadata.LastSyncStatus = "Failed: 304 Not Modified with no blocklist loaded";
-                    _metadata.LastFailureMessage = _metadata.LastSyncStatus;
+                    _logger.Warn("Blocklist at {0} returned 304 Not Modified but in-memory tree is empty. Retrying with unconditional request.", effectiveUrl);
+                    response.Dispose();
+                    var fallbackRequest = new HttpRequestMessage(HttpMethod.Get, effectiveUrl);
+                    try
+                    {
+                        response = await _httpClient.SendAsync(fallbackRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        now = _nowProvider();
+                        _logger.Error(ex, "Failed to download blocklist fallback from {0}", effectiveUrl);
+                        return RecordTransportFailure(ex, now, cancellationToken);
+                    }
+                }
+            }
 
-                    _logger.Warn(
-                        "Blocklist at {0} returned 304 Not Modified but in-memory tree is still empty after fallback.",
-                        effectiveUrl);
+            now = _nowProvider();
+
+            lock (_syncLock)
+            {
+                _metadata.LastCheckedUtc = now;
+                _metadata.LastSyncHttpStatus = response.StatusCode;
+
+                if (response.StatusCode == HttpStatusCode.NotModified)
+                {
+                    var hasLoadedTree = _tree != null && _rules.Count > 0;
+                    if (!hasLoadedTree)
+                    {
+                        _metadata.ConsecutiveFailures++;
+                        _metadata.LastSyncStatus = "Failed: 304 Not Modified with no blocklist loaded";
+                        _metadata.LastFailureMessage = _metadata.LastSyncStatus;
+
+                        _logger.Warn(
+                            "Blocklist at {0} returned 304 Not Modified but in-memory tree is still empty after fallback.",
+                            effectiveUrl);
+
+                        return new BlocklistSyncResult
+                        {
+                            Success = false,
+                            IsNotModified = true,
+                            Status = _metadata.LastSyncStatus,
+                            HttpStatusCode = HttpStatusCode.NotModified,
+                            RuleCount = _rules.Count,
+                            Message = "Server returned 304 Not Modified but no blocklist rules are loaded"
+                        };
+                    }
+
+                    _logger.Info("Blocklist at {0} is unchanged (304 Not Modified). Skipping re-parse.", effectiveUrl);
+                    _metadata.LastSyncStatus = "Sync Skipped (Not Modified)";
+                    _metadata.ConsecutiveFailures = 0;
 
                     return new BlocklistSyncResult
                     {
-                        Success = false,
+                        Success = true,
                         IsNotModified = true,
                         Status = _metadata.LastSyncStatus,
                         HttpStatusCode = HttpStatusCode.NotModified,
                         RuleCount = _rules.Count,
-                        Message = "Server returned 304 Not Modified but no blocklist rules are loaded"
+                        Message = "Blocklist is unchanged (304 Not Modified)"
                     };
                 }
 
-                _logger.Info("Blocklist at {0} is unchanged (304 Not Modified). Skipping re-parse.", effectiveUrl);
-                _metadata.LastSyncStatus = "Sync Skipped (Not Modified)";
-                _metadata.ConsecutiveFailures = 0;
-
-                return new BlocklistSyncResult
+                if (response.StatusCode == HttpStatusCode.TooManyRequests || response.StatusCode == HttpStatusCode.ServiceUnavailable)
                 {
-                    Success = true,
-                    IsNotModified = true,
-                    Status = _metadata.LastSyncStatus,
-                    HttpStatusCode = HttpStatusCode.NotModified,
-                    RuleCount = _rules.Count,
-                    Message = "Blocklist is unchanged (304 Not Modified)"
-                };
-            }
+                    _metadata.ConsecutiveFailures++;
+                    var retrySpan = ParseRetryAfter(response, now);
+                    if (!retrySpan.HasValue)
+                    {
+                        var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
+                        retrySpan = CalculateExponentialBackoff(retryCount);
+                    }
 
-            if (response.StatusCode == HttpStatusCode.TooManyRequests || response.StatusCode == HttpStatusCode.ServiceUnavailable)
-            {
-                _metadata.ConsecutiveFailures++;
-                var retrySpan = ParseRetryAfter(response, now);
-                if (!retrySpan.HasValue)
-                {
-                    var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
-                    retrySpan = CalculateExponentialBackoff(retryCount);
+                    _metadata.NextAllowedSyncUtc = now.Add(retrySpan.Value);
+                    _metadata.LastSyncStatus = $"Rate Limited by Provider (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
+                    _metadata.LastFailureMessage = $"HTTP {(int)response.StatusCode} {response.StatusCode}";
+
+                    _logger.Warn(
+                        "Upstream blocklist provider rate-limited ({0}). Backing off until {1}.",
+                        response.StatusCode,
+                        _metadata.NextAllowedSyncUtc.Value);
+
+                    return new BlocklistSyncResult
+                    {
+                        Success = false,
+                        IsRateLimited = true,
+                        Status = _metadata.LastSyncStatus,
+                        HttpStatusCode = response.StatusCode,
+                        NextAllowedSyncUtc = _metadata.NextAllowedSyncUtc,
+                        RuleCount = _rules.Count,
+                        Message = $"Rate limited by upstream provider. Retry after {retrySpan.Value}."
+                    };
                 }
 
-                _metadata.NextAllowedSyncUtc = now.Add(retrySpan.Value);
-                _metadata.LastSyncStatus = $"Rate Limited by Provider (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
-                _metadata.LastFailureMessage = $"HTTP {(int)response.StatusCode} {response.StatusCode}";
-
-                _logger.Warn(
-                    "Upstream blocklist provider rate-limited ({0}). Backing off until {1}.",
-                    response.StatusCode,
-                    _metadata.NextAllowedSyncUtc.Value);
-
-                return new BlocklistSyncResult
+                if (!response.IsSuccessStatusCode)
                 {
-                    Success = false,
-                    IsRateLimited = true,
-                    Status = _metadata.LastSyncStatus,
-                    HttpStatusCode = response.StatusCode,
-                    NextAllowedSyncUtc = _metadata.NextAllowedSyncUtc,
-                    RuleCount = _rules.Count,
-                    Message = $"Rate limited by upstream provider. Retry after {retrySpan.Value}."
-                };
+                    _metadata.ConsecutiveFailures++;
+                    var failureStatus = $"Failed: {(int)response.StatusCode} {response.StatusCode}";
+                    _metadata.LastFailureMessage = failureStatus;
+
+                    var retrySpan = ParseRetryAfter(response, now);
+                    if (!retrySpan.HasValue)
+                    {
+                        var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
+                        retrySpan = CalculateExponentialBackoff(retryCount);
+                    }
+
+                    _metadata.NextAllowedSyncUtc = now.Add(retrySpan.Value);
+                    _metadata.LastSyncStatus = $"{failureStatus} (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
+
+                    _logger.Warn(
+                        "Blocklist download failed from {0} with status code {1}. Backing off until {2}.",
+                        effectiveUrl,
+                        response.StatusCode,
+                        _metadata.NextAllowedSyncUtc.Value);
+
+                    return new BlocklistSyncResult
+                    {
+                        Success = false,
+                        IsRateLimited = true,
+                        Status = _metadata.LastSyncStatus,
+                        HttpStatusCode = response.StatusCode,
+                        NextAllowedSyncUtc = _metadata.NextAllowedSyncUtc,
+                        RuleCount = _rules.Count,
+                        Message = $"Download failed with HTTP status {(int)response.StatusCode}. Retry after {retrySpan.Value}."
+                    };
+                }
             }
 
-            if (!response.IsSuccessStatusCode)
+            string newETag = null;
+            if (response.Headers.ETag != null)
             {
-                _metadata.ConsecutiveFailures++;
-                var failureStatus = $"Failed: {(int)response.StatusCode} {response.StatusCode}";
-                _metadata.LastFailureMessage = failureStatus;
+                newETag = response.Headers.ETag.ToString();
+            }
+            else if (response.Headers.TryGetValues("ETag", out var etagValues))
+            {
+                newETag = etagValues.FirstOrDefault();
+            }
 
-                var retrySpan = ParseRetryAfter(response, now);
-                if (!retrySpan.HasValue)
+            DateTimeOffset? newLastModified = null;
+            if (response.Content?.Headers.LastModified != null)
+            {
+                newLastModified = response.Content.Headers.LastModified;
+            }
+            else if (response.Headers.TryGetValues("Last-Modified", out var lastModValues))
+            {
+                var rawVal = lastModValues.FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(rawVal) && DateTimeOffset.TryParse(rawVal, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDto))
                 {
-                    var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
-                    retrySpan = CalculateExponentialBackoff(retryCount);
+                    newLastModified = parsedDto;
                 }
+            }
 
-                _metadata.NextAllowedSyncUtc = now.Add(retrySpan.Value);
-                _metadata.LastSyncStatus = $"{failureStatus} (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
-
-                _logger.Warn(
-                    "Blocklist download failed from {0} with status code {1}. Backing off until {2}.",
+            List<string> parsedRules;
+            try
+            {
+                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                parsedRules = await _streamProvider.ExtractRulesAsync(
+                    stream,
                     effectiveUrl,
-                    response.StatusCode,
-                    _metadata.NextAllowedSyncUtc.Value);
+                    response.Content.Headers.ContentType?.MediaType,
+                    response.Content.Headers.ContentEncoding?.FirstOrDefault(),
+                    leaveOpen: false,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                now = _nowProvider();
+                DateTime? nextAllowedSyncUtc = null;
+                string status;
+                lock (_syncLock)
+                {
+                    _metadata.ConsecutiveFailures++;
+                    _metadata.LastCheckedUtc = now;
+                    _metadata.LastFailureMessage = ex.Message;
+
+                    if (ex is BlocklistQuotaExceededException)
+                    {
+                        var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
+                        var retrySpan = CalculateExponentialBackoff(retryCount);
+                        _metadata.NextAllowedSyncUtc = now.Add(retrySpan);
+                        nextAllowedSyncUtc = _metadata.NextAllowedSyncUtc;
+                        _metadata.LastSyncStatus = $"Quota Exceeded (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
+                        status = _metadata.LastSyncStatus;
+                    }
+                    else
+                    {
+                        _metadata.LastSyncStatus = $"Failed: {ex.Message}";
+                        status = _metadata.LastSyncStatus;
+                    }
+                }
+
+                _logger.Warn(ex, "Failed to decompress or parse blocklist from {0}: {1}", effectiveUrl, ex.Message);
+                return new BlocklistSyncResult
+                {
+                    Success = false,
+                    Status = status,
+                    Message = ex.Message,
+                    RuleCount = RuleCount,
+                    NextAllowedSyncUtc = nextAllowedSyncUtc,
+                    IsRateLimited = nextAllowedSyncUtc.HasValue
+                };
+            }
+
+            parsedRules = Ipv6IntervalTree.SelectEnforceableRules(parsedRules);
+            var newTree = parsedRules.Count > 0 ? Ipv6IntervalTree.Parse(parsedRules) : null;
+
+            int priorRuleCount;
+            Ipv6IntervalTree priorTree;
+            lock (_syncLock)
+            {
+                priorRuleCount = _rules.Count;
+                priorTree = _tree;
+            }
+
+            if (!HasEnforceableIntervals(newTree) && (HasEnforceableIntervals(priorTree) || priorRuleCount > 0))
+            {
+                const string failureMessage = "HTTP 200 response contained no enforceable blocklist rules";
+                var status = $"Failed: {failureMessage}";
+                lock (_syncLock)
+                {
+                    _metadata.ConsecutiveFailures++;
+                    _metadata.LastSyncStatus = status;
+                    _metadata.LastFailureMessage = failureMessage;
+                }
+
+                _logger.Warn(
+                    "Refusing to replace active blocklist from {0}: response had no enforceable intervals (parsed {1} rule line(s)).",
+                    effectiveUrl,
+                    parsedRules.Count);
 
                 return new BlocklistSyncResult
                 {
                     Success = false,
-                    IsRateLimited = true,
-                    Status = _metadata.LastSyncStatus,
-                    HttpStatusCode = response.StatusCode,
-                    NextAllowedSyncUtc = _metadata.NextAllowedSyncUtc,
-                    RuleCount = _rules.Count,
-                    Message = $"Download failed with HTTP status {(int)response.StatusCode}. Retry after {retrySpan.Value}."
+                    Status = status,
+                    HttpStatusCode = HttpStatusCode.OK,
+                    RuleCount = priorRuleCount,
+                    Message = failureMessage
                 };
             }
-        }
 
-        string newETag = null;
-        if (response.Headers.ETag != null)
-        {
-            newETag = response.Headers.ETag.ToString();
-        }
-        else if (response.Headers.TryGetValues("ETag", out var etagValues))
-        {
-            newETag = etagValues.FirstOrDefault();
-        }
-
-        DateTimeOffset? newLastModified = null;
-        if (response.Content?.Headers.LastModified != null)
-        {
-            newLastModified = response.Content.Headers.LastModified;
-        }
-        else if (response.Headers.TryGetValues("Last-Modified", out var lastModValues))
-        {
-            var rawVal = lastModValues.FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(rawVal) && DateTimeOffset.TryParse(rawVal, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDto))
-            {
-                newLastModified = parsedDto;
-            }
-        }
-
-        List<string> parsedRules;
-        try
-        {
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            parsedRules = await _streamProvider.ExtractRulesAsync(
-                stream,
-                effectiveUrl,
-                response.Content.Headers.ContentType?.MediaType,
-                response.Content.Headers.ContentEncoding?.FirstOrDefault(),
-                leaveOpen: false,
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            now = _nowProvider();
-            DateTime? nextAllowedSyncUtc = null;
-            string status;
             lock (_syncLock)
             {
-                _metadata.ConsecutiveFailures++;
-                _metadata.LastCheckedUtc = now;
-                _metadata.LastFailureMessage = ex.Message;
+                _rules = parsedRules;
+                _metadata.RuleCount = _rules.Count;
+                Interlocked.Exchange(ref _tree, newTree);
 
-                if (ex is BlocklistQuotaExceededException)
+                _metadata.BlocklistValidatorUrl = effectiveUrl;
+                if (_configService != null)
                 {
-                    var retryCount = Math.Max(0, _metadata.ConsecutiveFailures - 1);
-                    var retrySpan = CalculateExponentialBackoff(retryCount);
-                    _metadata.NextAllowedSyncUtc = now.Add(retrySpan);
-                    nextAllowedSyncUtc = _metadata.NextAllowedSyncUtc;
-                    _metadata.LastSyncStatus = $"Quota Exceeded (Retry after {_metadata.NextAllowedSyncUtc.Value:HH:mm})";
-                    status = _metadata.LastSyncStatus;
+                    _configService.BlocklistValidatorUrl = effectiveUrl;
                 }
-                else
+
+                if (!string.IsNullOrWhiteSpace(newETag))
                 {
-                    _metadata.LastSyncStatus = $"Failed: {ex.Message}";
-                    status = _metadata.LastSyncStatus;
+                    _metadata.BlocklistETag = newETag;
+                    if (_configService != null)
+                    {
+                        _configService.BlocklistETag = newETag;
+                    }
                 }
+
+                if (newLastModified.HasValue)
+                {
+                    _metadata.BlocklistLastModified = newLastModified;
+                    if (_configService != null)
+                    {
+                        _configService.BlocklistLastModified = newLastModified.Value.ToString("r", CultureInfo.InvariantCulture);
+                    }
+                }
+
+                _metadata.ConsecutiveFailures = 0;
+                _metadata.NextAllowedSyncUtc = null;
+                _metadata.LastSyncStatus = "Success";
+                _metadata.LastFailureMessage = null;
             }
 
-            _logger.Warn(ex, "Failed to decompress or parse blocklist from {0}: {1}", effectiveUrl, ex.Message);
-            return new BlocklistSyncResult
-            {
-                Success = false,
-                Status = status,
-                Message = ex.Message,
-                RuleCount = RuleCount,
-                NextAllowedSyncUtc = nextAllowedSyncUtc,
-                IsRateLimited = nextAllowedSyncUtc.HasValue
-            };
-        }
-
-        parsedRules = Ipv6IntervalTree.SelectEnforceableRules(parsedRules);
-        var newTree = parsedRules.Count > 0 ? Ipv6IntervalTree.Parse(parsedRules) : null;
-
-        int priorRuleCount;
-        Ipv6IntervalTree priorTree;
-        lock (_syncLock)
-        {
-            priorRuleCount = _rules.Count;
-            priorTree = _tree;
-        }
-
-        if (!HasEnforceableIntervals(newTree) && (HasEnforceableIntervals(priorTree) || priorRuleCount > 0))
-        {
-            const string failureMessage = "HTTP 200 response contained no enforceable blocklist rules";
-            var status = $"Failed: {failureMessage}";
-            lock (_syncLock)
-            {
-                _metadata.ConsecutiveFailures++;
-                _metadata.LastSyncStatus = status;
-                _metadata.LastFailureMessage = failureMessage;
-            }
-
-            _logger.Warn(
-                "Refusing to replace active blocklist from {0}: response had no enforceable intervals (parsed {1} rule line(s)).",
-                effectiveUrl,
-                parsedRules.Count);
+            _logger.Info("Blocklist synchronized successfully from {0}. Parsed {1} rules.", effectiveUrl, parsedRules.Count);
 
             return new BlocklistSyncResult
             {
-                Success = false,
-                Status = status,
+                Success = true,
+                Status = "Success",
                 HttpStatusCode = HttpStatusCode.OK,
-                RuleCount = priorRuleCount,
-                Message = failureMessage
+                RuleCount = parsedRules.Count,
+                Message = "Blocklist updated successfully"
             };
-        }
-
-        lock (_syncLock)
-        {
-            _rules = parsedRules;
-            _metadata.RuleCount = _rules.Count;
-            Interlocked.Exchange(ref _tree, newTree);
-
-            _metadata.BlocklistValidatorUrl = effectiveUrl;
-            if (_configService != null)
-            {
-                _configService.BlocklistValidatorUrl = effectiveUrl;
-            }
-
-            if (!string.IsNullOrWhiteSpace(newETag))
-            {
-                _metadata.BlocklistETag = newETag;
-                if (_configService != null)
-                {
-                    _configService.BlocklistETag = newETag;
-                }
-            }
-
-            if (newLastModified.HasValue)
-            {
-                _metadata.BlocklistLastModified = newLastModified;
-                if (_configService != null)
-                {
-                    _configService.BlocklistLastModified = newLastModified.Value.ToString("r", CultureInfo.InvariantCulture);
-                }
-            }
-
-            _metadata.ConsecutiveFailures = 0;
-            _metadata.NextAllowedSyncUtc = null;
-            _metadata.LastSyncStatus = "Success";
-            _metadata.LastFailureMessage = null;
-        }
-
-        _logger.Info("Blocklist synchronized successfully from {0}. Parsed {1} rules.", effectiveUrl, parsedRules.Count);
-
-        return new BlocklistSyncResult
-        {
-            Success = true,
-            Status = "Success",
-            HttpStatusCode = HttpStatusCode.OK,
-            RuleCount = parsedRules.Count,
-            Message = "Blocklist updated successfully"
-        };
         }
         finally
         {

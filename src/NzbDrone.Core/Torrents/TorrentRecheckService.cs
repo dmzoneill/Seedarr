@@ -191,59 +191,59 @@ public class TorrentRecheckService : ITorrentRecheckService
         {
             while (_recheckQueue.TryDequeue(out var nextId))
             {
-                    using var cts = new CancellationTokenSource();
-                    if (!_activeRechecks.TryAdd(nextId, cts))
-                    {
-                        continue;
-                    }
+                using var cts = new CancellationTokenSource();
+                if (!_activeRechecks.TryAdd(nextId, cts))
+                {
+                    continue;
+                }
 
-                    if (!_queuedTorrentIds.TryRemove(nextId, out _))
-                    {
-                        _activeRechecks.TryRemove(nextId, out _);
-                        RevertQueuedRecheck(nextId);
-                        continue;
-                    }
+                if (!_queuedTorrentIds.TryRemove(nextId, out _))
+                {
+                    _activeRechecks.TryRemove(nextId, out _);
+                    RevertQueuedRecheck(nextId);
+                    continue;
+                }
 
-                    var torrent = _torrentRepository?.Get(nextId);
-                    if (torrent == null)
-                    {
-                        _activeRechecks.TryRemove(nextId, out _);
-                        continue;
-                    }
+                var torrent = _torrentRepository?.Get(nextId);
+                if (torrent == null)
+                {
+                    _activeRechecks.TryRemove(nextId, out _);
+                    continue;
+                }
 
+                try
+                {
+                    await _recheckConcurrencySemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
+                    cts.Token.ThrowIfCancellationRequested();
                     try
                     {
-                        await _recheckConcurrencySemaphore.WaitAsync(cts.Token).ConfigureAwait(false);
-                        cts.Token.ThrowIfCancellationRequested();
-                        try
-                        {
-                            await ExecuteRecheckCoreAsync(torrent, null, cts.Token).ConfigureAwait(false);
-                        }
-                        finally
-                        {
-                            _recheckConcurrencySemaphore.Release();
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        _logger.Info("Recheck canceled for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
-                        RevertQueuedRecheck(nextId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error during recheck for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
-                        if (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking)
-                        {
-                            var statusBefore = _queuedPreviousStatus.TryRemove(nextId, out var previous)
-                                ? previous
-                                : torrent.Status;
-                            PublishRecheckFailure(torrent, statusBefore);
-                        }
+                        await ExecuteRecheckCoreAsync(torrent, null, cts.Token).ConfigureAwait(false);
                     }
                     finally
                     {
-                        _activeRechecks.TryRemove(nextId, out _);
+                        _recheckConcurrencySemaphore.Release();
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Info("Recheck canceled for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
+                    RevertQueuedRecheck(nextId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error during recheck for torrent {0} (Id: {1})", torrent.Name, torrent.Id);
+                    if (torrent.Status == TorrentStatus.Checking || torrent.Status == TorrentStatus.QueuedForChecking)
+                    {
+                        var statusBefore = _queuedPreviousStatus.TryRemove(nextId, out var previous)
+                            ? previous
+                            : torrent.Status;
+                        PublishRecheckFailure(torrent, statusBefore);
+                    }
+                }
+                finally
+                {
+                    _activeRechecks.TryRemove(nextId, out _);
+                }
             }
         }
         finally

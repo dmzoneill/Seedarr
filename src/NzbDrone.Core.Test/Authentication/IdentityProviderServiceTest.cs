@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.DataProtection;
 using NSubstitute;
