@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.9](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.9) - 2026-10-20
+
+### 🐛 Bug Fixes
+- fix: pin TypeScript to 5.9.3 so the frontend webpack build works
+
 ## [v3.0.8](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.8) - 2026-10-19
 
 ### 🐛 Bug Fixes
