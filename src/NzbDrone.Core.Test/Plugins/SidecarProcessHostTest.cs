@@ -199,10 +199,10 @@ public class SidecarProcessHostTest
     }
 
     [Test]
-    public void SendRequestAsync_should_throw_when_plugin_is_not_running()
+    public async Task SendRequestAsync_should_throw_when_plugin_is_not_running()
     {
         using var host = new SidecarProcessHost(_manifest, _tempDir);
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await host.SendRequestAsync("ping"));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await host.SendRequestAsync("ping"));
         Assert.That(ex.Message, Does.Contain("not running"));
     }
 

@@ -172,18 +172,18 @@ public class TransmissionRpcInputFormatterTest
     }
 
     [Test]
-    public void ReadRequestBodyAsync_should_throw_on_null_context()
+    public async Task ReadRequestBodyAsync_should_throw_on_null_context()
     {
-        Assert.ThrowsAsync<ArgumentNullException>(() => _formatter.ReadRequestBodyAsync(null, Encoding.UTF8));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _formatter.ReadRequestBodyAsync(null, Encoding.UTF8));
     }
 
     [Test]
-    public void ReadRequestBodyAsync_should_throw_on_null_encoding()
+    public async Task ReadRequestBodyAsync_should_throw_on_null_encoding()
     {
         var stream = new MemoryStream(Encoding.UTF8.GetBytes("{}"));
         var context = CreateContext(stream);
 
-        Assert.ThrowsAsync<ArgumentNullException>(() => _formatter.ReadRequestBodyAsync(context, null));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => _formatter.ReadRequestBodyAsync(context, null));
     }
 
     private static InputFormatterContext CreateContext(

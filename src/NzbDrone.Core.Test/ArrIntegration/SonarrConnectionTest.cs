@@ -646,14 +646,14 @@ public class SonarrConnectionTest
     }
 
     [Test]
-    public void GetDownloadHistoryAsync_with_cancelled_token_throws_OperationCanceledException()
+    public async Task GetDownloadHistoryAsync_with_cancelled_token_throws_OperationCanceledException()
     {
         var handler = new MockHttpMessageHandler();
         var connection = CreateWithMockClient(handler);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await connection.GetDownloadHistoryAsync(cts.Token));
     }
 

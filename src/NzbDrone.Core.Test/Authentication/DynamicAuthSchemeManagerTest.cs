@@ -429,7 +429,7 @@ public class DynamicAuthSchemeManagerTest
         var manager = new DynamicAuthSchemeManager(sp, repo);
 
         // Act - should not throw
-        Assert.DoesNotThrowAsync(async () => await manager.InitializeConfiguredProvidersAsync());
+        await Assert.DoesNotThrowAsync(async () => await manager.InitializeConfiguredProvidersAsync());
 
         // Verify provider was not deactivated or corrupted in the repository
         repo.DidNotReceive().Update(Arg.Is<IdentityProviderDefinition>(p => p.ProviderId == "offline_idp" && !p.IsEnabled));
@@ -561,7 +561,7 @@ public class DynamicAuthSchemeManagerTest
     [TestCase("https://auth.example.com", null)]
     [TestCase("https://auth.example.com", "")]
     [TestCase("https://auth.example.com", "   ")]
-    public void RegisterOrUpdateOidcProviderAsync_should_throw_ArgumentException_when_required_fields_missing(string issuerUrl, string clientId)
+    public async Task RegisterOrUpdateOidcProviderAsync_should_throw_ArgumentException_when_required_fields_missing(string issuerUrl, string clientId)
     {
         var services = new ServiceCollection();
         services.AddOptions();
@@ -581,7 +581,7 @@ public class DynamicAuthSchemeManagerTest
             IsEnabled = true,
         };
 
-        Assert.ThrowsAsync<ArgumentException>(async () => await manager.RegisterOrUpdateOidcProviderAsync(provider));
+        await Assert.ThrowsAsync<ArgumentException>(async () => await manager.RegisterOrUpdateOidcProviderAsync(provider));
     }
 
     [Test]
@@ -703,7 +703,7 @@ public class DynamicAuthSchemeManagerTest
         };
 
         var tasks = Enumerable.Range(0, 10).Select(_ => manager.RegisterOrUpdateOidcProviderAsync(provider));
-        Assert.DoesNotThrowAsync(async () => await Task.WhenAll(tasks));
+        await Assert.DoesNotThrowAsync(async () => await Task.WhenAll(tasks));
 
         var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
         var scheme = await schemeProvider.GetSchemeAsync("Oidc_concurrent_provider");
@@ -711,7 +711,7 @@ public class DynamicAuthSchemeManagerTest
     }
 
     [Test]
-    public void RegisterOrUpdateOidcProviderAsync_throws_when_provider_id_is_empty_or_whitespace()
+    public async Task RegisterOrUpdateOidcProviderAsync_throws_when_provider_id_is_empty_or_whitespace()
     {
         var services = new ServiceCollection();
         services.AddOptions();
@@ -730,7 +730,7 @@ public class DynamicAuthSchemeManagerTest
             ClientId = "client-id",
         };
 
-        Assert.ThrowsAsync<ArgumentException>(() => manager.RegisterOrUpdateOidcProviderAsync(provider));
+        await Assert.ThrowsAsync<ArgumentException>(() => manager.RegisterOrUpdateOidcProviderAsync(provider));
     }
 
     [Test]

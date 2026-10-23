@@ -2031,13 +2031,13 @@ public class PeerConnectionTest
     }
 
     [Test]
-    public void ReceiveMessageAsync_should_throw_on_cancellation()
+    public async Task ReceiveMessageAsync_should_throw_on_cancellation()
     {
         var (_, server) = CreateTestPair();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        Assert.CatchAsync<OperationCanceledException>(async () =>
+        await Assert.CatchAsync<OperationCanceledException>(async () =>
         {
             await server.ReceiveMessageAsync(cts.Token);
         });

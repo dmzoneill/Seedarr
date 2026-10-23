@@ -1041,7 +1041,7 @@ public class CustomScriptServiceTest
         using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("Some output"));
         using var reader = new StreamReader(stream);
 
-        Assert.CatchAsync<OperationCanceledException>(async () =>
+        await Assert.CatchAsync<OperationCanceledException>(async () =>
         {
             await CustomScriptService.ReadBoundedAsync(reader, 1024, cts.Token);
         });
@@ -1056,7 +1056,7 @@ public class CustomScriptServiceTest
         reader.Dispose();
         await cts.CancelAsync();
 
-        Assert.CatchAsync<OperationCanceledException>(async () =>
+        await Assert.CatchAsync<OperationCanceledException>(async () =>
         {
             await CustomScriptService.ReadBoundedAsync(reader, 1024, cts.Token);
         });

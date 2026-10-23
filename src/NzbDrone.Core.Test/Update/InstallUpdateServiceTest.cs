@@ -93,7 +93,7 @@ public class InstallUpdateServiceTest
     }
 
     [Test]
-    public void InstallUpdateAsync_should_throw_and_set_failed_progress_when_containerized()
+    public async Task InstallUpdateAsync_should_throw_and_set_failed_progress_when_containerized()
     {
         var service = new InstallUpdateService(
             _updateService,
@@ -103,7 +103,7 @@ public class InstallUpdateServiceTest
             installDirectory: _targetDir,
             isContainerizedOverride: true);
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await service.InstallUpdateAsync("2.0.0");
         });
@@ -115,7 +115,7 @@ public class InstallUpdateServiceTest
     }
 
     [Test]
-    public void StageAndInstallAsync_should_throw_and_set_failed_progress_when_containerized()
+    public async Task StageAndInstallAsync_should_throw_and_set_failed_progress_when_containerized()
     {
         var service = new InstallUpdateService(
             _updateService,
@@ -128,7 +128,7 @@ public class InstallUpdateServiceTest
         var dummyPkg = Path.Combine(_tempDir, "package.zip");
         File.WriteAllText(dummyPkg, "dummy");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await service.StageAndInstallAsync(dummyPkg, targetVersion: "2.0.0");
         });
@@ -138,7 +138,7 @@ public class InstallUpdateServiceTest
     }
 
     [Test]
-    public void StageAndInstallAsync_should_fail_when_sha256_checksum_not_provided()
+    public async Task StageAndInstallAsync_should_fail_when_sha256_checksum_not_provided()
     {
         var service = new InstallUpdateService(
             _updateService,
@@ -151,7 +151,7 @@ public class InstallUpdateServiceTest
         var pkgPath = Path.Combine(_tempDir, "update_package.zip");
         File.WriteAllText(pkgPath, "some payload bytes for update");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await service.StageAndInstallAsync(pkgPath, expectedChecksum: null, "2.0.0");
         });
@@ -162,7 +162,7 @@ public class InstallUpdateServiceTest
     }
 
     [Test]
-    public void StageAndInstallAsync_should_fail_when_sha256_verification_mismatches()
+    public async Task StageAndInstallAsync_should_fail_when_sha256_verification_mismatches()
     {
         var service = new InstallUpdateService(
             _updateService,
@@ -177,7 +177,7 @@ public class InstallUpdateServiceTest
 
         var invalidChecksum = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await service.StageAndInstallAsync(pkgPath, invalidChecksum, "2.0.0");
         });

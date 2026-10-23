@@ -320,7 +320,7 @@ public class NatPmpClientTests
     }
 
     [Test]
-    public void GetExternalIpAsync_should_throw_NatPmpException_when_gateway_returns_error()
+    public async Task GetExternalIpAsync_should_throw_NatPmpException_when_gateway_returns_error()
     {
         var transport = new TestNatPmpTransport();
         var gatewayIp = IPAddress.Parse("192.168.1.1");
@@ -328,7 +328,7 @@ public class NatPmpClientTests
         transport.Responses.Enqueue(BuildExternalIpResponse(NatPmpResultCode.NotAuthorized, 100, IPAddress.None));
 
         using var client = new NatPmpClient(gatewayIp, transport);
-        var ex = Assert.ThrowsAsync<NatPmpException>(async () => await client.GetExternalIpAsync());
+        var ex = await Assert.ThrowsAsync<NatPmpException>(async () => await client.GetExternalIpAsync());
 
         Assert.That(ex.ResultCode, Is.EqualTo(NatPmpResultCode.NotAuthorized));
     }
@@ -373,7 +373,7 @@ public class NatPmpClientTests
     }
 
     [Test]
-    public void MapPortAsync_should_throw_NatPmpException_when_gateway_out_of_resources()
+    public async Task MapPortAsync_should_throw_NatPmpException_when_gateway_out_of_resources()
     {
         var transport = new TestNatPmpTransport();
         var gatewayIp = IPAddress.Parse("192.168.1.1");
@@ -381,7 +381,7 @@ public class NatPmpClientTests
         transport.Responses.Enqueue(BuildPortMappingResponse(NatPmpProtocol.Tcp, NatPmpResultCode.OutOfResources, 100, 8080, 0, 0));
 
         using var client = new NatPmpClient(gatewayIp, transport);
-        var ex = Assert.ThrowsAsync<NatPmpException>(async () => await client.MapPortAsync(NatPmpProtocol.Tcp, 8080, 8080, 3600));
+        var ex = await Assert.ThrowsAsync<NatPmpException>(async () => await client.MapPortAsync(NatPmpProtocol.Tcp, 8080, 8080, 3600));
 
         Assert.That(ex.ResultCode, Is.EqualTo(NatPmpResultCode.OutOfResources));
         Assert.That(client.ActiveMappings.Count, Is.EqualTo(0));

@@ -543,7 +543,7 @@ public class MseHandshakeTests
     }
 
     [Test]
-    public void NegotiateOutgoingAsync_should_abort_when_cancelled()
+    public async Task NegotiateOutgoingAsync_should_abort_when_cancelled()
     {
         var (sideA, sideB) = CreateConnectedPair();
         using (sideB)
@@ -552,7 +552,7 @@ public class MseHandshakeTests
             using var cts = new CancellationTokenSource();
             cts.Cancel();
 
-            Assert.CatchAsync<OperationCanceledException>(async () =>
+            await Assert.CatchAsync<OperationCanceledException>(async () =>
             {
                 await outgoing.NegotiateOutgoingAsync(sideA, cts.Token);
             });
@@ -560,7 +560,7 @@ public class MseHandshakeTests
     }
 
     [Test]
-    public void NegotiateIncomingAsync_should_abort_when_cancelled()
+    public async Task NegotiateIncomingAsync_should_abort_when_cancelled()
     {
         var (sideA, sideB) = CreateConnectedPair();
         using (sideA)
@@ -569,7 +569,7 @@ public class MseHandshakeTests
             using var cts = new CancellationTokenSource();
             cts.Cancel();
 
-            Assert.CatchAsync<OperationCanceledException>(async () =>
+            await Assert.CatchAsync<OperationCanceledException>(async () =>
             {
                 await incoming.NegotiateIncomingAsync(sideB, ValidateInfoHash, cts.Token);
             });

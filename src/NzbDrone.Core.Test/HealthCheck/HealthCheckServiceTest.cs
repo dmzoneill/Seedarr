@@ -392,7 +392,7 @@ public class HealthCheckServiceTest
     }
 
     [Test]
-    public void PerformChecksAsync_should_throw_OperationCanceledException_when_cancellationToken_is_cancelled()
+    public async Task PerformChecksAsync_should_throw_OperationCanceledException_when_cancellationToken_is_cancelled()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -402,7 +402,7 @@ public class HealthCheckServiceTest
 
         _subject = new HealthCheckService(new List<IHealthCheck> { check });
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
             await _subject.PerformChecksAsync(cts.Token);
         });
@@ -411,7 +411,7 @@ public class HealthCheckServiceTest
     }
 
     [Test]
-    public void PerformChecksAsync_should_abort_remaining_checks_when_cancellationToken_is_cancelled()
+    public async Task PerformChecksAsync_should_abort_remaining_checks_when_cancellationToken_is_cancelled()
     {
         using var cts = new CancellationTokenSource();
 
@@ -427,7 +427,7 @@ public class HealthCheckServiceTest
 
         _subject = new HealthCheckService(new List<IHealthCheck> { check1, check2 });
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
             await _subject.PerformChecksAsync(cts.Token);
         });

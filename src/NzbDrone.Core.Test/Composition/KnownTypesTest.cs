@@ -98,7 +98,7 @@ public class KnownTypesTest
     }
 
     [Test]
-    public void Concurrent_Register_and_GetImplementations_is_thread_safe()
+    public async Task Concurrent_Register_and_GetImplementations_is_thread_safe()
     {
         var tasks = new List<Task>();
         const int iterations = 100;
@@ -116,7 +116,7 @@ public class KnownTypesTest
             }));
         }
 
-        Assert.DoesNotThrowAsync(async () => await Task.WhenAll(tasks));
+        await Assert.DoesNotThrowAsync(async () => await Task.WhenAll(tasks));
 
         var finalImpls = KnownTypes.GetImplementations(typeof(ITestContract));
         Assert.That(finalImpls, Has.Count.EqualTo(2));

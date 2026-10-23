@@ -161,13 +161,13 @@ public class TrackerBoostServiceTest
     }
 
     [Test]
-    public void UdpReceive_with_cancelled_token_throws_OperationCanceledException_handled_gracefully()
+    public async Task UdpReceive_with_cancelled_token_throws_OperationCanceledException_handled_gracefully()
     {
         using var client = new UdpClient(0);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        Assert.CatchAsync<OperationCanceledException>(async () =>
+        await Assert.CatchAsync<OperationCanceledException>(async () =>
         {
             await client.ReceiveAsync(cts.Token);
         });
@@ -460,24 +460,24 @@ public class TrackerBoostServiceTest
     }
 
     [Test]
-    public void ProbeTrackerHealthAsync_throws_OperationCanceledException_when_token_is_cancelled()
+    public async Task ProbeTrackerHealthAsync_throws_OperationCanceledException_when_token_is_cancelled()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
             await _service.ProbeTrackerHealthAsync(cts.Token);
         });
     }
 
     [Test]
-    public void RunOptimizationCycleAsync_throws_OperationCanceledException_when_token_is_cancelled()
+    public async Task RunOptimizationCycleAsync_throws_OperationCanceledException_when_token_is_cancelled()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
             await _service.RunOptimizationCycleAsync(cts.Token);
         });

@@ -250,7 +250,7 @@ public class BlocklistArchiveStreamProviderTests
     }
 
     [Test]
-    public void ExtractRulesAsync_should_abort_when_uncompressed_bytes_quota_exceeded()
+    public async Task ExtractRulesAsync_should_abort_when_uncompressed_bytes_quota_exceeded()
     {
         var options = new BlocklistArchiveStreamOptions
         {
@@ -262,7 +262,7 @@ public class BlocklistArchiveStreamProviderTests
         var gzipBytes = CreateGzipBytes(largeText);
         using var stream = new MemoryStream(gzipBytes);
 
-        var ex = Assert.ThrowsAsync<BlocklistQuotaExceededException>(async () =>
+        var ex = await Assert.ThrowsAsync<BlocklistQuotaExceededException>(async () =>
         {
             await strictProvider.ExtractRulesAsync(stream, url: "http://example.com/bomb.gz");
         });
@@ -271,7 +271,7 @@ public class BlocklistArchiveStreamProviderTests
     }
 
     [Test]
-    public void ExtractRulesAsync_should_abort_when_max_rule_lines_quota_exceeded()
+    public async Task ExtractRulesAsync_should_abort_when_max_rule_lines_quota_exceeded()
     {
         var options = new BlocklistArchiveStreamOptions
         {
@@ -283,7 +283,7 @@ public class BlocklistArchiveStreamProviderTests
         var gzipBytes = CreateGzipBytes(text);
         using var stream = new MemoryStream(gzipBytes);
 
-        var ex = Assert.ThrowsAsync<BlocklistQuotaExceededException>(async () =>
+        var ex = await Assert.ThrowsAsync<BlocklistQuotaExceededException>(async () =>
         {
             await strictProvider.ExtractRulesAsync(stream, url: "http://example.com/manyrules.gz");
         });
@@ -322,7 +322,7 @@ public class BlocklistArchiveStreamProviderTests
     }
 
     [Test]
-    public void ExtractRulesAsync_should_throw_on_corrupted_gzip_stream()
+    public async Task ExtractRulesAsync_should_throw_on_corrupted_gzip_stream()
     {
         var validBytes = CreateGzipBytes("1.2.3.4\n5.6.7.8\n9.10.11.12\n" + new string('A', 2000));
         // Corrupt deflate payload bytes after the 10-byte header
@@ -333,19 +333,19 @@ public class BlocklistArchiveStreamProviderTests
 
         using var stream = new MemoryStream(validBytes);
 
-        Assert.ThrowsAsync<InvalidDataException>(async () =>
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
         {
             await _provider.ExtractRulesAsync(stream, url: "http://example.com/corrupted.gz");
         });
     }
 
     [Test]
-    public void ExtractRulesAsync_should_throw_on_corrupted_zip_stream()
+    public async Task ExtractRulesAsync_should_throw_on_corrupted_zip_stream()
     {
         var corruptBytes = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x00, 0x00, 0xFF, 0xFF };
         using var stream = new MemoryStream(corruptBytes);
 
-        Assert.ThrowsAsync<InvalidDataException>(async () =>
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
         {
             await _provider.ExtractRulesAsync(stream, url: "http://example.com/corrupted.zip");
         });
@@ -441,7 +441,7 @@ public class BlocklistArchiveStreamProviderTests
     }
 
     [Test]
-    public void ExtractRulesAsync_should_abort_when_compressed_bytes_quota_exceeded_on_non_seekable_zip_stream()
+    public async Task ExtractRulesAsync_should_abort_when_compressed_bytes_quota_exceeded_on_non_seekable_zip_stream()
     {
         var entries = new[]
         {
@@ -455,7 +455,7 @@ public class BlocklistArchiveStreamProviderTests
         var strictProvider = new BlocklistArchiveStreamProvider(options);
         using var stream = new NonSeekableStream(zipBytes);
 
-        var ex = Assert.ThrowsAsync<BlocklistQuotaExceededException>(async () =>
+        var ex = await Assert.ThrowsAsync<BlocklistQuotaExceededException>(async () =>
         {
             await strictProvider.ExtractRulesAsync(stream, url: "http://example.com/rules.zip");
         });

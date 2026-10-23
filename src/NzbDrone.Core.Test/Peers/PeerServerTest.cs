@@ -2043,7 +2043,7 @@ public class PeerServerTest
         var dict = GetConnectionsPerIp();
 
         using var cts = new CancellationTokenSource();
-        Assert.DoesNotThrowAsync(async () => await InvokeProcessIncomingClientAsync(client, cts.Token));
+        await Assert.DoesNotThrowAsync(async () => await InvokeProcessIncomingClientAsync(client, cts.Token));
 
         // Should return gracefully without leaking half-open permits or IP entries
         Assert.That(halfOpen.CurrentCount, Is.EqualTo(initialCount));
@@ -3658,7 +3658,7 @@ public class PeerServerTest
         mockConn.IsConnected.Returns(true);
         mockConn.GetStream().Returns(_ => throw new IOException("Simulated uTP stream read failure"));
 
-        Assert.DoesNotThrowAsync(async () => await server.ProcessIncomingUtpConnectionAsync(mockConn));
+        await Assert.DoesNotThrowAsync(async () => await server.ProcessIncomingUtpConnectionAsync(mockConn));
         mockConn.Received().Dispose();
     }
 

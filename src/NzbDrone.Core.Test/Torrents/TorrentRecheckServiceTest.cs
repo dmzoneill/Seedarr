@@ -923,7 +923,7 @@ public class TorrentRecheckServiceTest
     }
 
     [Test]
-    public void RecheckAsync_respects_cancellation_token()
+    public async Task RecheckAsync_respects_cancellation_token()
     {
         var signalR = Substitute.For<NzbDrone.SignalR.IBroadcastSignalRMessage>();
         var serviceWithSignalR = new TorrentRecheckService(
@@ -952,7 +952,7 @@ public class TorrentRecheckServiceTest
         using var cts = new System.Threading.CancellationTokenSource();
         cts.Cancel();
 
-        Assert.CatchAsync<System.OperationCanceledException>(async () =>
+        await Assert.CatchAsync<System.OperationCanceledException>(async () =>
         {
             await serviceWithSignalR.RecheckAsync(torrent, null, cts.Token);
         });

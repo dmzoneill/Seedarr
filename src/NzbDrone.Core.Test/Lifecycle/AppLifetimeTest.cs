@@ -480,7 +480,7 @@ public class AppLifetimeTest
         _trackerAnnounceService.When(x => x.AnnounceTorrent(Arg.Any<Torrent>(), Arg.Any<bool>(), Arg.Any<AnnounceEvent>()))
             .Do(_ => throw new InvalidOperationException("Tracker unreachable"));
 
-        Assert.DoesNotThrowAsync(async () => await _subject.StopAsync(CancellationToken.None));
+        await Assert.DoesNotThrowAsync(async () => await _subject.StopAsync(CancellationToken.None));
 
         _fastResumeService.Received(1).SaveAll();
         _pieceStorage.Received(1).Flush();
@@ -509,12 +509,12 @@ public class AppLifetimeTest
     }
 
     [Test]
-    public void StartAsync_should_honor_cancelled_startup_token_before_side_effects()
+    public async Task StartAsync_should_honor_cancelled_startup_token_before_side_effects()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () => await _subject.StartAsync(cts.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await _subject.StartAsync(cts.Token));
 
         _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<ApplicationStartedEvent>());
         _fastResumeService.DidNotReceive().LoadAll();
@@ -526,7 +526,7 @@ public class AppLifetimeTest
         _torrentService.GetAll().Returns(new List<Torrent>());
         _mainDatabase.When(x => x.Optimize()).Do(_ => throw new InvalidOperationException("Optimize failed"));
 
-        Assert.DoesNotThrowAsync(async () => await _subject.StopAsync(CancellationToken.None));
+        await Assert.DoesNotThrowAsync(async () => await _subject.StopAsync(CancellationToken.None));
 
         _mainDatabase.Received(1).Checkpoint(WalCheckpointMode.Truncate);
     }

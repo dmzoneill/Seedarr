@@ -31,13 +31,13 @@ public class BootstrapDynamicAuthTest
     {
         await using var provider = new ServiceCollection().BuildServiceProvider();
 
-        Assert.DoesNotThrowAsync(async () => await Bootstrap.InitializeDynamicAuthSchemesAsync(provider));
+        await Assert.DoesNotThrowAsync(async () => await Bootstrap.InitializeDynamicAuthSchemesAsync(provider));
     }
 
     [Test]
     public async Task InitializeDynamicAuthSchemesAsync_should_noop_when_services_null()
     {
-        Assert.DoesNotThrowAsync(async () => await Bootstrap.InitializeDynamicAuthSchemesAsync(null));
+        await Assert.DoesNotThrowAsync(async () => await Bootstrap.InitializeDynamicAuthSchemesAsync(null));
     }
 
     [Test]
@@ -50,6 +50,6 @@ public class BootstrapDynamicAuthTest
         services.AddSingleton(manager);
         await using var provider = services.BuildServiceProvider();
 
-        Assert.DoesNotThrowAsync(async () => await Bootstrap.InitializeDynamicAuthSchemesAsync(provider));
+        await Assert.DoesNotThrowAsync(async () => await Bootstrap.InitializeDynamicAuthSchemesAsync(provider));
     }
 }

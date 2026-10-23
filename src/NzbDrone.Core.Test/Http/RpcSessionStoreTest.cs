@@ -121,7 +121,7 @@ public class RpcSessionStoreTest
     }
 
     [Test]
-    public void ConcurrentOperations_AreThreadSafe()
+    public async Task ConcurrentOperations_AreThreadSafe()
     {
         var store = new RpcSessionStore(50);
         var tasks = new List<Task>();
@@ -145,7 +145,7 @@ public class RpcSessionStoreTest
             }));
         }
 
-        Assert.DoesNotThrowAsync(async () => await Task.WhenAll(tasks));
+        await Assert.DoesNotThrowAsync(async () => await Task.WhenAll(tasks));
         Assert.That(store.Count, Is.LessThanOrEqualTo(50));
     }
 }

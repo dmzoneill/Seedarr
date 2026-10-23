@@ -321,7 +321,7 @@ public class UpnpServiceTest
         await service.CreateMappings(CancellationToken.None);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        Assert.DoesNotThrowAsync(async () => await service.RemoveMappings());
+        await Assert.DoesNotThrowAsync(async () => await service.RemoveMappings());
         sw.Stop();
 
         Assert.That(sw.ElapsedMilliseconds, Is.LessThan(4000));

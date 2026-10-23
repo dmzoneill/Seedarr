@@ -245,7 +245,7 @@ public class TorrentPackageServiceTest
     }
 
     [Test]
-    public void ImportPackageAsync_ZipSlipParentDirectoryTraversal_ThrowsSecurityException()
+    public async Task ImportPackageAsync_ZipSlipParentDirectoryTraversal_ThrowsSecurityException()
     {
         var archiveBytes = CreateGzipTarArchive(tar =>
         {
@@ -256,7 +256,7 @@ public class TorrentPackageServiceTest
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -266,7 +266,7 @@ public class TorrentPackageServiceTest
     }
 
     [Test]
-    public void ImportPackageAsync_ZipSlipAbsoluteUnixPath_ThrowsSecurityException()
+    public async Task ImportPackageAsync_ZipSlipAbsoluteUnixPath_ThrowsSecurityException()
     {
         var archiveBytes = CreateGzipTarArchive(tar =>
         {
@@ -277,7 +277,7 @@ public class TorrentPackageServiceTest
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -286,7 +286,7 @@ public class TorrentPackageServiceTest
     }
 
     [Test]
-    public void ImportPackageAsync_ZipSlipWindowsDriveLetter_ThrowsSecurityException()
+    public async Task ImportPackageAsync_ZipSlipWindowsDriveLetter_ThrowsSecurityException()
     {
         var archiveBytes = CreateGzipTarArchive(tar =>
         {
@@ -297,7 +297,7 @@ public class TorrentPackageServiceTest
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -306,7 +306,7 @@ public class TorrentPackageServiceTest
     }
 
     [Test]
-    public void ImportPackageAsync_SymbolicLink_ThrowsSecurityException()
+    public async Task ImportPackageAsync_SymbolicLink_ThrowsSecurityException()
     {
         var archiveBytes = CreateGzipTarArchive(tar =>
         {
@@ -317,7 +317,7 @@ public class TorrentPackageServiceTest
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -326,7 +326,7 @@ public class TorrentPackageServiceTest
     }
 
     [Test]
-    public void ImportPackageAsync_HardLink_ThrowsSecurityException()
+    public async Task ImportPackageAsync_HardLink_ThrowsSecurityException()
     {
         var archiveBytes = CreateGzipTarArchive(tar =>
         {
@@ -337,7 +337,7 @@ public class TorrentPackageServiceTest
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });

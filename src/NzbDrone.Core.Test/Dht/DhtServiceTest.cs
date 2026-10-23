@@ -2831,7 +2831,7 @@ public class DhtServiceTest
         SetUdpClient();
         var target = new IPEndPoint(IPAddress.Loopback, 6881);
 
-        Assert.DoesNotThrowAsync(async () => await _service.Bootstrap(target));
+        await Assert.DoesNotThrowAsync(async () => await _service.Bootstrap(target));
     }
 
     [Test]
@@ -2842,8 +2842,8 @@ public class DhtServiceTest
         var target = new IPEndPoint(IPAddress.Loopback, 6881);
         var token = RandomNumberGenerator.GetBytes(20);
 
-        Assert.DoesNotThrowAsync(async () => await _service.SendGetPeers(target, infoHash));
-        Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(target, infoHash, 51413, token));
+        await Assert.DoesNotThrowAsync(async () => await _service.SendGetPeers(target, infoHash));
+        await Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(target, infoHash, 51413, token));
     }
 
     // ── Private Torrent Safeguards (BEP 27) ──────────────────────────
@@ -3682,6 +3682,6 @@ public class DhtServiceTest
     public async Task SendGetPeersInternal_and_SendAnnouncePeer_with_null_target_does_not_throw()
     {
         SetUdpClient();
-        Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(null, new byte[20], 6881, new byte[4]));
+        await Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(null, new byte[20], 6881, new byte[4]));
     }
 }
