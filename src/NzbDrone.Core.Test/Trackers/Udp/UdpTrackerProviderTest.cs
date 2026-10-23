@@ -831,7 +831,7 @@ public class UdpTrackerProviderTest
     }
 
     [Test]
-    public void ConnectAsync_should_throw_exception_containing_tracker_error_string()
+    public async Task ConnectAsync_should_throw_exception_containing_tracker_error_string()
     {
         using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
@@ -852,7 +852,7 @@ public class UdpTrackerProviderTest
         using var client = new UdpClient();
         client.Connect(IPAddress.Loopback, serverPort);
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _provider.ConnectAsync(client));
 
         serverTask.Wait(TimeSpan.FromSeconds(5));

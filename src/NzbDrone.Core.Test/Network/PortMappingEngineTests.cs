@@ -52,11 +52,11 @@ public class PortMappingEngineTests
     }
 
     [Test]
-    public void CreatePcpMappingAsync_throws_InvalidOperationException_when_pcp_client_is_null()
+    public async Task CreatePcpMappingAsync_throws_InvalidOperationException_when_pcp_client_is_null()
     {
         var engine = new PortMappingEngine(_gatewayService, _upnpService, null, null, null);
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await engine.CreatePcpMappingAsync(
                 IPAddress.Loopback,

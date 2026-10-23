@@ -78,7 +78,7 @@ public class PackageImportSecurityTests
     }
 
     [Test]
-    public void ZipSlip_RelativePathTraversal_ThrowsSecurityExceptionAndDoesNotWriteOutsideSandbox()
+    public async Task ZipSlip_RelativePathTraversal_ThrowsSecurityExceptionAndDoesNotWriteOutsideSandbox()
     {
         var outsideTarget = Path.Combine(_outsideDir, "malicious.txt");
         var traversalRelative = Path.GetRelativePath(_sandboxDir, outsideTarget);
@@ -92,7 +92,7 @@ public class PackageImportSecurityTests
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -102,7 +102,7 @@ public class PackageImportSecurityTests
     }
 
     [Test]
-    public void ZipSlip_ParentDirectoryEscape_ThrowsSecurityException()
+    public async Task ZipSlip_ParentDirectoryEscape_ThrowsSecurityException()
     {
         var archiveBytes = CreateGzipTarArchive(tar =>
         {
@@ -113,7 +113,7 @@ public class PackageImportSecurityTests
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -122,7 +122,7 @@ public class PackageImportSecurityTests
     }
 
     [Test]
-    public void SymlinkEntry_RejectedUnconditionallyWithSecurityException()
+    public async Task SymlinkEntry_RejectedUnconditionallyWithSecurityException()
     {
         var archiveBytes = CreateGzipTarArchive(tar =>
         {
@@ -133,7 +133,7 @@ public class PackageImportSecurityTests
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -143,7 +143,7 @@ public class PackageImportSecurityTests
     }
 
     [Test]
-    public void HardlinkEntry_RejectedUnconditionallyWithSecurityException()
+    public async Task HardlinkEntry_RejectedUnconditionallyWithSecurityException()
     {
         var archiveBytes = CreateGzipTarArchive(tar =>
         {
@@ -154,7 +154,7 @@ public class PackageImportSecurityTests
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -163,7 +163,7 @@ public class PackageImportSecurityTests
     }
 
     [Test]
-    public void DecompressionBomb_ExceedingByteCap_ThrowsSecurityException()
+    public async Task DecompressionBomb_ExceedingByteCap_ThrowsSecurityException()
     {
         // 50 KB of uncompressed data
         var bigPayload = new byte[50 * 1024];
@@ -182,7 +182,7 @@ public class PackageImportSecurityTests
             MaxUncompressedBytes = 10 * 1024 // Cap at 10 KB
         };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -191,7 +191,7 @@ public class PackageImportSecurityTests
     }
 
     [Test]
-    public void DecompressionBomb_ExceedingCompressionRatio_ThrowsSecurityException()
+    public async Task DecompressionBomb_ExceedingCompressionRatio_ThrowsSecurityException()
     {
         // 200 KB of repetitive zeroes that compresses to ~200 bytes (1000:1 ratio)
         var zeroPayload = new byte[200 * 1024];
@@ -210,7 +210,7 @@ public class PackageImportSecurityTests
             MinBytesForRatioCheck = 1024 // Start checking after 1 KB
         };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -273,7 +273,7 @@ public class PackageImportSecurityTests
     }
 
     [Test]
-    public void ManifestValidation_MissingManifest_ThrowsSecurityException()
+    public async Task ManifestValidation_MissingManifest_ThrowsSecurityException()
     {
         var archiveBytes = CreateGzipTarArchive(tar =>
         {
@@ -283,7 +283,7 @@ public class PackageImportSecurityTests
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });
@@ -292,7 +292,7 @@ public class PackageImportSecurityTests
     }
 
     [Test]
-    public void ManifestValidation_InvalidSchemaVersion_ThrowsSecurityException()
+    public async Task ManifestValidation_InvalidSchemaVersion_ThrowsSecurityException()
     {
         var manifest = new PackageManifest
         {
@@ -309,7 +309,7 @@ public class PackageImportSecurityTests
         using var archiveStream = new MemoryStream(archiveBytes);
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _service.ImportPackageAsync(archiveStream, options);
         });

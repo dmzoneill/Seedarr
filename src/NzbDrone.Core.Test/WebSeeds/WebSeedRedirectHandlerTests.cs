@@ -190,7 +190,7 @@ public class WebSeedRedirectHandlerTests
     }
 
     [Test]
-    public void SendWithRedirectsAsync_detects_circular_redirect_and_throws_invalid_operation_exception()
+    public async Task SendWithRedirectsAsync_detects_circular_redirect_and_throws_invalid_operation_exception()
     {
         var mockHandler = new TestHttpMessageHandler((request, ct) =>
         {
@@ -217,7 +217,7 @@ public class WebSeedRedirectHandlerTests
         using var client = new HttpClient(mockHandler);
         using var initialRequest = new HttpRequestMessage(HttpMethod.Get, "https://example.com/a");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await _handler.SendWithRedirectsAsync(client, initialRequest);
         });
@@ -226,7 +226,7 @@ public class WebSeedRedirectHandlerTests
     }
 
     [Test]
-    public void SendWithRedirectsAsync_detects_self_redirect_and_throws_invalid_operation_exception()
+    public async Task SendWithRedirectsAsync_detects_self_redirect_and_throws_invalid_operation_exception()
     {
         var mockHandler = new TestHttpMessageHandler((request, ct) =>
         {
@@ -238,7 +238,7 @@ public class WebSeedRedirectHandlerTests
         using var client = new HttpClient(mockHandler);
         using var initialRequest = new HttpRequestMessage(HttpMethod.Get, "https://example.com/self");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await _handler.SendWithRedirectsAsync(client, initialRequest);
         });
@@ -247,7 +247,7 @@ public class WebSeedRedirectHandlerTests
     }
 
     [Test]
-    public void SendWithRedirectsAsync_throws_when_redirect_count_exceeds_max_redirects()
+    public async Task SendWithRedirectsAsync_throws_when_redirect_count_exceeds_max_redirects()
     {
         // 6 distinct redirect hops (exceeding MaxRedirects = 5)
         var mockHandler = new TestHttpMessageHandler((request, ct) =>
@@ -262,7 +262,7 @@ public class WebSeedRedirectHandlerTests
         using var client = new HttpClient(mockHandler);
         using var initialRequest = new HttpRequestMessage(HttpMethod.Get, "https://example.com/hop1");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await _handler.SendWithRedirectsAsync(client, initialRequest);
         });

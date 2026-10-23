@@ -117,11 +117,11 @@ public class TelegramPollingServiceTest
     }
 
     [Test]
-    public void PollOnceAsync_should_throw_on_http_429()
+    public async Task PollOnceAsync_should_throw_on_http_429()
     {
         _httpHandler.Enqueue((HttpStatusCode)429, "Too Many Requests");
 
-        Assert.ThrowsAsync<HttpRequestException>(async () => await _service.PollOnceAsync());
+        await Assert.ThrowsAsync<HttpRequestException>(async () => await _service.PollOnceAsync());
     }
 
     [Test]
@@ -142,11 +142,11 @@ public class TelegramPollingServiceTest
     }
 
     [Test]
-    public void PollOnceAsync_should_throw_on_non_success_status_code()
+    public async Task PollOnceAsync_should_throw_on_non_success_status_code()
     {
         _httpHandler.Enqueue(HttpStatusCode.Conflict, "Conflict: webhook is active");
 
-        var ex = Assert.ThrowsAsync<HttpRequestException>(async () => await _service.PollOnceAsync());
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(async () => await _service.PollOnceAsync());
         Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
     }
 

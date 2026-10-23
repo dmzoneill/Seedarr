@@ -125,13 +125,13 @@ public class WebSeedPieceDownloaderTests
     }
 
     [Test]
-    public void DownloadPieceAsync_throws_http_request_exception_on_error_status_code()
+    public async Task DownloadPieceAsync_throws_http_request_exception_on_error_status_code()
     {
         var mockHandler = new MockHttpMessageHandler(HttpStatusCode.InternalServerError, Array.Empty<byte>());
         using var httpClient = new HttpClient(mockHandler);
         var downloader = new WebSeedPieceDownloader(httpClient);
 
-        Assert.ThrowsAsync<HttpRequestException>(async () =>
+        await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await downloader.DownloadPieceAsync(
                 "https://webseed.example.com/files/test.iso",
@@ -142,22 +142,22 @@ public class WebSeedPieceDownloaderTests
     }
 
     [Test]
-    public void DownloadPieceAsync_throws_argument_exception_on_invalid_url()
+    public async Task DownloadPieceAsync_throws_argument_exception_on_invalid_url()
     {
         using var httpClient = new HttpClient(new MockHttpMessageHandler(HttpStatusCode.OK, Array.Empty<byte>()));
         var downloader = new WebSeedPieceDownloader(httpClient);
 
-        Assert.ThrowsAsync<ArgumentException>(async () =>
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
         {
             await downloader.DownloadPieceAsync(null, 0, 16384, 50000);
         });
 
-        Assert.ThrowsAsync<ArgumentException>(async () =>
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
         {
             await downloader.DownloadPieceAsync(string.Empty, 0, 16384, 50000);
         });
 
-        Assert.ThrowsAsync<ArgumentException>(async () =>
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
         {
             await downloader.DownloadPieceAsync("   ", 0, 16384, 50000);
         });
@@ -198,7 +198,7 @@ public class WebSeedPieceDownloaderTests
     }
 
     [Test]
-    public void DownloadPieceAsync_throws_when_cancellation_requested_beforehand()
+    public async Task DownloadPieceAsync_throws_when_cancellation_requested_beforehand()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -206,7 +206,7 @@ public class WebSeedPieceDownloaderTests
         using var httpClient = new HttpClient(new MockHttpMessageHandler(HttpStatusCode.OK, Array.Empty<byte>()));
         var downloader = new WebSeedPieceDownloader(httpClient);
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
             await downloader.DownloadPieceAsync(
                 "https://webseed.example.com/files/test.iso",
@@ -218,7 +218,7 @@ public class WebSeedPieceDownloaderTests
     }
 
     [Test]
-    public void DownloadPieceAsync_handles_cancellation_during_stream_read()
+    public async Task DownloadPieceAsync_handles_cancellation_during_stream_read()
     {
         using var cts = new CancellationTokenSource();
         var pieceBytes = new byte[32768];
@@ -240,7 +240,7 @@ public class WebSeedPieceDownloaderTests
         using var httpClient = new HttpClient(mockHandler);
         var downloader = new WebSeedPieceDownloader(httpClient);
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
         {
             await downloader.DownloadPieceAsync(
                 "https://webseed.example.com/files/test.iso",
@@ -252,7 +252,7 @@ public class WebSeedPieceDownloaderTests
     }
 
     [Test]
-    public void DownloadPieceAsync_throws_invalid_operation_exception_on_incomplete_stream()
+    public async Task DownloadPieceAsync_throws_invalid_operation_exception_on_incomplete_stream()
     {
         // Expecting 16384 bytes, but only returning 1000 bytes
         var incompleteBytes = new byte[1000];
@@ -260,7 +260,7 @@ public class WebSeedPieceDownloaderTests
         using var httpClient = new HttpClient(mockHandler);
         var downloader = new WebSeedPieceDownloader(httpClient);
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await downloader.DownloadPieceAsync(
                 "https://webseed.example.com/files/test.iso",
@@ -389,7 +389,7 @@ public class WebSeedPieceDownloaderTests
     }
 
     [Test]
-    public void DownloadAndVerifyPieceAsync_corrupted_piece_detected_throws_and_increments_corruption_count()
+    public async Task DownloadAndVerifyPieceAsync_corrupted_piece_detected_throws_and_increments_corruption_count()
     {
         const string url = "https://webseed.example.com/files/test.iso";
         var pieceData = new byte[16384];
@@ -402,7 +402,7 @@ public class WebSeedPieceDownloaderTests
         using var httpClient = new HttpClient(mockHandler);
         var downloader = new WebSeedPieceDownloader(httpClient);
 
-        var ex = Assert.ThrowsAsync<WebSeedException>(async () =>
+        var ex = await Assert.ThrowsAsync<WebSeedException>(async () =>
         {
             await downloader.DownloadAndVerifyPieceAsync(
                 url,
@@ -418,7 +418,7 @@ public class WebSeedPieceDownloaderTests
     }
 
     [Test]
-    public void DownloadAndVerifyPieceAsync_bans_web_seed_when_corruption_threshold_is_reached()
+    public async Task DownloadAndVerifyPieceAsync_bans_web_seed_when_corruption_threshold_is_reached()
     {
         const string url = "https://webseed.example.com/files/test.iso";
         var pieceData = new byte[16384];
@@ -435,19 +435,19 @@ public class WebSeedPieceDownloaderTests
         };
 
         // Failure 1
-        Assert.ThrowsAsync<WebSeedException>(async () =>
+        await Assert.ThrowsAsync<WebSeedException>(async () =>
             await downloader.DownloadAndVerifyPieceAsync(url, 0, 16384, 50000, mismatchedHash));
         Assert.That(downloader.GetCorruptionCount(url), Is.EqualTo(1));
         Assert.That(downloader.IsWebSeedBanned(url), Is.False);
 
         // Failure 2
-        Assert.ThrowsAsync<WebSeedException>(async () =>
+        await Assert.ThrowsAsync<WebSeedException>(async () =>
             await downloader.DownloadAndVerifyPieceAsync(url, 0, 16384, 50000, mismatchedHash));
         Assert.That(downloader.GetCorruptionCount(url), Is.EqualTo(2));
         Assert.That(downloader.IsWebSeedBanned(url), Is.False);
 
         // Failure 3 (reaches threshold)
-        Assert.ThrowsAsync<WebSeedException>(async () =>
+        await Assert.ThrowsAsync<WebSeedException>(async () =>
             await downloader.DownloadAndVerifyPieceAsync(url, 0, 16384, 50000, mismatchedHash));
         Assert.That(downloader.GetCorruptionCount(url), Is.EqualTo(3));
         Assert.That(downloader.IsWebSeedBanned(url), Is.True);
@@ -456,14 +456,14 @@ public class WebSeedPieceDownloaderTests
         var requestCountBeforeBannedCall = mockHandler.RequestCount;
 
         // 4th attempt must be rejected immediately without making any HTTP request
-        var bannedEx = Assert.ThrowsAsync<WebSeedException>(async () =>
+        var bannedEx = await Assert.ThrowsAsync<WebSeedException>(async () =>
             await downloader.DownloadAndVerifyPieceAsync(url, 0, 16384, 50000, mismatchedHash));
         Assert.That(bannedEx.Message, Does.Contain("banned"));
         Assert.That(mockHandler.RequestCount, Is.EqualTo(requestCountBeforeBannedCall));
     }
 
     [Test]
-    public void DownloadAndVerifyPieceAsync_supports_per_torrent_banning()
+    public async Task DownloadAndVerifyPieceAsync_supports_per_torrent_banning()
     {
         const string url = "https://webseed.example.com/files/test.iso";
         const string torrentA = "urn:btih:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -481,9 +481,9 @@ public class WebSeedPieceDownloaderTests
         };
 
         // Fail twice for torrentA
-        Assert.ThrowsAsync<WebSeedException>(async () =>
+        await Assert.ThrowsAsync<WebSeedException>(async () =>
             await downloader.DownloadAndVerifyPieceAsync(url, 0, 1024, 1024, mismatchedHash, torrentA));
-        Assert.ThrowsAsync<WebSeedException>(async () =>
+        await Assert.ThrowsAsync<WebSeedException>(async () =>
             await downloader.DownloadAndVerifyPieceAsync(url, 0, 1024, 1024, mismatchedHash, torrentA));
 
         Assert.That(downloader.IsWebSeedBanned(url, torrentA), Is.True);

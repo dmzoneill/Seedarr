@@ -231,13 +231,13 @@ public class TerminalHubAuthTest
     }
 
     [Test]
-    public void StartSession_throws_when_TerminalAccessEnabled_is_false()
+    public async Task StartSession_throws_when_TerminalAccessEnabled_is_false()
     {
         _configFileProvider.TerminalAccessEnabled.Returns(false);
 
         var hub = CreateHub();
 
-        Assert.ThrowsAsync<HubException>(async () => await hub.StartSession(80, 24));
+        await Assert.ThrowsAsync<HubException>(async () => await hub.StartSession(80, 24));
         _terminalService.DidNotReceive().StartSessionAsync(
             Arg.Any<string>(),
             Arg.Any<int>(),
@@ -248,13 +248,13 @@ public class TerminalHubAuthTest
     }
 
     [Test]
-    public void WriteInput_throws_when_TerminalAccessEnabled_is_false()
+    public async Task WriteInput_throws_when_TerminalAccessEnabled_is_false()
     {
         _configFileProvider.TerminalAccessEnabled.Returns(false);
 
         var hub = CreateHub();
 
-        Assert.ThrowsAsync<HubException>(async () => await hub.WriteInput("ls"));
+        await Assert.ThrowsAsync<HubException>(async () => await hub.WriteInput("ls"));
         _terminalService.DidNotReceive().WriteInputAsync(Arg.Any<string>(), Arg.Any<string>());
     }
 

@@ -44,7 +44,7 @@ public class DynamicAuthSchemeManagerResilienceTest
             IsEnabled = true,
         };
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await manager.RegisterOrUpdateOidcProviderAsync(provider);
         });
@@ -133,7 +133,7 @@ public class DynamicAuthSchemeManagerResilienceTest
 
         var manager = new DynamicAuthSchemeManager(sp, repo);
 
-        Assert.DoesNotThrowAsync(async () => await manager.InitializeConfiguredProvidersAsync());
+        await Assert.DoesNotThrowAsync(async () => await manager.InitializeConfiguredProvidersAsync());
 
         // Provider configuration was not corrupted or disabled
         repo.DidNotReceive().Update(Arg.Is<IdentityProviderDefinition>(p => p.ProviderId == "unreachable_idp" && !p.IsEnabled));

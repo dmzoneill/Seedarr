@@ -384,28 +384,28 @@ public class PackageManagementTests
     }
 
     [Test]
-    public void ExportPackageAsync_CancellationToken_AbortsExportPromptly()
+    public async Task ExportPackageAsync_CancellationToken_AbortsExportPromptly()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         using var ms = new MemoryStream();
-        Assert.CatchAsync<OperationCanceledException>(async () =>
+        await Assert.CatchAsync<OperationCanceledException>(async () =>
         {
             await _exportService.ExportPackageAsync(ms, new[] { 1 }, includePayload: false, cancellationToken: cts.Token);
         });
     }
 
     [Test]
-    public void ExportPackageAsync_NullArguments_ThrowsArgumentNullException()
+    public async Task ExportPackageAsync_NullArguments_ThrowsArgumentNullException()
     {
-        Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
         {
             await _exportService.ExportPackageAsync(null, new[] { 1 }, false);
         });
 
         using var ms = new MemoryStream();
-        Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
         {
             await _exportService.ExportPackageAsync(ms, null, false);
         });
@@ -533,7 +533,7 @@ public class PackageManagementTests
     }
 
     [Test]
-    public void ImportPackageAsync_CompressionRatioExceeded_ThrowsSecurityException()
+    public async Task ImportPackageAsync_CompressionRatioExceeded_ThrowsSecurityException()
     {
         // 120 KB of zeroes that compress into < 200 bytes (over 50:1 ratio)
         var highlyCompressible = new byte[120 * 1024];
@@ -570,7 +570,7 @@ public class PackageManagementTests
             MinBytesForRatioCheck = 1024
         };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _importService.ImportPackageAsync(ms, options);
         });
@@ -579,7 +579,7 @@ public class PackageManagementTests
     }
 
     [Test]
-    public void ImportPackageAsync_DeclaredLengthExceedingMax_ThrowsSecurityException()
+    public async Task ImportPackageAsync_DeclaredLengthExceedingMax_ThrowsSecurityException()
     {
         var manifest = new PackageManifest
         {
@@ -613,7 +613,7 @@ public class PackageManagementTests
             MaxUncompressedBytes = 50
         };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _importService.ImportPackageAsync(ms, options);
         });
@@ -622,7 +622,7 @@ public class PackageManagementTests
     }
 
     [Test]
-    public void ImportPackageAsync_MalformedManifestJson_ThrowsSecurityException()
+    public async Task ImportPackageAsync_MalformedManifestJson_ThrowsSecurityException()
     {
         using var ms = new MemoryStream();
         using (var gzip = new GZipStream(ms, CompressionMode.Compress, leaveOpen: true))
@@ -638,7 +638,7 @@ public class PackageManagementTests
 
         var options = new PackageImportOptions { TargetRootDir = _sandboxDir };
 
-        var ex = Assert.ThrowsAsync<SecurityException>(async () =>
+        var ex = await Assert.ThrowsAsync<SecurityException>(async () =>
         {
             await _importService.ImportPackageAsync(ms, options);
         });

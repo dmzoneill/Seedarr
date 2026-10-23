@@ -208,12 +208,12 @@ public class PackageExportServiceTests
     }
 
     [Test]
-    public void ExportPackageAsync_NonexistentTorrent_ThrowsArgumentException()
+    public async Task ExportPackageAsync_NonexistentTorrent_ThrowsArgumentException()
     {
         _torrentService.Get(999).Returns((Torrent)null);
         using var ms = new MemoryStream();
 
-        var ex = Assert.ThrowsAsync<ArgumentException>(async () =>
+        var ex = await Assert.ThrowsAsync<ArgumentException>(async () =>
         {
             await _service.ExportPackageAsync(ms, new[] { 999 }, includePayload: false);
         });
@@ -222,11 +222,11 @@ public class PackageExportServiceTests
     }
 
     [Test]
-    public void ExportPackageAsync_EmptyTorrentIds_ThrowsArgumentException()
+    public async Task ExportPackageAsync_EmptyTorrentIds_ThrowsArgumentException()
     {
         using var ms = new MemoryStream();
 
-        Assert.ThrowsAsync<ArgumentException>(async () =>
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
         {
             await _service.ExportPackageAsync(ms, Array.Empty<int>(), includePayload: false);
         });

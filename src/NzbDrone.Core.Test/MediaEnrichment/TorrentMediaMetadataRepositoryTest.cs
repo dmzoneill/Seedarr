@@ -195,7 +195,7 @@ public class TorrentMediaMetadataRepositoryTest
         }));
 
         TorrentMediaMetadata[] results = null;
-        Assert.DoesNotThrowAsync(async () =>
+        await Assert.DoesNotThrowAsync(async () =>
         {
             results = await Task.WhenAll(tasks);
         });

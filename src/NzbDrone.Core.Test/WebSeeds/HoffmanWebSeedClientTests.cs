@@ -146,7 +146,7 @@ public class HoffmanWebSeedClientTests
     }
 
     [Test]
-    public void DownloadPieceAsync_throws_on_non_200_status()
+    public async Task DownloadPieceAsync_throws_on_non_200_status()
     {
         var mockHandler = new TestHttpMessageHandler((request, ct) =>
         {
@@ -157,7 +157,7 @@ public class HoffmanWebSeedClientTests
         using var httpClient = new HttpClient(mockHandler);
         var client = new HoffmanWebSeedClient(httpClient);
 
-        Assert.ThrowsAsync<HttpRequestException>(async () =>
+        await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadPieceAsync(
                 "https://seed.example.com/endpoint",
@@ -169,7 +169,7 @@ public class HoffmanWebSeedClientTests
     }
 
     [Test]
-    public void DownloadPieceAsync_throws_on_incomplete_payload()
+    public async Task DownloadPieceAsync_throws_on_incomplete_payload()
     {
         var incompletePayload = new byte[1000];
         var mockHandler = new TestHttpMessageHandler((request, ct) =>
@@ -184,7 +184,7 @@ public class HoffmanWebSeedClientTests
         using var httpClient = new HttpClient(mockHandler);
         var client = new HoffmanWebSeedClient(httpClient);
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await client.DownloadPieceAsync(
                 "https://seed.example.com/endpoint",

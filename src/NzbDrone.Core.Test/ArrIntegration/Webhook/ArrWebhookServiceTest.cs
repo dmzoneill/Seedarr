@@ -1050,7 +1050,7 @@ public class ArrWebhookServiceTest
     }
 
     [Test]
-    public void EnrichTorrentFromHistoryAsync_should_handle_cancellation_gracefully()
+    public async Task EnrichTorrentFromHistoryAsync_should_handle_cancellation_gracefully()
     {
         var service = CreateWithMockClient(new MockHttpMessageHandler());
         var method = typeof(ArrWebhookService).GetMethod("EnrichTorrentFromHistoryAsync",
@@ -1068,11 +1068,11 @@ public class ArrWebhookServiceTest
 
         // Should complete without throwing when cancelled
         var task = (Task)method.Invoke(service, new object[] { 1, "testhash", "TESTHASH", connection, "Sonarr", cts.Token });
-        Assert.DoesNotThrowAsync(async () => await task);
+        await Assert.DoesNotThrowAsync(async () => await task);
     }
 
     [Test]
-    public void EnrichTorrentFromHistoryAsync_should_handle_missing_torrent_after_enrich()
+    public async Task EnrichTorrentFromHistoryAsync_should_handle_missing_torrent_after_enrich()
     {
         // Mock the history to return a download URL pointing to a public IP
         var handler = new MockHttpMessageHandler();
@@ -1111,7 +1111,7 @@ public class ArrWebhookServiceTest
         var task = (Task)method.Invoke(service, new object[] { 1, "testhash", "TESTHASH", connection, "Sonarr", cts.Token });
 
         // Should handle the delay being cancelled (2s timeout) or complete with torrent not found
-        Assert.DoesNotThrowAsync(async () => await task);
+        await Assert.DoesNotThrowAsync(async () => await task);
     }
 
     // ── EnrichTorrentFromHistoryAsync: paths that require the 5-second delay to elapse ──
@@ -1284,7 +1284,7 @@ public class ArrWebhookServiceTest
         };
 
         var task = (Task)method.Invoke(service, new object[] { 1, "testhash", "TESTHASH", connection, "Sonarr", CancellationToken.None });
-        Assert.DoesNotThrowAsync(async () => await task);
+        await Assert.DoesNotThrowAsync(async () => await task);
 
         _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
     }

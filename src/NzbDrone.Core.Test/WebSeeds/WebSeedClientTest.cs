@@ -96,7 +96,7 @@ public class WebSeedClientTest
     }
 
     [Test]
-    public void DownloadBlockAsync_throws_WebSeedException_and_aborts_when_server_returns_200_OK()
+    public async Task DownloadBlockAsync_throws_WebSeedException_and_aborts_when_server_returns_200_OK()
     {
         // Misconfigured server returns 200 OK instead of 206 Partial Content
         var multiGigabytePayload = new byte[1024]; // simulated stream
@@ -114,7 +114,7 @@ public class WebSeedClientTest
         using var httpClient = new HttpClient(mockHandler);
         var client = new WebSeedClient(httpClient);
 
-        var ex = Assert.ThrowsAsync<WebSeedException>(async () =>
+        var ex = await Assert.ThrowsAsync<WebSeedException>(async () =>
         {
             await client.DownloadBlockAsync("https://seed.example.com/files/movie.mkv", 16384, 16384);
         });
@@ -124,7 +124,7 @@ public class WebSeedClientTest
     }
 
     [Test]
-    public void DownloadBlockAsync_throws_HttpRequestException_on_server_error()
+    public async Task DownloadBlockAsync_throws_HttpRequestException_on_server_error()
     {
         var mockHandler = new TestHttpMessageHandler((req, ct) =>
         {
@@ -138,7 +138,7 @@ public class WebSeedClientTest
         using var httpClient = new HttpClient(mockHandler);
         var client = new WebSeedClient(httpClient);
 
-        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadBlockAsync("https://seed.example.com/files/movie.mkv", 0, 16384);
         });
@@ -147,7 +147,7 @@ public class WebSeedClientTest
     }
 
     [Test]
-    public void DownloadBlockAsync_throws_when_ContentLength_header_mismatches_expected_length()
+    public async Task DownloadBlockAsync_throws_when_ContentLength_header_mismatches_expected_length()
     {
         var payload = new byte[16384];
         var mockHandler = new TestHttpMessageHandler((req, ct) =>
@@ -163,7 +163,7 @@ public class WebSeedClientTest
         using var httpClient = new HttpClient(mockHandler);
         var client = new WebSeedClient(httpClient);
 
-        var ex = Assert.ThrowsAsync<WebSeedException>(async () =>
+        var ex = await Assert.ThrowsAsync<WebSeedException>(async () =>
         {
             await client.DownloadBlockAsync("https://seed.example.com/files/movie.mkv", 0, 16384);
         });
@@ -172,7 +172,7 @@ public class WebSeedClientTest
     }
 
     [Test]
-    public void DownloadBlockAsync_throws_when_stream_is_incomplete()
+    public async Task DownloadBlockAsync_throws_when_stream_is_incomplete()
     {
         var payload = new byte[1000]; // requested 16384, only 1000 returned
         var mockHandler = new TestHttpMessageHandler((req, ct) =>
@@ -188,7 +188,7 @@ public class WebSeedClientTest
         using var httpClient = new HttpClient(mockHandler);
         var client = new WebSeedClient(httpClient);
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await client.DownloadBlockAsync("https://seed.example.com/files/movie.mkv", 0, 16384);
         });
@@ -456,7 +456,7 @@ public class WebSeedClientTest
     }
 
     [Test]
-    public void DownloadBlockAsync_404_permanently_marks_web_seed_dead_and_prevents_subsequent_requests()
+    public async Task DownloadBlockAsync_404_permanently_marks_web_seed_dead_and_prevents_subsequent_requests()
     {
         var requestCount = 0;
         var mockHandler = new TestHttpMessageHandler((req, ct) =>
@@ -472,7 +472,7 @@ public class WebSeedClientTest
         using var httpClient = new HttpClient(mockHandler);
         var client = new WebSeedClient(httpClient);
 
-        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadBlockAsync("https://seed.example.com/files/movie.mkv", 0, 16384);
         });
@@ -483,7 +483,7 @@ public class WebSeedClientTest
         Assert.That(client.IsSeedAvailable("https://seed.example.com/files/movie.mkv"), Is.False);
 
         // Second request to same file must fail immediately with WebSeedException without hitting network
-        var ex2 = Assert.ThrowsAsync<WebSeedException>(async () =>
+        var ex2 = await Assert.ThrowsAsync<WebSeedException>(async () =>
         {
             await client.DownloadBlockAsync("https://seed.example.com/files/movie.mkv", 0, 16384);
         });
@@ -491,7 +491,7 @@ public class WebSeedClientTest
         Assert.That(requestCount, Is.EqualTo(1));
 
         // Third request to a different file on the same host must also be blocked without hitting network
-        var ex3 = Assert.ThrowsAsync<WebSeedException>(async () =>
+        var ex3 = await Assert.ThrowsAsync<WebSeedException>(async () =>
         {
             await client.DownloadBlockAsync("https://seed.example.com/files/other.mkv", 0, 16384);
         });
@@ -502,7 +502,7 @@ public class WebSeedClientTest
     [TestCase(HttpStatusCode.Unauthorized)]
     [TestCase(HttpStatusCode.Forbidden)]
     [TestCase(HttpStatusCode.Gone)]
-    public void DownloadBlockAsync_permanent_errors_mark_web_seed_dead(HttpStatusCode statusCode)
+    public async Task DownloadBlockAsync_permanent_errors_mark_web_seed_dead(HttpStatusCode statusCode)
     {
         var requestCount = 0;
         var mockHandler = new TestHttpMessageHandler((req, ct) =>
@@ -516,7 +516,7 @@ public class WebSeedClientTest
 
         var url = $"https://seed-{statusCode}.example.com/file.dat";
 
-        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 1024);
         });
@@ -525,7 +525,7 @@ public class WebSeedClientTest
         Assert.That(requestCount, Is.EqualTo(1));
 
         // Subsequent call throws WebSeedException
-        Assert.ThrowsAsync<WebSeedException>(async () =>
+        await Assert.ThrowsAsync<WebSeedException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 1024);
         });
@@ -568,7 +568,7 @@ public class WebSeedClientTest
         var url = "https://rate-limited.example.com/file.dat";
 
         // 1st call: returns 429
-        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 1024);
         });
@@ -579,7 +579,7 @@ public class WebSeedClientTest
         Assert.That(client.GetCooldownRemaining(url), Is.EqualTo(TimeSpan.FromSeconds(60)));
 
         // 2nd call while cooldown is active: immediately throws WebSeedException without network call
-        var ex2 = Assert.ThrowsAsync<WebSeedException>(async () =>
+        var ex2 = await Assert.ThrowsAsync<WebSeedException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 1024);
         });
@@ -590,7 +590,7 @@ public class WebSeedClientTest
         fixedTime = fixedTime.AddSeconds(30);
         Assert.That(client.IsSeedCoolingDown(url), Is.True);
         Assert.That(client.GetCooldownRemaining(url), Is.EqualTo(TimeSpan.FromSeconds(30)));
-        Assert.ThrowsAsync<WebSeedException>(async () =>
+        await Assert.ThrowsAsync<WebSeedException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 1024);
         });
@@ -637,7 +637,7 @@ public class WebSeedClientTest
 
         var url = "https://service-unavailable.example.com/file.dat";
 
-        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 512);
         });
@@ -693,7 +693,7 @@ public class WebSeedClientTest
         // Failures 1 through 4: increment consecutive failure count, circuit breaker not tripped yet
         for (var i = 1; i <= 4; i++)
         {
-            var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+            var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
             {
                 await client.DownloadBlockAsync(url, 0, 1024);
             });
@@ -704,7 +704,7 @@ public class WebSeedClientTest
         }
 
         // 5th failure: threshold reached, trips circuit breaker!
-        var ex5 = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        var ex5 = await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 1024);
         });
@@ -716,7 +716,7 @@ public class WebSeedClientTest
         Assert.That(requestCount, Is.EqualTo(5));
 
         // Next call during cooldown: immediately rejected with WebSeedException without network request
-        var exCooling = Assert.ThrowsAsync<WebSeedException>(async () =>
+        var exCooling = await Assert.ThrowsAsync<WebSeedException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 1024);
         });
@@ -728,7 +728,7 @@ public class WebSeedClientTest
         Assert.That(client.IsSeedCoolingDown(url), Is.False);
 
         // Probe call fails again (6th failure) -> 2nd trip with exponential backoff (30s)!
-        var ex6 = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        var ex6 = await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 1024);
         });
@@ -755,7 +755,7 @@ public class WebSeedClientTest
     }
 
     [Test]
-    public void DownloadBlockAsync_network_exception_counts_towards_circuit_breaker()
+    public async Task DownloadBlockAsync_network_exception_counts_towards_circuit_breaker()
     {
         var requestCount = 0;
         var mockHandler = new TestHttpMessageHandler((req, ct) =>
@@ -774,7 +774,7 @@ public class WebSeedClientTest
 
         for (var i = 1; i <= 2; i++)
         {
-            Assert.ThrowsAsync<HttpRequestException>(async () =>
+            await Assert.ThrowsAsync<HttpRequestException>(async () =>
             {
                 await client.DownloadBlockAsync(url, 0, 1024);
             });
@@ -783,7 +783,7 @@ public class WebSeedClientTest
         }
 
         // 3rd failure trips circuit breaker
-        Assert.ThrowsAsync<HttpRequestException>(async () =>
+        await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadBlockAsync(url, 0, 1024);
         });
@@ -793,7 +793,7 @@ public class WebSeedClientTest
     }
 
     [Test]
-    public void DownloadBlockAsync_416_RangeNotSatisfiable_throws_informative_HttpRequestException()
+    public async Task DownloadBlockAsync_416_RangeNotSatisfiable_throws_informative_HttpRequestException()
     {
         var mockHandler = new TestHttpMessageHandler((req, ct) =>
         {
@@ -806,7 +806,7 @@ public class WebSeedClientTest
         using var httpClient = new HttpClient(mockHandler);
         var client = new WebSeedClient(httpClient);
 
-        var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(async () =>
         {
             await client.DownloadBlockAsync("https://seed.example.com/file.dat", 1000, 500);
         });

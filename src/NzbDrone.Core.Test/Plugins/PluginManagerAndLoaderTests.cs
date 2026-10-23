@@ -796,12 +796,12 @@ public class PluginManagerAndLoaderTests
     }
 
     [Test]
-    public void SidecarProcessHost_SendRequestAsync_when_not_running_should_throw_InvalidOperationException()
+    public async Task SidecarProcessHost_SendRequestAsync_when_not_running_should_throw_InvalidOperationException()
     {
         var manifest = new PluginManifest { Id = "req-not-running", Name = "Req", Version = "1.0", Entrypoint = "p.sh" };
         using var host = new SidecarProcessHost(manifest, _tempAppData);
 
-        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await host.SendRequestAsync("ping");
         });
