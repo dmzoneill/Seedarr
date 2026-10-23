@@ -62,20 +62,21 @@ describe("isTelemetryStale", () => {
   });
 });
 
-const baseTorrent = (): Torrent => ({
-  id: 1,
-  name: "example",
-  status: "Seeding",
-  progress: 1,
-  downloadSpeed: 1200,
-  uploadSpeed: 3400,
-  eta: 0,
-  seeders: 3,
-  leechers: 1,
-  uploaded: 100,
-  downloaded: 100,
-  ratio: 1,
-});
+const baseTorrent = (): Torrent =>
+  ({
+    id: 1,
+    name: "example",
+    status: "Seeding",
+    progress: 1,
+    downloadSpeed: 1200,
+    uploadSpeed: 3400,
+    eta: 0,
+    seeders: 3,
+    leechers: 1,
+    uploaded: 100,
+    downloaded: 100,
+    ratio: 1,
+  }) as Torrent;
 
 describe("applyTelemetry", () => {
   it("ignores stale Paused telemetry so REST seeding speeds show after resume", () => {
@@ -166,11 +167,13 @@ describe("useTorrentStore actions", () => {
     assert.equal(map.version, 1);
 
     store.updatePieceMap(9, { pieceIndex: 4, pieceState: 3 });
-    map = useTorrentStore.getState().pieceMaps[9]!;
+    map = useTorrentStore.getState().pieceMaps[9];
+    assert.ok(map);
     assert.deepEqual(map.corruptedIndices, [4]);
 
     store.updatePieceMap(9, { cleared: true });
-    map = useTorrentStore.getState().pieceMaps[9]!;
+    map = useTorrentStore.getState().pieceMaps[9];
+    assert.ok(map);
     assert.equal(map.bitfield.length, 0);
     assert.deepEqual(map.corruptedIndices, []);
     assert.equal(map.version, 3);
@@ -205,7 +208,8 @@ describe("useTorrentStore actions", () => {
       PieceIndex: 11,
       PieceState: 1,
     });
-    const map = useTorrentStore.getState().pieceMaps[3]!;
+    const map = useTorrentStore.getState().pieceMaps[3];
+    assert.ok(map);
     assert.ok(map.bitfield.length >= 2);
     assert.equal(map.corruptedIndices?.length ?? 0, 0);
   });
@@ -308,10 +312,14 @@ describe("useTorrentStore edge cases", () => {
   it("applies pieceIndices batches and ignores malformed ranges", () => {
     const store = useTorrentStore.getState();
     store.updatePieceMap(8, {
-      ranges: [[0, 1], ["bad" as unknown as number, 2]],
+      ranges: [
+        [0, 1],
+        ["bad" as unknown as number, 2],
+      ],
       pieceIndices: [5, 6],
     });
-    const map = useTorrentStore.getState().pieceMaps[8]!;
+    const map = useTorrentStore.getState().pieceMaps[8];
+    assert.ok(map);
     assert.ok(map.bitfield.length >= 1);
   });
 });
@@ -366,18 +374,25 @@ describe("computeAggregatedTorrentMetrics", () => {
     assert.equal(metrics.totalDlSpeed, 1249);
     assert.equal(metrics.totalUlSpeed, 1524);
     assert.equal(metrics.peerConnections, 15);
-    assert.equal(metrics.networkActivity, metrics.uploadSpeed + metrics.downloadSpeed);
+    assert.equal(
+      metrics.networkActivity,
+      metrics.uploadSpeed + metrics.downloadSpeed,
+    );
   });
 
   it("falls back to stats when torrent list is empty", () => {
-    const metrics = computeAggregatedTorrentMetrics([], {}, {
-      activeTorrents: 9,
-      downloadSpeed: "1200",
-      uploadSpeed: "800",
-      averageRatio: 3.5,
-      totalUploaded: 50_000,
-      totalDownloaded: 40_000,
-    });
+    const metrics = computeAggregatedTorrentMetrics(
+      [],
+      {},
+      {
+        activeTorrents: 9,
+        downloadSpeed: "1200",
+        uploadSpeed: "800",
+        averageRatio: 3.5,
+        totalUploaded: 50_000,
+        totalDownloaded: 40_000,
+      },
+    );
 
     assert.equal(metrics.activeTorrents, 9);
     assert.equal(metrics.downloadSpeed, 1200);

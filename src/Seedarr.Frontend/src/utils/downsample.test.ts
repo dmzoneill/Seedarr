@@ -6,29 +6,61 @@ describe("downsampleLTTB", () => {
   const points = Array.from({ length: 10 }, (_, i) => ({ x: i, y: i * i }));
 
   it("returns empty array for empty input", () => {
-    assert.deepEqual(downsampleLTTB([], 5, (d) => d.x, (d) => d.y), []);
+    const empty: { x: number; y: number }[] = [];
+    assert.deepEqual(
+      downsampleLTTB(
+        empty,
+        5,
+        (d) => d.x,
+        (d) => d.y,
+      ),
+      [],
+    );
   });
 
   it("returns empty array for non-positive target", () => {
-    assert.deepEqual(downsampleLTTB(points, 0, (d) => d.x, (d) => d.y), []);
+    assert.deepEqual(
+      downsampleLTTB(
+        points,
+        0,
+        (d) => d.x,
+        (d) => d.y,
+      ),
+      [],
+    );
   });
 
   it("returns original data when target is larger than input", () => {
     assert.deepEqual(
-      downsampleLTTB(points, 20, (d) => d.x, (d) => d.y),
+      downsampleLTTB(
+        points,
+        20,
+        (d) => d.x,
+        (d) => d.y,
+      ),
       points,
     );
   });
 
   it("keeps endpoints for target of two", () => {
-    const result = downsampleLTTB(points, 2, (d) => d.x, (d) => d.y);
+    const result = downsampleLTTB(
+      points,
+      2,
+      (d) => d.x,
+      (d) => d.y,
+    );
     assert.equal(result.length, 2);
     assert.equal(result[0].x, 0);
     assert.equal(result[1].x, 9);
   });
 
   it("downsamples while preserving first and last points", () => {
-    const result = downsampleLTTB(points, 4, (d) => d.x, (d) => d.y);
+    const result = downsampleLTTB(
+      points,
+      4,
+      (d) => d.x,
+      (d) => d.y,
+    );
     assert.equal(result.length, 4);
     assert.equal(result[0].x, 0);
     assert.equal(result[result.length - 1].x, 9);

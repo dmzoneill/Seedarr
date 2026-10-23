@@ -21,7 +21,7 @@ const torrents: Torrent[] = [
     uploaded: 0,
     downloaded: 0,
     ratio: 0,
-  },
+  } as Torrent,
 ];
 
 describe("resolvePieceMapTorrentId", () => {
@@ -45,7 +45,10 @@ describe("resolvePieceMapTorrentId", () => {
   });
 
   it("returns undefined for blank infoHash or missing list", () => {
-    assert.equal(resolvePieceMapTorrentId({ infoHash: "  " }, torrents), undefined);
+    assert.equal(
+      resolvePieceMapTorrentId({ infoHash: "  " }, torrents),
+      undefined,
+    );
     assert.equal(resolvePieceMapTorrentId({ InfoHash: "abcdef" }), undefined);
   });
 });

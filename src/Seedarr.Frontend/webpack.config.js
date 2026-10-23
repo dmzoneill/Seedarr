@@ -25,9 +25,9 @@ module.exports = (env, argv) => {
         {
           test: /\.tsx?$/,
           use: {
-            loader: "ts-loader",
+            loader: "esbuild-loader",
             options: {
-              transpileOnly: true,
+              target: "es2020",
             },
           },
           exclude: /node_modules/,
