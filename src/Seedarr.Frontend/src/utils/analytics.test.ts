@@ -7,13 +7,13 @@ type AnalyticsModule = typeof import("./analytics");
 
 function installBrowserStubs(storage: StorageMap) {
   const gtagCalls: unknown[][] = [];
-  const win = globalThis as typeof globalThis & {
+  const win = globalThis as unknown as {
     localStorage: {
       getItem: (k: string) => string | null;
       setItem: (k: string, v: string) => void;
       clear: () => void;
     };
-    window: typeof globalThis & { gtag?: (...args: unknown[]) => void };
+    window: { gtag?: (...args: unknown[]) => void };
     document: { title: string };
   };
 
@@ -30,7 +30,7 @@ function installBrowserStubs(storage: StorageMap) {
   };
 
   win.document = { title: "Seedarr" };
-  win.window = win as typeof globalThis & { gtag?: (...args: unknown[]) => void };
+  win.window = win as typeof win & { gtag?: (...args: unknown[]) => void };
   win.window.gtag = (...args: unknown[]) => {
     gtagCalls.push(args);
   };
@@ -100,7 +100,7 @@ describe("analytics", () => {
     assert.ok(gtagCalls.length >= 10);
     const pageView = gtagCalls.find((c) => c[1] === "page_view");
     assert.ok(pageView);
-    const params = pageView![2] as { page_path?: string };
+    const params = pageView[2] as { page_path?: string };
     assert.equal(params.page_path, "/torrents?tab=files");
   });
 

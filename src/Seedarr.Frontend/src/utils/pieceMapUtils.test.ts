@@ -34,8 +34,8 @@ describe("decodeBase64Bitfield", () => {
   it("decodes valid base64", () => {
     const bytes = decodeBase64Bitfield("AQ==");
     assert.ok(bytes);
-    assert.equal(bytes!.length, 1);
-    assert.equal(bytes![0], 1);
+    assert.equal(bytes.length, 1);
+    assert.equal(bytes[0], 1);
   });
 
   it("returns null for invalid base64", () => {
@@ -67,7 +67,10 @@ describe("bitfield mutations", () => {
 
   it("setPieceRangesInPlace applies multiple ranges", () => {
     const field = new Uint8Array(2);
-    setPieceRangesInPlace(field, [[0, 1], [8, 9]]);
+    setPieceRangesInPlace(field, [
+      [0, 1],
+      [8, 9],
+    ]);
     assert.ok(isPieceVerifiedInBitfield(field, 0));
     assert.ok(isPieceVerifiedInBitfield(field, 9));
   });
