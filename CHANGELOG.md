@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.11](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.11) - 2026-10-23
+
+### 🔧 Maintenance & Improvements
+- Await NUnit 5 async assertions in tests
+- Bump the nuget group with 13 updates
+
 ## [v3.0.10](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.10) - 2026-10-23
 
 ### 🔧 Maintenance & Improvements
