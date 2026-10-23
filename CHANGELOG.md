@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.13](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.13) - 2026-10-23
+
+### 🔧 Maintenance & Improvements
+- build(deps): bump dompurify in /src/Seedarr.Frontend
+- build(deps): bump launch-editor in /src/Seedarr.Frontend
+- chore(deps): bump the github-actions group across 1 directory with 8 updates
+
 ## [v3.0.12](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.12) - 2026-10-23
 
 ### 🐛 Bug Fixes
