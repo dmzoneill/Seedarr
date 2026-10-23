@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.10](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.10) - 2026-10-23
+
+### 🔧 Maintenance & Improvements
+- chore(deps): bump the npm group in /src/Seedarr.Frontend with 5 updates
+
 ## [v3.0.9](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.9) - 2026-10-20
 
 ### 🐛 Bug Fixes
