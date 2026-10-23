@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.12](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.12) - 2026-10-23
+
+### 🐛 Bug Fixes
+- Fix frontend build and lint on TypeScript 7
+
 ## [v3.0.11](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.11) - 2026-10-23
 
 ### 🔧 Maintenance & Improvements
