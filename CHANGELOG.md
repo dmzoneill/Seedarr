@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.15](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.15) - 2026-10-25
+
+### 🔧 Maintenance & Improvements
+- build(deps-dev): bump serialize-javascript in /src/Seedarr.Frontend
+- build(deps-dev): bump fast-uri in /src/Seedarr.Frontend
+
 ## [v3.0.14](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.14) - 2026-10-24
 
 ### ✨ Features
