@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/logo.png" alt="Seedarr logo" width="128" />
+</p>
+
 <div align="center">
   <center>
     <img src="logo/seedarr-skull.svg" alt="Seedarr" width="200"/>
@@ -78,6 +82,7 @@ Seedarr container images are available on both **Docker Hub** and **GitHub Conta
 ### Run with Podman / Docker
 
 **Option 1: Docker Hub**
+
 ```bash
 podman run -d \
   --name seedarr \
@@ -89,6 +94,7 @@ podman run -d \
 ```
 
 **Option 2: GitHub Container Registry (GHCR)**
+
 ```bash
 podman run -d \
   --name seedarr \
