@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.17](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.17) - 2026-10-27
+
+### ✨ Features
+- Add repository logo and social preview (#1316)
+
 ## [v3.0.16](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.16) - 2026-10-25
 
 ### ✨ Features
