@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.19](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.19) - 2026-10-29
+
+### 🔧 Maintenance & Improvements
+- build(deps): bump qs from 6.15.3 to 6.17.1 in /src/Seedarr.Frontend (#1320)
+
 ## [v3.0.18](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.18) - 2026-10-29
 
 ### 🔧 Maintenance & Improvements
