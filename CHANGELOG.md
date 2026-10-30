@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.20](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.20) - 2026-10-30
+
+### 🔧 Maintenance & Improvements
+- Exclude test projects from Codacy analysis
+- build(deps): bump the github-actions group with 2 updates
+
 ## [v3.0.19](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.19) - 2026-10-29
 
 ### 🔧 Maintenance & Improvements
