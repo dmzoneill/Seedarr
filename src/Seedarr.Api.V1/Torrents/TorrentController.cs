@@ -826,9 +826,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             : resolvedBaseFullPath + Path.DirectorySeparatorChar;
 
         var isContained = resolvedFullPath.StartsWith(baseDirWithSep, StringComparison.OrdinalIgnoreCase) ||
-                          string.Equals(resolvedFullPath, fullBasePath, StringComparison.OrdinalIgnoreCase) ||
-                          resolvedFullPath.StartsWith(resolvedBaseDirWithSep, StringComparison.OrdinalIgnoreCase) ||
-                          string.Equals(resolvedFullPath, resolvedBaseFullPath, StringComparison.OrdinalIgnoreCase);
+                            string.Equals(resolvedFullPath, fullBasePath, StringComparison.OrdinalIgnoreCase) ||
+                            resolvedFullPath.StartsWith(resolvedBaseDirWithSep, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(resolvedFullPath, resolvedBaseFullPath, StringComparison.OrdinalIgnoreCase);
 
         if (!isContained)
         {
