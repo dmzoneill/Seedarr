@@ -105,7 +105,7 @@ export function LogViewer() {
               fontSize: "0.82rem",
             }}
             value={logCategoryFilter}
-            onChange={(e) => setLogCategoryFilter(e.target.value)}
+            onChange={(e) => { setLogCategoryFilter(e.target.value); }}
           >
             <option value="all">
               {t("trackerBoost.allCategories", undefined, "All Categories")}
@@ -146,7 +146,7 @@ export function LogViewer() {
               fontSize: "0.82rem",
             }}
             value={logLevelFilter}
-            onChange={(e) => setLogLevelFilter(e.target.value)}
+            onChange={(e) => { setLogLevelFilter(e.target.value); }}
           >
             <option value="all">
               {t("trackerBoost.allLevels", undefined, "All Levels")}
@@ -174,7 +174,7 @@ export function LogViewer() {
               "Search logs (message, url, hash)...",
             )}
             value={logSearch}
-            onChange={(e) => setLogSearch(e.target.value)}
+            onChange={(e) => { setLogSearch(e.target.value); }}
             style={{
               width: "280px",
               padding: "0.4rem 0.75rem",
@@ -198,7 +198,7 @@ export function LogViewer() {
             <input
               type="checkbox"
               checked={logAutoRefresh}
-              onChange={(e) => setLogAutoRefresh(e.target.checked)}
+              onChange={(e) => { setLogAutoRefresh(e.target.checked); }}
             />
             <span>
               {t(
@@ -211,7 +211,7 @@ export function LogViewer() {
 
           <button
             className="btn btn-outline"
-            onClick={() => refetchLogs()}
+            onClick={() => { void refetchLogs(); }}
             disabled={logsLoading}
             style={{ padding: "0.35rem 0.75rem", fontSize: "0.8rem" }}
           >

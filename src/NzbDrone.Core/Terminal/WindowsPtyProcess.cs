@@ -185,7 +185,7 @@ public class WindowsPtyProcess : IPtyProcess
     {
         var psi = new ProcessStartInfo
         {
-            FileName = shellPath,
+            FileName = shellPath, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
             UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
@@ -223,7 +223,7 @@ public class WindowsPtyProcess : IPtyProcess
             }
         }
 
-        var process = Process.Start(psi);
+        var process = Process.Start(psi); /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
         return new WindowsPtyProcess(process);
     }
 

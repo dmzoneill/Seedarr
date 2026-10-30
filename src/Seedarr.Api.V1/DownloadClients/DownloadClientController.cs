@@ -15,7 +15,7 @@ namespace Seedarr.Api.V1.DownloadClients;
 [Authorize(Policy = Policies.Reader)]
 public class DownloadClientController : Controller
 {
-    private const string PasswordMask = "********"; // NOSONAR
+    private const string PasswordMask = "********"; // NOSONAR /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
 
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly NzbDrone.Core.DownloadClients.Sync.IDownloadClientSyncService _syncService;
@@ -47,7 +47,7 @@ public class DownloadClientController : Controller
         return Ok(MaskPassword(EnrichWithStatus(definition)));
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<DownloadClientDefinition> Create([FromBody] DownloadClientDefinition definition)
     {

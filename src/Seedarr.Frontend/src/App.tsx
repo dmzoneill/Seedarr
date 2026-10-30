@@ -210,7 +210,7 @@ function App() {
   const startRestartPolling = useCallback(() => {
     setIsRestarting(true);
     setTimeout(() => {
-      const pollInterval = setInterval(async () => {
+      const pollInterval = setInterval(() => { void (async () => {
         try {
           const res = await fetch("/api/v1/system/status");
           if (res.ok) {
@@ -220,7 +220,7 @@ function App() {
         } catch {
           // Backend is restarting; continue polling
         }
-      }, 1500);
+      })(); }, 1500);
     }, 1500);
   }, []);
 
@@ -810,7 +810,7 @@ function App() {
           <button
             type="button"
             className="mobile-sidebar-close-btn"
-            onClick={() => setIsMobileMenuOpen(false)}
+            onClick={() => { setIsMobileMenuOpen(false); }}
             aria-label="Close navigation"
           >
             ✕
@@ -1180,7 +1180,7 @@ function App() {
       {isMobileMenuOpen && (
         <div
           className="sidebar-backdrop"
-          onClick={() => setIsMobileMenuOpen(false)}
+          onClick={() => { setIsMobileMenuOpen(false); }}
           aria-hidden="true"
         />
       )}
@@ -1246,7 +1246,7 @@ function App() {
             </div>
             <button
               type="button"
-              onClick={() => reconnect()}
+              onClick={() => { void reconnect(); }}
               className="btn btn-small"
               style={{
                 backgroundColor: isReconnecting ? "#f59e0b" : "#ef4444",
@@ -1356,7 +1356,7 @@ function App() {
             <button
               type="button"
               className="topbar-btn topbar-shortcuts-btn"
-              onClick={() => setShowShortcutsModal(true)}
+              onClick={() => { setShowShortcutsModal(true); }}
               title={t(
                 "topbar.keyboardShortcuts",
                 undefined,
@@ -1395,7 +1395,7 @@ function App() {
             </button>
             <button
               className="btn btn-small"
-              onClick={() => setShowGettingStartedModal(true)}
+              onClick={() => { setShowGettingStartedModal(true); }}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -1420,8 +1420,8 @@ function App() {
               <button
                 type="button"
                 className="topbar-apikey-btn"
-                onClick={handleCopyApiKey}
-                onMouseEnter={handleMouseEnterApiKey}
+                onClick={(...args: Parameters<typeof handleCopyApiKey>) => { void handleCopyApiKey(...args); }}
+                onMouseEnter={(...args: Parameters<typeof handleMouseEnterApiKey>) => { void handleMouseEnterApiKey(...args); }}
                 onMouseLeave={handleMouseLeaveApiKey}
                 title={t(
                   "topbar.copyApiKey",
@@ -1485,7 +1485,7 @@ function App() {
             <div style={{ position: "relative" }}>
               <button
                 className="topbar-btn"
-                onClick={() => setShowActionsMenu(!showActionsMenu)}
+                onClick={() => { setShowActionsMenu(!showActionsMenu); }}
                 title={t("topbar.actions", undefined, "Actions")}
                 aria-label={t("topbar.actions", undefined, "Actions menu")}
                 aria-expanded={showActionsMenu}
@@ -1521,19 +1521,19 @@ function App() {
                   className="topbar-dropdown"
                   role="menu"
                   tabIndex={-1}
-                  onClick={() => setShowActionsMenu(false)}
+                  onClick={() => { setShowActionsMenu(false); }}
                 >
                   <button
                     className="topbar-dropdown-item"
                     role="menuitem"
-                    onClick={() => navigate("/system/status")}
+                    onClick={() => { void navigate("/system/status"); }}
                   >
                     {t("topbar.systemStatus", undefined, "System Status")}
                   </button>
                   <button
                     className="topbar-dropdown-item"
                     role="menuitem"
-                    onClick={() => navigate("/settings/general")}
+                    onClick={() => { void navigate("/settings/general"); }}
                   >
                     {t("topbar.settings", undefined, "Settings")}
                   </button>
@@ -1551,7 +1551,7 @@ function App() {
                   <button
                     className="topbar-dropdown-item"
                     role="menuitem"
-                    onClick={() => setShowShortcutsModal(true)}
+                    onClick={() => { setShowShortcutsModal(true); }}
                   >
                     {t(
                       "topbar.keyboardShortcuts",
@@ -1562,7 +1562,7 @@ function App() {
                   <button
                     className="topbar-dropdown-item"
                     role="menuitem"
-                    onClick={() => setShowGettingStartedModal(true)}
+                    onClick={() => { setShowGettingStartedModal(true); }}
                   >
                     {t(
                       "topbar.gettingStarted",
@@ -1584,7 +1584,7 @@ function App() {
                   <button
                     className="topbar-dropdown-item"
                     role="menuitem"
-                    onClick={handleLogout}
+                    onClick={(...args: Parameters<typeof handleLogout>) => { void handleLogout(...args); }}
                   >
                     {t("topbar.logout", undefined, "Log Out")}
                   </button>
@@ -1594,7 +1594,7 @@ function App() {
                       <button
                         className="topbar-dropdown-item"
                         role="menuitem"
-                        onClick={handleRestart}
+                        onClick={(...args: Parameters<typeof handleRestart>) => { void handleRestart(...args); }}
                       >
                         {t("topbar.restart", undefined, "Restart")}
                       </button>
@@ -1777,11 +1777,11 @@ function App() {
       <SignalRProvider />
       <AiCopilotDrawer />
       {showAddTorrentModal && (
-        <AddTorrentModal onClose={() => setShowAddTorrentModal(false)} />
+        <AddTorrentModal onClose={() => { setShowAddTorrentModal(false); }} />
       )}
       <CommandPalette
         isOpen={showCommandPalette}
-        onClose={() => setShowCommandPalette(false)}
+        onClose={() => { setShowCommandPalette(false); }}
         onOpenShortcuts={() => {
           setShowCommandPalette(false);
           setShowShortcutsModal(true);
@@ -1797,18 +1797,18 @@ function App() {
       />
       <KeyboardShortcutsModal
         isOpen={showShortcutsModal}
-        onClose={() => setShowShortcutsModal(false)}
+        onClose={() => { setShowShortcutsModal(false); }}
       />
       <GettingStartedModal
         isOpen={showGettingStartedModal}
-        onClose={() => setShowGettingStartedModal(false)}
+        onClose={() => { setShowGettingStartedModal(false); }}
       />
       <IdleLockModal
         isOpen={isLocked}
         currentUser={currentUser}
         lockReason={lockReason}
         onUnlock={handleUnlockSession}
-        onLogout={handleLogout}
+        onLogout={(...args: Parameters<typeof handleLogout>) => { void handleLogout(...args); }}
       />
       <IdleCountdownModal
         isOpen={
@@ -1817,12 +1817,12 @@ function App() {
           Boolean(currentUser && location.pathname !== "/login")
         }
         remainingSeconds={remainingSeconds}
-        onStayLoggedIn={handleStayLoggedIn}
+        onStayLoggedIn={(...args: Parameters<typeof handleStayLoggedIn>) => { void handleStayLoggedIn(...args); }}
         onLockNow={() => {
           setLockReason("idle");
           lockSession();
         }}
-        onLogout={handleLogout}
+        onLogout={(...args: Parameters<typeof handleLogout>) => { void handleLogout(...args); }}
       />
       {isRestarting && (
         <div
@@ -1837,7 +1837,7 @@ function App() {
             backgroundColor: "rgba(0, 0, 0, 0.75)",
             backdropFilter: "blur(4px)",
           }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); }}
         >
           <div
             className="modal"

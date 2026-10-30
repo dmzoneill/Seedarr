@@ -114,7 +114,7 @@ export function NetworkSwarmCard() {
             <select
               className="quick-settings-select"
               value={globalConns}
-              onChange={(e) => handleGlobalConnChange(Number(e.target.value))}
+              onChange={(e) => { handleGlobalConnChange(Number(e.target.value)); }}
             >
               <option value={50}>50</option>
               <option value={100}>100</option>
@@ -130,8 +130,7 @@ export function NetworkSwarmCard() {
             <select
               className="quick-settings-select"
               value={perTorrentConns}
-              onChange={(e) =>
-                handlePerTorrentConnChange(Number(e.target.value))
+              onChange={(e) => { handlePerTorrentConnChange(Number(e.target.value)); }
               }
             >
               <option value={20}>20</option>
@@ -152,7 +151,7 @@ export function NetworkSwarmCard() {
             <button
               type="button"
               className={`quick-settings-protocol-chip ${dht ? "active" : ""}`}
-              onClick={() => handleToggleBtFlag("enableDht")}
+              onClick={() => { handleToggleBtFlag("enableDht"); }}
               title="Toggle Mainline Distributed Hash Table"
             >
               <span className="quick-settings-chip-dot" />
@@ -161,7 +160,7 @@ export function NetworkSwarmCard() {
             <button
               type="button"
               className={`quick-settings-protocol-chip ${pex ? "active" : ""}`}
-              onClick={() => handleToggleBtFlag("enablePex")}
+              onClick={() => { handleToggleBtFlag("enablePex"); }}
               title="Toggle Peer Exchange protocol (BEP 11)"
             >
               <span className="quick-settings-chip-dot" />
@@ -170,7 +169,7 @@ export function NetworkSwarmCard() {
             <button
               type="button"
               className={`quick-settings-protocol-chip ${lpd ? "active" : ""}`}
-              onClick={() => handleToggleBtFlag("enableLpd")}
+              onClick={() => { handleToggleBtFlag("enableLpd"); }}
               title="Toggle Local Peer Discovery (LSD/LPD)"
             >
               <span className="quick-settings-chip-dot" />

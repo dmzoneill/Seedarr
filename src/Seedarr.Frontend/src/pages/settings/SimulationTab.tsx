@@ -54,8 +54,7 @@ export function SimulationTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() =>
-          save.mutate(form, {
+        onSave={() => { save.mutate(form, {
             onSuccess: () => {
               setDirty(false);
               trackSettingSave("simulation", {
@@ -65,7 +64,7 @@ export function SimulationTab() {
                 swarmIntelligenceEnabled: form.swarmIntelligenceEnabled,
               });
             },
-          })
+          }); }
         }
       />
 
@@ -76,13 +75,13 @@ export function SimulationTab() {
         <Toggle
           label="Behavior Engine"
           checked={form.clientBehaviorEngineEnabled}
-          onChange={(v) => set("clientBehaviorEngineEnabled", v)}
+          onChange={(v) => { set("clientBehaviorEngineEnabled", v); }}
           hint="Enable organic peer client simulation"
         />
         <SelectInput
           label="Primary Client Profile"
           value={form.primaryClient}
-          onChange={(v) => set("primaryClient", v)}
+          onChange={(v) => { set("primaryClient", v); }}
           options={[
             { value: "qBittorrent", label: "qBittorrent (v4.4.2+)" },
             { value: "Deluge", label: "Deluge (libtorrent 1.2+)" },
@@ -96,7 +95,7 @@ export function SimulationTab() {
         <NumberInput
           label="Behavior Variation"
           value={form.behaviorVariation}
-          onChange={(v) => set("behaviorVariation", v)}
+          onChange={(v) => { set("behaviorVariation", v); }}
           min={0}
           max={1}
           step={0.05}
@@ -112,13 +111,13 @@ export function SimulationTab() {
         <Toggle
           label="Client Identity Rotation"
           checked={form.clientProfileSwitching}
-          onChange={(v) => set("clientProfileSwitching", v)}
+          onChange={(v) => { set("clientProfileSwitching", v); }}
           hint="Allow occasional subtle rotation of client identities"
         />
         <NumberInput
           label="Switch Probability"
           value={form.switchClientProbability}
-          onChange={(v) => set("switchClientProbability", v)}
+          onChange={(v) => { set("switchClientProbability", v); }}
           min={0}
           max={1}
           step={0.01}
@@ -135,7 +134,7 @@ export function SimulationTab() {
         <SelectInput
           label="Pattern Profile"
           value={form.trafficPatternProfile}
-          onChange={(v) => set("trafficPatternProfile", v)}
+          onChange={(v) => { set("trafficPatternProfile", v); }}
           options={[
             { value: "conservative", label: "Conservative (Low Jitter)" },
             { value: "balanced", label: "Balanced (Natural ISP Curves)" },
@@ -146,13 +145,13 @@ export function SimulationTab() {
         <Toggle
           label="Realistic Variations"
           checked={form.realisticVariations}
-          onChange={(v) => set("realisticVariations", v)}
+          onChange={(v) => { set("realisticVariations", v); }}
           hint="Inject natural noise and micro-bursting into upload streams"
         />
         <Toggle
           label="Time-Based Diurnal Cycles"
           checked={form.timeBasedPatterns}
-          onChange={(v) => set("timeBasedPatterns", v)}
+          onChange={(v) => { set("timeBasedPatterns", v); }}
           hint="Automatically dip speed during peak business hours and boost late at night"
         />
       </SectionCard>
@@ -164,13 +163,13 @@ export function SimulationTab() {
         <Toggle
           label="Swarm Intelligence"
           checked={form.swarmIntelligenceEnabled}
-          onChange={(v) => set("swarmIntelligenceEnabled", v)}
+          onChange={(v) => { set("swarmIntelligenceEnabled", v); }}
           hint="Dynamically prioritize dying swarms with few seeders"
         />
         <NumberInput
           label="Adaptation Rate"
           value={form.swarmAdaptationRate}
-          onChange={(v) => set("swarmAdaptationRate", v)}
+          onChange={(v) => { set("swarmAdaptationRate", v); }}
           min={0}
           max={1}
           step={0.1}
@@ -180,7 +179,7 @@ export function SimulationTab() {
         <NumberInput
           label="Peer Analysis Depth"
           value={form.swarmPeerAnalysisDepth}
-          onChange={(v) => set("swarmPeerAnalysisDepth", v)}
+          onChange={(v) => { set("swarmPeerAnalysisDepth", v); }}
           min={1}
           suffix="peers"
           hint="Number of peers sampled to evaluate swarm health"

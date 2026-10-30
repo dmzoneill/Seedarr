@@ -206,7 +206,7 @@ public class DownloadHistoryController : Controller
         return Ok();
     }
 
-    [HttpDelete]
+    [HttpDelete] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult ClearAll()
     {

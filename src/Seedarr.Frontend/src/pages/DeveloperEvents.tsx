@@ -34,7 +34,7 @@ export default function DeveloperEvents() {
   useEffect(() => {
     void fetchEvents();
     const interval = setInterval(() => { void fetchEvents(); }, 2500);
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); };
   }, [fetchEvents]);
 
   const handleClear = async () => {
@@ -87,7 +87,7 @@ export default function DeveloperEvents() {
 
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           <button
-            onClick={() => setIsPaused(!isPaused)}
+            onClick={() => { setIsPaused(!isPaused); }}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -106,7 +106,7 @@ export default function DeveloperEvents() {
           </button>
 
           <button
-            onClick={() => setShowPublishModal(true)}
+            onClick={() => { setShowPublishModal(true); }}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -125,7 +125,7 @@ export default function DeveloperEvents() {
           </button>
 
           <button
-            onClick={handleClear}
+            onClick={(...args: Parameters<typeof handleClear>) => { void handleClear(...args); }}
             style={{
               padding: "7px 12px",
               borderRadius: "6px",
@@ -149,7 +149,7 @@ export default function DeveloperEvents() {
           type="text"
           placeholder="Filter by event name, namespace, or payload content..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); }}
           style={{
             flex: 1,
             padding: "8px 12px",
@@ -205,7 +205,7 @@ export default function DeveloperEvents() {
                     return (
                       <tr
                         key={ev.id}
-                        onClick={() => setSelectedEvent(ev)}
+                        onClick={() => { setSelectedEvent(ev); }}
                         style={{
                           borderBottom: "1px solid var(--border, #3a352e)",
                           backgroundColor: isSelected ? "var(--accent-bg, rgb(200 168 78 / 15%))" : "transparent",
@@ -291,7 +291,7 @@ export default function DeveloperEvents() {
                 {selectedEvent.eventName}
               </h3>
               <button
-                onClick={() => setSelectedEvent(null)}
+                onClick={() => { setSelectedEvent(null); }}
                 style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "1.1rem" }}
               >
                 ✕
@@ -382,14 +382,14 @@ export default function DeveloperEvents() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
               <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>Dispatch Synthetic Event</h3>
               <button
-                onClick={() => setShowPublishModal(false)}
+                onClick={() => { setShowPublishModal(false); }}
                 style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: "1.2rem" }}
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handlePublish}>
+            <form onSubmit={(...args: Parameters<typeof handlePublish>) => { void handlePublish(...args); }}>
               <div style={{ marginBottom: "12px" }}>
                 <label htmlFor="publish-event-name" style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, marginBottom: "4px" }}>
                   Event Name
@@ -398,7 +398,7 @@ export default function DeveloperEvents() {
                   id="publish-event-name"
                   type="text"
                   value={publishEventName}
-                  onChange={(e) => setPublishEventName(e.target.value)}
+                  onChange={(e) => { setPublishEventName(e.target.value); }}
                   required
                   style={{
                     width: "100%",
@@ -420,7 +420,7 @@ export default function DeveloperEvents() {
                   id="publish-payload"
                   rows={8}
                   value={publishPayload}
-                  onChange={(e) => setPublishPayload(e.target.value)}
+                  onChange={(e) => { setPublishPayload(e.target.value); }}
                   style={{
                     width: "100%",
                     padding: "8px 12px",
@@ -437,7 +437,7 @@ export default function DeveloperEvents() {
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
                 <button
                   type="button"
-                  onClick={() => setShowPublishModal(false)}
+                  onClick={() => { setShowPublishModal(false); }}
                   style={{
                     padding: "8px 14px",
                     borderRadius: "6px",

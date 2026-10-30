@@ -118,7 +118,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
       .writeText(text)
       .then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        setTimeout(() => { setCopied(false); }, 2000);
       })
       .catch(() => {});
   }
@@ -178,14 +178,14 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           <button
             className={`btn btn-xs ${isLive ? "btn-outline" : "btn-primary"}`}
             style={{ fontSize: "0.72rem", padding: "0.15rem 0.4rem" }}
-            onClick={() => setIsLive(!isLive)}
+            onClick={() => { setIsLive(!isLive); }}
           >
             {isLive ? "⏸ Pause" : "▶ Resume"}
           </button>
           <button
             className="btn btn-outline btn-xs"
             style={{ fontSize: "0.72rem", padding: "0.15rem 0.4rem" }}
-            onClick={() => refetch()}
+            onClick={() => { void refetch(); }}
           >
             🔄 Refresh
           </button>
@@ -213,7 +213,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           className="form-control"
           placeholder="Filter logs..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => { setSearchTerm(e.target.value); }}
           style={{
             flex: "1 1 120px",
             padding: "0.2rem 0.45rem",
@@ -229,7 +229,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
               key={lvl}
               className={`btn btn-xs ${levelFilter === lvl ? "btn-primary" : "btn-outline"}`}
               style={{ fontSize: "0.68rem", padding: "0.1rem 0.35rem" }}
-              onClick={() => setLevelFilter(lvl)}
+              onClick={() => { setLevelFilter(lvl); }}
             >
               {lvl}
             </button>
@@ -238,7 +238,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
         {sources.length > 1 && (
           <select
             value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
+            onChange={(e) => { setSourceFilter(e.target.value); }}
             style={{
               fontSize: "0.68rem",
               padding: "0.1rem 0.35rem",

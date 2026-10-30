@@ -232,7 +232,7 @@ export const AiCopilotDrawer: React.FC = () => {
     parseMutation.mutate(
       { releaseName: releaseInput.trim() },
       {
-        onSuccess: (data) => setParsedResult(data),
+        onSuccess: (data) => { setParsedResult(data); },
       },
     );
   };
@@ -249,7 +249,7 @@ export const AiCopilotDrawer: React.FC = () => {
         fileNames: lines,
       },
       {
-        onSuccess: (data) => setSecurityResult(data),
+        onSuccess: (data) => { setSecurityResult(data); },
       },
     );
   };
@@ -429,7 +429,7 @@ export const AiCopilotDrawer: React.FC = () => {
               style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}
             >
               <button
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={() => { setIsExpanded(!isExpanded); }}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -443,7 +443,7 @@ export const AiCopilotDrawer: React.FC = () => {
                 {isExpanded ? "🗗" : "🗖"}
               </button>
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={() => { setIsOpen(false); }}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -472,7 +472,7 @@ export const AiCopilotDrawer: React.FC = () => {
             }}
           >
             <button
-              onClick={() => setActiveTab("chat")}
+              onClick={() => { setActiveTab("chat"); }}
               style={{
                 padding: "0.25rem 0.6rem",
                 borderRadius: "5px",
@@ -487,7 +487,7 @@ export const AiCopilotDrawer: React.FC = () => {
               💬 {t("copilot.tabChat")}
             </button>
             <button
-              onClick={() => setActiveTab("parse")}
+              onClick={() => { setActiveTab("parse"); }}
               style={{
                 padding: "0.25rem 0.6rem",
                 borderRadius: "5px",
@@ -502,7 +502,7 @@ export const AiCopilotDrawer: React.FC = () => {
               🏷️ {t("copilot.tabParse")}
             </button>
             <button
-              onClick={() => setActiveTab("security")}
+              onClick={() => { setActiveTab("security"); }}
               style={{
                 padding: "0.25rem 0.6rem",
                 borderRadius: "5px",
@@ -552,10 +552,9 @@ export const AiCopilotDrawer: React.FC = () => {
                   {t("copilot.quick")}
                 </span>
                 <button
-                  onClick={() =>
-                    setInputMessage(
+                  onClick={() => { setInputMessage(
                       "How do I optimize my BitTorrent download speeds?",
-                    )
+                    ); }
                   }
                   style={{
                     fontSize: "0.7rem",
@@ -571,10 +570,9 @@ export const AiCopilotDrawer: React.FC = () => {
                   {t("copilot.speedTips")}
                 </button>
                 <button
-                  onClick={() =>
-                    setInputMessage(
+                  onClick={() => { setInputMessage(
                       "Explain what Endgame mode and Rarest-First piece picking do in Seedarr.",
-                    )
+                    ); }
                   }
                   style={{
                     fontSize: "0.7rem",
@@ -590,10 +588,9 @@ export const AiCopilotDrawer: React.FC = () => {
                   {t("copilot.piecePickers")}
                 </button>
                 <button
-                  onClick={() =>
-                    setInputMessage(
+                  onClick={() => { setInputMessage(
                       "How does VPN kill switch and interface binding work?",
-                    )
+                    ); }
                   }
                   style={{
                     fontSize: "0.7rem",
@@ -749,7 +746,7 @@ export const AiCopilotDrawer: React.FC = () => {
                 <input
                   type="text"
                   value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
+                  onChange={(e) => { setInputMessage(e.target.value); }}
                   placeholder={t("copilot.inputPlaceholder")}
                   style={{
                     flex: 1,
@@ -820,7 +817,7 @@ export const AiCopilotDrawer: React.FC = () => {
                   <input
                     type="text"
                     value={releaseInput}
-                    onChange={(e) => setReleaseInput(e.target.value)}
+                    onChange={(e) => { setReleaseInput(e.target.value); }}
                     placeholder={t("copilot.rawScenePlaceholder")}
                     style={{
                       flex: 1,
@@ -1082,7 +1079,7 @@ export const AiCopilotDrawer: React.FC = () => {
                 <textarea
                   rows={4}
                   value={securityInput}
-                  onChange={(e) => setSecurityInput(e.target.value)}
+                  onChange={(e) => { setSecurityInput(e.target.value); }}
                   placeholder={t("copilot.fileListPlaceholder")}
                   style={{
                     width: "100%",

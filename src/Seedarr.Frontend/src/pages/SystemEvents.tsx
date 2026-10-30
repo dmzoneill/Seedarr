@@ -329,7 +329,7 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
         document.body.removeChild(textarea);
       }
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => { setCopied(false); }, 2000);
     } catch (err) {
       console.error("Failed to copy event to clipboard", err);
     }
@@ -496,7 +496,7 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
                 <button
                   type="button"
                   className="btn btn-small btn-outline"
-                  onClick={() => setStackTraceExpanded((prev) => !prev)}
+                  onClick={() => { setStackTraceExpanded((prev) => !prev); }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -554,7 +554,7 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
           <button
             type="button"
             className="btn btn-small btn-outline"
-            onClick={handleCopy}
+            onClick={(...args: Parameters<typeof handleCopy>) => { void handleCopy(...args); }}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -850,7 +850,7 @@ function SystemEvents() {
                 <tr
                   key={entry.id}
                   className="torrent-table-row"
-                  onClick={() => setSelectedEvent(entry)}
+                  onClick={() => { setSelectedEvent(entry); }}
                   style={{ cursor: "pointer" }}
                   title="Click to view event details"
                 >
@@ -989,7 +989,7 @@ function SystemEvents() {
             <button
               type="button"
               className="btn btn-small btn-outline"
-              onClick={() => setCurrentPage(1)}
+              onClick={() => { setCurrentPage(1); }}
               disabled={activePage <= 1}
               title="First Page"
               style={{ minWidth: "30px", padding: "0.25rem 0.5rem" }}
@@ -999,7 +999,7 @@ function SystemEvents() {
             <button
               type="button"
               className="btn btn-small btn-outline"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => { setCurrentPage((p) => Math.max(1, p - 1)); }}
               disabled={activePage <= 1}
               title="Previous Page"
               style={{ minWidth: "30px", padding: "0.25rem 0.5rem" }}
@@ -1013,7 +1013,7 @@ function SystemEvents() {
                   key={p}
                   type="button"
                   className={`btn btn-small ${activePage === p ? "log-filter-active" : "btn-outline"}`}
-                  onClick={() => setCurrentPage(p)}
+                  onClick={() => { setCurrentPage(p); }}
                   style={{ minWidth: "30px", padding: "0.25rem 0.5rem" }}
                 >
                   {p}
@@ -1035,7 +1035,7 @@ function SystemEvents() {
             <button
               type="button"
               className="btn btn-small btn-outline"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => { setCurrentPage((p) => Math.min(totalPages, p + 1)); }}
               disabled={activePage >= totalPages}
               title="Next Page"
               style={{ minWidth: "30px", padding: "0.25rem 0.5rem" }}
@@ -1045,7 +1045,7 @@ function SystemEvents() {
             <button
               type="button"
               className="btn btn-small btn-outline"
-              onClick={() => setCurrentPage(totalPages)}
+              onClick={() => { setCurrentPage(totalPages); }}
               disabled={activePage >= totalPages}
               title="Last Page"
               style={{ minWidth: "30px", padding: "0.25rem 0.5rem" }}
@@ -1060,7 +1060,7 @@ function SystemEvents() {
       {selectedEvent && (
         <EventDetailsModal
           event={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
+          onClose={() => { setSelectedEvent(null); }}
         />
       )}
     </div>

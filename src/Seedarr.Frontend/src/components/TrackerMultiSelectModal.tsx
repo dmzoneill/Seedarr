@@ -179,7 +179,7 @@ export default function TrackerMultiSelectModal({
           border: "1px solid var(--border-light)",
           boxShadow: "0 20px 45px rgba(0, 0, 0, 0.6)",
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();
@@ -254,7 +254,7 @@ export default function TrackerMultiSelectModal({
               placeholder="🔍 Search by domain, protocol, status..."
               aria-label="Search candidate trackers"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); }}
               style={{
                 flex: "1 1 240px",
                 padding: "0.4rem 0.75rem",
@@ -266,7 +266,7 @@ export default function TrackerMultiSelectModal({
               className="form-control"
               aria-label="Filter trackers by health status"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => { setStatusFilter(e.target.value); }}
               style={{
                 width: "160px",
                 padding: "0.4rem 0.6rem",
@@ -303,7 +303,7 @@ export default function TrackerMultiSelectModal({
                 type="button"
                 className="btn btn-sm btn-action"
                 style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
-                onClick={() => onSelectBatch(verifiedUnattached)}
+                onClick={() => { onSelectBatch(verifiedUnattached); }}
               >
                 🟢 Verified Swarms ({verifiedUnattached.length})
               </button>
@@ -314,7 +314,7 @@ export default function TrackerMultiSelectModal({
                 type="button"
                 className="btn btn-sm btn-action"
                 style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
-                onClick={() => onSelectBatch(onlineUnattached)}
+                onClick={() => { onSelectBatch(onlineUnattached); }}
               >
                 ⚡ All Online ({onlineUnattached.length})
               </button>
@@ -568,7 +568,7 @@ export default function TrackerMultiSelectModal({
             placeholder="Or enter custom URL (e.g. udp://tracker.example.com:1337/announce)"
             aria-label="Enter custom tracker URL"
             value={customUrl}
-            onChange={(e) => setCustomUrl(e.target.value)}
+            onChange={(e) => { setCustomUrl(e.target.value); }}
             style={{ flex: 1, fontSize: "0.82rem", padding: "0.35rem 0.6rem" }}
           />
           <button

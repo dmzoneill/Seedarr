@@ -114,12 +114,11 @@ export function DownloadClientsTab() {
   const handleTest = (id: number) => {
     setTestResults((prev) => ({ ...prev, [id]: null }));
     testMutation.mutate(id, {
-      onSuccess: (data) => setTestResults((prev) => ({ ...prev, [id]: data })),
-      onError: (err) =>
-        setTestResults((prev) => ({
+      onSuccess: (data) => { setTestResults((prev) => ({ ...prev, [id]: data })); },
+      onError: (err) => { setTestResults((prev) => ({
           ...prev,
           [id]: { success: false, message: err.message },
-        })),
+        })); },
     });
   };
 
@@ -169,8 +168,7 @@ export function DownloadClientsTab() {
           showToast("Remote path mapping updated", "success");
           setEditingMapping(null);
         },
-        onError: (err) =>
-          showToast(err.message || "Failed to update mapping", "error"),
+        onError: (err) => { showToast(err.message || "Failed to update mapping", "error"); },
       });
     } else {
       createMappingMutation.mutate(editingMapping, {
@@ -178,8 +176,7 @@ export function DownloadClientsTab() {
           showToast("Remote path mapping created", "success");
           setEditingMapping(null);
         },
-        onError: (err) =>
-          showToast(err.message || "Failed to create mapping", "error"),
+        onError: (err) => { showToast(err.message || "Failed to create mapping", "error"); },
       });
     }
   };
@@ -192,9 +189,8 @@ export function DownloadClientsTab() {
       )
     ) {
       deleteMappingMutation.mutate(mapping.id, {
-        onSuccess: () => showToast("Remote path mapping deleted", "success"),
-        onError: (err) =>
-          showToast(err.message || "Failed to delete mapping", "error"),
+        onSuccess: () => { showToast("Remote path mapping deleted", "success"); },
+        onError: (err) => { showToast(err.message || "Failed to delete mapping", "error"); },
       });
     }
   };
@@ -222,9 +218,8 @@ export function DownloadClientsTab() {
         direction: testDirection,
       },
       {
-        onSuccess: (data) => setMappingTestResult(data),
-        onError: (err) =>
-          showToast(err.message || "Path translation test failed", "error"),
+        onSuccess: (data) => { setMappingTestResult(data); },
+        onError: (err) => { showToast(err.message || "Path translation test failed", "error"); },
       },
     );
   };
@@ -252,13 +247,11 @@ export function DownloadClientsTab() {
             className="btn btn-outline btn-small"
             onClick={() => {
               syncMutation.mutate(undefined, {
-                onSuccess: (res) =>
-                  showToast(
+                onSuccess: (res) => { showToast(
                     `Sync Complete: ${res.added} added, ${res.skipped} skipped, ${res.failed} failed`,
                     "success",
-                  ),
-                onError: (err) =>
-                  showToast(err.message || "Torrent sync failed", "error"),
+                  ); },
+                onError: (err) => { showToast(err.message || "Torrent sync failed", "error"); },
               });
             }}
             disabled={syncMutation.isPending}
@@ -275,7 +268,7 @@ export function DownloadClientsTab() {
               className="provider-card"
               role="button"
               tabIndex={0}
-              onClick={() => handleOpenModal(client)}
+              onClick={() => { handleOpenModal(client); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -291,7 +284,7 @@ export function DownloadClientsTab() {
                     rel="noopener noreferrer"
                     className="provider-card-action"
                     title={`Open ${client.name} Web UI`}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); }}
                     style={{ textDecoration: "none", color: "inherit" }}
                   >
                     ↗
@@ -318,13 +311,11 @@ export function DownloadClientsTab() {
                       )
                     ) {
                       deleteMutation.mutate(client.id, {
-                        onSuccess: () =>
-                          showToast("Download client deleted", "success"),
-                        onError: () =>
-                          showToast(
+                        onSuccess: () => { showToast("Download client deleted", "success"); },
+                        onError: () => { showToast(
                             "Failed to delete download client",
                             "error",
-                          ),
+                          ); },
                       });
                     }
                   }}
@@ -460,7 +451,7 @@ export function DownloadClientsTab() {
             className="provider-card-add"
             role="button"
             tabIndex={0}
-            onClick={() => handleOpenModal(defaultClient)}
+            onClick={() => { handleOpenModal(defaultClient); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -496,14 +487,14 @@ export function DownloadClientsTab() {
             <button
               type="button"
               className="btn btn-outline btn-small"
-              onClick={() => handleOpenTestModal()}
+              onClick={() => { handleOpenTestModal(); }}
             >
               🧪 Test Path Mapping
             </button>
             <button
               type="button"
               className="btn btn-primary btn-small"
-              onClick={() => handleOpenMappingModal(defaultMapping)}
+              onClick={() => { handleOpenMappingModal(defaultMapping); }}
             >
               + Add Mapping
             </button>
@@ -611,11 +602,10 @@ export function DownloadClientsTab() {
                             fontSize: "0.75rem",
                           }}
                           title="Test translation with this mapping"
-                          onClick={() =>
-                            handleOpenTestModal(
+                          onClick={() => { handleOpenTestModal(
                               mapping.host,
                               mapping.remotePath,
-                            )
+                            ); }
                           }
                         >
                           Test
@@ -628,7 +618,7 @@ export function DownloadClientsTab() {
                             fontSize: "0.75rem",
                           }}
                           title="Edit mapping"
-                          onClick={() => handleOpenMappingModal(mapping)}
+                          onClick={() => { handleOpenMappingModal(mapping); }}
                         >
                           Edit
                         </button>
@@ -640,7 +630,7 @@ export function DownloadClientsTab() {
                             fontSize: "0.75rem",
                           }}
                           title="Delete mapping"
-                          onClick={() => handleDeleteMapping(mapping)}
+                          onClick={() => { handleDeleteMapping(mapping); }}
                         >
                           Delete
                         </button>
@@ -659,7 +649,7 @@ export function DownloadClientsTab() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setEditing(null)}
+          onClick={() => { setEditing(null); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -671,7 +661,7 @@ export function DownloadClientsTab() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -924,7 +914,7 @@ export function DownloadClientsTab() {
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
                   className="btn btn-outline btn-small"
-                  onClick={() => setEditing(null)}
+                  onClick={() => { setEditing(null); }}
                 >
                   Cancel
                 </button>
@@ -950,7 +940,7 @@ export function DownloadClientsTab() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setEditingMapping(null)}
+          onClick={() => { setEditingMapping(null); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -962,7 +952,7 @@ export function DownloadClientsTab() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -986,8 +976,7 @@ export function DownloadClientsTab() {
             <TextInput
               label="Host"
               value={editingMapping.host || ""}
-              onChange={(v) =>
-                setEditingMapping({ ...editingMapping, host: v })
+              onChange={(v) => { setEditingMapping({ ...editingMapping, host: v }); }
               }
               placeholder="e.g. localhost, 192.168.1.100, or seedbox"
               hint="The download client host as configured in Seedarr (must match client Host)."
@@ -995,8 +984,7 @@ export function DownloadClientsTab() {
             <TextInput
               label="Remote Path"
               value={editingMapping.remotePath || ""}
-              onChange={(v) =>
-                setEditingMapping({ ...editingMapping, remotePath: v })
+              onChange={(v) => { setEditingMapping({ ...editingMapping, remotePath: v }); }
               }
               placeholder="e.g. /downloads or D:\Torrents"
               hint="Path prefix reported by the remote download client."
@@ -1004,8 +992,7 @@ export function DownloadClientsTab() {
             <TextInput
               label="Local Path"
               value={editingMapping.localPath || ""}
-              onChange={(v) =>
-                setEditingMapping({ ...editingMapping, localPath: v })
+              onChange={(v) => { setEditingMapping({ ...editingMapping, localPath: v }); }
               }
               placeholder="e.g. /media/downloads or /mnt/storage/downloads"
               hint="Local path prefix where files are accessible by Seedarr on disk."
@@ -1034,7 +1021,7 @@ export function DownloadClientsTab() {
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => setEditingMapping(null)}
+                onClick={() => { setEditingMapping(null); }}
               >
                 Cancel
               </button>
@@ -1062,7 +1049,7 @@ export function DownloadClientsTab() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setTestModalOpen(false)}
+          onClick={() => { setTestModalOpen(false); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -1074,7 +1061,7 @@ export function DownloadClientsTab() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1347,7 +1334,7 @@ export function DownloadClientsTab() {
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => setTestModalOpen(false)}
+                onClick={() => { setTestModalOpen(false); }}
               >
                 Close
               </button>

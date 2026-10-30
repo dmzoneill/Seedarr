@@ -130,7 +130,7 @@ function TorrentContextMenu({
 
   useEffect(() => {
     if (promptConfig) return;
-    const handleClick = () => onClose();
+    const handleClick = () => { onClose(); };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -171,7 +171,7 @@ function TorrentContextMenu({
       if (onBatchStart) {
         onBatchStart(effectiveTorrents.map((t) => t.id));
       } else {
-        effectiveTorrents.forEach((t) => onStart(t.id));
+        effectiveTorrents.forEach((t) => { onStart(t.id); });
       }
     } else if (ct) {
       onStart(ct.id);
@@ -184,7 +184,7 @@ function TorrentContextMenu({
       if (onBatchStop) {
         onBatchStop(effectiveTorrents.map((t) => t.id));
       } else {
-        effectiveTorrents.forEach((t) => onStop(t.id));
+        effectiveTorrents.forEach((t) => { onStop(t.id); });
       }
     } else if (ct) {
       onStop(ct.id);
@@ -197,7 +197,7 @@ function TorrentContextMenu({
       if (onBatchAnnounce) {
         onBatchAnnounce(effectiveTorrents.map((t) => t.id));
       } else {
-        effectiveTorrents.forEach((t) => onAnnounce(t.id));
+        effectiveTorrents.forEach((t) => { onAnnounce(t.id); });
       }
     } else if (ct) {
       onAnnounce(ct.id);
@@ -216,7 +216,7 @@ function TorrentContextMenu({
         if (onBatchDelete) {
           onBatchDelete({ ids, deleteFiles });
         } else {
-          ids.forEach((id) => onDelete({ id, deleteFiles }));
+          ids.forEach((id) => { onDelete({ id, deleteFiles }); });
         }
       }
     } else if (ct) {
@@ -235,7 +235,7 @@ function TorrentContextMenu({
       if (onBatchUpdate) {
         onBatchUpdate(updated);
       } else {
-        updated.forEach((t) => onUpdate(t));
+        updated.forEach((t) => { onUpdate(t); });
       }
     } else if (ct) {
       onUpdate(updater(ct));
@@ -252,7 +252,7 @@ function TorrentContextMenu({
       if (onBatchMoveQueue) {
         onBatchMoveQueue({ ids, position });
       } else {
-        ids.forEach((id) => onMoveQueue({ id, position }));
+        ids.forEach((id) => { onMoveQueue({ id, position }); });
       }
     } else if (ct) {
       onMoveQueue({ id: ct.id, position });
@@ -281,7 +281,7 @@ function TorrentContextMenu({
         role="menu"
         tabIndex={-1}
         style={{ left: x, top: y, display: promptConfig ? "none" : undefined }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();
@@ -336,7 +336,7 @@ function TorrentContextMenu({
                     fontSize: "0.75rem",
                     textAlign: "center",
                   }}
-                  onClick={() => handleMoveQueueAll("top")}
+                  onClick={() => { handleMoveQueueAll("top"); }}
                   title={t(
                     "torrents.contextMenu.top",
                     undefined,
@@ -354,7 +354,7 @@ function TorrentContextMenu({
                     fontSize: "0.75rem",
                     textAlign: "center",
                   }}
-                  onClick={() => handleMoveQueueAll("up")}
+                  onClick={() => { handleMoveQueueAll("up"); }}
                   title={t("torrents.contextMenu.up", undefined, "Move Up")}
                 >
                   ▲ {t("torrents.contextMenu.up", undefined, "Up")}
@@ -368,7 +368,7 @@ function TorrentContextMenu({
                     fontSize: "0.75rem",
                     textAlign: "center",
                   }}
-                  onClick={() => handleMoveQueueAll("down")}
+                  onClick={() => { handleMoveQueueAll("down"); }}
                   title={t("torrents.contextMenu.down", undefined, "Move Down")}
                 >
                   ▼ {t("torrents.contextMenu.down", undefined, "Down")}
@@ -382,7 +382,7 @@ function TorrentContextMenu({
                     fontSize: "0.75rem",
                     textAlign: "center",
                   }}
-                  onClick={() => handleMoveQueueAll("bottom")}
+                  onClick={() => { handleMoveQueueAll("bottom"); }}
                   title={t(
                     "torrents.contextMenu.bottom",
                     undefined,
@@ -443,11 +443,10 @@ function TorrentContextMenu({
 
                 <button
                   className="context-menu-item"
-                  onClick={() =>
-                    handleUpdateAll((t) => ({
+                  onClick={() => { handleUpdateAll((t) => ({
                       ...t,
                       forceStart: !t.forceStart,
-                    }))
+                    })); }
                   }
                 >
                   {!isMulti && ct?.forceStart ? "✓ " : ""}
@@ -466,8 +465,7 @@ function TorrentContextMenu({
                 (isMulti && effectiveTorrents.some((t) => t.progress < 1.0)) ? (
                   <button
                     className="context-menu-item"
-                    onClick={() =>
-                      handleUpdateAll((t) => ({ ...t, progress: 1.0 }))
+                    onClick={() => { handleUpdateAll((t) => ({ ...t, progress: 1.0 })); }
                     }
                   >
                     {t("torrents.forceComplete", undefined, "Force Complete")}
@@ -517,8 +515,8 @@ function TorrentContextMenu({
             {/* Copy submenu */}
             <div
               className="context-menu-item context-menu-submenu-trigger"
-              onMouseEnter={() => setOpenSubmenu("copy")}
-              onMouseLeave={() => setOpenSubmenu(null)}
+              onMouseEnter={() => { setOpenSubmenu("copy"); }}
+              onMouseLeave={() => { setOpenSubmenu(null); }}
             >
               {t("common.copy", undefined, "Copy")}
               {countSuffix} ▶
@@ -526,32 +524,27 @@ function TorrentContextMenu({
                 <div className="context-menu context-menu-submenu">
                   <button
                     className="context-menu-item"
-                    onClick={() =>
-                      handleCopy(
+                    onClick={() => { void (handleCopy(
                         effectiveTorrents.map((t) => t.name).join("\n"),
                         t("common.name", undefined, "Name"),
-                      )
-                    }
+                      )); }}
                   >
                     {t("common.name", undefined, "Name")}
                     {countSuffix}
                   </button>
                   <button
                     className="context-menu-item"
-                    onClick={() =>
-                      handleCopy(
+                    onClick={() => { void (handleCopy(
                         effectiveTorrents.map((t) => t.infoHash).join("\n"),
                         t("torrents.table.infoHash", undefined, "Info Hash"),
-                      )
-                    }
+                      )); }}
                   >
                     {t("torrents.table.infoHash", undefined, "Info Hash")}
                     {countSuffix}
                   </button>
                   <button
                     className="context-menu-item"
-                    onClick={() =>
-                      handleCopy(
+                    onClick={() => { void (handleCopy(
                         effectiveTorrents
                           .map((t) => buildMagnetLink(t))
                           .join("\n"),
@@ -560,8 +553,7 @@ function TorrentContextMenu({
                           undefined,
                           "Magnet Link",
                         ),
-                      )
-                    }
+                      )); }}
                   >
                     {t("modals.addTorrent.byMagnet", undefined, "Magnet Link")}
                     {countSuffix}
@@ -569,12 +561,10 @@ function TorrentContextMenu({
                   {!isMulti && ct && (
                     <button
                       className="context-menu-item"
-                      onClick={() =>
-                        handleCopy(
+                      onClick={() => { void (handleCopy(
                           ct.trackerUrl ?? "",
                           t("torrents.table.tracker", undefined, "Tracker URL"),
-                        )
-                      }
+                        )); }}
                     >
                       {t("torrents.table.tracker", undefined, "Tracker URL")}
                     </button>
@@ -589,8 +579,8 @@ function TorrentContextMenu({
                 {/* Priority submenu */}
                 <div
                   className="context-menu-item context-menu-submenu-trigger"
-                  onMouseEnter={() => setOpenSubmenu("priority")}
-                  onMouseLeave={() => setOpenSubmenu(null)}
+                  onMouseEnter={() => { setOpenSubmenu("priority"); }}
+                  onMouseLeave={() => { setOpenSubmenu(null); }}
                 >
                   {t("torrents.priority", undefined, "Priority")}
                   {countSuffix} ▶
@@ -598,24 +588,21 @@ function TorrentContextMenu({
                     <div className="context-menu context-menu-submenu">
                       <button
                         className="context-menu-item"
-                        onClick={() =>
-                          handleUpdateAll((t) => ({ ...t, priority: 2 }))
+                        onClick={() => { handleUpdateAll((t) => ({ ...t, priority: 2 })); }
                         }
                       >
                         {!isMulti && ct?.priority === 2 ? "✓ " : ""}High
                       </button>
                       <button
                         className="context-menu-item"
-                        onClick={() =>
-                          handleUpdateAll((t) => ({ ...t, priority: 1 }))
+                        onClick={() => { handleUpdateAll((t) => ({ ...t, priority: 1 })); }
                         }
                       >
                         {!isMulti && ct?.priority === 1 ? "✓ " : ""}Normal
                       </button>
                       <button
                         className="context-menu-item"
-                        onClick={() =>
-                          handleUpdateAll((t) => ({ ...t, priority: 0 }))
+                        onClick={() => { handleUpdateAll((t) => ({ ...t, priority: 0 })); }
                         }
                       >
                         {!isMulti && ct?.priority === 0 ? "✓ " : ""}Low
@@ -627,8 +614,8 @@ function TorrentContextMenu({
                 {/* Speed Limit submenu */}
                 <div
                   className="context-menu-item context-menu-submenu-trigger"
-                  onMouseEnter={() => setOpenSubmenu("speed")}
-                  onMouseLeave={() => setOpenSubmenu(null)}
+                  onMouseEnter={() => { setOpenSubmenu("speed"); }}
+                  onMouseLeave={() => { setOpenSubmenu(null); }}
                 >
                   Speed Limit{countSuffix} ▶
                   {openSubmenu === "speed" && (
@@ -685,12 +672,11 @@ function TorrentContextMenu({
                       </button>
                       <button
                         className="context-menu-item"
-                        onClick={() =>
-                          handleUpdateAll((t) => ({
+                        onClick={() => { handleUpdateAll((t) => ({
                             ...t,
                             uploadLimit: 0,
                             downloadLimit: 0,
-                          }))
+                          })); }
                         }
                       >
                         Reset to Global Limits{countSuffix}
@@ -702,8 +688,8 @@ function TorrentContextMenu({
                 {/* Queue submenu */}
                 <div
                   className="context-menu-item context-menu-submenu-trigger"
-                  onMouseEnter={() => setOpenSubmenu("queue")}
-                  onMouseLeave={() => setOpenSubmenu(null)}
+                  onMouseEnter={() => { setOpenSubmenu("queue"); }}
+                  onMouseLeave={() => { setOpenSubmenu(null); }}
                 >
                   {t("torrents.queue", undefined, "Queue")}
                   {countSuffix} ▶
@@ -711,28 +697,28 @@ function TorrentContextMenu({
                     <div className="context-menu context-menu-submenu">
                       <button
                         className="context-menu-item"
-                        onClick={() => handleMoveQueueAll("top")}
+                        onClick={() => { handleMoveQueueAll("top"); }}
                       >
                         {t("common.top", undefined, "Top")}
                         {countSuffix}
                       </button>
                       <button
                         className="context-menu-item"
-                        onClick={() => handleMoveQueueAll("up")}
+                        onClick={() => { handleMoveQueueAll("up"); }}
                       >
                         {t("common.up", undefined, "Up")}
                         {countSuffix}
                       </button>
                       <button
                         className="context-menu-item"
-                        onClick={() => handleMoveQueueAll("down")}
+                        onClick={() => { handleMoveQueueAll("down"); }}
                       >
                         {t("common.down", undefined, "Down")}
                         {countSuffix}
                       </button>
                       <button
                         className="context-menu-item"
-                        onClick={() => handleMoveQueueAll("bottom")}
+                        onClick={() => { handleMoveQueueAll("bottom"); }}
                       >
                         {t("common.bottom", undefined, "Bottom")}
                         {countSuffix}
@@ -948,8 +934,8 @@ function TorrentContextMenu({
                 <div className="context-menu-separator" />
                 <div
                   className="context-menu-item context-menu-submenu-trigger"
-                  onMouseEnter={() => setOpenSubmenu("remove")}
-                  onMouseLeave={() => setOpenSubmenu(null)}
+                  onMouseEnter={() => { setOpenSubmenu("remove"); }}
+                  onMouseLeave={() => { setOpenSubmenu(null); }}
                 >
                   {t("common.remove", undefined, "Remove")}
                   {countSuffix} ▶
@@ -957,7 +943,7 @@ function TorrentContextMenu({
                     <div className="context-menu context-menu-submenu">
                       <button
                         className="context-menu-item context-menu-item-danger"
-                        onClick={() => handleDeleteAll(false)}
+                        onClick={() => { handleDeleteAll(false); }}
                       >
                         {t(
                           "torrents.removeTorrent",
@@ -968,7 +954,7 @@ function TorrentContextMenu({
                       </button>
                       <button
                         className="context-menu-item context-menu-item-danger"
-                        onClick={() => handleDeleteAll(true)}
+                        onClick={() => { handleDeleteAll(true); }}
                       >
                         {t(
                           "torrents.removeTorrentAndData",
@@ -991,8 +977,8 @@ function TorrentContextMenu({
         {allColumns.length > 0 && (
           <div
             className="context-menu-item context-menu-submenu-trigger"
-            onMouseEnter={() => setOpenSubmenu("columns")}
-            onMouseLeave={() => setOpenSubmenu(null)}
+            onMouseEnter={() => { setOpenSubmenu("columns"); }}
+            onMouseLeave={() => { setOpenSubmenu(null); }}
           >
             {t("torrents.columns", undefined, "Columns")} ▶
             {openSubmenu === "columns" && (
@@ -1002,7 +988,7 @@ function TorrentContextMenu({
                     <input
                       type="checkbox"
                       checked={visibleColumns.has(col.key)}
-                      onChange={() => onToggleColumn(col.key)}
+                      onChange={() => { onToggleColumn(col.key); }}
                     />
                     {t(
                       COLUMN_I18N_KEYS[

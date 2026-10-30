@@ -10,12 +10,12 @@ import {
   validateStorageConfig,
 } from "./GettingStartedModal";
 
-describe("GettingStartedModal: Storage Constants & URL Validation", () => {
-  it("exports correct storage key for suppressing wizard on startup", () => {
+void describe("GettingStartedModal: Storage Constants & URL Validation", () => {
+  void it("exports correct storage key for suppressing wizard on startup", () => {
     assert.equal(STORAGE_KEY_HIDE_GUIDE, "seedarr_hide_getting_started");
   });
 
-  it("validates HTTP and HTTPS URLs correctly", () => {
+  void it("validates HTTP and HTTPS URLs correctly", () => {
     assert.equal(isValidHttpUrl("http://localhost:8080"), true);
     assert.equal(isValidHttpUrl("https://prowlarr.local:9696/api"), true);
     assert.equal(isValidHttpUrl("http://192.168.1.100:8989"), true);
@@ -28,7 +28,7 @@ describe("GettingStartedModal: Storage Constants & URL Validation", () => {
     assert.equal(isValidHttpUrl("javascript:alert(1)"), false);
   });
 
-  it("validates absolute filesystem paths correctly", () => {
+  void it("validates absolute filesystem paths correctly", () => {
     // POSIX absolute
     assert.equal(isValidAbsolutePath("/downloads"), true);
     assert.equal(isValidAbsolutePath("/mnt/storage/torrents"), true);
@@ -50,9 +50,9 @@ describe("GettingStartedModal: Storage Constants & URL Validation", () => {
   });
 });
 
-describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
-  describe("validateClientConfig", () => {
-    it("rejects missing or empty host", () => {
+void describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
+  void describe("validateClientConfig", () => {
+    void it("rejects missing or empty host", () => {
       const res1 = validateClientConfig({ host: "", port: 8080 });
       assert.equal(res1.valid, false);
       assert.ok(res1.error?.includes("Host is required"));
@@ -66,7 +66,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.ok(res3.error?.includes("Host is required"));
     });
 
-    it("rejects out-of-range or non-integer port numbers", () => {
+    void it("rejects out-of-range or non-integer port numbers", () => {
       const invalidPorts = [0, -1, 65536, 70000, 8080.5, NaN];
       for (const port of invalidPorts) {
         const res = validateClientConfig({ host: "localhost", port });
@@ -81,7 +81,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       }
     });
 
-    it("accepts valid client configuration", () => {
+    void it("accepts valid client configuration", () => {
       const validCases = [
         { host: "localhost", port: 8080 },
         { host: "192.168.1.50", port: 9091 },
@@ -97,8 +97,8 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
     });
   });
 
-  describe("validateIndexerConfig", () => {
-    it("rejects empty name or URL", () => {
+  void describe("validateIndexerConfig", () => {
+    void it("rejects empty name or URL", () => {
       const resName = validateIndexerConfig({
         name: "",
         url: "http://prowlarr:9696",
@@ -116,7 +116,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.ok(resUrl.error?.includes("URL is required"));
     });
 
-    it("rejects malformed URLs", () => {
+    void it("rejects malformed URLs", () => {
       const res = validateIndexerConfig({
         name: "Prowlarr",
         url: "ftp://prowlarr:9696",
@@ -126,7 +126,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.ok(res.error?.includes("valid HTTP or HTTPS address"));
     });
 
-    it("requires API key in live setup mode", () => {
+    void it("requires API key in live setup mode", () => {
       const res = validateIndexerConfig(
         { name: "Prowlarr", url: "http://prowlarr:9696", apiKey: "" },
         true, // isLive
@@ -135,7 +135,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.ok(res.error?.includes("API Key is required"));
     });
 
-    it("allows empty API key in tour / read-only mode", () => {
+    void it("allows empty API key in tour / read-only mode", () => {
       const res = validateIndexerConfig(
         { name: "Prowlarr", url: "http://prowlarr:9696", apiKey: "" },
         false, // tour mode
@@ -143,7 +143,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.equal(res.valid, true);
     });
 
-    it("accepts valid indexer config", () => {
+    void it("accepts valid indexer config", () => {
       const res = validateIndexerConfig(
         {
           name: "Prowlarr",
@@ -156,8 +156,8 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
     });
   });
 
-  describe("validateArrConfig", () => {
-    it("rejects empty name or URL", () => {
+  void describe("validateArrConfig", () => {
+    void it("rejects empty name or URL", () => {
       const resName = validateArrConfig({
         arrType: "Sonarr",
         name: "",
@@ -177,7 +177,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.ok(resUrl.error?.includes("URL is required"));
     });
 
-    it("requires API key in live setup mode", () => {
+    void it("requires API key in live setup mode", () => {
       const res = validateArrConfig(
         {
           arrType: "Sonarr",
@@ -191,7 +191,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.ok(res.error?.includes("API Key is required"));
     });
 
-    it("allows empty API key in tour mode", () => {
+    void it("allows empty API key in tour mode", () => {
       const res = validateArrConfig(
         {
           arrType: "Radarr",
@@ -204,7 +204,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.equal(res.valid, true);
     });
 
-    it("accepts valid Arr configuration", () => {
+    void it("accepts valid Arr configuration", () => {
       const res = validateArrConfig(
         {
           arrType: "Lidarr",
@@ -218,8 +218,8 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
     });
   });
 
-  describe("validateStorageConfig", () => {
-    it("rejects missing or empty default download path", () => {
+  void describe("validateStorageConfig", () => {
+    void it("rejects missing or empty default download path", () => {
       const res1 = validateStorageConfig({ defaultDownloadPath: "" });
       assert.equal(res1.valid, false);
       assert.ok(res1.error?.includes("Default download directory is required"));
@@ -229,7 +229,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.ok(res2.error?.includes("Default download directory is required"));
     });
 
-    it("rejects non-absolute default download path", () => {
+    void it("rejects non-absolute default download path", () => {
       const res = validateStorageConfig({
         defaultDownloadPath: "downloads/data",
       });
@@ -237,7 +237,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.ok(res.error?.includes("must be an absolute path"));
     });
 
-    it("rejects directory traversal sequences in download or completed path", () => {
+    void it("rejects directory traversal sequences in download or completed path", () => {
       const res1 = validateStorageConfig({
         defaultDownloadPath: "/downloads/../etc",
       });
@@ -252,7 +252,7 @@ describe("GettingStartedModal: Pre-Mutation Input Validation", () => {
       assert.ok(res2.error?.includes("cannot contain '..'"));
     });
 
-    it("accepts valid storage paths", () => {
+    void it("accepts valid storage paths", () => {
       const res = validateStorageConfig({
         defaultDownloadPath: "/downloads",
         completedPath: "/downloads/completed",

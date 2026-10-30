@@ -2,13 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { parseConfirmOptions, createConfirmQueue } from "./ConfirmContext";
 
-describe("ConfirmContext: parseConfirmOptions", () => {
-  it("wraps string into ConfirmOptions object", () => {
+void describe("ConfirmContext: parseConfirmOptions", () => {
+  void it("wraps string into ConfirmOptions object", () => {
     const res = parseConfirmOptions("Are you sure?");
     assert.deepEqual(res, { message: "Are you sure?" });
   });
 
-  it("passes ConfirmOptions object through untouched", () => {
+  void it("passes ConfirmOptions object through untouched", () => {
     const opts = {
       title: "Delete Torrent",
       message: "Are you sure you want to delete this torrent?",
@@ -21,8 +21,8 @@ describe("ConfirmContext: parseConfirmOptions", () => {
   });
 });
 
-describe("ConfirmContext: sequential queue handling", () => {
-  it("handles sequential queue execution when multiple confirms are triggered", async () => {
+void describe("ConfirmContext: sequential queue handling", () => {
+  void it("handles sequential queue execution when multiple confirms are triggered", async () => {
     const queue = createConfirmQueue();
 
     let p1Resolved: boolean | undefined = undefined;
@@ -92,7 +92,7 @@ describe("ConfirmContext: sequential queue handling", () => {
     assert.equal(queue.getQueueLength(), 0);
   });
 
-  it("notifies state change listener on each step of sequential processing", async () => {
+  void it("notifies state change listener on each step of sequential processing", async () => {
     const states: { isOpen: boolean; message: unknown }[] = [];
     const queue = createConfirmQueue((s) => {
       states.push({ isOpen: s.isOpen, message: s.options.message });

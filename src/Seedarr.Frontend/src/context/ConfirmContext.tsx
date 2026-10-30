@@ -99,8 +99,8 @@ export function createConfirmQueue(
 
   return {
     confirm,
-    handleConfirm: () => processNext(true),
-    handleCancel: () => processNext(false),
+    handleConfirm: () => { processNext(true); },
+    handleCancel: () => { processNext(false); },
     processNext,
     getState: () => modalState,
     getQueueLength: () => queue.length,

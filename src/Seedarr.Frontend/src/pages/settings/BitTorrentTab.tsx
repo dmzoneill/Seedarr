@@ -82,19 +82,19 @@ export function BitTorrentTab() {
         <Toggle
           label="DHT"
           checked={form.enableDht}
-          onChange={(v) => set("enableDht", v)}
+          onChange={(v) => { set("enableDht", v); }}
           hint="Distributed Hash Table (Mainline DHT) for trackerless peer discovery"
         />
         <Toggle
           label="PEX"
           checked={form.enablePex}
-          onChange={(v) => set("enablePex", v)}
+          onChange={(v) => { set("enablePex", v); }}
           hint="Peer Exchange (ut_pex) for discovering peers from connected clients"
         />
         <Toggle
           label="LPD"
           checked={form.enableLpd}
-          onChange={(v) => set("enableLpd", v)}
+          onChange={(v) => { set("enableLpd", v); }}
           hint="Local Peer Discovery / Local Service Discovery (LSD)"
         />
         <SelectInput
@@ -102,7 +102,7 @@ export function BitTorrentTab() {
           value={
             form.encryptionMode === "forced" ? "required" : form.encryptionMode
           }
-          onChange={(v) => set("encryptionMode", v)}
+          onChange={(v) => { set("encryptionMode", v); }}
           options={[
             { value: "disabled", label: "Disabled (Plain Only)" },
             { value: "enabled", label: "Enabled (Prefer Encrypted)" },
@@ -119,13 +119,13 @@ export function BitTorrentTab() {
         <TextInput
           label="User Agent"
           value={form.bitTorrentUserAgent}
-          onChange={(v) => set("bitTorrentUserAgent", v)}
+          onChange={(v) => { set("bitTorrentUserAgent", v); }}
           hint="HTTP tracker User-Agent string"
         />
         <TextInput
           label="Peer ID Prefix"
           value={form.peerIdPrefix}
-          onChange={(v) => set("peerIdPrefix", v)}
+          onChange={(v) => { set("peerIdPrefix", v); }}
           hint="8-character Azureus-style Peer ID prefix"
         />
       </SectionCard>
@@ -137,7 +137,7 @@ export function BitTorrentTab() {
         <NumberInput
           label="Announce Interval"
           value={form.announceIntervalSeconds}
-          onChange={(v) => set("announceIntervalSeconds", v)}
+          onChange={(v) => { set("announceIntervalSeconds", v); }}
           min={60}
           suffix="seconds"
           hint="Standard periodic announce duration"
@@ -145,7 +145,7 @@ export function BitTorrentTab() {
         <NumberInput
           label="Min Announce Interval"
           value={form.minAnnounceIntervalSeconds}
-          onChange={(v) => set("minAnnounceIntervalSeconds", v)}
+          onChange={(v) => { set("minAnnounceIntervalSeconds", v); }}
           min={30}
           suffix="seconds"
           hint="Minimum interval between back-to-back announces"
@@ -153,7 +153,7 @@ export function BitTorrentTab() {
         <NumberInput
           label="Scrape Interval"
           value={form.scrapeIntervalSeconds}
-          onChange={(v) => set("scrapeIntervalSeconds", v)}
+          onChange={(v) => { set("scrapeIntervalSeconds", v); }}
           min={60}
           suffix="seconds"
           hint="Periodic scrape frequency for seed/peer counts"

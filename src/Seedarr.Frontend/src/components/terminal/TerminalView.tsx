@@ -316,7 +316,7 @@ export function TerminalView({
       handleResize();
       termRef.current?.focus();
     }, 100);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); };
   }, [isFullscreen, handleResize]);
 
   useEffect(() => {
@@ -325,7 +325,7 @@ export function TerminalView({
       handleResize();
     });
     observer.observe(containerRef.current);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); };
   }, [handleResize]);
 
   const handleCopyPath = () => {

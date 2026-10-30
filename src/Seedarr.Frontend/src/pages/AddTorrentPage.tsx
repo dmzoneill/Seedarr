@@ -93,7 +93,7 @@ export function AddTorrentPage() {
       >
         <AddTorrentForm
           isModal={false}
-          onSuccess={() => navigate("/torrents")}
+          onSuccess={() => { void navigate("/torrents"); }}
         />
       </div>
     </div>

@@ -203,18 +203,18 @@ export function BandwidthCard() {
             max={50000}
             step={100}
             value={downloadLimit}
-            onChange={(e) => setDownloadLimit(Number(e.target.value))}
-            onMouseUp={() => commitDownload()}
-            onTouchEnd={() => commitDownload()}
-            onKeyUp={() => commitDownload()}
-            onBlur={() => commitDownload()}
+            onChange={(e) => { setDownloadLimit(Number(e.target.value)); }}
+            onMouseUp={() => { commitDownload(); }}
+            onTouchEnd={() => { commitDownload(); }}
+            onKeyUp={() => { commitDownload(); }}
+            onBlur={() => { commitDownload(); }}
             aria-label={t("quickSettings.maxDownload")}
           />
           <div className="quick-settings-slider-ticks">
             <span
               role="button"
               tabIndex={0}
-              onClick={() => commitDownload(0)}
+              onClick={() => { commitDownload(0); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -227,7 +227,7 @@ export function BandwidthCard() {
             <span
               role="button"
               tabIndex={0}
-              onClick={() => commitDownload(1250)}
+              onClick={() => { commitDownload(1250); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -240,7 +240,7 @@ export function BandwidthCard() {
             <span
               role="button"
               tabIndex={0}
-              onClick={() => commitDownload(10240)}
+              onClick={() => { commitDownload(10240); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -253,7 +253,7 @@ export function BandwidthCard() {
             <span
               role="button"
               tabIndex={0}
-              onClick={() => commitDownload(50000)}
+              onClick={() => { commitDownload(50000); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -283,18 +283,18 @@ export function BandwidthCard() {
             max={50000}
             step={50}
             value={uploadLimit}
-            onChange={(e) => setUploadLimit(Number(e.target.value))}
-            onMouseUp={() => commitUpload()}
-            onTouchEnd={() => commitUpload()}
-            onKeyUp={() => commitUpload()}
-            onBlur={() => commitUpload()}
+            onChange={(e) => { setUploadLimit(Number(e.target.value)); }}
+            onMouseUp={() => { commitUpload(); }}
+            onTouchEnd={() => { commitUpload(); }}
+            onKeyUp={() => { commitUpload(); }}
+            onBlur={() => { commitUpload(); }}
             aria-label={t("quickSettings.maxUpload")}
           />
           <div className="quick-settings-slider-ticks">
             <span
               role="button"
               tabIndex={0}
-              onClick={() => commitUpload(0)}
+              onClick={() => { commitUpload(0); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -307,7 +307,7 @@ export function BandwidthCard() {
             <span
               role="button"
               tabIndex={0}
-              onClick={() => commitUpload(625)}
+              onClick={() => { commitUpload(625); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -320,7 +320,7 @@ export function BandwidthCard() {
             <span
               role="button"
               tabIndex={0}
-              onClick={() => commitUpload(5120)}
+              onClick={() => { commitUpload(5120); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -333,7 +333,7 @@ export function BandwidthCard() {
             <span
               role="button"
               tabIndex={0}
-              onClick={() => commitUpload(50000)}
+              onClick={() => { commitUpload(50000); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -361,7 +361,7 @@ export function BandwidthCard() {
                     ? "selected"
                     : ""
                 }`}
-                onClick={() => handlePresetClick(p.dl, p.ul)}
+                onClick={() => { handlePresetClick(p.dl, p.ul); }}
               >
                 {p.label}
               </button>

@@ -48,7 +48,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         forceStart,
         label: label || null,
       },
-      { onSuccess: () => setDirty(false) },
+      { onSuccess: () => { setDirty(false); } },
     );
   };
 
@@ -71,7 +71,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           id="popt-priority"
           className="form-select"
           value={priority}
-          onChange={(e) => mark(setPriority)(e.target.value)}
+          onChange={(e) => { mark(setPriority)(e.target.value); }}
         >
           {priorityOptions.map((o) => (
             <option key={o.value} value={o.value}>
@@ -90,8 +90,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           type="number"
           className="form-input"
           value={uploadLimit}
-          onChange={(e) =>
-            mark(setUploadLimit)(Number.parseInt(e.target.value, 10) || 0)
+          onChange={(e) => { mark(setUploadLimit)(Number.parseInt(e.target.value, 10) || 0); }
           }
           min={0}
         />
@@ -106,8 +105,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           type="number"
           className="form-input"
           value={downloadLimit}
-          onChange={(e) =>
-            mark(setDownloadLimit)(Number.parseInt(e.target.value, 10) || 0)
+          onChange={(e) => { mark(setDownloadLimit)(Number.parseInt(e.target.value, 10) || 0); }
           }
           min={0}
         />
@@ -122,7 +120,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
             id="popt-super-seeding"
             type="checkbox"
             checked={superSeeding}
-            onChange={(e) => mark(setSuperSeeding)(e.target.checked)}
+            onChange={(e) => { mark(setSuperSeeding)(e.target.checked); }}
           />
           <span className="toggle-slider" />
         </label>
@@ -137,7 +135,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
             id="popt-force-start"
             type="checkbox"
             checked={forceStart}
-            onChange={(e) => mark(setForceStart)(e.target.checked)}
+            onChange={(e) => { mark(setForceStart)(e.target.checked); }}
           />
           <span className="toggle-slider" />
         </label>
@@ -152,7 +150,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           type="text"
           className="form-input"
           value={label}
-          onChange={(e) => mark(setLabel)(e.target.value)}
+          onChange={(e) => { mark(setLabel)(e.target.value); }}
           placeholder="e.g. movies, music"
         />
       </div>

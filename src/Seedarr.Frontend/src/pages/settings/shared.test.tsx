@@ -33,32 +33,32 @@ function captureInputProps(props: Parameters<typeof NumberInput>[0]): CapturedIn
   return captured || { onChange: () => {}, onBlur: () => {} };
 }
 
-describe("clampNumber helper", () => {
-  it("clamps values below min to min", () => {
+void describe("clampNumber helper", () => {
+  void it("clamps values below min to min", () => {
     assert.equal(clampNumber(-5, 0, 100), 0);
     assert.equal(clampNumber(3, 10, 20), 10);
   });
 
-  it("clamps values above max to max", () => {
+  void it("clamps values above max to max", () => {
     assert.equal(clampNumber(150, 0, 100), 100);
     assert.equal(clampNumber(25, 10, 20), 20);
   });
 
-  it("leaves values within bounds untouched", () => {
+  void it("leaves values within bounds untouched", () => {
     assert.equal(clampNumber(50, 0, 100), 50);
     assert.equal(clampNumber(0, 0, 100), 0);
     assert.equal(clampNumber(100, 0, 100), 100);
   });
 
-  it("handles optional min or max bounds", () => {
+  void it("handles optional min or max bounds", () => {
     assert.equal(clampNumber(-10, 0, undefined), 0);
     assert.equal(clampNumber(500, undefined, 100), 100);
     assert.equal(clampNumber(42, undefined, undefined), 42);
   });
 });
 
-describe("NumberInput DOM rendering", () => {
-  it("renders with label, initial value, hint, and suffix", () => {
+void describe("NumberInput DOM rendering", () => {
+  void it("renders with label, initial value, hint, and suffix", () => {
     const html = renderToStaticMarkup(
       React.createElement(NumberInput, {
         label: "Max Upload Speed",
@@ -78,7 +78,7 @@ describe("NumberInput DOM rendering", () => {
     assert.ok(html.includes("0 for unlimited"));
   });
 
-  it("renders disabled state and step attribute", () => {
+  void it("renders disabled state and step attribute", () => {
     const html = renderToStaticMarkup(
       React.createElement(NumberInput, {
         label: "Alt Upload Speed",
@@ -95,8 +95,8 @@ describe("NumberInput DOM rendering", () => {
   });
 });
 
-describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () => {
-  it("does not snap to 0 immediately when clearing input with backspace while typing", () => {
+void describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () => {
+  void it("does not snap to 0 immediately when clearing input with backspace while typing", () => {
     const calls: number[] = [];
     const inputProps = captureInputProps({
       label: "Max Upload Speed",
@@ -134,7 +134,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     );
   });
 
-  it("clamps empty input to min (or defaultValue) on blur", () => {
+  void it("clamps empty input to min (or defaultValue) on blur", () => {
     const calls: number[] = [];
     const inputProps = captureInputProps({
       label: "Max Upload Speed",
@@ -156,7 +156,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     );
   });
 
-  it("falls back to defaultValue on blur when provided and input is empty", () => {
+  void it("falls back to defaultValue on blur when provided and input is empty", () => {
     const calls: number[] = [];
     const inputProps = captureInputProps({
       label: "Timeout",
@@ -178,7 +178,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     );
   });
 
-  it("does not call onChange when typing out-of-bounds values, but clamps to bounds on blur", () => {
+  void it("does not call onChange when typing out-of-bounds values, but clamps to bounds on blur", () => {
     const calls: number[] = [];
     const inputProps = captureInputProps({
       label: "Percentage",
@@ -213,7 +213,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     assert.deepEqual(calls, [10, 100], "Blur should clamp 200 to max=100");
   });
 
-  it("allows typing intermediate decimals without premature onChange, calling onChange on valid decimal", () => {
+  void it("allows typing intermediate decimals without premature onChange, calling onChange on valid decimal", () => {
     const calls: number[] = [];
     const inputProps = captureInputProps({
       label: "Global Seed Ratio Limit",
@@ -244,7 +244,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     assert.deepEqual(calls, [1, 1.5, 1.5], "Blur maintains 1.5");
   });
 
-  it("clamps intermediate decimal on blur if blurred before adding fractional digits", () => {
+  void it("clamps intermediate decimal on blur if blurred before adding fractional digits", () => {
     const calls: number[] = [];
     const inputProps = captureInputProps({
       label: "Ratio",
@@ -262,7 +262,7 @@ describe("NumberInput typing, backspace, and bounds behavior (Issue #205)", () =
     assert.deepEqual(calls, [3], "Blur on '3.' should parse and clamp to 3");
   });
 
-  it("handles typing intermediate '-' and clamps appropriately on blur", () => {
+  void it("handles typing intermediate '-' and clamps appropriately on blur", () => {
     const calls: number[] = [];
     const inputProps = captureInputProps({
       label: "Signed Value",

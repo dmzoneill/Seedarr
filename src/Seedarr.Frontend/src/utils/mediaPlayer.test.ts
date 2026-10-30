@@ -16,15 +16,15 @@ import {
 } from "./mediaPlayer";
 import type { SubtitleTrack } from "../api/types";
 
-describe("mediaPlayer: isPlayableFile and isAudioFile", () => {
-  it("should identify all supported video and audio extensions as playable", () => {
+void describe("mediaPlayer: isPlayableFile and isAudioFile", () => {
+  void it("should identify all supported video and audio extensions as playable", () => {
     for (const ext of PLAYABLE_EXTENSIONS) {
       assert.equal(isPlayableFile(`video${ext}`), true);
       assert.equal(isPlayableFile(`path/to/my_file${ext.toUpperCase()}`), true);
     }
   });
 
-  it("should reject non-media file extensions", () => {
+  void it("should reject non-media file extensions", () => {
     const nonPlayable = [
       "readme.txt",
       "disc.iso",
@@ -42,7 +42,7 @@ describe("mediaPlayer: isPlayableFile and isAudioFile", () => {
     }
   });
 
-  it("should distinguish audio-only files from video files", () => {
+  void it("should distinguish audio-only files from video files", () => {
     for (const ext of AUDIO_EXTENSIONS) {
       assert.equal(isAudioFile(`track${ext}`), true);
     }
@@ -52,8 +52,8 @@ describe("mediaPlayer: isPlayableFile and isAudioFile", () => {
   });
 });
 
-describe("mediaPlayer: parseMediaBadges", () => {
-  it("should detect resolution, video codec, audio codec, and container from filename", () => {
+void describe("mediaPlayer: parseMediaBadges", () => {
+  void it("should detect resolution, video codec, audio codec, and container from filename", () => {
     const badges1 = parseMediaBadges(
       "Cosmos.S01E01.1080p.HEVC.x265.AC3-GROUP.mkv",
       "Cosmos S01",
@@ -79,7 +79,7 @@ describe("mediaPlayer: parseMediaBadges", () => {
     assert.ok(badges2.badges.includes("TrueHD"));
   });
 
-  it("should handle files with minimal or no metadata gracefully", () => {
+  void it("should handle files with minimal or no metadata gracefully", () => {
     const badges = parseMediaBadges("audio_sample.mp3");
     assert.equal(badges.audioCodec, "MP3");
     assert.equal(badges.container, "MP3");
@@ -88,8 +88,8 @@ describe("mediaPlayer: parseMediaBadges", () => {
   });
 });
 
-describe("mediaPlayer: URL builders", () => {
-  it("should build valid torrent stream and download URLs", () => {
+void describe("mediaPlayer: URL builders", () => {
+  void it("should build valid torrent stream and download URLs", () => {
     assert.equal(buildStreamUrl(42, 7), "/api/v1/torrent/42/files/7/stream");
     assert.equal(
       buildDownloadUrl(42, 7),
@@ -97,7 +97,7 @@ describe("mediaPlayer: URL builders", () => {
     );
   });
 
-  it("should build absolute URLs with origin", () => {
+  void it("should build absolute URLs with origin", () => {
     const abs = getAbsoluteUrl(
       "/api/v1/torrent/10/files/2/stream",
       "https://seedarr.example.com",
@@ -108,7 +108,7 @@ describe("mediaPlayer: URL builders", () => {
     );
   });
 
-  it("should build external player deep links for VLC and MPV", () => {
+  void it("should build external player deep links for VLC and MPV", () => {
     const streamUrl = "/api/v1/torrent/15/files/1/stream";
     const origin = "http://127.0.0.1:5000";
 
@@ -126,8 +126,8 @@ describe("mediaPlayer: URL builders", () => {
   });
 });
 
-describe("mediaPlayer: cleanUpMediaElement stream lifecycle cleanup", () => {
-  it("should pause, remove src, remove child source elements, and call load() to flush pipeline", () => {
+void describe("mediaPlayer: cleanUpMediaElement stream lifecycle cleanup", () => {
+  void it("should pause, remove src, remove child source elements, and call load() to flush pipeline", () => {
     let paused = false;
     let srcAttribute: string | null = "blob:http://localhost/123";
     let loaded = false;
@@ -163,9 +163,9 @@ describe("mediaPlayer: cleanUpMediaElement stream lifecycle cleanup", () => {
     assert.equal(loaded, true);
   });
 
-  it("should not throw on null, undefined, or aborted media element", () => {
-    assert.doesNotThrow(() => cleanUpMediaElement(null));
-    assert.doesNotThrow(() => cleanUpMediaElement(undefined));
+  void it("should not throw on null, undefined, or aborted media element", () => {
+    assert.doesNotThrow(() => { cleanUpMediaElement(null); });
+    assert.doesNotThrow(() => { cleanUpMediaElement(undefined); });
 
     const brokenElement = {
       pause: () => {
@@ -174,12 +174,12 @@ describe("mediaPlayer: cleanUpMediaElement stream lifecycle cleanup", () => {
       removeAttribute: () => {},
       load: () => {},
     } as unknown as HTMLMediaElement;
-    assert.doesNotThrow(() => cleanUpMediaElement(brokenElement));
+    assert.doesNotThrow(() => { cleanUpMediaElement(brokenElement); });
   });
 });
 
-describe("mediaPlayer: Subtitle track switching and textTracks synchronization", () => {
-  it("should disable all text tracks when subtitle mode is set to off", () => {
+void describe("mediaPlayer: Subtitle track switching and textTracks synchronization", () => {
+  void it("should disable all text tracks when subtitle mode is set to off", () => {
     const textTracks = [
       { mode: "showing", label: "English", language: "en" },
       { mode: "disabled", label: "Spanish", language: "es" },
@@ -191,7 +191,7 @@ describe("mediaPlayer: Subtitle track switching and textTracks synchronization",
     assert.equal(textTracks[1].mode, "disabled");
   });
 
-  it("should activate the selected subtitle track and disable all other tracks", () => {
+  void it("should activate the selected subtitle track and disable all other tracks", () => {
     const textTracks = [
       { mode: "showing", label: "English", language: "en" },
       { mode: "disabled", label: "French", language: "fr" },
@@ -236,8 +236,8 @@ describe("mediaPlayer: Subtitle track switching and textTracks synchronization",
   });
 });
 
-describe("mediaPlayer: Codec error recovery message generator", () => {
-  it("should generate actionable diagnostic message for MEDIA_ERR_SRC_NOT_SUPPORTED (code 4)", () => {
+void describe("mediaPlayer: Codec error recovery message generator", () => {
+  void it("should generate actionable diagnostic message for MEDIA_ERR_SRC_NOT_SUPPORTED (code 4)", () => {
     const msg = getCodecErrorMessage(4, "Movie.2024.1080p.HEVC.x265.AC3.mkv");
     assert.ok(msg.includes("cannot decode this media codec"));
     assert.ok(msg.includes("HEVC / H.265 video"));
@@ -245,7 +245,7 @@ describe("mediaPlayer: Codec error recovery message generator", () => {
     assert.ok(msg.includes("Matroska (.mkv) container"));
   });
 
-  it("should handle decode errors (code 3) gracefully", () => {
+  void it("should handle decode errors (code 3) gracefully", () => {
     const msg = getCodecErrorMessage(3, "video.mp4");
     assert.ok(msg.includes("media decoding error occurred"));
   });

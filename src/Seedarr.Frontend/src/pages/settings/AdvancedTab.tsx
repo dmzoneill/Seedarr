@@ -46,7 +46,7 @@ export function AdvancedTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+        onSave={() => { save.mutate(form, { onSuccess: () => { setDirty(false); } }); }}
       />
 
       <SectionCard
@@ -56,13 +56,13 @@ export function AdvancedTab() {
         <Toggle
           label="Log to File"
           checked={form.logToFile}
-          onChange={(v) => set("logToFile", v)}
+          onChange={(v) => { set("logToFile", v); }}
           hint="Persist log entries to rolling disk log files"
         />
         <SelectInput
           label="File Log Level"
           value={form.fileLogLevel}
-          onChange={(v) => set("fileLogLevel", v)}
+          onChange={(v) => { set("fileLogLevel", v); }}
           options={[
             { value: "Trace", label: "Trace (Most Verbose)" },
             { value: "Debug", label: "Debug" },
@@ -76,7 +76,7 @@ export function AdvancedTab() {
         <Toggle
           label="Debug Mode"
           checked={form.debugMode}
-          onChange={(v) => set("debugMode", v)}
+          onChange={(v) => { set("debugMode", v); }}
           hint="Enable comprehensive internal state tracing and diagnostic outputs"
         />
       </SectionCard>
@@ -88,7 +88,7 @@ export function AdvancedTab() {
         <NumberInput
           label="UI Refresh Rate"
           value={form.uiRefreshRateSec}
-          onChange={(v) => set("uiRefreshRateSec", v)}
+          onChange={(v) => { set("uiRefreshRateSec", v); }}
           min={1}
           max={60}
           suffix="seconds"

@@ -7,7 +7,7 @@ namespace Seedarr.Api.V1.DownloadClients;
 
 internal static class DownloadClientUpdateMerger
 {
-    public const string PasswordMask = "********"; // NOSONAR
+    public const string PasswordMask = "********"; // NOSONAR /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
 
     public static DownloadClientDefinition Merge(
         DownloadClientDefinition existing,

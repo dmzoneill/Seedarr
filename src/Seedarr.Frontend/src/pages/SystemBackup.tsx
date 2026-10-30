@@ -116,8 +116,8 @@ function SystemBackup() {
   const handleCreateBackup = () => {
     trackSystemMaintenanceAction("backup_create");
     createBackup.mutate(undefined, {
-      onSuccess: () => showToast("Backup created successfully", "success"),
-      onError: () => showToast("Failed to create backup", "error"),
+      onSuccess: () => { showToast("Backup created successfully", "success"); },
+      onError: () => { showToast("Failed to create backup", "error"); },
     });
   };
 
@@ -128,7 +128,7 @@ function SystemBackup() {
         showToast("Backup deleted", "success");
         setConfirmDelete(null);
       },
-      onError: () => showToast("Failed to delete backup", "error"),
+      onError: () => { showToast("Failed to delete backup", "error"); },
     });
   };
 
@@ -139,7 +139,7 @@ function SystemBackup() {
         showToast("Backup restored. Restart required.", "info");
         setConfirmRestore(null);
       },
-      onError: () => showToast("Failed to restore backup", "error"),
+      onError: () => { showToast("Failed to restore backup", "error"); },
     });
   };
 
@@ -302,7 +302,7 @@ function SystemBackup() {
                     <td>
                       <button
                         type="button"
-                        onClick={() => handleDownload(backup.id, backup.name)}
+                        onClick={() => { void handleDownload(backup.id, backup.name); }}
                         className="torrent-link"
                         style={{
                           background: "none",
@@ -329,7 +329,7 @@ function SystemBackup() {
                         >
                           <button
                             className="btn btn-small btn-outline"
-                            onClick={() => setConfirmRestore(backup.name)}
+                            onClick={() => { setConfirmRestore(backup.name); }}
                             title="Restore Snapshot"
                             disabled={restoreBackup.isPending}
                           >
@@ -337,7 +337,7 @@ function SystemBackup() {
                           </button>
                           <button
                             className="btn btn-small btn-danger"
-                            onClick={() => setConfirmDelete(backup.id)}
+                            onClick={() => { setConfirmDelete(backup.id); }}
                             title="Delete Snapshot"
                             disabled={deleteBackup.isPending}
                           >
@@ -370,7 +370,7 @@ function SystemBackup() {
           aria-modal="true"
           tabIndex={-1}
           className="modal-overlay"
-          onClick={() => setConfirmDelete(null)}
+          onClick={() => { setConfirmDelete(null); }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setConfirmDelete(null);
@@ -381,7 +381,7 @@ function SystemBackup() {
             role="button"
             tabIndex={0}
             className="modal"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -421,13 +421,13 @@ function SystemBackup() {
             >
               <button
                 className="btn btn-outline btn-small"
-                onClick={() => setConfirmDelete(null)}
+                onClick={() => { setConfirmDelete(null); }}
               >
                 Cancel
               </button>
               <button
                 className="btn btn-danger btn-small"
-                onClick={() => handleDeleteBackup(confirmDelete)}
+                onClick={() => { handleDeleteBackup(confirmDelete); }}
                 disabled={deleteBackup.isPending}
               >
                 {deleteBackup.isPending ? "Deleting..." : "Delete Backup"}
@@ -444,7 +444,7 @@ function SystemBackup() {
           aria-modal="true"
           tabIndex={-1}
           className="modal-overlay"
-          onClick={() => setConfirmRestore(null)}
+          onClick={() => { setConfirmRestore(null); }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setConfirmRestore(null);
@@ -455,7 +455,7 @@ function SystemBackup() {
             role="button"
             tabIndex={0}
             className="modal"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -511,13 +511,13 @@ function SystemBackup() {
             >
               <button
                 className="btn btn-outline btn-small"
-                onClick={() => setConfirmRestore(null)}
+                onClick={() => { setConfirmRestore(null); }}
               >
                 Cancel
               </button>
               <button
                 className="btn btn-danger btn-small"
-                onClick={() => handleRestoreBackup(confirmRestore)}
+                onClick={() => { handleRestoreBackup(confirmRestore); }}
                 disabled={restoreBackup.isPending}
               >
                 {restoreBackup.isPending ? "Restoring..." : "Confirm & Restore"}

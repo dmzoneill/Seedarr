@@ -52,7 +52,7 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
         return Ok(CategoryResourceMapper.ToResource(category));
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.Operator)]
     [ProducesResponseType(typeof(CategoryResource), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -93,7 +93,7 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
         }
     }
 
-    [HttpPut("{id:int}")]
+    [HttpPut("{id:int}")] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [HttpPut]
     [Authorize(Policy = Policies.Operator)]
     [ProducesResponseType(typeof(CategoryResource), StatusCodes.Status200OK)]

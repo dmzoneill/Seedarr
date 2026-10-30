@@ -242,14 +242,14 @@ function TrackerServer() {
           <div className="view-toggle">
             <button
               className={`view-toggle-btn ${viewMode === "grid" ? "active" : ""}`}
-              onClick={() => setViewMode("grid")}
+              onClick={() => { setViewMode("grid"); }}
               title="Poster Card Grid View"
             >
               🎬 Posters
             </button>
             <button
               className={`view-toggle-btn ${viewMode === "table" ? "active" : ""}`}
-              onClick={() => setViewMode("table")}
+              onClick={() => { setViewMode("table"); }}
               title="Detailed Table View"
             >
               📋 Table
@@ -355,7 +355,7 @@ function TrackerServer() {
               <button
                 className="btn btn-outline"
                 style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
-                onClick={() => copyToClipboard(httpAnnounceUrl, "HTTP URL")}
+                onClick={() => { void copyToClipboard(httpAnnounceUrl, "HTTP URL"); }}
                 title="Copy HTTP Announce URL"
               >
                 Copy
@@ -393,7 +393,7 @@ function TrackerServer() {
               <button
                 className="btn btn-outline"
                 style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
-                onClick={() => copyToClipboard(udpAnnounceUrl, "UDP URL")}
+                onClick={() => { void copyToClipboard(udpAnnounceUrl, "UDP URL"); }}
                 title="Copy UDP Announce URL"
               >
                 Copy
@@ -441,7 +441,7 @@ function TrackerServer() {
                 borderRadius: "6px",
                 fontWeight: 500,
               }}
-              onClick={() => setFilterScope(scope.id)}
+              onClick={() => { setFilterScope(scope.id); }}
             >
               {scope.label}
             </button>
@@ -499,8 +499,7 @@ function TrackerServer() {
             </select>
             <button
               className="btn btn-outline"
-              onClick={() =>
-                setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+              onClick={() => { setSortDirection((prev) => (prev === "asc" ? "desc" : "asc")); }
               }
               style={{
                 fontSize: "0.82rem",
@@ -531,7 +530,7 @@ function TrackerServer() {
               className="form-control"
               placeholder="Search tracked torrents, titles, hash..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); }}
               style={{
                 width: "100%",
                 padding: "0.4rem 0.75rem",
@@ -545,7 +544,7 @@ function TrackerServer() {
             {searchTerm && (
               <button
                 className="btn btn-outline"
-                onClick={() => setSearchTerm("")}
+                onClick={() => { setSearchTerm(""); }}
                 style={{
                   fontSize: "0.75rem",
                   padding: "0.35rem 0.5rem",
@@ -974,7 +973,7 @@ function TrackerServer() {
                   <th className="torrent-table-th">Source</th>
                   <th
                     className="torrent-table-th"
-                    onClick={() => handleSort("name")}
+                    onClick={() => { handleSort("name"); }}
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Name"
                   >
@@ -989,7 +988,7 @@ function TrackerServer() {
                   </th>
                   <th
                     className="torrent-table-th"
-                    onClick={() => handleSort("seeders")}
+                    onClick={() => { handleSort("seeders"); }}
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Seeders"
                   >
@@ -1004,7 +1003,7 @@ function TrackerServer() {
                   </th>
                   <th
                     className="torrent-table-th"
-                    onClick={() => handleSort("leechers")}
+                    onClick={() => { handleSort("leechers"); }}
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Leechers"
                   >
@@ -1019,7 +1018,7 @@ function TrackerServer() {
                   </th>
                   <th
                     className="torrent-table-th"
-                    onClick={() => handleSort("uploaded")}
+                    onClick={() => { handleSort("uploaded"); }}
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Uploaded"
                   >
@@ -1034,7 +1033,7 @@ function TrackerServer() {
                   </th>
                   <th
                     className="torrent-table-th"
-                    onClick={() => handleSort("downloaded")}
+                    onClick={() => { handleSort("downloaded"); }}
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Downloaded"
                   >
@@ -1049,7 +1048,7 @@ function TrackerServer() {
                   </th>
                   <th
                     className="torrent-table-th"
-                    onClick={() => handleSort("completed")}
+                    onClick={() => { handleSort("completed"); }}
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Completed"
                   >
@@ -1064,7 +1063,7 @@ function TrackerServer() {
                   </th>
                   <th
                     className="torrent-table-th"
-                    onClick={() => handleSort("peers")}
+                    onClick={() => { handleSort("peers"); }}
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Total Peers"
                   >
@@ -1079,7 +1078,7 @@ function TrackerServer() {
                   </th>
                   <th
                     className="torrent-table-th"
-                    onClick={() => handleSort("activity")}
+                    onClick={() => { handleSort("activity"); }}
                     style={{ cursor: "pointer", userSelect: "none" }}
                     title="Click to sort by Last Activity"
                   >

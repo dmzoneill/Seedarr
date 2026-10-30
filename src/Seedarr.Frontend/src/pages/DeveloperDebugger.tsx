@@ -107,7 +107,7 @@ export default function DeveloperDebugger() {
     const interval = setInterval(() => {
       void fetchAll();
     }, 5000);
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); };
   }, [fetchAll]);
 
   useEffect(() => {
@@ -301,7 +301,7 @@ export default function DeveloperDebugger() {
           <button
             type="button"
             aria-label="Add custom breakpoint"
-            onClick={() => setShowAddModal(true)}
+            onClick={() => { setShowAddModal(true); }}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -386,7 +386,7 @@ export default function DeveloperDebugger() {
           <select
             id="debugger-select-source-file"
             value={selectedFilePath}
-            onChange={(e) => setSelectedFilePath(e.target.value)}
+            onChange={(e) => { setSelectedFilePath(e.target.value); }}
             style={{
               flex: 1,
               padding: "7px 12px",
@@ -414,7 +414,7 @@ export default function DeveloperDebugger() {
             placeholder="Filter files..."
             aria-label="Filter source files"
             value={fileFilter}
-            onChange={(e) => setFileFilter(e.target.value)}
+            onChange={(e) => { setFileFilter(e.target.value); }}
             style={{
               padding: "6px 12px",
               borderRadius: "6px",
@@ -874,7 +874,7 @@ export default function DeveloperDebugger() {
                   id="debugger-target-file-path"
                   type="text"
                   value={newFilePath}
-                  onChange={(e) => setNewFilePath(e.target.value)}
+                  onChange={(e) => { setNewFilePath(e.target.value); }}
                   style={{
                     width: "100%",
                     padding: "8px 10px",
@@ -898,7 +898,7 @@ export default function DeveloperDebugger() {
                   id="debugger-line-number"
                   type="number"
                   value={newLineNumber}
-                  onChange={(e) => setNewLineNumber(Number(e.target.value))}
+                  onChange={(e) => { setNewLineNumber(Number(e.target.value)); }}
                   style={{
                     width: "100%",
                     padding: "8px 10px",
@@ -924,7 +924,7 @@ export default function DeveloperDebugger() {
                   type="text"
                   placeholder="e.g. torrent.Id > 0"
                   value={newCondition}
-                  onChange={(e) => setNewCondition(e.target.value)}
+                  onChange={(e) => { setNewCondition(e.target.value); }}
                   style={{
                     width: "100%",
                     padding: "8px 10px",
@@ -943,7 +943,7 @@ export default function DeveloperDebugger() {
                 <button
                   type="button"
                   aria-label="Cancel"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => { setShowAddModal(false); }}
                   style={{
                     padding: "7px 14px",
                     borderRadius: "6px",

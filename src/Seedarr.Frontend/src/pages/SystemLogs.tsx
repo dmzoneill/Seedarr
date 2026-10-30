@@ -88,7 +88,7 @@ function SystemLogs() {
     const timer = setTimeout(() => {
       setDebouncedSearchText(searchText);
     }, 250);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); };
   }, [searchText]);
 
   // Reset window slice when filter, search, or clear changes
@@ -225,13 +225,13 @@ function SystemLogs() {
               className="search-input"
               placeholder="Filter logs..."
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e) => { setSearchText(e.target.value); }}
             />
             <label className="log-auto-scroll">
               <input
                 type="checkbox"
                 checked={autoScroll}
-                onChange={(e) => setAutoScroll(e.target.checked)}
+                onChange={(e) => { setAutoScroll(e.target.checked); }}
               />
               <span>Auto-scroll</span>
             </label>

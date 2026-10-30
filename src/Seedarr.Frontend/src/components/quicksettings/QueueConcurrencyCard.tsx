@@ -98,7 +98,7 @@ export function QueueConcurrencyCard() {
             <button
               type="button"
               className="quick-settings-stepper-btn"
-              onClick={() => handleAdjustDownloads(-1)}
+              onClick={() => { handleAdjustDownloads(-1); }}
               title="Decrease max downloads"
             >
               −
@@ -109,7 +109,7 @@ export function QueueConcurrencyCard() {
             <button
               type="button"
               className="quick-settings-stepper-btn"
-              onClick={() => handleAdjustDownloads(1)}
+              onClick={() => { handleAdjustDownloads(1); }}
               title="Increase max downloads"
             >
               +
@@ -129,7 +129,7 @@ export function QueueConcurrencyCard() {
             <button
               type="button"
               className="quick-settings-stepper-btn"
-              onClick={() => handleAdjustSeeds(-1)}
+              onClick={() => { handleAdjustSeeds(-1); }}
               title="Decrease max seeds"
             >
               −
@@ -140,7 +140,7 @@ export function QueueConcurrencyCard() {
             <button
               type="button"
               className="quick-settings-stepper-btn"
-              onClick={() => handleAdjustSeeds(1)}
+              onClick={() => { handleAdjustSeeds(1); }}
               title="Increase max seeds"
             >
               +
@@ -155,7 +155,7 @@ export function QueueConcurrencyCard() {
               type="checkbox"
               className="quick-settings-checkbox"
               checked={ignoreSlow}
-              onChange={(e) => handleToggleIgnoreSlow(e.target.checked)}
+              onChange={(e) => { handleToggleIgnoreSlow(e.target.checked); }}
             />
             <span>Ignore slow / stalled transfers in queue</span>
           </label>

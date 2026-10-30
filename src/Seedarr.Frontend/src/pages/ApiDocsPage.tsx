@@ -60,7 +60,7 @@ function ApiDocsPage() {
             clearInterval(interval);
           }
         }, 200);
-        setTimeout(() => clearInterval(interval), 5000);
+        setTimeout(() => { clearInterval(interval); }, 5000);
       }
     } catch {
       // Ignore cross-origin or load timing errors
@@ -103,7 +103,7 @@ function ApiDocsPage() {
           injectApiKeyToSwagger(key);
           setCopied(true);
           showToast("API Key copied to clipboard!", "success");
-          setTimeout(() => setCopied(false), 2000);
+          setTimeout(() => { setCopied(false); }, 2000);
         } else {
           showToast("Failed to copy API Key", "error");
         }
@@ -189,7 +189,7 @@ function ApiDocsPage() {
         >
           <button
             className="btn btn-outline"
-            onClick={handleCopyKey}
+            onClick={(...args: Parameters<typeof handleCopyKey>) => { void handleCopyKey(...args); }}
             title="Copy API Key to clipboard"
             style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
           >
@@ -236,7 +236,7 @@ function ApiDocsPage() {
           ref={iframeRef}
           src="/swagger/index.html"
           title="Seedarr REST API Documentation"
-          onLoad={handleIframeLoad}
+          onLoad={(...args: Parameters<typeof handleIframeLoad>) => { void handleIframeLoad(...args); }}
           style={{
             width: "100%",
             height: "100%",

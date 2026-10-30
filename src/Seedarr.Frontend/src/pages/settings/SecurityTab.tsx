@@ -283,12 +283,12 @@ export function SecurityTab() {
 
   const regenerateModalTrapRef = useFocusTrap<HTMLDivElement>({
     isOpen: showRegenerateModal,
-    onEscape: () => setShowRegenerateModal(false),
+    onEscape: () => { setShowRegenerateModal(false); },
   });
   useModalRegistration({
     id: "security-regenerate-modal",
     isOpen: showRegenerateModal,
-    onClose: () => setShowRegenerateModal(false),
+    onClose: () => { setShowRegenerateModal(false); },
     modalRef: regenerateModalTrapRef,
   });
 
@@ -371,7 +371,7 @@ export function SecurityTab() {
 
       await navigator.clipboard.writeText(keyToCopy);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => { setCopied(false); }, 2000);
       showToast("API key copied to clipboard", "success");
     } catch {
       showToast("Failed to copy API key", "error");
@@ -396,7 +396,7 @@ export function SecurityTab() {
         terminalAccessEnabled: form.terminalAccessEnabled,
       } as GeneralConfig,
       {
-        onSuccess: () => setDirty(false),
+        onSuccess: () => { setDirty(false); },
       },
     );
   };
@@ -505,14 +505,14 @@ export function SecurityTab() {
           <Toggle
             label="Enable Web UI Authentication"
             checked={form.authenticationEnabled}
-            onChange={(v) => update("authenticationEnabled", v)}
+            onChange={(v) => { update("authenticationEnabled", v); }}
             hint="Require login credentials before accessing the Web UI"
           />
 
           <SelectInput
             label="Session Inactivity Lock Timeout"
             value={String(idleTimeout)}
-            onChange={(v) => handleIdleTimeoutChange(Number(v))}
+            onChange={(v) => { handleIdleTimeoutChange(Number(v)); }}
             options={TIMEOUT_OPTIONS.map((opt) => ({
               value: String(opt.value),
               label: opt.label,
@@ -551,21 +551,21 @@ export function SecurityTab() {
           <Toggle
             label="Enable CSRF Protection"
             checked={form.csrfProtectionEnabled}
-            onChange={(v) => update("csrfProtectionEnabled", v)}
+            onChange={(v) => { update("csrfProtectionEnabled", v); }}
             hint="Enforces strict Origin and Referer header checks on state-changing requests"
           />
 
           <Toggle
             label="Enable Strict Host Header Validation"
             checked={form.hostHeaderValidationEnabled}
-            onChange={(v) => update("hostHeaderValidationEnabled", v)}
+            onChange={(v) => { update("hostHeaderValidationEnabled", v); }}
             hint="Prevents DNS rebinding attacks by validating the Host HTTP header against whitelist"
           />
 
           <Toggle
             label="Terminal Access"
             checked={form.terminalAccessEnabled}
-            onChange={(v) => update("terminalAccessEnabled", v)}
+            onChange={(v) => { update("terminalAccessEnabled", v); }}
             hint="Allow interactive command execution and console terminal access via Web UI"
           />
 
@@ -573,7 +573,7 @@ export function SecurityTab() {
             <TextInput
               label="Allowed Host Headers Whitelist"
               value={form.allowedHosts}
-              onChange={(v) => update("allowedHosts", v)}
+              onChange={(v) => { update("allowedHosts", v); }}
               placeholder="localhost, 127.0.0.1, seedarr.local"
               hint="Comma-separated list of allowed hostnames or IP addresses (e.g. localhost, seedarr.local, 192.168.1.100)"
             />
@@ -582,7 +582,7 @@ export function SecurityTab() {
           <TextInput
             label="Allowed CORS Origins"
             value={form.allowedOrigins}
-            onChange={(v) => update("allowedOrigins", v)}
+            onChange={(v) => { update("allowedOrigins", v); }}
             placeholder="https://app.example.com, http://dashboard.local:3000"
             hint="Comma-separated list of allowed CORS origins (e.g. https://app.example.com)"
           />
@@ -615,7 +615,7 @@ export function SecurityTab() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => handleOpenAdd("authentik")}
+                onClick={() => { handleOpenAdd("authentik"); }}
                 style={{ fontSize: "0.8rem", padding: "4px 10px" }}
               >
                 + Authentik
@@ -623,7 +623,7 @@ export function SecurityTab() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => handleOpenAdd("keycloak")}
+                onClick={() => { handleOpenAdd("keycloak"); }}
                 style={{ fontSize: "0.8rem", padding: "4px 10px" }}
               >
                 + Keycloak
@@ -631,7 +631,7 @@ export function SecurityTab() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => handleOpenAdd("authelia")}
+                onClick={() => { handleOpenAdd("authelia"); }}
                 style={{ fontSize: "0.8rem", padding: "4px 10px" }}
               >
                 + Authelia
@@ -639,7 +639,7 @@ export function SecurityTab() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => handleOpenAdd("google")}
+                onClick={() => { handleOpenAdd("google"); }}
                 style={{ fontSize: "0.8rem", padding: "4px 10px" }}
               >
                 + Google
@@ -647,7 +647,7 @@ export function SecurityTab() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => handleOpenAdd("github")}
+                onClick={() => { handleOpenAdd("github"); }}
                 style={{ fontSize: "0.8rem", padding: "4px 10px" }}
               >
                 + GitHub
@@ -655,7 +655,7 @@ export function SecurityTab() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => handleOpenAdd("apple")}
+                onClick={() => { handleOpenAdd("apple"); }}
                 style={{ fontSize: "0.8rem", padding: "4px 10px" }}
               >
                 + Apple
@@ -663,7 +663,7 @@ export function SecurityTab() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => handleOpenAdd("saml")}
+                onClick={() => { handleOpenAdd("saml"); }}
                 style={{ fontSize: "0.8rem", padding: "4px 10px" }}
               >
                 + SAML 2.0
@@ -761,7 +761,7 @@ export function SecurityTab() {
                     <button
                       type="button"
                       className="btn btn-outline"
-                      onClick={() => handleOpenEdit(p)}
+                      onClick={() => { handleOpenEdit(p); }}
                       style={{ fontSize: "0.8rem", padding: "4px 10px" }}
                     >
                       ✏️ Edit
@@ -769,7 +769,7 @@ export function SecurityTab() {
                     <button
                       type="button"
                       className="btn btn-danger"
-                      onClick={() => handleDeleteProvider(p)}
+                      onClick={() => { void handleDeleteProvider(p); }}
                       style={{ fontSize: "0.8rem", padding: "4px 10px" }}
                     >
                       🗑️ Delete
@@ -810,7 +810,7 @@ export function SecurityTab() {
                   <button
                     type="button"
                     className="btn btn-outline"
-                    onClick={handleToggleShowApiKey}
+                    onClick={(...args: Parameters<typeof handleToggleShowApiKey>) => { void handleToggleShowApiKey(...args); }}
                     style={{
                       whiteSpace: "nowrap",
                       height: "36px",
@@ -832,7 +832,7 @@ export function SecurityTab() {
             <button
               type="button"
               className="btn btn-outline"
-              onClick={handleCopyApiKey}
+              onClick={(...args: Parameters<typeof handleCopyApiKey>) => { void handleCopyApiKey(...args); }}
               style={{ marginBottom: "0.25rem", whiteSpace: "nowrap" }}
             >
               {copied ? "Copied!" : "📋 Copy"}
@@ -840,7 +840,7 @@ export function SecurityTab() {
             <button
               type="button"
               className="btn btn-outline"
-              onClick={() => setShowRegenerateModal(true)}
+              onClick={() => { setShowRegenerateModal(true); }}
               style={{ marginBottom: "0.25rem", whiteSpace: "nowrap" }}
             >
               🔄 Regenerate
@@ -848,7 +848,7 @@ export function SecurityTab() {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => navigate("/system/api")}
+              onClick={() => { void navigate("/system/api"); }}
               style={{ marginBottom: "0.25rem", whiteSpace: "nowrap" }}
             >
               📖 API Docs
@@ -952,7 +952,7 @@ export function SecurityTab() {
             <button
               type="button"
               className="btn btn-outline"
-              onClick={handleSyncBlocklist}
+              onClick={(...args: Parameters<typeof handleSyncBlocklist>) => { void handleSyncBlocklist(...args); }}
               disabled={syncBlocklistMutation.isPending}
               style={{
                 fontSize: "0.8rem",
@@ -970,14 +970,14 @@ export function SecurityTab() {
           <Toggle
             label="Enable Peer Blocklist"
             checked={blocklistForm.enabled}
-            onChange={(v) => updateBlocklist("enabled", v)}
+            onChange={(v) => { updateBlocklist("enabled", v); }}
             hint="Filter BitTorrent peer connections against the downloaded IP blocklist ruleset"
           />
 
           <TextInput
             label="Blocklist Feed URL"
             value={blocklistForm.url}
-            onChange={(v) => updateBlocklist("url", v)}
+            onChange={(v) => { updateBlocklist("url", v); }}
             placeholder="https://example.com/blocklist.gz"
             hint="Supports gzip (.gz), zip (.zip), P2P plaintext, and DAT blocklists (e.g., Bluetack, I-Blocklist, PeerGuardian format)"
           />
@@ -985,7 +985,7 @@ export function SecurityTab() {
           <Toggle
             label="Automatic Updates"
             checked={blocklistForm.autoUpdateEnabled}
-            onChange={(v) => updateBlocklist("autoUpdateEnabled", v)}
+            onChange={(v) => { updateBlocklist("autoUpdateEnabled", v); }}
             hint="Automatically refresh blocklist rules in the background using HTTP ETag and Last-Modified caching"
           />
 
@@ -1033,8 +1033,7 @@ export function SecurityTab() {
                     value={blocklistForm.autoUpdateIntervalDays}
                     min={1}
                     max={365}
-                    onChange={(v) =>
-                      updateBlocklist("autoUpdateIntervalDays", v)
+                    onChange={(v) => { updateBlocklist("autoUpdateIntervalDays", v); }
                     }
                     suffix="days"
                   />
@@ -1054,7 +1053,7 @@ export function SecurityTab() {
             <button
               type="button"
               className={`btn ${blocklistDirty ? "btn-primary" : "btn-outline"}`}
-              onClick={handleSaveBlocklist}
+              onClick={(...args: Parameters<typeof handleSaveBlocklist>) => { void handleSaveBlocklist(...args); }}
               disabled={!blocklistDirty || updateBlocklistMutation.isPending}
               style={{ fontSize: "0.85rem", padding: "6px 14px" }}
             >
@@ -1076,7 +1075,7 @@ export function SecurityTab() {
           >
             <button
               type="button"
-              onClick={() => setDiagnosticsOpen((prev) => !prev)}
+              onClick={() => { setDiagnosticsOpen((prev) => !prev); }}
               style={{
                 background: "none",
                 border: "none",
@@ -1137,7 +1136,7 @@ export function SecurityTab() {
                   <button
                     type="button"
                     className="btn btn-primary"
-                    onClick={handleCheckIp}
+                    onClick={(...args: Parameters<typeof handleCheckIp>) => { void handleCheckIp(...args); }}
                     disabled={testingIp || !testIpInput.trim()}
                     style={{
                       marginBottom: "0.25rem",
@@ -1229,7 +1228,7 @@ export function SecurityTab() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1260,8 +1259,7 @@ export function SecurityTab() {
               <Toggle
                 label="Enable Provider"
                 checked={editingProvider.isEnabled ?? true}
-                onChange={(v) =>
-                  setEditingProvider((prev) => ({ ...prev, isEnabled: v }))
+                onChange={(v) => { setEditingProvider((prev) => ({ ...prev, isEnabled: v })); }
                 }
                 hint="Allow users to log in with this provider"
               />
@@ -1269,8 +1267,7 @@ export function SecurityTab() {
               <TextInput
                 label="Provider Name"
                 value={editingProvider.name || ""}
-                onChange={(v) =>
-                  setEditingProvider((prev) => ({ ...prev, name: v }))
+                onChange={(v) => { setEditingProvider((prev) => ({ ...prev, name: v })); }
                 }
                 hint="Display name on login screen (e.g. Authentik, Keycloak, Corporate SSO)"
               />
@@ -1278,8 +1275,7 @@ export function SecurityTab() {
               <TextInput
                 label="Provider Identifier"
                 value={editingProvider.providerId || ""}
-                onChange={(v) =>
-                  setEditingProvider((prev) => ({ ...prev, providerId: v }))
+                onChange={(v) => { setEditingProvider((prev) => ({ ...prev, providerId: v })); }
                 }
                 hint="Unique URL-safe identifier (e.g. authentik, keycloak, google)"
               />
@@ -1305,19 +1301,17 @@ export function SecurityTab() {
                     label: "ForwardAuth (Reverse Proxy)",
                   },
                 ]}
-                onChange={(v) =>
-                  setEditingProvider((prev) => ({
+                onChange={(v) => { setEditingProvider((prev) => ({
                     ...prev,
                     providerType: Number(v) as IdentityProviderType,
-                  }))
+                  })); }
                 }
               />
 
               <TextInput
                 label="Issuer URL / Authority"
                 value={editingProvider.issuerUrl || ""}
-                onChange={(v) =>
-                  setEditingProvider((prev) => ({ ...prev, issuerUrl: v }))
+                onChange={(v) => { setEditingProvider((prev) => ({ ...prev, issuerUrl: v })); }
                 }
                 hint={
                   editingProvider.providerType === IdentityProviderType.Saml
@@ -1331,8 +1325,7 @@ export function SecurityTab() {
                   <TextInput
                     label="Client ID"
                     value={editingProvider.clientId || ""}
-                    onChange={(v) =>
-                      setEditingProvider((prev) => ({ ...prev, clientId: v }))
+                    onChange={(v) => { setEditingProvider((prev) => ({ ...prev, clientId: v })); }
                     }
                   />
 
@@ -1340,18 +1333,17 @@ export function SecurityTab() {
                     label="Client Secret"
                     type={showSecret ? "text" : "password"}
                     value={editingProvider.clientSecret || ""}
-                    onChange={(v) =>
-                      setEditingProvider((prev) => ({
+                    onChange={(v) => { setEditingProvider((prev) => ({
                         ...prev,
                         clientSecret: v,
-                      }))
+                      })); }
                     }
                     hint="Leave blank or masked to keep current secret"
                     rightElement={
                       <button
                         type="button"
                         className="btn btn-outline"
-                        onClick={() => setShowSecret((prev) => !prev)}
+                        onClick={() => { setShowSecret((prev) => !prev); }}
                         style={{
                           whiteSpace: "nowrap",
                           height: "36px",
@@ -1376,8 +1368,7 @@ export function SecurityTab() {
                   <TextInput
                     label="OAuth Scopes"
                     value={editingProvider.scopes || "openid profile email"}
-                    onChange={(v) =>
-                      setEditingProvider((prev) => ({ ...prev, scopes: v }))
+                    onChange={(v) => { setEditingProvider((prev) => ({ ...prev, scopes: v })); }
                     }
                     hint="Space-separated list of scopes to request (e.g. openid profile email groups)"
                   />
@@ -1389,11 +1380,10 @@ export function SecurityTab() {
                   <TextInput
                     label="X.509 Public Signing Certificate (PEM / Base64)"
                     value={editingProvider.certificate || ""}
-                    onChange={(v) =>
-                      setEditingProvider((prev) => ({
+                    onChange={(v) => { setEditingProvider((prev) => ({
                         ...prev,
                         certificate: v,
-                      }))
+                      })); }
                     }
                     hint="IdP public certificate used to verify SAML response digital signatures"
                   />
@@ -1401,11 +1391,10 @@ export function SecurityTab() {
                   <TextInput
                     label="IdP Metadata URL (XML Endpoint)"
                     value={editingProvider.metadataUrl || ""}
-                    onChange={(v) =>
-                      setEditingProvider((prev) => ({
+                    onChange={(v) => { setEditingProvider((prev) => ({
                         ...prev,
                         metadataUrl: v,
-                      }))
+                      })); }
                     }
                     hint="URL to the IdP SAML 2.0 metadata XML descriptor"
                   />
@@ -1415,11 +1404,10 @@ export function SecurityTab() {
               <TextInput
                 label="Role Mapping Rules (JSON)"
                 value={editingProvider.roleMappingRules || ""}
-                onChange={(v) =>
-                  setEditingProvider((prev) => ({
+                onChange={(v) => { setEditingProvider((prev) => ({
                     ...prev,
                     roleMappingRules: v,
-                  }))
+                  })); }
                 }
                 hint='JSON mapping of roles to regex patterns, e.g. {"Admin":"^(admin|admins)$"}'
               />
@@ -1427,8 +1415,7 @@ export function SecurityTab() {
               <TextInput
                 label="Button Text"
                 value={editingProvider.buttonText || ""}
-                onChange={(v) =>
-                  setEditingProvider((prev) => ({ ...prev, buttonText: v }))
+                onChange={(v) => { setEditingProvider((prev) => ({ ...prev, buttonText: v })); }
                 }
                 hint="Custom label on the login screen button (e.g. Sign in with Authentik)"
               />
@@ -1466,7 +1453,7 @@ export function SecurityTab() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={handleTestConnection}
+                onClick={(...args: Parameters<typeof handleTestConnection>) => { void handleTestConnection(...args); }}
                 disabled={testing}
                 style={{ fontSize: "0.85rem" }}
               >
@@ -1486,7 +1473,7 @@ export function SecurityTab() {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={handleSaveProvider}
+                  onClick={(...args: Parameters<typeof handleSaveProvider>) => { void handleSaveProvider(...args); }}
                 >
                   Save Provider
                 </button>
@@ -1502,7 +1489,7 @@ export function SecurityTab() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setShowRegenerateModal(false)}
+          onClick={() => { setShowRegenerateModal(false); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -1515,7 +1502,7 @@ export function SecurityTab() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1562,7 +1549,7 @@ export function SecurityTab() {
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => setShowRegenerateModal(false)}
+                onClick={() => { setShowRegenerateModal(false); }}
               >
                 Cancel
               </button>

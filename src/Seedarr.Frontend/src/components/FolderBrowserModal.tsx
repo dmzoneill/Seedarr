@@ -164,7 +164,7 @@ export function FolderBrowserModal({
         className="modal-content"
         role="button"
         tabIndex={0}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();
@@ -277,7 +277,7 @@ export function FolderBrowserModal({
                   <React.Fragment key={crumb.path}>
                     <button
                       type="button"
-                      onClick={() => handleNavigateInto(crumb.path)}
+                      onClick={() => { handleNavigateInto(crumb.path); }}
                       style={{
                         background: "none",
                         border: "none",
@@ -311,7 +311,7 @@ export function FolderBrowserModal({
             <button
               type="button"
               className="btn btn-outline btn-small"
-              onClick={() => setShowNewFolderInput((prev) => !prev)}
+              onClick={() => { setShowNewFolderInput((prev) => !prev); }}
               title={t("folderBrowser.createNewFolder", "Create new folder")}
               style={{
                 padding: "0.3rem 0.6rem",
@@ -336,7 +336,7 @@ export function FolderBrowserModal({
                 type="text"
                 className="form-input"
                 value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
+                onChange={(e) => { setNewFolderName(e.target.value); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void handleCreateFolder();
                 }}
@@ -353,7 +353,7 @@ export function FolderBrowserModal({
               <button
                 type="button"
                 className="btn btn-primary btn-small"
-                onClick={handleCreateFolder}
+                onClick={(...args: Parameters<typeof handleCreateFolder>) => { void handleCreateFolder(...args); }}
                 disabled={!newFolderName.trim() || mkdirMutation.isPending}
                 style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
               >
@@ -436,7 +436,7 @@ export function FolderBrowserModal({
                   key={dir.path}
                   role="button"
                   tabIndex={0}
-                  onClick={() => handleNavigateInto(dir.path)}
+                  onClick={() => { handleNavigateInto(dir.path); }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();

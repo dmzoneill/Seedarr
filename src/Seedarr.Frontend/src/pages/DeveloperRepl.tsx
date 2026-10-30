@@ -195,7 +195,7 @@ export default function DeveloperRepl() {
           <button
             key={preset.name}
             type="button"
-            onClick={() => setCode(preset.code)}
+            onClick={() => { setCode(preset.code); }}
             style={{
               padding: "5px 12px",
               borderRadius: "6px",
@@ -240,7 +240,7 @@ export default function DeveloperRepl() {
             ref={textareaRef}
             aria-label="Script editor"
             value={code}
-            onChange={(e) => setCode(e.target.value)}
+            onChange={(e) => { setCode(e.target.value); }}
             onKeyDown={handleKeyDown}
             style={{
               flex: 1,
@@ -305,7 +305,7 @@ export default function DeveloperRepl() {
                 type="button"
                 role="tab"
                 aria-selected={activeTab === "result"}
-                onClick={() => setActiveTab("result")}
+                onClick={() => { setActiveTab("result"); }}
                 style={{
                   padding: "4px 10px",
                   borderRadius: "4px",
@@ -323,7 +323,7 @@ export default function DeveloperRepl() {
                 type="button"
                 role="tab"
                 aria-selected={activeTab === "logs"}
-                onClick={() => setActiveTab("logs")}
+                onClick={() => { setActiveTab("logs"); }}
                 style={{
                   padding: "4px 10px",
                   borderRadius: "4px",
@@ -416,7 +416,7 @@ export default function DeveloperRepl() {
                 role="button"
                 tabIndex={0}
                 aria-label={`Load command: ${h.code.slice(0, 30)}`}
-                onClick={() => setCode(h.code)}
+                onClick={() => { setCode(h.code); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();

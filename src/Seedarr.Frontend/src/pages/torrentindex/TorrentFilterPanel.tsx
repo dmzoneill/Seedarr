@@ -93,7 +93,7 @@ export function TorrentFilterPanel({
         role="button"
         tabIndex={0}
         style={{ cursor: "pointer", userSelect: "none" }}
-        onClick={() => setIsStateOpen(!isStateOpen)}
+        onClick={() => { setIsStateOpen(!isStateOpen); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -129,7 +129,7 @@ export function TorrentFilterPanel({
             <li key={state}>
               <button
                 className={`filter-panel-item${selectedState === state ? " active" : ""}`}
-                onClick={() => onSelectState(state)}
+                onClick={() => { onSelectState(state); }}
               >
                 <span className="filter-panel-label">
                   {STATE_FILTER_ICONS[state]}{" "}
@@ -156,7 +156,7 @@ export function TorrentFilterPanel({
           userSelect: "none",
           marginTop: "0.5rem",
         }}
-        onClick={() => setIsTrackerOpen(!isTrackerOpen)}
+        onClick={() => { setIsTrackerOpen(!isTrackerOpen); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -179,7 +179,7 @@ export function TorrentFilterPanel({
           <li>
             <button
               className={`filter-panel-item${selectedTracker === "All" ? " active" : ""}`}
-              onClick={() => onSelectTracker("All")}
+              onClick={() => { onSelectTracker("All"); }}
             >
               <span className="filter-panel-label">
                 <AllIcon size={13} /> {t("common.all", undefined, "All")}
@@ -191,7 +191,7 @@ export function TorrentFilterPanel({
             <li key={domain}>
               <button
                 className={`filter-panel-item${selectedTracker === domain ? " active" : ""}`}
-                onClick={() => onSelectTracker(domain)}
+                onClick={() => { onSelectTracker(domain); }}
               >
                 <span
                   className="filter-panel-label"
@@ -229,7 +229,7 @@ export function TorrentFilterPanel({
           userSelect: "none",
           marginTop: "0.5rem",
         }}
-        onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+        onClick={() => { setIsCategoryOpen(!isCategoryOpen); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -305,7 +305,7 @@ export function TorrentFilterPanel({
           alignItems: "center",
           justifyContent: "space-between",
         }}
-        onClick={() => setIsTagOpen(!isTagOpen)}
+        onClick={() => { setIsTagOpen(!isTagOpen); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -375,7 +375,7 @@ export function TorrentFilterPanel({
               >
                 <button
                   type="button"
-                  onClick={() => onTagMatchModeChange("OR")}
+                  onClick={() => { onTagMatchModeChange("OR"); }}
                   style={{
                     padding: "2px 8px",
                     fontSize: "0.7rem",
@@ -401,7 +401,7 @@ export function TorrentFilterPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onTagMatchModeChange("AND")}
+                  onClick={() => { onTagMatchModeChange("AND"); }}
                   style={{
                     padding: "2px 8px",
                     fontSize: "0.7rem",

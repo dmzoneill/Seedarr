@@ -49,17 +49,17 @@ global.localStorage = {
   key: () => null,
 } as unknown as Storage;
 
-describe("ColumnCustomizer: Column Definitions & Configuration", () => {
-  it("should contain exactly 39 column definitions", () => {
+void describe("ColumnCustomizer: Column Definitions & Configuration", () => {
+  void it("should contain exactly 39 column definitions", () => {
     assert.strictEqual(ALL_COLUMNS.length, 39);
   });
 
-  it("should ensure all column keys are unique", () => {
+  void it("should ensure all column keys are unique", () => {
     const keys = new Set(ALL_COLUMNS.map((c) => c.key));
     assert.strictEqual(keys.size, ALL_COLUMNS.length);
   });
 
-  it("should assign every column to a recognized category", () => {
+  void it("should assign every column to a recognized category", () => {
     const validCategories = new Set<ColumnCategory>([
       "basic",
       "transfer",
@@ -76,14 +76,14 @@ describe("ColumnCustomizer: Column Definitions & Configuration", () => {
     }
   });
 
-  it("should have all 5 categories populated", () => {
+  void it("should have all 5 categories populated", () => {
     for (const cat of COLUMN_CATEGORIES) {
       const count = ALL_COLUMNS.filter((c) => c.category === cat.id).length;
       assert.ok(count > 0, `Category ${cat.id} has no columns`);
     }
   });
 
-  it("should provide an i18n translation key for every column", () => {
+  void it("should provide an i18n translation key for every column", () => {
     for (const col of ALL_COLUMNS) {
       const key = col.key as ColumnKey;
       assert.ok(
@@ -93,7 +93,7 @@ describe("ColumnCustomizer: Column Definitions & Configuration", () => {
     }
   });
 
-  it("should define default visible columns as a subset of ALL_COLUMNS", () => {
+  void it("should define default visible columns as a subset of ALL_COLUMNS", () => {
     const allKeys = new Set(ALL_COLUMNS.map((c) => c.key));
     assert.strictEqual(DEFAULT_VISIBLE.size, 11);
     for (const key of DEFAULT_VISIBLE) {
@@ -104,7 +104,7 @@ describe("ColumnCustomizer: Column Definitions & Configuration", () => {
     }
   });
 
-  it("should define compact visible columns as a subset of ALL_COLUMNS", () => {
+  void it("should define compact visible columns as a subset of ALL_COLUMNS", () => {
     const allKeys = new Set(ALL_COLUMNS.map((c) => c.key));
     assert.strictEqual(COMPACT_VISIBLE.size, 7);
     for (const key of COMPACT_VISIBLE) {
@@ -116,12 +116,12 @@ describe("ColumnCustomizer: Column Definitions & Configuration", () => {
   });
 });
 
-describe("ColumnCustomizer: Storage Persistence", () => {
+void describe("ColumnCustomizer: Storage Persistence", () => {
   beforeEach(() => {
     global.localStorage.clear();
   });
 
-  it("should load defaults when localStorage is empty", () => {
+  void it("should load defaults when localStorage is empty", () => {
     const cols = loadVisibleColumns();
     assert.strictEqual(cols.size, DEFAULT_VISIBLE.size);
     for (const key of DEFAULT_VISIBLE) {
@@ -129,7 +129,7 @@ describe("ColumnCustomizer: Storage Persistence", () => {
     }
   });
 
-  it("should save and load custom column sets from localStorage", () => {
+  void it("should save and load custom column sets from localStorage", () => {
     const custom = new Set(["name", "totalSize", "uploadSpeed"]);
     saveVisibleColumns(custom);
 
@@ -140,7 +140,7 @@ describe("ColumnCustomizer: Storage Persistence", () => {
     assert.ok(loaded.has("uploadSpeed"));
   });
 
-  it("should ignore invalid or non-existent column keys in localStorage", () => {
+  void it("should ignore invalid or non-existent column keys in localStorage", () => {
     mockStorage[STORAGE_KEY] = JSON.stringify([
       "name",
       "non_existent_column_123",
@@ -153,13 +153,13 @@ describe("ColumnCustomizer: Storage Persistence", () => {
     assert.ok(!loaded.has("non_existent_column_123"));
   });
 
-  it("should fall back to default when localStorage contains invalid JSON", () => {
+  void it("should fall back to default when localStorage contains invalid JSON", () => {
     mockStorage[STORAGE_KEY] = "{not valid json]";
     const loaded = loadVisibleColumns();
     assert.strictEqual(loaded.size, DEFAULT_VISIBLE.size);
   });
 
-  it("should fall back to default visible columns when all stored keys are obsolete", () => {
+  void it("should fall back to default visible columns when all stored keys are obsolete", () => {
     mockStorage[STORAGE_KEY] = JSON.stringify([
       "legacy_col_1",
       "removed_metric_x",
@@ -173,7 +173,7 @@ describe("ColumnCustomizer: Storage Persistence", () => {
     }
   });
 
-  it("should fall back to default visible columns when stored array is empty", () => {
+  void it("should fall back to default visible columns when stored array is empty", () => {
     mockStorage[STORAGE_KEY] = JSON.stringify([]);
     const loaded = loadVisibleColumns();
     assert.strictEqual(loaded.size, DEFAULT_VISIBLE.size);
@@ -182,7 +182,7 @@ describe("ColumnCustomizer: Storage Persistence", () => {
     }
   });
 
-  it("should migrate columns from LEGACY_STORAGE_KEY when STORAGE_KEY is absent", () => {
+  void it("should migrate columns from LEGACY_STORAGE_KEY when STORAGE_KEY is absent", () => {
     mockStorage[LEGACY_STORAGE_KEY] = JSON.stringify([
       "name",
       "status",
@@ -202,25 +202,25 @@ describe("ColumnCustomizer: Storage Persistence", () => {
     assert.deepStrictEqual(parsedV2, ["name", "status", "ratio"]);
   });
 
-  it("should fall back to default when saving empty or wholly invalid column sets", () => {
+  void it("should fall back to default when saving empty or wholly invalid column sets", () => {
     saveVisibleColumns(new Set(["completely_invalid_key_xyz"]));
     const loaded = loadVisibleColumns();
     assert.strictEqual(loaded.size, DEFAULT_VISIBLE.size);
   });
 });
 
-describe("TableSortPreferences: Persistence & Migration", () => {
+void describe("TableSortPreferences: Persistence & Migration", () => {
   beforeEach(() => {
     global.localStorage.clear();
   });
 
-  it("should return default sort state when localStorage is empty", () => {
+  void it("should return default sort state when localStorage is empty", () => {
     const prefs = loadTableSortPreferences();
     assert.strictEqual(prefs.sortKey, null);
     assert.strictEqual(prefs.sortAsc, true);
   });
 
-  it("should persist and load sort column and direction", () => {
+  void it("should persist and load sort column and direction", () => {
     saveTableSortPreferences("name", false);
     assert.strictEqual(mockStorage[SORT_KEY_STORAGE], "name");
     assert.strictEqual(mockStorage[SORT_ASC_STORAGE], "false");
@@ -230,7 +230,7 @@ describe("TableSortPreferences: Persistence & Migration", () => {
     assert.strictEqual(loaded.sortAsc, false);
   });
 
-  it("should persist ascending sort correctly", () => {
+  void it("should persist ascending sort correctly", () => {
     saveTableSortPreferences("totalSize", true);
     assert.strictEqual(mockStorage[SORT_KEY_STORAGE], "totalSize");
     assert.strictEqual(mockStorage[SORT_ASC_STORAGE], "true");
@@ -240,7 +240,7 @@ describe("TableSortPreferences: Persistence & Migration", () => {
     assert.strictEqual(loaded.sortAsc, true);
   });
 
-  it("should remove sortKey storage when sortKey is set to null (reset state)", () => {
+  void it("should remove sortKey storage when sortKey is set to null (reset state)", () => {
     saveTableSortPreferences("uploadSpeed", false);
     assert.strictEqual(mockStorage[SORT_KEY_STORAGE], "uploadSpeed");
 
@@ -253,7 +253,7 @@ describe("TableSortPreferences: Persistence & Migration", () => {
     assert.strictEqual(loaded.sortAsc, true);
   });
 
-  it("should completely clear storage on resetTableSortPreferences", () => {
+  void it("should completely clear storage on resetTableSortPreferences", () => {
     saveTableSortPreferences("downloadSpeed", false);
     resetTableSortPreferences();
 
@@ -265,7 +265,7 @@ describe("TableSortPreferences: Persistence & Migration", () => {
     assert.strictEqual(loaded.sortAsc, true);
   });
 
-  it("should safely fall back to null when stored sort key is obsolete or invalid", () => {
+  void it("should safely fall back to null when stored sort key is obsolete or invalid", () => {
     mockStorage[SORT_KEY_STORAGE] = "obsolete_non_existent_column";
     mockStorage[SORT_ASC_STORAGE] = "false";
 
@@ -277,17 +277,17 @@ describe("TableSortPreferences: Persistence & Migration", () => {
   });
 });
 
-describe("TablePageSizePreferences: Persistence", () => {
+void describe("TablePageSizePreferences: Persistence", () => {
   beforeEach(() => {
     global.localStorage.clear();
   });
 
-  it("should return default page size (50) when localStorage is empty", () => {
+  void it("should return default page size (50) when localStorage is empty", () => {
     const size = loadTablePageSize();
     assert.strictEqual(size, DEFAULT_PAGE_SIZE);
   });
 
-  it("should persist and load custom page size", () => {
+  void it("should persist and load custom page size", () => {
     saveTablePageSize(100);
     assert.strictEqual(mockStorage[PAGE_SIZE_STORAGE], "100");
 
@@ -295,7 +295,7 @@ describe("TablePageSizePreferences: Persistence", () => {
     assert.strictEqual(loaded, 100);
   });
 
-  it("should fall back to default page size for invalid values in storage", () => {
+  void it("should fall back to default page size for invalid values in storage", () => {
     mockStorage[PAGE_SIZE_STORAGE] = "not_a_number";
     assert.strictEqual(loadTablePageSize(), DEFAULT_PAGE_SIZE);
 
@@ -306,7 +306,7 @@ describe("TablePageSizePreferences: Persistence", () => {
     assert.strictEqual(loadTablePageSize(), DEFAULT_PAGE_SIZE);
   });
 
-  it("should reset page size preference", () => {
+  void it("should reset page size preference", () => {
     saveTablePageSize(250);
     resetTablePageSize();
     assert.strictEqual(mockStorage[PAGE_SIZE_STORAGE], undefined);
@@ -314,8 +314,8 @@ describe("TablePageSizePreferences: Persistence", () => {
   });
 });
 
-describe("ColumnCustomizer: Toggle & Preset Logic", () => {
-  it("should correctly toggle an unchecked column to checked", () => {
+void describe("ColumnCustomizer: Toggle & Preset Logic", () => {
+  void it("should correctly toggle an unchecked column to checked", () => {
     const current = new Set(["name", "status"]);
     const keyToToggle = "uploadSpeed";
 
@@ -331,7 +331,7 @@ describe("ColumnCustomizer: Toggle & Preset Logic", () => {
     assert.strictEqual(next.size, 3);
   });
 
-  it("should correctly toggle a checked column to unchecked", () => {
+  void it("should correctly toggle a checked column to unchecked", () => {
     const current = new Set(["name", "status", "uploadSpeed"]);
     const keyToToggle = "uploadSpeed";
 
@@ -346,7 +346,7 @@ describe("ColumnCustomizer: Toggle & Preset Logic", () => {
     assert.strictEqual(next.size, 2);
   });
 
-  it("should prevent deselecting the last remaining column", () => {
+  void it("should prevent deselecting the last remaining column", () => {
     const current = new Set(["name"]);
     const keyToToggle = "name";
 
@@ -362,7 +362,7 @@ describe("ColumnCustomizer: Toggle & Preset Logic", () => {
     assert.strictEqual(next.size, 1);
   });
 
-  it("should toggle an entire category of columns", () => {
+  void it("should toggle an entire category of columns", () => {
     const current = new Set(["#", "name"]);
     const transferCols = ALL_COLUMNS.filter(
       (c) => c.category === "transfer",
@@ -384,7 +384,7 @@ describe("ColumnCustomizer: Toggle & Preset Logic", () => {
     assert.ok(next.has("name"));
   });
 
-  it("should apply 'compact' preset", () => {
+  void it("should apply 'compact' preset", () => {
     const preset = new Set(COMPACT_VISIBLE);
     assert.strictEqual(preset.size, 7);
     assert.ok(preset.has("name"));
@@ -393,13 +393,13 @@ describe("ColumnCustomizer: Toggle & Preset Logic", () => {
     assert.ok(!preset.has("trackerUrl"));
   });
 
-  it("should apply 'all' preset", () => {
+  void it("should apply 'all' preset", () => {
     const preset = new Set(ALL_COLUMNS.map((c) => c.key));
     assert.strictEqual(preset.size, 39);
   });
 });
 
-describe("ColumnCustomizer: Search Filtering", () => {
+void describe("ColumnCustomizer: Search Filtering", () => {
   function searchColumns(query: string) {
     const q = query.trim().toLowerCase();
     if (!q) return ALL_COLUMNS;
@@ -410,12 +410,12 @@ describe("ColumnCustomizer: Search Filtering", () => {
     );
   }
 
-  it("should return all columns when search query is empty", () => {
+  void it("should return all columns when search query is empty", () => {
     const results = searchColumns("");
     assert.strictEqual(results.length, 39);
   });
 
-  it("should filter columns by partial label match", () => {
+  void it("should filter columns by partial label match", () => {
     const results = searchColumns("speed");
     const keys = results.map((r) => r.key);
     assert.ok(keys.includes("uploadSpeed"));
@@ -423,26 +423,26 @@ describe("ColumnCustomizer: Search Filtering", () => {
     assert.strictEqual(results.length, 2);
   });
 
-  it("should filter columns by key match", () => {
+  void it("should filter columns by key match", () => {
     const results = searchColumns("queue");
     assert.strictEqual(results.length, 1);
     assert.strictEqual(results[0].key, "queuePosition");
   });
 
-  it("should be case-insensitive", () => {
+  void it("should be case-insensitive", () => {
     const lower = searchColumns("tracker");
     const upper = searchColumns("TRACKER");
     assert.strictEqual(lower.length, upper.length);
     assert.ok(lower.length >= 1);
   });
 
-  it("should return empty array for non-matching search", () => {
+  void it("should return empty array for non-matching search", () => {
     const results = searchColumns("nonexistent_column_search_term");
     assert.strictEqual(results.length, 0);
   });
 });
 
-describe("ColumnCustomizer: Column Order & Width Preferences", () => {
+void describe("ColumnCustomizer: Column Order & Width Preferences", () => {
   beforeEach(() => {
     mockStorage[COL_ORDER_STORAGE] = "";
     mockStorage[COL_WIDTHS_STORAGE] = "";
@@ -450,7 +450,7 @@ describe("ColumnCustomizer: Column Order & Width Preferences", () => {
     delete mockStorage[COL_WIDTHS_STORAGE];
   });
 
-  it("should load default column order matching ALL_COLUMNS when storage is empty", () => {
+  void it("should load default column order matching ALL_COLUMNS when storage is empty", () => {
     const order = loadColumnOrder();
     assert.strictEqual(order.length, ALL_COLUMNS.length);
     assert.deepStrictEqual(
@@ -459,7 +459,7 @@ describe("ColumnCustomizer: Column Order & Width Preferences", () => {
     );
   });
 
-  it("should save and load custom column order", () => {
+  void it("should save and load custom column order", () => {
     const customOrder: ColumnKey[] = ["name", "#", "status", "totalSize"];
     saveColumnOrder(customOrder);
     const loaded = loadColumnOrder();
@@ -471,7 +471,7 @@ describe("ColumnCustomizer: Column Order & Width Preferences", () => {
     assert.strictEqual(loaded.length, ALL_COLUMNS.length);
   });
 
-  it("should reset column order", () => {
+  void it("should reset column order", () => {
     saveColumnOrder(["name", "#"]);
     resetColumnOrder();
     assert.strictEqual(localStorage.getItem(COL_ORDER_STORAGE), null);
@@ -479,12 +479,12 @@ describe("ColumnCustomizer: Column Order & Width Preferences", () => {
     assert.strictEqual(loaded[0], ALL_COLUMNS[0].key);
   });
 
-  it("should load empty column widths by default", () => {
+  void it("should load empty column widths by default", () => {
     const widths = loadColumnWidths();
     assert.deepStrictEqual(widths, {});
   });
 
-  it("should save and load column widths", () => {
+  void it("should save and load column widths", () => {
     const customWidths = { name: 300, totalSize: 120 };
     saveColumnWidths(customWidths);
     const loaded = loadColumnWidths();
@@ -492,7 +492,7 @@ describe("ColumnCustomizer: Column Order & Width Preferences", () => {
     assert.strictEqual(loaded.totalSize, 120);
   });
 
-  it("should reset column widths", () => {
+  void it("should reset column widths", () => {
     saveColumnWidths({ name: 300 });
     resetColumnWidths();
     assert.strictEqual(localStorage.getItem(COL_WIDTHS_STORAGE), null);

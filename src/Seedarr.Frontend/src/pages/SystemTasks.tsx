@@ -344,7 +344,7 @@ function TaskHistoryModal({ task, onClose }: TaskHistoryModalProps) {
               type="button"
               className="btn btn-outline"
               style={{ padding: "0.25rem 0.6rem", fontSize: "0.8rem" }}
-              onClick={() => refetch()}
+              onClick={() => { void refetch(); }}
               disabled={isFetching}
               title="Refresh history"
             >
@@ -470,7 +470,7 @@ function TaskHistoryModal({ task, onClose }: TaskHistoryModalProps) {
                                   color: "var(--color-danger, #e55353)",
                                   borderColor: "var(--color-danger, #e55353)",
                                 }}
-                                onClick={() => toggleExpand(item.id)}
+                                onClick={() => { toggleExpand(item.id); }}
                               >
                                 {isExpanded ? "Hide Error ▲" : "View Error ▼"}
                               </button>
@@ -729,7 +729,7 @@ function EditTaskModal({
               id="task-enabled-toggle"
               type="checkbox"
               checked={isEnabled}
-              onChange={(e) => setIsEnabled(e.target.checked)}
+              onChange={(e) => { setIsEnabled(e.target.checked); }}
               style={{
                 width: "18px",
                 height: "18px",
@@ -793,7 +793,7 @@ function SystemTasks() {
   useEffect(() => {
     const timeouts = timeoutIdsRef.current;
     return () => {
-      timeouts.forEach((id) => clearTimeout(id));
+      timeouts.forEach((id) => { clearTimeout(id); });
     };
   }, []);
 
@@ -1238,7 +1238,7 @@ function SystemTasks() {
                             gap: "0.3rem",
                             marginRight: "0.5rem",
                           }}
-                          onClick={() => setSelectedEditTask(task)}
+                          onClick={() => { setSelectedEditTask(task); }}
                           title="Configure task interval and enabled state"
                         >
                           ⚙️ Edit
@@ -1254,7 +1254,7 @@ function SystemTasks() {
                             gap: "0.3rem",
                             marginRight: "0.5rem",
                           }}
-                          onClick={() => setSelectedHistoryTask(task)}
+                          onClick={() => { setSelectedHistoryTask(task); }}
                           title="View task execution history"
                         >
                           📜 History
@@ -1268,7 +1268,7 @@ function SystemTasks() {
                             alignItems: "center",
                             gap: "0.3rem",
                           }}
-                          onClick={() => executeMutation.mutate(task)}
+                          onClick={() => { executeMutation.mutate(task); }}
                           disabled={running}
                           title={
                             running
@@ -1289,7 +1289,7 @@ function SystemTasks() {
                               gap: "0.3rem",
                               marginLeft: "0.5rem",
                             }}
-                            onClick={() => abortTaskMutation.mutate(task)}
+                            onClick={() => { abortTaskMutation.mutate(task); }}
                             disabled={isAborting}
                             title="Abort running task"
                           >
@@ -1425,7 +1425,7 @@ function SystemTasks() {
                             color: "var(--color-danger, #e55353)",
                             borderColor: "var(--color-danger, #e55353)",
                           }}
-                          onClick={() => cancelMutation.mutate(cmd.id)}
+                          onClick={() => { cancelMutation.mutate(cmd.id); }}
                           disabled={cancelMutation.isPending}
                           title="Cancel command"
                         >
@@ -1449,14 +1449,14 @@ function SystemTasks() {
       {selectedHistoryTask && (
         <TaskHistoryModal
           task={selectedHistoryTask}
-          onClose={() => setSelectedHistoryTask(null)}
+          onClose={() => { setSelectedHistoryTask(null); }}
         />
       )}
 
       {selectedEditTask && (
         <EditTaskModal
           task={selectedEditTask}
-          onClose={() => setSelectedEditTask(null)}
+          onClose={() => { setSelectedEditTask(null); }}
           onSave={(interval, isEnabled) => {
             if (selectedEditTask.id !== undefined) {
               updateTaskMutation.mutate({

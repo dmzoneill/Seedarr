@@ -81,7 +81,7 @@ export function ProxySettingsTab() {
         forceProxy: form.forceProxy,
       },
       {
-        onSuccess: () => setDirty(false),
+        onSuccess: () => { setDirty(false); },
       },
     );
   };
@@ -144,7 +144,7 @@ export function ProxySettingsTab() {
           <SelectInput
             label="Proxy Protocol Type"
             value={form.proxyType}
-            onChange={(v) => update("proxyType", v)}
+            onChange={(v) => { update("proxyType", v); }}
             options={[
               { value: "none", label: "None (Direct Connection)" },
               { value: "socks5", label: "SOCKS5 Proxy" },
@@ -156,7 +156,7 @@ export function ProxySettingsTab() {
           <TextInput
             label="Proxy Hostname / IP"
             value={form.proxyHost}
-            onChange={(v) => update("proxyHost", v)}
+            onChange={(v) => { update("proxyHost", v); }}
             disabled={!isProxyActive}
             placeholder="proxy.example.com"
             hint="Proxy server hostname or IP address"
@@ -165,7 +165,7 @@ export function ProxySettingsTab() {
           <NumberInput
             label="Proxy Port"
             value={form.proxyPort}
-            onChange={(v) => update("proxyPort", v)}
+            onChange={(v) => { update("proxyPort", v); }}
             disabled={!isProxyActive}
             min={1}
             max={65535}
@@ -184,7 +184,7 @@ export function ProxySettingsTab() {
             <Toggle
               label="Enable Proxy Authentication"
               checked={form.proxyAuthEnabled}
-              onChange={(v) => update("proxyAuthEnabled", v)}
+              onChange={(v) => { update("proxyAuthEnabled", v); }}
             />
 
             {form.proxyAuthEnabled && (
@@ -199,13 +199,13 @@ export function ProxySettingsTab() {
                 <TextInput
                   label="Proxy Username"
                   value={form.proxyUsername}
-                  onChange={(v) => update("proxyUsername", v)}
+                  onChange={(v) => { update("proxyUsername", v); }}
                 />
 
                 <TextInput
                   label="Proxy Password"
                   value={form.proxyPassword}
-                  onChange={(v) => update("proxyPassword", v)}
+                  onChange={(v) => { update("proxyPassword", v); }}
                   type="password"
                 />
               </div>
@@ -229,7 +229,7 @@ export function ProxySettingsTab() {
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={handleTestProxy}
+                  onClick={(...args: Parameters<typeof handleTestProxy>) => { void handleTestProxy(...args); }}
                   disabled={testMutation.isPending || !form.proxyHost}
                   style={{ fontSize: "0.85rem" }}
                 >
@@ -291,14 +291,14 @@ export function ProxySettingsTab() {
           <Toggle
             label="Anonymous Mode"
             checked={form.anonymousMode}
-            onChange={(v) => update("anonymousMode", v)}
+            onChange={(v) => { update("anonymousMode", v); }}
             hint="Strip client fingerprint headers, hide user-agent strings, and prevent direct DNS resolution"
           />
 
           <Toggle
             label="Strict Proxy Enforcement (Kill Switch)"
             checked={form.forceProxy}
-            onChange={(v) => update("forceProxy", v)}
+            onChange={(v) => { update("forceProxy", v); }}
             disabled={!isProxyActive}
             hint="Drop all peer connections and tracker announcements if the proxy connection fails"
           />

@@ -57,7 +57,7 @@ function createMockTorrent(overrides: Partial<Torrent> = {}): Torrent {
   };
 }
 
-describe("filterUtils: filterTorrents", () => {
+void describe("filterUtils: filterTorrents", () => {
   const torrents: Torrent[] = [
     createMockTorrent({
       id: 1,
@@ -94,13 +94,13 @@ describe("filterUtils: filterTorrents", () => {
     }),
   ];
 
-  it("should filter by search text query", () => {
+  void it("should filter by search text query", () => {
     const result = filterTorrents(torrents, { filter: "debian" });
     assert.equal(result.length, 1);
     assert.equal(result[0].id, 2);
   });
 
-  it("should filter by status state", () => {
+  void it("should filter by status state", () => {
     const seeding = filterTorrents(torrents, { stateFilter: "Seeding" });
     assert.equal(seeding.length, 2);
     assert.deepEqual(
@@ -112,7 +112,7 @@ describe("filterUtils: filterTorrents", () => {
     assert.equal(all.length, 4);
   });
 
-  it("should filter by tracker domain", () => {
+  void it("should filter by tracker domain", () => {
     const result = filterTorrents(torrents, {
       trackerFilter: "tracker.ubuntu.com",
     });
@@ -120,7 +120,7 @@ describe("filterUtils: filterTorrents", () => {
     assert.equal(result[0].id, 1);
   });
 
-  it("should filter by category and handle Uncategorized", () => {
+  void it("should filter by category and handle Uncategorized", () => {
     const linux = filterTorrents(torrents, { categoryFilter: "Linux" });
     assert.equal(linux.length, 2);
     assert.deepEqual(
@@ -135,7 +135,7 @@ describe("filterUtils: filterTorrents", () => {
     assert.equal(uncat[0].id, 4);
   });
 
-  it("should filter by tag / label and handle Untagged", () => {
+  void it("should filter by tag / label and handle Untagged", () => {
     const iso = filterTorrents(torrents, { tagFilter: "ISO" });
     assert.equal(iso.length, 2);
     assert.deepEqual(
@@ -148,7 +148,7 @@ describe("filterUtils: filterTorrents", () => {
     assert.equal(untagged[0].id, 4);
   });
 
-  it("should apply multiple filter combinations concurrently", () => {
+  void it("should apply multiple filter combinations concurrently", () => {
     const result = filterTorrents(torrents, {
       filter: "Linux",
       stateFilter: "Seeding",
@@ -159,12 +159,12 @@ describe("filterUtils: filterTorrents", () => {
     assert.equal(result[0].id, 3);
   });
 
-  it("should return empty array for empty or undefined torrent list", () => {
+  void it("should return empty array for empty or undefined torrent list", () => {
     assert.deepEqual(filterTorrents(undefined, {}), []);
     assert.deepEqual(filterTorrents([], { filter: "test" }), []);
   });
 
-  describe("tag filtering with tagIds and matching semantics", () => {
+  void describe("tag filtering with tagIds and matching semantics", () => {
     const multiTagTorrents: Torrent[] = [
       createMockTorrent({
         id: 10,
@@ -198,7 +198,7 @@ describe("filterUtils: filterTorrents", () => {
       }),
     ];
 
-    it("should filter by single tag ID", () => {
+    void it("should filter by single tag ID", () => {
       const result = filterTorrents(multiTagTorrents, {
         selectedTagIds: [1],
       });
@@ -209,7 +209,7 @@ describe("filterUtils: filterTorrents", () => {
       );
     });
 
-    it("should filter by single tag ID using Set<number>", () => {
+    void it("should filter by single tag ID using Set<number>", () => {
       const result = filterTorrents(multiTagTorrents, {
         selectedTagIds: new Set([3]),
       });
@@ -217,7 +217,7 @@ describe("filterUtils: filterTorrents", () => {
       assert.equal(result[0].id, 20);
     });
 
-    it("should filter by multiple tags using OR semantics (union / ANY)", () => {
+    void it("should filter by multiple tags using OR semantics (union / ANY)", () => {
       const result = filterTorrents(multiTagTorrents, {
         selectedTagIds: [1, 3],
         tagMatchMode: "OR",
@@ -229,7 +229,7 @@ describe("filterUtils: filterTorrents", () => {
       );
     });
 
-    it("should default to OR semantics when tagMatchMode is omitted", () => {
+    void it("should default to OR semantics when tagMatchMode is omitted", () => {
       const result = filterTorrents(multiTagTorrents, {
         selectedTagIds: [1, 3],
       });
@@ -240,7 +240,7 @@ describe("filterUtils: filterTorrents", () => {
       );
     });
 
-    it("should filter by multiple tags using AND semantics (intersection / ALL)", () => {
+    void it("should filter by multiple tags using AND semantics (intersection / ALL)", () => {
       const result = filterTorrents(multiTagTorrents, {
         selectedTagIds: [1, 2],
         tagMatchMode: "AND",
@@ -249,7 +249,7 @@ describe("filterUtils: filterTorrents", () => {
       assert.equal(result[0].id, 10);
     });
 
-    it("should return empty array if no torrent matches all tags in AND mode", () => {
+    void it("should return empty array if no torrent matches all tags in AND mode", () => {
       const result = filterTorrents(multiTagTorrents, {
         selectedTagIds: [1, 3],
         tagMatchMode: "AND",
@@ -257,7 +257,7 @@ describe("filterUtils: filterTorrents", () => {
       assert.equal(result.length, 0);
     });
 
-    it("should filter untagged torrents", () => {
+    void it("should filter untagged torrents", () => {
       const result = filterTorrents(multiTagTorrents, {
         tagFilter: "Untagged",
       });
@@ -265,7 +265,7 @@ describe("filterUtils: filterTorrents", () => {
       assert.equal(result[0].id, 40);
     });
 
-    it("should maintain backward compatibility with legacy tagFilter string", () => {
+    void it("should maintain backward compatibility with legacy tagFilter string", () => {
       const result = filterTorrents(multiTagTorrents, {
         tagFilter: "Anime",
       });
@@ -273,7 +273,7 @@ describe("filterUtils: filterTorrents", () => {
       assert.equal(result[0].id, 50);
     });
 
-    it("should ignore empty selectedTagIds and fall back to tagFilter", () => {
+    void it("should ignore empty selectedTagIds and fall back to tagFilter", () => {
       const result = filterTorrents(multiTagTorrents, {
         selectedTagIds: [],
         tagFilter: "Anime",

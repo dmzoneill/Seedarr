@@ -90,8 +90,7 @@ export interface TorrentStoreState {
 export const useTorrentStore = create<TorrentStoreState>((set) => ({
   telemetry: {},
   pieceMaps: {},
-  updatePieceMap: (torrentId, data) =>
-    set((state) => {
+  updatePieceMap: (torrentId, data) => { set((state) => {
       const prevData = state.pieceMaps[torrentId];
       const prevVersion = prevData?.version ?? 0;
       const pieceIndices =
@@ -225,9 +224,8 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
           },
         },
       };
-    }),
-  updateTelemetry: (updates) =>
-    set((state) => {
+    }); },
+  updateTelemetry: (updates) => { set((state) => {
       let changed = false;
       const nextTelemetry = { ...state.telemetry };
       const now = Date.now();
@@ -255,17 +253,15 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
         }
       }
       return changed ? { telemetry: nextTelemetry } : state;
-    }),
-  clearTelemetry: () => set({ telemetry: {} }),
-  clearTorrentTelemetry: (id) =>
-    set((state) => {
+    }); },
+  clearTelemetry: () => { set({ telemetry: {} }); },
+  clearTorrentTelemetry: (id) => { set((state) => {
       if (!state.telemetry[id]) return state;
       const nextTelemetry = { ...state.telemetry };
       delete nextTelemetry[id];
       return { telemetry: nextTelemetry };
-    }),
-  purgeStaleTelemetry: (maxAgeMs = 5000) =>
-    set((state) => {
+    }); },
+  purgeStaleTelemetry: (maxAgeMs = 5000) => { set((state) => {
       const now = Date.now();
       const nextTelemetry: Record<number, TorrentTelemetry> = {};
       let changed = false;
@@ -277,18 +273,16 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
         }
       }
       return changed ? { telemetry: nextTelemetry } : state;
-    }),
-  clearPieceMaps: () => set({ pieceMaps: {} }),
+    }); },
+  clearPieceMaps: () => { set({ pieceMaps: {} }); },
 
   selectedTorrentId: null,
   selectedIds: new Set<number>(),
-  setSelectedTorrentId: (id) => set({ selectedTorrentId: id }),
-  setSelectedIds: (ids) =>
-    set({
+  setSelectedTorrentId: (id) => { set({ selectedTorrentId: id }); },
+  setSelectedIds: (ids) => { set({
       selectedIds: ids instanceof Set ? ids : new Set(ids),
-    }),
-  toggleSelectedId: (id) =>
-    set((state) => {
+    }); },
+  toggleSelectedId: (id) => { set((state) => {
       const next = new Set(state.selectedIds);
       if (next.has(id)) {
         next.delete(id);
@@ -296,12 +290,10 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
         next.add(id);
       }
       return { selectedIds: next };
-    }),
-  selectAllIds: (ids) => set({ selectedIds: new Set(ids) }),
-  clearSelection: () =>
-    set({ selectedIds: new Set(), selectedTorrentId: null }),
-  removeTorrent: (id: number) =>
-    set((state) => {
+    }); },
+  selectAllIds: (ids) => { set({ selectedIds: new Set(ids) }); },
+  clearSelection: () => { set({ selectedIds: new Set(), selectedTorrentId: null }); },
+  removeTorrent: (id: number) => { set((state) => {
       const nextSelected = new Set(state.selectedIds);
       nextSelected.delete(id);
       const nextTelemetry = { ...state.telemetry };
@@ -318,17 +310,15 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
         pieceMaps: nextPieceMaps,
         optimisticUpdates: nextOptimistic,
       };
-    }),
+    }); },
   optimisticUpdates: {},
-  updateTorrentOptimistic: (id, partial) =>
-    set((state) => ({
+  updateTorrentOptimistic: (id, partial) => { set((state) => ({
       optimisticUpdates: {
         ...state.optimisticUpdates,
         [id]: { ...(state.optimisticUpdates[id] || {}), ...partial },
       },
-    })),
-  clearOptimisticUpdates: (id) =>
-    set((state) => {
+    })); },
+  clearOptimisticUpdates: (id) => { set((state) => {
       if (id !== undefined) {
         if (!state.optimisticUpdates[id]) return state;
         const next = { ...state.optimisticUpdates };
@@ -337,7 +327,7 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
       }
       if (Object.keys(state.optimisticUpdates).length === 0) return state;
       return { optimisticUpdates: {} };
-    }),
+    }); },
 }));
 
 export const TELEMETRY_STATUS_STALE_MS = 10000;

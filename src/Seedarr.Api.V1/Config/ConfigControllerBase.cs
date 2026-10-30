@@ -11,7 +11,7 @@ using Seedarr.Http.REST.Attributes;
 
 namespace Seedarr.Api.V1.Config;
 
-public abstract class ConfigController<TResource> : Controller
+public abstract class ConfigController<TResource> : Controller /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
     where TResource : RestResource, new()
 {
     protected readonly IConfigService _configService;

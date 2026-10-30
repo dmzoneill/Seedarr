@@ -63,20 +63,20 @@ function createMockTorrent(overrides: Partial<Torrent> = {}): Torrent {
   };
 }
 
-describe("Tags: calculateTagUsageCounts", () => {
+void describe("Tags: calculateTagUsageCounts", () => {
   const tags: Tag[] = [
     createMockTag({ id: 1, label: "Anime" }),
     createMockTag({ id: 2, label: "4K" }),
     createMockTag({ id: 3, label: "Music" }),
   ];
 
-  it("should return empty object when torrents list is empty or null", () => {
+  void it("should return empty object when torrents list is empty or null", () => {
     assert.deepEqual(calculateTagUsageCounts(null, "All", tags), {});
     assert.deepEqual(calculateTagUsageCounts([], "All", tags), {});
     assert.deepEqual(calculateTagUsageCounts(undefined, "All", tags), {});
   });
 
-  it("should calculate usage count from torrent.tagIds", () => {
+  void it("should calculate usage count from torrent.tagIds", () => {
     const torrents: Torrent[] = [
       createMockTorrent({ id: 101, tagIds: [1, 2] }),
       createMockTorrent({ id: 102, tagIds: [1] }),
@@ -91,7 +91,7 @@ describe("Tags: calculateTagUsageCounts", () => {
     assert.equal(counts[999], undefined);
   });
 
-  it("should support fallback to torrent.tags if tagIds is absent", () => {
+  void it("should support fallback to torrent.tags if tagIds is absent", () => {
     const torrents = [
       createMockTorrent({ id: 201, tagIds: undefined }),
       createMockTorrent({ id: 202, tagIds: undefined }),
@@ -104,7 +104,7 @@ describe("Tags: calculateTagUsageCounts", () => {
     assert.equal(counts[3], 1);
   });
 
-  it("should support backward compatibility with legacy torrent.label", () => {
+  void it("should support backward compatibility with legacy torrent.label", () => {
     const torrents: Torrent[] = [
       createMockTorrent({ id: 301, tagIds: [], label: "Anime" }),
       createMockTorrent({ id: 302, tagIds: [], label: "4K, Music" }),
@@ -116,7 +116,7 @@ describe("Tags: calculateTagUsageCounts", () => {
     assert.equal(counts[3], 1);
   });
 
-  it("should not duplicate count if torrent has both matching tagId and legacy label", () => {
+  void it("should not duplicate count if torrent has both matching tagId and legacy label", () => {
     const torrents: Torrent[] = [
       createMockTorrent({ id: 401, tagIds: [1], label: "Anime" }),
     ];
@@ -125,7 +125,7 @@ describe("Tags: calculateTagUsageCounts", () => {
     assert.equal(counts[1], 1);
   });
 
-  it("should filter tag counts by selectedCategory", () => {
+  void it("should filter tag counts by selectedCategory", () => {
     const torrents: Torrent[] = [
       createMockTorrent({ id: 501, tagIds: [1], category: "Movies" }),
       createMockTorrent({ id: 502, tagIds: [1], category: "Series" }),
@@ -150,8 +150,8 @@ describe("Tags: calculateTagUsageCounts", () => {
   });
 });
 
-describe("Tags: Deletion and Filter State Synchronization", () => {
-  it("should sanitize active tag filter when a tag is deleted", () => {
+void describe("Tags: Deletion and Filter State Synchronization", () => {
+  void it("should sanitize active tag filter when a tag is deleted", () => {
     let selectedTag = "Anime";
     let selectedTagIds = new Set([1, 2]);
 
@@ -172,7 +172,7 @@ describe("Tags: Deletion and Filter State Synchronization", () => {
     assert.equal(selectedTagIds.has(2), true);
   });
 
-  it("should strip leading and trailing whitespace when creating or editing tags", () => {
+  void it("should strip leading and trailing whitespace when creating or editing tags", () => {
     const inputLabel = "   seedbox-vip   ";
     const trimmed = inputLabel.trim();
     assert.equal(trimmed, "seedbox-vip");

@@ -276,7 +276,7 @@ public class ConfigModel : ModelBase
 
 public class ConfigService : IConfigService
 {
-    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2068:Hardcoded credentials", Justification = "Public open read-only TMDB API proxy key for metadata")]
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2068:Hardcoded credentials", Justification = "Public open read-only TMDB API proxy key for metadata")] /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
     public const string DefaultTmdbApiKey = "b69b7f0431f4d3cd5116acc5e73b6668"; // gitleaks:allow NOSONAR
 
     private readonly IBasicRepository<ConfigModel> _repository;

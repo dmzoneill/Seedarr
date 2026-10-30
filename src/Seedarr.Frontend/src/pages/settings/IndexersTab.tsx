@@ -144,7 +144,7 @@ export function IndexersTab() {
     const timer = setInterval(() => {
       setSyncCooldownRemaining((prev) => Math.max(0, prev - 1));
     }, 1000);
-    return () => clearInterval(timer);
+    return () => { clearInterval(timer); };
   }, [syncCooldownRemaining]);
 
   const handleSave = () => {
@@ -420,7 +420,7 @@ export function IndexersTab() {
                     rel="noopener noreferrer"
                     className="provider-card-action"
                     title={`Open ${idx.url}`}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); }}
                     style={{ textDecoration: "none", color: "inherit" }}
                   >
                     ↗
@@ -593,7 +593,7 @@ export function IndexersTab() {
                 className="provider-card"
                 role="button"
                 tabIndex={0}
-                onClick={() => setEditingRule({ ...rule })}
+                onClick={() => { setEditingRule({ ...rule }); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -613,11 +613,10 @@ export function IndexersTab() {
                         )
                       ) {
                         deleteRuleMutation.mutate(rule.id, {
-                          onSuccess: () =>
-                            showToast(
+                          onSuccess: () => { showToast(
                               `RSS Rule "${rule.name}" deleted`,
                               "info",
-                            ),
+                            ); },
                           onError: (err: unknown) => {
                             const msg = err instanceof Error ? err.message : "Failed to delete RSS rule";
                             showToast(msg, "error");
@@ -731,7 +730,7 @@ export function IndexersTab() {
             className="provider-card-add"
             role="button"
             tabIndex={0}
-            onClick={() => setEditingRule({ ...defaultRssRule })}
+            onClick={() => { setEditingRule({ ...defaultRssRule }); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -768,7 +767,7 @@ export function IndexersTab() {
             <select
               className="form-select"
               value={historyStatusFilter}
-              onChange={(e) => setHistoryStatusFilter(e.target.value)}
+              onChange={(e) => { setHistoryStatusFilter(e.target.value); }}
               style={{
                 padding: "0.3rem 0.6rem",
                 borderRadius: "4px",
@@ -795,8 +794,7 @@ export function IndexersTab() {
                   )
                 ) {
                   clearGrabHistoryMutation.mutate(undefined, {
-                    onSuccess: () =>
-                      showToast("RSS grab history cleared", "info"),
+                    onSuccess: () => { showToast("RSS grab history cleared", "info"); },
                     onError: (err: unknown) => {
                       const msg = err instanceof Error ? err.message : "Failed to clear history";
                       showToast(msg, "error");
@@ -966,7 +964,7 @@ export function IndexersTab() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1246,7 +1244,7 @@ export function IndexersTab() {
                   type="text"
                   placeholder="Search discovered categories..."
                   value={capsFilter}
-                  onChange={(e) => setCapsFilter(e.target.value)}
+                  onChange={(e) => { setCapsFilter(e.target.value); }}
                   style={{
                     width: "100%",
                     padding: "0.35rem 0.6rem",
@@ -1327,7 +1325,7 @@ export function IndexersTab() {
                           <div
                             role="button"
                             tabIndex={0}
-                            onClick={() => toggleId(cat.id)}
+                            onClick={() => { toggleId(cat.id); }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
@@ -1351,7 +1349,7 @@ export function IndexersTab() {
                             <input
                               type="checkbox"
                               checked={isCatSelected}
-                              onChange={() => toggleId(cat.id)}
+                              onChange={() => { toggleId(cat.id); }}
                               style={{ cursor: "pointer" }}
                             />
                             <span>
@@ -1387,7 +1385,7 @@ export function IndexersTab() {
                                         key={sub.id}
                                         role="button"
                                         tabIndex={0}
-                                        onClick={() => toggleId(sub.id)}
+                                        onClick={() => { toggleId(sub.id); }}
                                         onKeyDown={(e) => {
                                           if (e.key === "Enter" || e.key === " ") {
                                             e.preventDefault();
@@ -1542,7 +1540,7 @@ export function IndexersTab() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setEditingRule(null)}
+          onClick={() => { setEditingRule(null); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -1554,7 +1552,7 @@ export function IndexersTab() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1576,19 +1574,18 @@ export function IndexersTab() {
             <TextInput
               label="Rule Name"
               value={editingRule.name || ""}
-              onChange={(v) => setEditingRule({ ...editingRule, name: v })}
+              onChange={(v) => { setEditingRule({ ...editingRule, name: v }); }}
               placeholder="e.g. 1080p Web-DL Only"
             />
             <Toggle
               label="Enable Rule"
               checked={editingRule.isEnabled ?? true}
-              onChange={(v) => setEditingRule({ ...editingRule, isEnabled: v })}
+              onChange={(v) => { setEditingRule({ ...editingRule, isEnabled: v }); }}
             />
             <TextInput
               label="Must Contain (Regex or Substring)"
               value={editingRule.mustContain || ""}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, mustContain: v })
+              onChange={(v) => { setEditingRule({ ...editingRule, mustContain: v }); }
               }
               placeholder="e.g. 1080p|720p or (?i)h265"
               hint="Regex pattern or keyword releases must match to be accepted"
@@ -1596,8 +1593,7 @@ export function IndexersTab() {
             <TextInput
               label="Must Not Contain (Regex or Substring)"
               value={editingRule.mustNotContain || ""}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, mustNotContain: v })
+              onChange={(v) => { setEditingRule({ ...editingRule, mustNotContain: v }); }
               }
               placeholder="e.g. CAM|TS|HDCAM"
               hint="Regex pattern or keyword releases must NOT match"
@@ -1605,23 +1601,21 @@ export function IndexersTab() {
             <NumberInput
               label="Priority"
               value={editingRule.priority ?? 0}
-              onChange={(v) => setEditingRule({ ...editingRule, priority: v })}
+              onChange={(v) => { setEditingRule({ ...editingRule, priority: v }); }}
               min={0}
               hint="Evaluation priority (lower numbers evaluate first, e.g. 0 before 10)"
             />
             <NumberInput
               label="Minimum Seeders"
               value={editingRule.minSeeders ?? 1}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, minSeeders: v })
+              onChange={(v) => { setEditingRule({ ...editingRule, minSeeders: v }); }
               }
               min={0}
             />
             <NumberInput
               label="Minimum Size (Bytes)"
               value={editingRule.minSizeBytes ?? 0}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, minSizeBytes: v })
+              onChange={(v) => { setEditingRule({ ...editingRule, minSizeBytes: v }); }
               }
               min={0}
               hint="Minimum file size in bytes (0 = no minimum)"
@@ -1629,8 +1623,7 @@ export function IndexersTab() {
             <NumberInput
               label="Maximum Size (Bytes)"
               value={editingRule.maxSizeBytes ?? 0}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, maxSizeBytes: v })
+              onChange={(v) => { setEditingRule({ ...editingRule, maxSizeBytes: v }); }
               }
               min={0}
               hint="Maximum file size in bytes (0 = no maximum)"
@@ -1638,8 +1631,7 @@ export function IndexersTab() {
             <NumberInput
               label="Max Age (Days)"
               value={editingRule.maxAgeDays ?? 0}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, maxAgeDays: v })
+              onChange={(v) => { setEditingRule({ ...editingRule, maxAgeDays: v }); }
               }
               min={0}
               hint="Maximum age of releases in days to match (0 = no limit)"
@@ -1647,8 +1639,7 @@ export function IndexersTab() {
             <SelectInput
               label="Category"
               value={String(editingRule.categoryId ?? 0)}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, categoryId: Number(v) || 0 })
+              onChange={(v) => { setEditingRule({ ...editingRule, categoryId: Number(v) || 0 }); }
               }
               options={categoryOptions}
               hint="Category to assign to grabbed torrents"
@@ -1892,7 +1883,7 @@ export function IndexersTab() {
             <TextInput
               label="Save Path (Custom Destination Folder)"
               value={editingRule.savePath || ""}
-              onChange={(v) => setEditingRule({ ...editingRule, savePath: v })}
+              onChange={(v) => { setEditingRule({ ...editingRule, savePath: v }); }}
               placeholder="e.g. /downloads/movies"
               hint="Custom destination directory for torrents matched by this rule"
             />
@@ -1900,8 +1891,7 @@ export function IndexersTab() {
             <SelectInput
               label="Initial Status"
               value={editingRule.initialStatus || "Queued"}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, initialStatus: v })
+              onChange={(v) => { setEditingRule({ ...editingRule, initialStatus: v }); }
               }
               options={[
                 {
@@ -1916,16 +1906,14 @@ export function IndexersTab() {
             <Toggle
               label="Sequential Download"
               checked={editingRule.sequentialDownload ?? false}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, sequentialDownload: v })
+              onChange={(v) => { setEditingRule({ ...editingRule, sequentialDownload: v }); }
               }
             />
 
             <Toggle
               label="Freeleech Only"
               checked={editingRule.freeleechOnly ?? false}
-              onChange={(v) =>
-                setEditingRule({ ...editingRule, freeleechOnly: v })
+              onChange={(v) => { setEditingRule({ ...editingRule, freeleechOnly: v }); }
               }
             />
 
@@ -1949,7 +1937,7 @@ export function IndexersTab() {
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => setEditingRule(null)}
+                onClick={() => { setEditingRule(null); }}
               >
                 Cancel
               </button>

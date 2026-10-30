@@ -197,7 +197,7 @@ export function MediaPlayerModal({
         .writeText(fullUrl)
         .then(() => {
           setCopied(true);
-          setTimeout(() => setCopied(false), 2500);
+          setTimeout(() => { setCopied(false); }, 2500);
         })
         .catch(() => {});
     }
@@ -350,7 +350,7 @@ export function MediaPlayerModal({
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => { window.removeEventListener("keydown", handleKeyDown); };
   }, [
     isOpen,
     resolvedSubtitles,
@@ -446,7 +446,7 @@ export function MediaPlayerModal({
           padding: 0,
           backgroundColor: "var(--bg-primary, #18191c)",
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
       >
         {/* Modal Header */}
         <div
@@ -767,7 +767,7 @@ export function MediaPlayerModal({
                   minWidth: "140px",
                 }}
                 value={activeSubtitleTrackId}
-                onChange={(e) => handleSubtitleChange(e.target.value)}
+                onChange={(e) => { handleSubtitleChange(e.target.value); }}
               >
                 <option value="off">{t("mediaPlayer.off", "Off")}</option>
                 {resolvedSubtitles.map((sub) => {
@@ -816,8 +816,7 @@ export function MediaPlayerModal({
                       width: "auto",
                     }}
                     value={subtitleSize}
-                    onChange={(e) =>
-                      setSubtitleSize(e.target.value as SubtitleSize)
+                    onChange={(e) => { setSubtitleSize(e.target.value as SubtitleSize); }
                     }
                   >
                     <option value="small">

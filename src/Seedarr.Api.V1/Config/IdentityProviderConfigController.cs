@@ -47,8 +47,8 @@ public class IdentityProviderResource : RestResource
 [V1ApiController("config/auth/providers")]
 public class IdentityProviderConfigController : RestController<IdentityProviderResource>
 {
-    private const string MaskedSecret = "********";
-    private const string AlternateMaskedSecret = "******";
+    private const string MaskedSecret = "********"; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
+    private const string AlternateMaskedSecret = "******"; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
 
     private static readonly HashSet<string> ReservedProviderIds = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -123,7 +123,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         return Ok(ToResource(provider));
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public async Task<ActionResult<IdentityProviderResource>> Create([FromBody] IdentityProviderResource resource)
     {

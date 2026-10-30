@@ -70,8 +70,8 @@ interface MockDocState {
   selected: boolean;
 }
 
-describe("TorrentContextMenu: buildMagnetLink", () => {
-  it("should return t.magnetLink directly when t.magnetLink is present", () => {
+void describe("TorrentContextMenu: buildMagnetLink", () => {
+  void it("should return t.magnetLink directly when t.magnetLink is present", () => {
     const existingMagnet =
       "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Custom+Name&tr=http%3A%2F%2Fcustom-tracker.com%2Fannounce";
     const torrent = createMockTorrent({
@@ -82,7 +82,7 @@ describe("TorrentContextMenu: buildMagnetLink", () => {
     assert.equal(result, existingMagnet);
   });
 
-  it("should build magnet link with multi-trackers from t.trackers", () => {
+  void it("should build magnet link with multi-trackers from t.trackers", () => {
     const torrent = createMockTorrent({
       magnetLink: null,
       trackerUrl: "http://tracker-primary.org/announce",
@@ -110,7 +110,7 @@ describe("TorrentContextMenu: buildMagnetLink", () => {
     );
   });
 
-  it("should deduplicate identical trackers from t.trackers and t.trackerUrl", () => {
+  void it("should deduplicate identical trackers from t.trackers and t.trackerUrl", () => {
     const torrent = createMockTorrent({
       magnetLink: undefined,
       trackerUrl: "http://tracker-dup.org/announce",
@@ -142,7 +142,7 @@ describe("TorrentContextMenu: buildMagnetLink", () => {
   });
 });
 
-describe("TorrentContextMenu: copyToClipboard fallback", () => {
+void describe("TorrentContextMenu: copyToClipboard fallback", () => {
   let originalNavigator: unknown;
   let originalDocument: unknown;
 
@@ -158,7 +158,7 @@ describe("TorrentContextMenu: copyToClipboard fallback", () => {
     g.document = originalDocument;
   });
 
-  it("should fall back to document.execCommand when navigator.clipboard is undefined", async () => {
+  void it("should fall back to document.execCommand when navigator.clipboard is undefined", async () => {
     const g = globalThis as Record<string, unknown>;
     g.navigator = {};
 
@@ -217,7 +217,7 @@ describe("TorrentContextMenu: copyToClipboard fallback", () => {
     assert.equal(state.removedChild, state.createdElement);
   });
 
-  it("should use navigator.clipboard.writeText when available", async () => {
+  void it("should use navigator.clipboard.writeText when available", async () => {
     const g = globalThis as Record<string, unknown>;
     let writtenText: string | null = null;
     g.navigator = {

@@ -119,7 +119,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
       .writeText(text)
       .then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        setTimeout(() => { setCopied(false); }, 2000);
       })
       .catch(() => {});
   }
@@ -182,7 +182,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           <button
             className={`btn btn-sm ${isLive ? "btn-outline" : "btn-primary"}`}
             style={{ fontSize: "0.78rem", padding: "0.25rem 0.6rem" }}
-            onClick={() => setIsLive(!isLive)}
+            onClick={() => { setIsLive(!isLive); }}
             title={isLive ? "Pause auto-polling" : "Resume live updates"}
           >
             {isLive ? "⏸ Pause" : "▶ Resume"}
@@ -190,7 +190,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           <button
             className="btn btn-outline btn-sm"
             style={{ fontSize: "0.78rem", padding: "0.25rem 0.6rem" }}
-            onClick={() => refetch()}
+            onClick={() => { void refetch(); }}
             title="Refresh logs immediately"
           >
             🔄 Refresh
@@ -222,7 +222,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
             className="form-control form-control-sm"
             placeholder="Search log messages, trackers, peers..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); }}
             style={{
               width: "100%",
               padding: "0.3rem 0.6rem",
@@ -249,7 +249,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
                 padding: "0.18rem 0.45rem",
                 borderRadius: "4px",
               }}
-              onClick={() => setLevelFilter(lvl)}
+              onClick={() => { setLevelFilter(lvl); }}
             >
               {lvl}
             </button>
@@ -271,7 +271,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
                 padding: "0.18rem 0.45rem",
                 borderRadius: "4px",
               }}
-              onClick={() => setSourceFilter("ALL")}
+              onClick={() => { setSourceFilter("ALL"); }}
             >
               All
             </button>
@@ -284,7 +284,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
                   padding: "0.18rem 0.45rem",
                   borderRadius: "4px",
                 }}
-                onClick={() => setSourceFilter(src)}
+                onClick={() => { setSourceFilter(src); }}
               >
                 {src}
               </button>

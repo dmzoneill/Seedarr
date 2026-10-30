@@ -32,8 +32,8 @@ public class RandomNumberGenerator : IRandomNumberGenerator
         _random = random ?? Random.Shared;
     }
 
-    public int Next() => _random.Next();
-    public int Next(int maxValue) => _random.Next(maxValue);
-    public int Next(int minValue, int maxValue) => _random.Next(minValue, maxValue);
-    public double NextDouble() => _random.NextDouble();
+    public int Next() => _random.Next(); /* non-crypto: seedable PRNG wrapper for simulation and tests */ // nosemgrep
+    public int Next(int maxValue) => _random.Next(maxValue); /* non-crypto: seedable PRNG wrapper for simulation and tests */ // nosemgrep
+    public int Next(int minValue, int maxValue) => _random.Next(minValue, maxValue); /* non-crypto: seedable PRNG wrapper for simulation and tests */ // nosemgrep
+    public double NextDouble() => _random.NextDouble(); /* non-crypto: seedable PRNG wrapper for simulation and tests */ // nosemgrep
 }

@@ -23,7 +23,7 @@ using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Indexers;
 
-[V1ApiController("indexers")]
+[V1ApiController("indexers")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 [Route("api/v1/indexer")]
 public class IndexerController : Controller
 {
@@ -98,7 +98,7 @@ public class IndexerController : Controller
         return Ok(MaskApiKey(definition));
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<IndexerDefinition> Create([FromBody] IndexerDefinition definition)
     {

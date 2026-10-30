@@ -511,14 +511,14 @@ export default function DownloadClientTorrents() {
           <div className="view-toggle">
             <button
               className={`view-toggle-btn ${viewMode === "grid" ? "active" : ""}`}
-              onClick={() => setViewMode("grid")}
+              onClick={() => { setViewMode("grid"); }}
               title="Poster Card Grid View"
             >
               🎬 Posters
             </button>
             <button
               className={`view-toggle-btn ${viewMode === "table" ? "active" : ""}`}
-              onClick={() => setViewMode("table")}
+              onClick={() => { setViewMode("table"); }}
               title="Detailed Table View"
             >
               📋 Table
@@ -540,7 +540,7 @@ export default function DownloadClientTorrents() {
 
           <button
             className="btn btn-outline"
-            onClick={() => refetch()}
+            onClick={() => { void refetch(); }}
             disabled={isFetching}
           >
             {isFetching ? "Refreshing..." : "↻ Refresh"}
@@ -611,7 +611,7 @@ export default function DownloadClientTorrents() {
               borderRadius: "6px",
               fontWeight: 500,
             }}
-            onClick={() => setFilterMode("all")}
+            onClick={() => { setFilterMode("all"); }}
           >
             All ({totalCount})
           </button>
@@ -623,7 +623,7 @@ export default function DownloadClientTorrents() {
               borderRadius: "6px",
               fontWeight: 500,
             }}
-            onClick={() => setFilterMode("missing")}
+            onClick={() => { setFilterMode("missing"); }}
           >
             Not in Library ({missingCount})
           </button>
@@ -635,7 +635,7 @@ export default function DownloadClientTorrents() {
               borderRadius: "6px",
               fontWeight: 500,
             }}
-            onClick={() => setFilterMode("library")}
+            onClick={() => { setFilterMode("library"); }}
           >
             In Library ({inLibraryCount})
           </button>
@@ -656,7 +656,7 @@ export default function DownloadClientTorrents() {
             className="form-control"
             placeholder="Filter client torrents by title, category, hash..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); }}
             style={{
               width: "100%",
               padding: "0.4rem 0.75rem",
@@ -670,7 +670,7 @@ export default function DownloadClientTorrents() {
           {searchTerm && (
             <button
               className="btn btn-outline"
-              onClick={() => setSearchTerm("")}
+              onClick={() => { setSearchTerm(""); }}
               style={{
                 fontSize: "0.75rem",
                 padding: "0.35rem 0.5rem",
@@ -1113,12 +1113,11 @@ export default function DownloadClientTorrents() {
                               padding: "0.2rem 0.55rem",
                               borderRadius: "4px",
                             }}
-                            onClick={() =>
-                              handleBoostTorrent(
+                            onClick={() => { handleBoostTorrent(
                                 item.infoHash,
                                 item.title,
                                 item.isPrivate,
-                              )
+                              ); }
                             }
                             disabled={boostHashMutation.isPending}
                             title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
@@ -1169,12 +1168,11 @@ export default function DownloadClientTorrents() {
                               padding: "0.2rem 0.55rem",
                               borderRadius: "4px",
                             }}
-                            onClick={() =>
-                              handleImportOne(
+                            onClick={() => { handleImportOne(
                                 item.infoHash,
                                 item.title,
                                 item.clientId,
-                              )
+                              ); }
                             }
                             disabled={isImporting}
                           >
@@ -1191,12 +1189,11 @@ export default function DownloadClientTorrents() {
                               padding: "0.2rem 0.55rem",
                               borderRadius: "4px",
                             }}
-                            onClick={() =>
-                              handleResumeTorrent(
+                            onClick={() => { handleResumeTorrent(
                                 item.clientId || clientId,
                                 item.infoHash,
                                 item.title,
-                              )
+                              ); }
                             }
                             disabled={resumeRemoteMutation.isPending}
                             title="Resume remote torrent"
@@ -1211,12 +1208,11 @@ export default function DownloadClientTorrents() {
                               padding: "0.2rem 0.55rem",
                               borderRadius: "4px",
                             }}
-                            onClick={() =>
-                              handlePauseTorrent(
+                            onClick={() => { handlePauseTorrent(
                                 item.clientId || clientId,
                                 item.infoHash,
                                 item.title,
-                              )
+                              ); }
                             }
                             disabled={pauseRemoteMutation.isPending}
                             title="Pause remote torrent"
@@ -1232,13 +1228,12 @@ export default function DownloadClientTorrents() {
                             padding: "0.2rem 0.55rem",
                             borderRadius: "4px",
                           }}
-                          onClick={() =>
-                            setDeleteTarget({
+                          onClick={() => { setDeleteTarget({
                               clientId: item.clientId || clientId,
                               clientName: item.clientName || client?.name,
                               infoHash: item.infoHash,
                               title: item.title,
-                            })
+                            }); }
                           }
                           disabled={deleteRemoteMutation.isPending}
                           title="Remove torrent from download client"
@@ -1399,7 +1394,7 @@ export default function DownloadClientTorrents() {
                               type="checkbox"
                               checked={selectedHashes.has(item.infoHash)}
                               disabled={isImporting}
-                              onChange={() => handleToggleSelect(item.infoHash)}
+                              onChange={() => { handleToggleSelect(item.infoHash); }}
                               aria-label={`Select ${displayTitle}`}
                               style={{
                                 cursor: isImporting ? "not-allowed" : "pointer",
@@ -1676,12 +1671,11 @@ export default function DownloadClientTorrents() {
                                   gap: "0.35rem",
                                   whiteSpace: "nowrap",
                                 }}
-                                onClick={() =>
-                                  handleBoostTorrent(
+                                onClick={() => { handleBoostTorrent(
                                     item.infoHash,
                                     item.title,
                                     item.isPrivate,
-                                  )
+                                  ); }
                                 }
                                 disabled={boostHashMutation.isPending}
                                 title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
@@ -1744,12 +1738,11 @@ export default function DownloadClientTorrents() {
                                   gap: "0.35rem",
                                   whiteSpace: "nowrap",
                                 }}
-                                onClick={() =>
-                                  handleImportOne(
+                                onClick={() => { handleImportOne(
                                     item.infoHash,
                                     item.title,
                                     item.clientId,
-                                  )
+                                  ); }
                                 }
                                 disabled={isImporting}
                               >
@@ -1777,12 +1770,11 @@ export default function DownloadClientTorrents() {
                                   gap: "0.35rem",
                                   whiteSpace: "nowrap",
                                 }}
-                                onClick={() =>
-                                  handleResumeTorrent(
+                                onClick={() => { handleResumeTorrent(
                                     item.clientId || clientId,
                                     item.infoHash,
                                     item.title,
-                                  )
+                                  ); }
                                 }
                                 disabled={resumeRemoteMutation.isPending}
                                 title="Resume remote torrent"
@@ -1802,12 +1794,11 @@ export default function DownloadClientTorrents() {
                                   gap: "0.35rem",
                                   whiteSpace: "nowrap",
                                 }}
-                                onClick={() =>
-                                  handlePauseTorrent(
+                                onClick={() => { handlePauseTorrent(
                                     item.clientId || clientId,
                                     item.infoHash,
                                     item.title,
-                                  )
+                                  ); }
                                 }
                                 disabled={pauseRemoteMutation.isPending}
                                 title="Pause remote torrent"
@@ -1828,13 +1819,12 @@ export default function DownloadClientTorrents() {
                                 gap: "0.35rem",
                                 whiteSpace: "nowrap",
                               }}
-                              onClick={() =>
-                                setDeleteTarget({
+                              onClick={() => { setDeleteTarget({
                                   clientId: item.clientId || clientId,
                                   clientName: item.clientName || client?.name,
                                   infoHash: item.infoHash,
                                   title: item.title,
-                                })
+                                }); }
                               }
                               disabled={deleteRemoteMutation.isPending}
                               title="Remove torrent from download client"
@@ -1872,7 +1862,7 @@ export default function DownloadClientTorrents() {
             justifyContent: "center",
             zIndex: 1000,
           }}
-          onClick={() => setDeleteTarget(null)}
+          onClick={() => { setDeleteTarget(null); }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setDeleteTarget(null);
@@ -1892,7 +1882,7 @@ export default function DownloadClientTorrents() {
               boxShadow: "0 10px 25px rgba(0, 0, 0, 0.5)",
               border: "1px solid var(--border-light, #333)",
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1944,7 +1934,7 @@ export default function DownloadClientTorrents() {
               <input
                 type="checkbox"
                 checked={deleteFiles}
-                onChange={(e) => setDeleteFiles(e.target.checked)}
+                onChange={(e) => { setDeleteFiles(e.target.checked); }}
                 style={{ width: "16px", height: "16px", cursor: "pointer" }}
               />
               <span
@@ -1968,7 +1958,7 @@ export default function DownloadClientTorrents() {
             >
               <button
                 className="btn btn-outline"
-                onClick={() => setDeleteTarget(null)}
+                onClick={() => { setDeleteTarget(null); }}
                 disabled={deleteRemoteMutation.isPending}
               >
                 Cancel
@@ -1994,7 +1984,7 @@ export default function DownloadClientTorrents() {
           aria-modal="true"
           tabIndex={-1}
           className="modal-overlay"
-          onClick={() => setFailedImportItems(null)}
+          onClick={() => { setFailedImportItems(null); }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setFailedImportItems(null);
@@ -2006,7 +1996,7 @@ export default function DownloadClientTorrents() {
             role="button"
             tabIndex={0}
             className="modal"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -2181,7 +2171,7 @@ export default function DownloadClientTorrents() {
             >
               <button
                 className="btn btn-primary"
-                onClick={() => setFailedImportItems(null)}
+                onClick={() => { setFailedImportItems(null); }}
               >
                 Dismiss
               </button>

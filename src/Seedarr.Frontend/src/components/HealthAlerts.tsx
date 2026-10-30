@@ -83,7 +83,7 @@ function HealthAlerts() {
             </div>
             <button
               className="health-alert-dismiss"
-              onClick={() => handleDismiss(alert.source)}
+              onClick={() => { handleDismiss(alert.source); }}
               style={{
                 cursor: "pointer",
                 background: "none",

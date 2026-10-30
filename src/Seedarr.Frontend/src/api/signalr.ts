@@ -257,8 +257,8 @@ export function getSignalRConnection(): HubConnection {
       .configureLogging(LogLevel.Warning)
       .build();
 
-    connection.onreconnecting(() => notifyStatus("reconnecting"));
-    connection.onreconnected(async () => {
+    connection.onreconnecting(() => { notifyStatus("reconnecting"); });
+    connection.onreconnected(() => { void (async () => {
       notifyStatus("connected");
       await subscribeDefaultChannels();
       await resubscribeActiveGroups();
@@ -272,7 +272,7 @@ export function getSignalRConnection(): HubConnection {
       } catch (err) {
         console.warn("Failed to request state snapshot on reconnect:", err);
       }
-    });
+    })(); });
     connection.on("stateSnapshot", (snapshot: StateSnapshot) => {
       if (snapshot) {
         notifySnapshot(snapshot);
@@ -565,7 +565,7 @@ export function useSignalR(queryClient?: QueryClient) {
       }
     };
 
-    conn.onreconnected(handleReconnected);
+    conn.onreconnected((...args: Parameters<typeof handleReconnected>) => { void handleReconnected(...args); });
 
     return () => {
       isMounted = false;

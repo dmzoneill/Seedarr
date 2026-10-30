@@ -30,7 +30,7 @@ export default function DeveloperSimulation() {
   useEffect(() => {
     void fetchSimulation();
     const interval = setInterval(() => { void fetchSimulation(); }, 3000);
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); };
   }, [fetchSimulation]);
 
   return (

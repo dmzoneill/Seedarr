@@ -42,7 +42,7 @@ async function loadAnalytics(): Promise<AnalyticsModule> {
   return import("./analytics");
 }
 
-describe("analytics", () => {
+void describe("analytics", () => {
   let storage: StorageMap;
   let gtagCalls: unknown[][];
 
@@ -56,7 +56,7 @@ describe("analytics", () => {
     gtagCalls.length = 0;
   });
 
-  it("tracks telemetry preference", async () => {
+  void it("tracks telemetry preference", async () => {
     const analytics = await loadAnalytics();
     assert.equal(analytics.isTelemetryEnabled(), true);
     analytics.setTelemetryEnabled(false);
@@ -64,7 +64,7 @@ describe("analytics", () => {
     assert.equal(analytics.isTelemetryEnabled(), false);
   });
 
-  it("sanitizes error messages", async () => {
+  void it("sanitizes error messages", async () => {
     const analytics = await loadAnalytics();
     const msg =
       "failed https://secret.example/path/to/file token=abc123 password=secret " +
@@ -77,7 +77,7 @@ describe("analytics", () => {
     assert.equal(analytics.sanitizeErrorMessage(""), "Unknown error");
   });
 
-  it("sends events when telemetry enabled", async () => {
+  void it("sends events when telemetry enabled", async () => {
     const analytics = await loadAnalytics();
     analytics.trackPageView("/torrents?apikey=secret&tab=files", "Title");
     analytics.trackTorrentAdd("magnet", 2, "Movies", { sequential: true });
@@ -104,7 +104,7 @@ describe("analytics", () => {
     assert.equal(params.page_path, "/torrents?tab=files");
   });
 
-  it("no-ops when telemetry disabled", async () => {
+  void it("no-ops when telemetry disabled", async () => {
     const analytics = await loadAnalytics();
     analytics.setTelemetryEnabled(false);
     analytics.trackEvent("test_event", { foo: "bar" });

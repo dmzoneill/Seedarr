@@ -55,7 +55,7 @@ export function TrackerServerTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+        onSave={() => { save.mutate(form, { onSuccess: () => { setDirty(false); } }); }}
       />
 
       <SectionCard
@@ -244,13 +244,13 @@ export function TrackerServerTab() {
         <Toggle
           label="Tracker Daemon Enabled"
           checked={form.trackerServerEnabled}
-          onChange={(v) => set("trackerServerEnabled", v)}
+          onChange={(v) => { set("trackerServerEnabled", v); }}
           hint="Enable Seedarr inbuilt HTTP/UDP BitTorrent tracker"
         />
         <TextInput
           label="Bind Address"
           value={form.trackerBindAddress}
-          onChange={(v) => set("trackerBindAddress", v)}
+          onChange={(v) => { set("trackerBindAddress", v); }}
           placeholder="0.0.0.0"
           disabled={!form.trackerServerEnabled}
           hint="Interface IP address to bind (* or 0.0.0.0 for all interfaces)"
@@ -264,13 +264,13 @@ export function TrackerServerTab() {
         <Toggle
           label="HTTP Tracker"
           checked={form.trackerHttpEnabled}
-          onChange={(v) => set("trackerHttpEnabled", v)}
+          onChange={(v) => { set("trackerHttpEnabled", v); }}
           hint="Enable HTTP GET /announce endpoint"
         />
         <NumberInput
           label="HTTP Port"
           value={form.trackerHttpPort}
-          onChange={(v) => set("trackerHttpPort", v)}
+          onChange={(v) => { set("trackerHttpPort", v); }}
           min={1}
           max={65535}
           disabled={!form.trackerHttpEnabled}
@@ -308,13 +308,13 @@ export function TrackerServerTab() {
         <Toggle
           label="UDP Tracker"
           checked={form.trackerUdpEnabled}
-          onChange={(v) => set("trackerUdpEnabled", v)}
+          onChange={(v) => { set("trackerUdpEnabled", v); }}
           hint="Enable BEP 15 UDP binary tracker endpoint"
         />
         <NumberInput
           label="UDP Port"
           value={form.trackerUdpPort}
-          onChange={(v) => set("trackerUdpPort", v)}
+          onChange={(v) => { set("trackerUdpPort", v); }}
           min={1}
           max={65535}
           disabled={!form.trackerUdpEnabled}
@@ -329,7 +329,7 @@ export function TrackerServerTab() {
         <NumberInput
           label="Announce Interval"
           value={form.trackerAnnounceInterval}
-          onChange={(v) => set("trackerAnnounceInterval", v)}
+          onChange={(v) => { set("trackerAnnounceInterval", v); }}
           min={60}
           max={86400}
           suffix="seconds"
@@ -338,7 +338,7 @@ export function TrackerServerTab() {
         <NumberInput
           label="Max Peers Per Announce"
           value={form.trackerMaxPeersPerAnnounce}
-          onChange={(v) => set("trackerMaxPeersPerAnnounce", v)}
+          onChange={(v) => { set("trackerMaxPeersPerAnnounce", v); }}
           min={1}
           max={200}
           hint="Maximum peer IPs returned per announce response (1 - 200)"
@@ -346,25 +346,25 @@ export function TrackerServerTab() {
         <Toggle
           label="Enable Scrape"
           checked={form.trackerEnableScrape}
-          onChange={(v) => set("trackerEnableScrape", v)}
+          onChange={(v) => { set("trackerEnableScrape", v); }}
           hint="Allow peers to query /scrape for seeder/leecher counts"
         />
         <Toggle
           label="Private Mode"
           checked={form.trackerPrivateMode}
-          onChange={(v) => set("trackerPrivateMode", v)}
+          onChange={(v) => { set("trackerPrivateMode", v); }}
           hint="Only track pre-registered infohashes; reject unregistered torrents"
         />
         <Toggle
           label="Log Announces"
           checked={form.trackerLogAnnounces}
-          onChange={(v) => set("trackerLogAnnounces", v)}
+          onChange={(v) => { set("trackerLogAnnounces", v); }}
           hint="Write verbose announce transactions to tracker log file"
         />
         <NumberInput
           label="Rate Limit"
           value={form.trackerRateLimitPerMinute}
-          onChange={(v) => set("trackerRateLimitPerMinute", v)}
+          onChange={(v) => { set("trackerRateLimitPerMinute", v); }}
           min={1}
           suffix="/ min"
           hint="Maximum announces permitted per IP per minute"

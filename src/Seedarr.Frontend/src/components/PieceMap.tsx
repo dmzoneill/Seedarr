@@ -257,7 +257,7 @@ export function PieceMap({
     handleResize();
     const observer = new ResizeObserver(handleResize);
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); };
   }, [layoutMode]);
 
   // Decompress states array: 0=Missing, 1=In-flight, 2=Completed/Verified, 3=Corrupted
@@ -900,7 +900,7 @@ export function PieceMap({
             <button
               type="button"
               className={`view-toggle-btn ${layoutMode === "bar" ? "active" : ""}`}
-              onClick={() => setLayoutMode("bar")}
+              onClick={() => { setLayoutMode("bar"); }}
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
@@ -920,7 +920,7 @@ export function PieceMap({
             <button
               type="button"
               className={`view-toggle-btn ${layoutMode === "grid" ? "active" : ""}`}
-              onClick={() => setLayoutMode("grid")}
+              onClick={() => { setLayoutMode("grid"); }}
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
@@ -947,7 +947,7 @@ export function PieceMap({
             <button
               type="button"
               className={`view-toggle-btn ${viewMode === "status" ? "active" : ""}`}
-              onClick={() => setViewMode("status")}
+              onClick={() => { setViewMode("status"); }}
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
@@ -967,7 +967,7 @@ export function PieceMap({
             <button
               type="button"
               className={`view-toggle-btn ${viewMode === "rarity" ? "active" : ""}`}
-              onClick={() => setViewMode("rarity")}
+              onClick={() => { setViewMode("rarity"); }}
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
@@ -987,7 +987,7 @@ export function PieceMap({
             <button
               type="button"
               className={`view-toggle-btn ${viewMode === "files" ? "active" : ""}`}
-              onClick={() => setViewMode("files")}
+              onClick={() => { setViewMode("files"); }}
               style={{
                 padding: "0.2rem 0.45rem",
                 fontSize: "0.7rem",
@@ -1125,7 +1125,7 @@ export function PieceMap({
             {selectedFileIndex !== null && (
               <button
                 type="button"
-                onClick={() => setSelectedFileIndex(null)}
+                onClick={() => { setSelectedFileIndex(null); }}
                 style={{
                   background: "none",
                   border: "none",
@@ -1150,9 +1150,9 @@ export function PieceMap({
                 <button
                   key={fb.file.id || idx}
                   type="button"
-                  onMouseEnter={() => setHoveredFileIndex(idx)}
-                  onMouseLeave={() => setHoveredFileIndex(null)}
-                  onClick={() => setSelectedFileIndex(isSelected ? null : idx)}
+                  onMouseEnter={() => { setHoveredFileIndex(idx); }}
+                  onMouseLeave={() => { setHoveredFileIndex(null); }}
+                  onClick={() => { setSelectedFileIndex(isSelected ? null : idx); }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",

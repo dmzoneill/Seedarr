@@ -47,7 +47,7 @@ export function BulkTagModal({
       const timer = setTimeout(() => {
         searchInputRef.current?.focus();
       }, 50);
-      return () => clearTimeout(timer);
+      return () => { clearTimeout(timer); };
     }
   }, [isOpen]);
 
@@ -132,7 +132,7 @@ export function BulkTagModal({
           display: "flex",
           flexDirection: "column",
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();
@@ -201,7 +201,7 @@ export function BulkTagModal({
                   className="search-input"
                   placeholder={t("common.filter", undefined, "Filter tags...")}
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => { setSearchTerm(e.target.value); }}
                   disabled={isPending}
                   style={{
                     flex: 1,
@@ -283,7 +283,7 @@ export function BulkTagModal({
                           id={`bulk-tag-item-${tag.id}`}
                           type="checkbox"
                           checked={isChecked}
-                          onChange={() => handleToggleTag(tag.id)}
+                          onChange={() => { handleToggleTag(tag.id); }}
                           disabled={isPending}
                           style={{ cursor: "inherit" }}
                         />
@@ -345,7 +345,7 @@ export function BulkTagModal({
           <button
             type="button"
             className={isAdd ? "btn btn-primary" : "btn btn-danger"}
-            onClick={handleConfirm}
+            onClick={(...args: Parameters<typeof handleConfirm>) => { void handleConfirm(...args); }}
             disabled={isPending || selectedTagIds.size === 0}
           >
             {isPending

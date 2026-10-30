@@ -75,7 +75,7 @@ export function PendingChangesModal({
         className="modal"
         role="button"
         tabIndex={0}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();
@@ -152,7 +152,7 @@ export function useUnsavedGuard(dirty: boolean) {
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
+    return () => { window.removeEventListener("beforeunload", handler); };
   }, [dirty]);
 
   return blocker;
@@ -288,7 +288,7 @@ export function SaveBar({
         >
           <button
             className={`btn ${dirty ? "btn-primary" : "btn-outline"}`}
-            onClick={onSave}
+            onClick={(...args: Parameters<typeof onSave>) => { void onSave(...args); }}
             disabled={!dirty || isSaving}
             style={{ minWidth: "120px" }}
           >
@@ -317,7 +317,7 @@ export function SaveBar({
       </div>
       {blocker.state === "blocked" && (
         <PendingChangesModal
-          onSave={handleSaveAndProceed}
+          onSave={(...args: Parameters<typeof handleSaveAndProceed>) => { void handleSaveAndProceed(...args); }}
           onDiscard={handleDiscard}
           onCancel={handleCancel}
           isPending={isSaving}
@@ -560,7 +560,7 @@ export function TextInput({
               type={type || "text"}
               className="form-input"
               value={value ?? ""}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={(e) => { onChange(e.target.value); }}
               placeholder={placeholder}
               disabled={disabled}
               style={{ borderRadius: "6px", flex: 1, minWidth: 0 }}
@@ -573,7 +573,7 @@ export function TextInput({
             type={type || "text"}
             className="form-input"
             value={value ?? ""}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => { onChange(e.target.value); }}
             placeholder={placeholder}
             disabled={disabled}
             style={{ borderRadius: "6px" }}
@@ -617,7 +617,7 @@ export function Toggle({
               type="checkbox"
               checked={checked}
               disabled={disabled}
-              onChange={(e) => onChange(e.target.checked)}
+              onChange={(e) => { onChange(e.target.checked); }}
             />
             <span className="toggle-slider" />
           </label>
@@ -652,7 +652,7 @@ export function SelectInput({
           id={selectId}
           className="form-select"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => { onChange(e.target.value); }}
           disabled={disabled}
           style={{ borderRadius: "6px" }}
         >

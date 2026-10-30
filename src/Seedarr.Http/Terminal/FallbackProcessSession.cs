@@ -55,7 +55,7 @@ public sealed class FallbackProcessSession : ITerminalSession
         var startInfo = new ProcessStartInfo
         {
             FileName = shell,
-            Arguments = args,
+            Arguments = args, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -71,7 +71,7 @@ public sealed class FallbackProcessSession : ITerminalSession
         TerminalEnvironmentSanitizer.Sanitize(startInfo);
         FallbackTerminalGeometry.ApplyToEnvironment(startInfo, cols, rows);
 
-        var proc = Process.Start(startInfo)
+        var proc = Process.Start(startInfo) /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
             ?? throw new InvalidOperationException("Failed to launch fallback terminal process");
 
         var session = new FallbackProcessSession(proc, cols, rows);

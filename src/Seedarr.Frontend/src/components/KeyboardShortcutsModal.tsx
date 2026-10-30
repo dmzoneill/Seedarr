@@ -365,7 +365,7 @@ export function KeyboardShortcutsModal({
           boxShadow: "0 16px 48px rgba(0, 0, 0, 0.6)",
           padding: 0,
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();

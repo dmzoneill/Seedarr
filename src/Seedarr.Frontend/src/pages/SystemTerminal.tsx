@@ -100,7 +100,7 @@ export function SystemTerminal() {
             type="button"
             className={`btn ${activePath === downloadDir ? "btn-primary" : "btn-secondary"}`}
             style={{ fontSize: "0.85rem", padding: "0.35rem 0.75rem" }}
-            onClick={() => setActivePath(downloadDir)}
+            onClick={() => { setActivePath(downloadDir); }}
           >
             {t("terminal.downloadsRoot", undefined, "Downloads Root")}
           </button>
@@ -109,7 +109,7 @@ export function SystemTerminal() {
             type="button"
             className={`btn ${activePath === `${downloadDir}/incomplete` ? "btn-primary" : "btn-secondary"}`}
             style={{ fontSize: "0.85rem", padding: "0.35rem 0.75rem" }}
-            onClick={() => setActivePath(`${downloadDir}/incomplete`)}
+            onClick={() => { setActivePath(`${downloadDir}/incomplete`); }}
           >
             {t("terminal.incomplete", undefined, "Incomplete")}
           </button>
@@ -126,7 +126,7 @@ export function SystemTerminal() {
                 "Enter directory path...",
               )}
               value={customPath}
-              onChange={(e) => setCustomPath(e.target.value)}
+              onChange={(e) => { setCustomPath(e.target.value); }}
               className="input"
               style={{
                 fontSize: "0.85rem",

@@ -113,7 +113,7 @@ export default function DeveloperWebhooks() {
                   key={tpl.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => selectTemplate(tpl)}
+                  onClick={() => { selectTemplate(tpl); }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
@@ -166,7 +166,7 @@ export default function DeveloperWebhooks() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
             <h3 style={{ margin: 0, fontSize: "0.92rem", fontWeight: 600 }}>Webhook Payload (JSON)</h3>
             <button
-              onClick={handleSimulate}
+              onClick={(...args: Parameters<typeof handleSimulate>) => { void handleSimulate(...args); }}
               disabled={isSimulating}
               style={{
                 padding: "6px 14px",
@@ -185,7 +185,7 @@ export default function DeveloperWebhooks() {
 
           <textarea
             value={payloadText}
-            onChange={(e) => setPayloadText(e.target.value)}
+            onChange={(e) => { setPayloadText(e.target.value); }}
             style={{
               flex: 1,
               width: "100%",

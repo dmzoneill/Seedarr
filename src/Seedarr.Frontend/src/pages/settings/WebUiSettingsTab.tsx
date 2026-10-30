@@ -79,7 +79,7 @@ export function WebUiSettingsTab() {
         authenticationEnabled: form.authenticationEnabled,
       },
       {
-        onSuccess: () => setDirty(false),
+        onSuccess: () => { setDirty(false); },
       },
     );
   };
@@ -177,7 +177,7 @@ export function WebUiSettingsTab() {
           <SelectInput
             label="Surface Theme"
             value={form.themeStyle}
-            onChange={(v) => update("themeStyle", v)}
+            onChange={(v) => { update("themeStyle", v); }}
             options={[
               { value: "dark", label: "Dark (Warm Espresso)" },
               { value: "indigo", label: "Obsidian (Deep Charcoal)" },
@@ -192,7 +192,7 @@ export function WebUiSettingsTab() {
           <SelectInput
             label="Accent Palette"
             value={form.colorScheme}
-            onChange={(v) => update("colorScheme", v)}
+            onChange={(v) => { update("colorScheme", v); }}
             options={[
               { value: "auto", label: "Auto / Brand Gold (Default)" },
               { value: "blue", label: "Electric Blue" },
@@ -410,7 +410,7 @@ export function WebUiSettingsTab() {
           <NumberInput
             label="Port"
             value={form.port}
-            onChange={(v) => update("port", v)}
+            onChange={(v) => { update("port", v); }}
             min={1}
             max={65535}
             hint="HTTP port to access Seedarr Web UI"
@@ -418,7 +418,7 @@ export function WebUiSettingsTab() {
           <TextInput
             label="Bind Address"
             value={form.bindAddress}
-            onChange={(v) => update("bindAddress", v)}
+            onChange={(v) => { update("bindAddress", v); }}
             placeholder="0.0.0.0"
             hint="Network address interface to bind (* or 0.0.0.0 for all)"
           />
@@ -432,7 +432,7 @@ export function WebUiSettingsTab() {
         <Toggle
           label="Authentication Enabled"
           checked={form.authenticationEnabled}
-          onChange={(v) => update("authenticationEnabled", v)}
+          onChange={(v) => { update("authenticationEnabled", v); }}
           hint="Require user login credentials for Web UI access"
         />
       </SectionCard>

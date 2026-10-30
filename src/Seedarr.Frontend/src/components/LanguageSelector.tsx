@@ -52,7 +52,7 @@ export function LanguageSelector() {
       <button
         type="button"
         className="topbar-btn language-selector-btn"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => { setIsOpen((prev) => !prev); }}
         title={t("topbar.language", undefined, "Language")}
         aria-label={t("topbar.selectLanguage", undefined, "Select Language")}
         aria-expanded={isOpen}
@@ -115,7 +115,7 @@ export function LanguageSelector() {
                 className={`topbar-dropdown-item language-dropdown-item ${
                   isSelected ? "selected" : ""
                 }`}
-                onClick={() => handleSelectLanguage(lang.code)}
+                onClick={() => { handleSelectLanguage(lang.code); }}
                 role="menuitem"
                 style={{
                   display: "flex",

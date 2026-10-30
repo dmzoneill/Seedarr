@@ -23,7 +23,6 @@ public class Scheduler : BackgroundService
     private readonly TimeSpan _minJitter;
     private readonly TimeSpan _maxJitter;
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
-    private readonly Random _random = new();
     private readonly Logger _logger;
 
     public TimeSpan StartupDelay => _startupDelay;
@@ -88,7 +87,7 @@ public class Scheduler : BackgroundService
             return TimeSpan.FromMilliseconds(minMs);
         }
 
-        return TimeSpan.FromMilliseconds(_random.Next(minMs, maxMs + 1));
+        return TimeSpan.FromMilliseconds(System.Security.Cryptography.RandomNumberGenerator.GetInt32(minMs, maxMs + 1));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

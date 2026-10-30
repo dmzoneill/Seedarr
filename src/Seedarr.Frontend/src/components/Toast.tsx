@@ -18,7 +18,7 @@ function ToastContainer() {
           <span className="toast-message">{toast.message}</span>
           <button
             className="toast-dismiss"
-            onClick={() => ctx.removeToast(toast.id)}
+            onClick={() => { ctx.removeToast(toast.id); }}
             aria-label="Dismiss"
           >
             &times;

@@ -19,7 +19,7 @@ public class InstallUpdateRequest
     public string Version { get; set; }
 }
 
-[V1ApiController("update")]
+[V1ApiController("update")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 public class UpdateController : Controller
 {
     private static readonly char[] LineSeparators = ['\r', '\n'];

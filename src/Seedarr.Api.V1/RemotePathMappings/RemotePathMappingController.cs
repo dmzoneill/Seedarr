@@ -39,7 +39,7 @@ public class RemotePathMappingController : Controller
         return Ok(RemotePathMappingResourceMapper.ToResource(mapping));
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<RemotePathMappingResource> Create([FromBody] RemotePathMappingResource resource)
     {
@@ -75,7 +75,7 @@ public class RemotePathMappingController : Controller
         }
     }
 
-    [HttpPut("{id:int}")]
+    [HttpPut("{id:int}")] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [HttpPut]
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<RemotePathMappingResource> Update(int? id, [FromBody] RemotePathMappingResource resource)

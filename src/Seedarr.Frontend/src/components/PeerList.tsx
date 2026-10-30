@@ -62,7 +62,7 @@ function PeerList({ torrentId }: PeerListProps) {
               padding: "0.2rem 0.5rem",
               cursor: "pointer",
             }}
-            onClick={() => setMaskIps((prev) => !prev)}
+            onClick={() => { setMaskIps((prev) => !prev); }}
             title={
               maskIps
                 ? "Click to show raw IP addresses"
@@ -150,7 +150,7 @@ function PeerList({ torrentId }: PeerListProps) {
                             cursor: "pointer",
                             opacity: 0.7,
                           }}
-                          onClick={() => handleCopyIp(ipPort)}
+                          onClick={() => { handleCopyIp(ipPort); }}
                           title="Copy IP:Port to clipboard"
                         >
                           📋

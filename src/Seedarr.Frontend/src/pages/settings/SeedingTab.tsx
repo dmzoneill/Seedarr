@@ -84,8 +84,7 @@ export function SeedingTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() =>
-          save.mutate(form, {
+        onSave={() => { save.mutate(form, {
             onSuccess: () => {
               setDirty(false);
               trackSettingSave("seeding", {
@@ -97,7 +96,7 @@ export function SeedingTab() {
                 seedGoalReachedAction: form.seedGoalReachedAction,
               });
             },
-          })
+          }); }
         }
       />
 
@@ -190,7 +189,7 @@ export function SeedingTab() {
         <NumberInput
           label="Max Upload Speed"
           value={form.maxUploadSpeedKbps}
-          onChange={(v) => set("maxUploadSpeedKbps", v)}
+          onChange={(v) => { set("maxUploadSpeedKbps", v); }}
           min={0}
           suffix="KB/s"
           hint="Default 625 KB/s (5 Mbit/s) (0 for unlimited)"
@@ -198,7 +197,7 @@ export function SeedingTab() {
         <NumberInput
           label="Max Download Speed"
           value={form.maxDownloadSpeedKbps}
-          onChange={(v) => set("maxDownloadSpeedKbps", v)}
+          onChange={(v) => { set("maxDownloadSpeedKbps", v); }}
           min={0}
           suffix="KB/s"
           hint="Default 1250 KB/s (10 Mbit/s) (0 for unlimited)"
@@ -206,7 +205,7 @@ export function SeedingTab() {
         <NumberInput
           label="Global Seed Ratio Limit"
           value={form.globalSeedRatioLimit}
-          onChange={(v) => set("globalSeedRatioLimit", v)}
+          onChange={(v) => { set("globalSeedRatioLimit", v); }}
           min={0}
           step={0.1}
           hint="Stop seeding automatically when ratio reaches this value (0 = unlimited)"
@@ -215,7 +214,7 @@ export function SeedingTab() {
           label="When Seeding Goal Reached"
           value={form.seedGoalReachedAction || "Stop"}
           options={seedGoalActions}
-          onChange={(v) => set("seedGoalReachedAction", v)}
+          onChange={(v) => { set("seedGoalReachedAction", v); }}
           hint="Action to execute when a torrent reaches the configured seed ratio limit"
         />
       </SectionCard>
@@ -227,13 +226,13 @@ export function SeedingTab() {
         <Toggle
           label="Enable Alt Speeds"
           checked={form.alternativeSpeedEnabled}
-          onChange={(v) => set("alternativeSpeedEnabled", v)}
+          onChange={(v) => { set("alternativeSpeedEnabled", v); }}
           hint="Enable secondary throttled speed profile"
         />
         <NumberInput
           label="Alt Upload Speed"
           value={form.altUploadSpeedKbps}
-          onChange={(v) => set("altUploadSpeedKbps", v)}
+          onChange={(v) => { set("altUploadSpeedKbps", v); }}
           min={0}
           suffix="KB/s"
           hint="0 for unlimited"
@@ -242,7 +241,7 @@ export function SeedingTab() {
         <NumberInput
           label="Alt Download Speed"
           value={form.altDownloadSpeedKbps}
-          onChange={(v) => set("altDownloadSpeedKbps", v)}
+          onChange={(v) => { set("altDownloadSpeedKbps", v); }}
           min={0}
           suffix="KB/s"
           hint="0 for unlimited"
@@ -257,14 +256,14 @@ export function SeedingTab() {
         <SelectInput
           label="Algorithm"
           value={form.uploadDistributionAlgorithm}
-          onChange={(v) => set("uploadDistributionAlgorithm", v)}
+          onChange={(v) => { set("uploadDistributionAlgorithm", v); }}
           options={distOptions}
           hint="Distribution algorithm used to split available upload capacity"
         />
         <NumberInput
           label="Spread %"
           value={form.uploadDistributionSpreadPercentage}
-          onChange={(v) => set("uploadDistributionSpreadPercentage", v)}
+          onChange={(v) => { set("uploadDistributionSpreadPercentage", v); }}
           min={0}
           max={100}
           hint="Variance spread percentage across active swarms"
@@ -272,14 +271,14 @@ export function SeedingTab() {
         <SelectInput
           label="Redistribution Mode"
           value={form.uploadRedistributionMode}
-          onChange={(v) => set("uploadRedistributionMode", v)}
+          onChange={(v) => { set("uploadRedistributionMode", v); }}
           options={redistOptions}
           hint="Rebalancing interval"
         />
         <NumberInput
           label="Custom Interval"
           value={form.uploadCustomIntervalMinutes}
-          onChange={(v) => set("uploadCustomIntervalMinutes", v)}
+          onChange={(v) => { set("uploadCustomIntervalMinutes", v); }}
           min={1}
           suffix="minutes"
           disabled={form.uploadRedistributionMode !== "interval"}
@@ -287,7 +286,7 @@ export function SeedingTab() {
         <NumberInput
           label="Stopped Min %"
           value={form.uploadStoppedMinPercentage}
-          onChange={(v) => set("uploadStoppedMinPercentage", v)}
+          onChange={(v) => { set("uploadStoppedMinPercentage", v); }}
           min={0}
           max={100}
           hint="Minimum percentage of torrents randomly paused/stopped to simulate natural seeding"
@@ -295,7 +294,7 @@ export function SeedingTab() {
         <NumberInput
           label="Stopped Max %"
           value={form.uploadStoppedMaxPercentage}
-          onChange={(v) => set("uploadStoppedMaxPercentage", v)}
+          onChange={(v) => { set("uploadStoppedMaxPercentage", v); }}
           min={0}
           max={100}
           hint="Maximum percentage of torrents randomly paused/stopped"
@@ -309,14 +308,14 @@ export function SeedingTab() {
         <SelectInput
           label="Algorithm"
           value={form.downloadDistributionAlgorithm}
-          onChange={(v) => set("downloadDistributionAlgorithm", v)}
+          onChange={(v) => { set("downloadDistributionAlgorithm", v); }}
           options={distOptions}
           hint="Distribution algorithm used to split available download capacity"
         />
         <NumberInput
           label="Spread %"
           value={form.downloadDistributionSpreadPercentage}
-          onChange={(v) => set("downloadDistributionSpreadPercentage", v)}
+          onChange={(v) => { set("downloadDistributionSpreadPercentage", v); }}
           min={0}
           max={100}
           hint="Variance spread percentage across active downloads"
@@ -324,14 +323,14 @@ export function SeedingTab() {
         <SelectInput
           label="Redistribution Mode"
           value={form.downloadRedistributionMode}
-          onChange={(v) => set("downloadRedistributionMode", v)}
+          onChange={(v) => { set("downloadRedistributionMode", v); }}
           options={redistOptions}
           hint="Rebalancing interval"
         />
         <NumberInput
           label="Custom Interval"
           value={form.downloadCustomIntervalMinutes}
-          onChange={(v) => set("downloadCustomIntervalMinutes", v)}
+          onChange={(v) => { set("downloadCustomIntervalMinutes", v); }}
           min={1}
           suffix="minutes"
           disabled={form.downloadRedistributionMode !== "interval"}
@@ -339,14 +338,14 @@ export function SeedingTab() {
         <NumberInput
           label="Stopped Min %"
           value={form.downloadStoppedMinPercentage}
-          onChange={(v) => set("downloadStoppedMinPercentage", v)}
+          onChange={(v) => { set("downloadStoppedMinPercentage", v); }}
           min={0}
           max={100}
         />
         <NumberInput
           label="Stopped Max %"
           value={form.downloadStoppedMaxPercentage}
-          onChange={(v) => set("downloadStoppedMaxPercentage", v)}
+          onChange={(v) => { set("downloadStoppedMaxPercentage", v); }}
           min={0}
           max={100}
         />

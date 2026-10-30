@@ -223,7 +223,7 @@ export function AddTorrentForm({
         <button
           type="button"
           className={`tab-btn ${mode === "file" ? "tab-btn-active" : ""}`}
-          onClick={() => setMode("file")}
+          onClick={() => { setMode("file"); }}
           style={{
             fontSize: "0.9rem",
             padding: "0.45rem 1rem",
@@ -235,7 +235,7 @@ export function AddTorrentForm({
         <button
           type="button"
           className={`tab-btn ${mode === "magnet" ? "tab-btn-active" : ""}`}
-          onClick={() => setMode("magnet")}
+          onClick={() => { setMode("magnet"); }}
           style={{
             fontSize: "0.9rem",
             padding: "0.45rem 1rem",
@@ -247,7 +247,7 @@ export function AddTorrentForm({
         <button
           type="button"
           className={`tab-btn ${mode === "search" ? "tab-btn-active" : ""}`}
-          onClick={() => setMode("search")}
+          onClick={() => { setMode("search"); }}
           style={{
             fontSize: "0.9rem",
             padding: "0.45rem 1rem",
@@ -259,7 +259,7 @@ export function AddTorrentForm({
         <button
           type="button"
           className={`tab-btn ${mode === "create" ? "tab-btn-active" : ""}`}
-          onClick={() => setMode("create")}
+          onClick={() => { setMode("create"); }}
           style={{
             fontSize: "0.9rem",
             padding: "0.45rem 1rem",
@@ -364,7 +364,7 @@ export function AddTorrentForm({
               <select
                 className="form-input"
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                onChange={(e) => { setSelectedCategory(e.target.value); }}
                 style={{
                   fontSize: "0.85rem",
                   padding: "0.4rem 0.6rem",
@@ -408,7 +408,7 @@ export function AddTorrentForm({
                     : "e.g. /downloads"
                 }
                 value={customSavePath}
-                onChange={(e) => setCustomSavePath(e.target.value)}
+                onChange={(e) => { setCustomSavePath(e.target.value); }}
                 style={{
                   fontSize: "0.85rem",
                   padding: "0.4rem 0.6rem",
@@ -443,7 +443,7 @@ export function AddTorrentForm({
               <input
                 type="checkbox"
                 checked={startPaused}
-                onChange={(e) => setStartPaused(e.target.checked)}
+                onChange={(e) => { setStartPaused(e.target.checked); }}
               />
               <span>⏸️ {t("addTorrent.startPaused", "Start Paused")}</span>
             </label>
@@ -461,7 +461,7 @@ export function AddTorrentForm({
               <input
                 type="checkbox"
                 checked={sequentialDownload}
-                onChange={(e) => setSequentialDownload(e.target.checked)}
+                onChange={(e) => { setSequentialDownload(e.target.checked); }}
               />
               <span>
                 ⏩ {t("torrents.sequentialDownload", "Sequential Download")}
@@ -481,7 +481,7 @@ export function AddTorrentForm({
               <input
                 type="checkbox"
                 checked={firstLastPiecePrio}
-                onChange={(e) => setFirstLastPiecePrio(e.target.checked)}
+                onChange={(e) => { setFirstLastPiecePrio(e.target.checked); }}
               />
               <span>
                 🎯{" "}

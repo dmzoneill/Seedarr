@@ -7,8 +7,8 @@ import ToastContext, { type ToastType } from "../context/ToastContext";
 
 (globalThis as unknown as { React: typeof React }).React = React;
 
-describe("ToastContainer accessibility and rendering", () => {
-  it("renders nothing when context is null or toasts array is empty", () => {
+void describe("ToastContainer accessibility and rendering", () => {
+  void it("renders nothing when context is null or toasts array is empty", () => {
     const htmlEmpty = renderToStaticMarkup(
       React.createElement(
         ToastContext.Provider,
@@ -36,7 +36,7 @@ describe("ToastContainer accessibility and rendering", () => {
     assert.equal(htmlNull, "");
   });
 
-  it("renders container with role region and aria-label Notifications", () => {
+  void it("renders container with role region and aria-label Notifications", () => {
     const html = renderToStaticMarkup(
       React.createElement(
         ToastContext.Provider,
@@ -71,7 +71,7 @@ describe("ToastContainer accessibility and rendering", () => {
     );
   });
 
-  it("renders polite status role for non-error toasts (success, info, warning)", () => {
+  void it("renders polite status role for non-error toasts (success, info, warning)", () => {
     const toasts = [
       { id: 1, message: "Torrent resumed", type: "success" as ToastType },
       { id: 2, message: "Connecting to peers", type: "info" as ToastType },
@@ -118,7 +118,7 @@ describe("ToastContainer accessibility and rendering", () => {
     assert.ok(html.includes("Disk space low"));
   });
 
-  it("renders assertive alert role for error toasts", () => {
+  void it("renders assertive alert role for error toasts", () => {
     const toasts = [
       {
         id: 1,

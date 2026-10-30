@@ -591,7 +591,7 @@ export const TorrentNameCell: React.FC<{
             flexShrink: 0,
           }}
           title={arrLink.label}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); }}
         >
           {arrLink.appName} ↗
         </a>
@@ -943,10 +943,10 @@ export const TorrentTableRow = React.memo<TorrentTableRowProps>(
         tabIndex={0}
         aria-selected={isSelected || isChecked}
         className={`torrent-table-row${isSelected ? " torrent-table-row-selected" : ""}${isChecked ? " torrent-table-row-selected" : ""}${isFocused ? " torrent-table-row-focused" : ""}`}
-        onFocus={() => onFocus(rowIndex)}
+        onFocus={() => { onFocus(rowIndex); }}
         onKeyDown={handleKeyDown}
-        onClick={(e) => onRowClick(t, rowIndex, e)}
-        onContextMenu={(e) => onContextMenu(e, t)}
+        onClick={(e) => { onRowClick(t, rowIndex, e); }}
+        onContextMenu={(e) => { onContextMenu(e, t); }}
         style={{
           cursor: "pointer",
           backgroundColor: isSelected
@@ -1232,7 +1232,7 @@ export function TorrentTable({
     return map;
   }, [history]);
 
-  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  const closeContextMenu = useCallback(() => { setContextMenu(null); }, []);
 
   const filtered = propTorrents
     ? propTorrents
@@ -1448,9 +1448,9 @@ export function TorrentTable({
     });
 
     if (anyActive) {
-      ids.forEach((id) => (onPause ? onPause(id) : stopSeeding.mutate(id)));
+      ids.forEach((id) => { if (onPause) { onPause(id); } else { stopSeeding.mutate(id); } });
     } else {
-      ids.forEach((id) => (onResume ? onResume(id) : startSeeding.mutate(id)));
+      ids.forEach((id) => { if (onResume) { onResume(id); } else { startSeeding.mutate(id); } });
     }
   }, [
     selectedIds,
@@ -1649,7 +1649,7 @@ export function TorrentTable({
               : sorted[focusedIndex]
                 ? [sorted[focusedIndex].id]
                 : [];
-        ids.forEach((id) => recheckTorrent.mutate(id));
+        ids.forEach((id) => { recheckTorrent.mutate(id); });
         return;
       }
 
@@ -1671,7 +1671,7 @@ export function TorrentTable({
               : sorted[focusedIndex]
                 ? [sorted[focusedIndex].id]
                 : [];
-        ids.forEach((id) => announceTorrent.mutate(id));
+        ids.forEach((id) => { announceTorrent.mutate(id); });
         return;
       }
 
@@ -2094,8 +2094,8 @@ export function TorrentTable({
   return (
     <div
       className="torrent-table-wrapper"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={() => { setIsHovered(true); }}
+      onMouseLeave={() => { setIsHovered(false); }}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -2112,7 +2112,7 @@ export function TorrentTable({
           className="torrent-table"
           style={{ width: "100%", borderCollapse: "collapse" }}
         >
-          <thead onContextMenu={(e) => handleContextMenu(e, null)}>
+          <thead onContextMenu={(e) => { handleContextMenu(e, null); }}>
             <tr
               style={{
                 position: "sticky",
@@ -2142,13 +2142,13 @@ export function TorrentTable({
                 <th
                   key={col.key}
                   draggable
-                  onDragStart={() => handleColDragStart(col.key)}
-                  onDragOver={(e) => handleColDragOver(e, col.key)}
-                  onDrop={(e) => handleColDrop(e, col.key)}
+                  onDragStart={() => { handleColDragStart(col.key); }}
+                  onDragOver={(e) => { handleColDragOver(e, col.key); }}
+                  onDrop={(e) => { handleColDrop(e, col.key); }}
                   onDragEnd={handleColDragEnd}
                   role={col.sortable ? "button" : undefined}
                   tabIndex={col.sortable ? 0 : undefined}
-                  onClick={() => col.sortable && handleSort(col.key)}
+                  onClick={() => { if (col.sortable) handleSort(col.key); }}
                   onKeyDown={
                     col.sortable
                       ? (e) => {
@@ -2238,7 +2238,7 @@ export function TorrentTable({
                       const th = e.currentTarget.parentElement as HTMLElement;
                       handleResizeMouseDown(e, col.key, th);
                     }}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.stopPropagation();
@@ -2352,30 +2352,23 @@ export function TorrentTable({
           onClose={closeContextMenu}
           onToggleColumn={toggleColumn}
           onResetSort={handleResetSort}
-          onStart={(id) => (onResume ? onResume(id) : startSeeding.mutate(id))}
-          onStop={(id) => (onPause ? onPause(id) : stopSeeding.mutate(id))}
-          onUpdate={(torrent) => updateTorrent.mutate(torrent)}
-          onAnnounce={(id) => announceTorrent.mutate(id)}
-          onRecheck={(id) => recheckTorrent.mutate(id)}
-          onDelete={(payload) =>
-            propOnDelete ? propOnDelete(payload) : deleteTorrent.mutate(payload)
+          onStart={(id) => { if (onResume) { onResume(id); } else { startSeeding.mutate(id); } }}
+          onStop={(id) => { if (onPause) { onPause(id); } else { stopSeeding.mutate(id); } }}
+          onUpdate={(torrent) => { updateTorrent.mutate(torrent); }}
+          onAnnounce={(id) => { announceTorrent.mutate(id); }}
+          onRecheck={(id) => { recheckTorrent.mutate(id); }}
+          onDelete={(payload) => { if (propOnDelete) { propOnDelete(payload); } else { deleteTorrent.mutate(payload); } }
           }
-          onMoveQueue={(payload) => moveTorrentQueue.mutate(payload)}
-          onBatchStart={(ids) =>
-            ids.forEach((id) =>
-              onResume ? onResume(id) : startSeeding.mutate(id),
-            )
+          onMoveQueue={(payload) => { moveTorrentQueue.mutate(payload); }}
+          onBatchStart={(ids) => { ids.forEach((id) => { if (onResume) { onResume(id); } else { startSeeding.mutate(id); } },
+            ); }
           }
-          onBatchStop={(ids) =>
-            ids.forEach((id) =>
-              onPause ? onPause(id) : stopSeeding.mutate(id),
-            )
+          onBatchStop={(ids) => { ids.forEach((id) => { if (onPause) { onPause(id); } else { stopSeeding.mutate(id); } },
+            ); }
           }
-          onBatchAnnounce={(ids) =>
-            ids.forEach((id) => announceTorrent.mutate(id))
+          onBatchAnnounce={(ids) => { ids.forEach((id) => { announceTorrent.mutate(id); }); }
           }
-          onBatchRecheck={(ids) =>
-            ids.forEach((id) => recheckTorrent.mutate(id))
+          onBatchRecheck={(ids) => { ids.forEach((id) => { recheckTorrent.mutate(id); }); }
           }
           onBatchDelete={(payload) => {
             if (payload.ids.length > 0) {
@@ -2389,16 +2382,13 @@ export function TorrentTable({
               });
             }
           }}
-          onBatchUpdate={(torrents) =>
-            torrents.forEach((tor) => updateTorrent.mutate(tor))
+          onBatchUpdate={(torrents) => { torrents.forEach((tor) => { updateTorrent.mutate(tor); }); }
           }
-          onBatchMoveQueue={(payload) =>
-            payload.ids.forEach((id) =>
-              moveTorrentQueue.mutate({ id, position: payload.position }),
-            )
+          onBatchMoveQueue={(payload) => { payload.ids.forEach((id) => { moveTorrentQueue.mutate({ id, position: payload.position }); },
+            ); }
           }
           onSearchIndexers={
-            onSearchIndexers ? onSearchIndexers : (q) => setSearchModalQuery(q)
+            onSearchIndexers ? onSearchIndexers : (q) => { setSearchModalQuery(q); }
           }
         />
       )}
@@ -2407,7 +2397,7 @@ export function TorrentTable({
         <AddTorrentModal
           initialMode="search"
           initialQuery={searchModalQuery}
-          onClose={() => setSearchModalQuery(null)}
+          onClose={() => { setSearchModalQuery(null); }}
         />
       )}
 

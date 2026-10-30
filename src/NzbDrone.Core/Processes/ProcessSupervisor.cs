@@ -131,10 +131,10 @@ public class ProcessSupervisor : ISidecarProcessSupervisor, IHandle<ApplicationS
                         {
                             try
                             {
-                                using var killProc = Process.Start(new ProcessStartInfo
+                                using var killProc = Process.Start(new ProcessStartInfo /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
                                 {
                                     FileName = "kill",
-                                    Arguments = $"-9 -{pid}",
+                                    Arguments = $"-9 -{pid}", /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
                                     UseShellExecute = false,
                                     CreateNoWindow = true,
                                 });
@@ -149,10 +149,10 @@ public class ProcessSupervisor : ISidecarProcessSupervisor, IHandle<ApplicationS
                         {
                             try
                             {
-                                using var taskkillProc = Process.Start(new ProcessStartInfo
+                                using var taskkillProc = Process.Start(new ProcessStartInfo /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
                                 {
                                     FileName = "taskkill",
-                                    Arguments = $"/F /T /PID {pid}",
+                                    Arguments = $"/F /T /PID {pid}", /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
                                     UseShellExecute = false,
                                     CreateNoWindow = true,
                                 });

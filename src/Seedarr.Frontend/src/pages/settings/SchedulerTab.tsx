@@ -58,7 +58,7 @@ export function SchedulerTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+        onSave={() => { save.mutate(form, { onSuccess: () => { setDirty(false); } }); }}
       />
 
       <SectionCard
@@ -68,7 +68,7 @@ export function SchedulerTab() {
         <Toggle
           label="Scheduler Enabled"
           checked={form.schedulerEnabled}
-          onChange={(v) => set("schedulerEnabled", v)}
+          onChange={(v) => { set("schedulerEnabled", v); }}
           hint="Automatically apply alternative speed profile on the schedule below"
         />
       </SectionCard>
@@ -80,7 +80,7 @@ export function SchedulerTab() {
         <NumberInput
           label="Start Hour"
           value={form.schedulerStartHour}
-          onChange={(v) => set("schedulerStartHour", v)}
+          onChange={(v) => { set("schedulerStartHour", v); }}
           min={0}
           max={23}
           disabled={!form.schedulerEnabled}
@@ -89,7 +89,7 @@ export function SchedulerTab() {
         <NumberInput
           label="Start Minute"
           value={form.schedulerStartMinute}
-          onChange={(v) => set("schedulerStartMinute", v)}
+          onChange={(v) => { set("schedulerStartMinute", v); }}
           min={0}
           max={59}
           disabled={!form.schedulerEnabled}
@@ -97,7 +97,7 @@ export function SchedulerTab() {
         <NumberInput
           label="End Hour"
           value={form.schedulerEndHour}
-          onChange={(v) => set("schedulerEndHour", v)}
+          onChange={(v) => { set("schedulerEndHour", v); }}
           min={0}
           max={23}
           disabled={!form.schedulerEnabled}
@@ -106,7 +106,7 @@ export function SchedulerTab() {
         <NumberInput
           label="End Minute"
           value={form.schedulerEndMinute}
-          onChange={(v) => set("schedulerEndMinute", v)}
+          onChange={(v) => { set("schedulerEndMinute", v); }}
           min={0}
           max={59}
           disabled={!form.schedulerEnabled}
@@ -129,7 +129,7 @@ export function SchedulerTab() {
               key={day.key}
               label={day.label}
               checked={form[day.key] as boolean}
-              onChange={(v) => set(day.key, v as never)}
+              onChange={(v) => { set(day.key, v as never); }}
             />
           ))}
         </div>

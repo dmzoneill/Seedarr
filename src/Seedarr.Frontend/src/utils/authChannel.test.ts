@@ -92,7 +92,7 @@ class MockLocalStorage {
   }
 }
 
-describe("authChannel: Cross-tab authentication synchronization", () => {
+void describe("authChannel: Cross-tab authentication synchronization", () => {
   let originalWindow: unknown;
   let originalBroadcastChannel: unknown;
   let mockStorage: MockLocalStorage;
@@ -133,7 +133,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     delete g.__storageListeners;
   });
 
-  it("broadcasts and receives AUTH_LOGOUT via BroadcastChannel", () => {
+  void it("broadcasts and receives AUTH_LOGOUT via BroadcastChannel", () => {
     const received: AuthEvent[] = [];
 
     // Simulate Tab B subscribing
@@ -155,7 +155,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     unsubscribe();
   });
 
-  it("broadcasts and receives AUTH_LOGIN with user payload", () => {
+  void it("broadcasts and receives AUTH_LOGIN with user payload", () => {
     const received: AuthEvent[] = [];
 
     const unsubscribe = subscribeAuthChannel((event) => {
@@ -187,7 +187,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     unsubscribe();
   });
 
-  it("broadcasts and receives AUTH_SESSION_EXPIRED", () => {
+  void it("broadcasts and receives AUTH_SESSION_EXPIRED", () => {
     const received: AuthEvent[] = [];
 
     const unsubscribe = subscribeAuthChannel((event) => {
@@ -206,7 +206,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     unsubscribe();
   });
 
-  it("broadcastLogin, broadcastLogout, and broadcastSessionExpired post to BroadcastChannel", () => {
+  void it("broadcastLogin, broadcastLogout, and broadcastSessionExpired post to BroadcastChannel", () => {
     let lastPosted: AuthEvent | null = null;
 
     // Simulate a receiver tab channel
@@ -234,7 +234,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     }
   });
 
-  it("unsubscribing removes the listener so further events are not received", () => {
+  void it("unsubscribing removes the listener so further events are not received", () => {
     const received: AuthEvent[] = [];
 
     const unsubscribe = subscribeAuthChannel((event) => {
@@ -259,7 +259,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     assert.equal(received.length, 1);
   });
 
-  it("supports multiple concurrent subscribers", () => {
+  void it("supports multiple concurrent subscribers", () => {
     const received1: AuthEvent[] = [];
     const received2: AuthEvent[] = [];
 
@@ -288,7 +288,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     unsub2();
   });
 
-  it("falls back to localStorage and storage event when BroadcastChannel is unsupported", () => {
+  void it("falls back to localStorage and storage event when BroadcastChannel is unsupported", () => {
     // Disable BroadcastChannel to test fallback
     const g = globalThis as unknown as GlobalThisWithAuth;
     if (g.window) g.window.BroadcastChannel = undefined;
@@ -323,7 +323,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     unsubscribe();
   });
 
-  it("falls back to localStorage if BroadcastChannel.postMessage throws", () => {
+  void it("falls back to localStorage if BroadcastChannel.postMessage throws", () => {
     // Make BroadcastChannel.postMessage throw
     class FaultyBroadcastChannel extends MockBroadcastChannel {
       override postMessage() {
@@ -353,7 +353,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     unsubscribe();
   });
 
-  it("ignores storage events for unrelated keys or invalid JSON", () => {
+  void it("ignores storage events for unrelated keys or invalid JSON", () => {
     const gUnrelated = globalThis as unknown as GlobalThisWithAuth;
     if (gUnrelated.window) gUnrelated.window.BroadcastChannel = undefined;
     gUnrelated.BroadcastChannel = undefined;
@@ -373,7 +373,7 @@ describe("authChannel: Cross-tab authentication synchronization", () => {
     unsubscribe();
   });
 
-  it("closeAuthChannel closes channel and detaches all listeners", () => {
+  void it("closeAuthChannel closes channel and detaches all listeners", () => {
     const received: AuthEvent[] = [];
     subscribeAuthChannel((e) => received.push(e));
 
