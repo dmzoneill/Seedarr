@@ -132,7 +132,7 @@ export function GeneralTab() {
       }
       await navigator.clipboard.writeText(keyToCopy);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => { setCopied(false); }, 2000);
       showToast("API key copied to clipboard", "success");
     } catch {
       showToast("Failed to copy API key", "error");
@@ -194,8 +194,7 @@ export function GeneralTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() =>
-          save.mutate(
+        onSave={() => { save.mutate(
             {
               ...form,
               colorScheme:
@@ -217,7 +216,7 @@ export function GeneralTab() {
                 });
               },
             },
-          )
+          ); }
         }
       />
 
@@ -228,7 +227,7 @@ export function GeneralTab() {
         <Toggle
           label="Auto Start"
           checked={form.autoStart}
-          onChange={(v) => set("autoStart", v)}
+          onChange={(v) => { set("autoStart", v); }}
           hint="Start seeding all queued swarms immediately on launch"
         />
         <SelectInput
@@ -276,7 +275,7 @@ export function GeneralTab() {
         <NumberInput
           label="Port"
           value={form.port}
-          onChange={(v) => set("port", v)}
+          onChange={(v) => { set("port", v); }}
           min={1}
           max={65535}
           hint="HTTP port for Seedarr Web UI and REST API"
@@ -284,21 +283,21 @@ export function GeneralTab() {
         <TextInput
           label="Bind Address"
           value={form.bindAddress}
-          onChange={(v) => set("bindAddress", v)}
+          onChange={(v) => { set("bindAddress", v); }}
           placeholder="0.0.0.0"
           hint="Listening IP address (* or 0.0.0.0 for all interfaces, 127.0.0.1 for local only)"
         />
         <TextInput
           label="URL Base"
           value={form.urlBase}
-          onChange={(v) => set("urlBase", v)}
+          onChange={(v) => { set("urlBase", v); }}
           placeholder="/seedarr"
           hint="Subdirectory prefix for reverse proxy setups (e.g. /seedarr)"
         />
         <Toggle
           label="Authentication"
           checked={form.authenticationEnabled}
-          onChange={(v) => set("authenticationEnabled", v)}
+          onChange={(v) => { set("authenticationEnabled", v); }}
           hint="Require user login credentials for Web UI and API access"
         />
         <TextInput
@@ -318,7 +317,7 @@ export function GeneralTab() {
             <button
               type="button"
               className="btn btn-outline"
-              onClick={handleToggleShowApiKey}
+              onClick={(...args: Parameters<typeof handleToggleShowApiKey>) => { void handleToggleShowApiKey(...args); }}
               style={{
                 whiteSpace: "nowrap",
                 height: "36px",
@@ -343,7 +342,7 @@ export function GeneralTab() {
           <button
             type="button"
             className="btn btn-outline"
-            onClick={handleCopyApiKey}
+            onClick={(...args: Parameters<typeof handleCopyApiKey>) => { void handleCopyApiKey(...args); }}
             style={{ whiteSpace: "nowrap" }}
           >
             📋 {copied ? "Copied!" : "Copy"}
@@ -359,7 +358,7 @@ export function GeneralTab() {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => navigate("/system/api")}
+            onClick={() => { void navigate("/system/api"); }}
             style={{ whiteSpace: "nowrap" }}
           >
             📖 API Docs (OpenAPI)
@@ -377,7 +376,7 @@ export function GeneralTab() {
           <Toggle
             label="Enable SSL (HTTPS)"
             checked={form.enableSsl ?? false}
-            onChange={(v) => set("enableSsl", v)}
+            onChange={(v) => { set("enableSsl", v); }}
             hint="Activate secure HTTPS web server endpoint with TLS certificate encryption"
           />
 
@@ -393,7 +392,7 @@ export function GeneralTab() {
                 <NumberInput
                   label="SSL / HTTPS Port"
                   value={form.sslPort ?? 9899}
-                  onChange={(v) => set("sslPort", v)}
+                  onChange={(v) => { set("sslPort", v); }}
                   min={1}
                   max={65535}
                   hint="Dedicated port for secure HTTPS traffic (default: 9899)"
@@ -409,7 +408,7 @@ export function GeneralTab() {
                   <Toggle
                     label="Redirect HTTP to HTTPS"
                     checked={form.redirectHttpToHttps ?? false}
-                    onChange={(v) => set("redirectHttpToHttps", v)}
+                    onChange={(v) => { set("redirectHttpToHttps", v); }}
                     hint="Automatically redirect plain HTTP requests to the HTTPS port"
                   />
                 </div>
@@ -425,21 +424,21 @@ export function GeneralTab() {
                 <TextInput
                   label="Certificate Path (.pfx, .crt, .pem)"
                   value={form.sslCertPath ?? ""}
-                  onChange={(v) => set("sslCertPath", v)}
+                  onChange={(v) => { set("sslCertPath", v); }}
                   hint="Path to PKCS#12 (.pfx/.p12) or PEM (.crt/.pem) certificate. Leave blank for auto-generated self-signed certificate."
                 />
 
                 <TextInput
                   label="Private Key Path (.key) (Optional for PEM)"
                   value={form.sslKeyPath ?? ""}
-                  onChange={(v) => set("sslKeyPath", v)}
+                  onChange={(v) => { set("sslKeyPath", v); }}
                   hint="Path to separate PEM private key (.key). Leave blank if key is bundled in certificate or PFX."
                 />
 
                 <TextInput
                   label="Certificate Password (Optional for PFX)"
                   value={form.sslCertPassword ?? ""}
-                  onChange={(v) => set("sslCertPassword", v)}
+                  onChange={(v) => { set("sslCertPassword", v); }}
                   type="password"
                   hint="Decryption passphrase if certificate file is password-protected"
                 />
@@ -458,7 +457,7 @@ export function GeneralTab() {
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={handleTestSsl}
+                  onClick={(...args: Parameters<typeof handleTestSsl>) => { void handleTestSsl(...args); }}
                   disabled={testingSsl}
                   style={{ minWidth: "160px" }}
                 >
@@ -689,13 +688,13 @@ export function GeneralTab() {
         <Toggle
           label="Enabled"
           checked={form.watchFolderEnabled}
-          onChange={(v) => set("watchFolderEnabled", v)}
+          onChange={(v) => { set("watchFolderEnabled", v); }}
           hint="Auto-import .torrent files discovered in the watch folder"
         />
         <TextInput
           label="Path"
           value={form.watchFolderPath}
-          onChange={(v) => set("watchFolderPath", v)}
+          onChange={(v) => { set("watchFolderPath", v); }}
           placeholder="/watch"
           disabled={!form.watchFolderEnabled}
           hint="Absolute filesystem path to monitor"
@@ -703,7 +702,7 @@ export function GeneralTab() {
         <NumberInput
           label="Scan Interval"
           value={form.watchFolderScanIntervalSeconds}
-          onChange={(v) => set("watchFolderScanIntervalSeconds", v)}
+          onChange={(v) => { set("watchFolderScanIntervalSeconds", v); }}
           min={1}
           suffix="seconds"
           disabled={!form.watchFolderEnabled}
@@ -712,13 +711,13 @@ export function GeneralTab() {
         <Toggle
           label="Auto Start Torrents"
           checked={form.watchFolderAutoStartTorrents}
-          onChange={(v) => set("watchFolderAutoStartTorrents", v)}
+          onChange={(v) => { set("watchFolderAutoStartTorrents", v); }}
           hint="Begin seeding torrents immediately once imported from the watch folder"
         />
         <Toggle
           label="Delete After Adding"
           checked={form.watchFolderDeleteAddedTorrents}
-          onChange={(v) => set("watchFolderDeleteAddedTorrents", v)}
+          onChange={(v) => { set("watchFolderDeleteAddedTorrents", v); }}
           hint="Remove .torrent file from the watch directory after successful import"
         />
       </SectionCard>
@@ -730,7 +729,7 @@ export function GeneralTab() {
         <TextInput
           label="TMDb API Key"
           value={form.tmdbApiKey ?? ""}
-          onChange={(v) => set("tmdbApiKey", v)}
+          onChange={(v) => { set("tmdbApiKey", v); }}
           placeholder="Leave empty for built-in default"
           hint="API key used to query The Movie Database (TMDb) for posters, backdrops, genres, and cast when Arr applications are not connected"
         />

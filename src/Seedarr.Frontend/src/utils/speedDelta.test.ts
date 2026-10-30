@@ -2,8 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { computeSpeedDelta, type SpeedSnapshot } from "./speedDelta";
 
-describe("speedDelta: computeSpeedDelta", () => {
-  it("initializes snapshot on initial setup (prev === null) without calculating speed", () => {
+void describe("speedDelta: computeSpeedDelta", () => {
+  void it("initializes snapshot on initial setup (prev === null) without calculating speed", () => {
     const now = 1000000;
     const current = { totalUploaded: 1024, totalDownloaded: 2048 };
     const result = computeSpeedDelta(current, null, now, 1.0);
@@ -17,7 +17,7 @@ describe("speedDelta: computeSpeedDelta", () => {
     });
   });
 
-  it("does not reset baseline snapshot when updates arrive faster than threshold (timeDelta < threshold)", () => {
+  void it("does not reset baseline snapshot when updates arrive faster than threshold (timeDelta < threshold)", () => {
     const t0 = 1000000;
     const initial: SpeedSnapshot = {
       totalUploaded: 1000,
@@ -63,7 +63,7 @@ describe("speedDelta: computeSpeedDelta", () => {
     assert.equal(result3.nextSnapshot.totalDownloaded, 4400);
   });
 
-  it("supports custom threshold (e.g. 0.5s for SpeedGraph)", () => {
+  void it("supports custom threshold (e.g. 0.5s for SpeedGraph)", () => {
     const t0 = 1000000;
     const initial: SpeedSnapshot = {
       totalUploaded: 0,
@@ -95,7 +95,7 @@ describe("speedDelta: computeSpeedDelta", () => {
     assert.equal(r2.nextSnapshot.timestamp, t0 + 550);
   });
 
-  it("clamps negative speeds to 0 if counters decrease (e.g. counter reset)", () => {
+  void it("clamps negative speeds to 0 if counters decrease (e.g. counter reset)", () => {
     const t0 = 1000000;
     const initial: SpeedSnapshot = {
       totalUploaded: 5000,

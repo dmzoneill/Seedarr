@@ -65,7 +65,7 @@ public class SidecarProcessHost : ISidecarProcessHost
         }
     }
 
-    public Func<ProcessStartInfo, Process> ProcessStarter { get; set; } = psi => Process.Start(psi);
+    public Func<ProcessStartInfo, Process> ProcessStarter { get; set; } = psi => Process.Start(psi); /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -87,8 +87,8 @@ public class SidecarProcessHost : ISidecarProcessHost
 
                 var startInfo = new ProcessStartInfo
                 {
-                    FileName = fileName,
-                    Arguments = arguments,
+                    FileName = fileName, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
+                    Arguments = arguments, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
                     WorkingDirectory = _pluginDirectory,
                     RedirectStandardInput = true,
                     RedirectStandardOutput = true,

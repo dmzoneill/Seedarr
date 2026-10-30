@@ -10,9 +10,9 @@ import {
   sanitizeArtworkUrl,
 } from "./MediaArtwork";
 
-describe("MediaArtwork: Helper Utilities", () => {
-  describe("getCategoryGlyph", () => {
-    it("returns 🎬 for movie and Radarr categories", () => {
+void describe("MediaArtwork: Helper Utilities", () => {
+  void describe("getCategoryGlyph", () => {
+    void it("returns 🎬 for movie and Radarr categories", () => {
       assert.equal(getCategoryGlyph("movie"), "🎬");
       assert.equal(getCategoryGlyph("Movies"), "🎬");
       assert.equal(getCategoryGlyph("Radarr"), "🎬");
@@ -20,7 +20,7 @@ describe("MediaArtwork: Helper Utilities", () => {
       assert.equal(getCategoryGlyph("cinema"), "🎬");
     });
 
-    it("returns 📺 for TV and Sonarr categories", () => {
+    void it("returns 📺 for TV and Sonarr categories", () => {
       assert.equal(getCategoryGlyph("tv"), "📺");
       assert.equal(getCategoryGlyph("Sonarr"), "📺");
       assert.equal(getCategoryGlyph("TV Series"), "📺");
@@ -28,7 +28,7 @@ describe("MediaArtwork: Helper Utilities", () => {
       assert.equal(getCategoryGlyph("show"), "📺");
     });
 
-    it("returns 🎵 for music and Lidarr categories", () => {
+    void it("returns 🎵 for music and Lidarr categories", () => {
       assert.equal(getCategoryGlyph("music"), "🎵");
       assert.equal(getCategoryGlyph("Lidarr"), "🎵");
       assert.equal(getCategoryGlyph("audio"), "🎵");
@@ -36,30 +36,30 @@ describe("MediaArtwork: Helper Utilities", () => {
       assert.equal(getCategoryGlyph("song"), "🎵");
     });
 
-    it("returns 📚 for book and Readarr categories", () => {
+    void it("returns 📚 for book and Readarr categories", () => {
       assert.equal(getCategoryGlyph("book"), "📚");
       assert.equal(getCategoryGlyph("Readarr"), "📚");
       assert.equal(getCategoryGlyph("ebook"), "📚");
     });
 
-    it("returns 🍙 for anime category", () => {
+    void it("returns 🍙 for anime category", () => {
       assert.equal(getCategoryGlyph("anime"), "🍙");
       assert.equal(getCategoryGlyph("Anime-Sub"), "🍙");
     });
 
-    it("returns 🎮 for gaming categories", () => {
+    void it("returns 🎮 for gaming categories", () => {
       assert.equal(getCategoryGlyph("game"), "🎮");
       assert.equal(getCategoryGlyph("gaming"), "🎮");
       assert.equal(getCategoryGlyph("pc-games"), "🎮");
     });
 
-    it("returns 💾 for software, app, and iso categories", () => {
+    void it("returns 💾 for software, app, and iso categories", () => {
       assert.equal(getCategoryGlyph("software"), "💾");
       assert.equal(getCategoryGlyph("app"), "💾");
       assert.equal(getCategoryGlyph("linux-iso"), "💾");
     });
 
-    it("returns 📦 for undefined, empty, or unknown categories", () => {
+    void it("returns 📦 for undefined, empty, or unknown categories", () => {
       assert.equal(getCategoryGlyph(undefined), "📦");
       assert.equal(getCategoryGlyph(""), "📦");
       assert.equal(getCategoryGlyph("other"), "📦");
@@ -67,8 +67,8 @@ describe("MediaArtwork: Helper Utilities", () => {
     });
   });
 
-  describe("buildPlaceholderUrl", () => {
-    it("builds URL with both title and category", () => {
+  void describe("buildPlaceholderUrl", () => {
+    void it("builds URL with both title and category", () => {
       const url = buildPlaceholderUrl("Inception", "radarr");
       assert.equal(
         url,
@@ -76,7 +76,7 @@ describe("MediaArtwork: Helper Utilities", () => {
       );
     });
 
-    it("properly encodes query parameters", () => {
+    void it("properly encodes query parameters", () => {
       const url = buildPlaceholderUrl(
         "Breaking Bad & Better Call Saul",
         "TV Series / Sonarr",
@@ -86,24 +86,24 @@ describe("MediaArtwork: Helper Utilities", () => {
       assert.ok(url.includes("category=TV+Series+%2F+Sonarr"));
     });
 
-    it("builds URL with title only", () => {
+    void it("builds URL with title only", () => {
       const url = buildPlaceholderUrl("Ubuntu 24.04");
       assert.equal(url, "/api/v1/mediacover/placeholder?title=Ubuntu+24.04");
     });
 
-    it("builds URL with category only", () => {
+    void it("builds URL with category only", () => {
       const url = buildPlaceholderUrl(undefined, "music");
       assert.equal(url, "/api/v1/mediacover/placeholder?category=music");
     });
 
-    it("builds base endpoint when both title and category are missing", () => {
+    void it("builds base endpoint when both title and category are missing", () => {
       const url = buildPlaceholderUrl();
       assert.equal(url, "/api/v1/mediacover/placeholder");
     });
   });
 
-  describe("sanitizeArtworkUrl", () => {
-    it("returns trimmed valid URL", () => {
+  void describe("sanitizeArtworkUrl", () => {
+    void it("returns trimmed valid URL", () => {
       assert.equal(
         sanitizeArtworkUrl("  https://image.tmdb.org/t/p/w500/test.jpg  "),
         "https://image.tmdb.org/t/p/w500/test.jpg",
@@ -114,14 +114,14 @@ describe("MediaArtwork: Helper Utilities", () => {
       );
     });
 
-    it("returns null for null, undefined, empty, or whitespace strings", () => {
+    void it("returns null for null, undefined, empty, or whitespace strings", () => {
       assert.equal(sanitizeArtworkUrl(null), null);
       assert.equal(sanitizeArtworkUrl(undefined), null);
       assert.equal(sanitizeArtworkUrl(""), null);
       assert.equal(sanitizeArtworkUrl("   "), null);
     });
 
-    it("returns null for literal string representations of null/undefined", () => {
+    void it("returns null for literal string representations of null/undefined", () => {
       assert.equal(sanitizeArtworkUrl("null"), null);
       assert.equal(sanitizeArtworkUrl("undefined"), null);
       assert.equal(sanitizeArtworkUrl("  null  "), null);
@@ -129,8 +129,8 @@ describe("MediaArtwork: Helper Utilities", () => {
   });
 });
 
-describe("MediaArtwork: Component Rendering", () => {
-  it("renders container with loading skeleton and image tag for valid src", () => {
+void describe("MediaArtwork: Component Rendering", () => {
+  void it("renders container with loading skeleton and image tag for valid src", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         src: "https://example.com/poster.jpg",
@@ -174,7 +174,7 @@ describe("MediaArtwork: Component Rendering", () => {
     );
   });
 
-  it("renders dynamic SVG placeholder as initial src when src is null or absent", () => {
+  void it("renders dynamic SVG placeholder as initial src when src is null or absent", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         src: null,
@@ -191,7 +191,7 @@ describe("MediaArtwork: Component Rendering", () => {
     );
   });
 
-  it("renders 20x28 compact thumbnail for TorrentTable without layout distortion", () => {
+  void it("renders 20x28 compact thumbnail for TorrentTable without layout distortion", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         src: "https://example.com/small.jpg",
@@ -211,7 +211,7 @@ describe("MediaArtwork: Component Rendering", () => {
     assert.ok(!html.includes("aspect-ratio:auto"));
   });
 
-  it("renders 32x46 thumbnail for DetailsTab without layout distortion", () => {
+  void it("renders 32x46 thumbnail for DetailsTab without layout distortion", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         src: "/api/v1/mediacover/5/poster.jpg",
@@ -230,7 +230,7 @@ describe("MediaArtwork: Component Rendering", () => {
     assert.ok(html.includes("border-radius:3px"));
   });
 
-  it("supports eager loading when specified", () => {
+  void it("supports eager loading when specified", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         src: "https://example.com/eager.jpg",
@@ -242,8 +242,8 @@ describe("MediaArtwork: Component Rendering", () => {
   });
 });
 
-describe("MediaArtwork: Fallback and Error Handling", () => {
-  it("renders client-side CSS fallback container when state is error", () => {
+void describe("MediaArtwork: Fallback and Error Handling", () => {
+  void it("renders client-side CSS fallback container when state is error", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         src: "https://broken.invalid/poster.jpg",
@@ -268,7 +268,7 @@ describe("MediaArtwork: Fallback and Error Handling", () => {
     );
   });
 
-  it("uses custom fallbackIcon when provided", () => {
+  void it("uses custom fallbackIcon when provided", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         title: "Special Item",
@@ -286,7 +286,7 @@ describe("MediaArtwork: Fallback and Error Handling", () => {
     );
   });
 
-  it("renders compact 20x28 fallback thumbnail without title overflow", () => {
+  void it("renders compact 20x28 fallback thumbnail without title overflow", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         title:
@@ -316,7 +316,7 @@ describe("MediaArtwork: Fallback and Error Handling", () => {
     );
   });
 
-  it("renders retry button when allowRetry is enabled in error state", () => {
+  void it("renders retry button when allowRetry is enabled in error state", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         title: "Inception",
@@ -334,7 +334,7 @@ describe("MediaArtwork: Fallback and Error Handling", () => {
     assert.ok(html.includes("↻"), "Must show retry icon");
   });
 
-  it("does NOT render retry button when allowRetry is disabled", () => {
+  void it("does NOT render retry button when allowRetry is disabled", () => {
     const html = renderToStaticMarkup(
       React.createElement(MediaArtwork, {
         title: "Inception",

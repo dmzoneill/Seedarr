@@ -227,8 +227,8 @@ function SystemNetwork() {
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(timer);
+    const timer = setInterval(() => { setTick((t) => t + 1); }, 1000);
+    return () => { clearInterval(timer); };
   }, []);
 
   const handleRefreshMappings = async () => {
@@ -322,7 +322,7 @@ function SystemNetwork() {
             type="button"
             className="btn btn-outline"
             style={{ fontSize: "0.85rem", padding: "0.35rem 0.75rem" }}
-            onClick={() => testPortMutation.mutate(diag.listeningPort)}
+            onClick={() => { testPortMutation.mutate(diag.listeningPort); }}
             disabled={testPortMutation.isPending}
             title="Test external reachability of BitTorrent listening port"
           >
@@ -704,7 +704,7 @@ function SystemNetwork() {
                 type="button"
                 className="btn btn-outline"
                 style={{ fontSize: "0.82rem", padding: "0.35rem 0.75rem" }}
-                onClick={handleRefreshMappings}
+                onClick={(...args: Parameters<typeof handleRefreshMappings>) => { void handleRefreshMappings(...args); }}
                 disabled={refreshMappingsMutation.isPending}
                 title="Trigger an immediate gateway probe and lease refresh"
               >

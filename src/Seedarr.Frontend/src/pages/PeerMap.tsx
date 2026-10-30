@@ -161,7 +161,7 @@ function PeerMap() {
   useEffect(() => {
     updateDimensions();
     window.addEventListener("resize", updateDimensions);
-    return () => window.removeEventListener("resize", updateDimensions);
+    return () => { window.removeEventListener("resize", updateDimensions); };
   }, [updateDimensions]);
 
   const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
@@ -717,7 +717,7 @@ function PeerMap() {
             <button
               key={h}
               className={`peer-map-btn ${hours === h ? "peer-map-btn-active" : ""}`}
-              onClick={() => setHours(h)}
+              onClick={() => { setHours(h); }}
             >
               {h}h
             </button>
@@ -730,7 +730,7 @@ function PeerMap() {
           <select
             id="peer-map-filter-swarm"
             value={selectedTorrentFilter}
-            onChange={(e) => setSelectedTorrentFilter(e.target.value)}
+            onChange={(e) => { setSelectedTorrentFilter(e.target.value); }}
             style={{
               padding: "0.35rem 0.65rem",
               borderRadius: "6px",
@@ -825,7 +825,7 @@ function PeerMap() {
           width={dimensions.width}
           height={dimensions.height}
           className="peer-map-svg"
-          onClick={() => setSelectedNode(null)}
+          onClick={() => { setSelectedNode(null); }}
         />
 
         {/* Floating Zoom Controls */}
@@ -903,7 +903,7 @@ function PeerMap() {
               boxShadow: "0 12px 35px rgba(0, 0, 0, 0.7)",
               zIndex: 10,
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -939,7 +939,7 @@ function PeerMap() {
                   cursor: "pointer",
                   color: "var(--text-muted)",
                 }}
-                onClick={() => setSelectedNode(null)}
+                onClick={() => { setSelectedNode(null); }}
               >
                 ✕
               </button>
@@ -978,7 +978,7 @@ function PeerMap() {
                   marginTop: "0.5rem",
                   borderRadius: "6px",
                 }}
-                onClick={() => navigate("/torrents")}
+                onClick={() => { void navigate("/torrents"); }}
               >
                 Open in Torrents View →
               </button>

@@ -364,7 +364,7 @@ export function useAddTorrent() {
     mutationFn: async (input) => {
       if (input.files && input.files.length > 0) {
         const formData = new FormData();
-        input.files.forEach((file) => formData.append("file", file));
+        input.files.forEach((file) => { formData.append("file", file); });
         if (input.category) formData.append("category", input.category);
         if (input.savePath) formData.append("savePath", input.savePath);
         if (input.paused !== undefined)

@@ -2,8 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { useI18nStore, extractDefaultValue } from "./i18nStore";
 
-describe("i18nStore", () => {
-  it("extractDefaultValue should extract default from string parameter", () => {
+void describe("i18nStore", () => {
+  void it("extractDefaultValue should extract default from string parameter", () => {
     const res1 = extractDefaultValue("Default Text");
     assert.equal(res1.fallbackDefault, "Default Text");
     assert.equal(res1.interpolationParams, undefined);
@@ -13,19 +13,19 @@ describe("i18nStore", () => {
     assert.deepEqual(res2.interpolationParams, { foo: "bar" });
   });
 
-  it("extractDefaultValue should extract defaultValue property from object", () => {
+  void it("extractDefaultValue should extract defaultValue property from object", () => {
     const res = extractDefaultValue({ defaultValue: "Custom Default", count: 5 });
     assert.equal(res.fallbackDefault, "Custom Default");
     assert.deepEqual(res.interpolationParams, { count: 5 });
   });
 
-  it("extractDefaultValue should return fallback when defaultValue is string", () => {
+  void it("extractDefaultValue should return fallback when defaultValue is string", () => {
     const res = extractDefaultValue(undefined, "String Fallback");
     assert.equal(res.fallbackDefault, "String Fallback");
     assert.equal(res.interpolationParams, undefined);
   });
 
-  it("t should translate key or return fallback default value", () => {
+  void it("t should translate key or return fallback default value", () => {
     const store = useI18nStore.getState();
     store.setLocale("en");
 
@@ -44,7 +44,7 @@ describe("i18nStore", () => {
     assert.equal(missing, missingKey2);
   });
 
-  it("t should interpolate variables correctly", () => {
+  void it("t should interpolate variables correctly", () => {
     const store = useI18nStore.getState();
     store.setLocale("en");
 
@@ -57,7 +57,7 @@ describe("i18nStore", () => {
     assert.equal(textWithArray, "Users: Alice and Bob");
   });
 
-  it("setLocale should ignore unsupported locales", () => {
+  void it("setLocale should ignore unsupported locales", () => {
     const store = useI18nStore.getState();
     store.setLocale("en");
     // @ts-expect-error testing invalid locale

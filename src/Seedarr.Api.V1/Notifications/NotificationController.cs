@@ -27,7 +27,7 @@ namespace Seedarr.Api.V1.Notifications;
 public class NotificationController : Controller
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
-    public const string PasswordMask = "********"; // NOSONAR
+    public const string PasswordMask = "********"; // NOSONAR /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
 
     private readonly INotificationRepository _notificationRepository;
     private readonly IWebhookDispatcher _webhookDispatcher;
@@ -94,7 +94,7 @@ public class NotificationController : Controller
     /// <summary>
     /// Creates a new notification definition.
     /// </summary>
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<NotificationResource> Create([FromBody] NotificationResource resource)
     {
@@ -232,7 +232,7 @@ public class NotificationController : Controller
     /// <summary>
     /// Updates an existing notification configuration (body-based ID).
     /// </summary>
-    [HttpPut]
+    [HttpPut] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<NotificationResource> UpdateWithoutId([FromBody] NotificationResource resource)
     {

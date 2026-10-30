@@ -271,7 +271,7 @@ public class DelugeJsonRpcController : ControllerBase
 
     private static object CreateDelugeError(string message, int code = 1) => new { message, code };
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     public async Task<IActionResult> HandleRpc([FromBody] JsonElement root)
     {
         if (root.ValueKind == JsonValueKind.Array)

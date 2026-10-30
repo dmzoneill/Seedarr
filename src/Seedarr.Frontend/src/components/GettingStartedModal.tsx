@@ -520,13 +520,13 @@ export function GettingStartedModal({
 
   const modalRef = useFocusTrap<HTMLDivElement>({
     isOpen,
-    onEscape: () => handleClose(true),
+    onEscape: () => { handleClose(true); },
   });
 
   useModalRegistration({
     id: "getting-started-modal",
     isOpen,
-    onClose: () => handleClose(true),
+    onClose: () => { handleClose(true); },
     modalRef,
   });
 
@@ -587,9 +587,8 @@ export function GettingStartedModal({
       return;
     }
     testClientMutation.mutate(clientForm, {
-      onSuccess: (data) => setClientTestResult(data),
-      onError: (err) =>
-        setClientTestResult({ success: false, message: err.message }),
+      onSuccess: (data) => { setClientTestResult(data); },
+      onError: (err) => { setClientTestResult({ success: false, message: err.message }); },
     });
   };
 
@@ -641,9 +640,8 @@ export function GettingStartedModal({
       return;
     }
     testIndexerMutation.mutate(indexerForm, {
-      onSuccess: (data) => setIndexerTestResult(data),
-      onError: (err) =>
-        setIndexerTestResult({ success: false, message: err.message }),
+      onSuccess: (data) => { setIndexerTestResult(data); },
+      onError: (err) => { setIndexerTestResult({ success: false, message: err.message }); },
     });
   };
 
@@ -696,8 +694,8 @@ export function GettingStartedModal({
       return;
     }
     testArrMutation.mutate(form, {
-      onSuccess: (data) => setResult(data),
-      onError: (err) => setResult({ success: false, message: err.message }),
+      onSuccess: (data) => { setResult(data); },
+      onError: (err) => { setResult({ success: false, message: err.message }); },
     });
   };
 
@@ -1040,7 +1038,7 @@ export function GettingStartedModal({
         className="modal"
         role="button"
         tabIndex={0}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();
@@ -1102,7 +1100,7 @@ export function GettingStartedModal({
           >
             <button
               type="button"
-              onClick={() => setMode("readonly")}
+              onClick={() => { setMode("readonly"); }}
               style={{
                 background:
                   mode === "readonly"
@@ -1130,7 +1128,7 @@ export function GettingStartedModal({
             </button>
             <button
               type="button"
-              onClick={() => setMode("interactive")}
+              onClick={() => { setMode("interactive"); }}
               style={{
                 background:
                   mode === "interactive"
@@ -1171,7 +1169,7 @@ export function GettingStartedModal({
                 borderRadius: "4px",
                 lineHeight: 1,
               }}
-              onClick={() => handleClose(true)}
+              onClick={() => { handleClose(true); }}
               title={t(
                 "modals.gettingStarted.close",
                 undefined,
@@ -1203,7 +1201,7 @@ export function GettingStartedModal({
               <button
                 key={s.id}
                 type="button"
-                onClick={() => setCurrentStep(idx)}
+                onClick={() => { setCurrentStep(idx); }}
                 style={{
                   background: isActive
                     ? "var(--accent, #c8a84e)"
@@ -1939,8 +1937,7 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() =>
-                  handleTestArr(sonarrForm, setSonarrTestResult, setSonarrError)
+                onClick={() => { handleTestArr(sonarrForm, setSonarrTestResult, setSonarrError); }
                 }
                 disabled={testArrMutation.isPending || isReadOnly}
               >
@@ -1964,13 +1961,12 @@ export function GettingStartedModal({
                   <button
                     type="button"
                     className="btn btn-primary btn-small"
-                    onClick={() =>
-                      handleSaveArr(
+                    onClick={() => { handleSaveArr(
                         sonarrForm,
                         setSonarrSaved,
                         setSonarrError,
                         "Sonarr",
-                      )
+                      ); }
                     }
                     disabled={isSavingArr}
                   >
@@ -2145,8 +2141,7 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() =>
-                  handleTestArr(radarrForm, setRadarrTestResult, setRadarrError)
+                onClick={() => { handleTestArr(radarrForm, setRadarrTestResult, setRadarrError); }
                 }
                 disabled={testArrMutation.isPending || isReadOnly}
               >
@@ -2170,13 +2165,12 @@ export function GettingStartedModal({
                   <button
                     type="button"
                     className="btn btn-primary btn-small"
-                    onClick={() =>
-                      handleSaveArr(
+                    onClick={() => { handleSaveArr(
                         radarrForm,
                         setRadarrSaved,
                         setRadarrError,
                         "Radarr",
-                      )
+                      ); }
                     }
                     disabled={isSavingArr}
                   >
@@ -2351,8 +2345,7 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() =>
-                  handleTestArr(lidarrForm, setLidarrTestResult, setLidarrError)
+                onClick={() => { handleTestArr(lidarrForm, setLidarrTestResult, setLidarrError); }
                 }
                 disabled={testArrMutation.isPending || isReadOnly}
               >
@@ -2376,13 +2369,12 @@ export function GettingStartedModal({
                   <button
                     type="button"
                     className="btn btn-primary btn-small"
-                    onClick={() =>
-                      handleSaveArr(
+                    onClick={() => { handleSaveArr(
                         lidarrForm,
                         setLidarrSaved,
                         setLidarrError,
                         "Lidarr",
-                      )
+                      ); }
                     }
                     disabled={isSavingArr}
                   >
@@ -2576,7 +2568,7 @@ export function GettingStartedModal({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={handleValidateStoragePath}
+                onClick={(...args: Parameters<typeof handleValidateStoragePath>) => { void handleValidateStoragePath(...args); }}
                 disabled={isValidatingPath || isReadOnly}
               >
                 {isValidatingPath
@@ -2603,7 +2595,7 @@ export function GettingStartedModal({
                   <button
                     type="button"
                     className="btn btn-primary btn-small"
-                    onClick={handleSaveStorage}
+                    onClick={(...args: Parameters<typeof handleSaveStorage>) => { void handleSaveStorage(...args); }}
                     disabled={isSavingStorage}
                   >
                     {isSavingStorage
@@ -2738,7 +2730,7 @@ export function GettingStartedModal({
             <input
               type="checkbox"
               checked={dontShowAgain}
-              onChange={(e) => handleDontShowChange(e.target.checked)}
+              onChange={(e) => { handleDontShowChange(e.target.checked); }}
               style={{
                 cursor: "pointer",
                 accentColor: "var(--accent, #c8a84e)",

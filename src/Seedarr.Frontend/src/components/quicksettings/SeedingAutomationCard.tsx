@@ -98,7 +98,7 @@ export function SeedingAutomationCard() {
                 className={`quick-settings-chip ${
                   ratioLimit === rp.value ? "selected" : ""
                 }`}
-                onClick={() => handleRatioChange(rp.value)}
+                onClick={() => { handleRatioChange(rp.value); }}
               >
                 {rp.label}
               </button>
@@ -113,7 +113,7 @@ export function SeedingAutomationCard() {
               type="checkbox"
               className="quick-settings-checkbox"
               checked={sequentialDefault}
-              onChange={(e) => setSequentialDefault(e.target.checked)}
+              onChange={(e) => { setSequentialDefault(e.target.checked); }}
             />
             <span>Sequential piece picking by default</span>
           </label>

@@ -117,26 +117,26 @@ function Statistics() {
           <div className="view-toggle" style={{ margin: 0 }}>
             <button
               className={`view-toggle-btn ${activeTab === "overview" ? "active" : ""}`}
-              onClick={() => setActiveTab("overview")}
+              onClick={() => { setActiveTab("overview"); }}
             >
               📊 Swarm Overview
             </button>
             <button
               className={`view-toggle-btn ${activeTab === "achievements" ? "active" : ""}`}
-              onClick={() => setActiveTab("achievements")}
+              onClick={() => { setActiveTab("achievements"); }}
             >
               🏆 Achievements ({achievements.unlockedCount}/
               {achievements.totalCount})
             </button>
             <button
               className={`view-toggle-btn ${activeTab === "buffers" ? "active" : ""}`}
-              onClick={() => setActiveTab("buffers")}
+              onClick={() => { setActiveTab("buffers"); }}
             >
               🛡️ Tracker Buffers & BP
             </button>
             <button
               className={`view-toggle-btn ${activeTab === "simulator" ? "active" : ""}`}
-              onClick={() => setActiveTab("simulator")}
+              onClick={() => { setActiveTab("simulator"); }}
             >
               🎯 Seeding Simulator
             </button>
@@ -201,7 +201,7 @@ function Statistics() {
 
             <button
               className="btn btn-outline btn-small"
-              onClick={() => setActiveTab("achievements")}
+              onClick={() => { setActiveTab("achievements"); }}
             >
               View Hall of Fame 🏆
             </button>

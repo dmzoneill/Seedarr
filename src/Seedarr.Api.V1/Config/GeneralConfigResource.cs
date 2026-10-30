@@ -70,7 +70,7 @@ public class GeneralConfigResource : RestResource
 
 public static class GeneralConfigResourceMapper
 {
-    public const string SecretMask = "********";
+    public const string SecretMask = "********"; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
 
     public const int DefaultWatchFolderScanIntervalSeconds = 10;
 

@@ -15,8 +15,8 @@ namespace NzbDrone.Core.Authentication;
 public class IdentityProviderService : IIdentityProviderService
 {
     public const string DataProtectionPurpose = "Seedarr.IdentityProvider.ClientSecret";
-    private const string MaskedClientSecret = "********";
-    private const string AlternateMaskedClientSecret = "******";
+    private const string MaskedClientSecret = "********"; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
+    private const string AlternateMaskedClientSecret = "******"; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
 
     public static readonly SocketsHttpHandler SharedHandler = new()
     {

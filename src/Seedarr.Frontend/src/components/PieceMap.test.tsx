@@ -21,9 +21,9 @@ function createQueryClient() {
   });
 }
 
-describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", () => {
-  describe("Block-level piece calculation (calculateBlocks)", () => {
-    it("when isSeeding is true but progress is 0.0, blocks are NOT marked complete", () => {
+void describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", () => {
+  void describe("Block-level piece calculation (calculateBlocks)", () => {
+    void it("when isSeeding is true but progress is 0.0, blocks are NOT marked complete", () => {
       const blocks = calculateBlocks(NUM_BLOCKS, 100, 0.0, true);
       const completeBlocks = blocks.filter((b) => b.status === "complete");
 
@@ -32,7 +32,7 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
       assert.ok(blocks.every((b) => b.status !== "complete"));
     });
 
-    it("when isSeeding is true but progress is 0.5, only blocks up to 50% are marked complete", () => {
+    void it("when isSeeding is true but progress is 0.5, only blocks up to 50% are marked complete", () => {
       const blocks = calculateBlocks(NUM_BLOCKS, 100, 0.5, true);
       const completeBlocks = blocks.filter((b) => b.status === "complete");
 
@@ -46,7 +46,7 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
       }
     });
 
-    it("when progress is 1.0, all blocks are marked complete", () => {
+    void it("when progress is 1.0, all blocks are marked complete", () => {
       const blocks = calculateBlocks(NUM_BLOCKS, 100, 1.0, false);
       const completeBlocks = blocks.filter((b) => b.status === "complete");
 
@@ -61,14 +61,14 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
       );
     });
 
-    it("default isSeeding does not force 100% complete when progress is 0", () => {
+    void it("default isSeeding does not force 100% complete when progress is 0", () => {
       const blocks = calculateBlocks(NUM_BLOCKS, 100, 0.0); // default isSeeding
       const completeBlocks = blocks.filter((b) => b.status === "complete");
 
       assert.equal(completeBlocks.length, 0);
     });
 
-    it("supports simplified signature calculateBlocks(progress, isSeeding)", () => {
+    void it("supports simplified signature calculateBlocks(progress, isSeeding)", () => {
       const zeroBlocks = calculateBlocks(0.0, true);
       assert.equal(zeroBlocks.filter((b) => b.status === "complete").length, 0);
 
@@ -92,8 +92,8 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
     });
   });
 
-  describe("Piece states simulation (calculatePieceStates)", () => {
-    it("when isSeeding is true but progress is 0.0, pieces are NOT marked complete", () => {
+  void describe("Piece states simulation (calculatePieceStates)", () => {
+    void it("when isSeeding is true but progress is 0.0, pieces are NOT marked complete", () => {
       const states = calculatePieceStates(100, 0.0, true);
       const verifiedCount = Array.from(states).filter((s) => s === 2).length;
 
@@ -101,7 +101,7 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
       assert.equal(states.length, 100);
     });
 
-    it("when isSeeding is true but progress is 0.5, only 50% of pieces are marked complete", () => {
+    void it("when isSeeding is true but progress is 0.5, only 50% of pieces are marked complete", () => {
       const states = calculatePieceStates(100, 0.5, true);
       const verifiedCount = Array.from(states).filter((s) => s === 2).length;
 
@@ -114,7 +114,7 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
       }
     });
 
-    it("when progress is 1.0, all pieces are marked complete", () => {
+    void it("when progress is 1.0, all pieces are marked complete", () => {
       const states = calculatePieceStates(100, 1.0, false);
       const verifiedCount = Array.from(states).filter((s) => s === 2).length;
 
@@ -122,7 +122,7 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
       assert.ok(Array.from(states).every((s) => s === 2));
     });
 
-    it("default isSeeding (false) does not force complete pieces when progress is 0", () => {
+    void it("default isSeeding (false) does not force complete pieces when progress is 0", () => {
       const states = calculatePieceStates(100, 0.0);
       const verifiedCount = Array.from(states).filter((s) => s === 2).length;
 
@@ -130,8 +130,8 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
     });
   });
 
-  describe("Piece stats calculation (calculatePieceStats)", () => {
-    it("correctly reflects completeCount, remainingCount, and verifiedPercent", () => {
+  void describe("Piece stats calculation (calculatePieceStats)", () => {
+    void it("correctly reflects completeCount, remainingCount, and verifiedPercent", () => {
       const statesZero = calculatePieceStates(100, 0.0, true);
       const statsZero = calculatePieceStats(statesZero, 100, 0.0);
       assert.equal(statsZero.completeCount, 0);
@@ -152,8 +152,8 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
     });
   });
 
-  describe("PieceMap Component DOM rendering", () => {
-    it("renders progressbar and badge matching progress 0.0 even if isSeeding is passed true", () => {
+  void describe("PieceMap Component DOM rendering", () => {
+    void it("renders progressbar and badge matching progress 0.0 even if isSeeding is passed true", () => {
       const qc = createQueryClient();
       const html = renderToStaticMarkup(
         React.createElement(
@@ -174,7 +174,7 @@ describe("PieceMap: Prevent False 100% Verified Grid on Seeding (Issue #207)", (
       assert.ok(!html.includes("100 / 100 Complete"));
     });
 
-    it("renders progressbar and badge matching 100% when progress is 1.0", () => {
+    void it("renders progressbar and badge matching 100% when progress is 1.0", () => {
       const qc = createQueryClient();
       const html = renderToStaticMarkup(
         React.createElement(

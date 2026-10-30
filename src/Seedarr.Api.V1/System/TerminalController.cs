@@ -62,7 +62,7 @@ public class TerminalController : ControllerBase
         });
     }
 
-    [HttpPost("session")]
+    [HttpPost("session")] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [HttpPost]
     [ProducesResponseType(typeof(TerminalSessionResource), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

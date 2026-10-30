@@ -75,7 +75,7 @@ function SystemStatus() {
   const pollReconnect = () => {
     let attempts = 0;
     const maxAttempts = 30;
-    const interval = setInterval(async () => {
+    const interval = setInterval(() => { void (async () => {
       attempts++;
       try {
         const res = await fetch("/api/v1/system/status");
@@ -108,7 +108,7 @@ function SystemStatus() {
           "error",
         );
       }
-    }, 2000);
+    })(); }, 2000);
   };
 
   const handleShutdown = async () => {
@@ -210,7 +210,7 @@ function SystemStatus() {
           <button
             type="button"
             className="btn btn-outline btn-small"
-            onClick={() => setShowRestartModal(true)}
+            onClick={() => { setShowRestartModal(true); }}
             disabled={isRestarting || isShuttingDown}
             style={{
               display: "inline-flex",
@@ -224,7 +224,7 @@ function SystemStatus() {
           <button
             type="button"
             className="btn btn-danger btn-small"
-            onClick={() => setShowShutdownModal(true)}
+            onClick={() => { setShowShutdownModal(true); }}
             disabled={isRestarting || isShuttingDown}
             style={{
               display: "inline-flex",
@@ -1351,7 +1351,7 @@ function SystemStatus() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => !isRestarting && setShowRestartModal(false)}
+          onClick={() => { if (!isRestarting) setShowRestartModal(false); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               if (!isRestarting) {
@@ -1365,7 +1365,7 @@ function SystemStatus() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1404,7 +1404,7 @@ function SystemStatus() {
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => setShowRestartModal(false)}
+                onClick={() => { setShowRestartModal(false); }}
                 disabled={isRestarting}
               >
                 {t("common.cancel", "Cancel")}
@@ -1412,7 +1412,7 @@ function SystemStatus() {
               <button
                 type="button"
                 className="btn btn-primary btn-small"
-                onClick={handleRestart}
+                onClick={(...args: Parameters<typeof handleRestart>) => { void handleRestart(...args); }}
                 disabled={isRestarting}
               >
                 {isRestarting
@@ -1429,7 +1429,7 @@ function SystemStatus() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => !isShuttingDown && setShowShutdownModal(false)}
+          onClick={() => { if (!isShuttingDown) setShowShutdownModal(false); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               if (!isShuttingDown) {
@@ -1443,7 +1443,7 @@ function SystemStatus() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1482,7 +1482,7 @@ function SystemStatus() {
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => setShowShutdownModal(false)}
+                onClick={() => { setShowShutdownModal(false); }}
                 disabled={isShuttingDown}
               >
                 {t("common.cancel", "Cancel")}
@@ -1490,7 +1490,7 @@ function SystemStatus() {
               <button
                 type="button"
                 className="btn btn-danger btn-small"
-                onClick={handleShutdown}
+                onClick={(...args: Parameters<typeof handleShutdown>) => { void handleShutdown(...args); }}
                 disabled={isShuttingDown}
               >
                 {isShuttingDown

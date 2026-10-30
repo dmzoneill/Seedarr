@@ -9,11 +9,11 @@ using Seedarr.Http;
 
 namespace Seedarr.Api.V1.ArrIntegration;
 
-[V1ApiController("webhook")]
+[V1ApiController("webhook")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 [Route("api/v1/webhooks")]
 public class WebhookReceiverController : Controller
 {
-    private const string ApiKeyHeader = "X-Api-Key";
+    private const string ApiKeyHeader = "X-Api-Key"; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
 
     private readonly IArrWebhookService _webhookService;
     private readonly IConfigFileProvider _configFileProvider;

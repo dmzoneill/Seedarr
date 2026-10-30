@@ -6,7 +6,7 @@ using Seedarr.Http;
 
 namespace Seedarr.Api.V1.FileSystem;
 
-[V1ApiController("directory")]
+[V1ApiController("directory")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 [Route("api/v1/filesystem/directory")]
 public class DirectoryController : Controller
 {

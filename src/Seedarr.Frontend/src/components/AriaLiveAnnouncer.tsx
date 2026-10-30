@@ -27,7 +27,7 @@ export function announce(
     message,
     priority,
   };
-  listeners.forEach((listener) => listener(item));
+  listeners.forEach((listener) => { listener(item); });
 }
 
 /**

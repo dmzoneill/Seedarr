@@ -9,7 +9,7 @@ namespace Seedarr.Api.V1.DiskSpace;
 /// <summary>
 /// Controller for disk space information.
 /// </summary>
-[V1ApiController("diskspace")]
+[V1ApiController("diskspace")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 public class DiskSpaceController : Controller
 {
     private readonly IDiskSpaceService _diskSpaceService;

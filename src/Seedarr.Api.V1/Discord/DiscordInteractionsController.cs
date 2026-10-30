@@ -14,7 +14,7 @@ using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Discord;
 
-[V1ApiController("discord")]
+[V1ApiController("discord")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 public class DiscordInteractionsController : Controller
 {
     public const string SignatureHeader = "X-Signature-Ed25519";

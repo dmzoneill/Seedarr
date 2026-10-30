@@ -73,22 +73,21 @@ export function ConnectionsTab() {
     };
     if (toSave.id) {
       updateMutation.mutate(toSave as ArrConnection, {
-        onSuccess: () => setEditing(null),
+        onSuccess: () => { setEditing(null); },
       });
     } else {
-      createMutation.mutate(toSave, { onSuccess: () => setEditing(null) });
+      createMutation.mutate(toSave, { onSuccess: () => { setEditing(null); } });
     }
   };
 
   const handleTest = (id: number) => {
     setTestResults((prev) => ({ ...prev, [id]: null }));
     testMutation.mutate(id, {
-      onSuccess: (data) => setTestResults((prev) => ({ ...prev, [id]: data })),
-      onError: (err) =>
-        setTestResults((prev) => ({
+      onSuccess: (data) => { setTestResults((prev) => ({ ...prev, [id]: data })); },
+      onError: (err) => { setTestResults((prev) => ({
           ...prev,
           [id]: { success: false, message: err.message },
-        })),
+        })); },
     });
   };
 
@@ -96,9 +95,8 @@ export function ConnectionsTab() {
     if (!editing) return;
     setModalTestResult(null);
     testDirectMutation.mutate(editing, {
-      onSuccess: (data) => setModalTestResult(data),
-      onError: (err) =>
-        setModalTestResult({ success: false, message: err.message }),
+      onSuccess: (data) => { setModalTestResult(data); },
+      onError: (err) => { setModalTestResult({ success: false, message: err.message }); },
     });
   };
 
@@ -130,7 +128,7 @@ export function ConnectionsTab() {
           >
             <button
               className="btn btn-outline btn-small"
-              onClick={() => syncMutation.mutate()}
+              onClick={() => { syncMutation.mutate(); }}
               disabled={syncMutation.isPending}
             >
               {syncMutation.isPending ? "Syncing..." : "🔄 Sync Now"}
@@ -163,7 +161,7 @@ export function ConnectionsTab() {
               role="button"
               tabIndex={0}
               className="provider-card"
-              onClick={() => handleOpenModal(conn)}
+              onClick={() => { handleOpenModal(conn); }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -179,7 +177,7 @@ export function ConnectionsTab() {
                     rel="noopener noreferrer"
                     className="provider-card-action"
                     title={`Open ${conn.name} Web UI (${conn.url})`}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); }}
                     style={{ textDecoration: "none", color: "inherit" }}
                   >
                     ↗
@@ -257,7 +255,7 @@ export function ConnectionsTab() {
             role="button"
             tabIndex={0}
             className="provider-card-add"
-            onClick={() => handleOpenModal(defaultConnection)}
+            onClick={() => { handleOpenModal(defaultConnection); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -276,7 +274,7 @@ export function ConnectionsTab() {
           role="button"
           tabIndex={0}
           className="modal-overlay"
-          onClick={() => setEditing(null)}
+          onClick={() => { setEditing(null); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -288,7 +286,7 @@ export function ConnectionsTab() {
             role="button"
             tabIndex={0}
             className="modal"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -310,7 +308,7 @@ export function ConnectionsTab() {
             <TextInput
               label="Name"
               value={editing.name || ""}
-              onChange={(v) => setEditing({ ...editing, name: v })}
+              onChange={(v) => { setEditing({ ...editing, name: v }); }}
               placeholder="Sonarr"
             />
             <SelectInput
@@ -342,31 +340,30 @@ export function ConnectionsTab() {
             <TextInput
               label="URL"
               value={editing.url || ""}
-              onChange={(v) => setEditing({ ...editing, url: v })}
+              onChange={(v) => { setEditing({ ...editing, url: v }); }}
               placeholder="http://localhost:8989"
             />
             <TextInput
               label="API Key"
               value={editing.apiKey || ""}
-              onChange={(v) => setEditing({ ...editing, apiKey: v })}
+              onChange={(v) => { setEditing({ ...editing, apiKey: v }); }}
               type="password"
             />
             <Toggle
               label="Enable Connection"
               checked={editing.enable ?? true}
-              onChange={(v) => setEditing({ ...editing, enable: v })}
+              onChange={(v) => { setEditing({ ...editing, enable: v }); }}
             />
             <Toggle
               label="Sync Enabled"
               checked={editing.syncEnabled ?? true}
-              onChange={(v) => setEditing({ ...editing, syncEnabled: v })}
+              onChange={(v) => { setEditing({ ...editing, syncEnabled: v }); }}
             />
             {editing.syncEnabled !== false && (
               <NumberInput
                 label="Sync Interval (minutes)"
                 value={editing.syncIntervalMinutes ?? 60}
-                onChange={(v) =>
-                  setEditing({ ...editing, syncIntervalMinutes: v })
+                onChange={(v) => { setEditing({ ...editing, syncIntervalMinutes: v }); }
                 }
                 min={5}
                 max={1440}
@@ -376,20 +373,19 @@ export function ConnectionsTab() {
             <Toggle
               label="Auto Add"
               checked={editing.enableAutomaticAdd ?? true}
-              onChange={(v) =>
-                setEditing({ ...editing, enableAutomaticAdd: v })
+              onChange={(v) => { setEditing({ ...editing, enableAutomaticAdd: v }); }
               }
             />
             <Toggle
               label="Webhook"
               checked={editing.webhookEnabled ?? true}
-              onChange={(v) => setEditing({ ...editing, webhookEnabled: v })}
+              onChange={(v) => { setEditing({ ...editing, webhookEnabled: v }); }}
             />
             {editing.webhookEnabled !== false && (
               <TextInput
                 label="Webhook Host"
                 value={editing.webhookHost || ""}
-                onChange={(v) => setEditing({ ...editing, webhookHost: v })}
+                onChange={(v) => { setEditing({ ...editing, webhookHost: v }); }}
                 placeholder="seedarr"
                 hint="Hostname or IP for *arr to reach Seedarr (leave empty to use default)"
               />
@@ -397,8 +393,7 @@ export function ConnectionsTab() {
             <Toggle
               label="Accept Invalid SSL / Self-Signed Certificates"
               checked={editing.acceptInvalidCertificates ?? false}
-              onChange={(v) =>
-                setEditing({ ...editing, acceptInvalidCertificates: v })
+              onChange={(v) => { setEditing({ ...editing, acceptInvalidCertificates: v }); }
               }
               hint="Allow self-signed or invalid SSL/TLS certificates when connecting to this service over HTTPS"
             />
@@ -468,7 +463,7 @@ export function ConnectionsTab() {
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
                   className="btn btn-outline btn-small"
-                  onClick={() => setEditing(null)}
+                  onClick={() => { setEditing(null); }}
                 >
                   Cancel
                 </button>

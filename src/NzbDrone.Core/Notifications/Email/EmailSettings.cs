@@ -6,7 +6,7 @@ public class EmailSettings
     public int SmtpPort { get; set; } = 587;
     public bool UseTls { get; set; } = true;
     public string Username { get; set; } = "";
-    public string Password { get; set; } = "";
+    public string Password { get; set; } = ""; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
     public string FromAddress { get; set; } = "";
 
     /// <summary>

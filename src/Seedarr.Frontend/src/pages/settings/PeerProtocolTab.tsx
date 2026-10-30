@@ -50,7 +50,7 @@ export function PeerProtocolTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+        onSave={() => { save.mutate(form, { onSuccess: () => { setDirty(false); } }); }}
       />
 
       <SectionCard
@@ -60,7 +60,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="Handshake Timeout"
           value={form.handshakeTimeoutSeconds}
-          onChange={(v) => set("handshakeTimeoutSeconds", v)}
+          onChange={(v) => { set("handshakeTimeoutSeconds", v); }}
           min={1}
           suffix="seconds"
           hint="Maximum time allowed for BitTorrent handshake exchange"
@@ -68,7 +68,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="Message Read Timeout"
           value={form.messageReadTimeoutSeconds}
-          onChange={(v) => set("messageReadTimeoutSeconds", v)}
+          onChange={(v) => { set("messageReadTimeoutSeconds", v); }}
           min={1}
           suffix="seconds"
           hint="Timeout for incoming piece/block message bytes"
@@ -76,7 +76,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="Keep Alive Interval"
           value={form.keepAliveIntervalSeconds}
-          onChange={(v) => set("keepAliveIntervalSeconds", v)}
+          onChange={(v) => { set("keepAliveIntervalSeconds", v); }}
           min={1}
           suffix="seconds"
           hint="Interval to send 0-byte keepalive pings to active peers"
@@ -84,7 +84,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="Peer Contact Interval"
           value={form.peerContactIntervalSeconds}
-          onChange={(v) => set("peerContactIntervalSeconds", v)}
+          onChange={(v) => { set("peerContactIntervalSeconds", v); }}
           min={1}
           suffix="seconds"
           hint="Minimum elapsed time before re-contacting an idle peer"
@@ -92,7 +92,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="UDP Tracker Timeout"
           value={form.udpTrackerTimeoutSeconds}
-          onChange={(v) => set("udpTrackerTimeoutSeconds", v)}
+          onChange={(v) => { set("udpTrackerTimeoutSeconds", v); }}
           min={1}
           suffix="seconds"
           hint="Timeout for UDP tracker connect/announce transactions"
@@ -100,7 +100,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="HTTP Tracker Timeout"
           value={form.httpTrackerTimeoutSeconds}
-          onChange={(v) => set("httpTrackerTimeoutSeconds", v)}
+          onChange={(v) => { set("httpTrackerTimeoutSeconds", v); }}
           min={1}
           suffix="seconds"
           hint="HTTP request timeout for tracker announces"
@@ -108,7 +108,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="Peer Request Count"
           value={form.peerRequestCount}
-          onChange={(v) => set("peerRequestCount", v)}
+          onChange={(v) => { set("peerRequestCount", v); }}
           min={1}
           suffix="peers"
           hint="Number of peers requested in standard announce payload (numwant)"
@@ -122,7 +122,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="Upload Activity Probability"
           value={form.seederUploadActivityProbability}
-          onChange={(v) => set("seederUploadActivityProbability", v)}
+          onChange={(v) => { set("seederUploadActivityProbability", v); }}
           min={0}
           max={1}
           step={0.05}
@@ -131,7 +131,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="Idle Chance"
           value={form.peerIdleChance}
-          onChange={(v) => set("peerIdleChance", v)}
+          onChange={(v) => { set("peerIdleChance", v); }}
           min={0}
           max={1}
           step={0.05}
@@ -140,7 +140,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="Dropout Probability"
           value={form.peerDropoutProbability}
-          onChange={(v) => set("peerDropoutProbability", v)}
+          onChange={(v) => { set("peerDropoutProbability", v); }}
           min={0}
           max={1}
           step={0.05}
@@ -149,7 +149,7 @@ export function PeerProtocolTab() {
         <NumberInput
           label="Connection Rotation"
           value={form.connectionRotationPercentage}
-          onChange={(v) => set("connectionRotationPercentage", v)}
+          onChange={(v) => { set("connectionRotationPercentage", v); }}
           min={0}
           max={1}
           step={0.05}

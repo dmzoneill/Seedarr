@@ -11,8 +11,8 @@ import {
   formatPriority,
 } from "./fileTree";
 
-describe("fileTree: buildFileTree and cascading priority", () => {
-  it("should correctly split Windows paths with backslashes into directory and child file", () => {
+void describe("fileTree: buildFileTree and cascading priority", () => {
+  void it("should correctly split Windows paths with backslashes into directory and child file", () => {
     const files = [
       {
         id: 1,
@@ -42,7 +42,7 @@ describe("fileTree: buildFileTree and cascading priority", () => {
     assert.equal(epFile.fileId, 1);
   });
 
-  it("should not produce empty ghost nodes with leading, trailing, and duplicate slashes", () => {
+  void it("should not produce empty ghost nodes with leading, trailing, and duplicate slashes", () => {
     const files = [
       {
         id: 101,
@@ -79,7 +79,7 @@ describe("fileTree: buildFileTree and cascading priority", () => {
     assert.equal(file.fileId, 101);
   });
 
-  it("should update all descendant file nodes under a directory recursively when cascading priority", () => {
+  void it("should update all descendant file nodes under a directory recursively when cascading priority", () => {
     const files = [
       { id: 1, path: "Series/Season 01/ep1.mkv", size: 100 },
       { id: 2, path: "Series/Season 01/ep2.mkv", size: 100 },
@@ -118,7 +118,7 @@ describe("fileTree: buildFileTree and cascading priority", () => {
     assert.equal(extrasDir.children[0].priority, "High");
   });
 
-  it("should collect descendant file ids correctly", () => {
+  void it("should collect descendant file ids correctly", () => {
     const files = [
       { id: 10, path: "Dir/A/f1.txt", size: 10 },
       { id: 20, path: "Dir/A/f2.txt", size: 20 },
@@ -142,7 +142,7 @@ describe("fileTree: buildFileTree and cascading priority", () => {
     );
   });
 
-  it("should calculate directory priority as Mixed or uniform", () => {
+  void it("should calculate directory priority as Mixed or uniform", () => {
     const files = [
       { id: 1, path: "Folder/f1.txt", size: 10 },
       { id: 2, path: "Folder/f2.txt", size: 20 },
@@ -163,7 +163,7 @@ describe("fileTree: buildFileTree and cascading priority", () => {
     assert.equal(getDirectoryPriority(folder), "High");
   });
 
-  it("should format priorities correctly", () => {
+  void it("should format priorities correctly", () => {
     assert.equal(formatPriority("skip"), "Do Not Download");
     assert.equal(formatPriority("Do Not Download"), "Do Not Download");
     assert.equal(formatPriority(0), "Do Not Download");
@@ -174,7 +174,7 @@ describe("fileTree: buildFileTree and cascading priority", () => {
     assert.equal(formatPriority(undefined), "Normal");
   });
 
-  it("should calculate per-file progress from bytesCompleted and size", () => {
+  void it("should calculate per-file progress from bytesCompleted and size", () => {
     const files = [
       { id: 1, path: "Movie/video.mkv", size: 1000, bytesCompleted: 500 },
       { id: 2, path: "Movie/sub.srt", size: 200, bytesCompleted: 200 },
@@ -192,7 +192,7 @@ describe("fileTree: buildFileTree and cascading priority", () => {
     assert.equal(extraNode?.progress, 0);
   });
 
-  it("should calculate directory wanted state as wanted, unwanted, or indeterminate", () => {
+  void it("should calculate directory wanted state as wanted, unwanted, or indeterminate", () => {
     const files = [
       { id: 1, path: "Show/ep1.mkv", size: 1000, wanted: true },
       { id: 2, path: "Show/ep2.mkv", size: 1000, wanted: true },

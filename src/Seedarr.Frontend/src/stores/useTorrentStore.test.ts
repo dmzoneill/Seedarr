@@ -20,10 +20,10 @@ function resetTorrentStore(): void {
   state.clearOptimisticUpdates();
 }
 
-beforeEach(() => resetTorrentStore());
+beforeEach(() => { resetTorrentStore(); });
 
-describe("resolveTelemetryStatus", () => {
-  it("uses REST status when telemetry is stale", () => {
+void describe("resolveTelemetryStatus", () => {
+  void it("uses REST status when telemetry is stale", () => {
     const telemetry: TorrentTelemetry = {
       status: "Paused",
       lastUpdated: Date.now() - 60_000,
@@ -31,7 +31,7 @@ describe("resolveTelemetryStatus", () => {
     assert.equal(resolveTelemetryStatus(telemetry, "Seeding"), "Seeding");
   });
 
-  it("uses live telemetry status when fresh", () => {
+  void it("uses live telemetry status when fresh", () => {
     const telemetry: TorrentTelemetry = {
       status: "Seeding",
       lastUpdated: Date.now(),
@@ -40,12 +40,12 @@ describe("resolveTelemetryStatus", () => {
   });
 });
 
-describe("isTelemetryStale", () => {
-  it("treats missing lastUpdated as not stale", () => {
+void describe("isTelemetryStale", () => {
+  void it("treats missing lastUpdated as not stale", () => {
     assert.equal(isTelemetryStale({ status: "Paused" }), false);
   });
 
-  it("treats telemetry older than the stale window as stale", () => {
+  void it("treats telemetry older than the stale window as stale", () => {
     const telemetry: TorrentTelemetry = {
       status: "Paused",
       lastUpdated: Date.now() - TELEMETRY_STATUS_STALE_MS - 1,
@@ -53,7 +53,7 @@ describe("isTelemetryStale", () => {
     assert.equal(isTelemetryStale(telemetry), true);
   });
 
-  it("treats telemetry within the stale window as fresh", () => {
+  void it("treats telemetry within the stale window as fresh", () => {
     const telemetry: TorrentTelemetry = {
       status: "Paused",
       lastUpdated: Date.now() - TELEMETRY_STATUS_STALE_MS + 500,
@@ -78,8 +78,8 @@ const baseTorrent = (): Torrent =>
     ratio: 1,
   }) as Torrent;
 
-describe("applyTelemetry", () => {
-  it("ignores stale Paused telemetry so REST seeding speeds show after resume", () => {
+void describe("applyTelemetry", () => {
+  void it("ignores stale Paused telemetry so REST seeding speeds show after resume", () => {
     const torrent = baseTorrent();
     const stalePaused: TorrentTelemetry = {
       status: "Paused",
@@ -94,7 +94,7 @@ describe("applyTelemetry", () => {
     assert.equal(merged.downloadSpeed, torrent.downloadSpeed);
   });
 
-  it("zeros speeds when fresh telemetry reports Paused", () => {
+  void it("zeros speeds when fresh telemetry reports Paused", () => {
     const torrent = baseTorrent();
     const freshPaused: TorrentTelemetry = {
       status: "Paused",
@@ -109,7 +109,7 @@ describe("applyTelemetry", () => {
     assert.equal(merged.downloadSpeed, 0);
   });
 
-  it("uses fresh telemetry speeds when status is active", () => {
+  void it("uses fresh telemetry speeds when status is active", () => {
     const torrent = baseTorrent();
     torrent.status = "Downloading";
     const fresh: TorrentTelemetry = {
@@ -124,7 +124,7 @@ describe("applyTelemetry", () => {
     assert.equal(merged.uploadSpeed, 10);
   });
 
-  it("zeros speeds for stale inactive torrents", () => {
+  void it("zeros speeds for stale inactive torrents", () => {
     const torrent = baseTorrent();
     torrent.status = "Queued";
     const stale: TorrentTelemetry = {
@@ -139,8 +139,8 @@ describe("applyTelemetry", () => {
   });
 });
 
-describe("useTorrentStore actions", () => {
-  it("updateTelemetry merges speed aliases and purge removes stale entries", () => {
+void describe("useTorrentStore actions", () => {
+  void it("updateTelemetry merges speed aliases and purge removes stale entries", () => {
     const store = useTorrentStore.getState();
     store.updateTelemetry([
       { id: 1, upSpeed: 11, downSpeed: 22, status: "Downloading" },
@@ -159,7 +159,7 @@ describe("useTorrentStore actions", () => {
     assert.equal(useTorrentStore.getState().telemetry[2]?.status, "Seeding");
   });
 
-  it("updatePieceMap applies ranges, corruption, and cleared resets", () => {
+  void it("updatePieceMap applies ranges, corruption, and cleared resets", () => {
     const store = useTorrentStore.getState();
     store.updatePieceMap(9, { ranges: [[0, 2]] });
     let map = useTorrentStore.getState().pieceMaps[9];
@@ -179,7 +179,7 @@ describe("useTorrentStore actions", () => {
     assert.equal(map.version, 3);
   });
 
-  it("selection, optimistic updates, and removeTorrent clean related state", () => {
+  void it("selection, optimistic updates, and removeTorrent clean related state", () => {
     const store = useTorrentStore.getState();
     store.setSelectedIds([1, 2]);
     store.toggleSelectedId(2);
@@ -198,7 +198,7 @@ describe("useTorrentStore actions", () => {
     assert.equal(state.optimisticUpdates[1], undefined);
   });
 
-  it("updatePieceMap merges base64 and Uint8Array bitfields and PascalCase aliases", () => {
+  void it("updatePieceMap merges base64 and Uint8Array bitfields and PascalCase aliases", () => {
     const store = useTorrentStore.getState();
     const singleByteB64 = btoa(String.fromCharCode(0xff));
     store.updatePieceMap(3, { bitfield: singleByteB64 });
@@ -214,7 +214,7 @@ describe("useTorrentStore actions", () => {
     assert.equal(map.corruptedIndices?.length ?? 0, 0);
   });
 
-  it("clearTorrentTelemetry and clearOptimisticUpdates no-op when missing", () => {
+  void it("clearTorrentTelemetry and clearOptimisticUpdates no-op when missing", () => {
     const store = useTorrentStore.getState();
     const before = useTorrentStore.getState();
     store.clearTorrentTelemetry(999);
@@ -228,7 +228,7 @@ describe("useTorrentStore actions", () => {
     assert.deepEqual(useTorrentStore.getState().optimisticUpdates, {});
   });
 
-  it("updateTelemetry ignores invalid rows and selectAllIds replaces selection", () => {
+  void it("updateTelemetry ignores invalid rows and selectAllIds replaces selection", () => {
     const store = useTorrentStore.getState();
     store.updateTelemetry([{ id: 1, status: "Seeding" }]);
     const snap = useTorrentStore.getState().telemetry;
@@ -245,8 +245,8 @@ describe("useTorrentStore actions", () => {
   });
 });
 
-describe("applyTelemetry extended", () => {
-  it("prefers optimistic status over fresh telemetry status", () => {
+void describe("applyTelemetry extended", () => {
+  void it("prefers optimistic status over fresh telemetry status", () => {
     const torrent = baseTorrent();
     const fresh: TorrentTelemetry = {
       status: "Error",
@@ -260,7 +260,7 @@ describe("applyTelemetry extended", () => {
     assert.equal(merged.downloadSpeed, 50);
   });
 
-  it("parses string eta from fresh telemetry", () => {
+  void it("parses string eta from fresh telemetry", () => {
     const torrent = baseTorrent();
     torrent.status = "Downloading";
     const fresh: TorrentTelemetry = {
@@ -273,16 +273,16 @@ describe("applyTelemetry extended", () => {
   });
 });
 
-describe("safeGetStorage", () => {
-  it("returns default when localStorage is unavailable (node test runner)", () => {
+void describe("safeGetStorage", () => {
+  void it("returns default when localStorage is unavailable (node test runner)", () => {
     assert.deepEqual(safeGetStorage("missing", ["alt"], { ok: true }), {
       ok: true,
     });
   });
 });
 
-describe("useTorrentStore edge cases", () => {
-  it("clears telemetry and piece maps wholesale", () => {
+void describe("useTorrentStore edge cases", () => {
+  void it("clears telemetry and piece maps wholesale", () => {
     const store = useTorrentStore.getState();
     store.updateTelemetry([{ id: 1, status: "Seeding" }]);
     store.updatePieceMap(1, { pieceIndex: 0, pieceState: 1 });
@@ -292,7 +292,7 @@ describe("useTorrentStore edge cases", () => {
     assert.deepEqual(useTorrentStore.getState().pieceMaps, {});
   });
 
-  it("repairing a corrupted piece clears corruptedIndices", () => {
+  void it("repairing a corrupted piece clears corruptedIndices", () => {
     const store = useTorrentStore.getState();
     store.updatePieceMap(5, { pieceIndex: 2, pieceState: 3 });
     store.updatePieceMap(5, { pieceIndex: 2, pieceState: 1 });
@@ -302,14 +302,14 @@ describe("useTorrentStore edge cases", () => {
     );
   });
 
-  it("honors Cleared PascalCase flag on piece maps", () => {
+  void it("honors Cleared PascalCase flag on piece maps", () => {
     const store = useTorrentStore.getState();
     store.updatePieceMap(6, { ranges: [[0, 3]] });
     store.updatePieceMap(6, { Cleared: true });
     assert.equal(useTorrentStore.getState().pieceMaps[6]?.bitfield.length, 0);
   });
 
-  it("applies pieceIndices batches and ignores malformed ranges", () => {
+  void it("applies pieceIndices batches and ignores malformed ranges", () => {
     const store = useTorrentStore.getState();
     store.updatePieceMap(8, {
       ranges: [
@@ -324,8 +324,8 @@ describe("useTorrentStore edge cases", () => {
   });
 });
 
-describe("computeAggregatedTorrentMetrics", () => {
-  it("aggregates speeds, status buckets, and peer counts", () => {
+void describe("computeAggregatedTorrentMetrics", () => {
+  void it("aggregates speeds, status buckets, and peer counts", () => {
     const torrents: Torrent[] = [
       {
         ...baseTorrent(),
@@ -380,7 +380,7 @@ describe("computeAggregatedTorrentMetrics", () => {
     );
   });
 
-  it("falls back to stats when torrent list is empty", () => {
+  void it("falls back to stats when torrent list is empty", () => {
     const metrics = computeAggregatedTorrentMetrics(
       [],
       {},
@@ -402,8 +402,8 @@ describe("computeAggregatedTorrentMetrics", () => {
   });
 });
 
-describe("applyTelemetry inactive branches", () => {
-  it("zeros speeds for fresh stopped and error statuses", () => {
+void describe("applyTelemetry inactive branches", () => {
+  void it("zeros speeds for fresh stopped and error statuses", () => {
     const torrent = baseTorrent();
     const stopped: TorrentTelemetry = {
       status: "Stopped",
@@ -425,7 +425,7 @@ describe("applyTelemetry inactive branches", () => {
     assert.equal(mergedError.uploadSpeed, 0);
   });
 
-  it("merges progress and ratio from fresh telemetry", () => {
+  void it("merges progress and ratio from fresh telemetry", () => {
     const torrent = baseTorrent();
     torrent.progress = 0.1;
     torrent.ratio = 0.5;

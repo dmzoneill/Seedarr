@@ -222,7 +222,7 @@ export function IndexerSearchTab({
         setActiveSearchTerm(trimmed);
         setPage(1);
       }, 350);
-      return () => clearTimeout(timer);
+      return () => { clearTimeout(timer); };
     }
   }, [searchQuery, activeSearchTerm]);
 
@@ -381,7 +381,7 @@ export function IndexerSearchTab({
           className="form-control"
           placeholder="Search releases (e.g. Ubuntu, Debian, release name)..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => { setSearchQuery(e.target.value); }}
           style={{
             flex: 1,
             minWidth: "240px",
@@ -544,7 +544,7 @@ export function IndexerSearchTab({
                     cursor: "pointer",
                     userSelect: "none",
                   }}
-                  onClick={() => handleSort("title")}
+                  onClick={() => { handleSort("title"); }}
                 >
                   Release Name{" "}
                   {sortField === "title" &&
@@ -558,7 +558,7 @@ export function IndexerSearchTab({
                     userSelect: "none",
                     whiteSpace: "nowrap",
                   }}
-                  onClick={() => handleSort("size")}
+                  onClick={() => { handleSort("size"); }}
                 >
                   Size{" "}
                   {sortField === "size" &&
@@ -571,7 +571,7 @@ export function IndexerSearchTab({
                     userSelect: "none",
                     whiteSpace: "nowrap",
                   }}
-                  onClick={() => handleSort("peers")}
+                  onClick={() => { handleSort("peers"); }}
                 >
                   Peers{" "}
                   {sortField === "peers" &&
@@ -584,7 +584,7 @@ export function IndexerSearchTab({
                     userSelect: "none",
                     whiteSpace: "nowrap",
                   }}
-                  onClick={() => handleSort("date")}
+                  onClick={() => { handleSort("date"); }}
                 >
                   Published{" "}
                   {sortField === "date" &&
@@ -702,7 +702,7 @@ export function IndexerSearchTab({
                             buttonState.disabled && !isDownloading ? 0.75 : 1,
                           cursor: buttonState.disabled ? "default" : "pointer",
                         }}
-                        onClick={() => handleAddRelease(rel)}
+                        onClick={() => { handleAddRelease(rel); }}
                         disabled={buttonState.disabled}
                       >
                         {buttonState.label}
@@ -771,7 +771,7 @@ export function IndexerSearchTab({
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => { setPage((p) => Math.max(1, p - 1)); }}
               disabled={pagination.currentPage <= 1}
               style={{
                 padding: "0.25rem 0.65rem",
@@ -789,8 +789,7 @@ export function IndexerSearchTab({
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() =>
-                setPage((p) => Math.min(pagination.totalPages, p + 1))
+              onClick={() => { setPage((p) => Math.min(pagination.totalPages, p + 1)); }
               }
               disabled={pagination.currentPage >= pagination.totalPages}
               style={{

@@ -238,14 +238,14 @@ export default function DownloadHistory() {
           <div className="view-toggle">
             <button
               className={`view-toggle-btn ${viewMode === "grid" ? "active" : ""}`}
-              onClick={() => setViewMode("grid")}
+              onClick={() => { setViewMode("grid"); }}
               title="Poster Card Grid View"
             >
               🎬 Posters
             </button>
             <button
               className={`view-toggle-btn ${viewMode === "table" ? "active" : ""}`}
-              onClick={() => setViewMode("table")}
+              onClick={() => { setViewMode("table"); }}
               title="Detailed Table View"
             >
               📋 Table
@@ -274,7 +274,7 @@ export default function DownloadHistory() {
 
           <button
             className="btn btn-outline"
-            onClick={() => setShowExportModal(true)}
+            onClick={() => { setShowExportModal(true); }}
             disabled={totalCount === 0}
             title="Export download history as JSON or CSV"
           >
@@ -494,7 +494,7 @@ export default function DownloadHistory() {
                     "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
                   cursor: "pointer",
                 }}
-                onClick={() => setSelectedDetailItem(item)}
+                onClick={() => { setSelectedDetailItem(item); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -834,7 +834,7 @@ export default function DownloadHistory() {
                         justifyContent: "center",
                         gap: "0.35rem",
                       }}
-                      onClick={() => setSearchModalQuery(item.title)}
+                      onClick={() => { setSearchModalQuery(item.title); }}
                       title="Search again on Indexers"
                     >
                       <span>🔍</span> <span>Search</span>
@@ -850,7 +850,7 @@ export default function DownloadHistory() {
                         justifyContent: "center",
                         gap: "0.35rem",
                       }}
-                      onClick={() => handleReAdd(item.id, item.title)}
+                      onClick={() => { handleReAdd(item.id, item.title); }}
                       disabled={
                         reAddMutation.isPending || item.status === "Active"
                       }
@@ -871,7 +871,7 @@ export default function DownloadHistory() {
                         alignItems: "center",
                         justifyContent: "center",
                       }}
-                      onClick={() => setSelectedDetailItem(item)}
+                      onClick={() => { setSelectedDetailItem(item); }}
                       title="View full media details, actors, and Arr links"
                     >
                       ℹ️
@@ -991,7 +991,7 @@ export default function DownloadHistory() {
                                 flexShrink: 0,
                                 cursor: "pointer",
                               }}
-                              onClick={() => setSelectedDetailItem(item)}
+                              onClick={() => { setSelectedDetailItem(item); }}
                               loading="lazy"
                             />
                           ) : (
@@ -1010,7 +1010,7 @@ export default function DownloadHistory() {
                                 flexShrink: 0,
                                 cursor: "pointer",
                               }}
-                              onClick={() => setSelectedDetailItem(item)}
+                              onClick={() => { setSelectedDetailItem(item); }}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
                                   e.preventDefault();
@@ -1031,7 +1031,7 @@ export default function DownloadHistory() {
                                 wordBreak: "break-word",
                                 cursor: "pointer",
                               }}
-                              onClick={() => setSelectedDetailItem(item)}
+                              onClick={() => { setSelectedDetailItem(item); }}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
                                   e.preventDefault();
@@ -1078,7 +1078,7 @@ export default function DownloadHistory() {
                                       color: "inherit",
                                     }}
                                     title={arrLink.label}
-                                    onClick={(e) => e.stopPropagation()}
+                                    onClick={(e) => { e.stopPropagation(); }}
                                   >
                                     {item.source} ↗
                                   </a>
@@ -1101,8 +1101,7 @@ export default function DownloadHistory() {
                                     color: "var(--text-dim, #999)",
                                     cursor: "pointer",
                                   }}
-                                  onClick={() =>
-                                    setSearchTerm(item.primaryTracker || "")
+                                  onClick={() => { setSearchTerm(item.primaryTracker || ""); }
                                   }
                                   onKeyDown={(e) => {
                                     if (e.key === "Enter" || e.key === " ") {
@@ -1206,7 +1205,7 @@ export default function DownloadHistory() {
                               gap: "0.35rem",
                               whiteSpace: "nowrap",
                             }}
-                            onClick={() => setSelectedDetailItem(item)}
+                            onClick={() => { setSelectedDetailItem(item); }}
                             title="View synopsis, actors, and Arr links"
                           >
                             <span>ℹ️</span>
@@ -1222,7 +1221,7 @@ export default function DownloadHistory() {
                               gap: "0.35rem",
                               whiteSpace: "nowrap",
                             }}
-                            onClick={() => setSearchModalQuery(item.title)}
+                            onClick={() => { setSearchModalQuery(item.title); }}
                             title="Search for this release again on configured indexers"
                           >
                             <span>🔍</span>
@@ -1238,7 +1237,7 @@ export default function DownloadHistory() {
                               gap: "0.35rem",
                               whiteSpace: "nowrap",
                             }}
-                            onClick={() => handleReAdd(item.id, item.title)}
+                            onClick={() => { handleReAdd(item.id, item.title); }}
                             disabled={
                               reAddMutation.isPending ||
                               item.status === "Active"
@@ -1263,7 +1262,7 @@ export default function DownloadHistory() {
                               justifyContent: "center",
                               whiteSpace: "nowrap",
                             }}
-                            onClick={() => handleDelete(item.id, item.title)}
+                            onClick={() => { handleDelete(item.id, item.title); }}
                             title="Delete historical record"
                           >
                             ✕
@@ -1354,7 +1353,7 @@ export default function DownloadHistory() {
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => { setPage((p) => Math.max(1, p - 1)); }}
               disabled={currentPage <= 1}
               style={{
                 padding: "0.25rem 0.65rem",
@@ -1372,7 +1371,7 @@ export default function DownloadHistory() {
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => { setPage((p) => Math.min(totalPages, p + 1)); }}
               disabled={currentPage >= totalPages}
               style={{
                 padding: "0.25rem 0.65rem",
@@ -1395,7 +1394,7 @@ export default function DownloadHistory() {
           aria-modal="true"
           tabIndex={-1}
           className="modal-overlay"
-          onClick={() => setSelectedDetailItem(null)}
+          onClick={() => { setSelectedDetailItem(null); }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setSelectedDetailItem(null);
@@ -1414,7 +1413,7 @@ export default function DownloadHistory() {
               borderRadius: "10px",
               backgroundColor: "var(--bg-primary, #1a1a1a)",
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1460,7 +1459,7 @@ export default function DownloadHistory() {
                   padding: "0.25rem 0.6rem",
                   fontSize: "1rem",
                 }}
-                onClick={() => setSelectedDetailItem(null)}
+                onClick={() => { setSelectedDetailItem(null); }}
               >
                 ✕
               </button>
@@ -2065,7 +2064,7 @@ export default function DownloadHistory() {
               >
                 <button
                   className="btn btn-outline"
-                  onClick={() => handleEnrich(selectedDetailItem)}
+                  onClick={() => { handleEnrich(selectedDetailItem); }}
                   disabled={enrichMutation.isPending}
                   title="Query connected Arr instance again to refresh metadata"
                   style={{ fontSize: "0.85rem" }}
@@ -2085,11 +2084,10 @@ export default function DownloadHistory() {
                   </button>
                   <button
                     className="btn btn-primary"
-                    onClick={() =>
-                      handleReAdd(
+                    onClick={() => { handleReAdd(
                         selectedDetailItem.id,
                         selectedDetailItem.title,
-                      )
+                      ); }
                     }
                     disabled={
                       reAddMutation.isPending ||
@@ -2110,7 +2108,7 @@ export default function DownloadHistory() {
         <AddTorrentModal
           initialMode="search"
           initialQuery={searchModalQuery}
-          onClose={() => setSearchModalQuery(null)}
+          onClose={() => { setSearchModalQuery(null); }}
         />
       )}
 
@@ -2120,7 +2118,7 @@ export default function DownloadHistory() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setShowExportModal(false)}
+          onClick={() => { setShowExportModal(false); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -2132,7 +2130,7 @@ export default function DownloadHistory() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -2191,7 +2189,7 @@ export default function DownloadHistory() {
                     name="exportFormat"
                     value="json"
                     checked={exportFormat === "json"}
-                    onChange={() => setExportFormat("json")}
+                    onChange={() => { setExportFormat("json"); }}
                   />
                   <span>JSON (.json)</span>
                 </label>
@@ -2211,7 +2209,7 @@ export default function DownloadHistory() {
                     name="exportFormat"
                     value="csv"
                     checked={exportFormat === "csv"}
-                    onChange={() => setExportFormat("csv")}
+                    onChange={() => { setExportFormat("csv"); }}
                   />
                   <span>CSV (.csv)</span>
                 </label>
@@ -2228,7 +2226,7 @@ export default function DownloadHistory() {
             >
               <button
                 className="btn btn-outline btn-small"
-                onClick={() => setShowExportModal(false)}
+                onClick={() => { setShowExportModal(false); }}
                 disabled={isExporting}
               >
                 Cancel
@@ -2236,7 +2234,7 @@ export default function DownloadHistory() {
               <button
                 className="btn btn-primary btn-small"
                 disabled={isExporting}
-                onClick={async () => {
+                onClick={() => { void (async () => {
                   setIsExporting(true);
                   try {
                     const searchParams = new URLSearchParams();
@@ -2325,7 +2323,7 @@ export default function DownloadHistory() {
                   } finally {
                     setIsExporting(false);
                   }
-                }}
+                })(); }}
               >
                 {isExporting
                   ? "Exporting..."

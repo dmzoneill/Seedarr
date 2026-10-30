@@ -214,7 +214,7 @@ function Tags() {
                   height: "auto",
                 }}
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                onChange={(e) => { setSelectedCategory(e.target.value); }}
               >
                 <option value="All">All Categories</option>
                 {categories.map((c) => (
@@ -228,7 +228,7 @@ function Tags() {
           )}
           <button
             className="btn btn-primary"
-            onClick={() => setModalTag({ label: "", color: "#c8a84e" })}
+            onClick={() => { setModalTag({ label: "", color: "#c8a84e" }); }}
           >
             + Add Tag
           </button>
@@ -374,13 +374,13 @@ function Tags() {
                         <div style={{ display: "inline-flex", gap: "0.5rem" }}>
                           <button
                             className="btn btn-outline btn-small"
-                            onClick={() => setModalTag({ ...tag })}
+                            onClick={() => { setModalTag({ ...tag }); }}
                           >
                             Edit
                           </button>
                           <button
                             className="btn btn-danger btn-small"
-                            onClick={() => handleDelete(tag.id)}
+                            onClick={() => { handleDelete(tag.id); }}
                           >
                             Delete
                           </button>
@@ -401,7 +401,7 @@ function Tags() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setModalTag(null)}
+          onClick={() => { setModalTag(null); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -413,7 +413,7 @@ function Tags() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -452,8 +452,7 @@ function Tags() {
                 className="form-input"
                 placeholder="e.g. 4k-hdr, seedbox, ptp"
                 value={modalTag.label || ""}
-                onChange={(e) =>
-                  setModalTag({ ...modalTag, label: e.target.value })
+                onChange={(e) => { setModalTag({ ...modalTag, label: e.target.value }); }
                 }
               />
             </div>
@@ -481,8 +480,7 @@ function Tags() {
                 <input
                   type="color"
                   value={modalTag.color || "#c8a84e"}
-                  onChange={(e) =>
-                    setModalTag({ ...modalTag, color: e.target.value })
+                  onChange={(e) => { setModalTag({ ...modalTag, color: e.target.value }); }
                   }
                   style={{
                     width: "36px",
@@ -499,8 +497,7 @@ function Tags() {
                   className="form-input"
                   placeholder="#c8a84e"
                   value={modalTag.color || ""}
-                  onChange={(e) =>
-                    setModalTag({ ...modalTag, color: e.target.value })
+                  onChange={(e) => { setModalTag({ ...modalTag, color: e.target.value }); }
                   }
                   style={{ width: "110px" }}
                 />
@@ -508,8 +505,7 @@ function Tags() {
                   <button
                     type="button"
                     className="btn btn-outline btn-small"
-                    onClick={() =>
-                      setModalTag({ ...modalTag, color: undefined })
+                    onClick={() => { setModalTag({ ...modalTag, color: undefined }); }
                     }
                     title="Clear color"
                   >
@@ -543,7 +539,7 @@ function Tags() {
                   <button
                     key={preset}
                     type="button"
-                    onClick={() => setModalTag({ ...modalTag, color: preset })}
+                    onClick={() => { setModalTag({ ...modalTag, color: preset }); }}
                     style={{
                       width: "20px",
                       height: "20px",
@@ -590,13 +586,12 @@ function Tags() {
                   placeholder="Unlimited"
                   min="0"
                   value={modalTag.uploadLimitKbps ?? ""}
-                  onChange={(e) =>
-                    setModalTag({
+                  onChange={(e) => { setModalTag({
                       ...modalTag,
                       uploadLimitKbps: e.target.value
                         ? Number(e.target.value)
                         : undefined,
-                    })
+                    }); }
                   }
                 />
               </div>
@@ -619,13 +614,12 @@ function Tags() {
                   placeholder="Unlimited"
                   min="0"
                   value={modalTag.downloadLimitKbps ?? ""}
-                  onChange={(e) =>
-                    setModalTag({
+                  onChange={(e) => { setModalTag({
                       ...modalTag,
                       downloadLimitKbps: e.target.value
                         ? Number(e.target.value)
                         : undefined,
-                    })
+                    }); }
                   }
                 />
               </div>
@@ -660,13 +654,12 @@ function Tags() {
                   step="0.1"
                   min="0"
                   value={modalTag.minSeedRatio ?? ""}
-                  onChange={(e) =>
-                    setModalTag({
+                  onChange={(e) => { setModalTag({
                       ...modalTag,
                       minSeedRatio: e.target.value
                         ? Number(e.target.value)
                         : undefined,
-                    })
+                    }); }
                   }
                 />
               </div>
@@ -689,13 +682,12 @@ function Tags() {
                   placeholder="e.g. 86400"
                   min="0"
                   value={modalTag.minSeedTimeSeconds ?? ""}
-                  onChange={(e) =>
-                    setModalTag({
+                  onChange={(e) => { setModalTag({
                       ...modalTag,
                       minSeedTimeSeconds: e.target.value
                         ? Number(e.target.value)
                         : undefined,
-                    })
+                    }); }
                   }
                 />
               </div>
@@ -712,7 +704,7 @@ function Tags() {
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => setModalTag(null)}
+                onClick={() => { setModalTag(null); }}
               >
                 Cancel
               </button>
@@ -741,7 +733,7 @@ function Tags() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setDeletingTag(null)}
+          onClick={() => { setDeletingTag(null); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -753,7 +745,7 @@ function Tags() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -826,7 +818,7 @@ function Tags() {
             >
               <button
                 className="btn btn-outline btn-small"
-                onClick={() => setDeletingTag(null)}
+                onClick={() => { setDeletingTag(null); }}
                 disabled={deleteTag.isPending}
               >
                 Cancel

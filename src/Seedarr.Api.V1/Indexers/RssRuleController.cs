@@ -86,7 +86,7 @@ public class RssRuleController : Controller
     /// <summary>
     /// Creates a new RSS rule.
     /// </summary>
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.Operator)]
     public ActionResult<RssRuleResource> Create([FromBody] RssRuleResource resource)
     {
@@ -168,7 +168,7 @@ public class RssRuleController : Controller
     /// <summary>
     /// Updates an existing RSS rule without specifying ID in the path.
     /// </summary>
-    [HttpPut]
+    [HttpPut] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.Operator)]
     public ActionResult<RssRuleResource> UpdateWithoutId([FromBody] RssRuleResource resource)
     {

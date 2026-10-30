@@ -71,7 +71,7 @@ export default function LineChart({
     });
 
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => { ro.disconnect(); };
   }, []);
 
   const chartW = Math.max(10, containerWidth - PADDING.left - PADDING.right);

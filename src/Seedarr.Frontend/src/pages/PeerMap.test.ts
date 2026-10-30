@@ -9,12 +9,12 @@ import {
   type SimNode,
 } from "./PeerMap";
 
-describe("PeerMap: getNodeId", () => {
-  it("extracts node ID from string endpoint", () => {
+void describe("PeerMap: getNodeId", () => {
+  void it("extracts node ID from string endpoint", () => {
     assert.equal(getNodeId("peer-1"), "peer-1");
   });
 
-  it("extracts node ID from SimNode object reference", () => {
+  void it("extracts node ID from SimNode object reference", () => {
     const nodeObj: SimNode = {
       id: "torrent-ubuntu",
       label: "Ubuntu",
@@ -26,19 +26,19 @@ describe("PeerMap: getNodeId", () => {
     assert.notEqual(getNodeId(nodeObj), "[object Object]");
   });
 
-  it("handles numeric indices safely", () => {
+  void it("handles numeric indices safely", () => {
     assert.equal(getNodeId(0), "0");
     assert.equal(getNodeId(42), "42");
   });
 
-  it("handles null and undefined gracefully without throwing", () => {
+  void it("handles null and undefined gracefully without throwing", () => {
     assert.equal(getNodeId(null), "");
     assert.equal(getNodeId(undefined), "");
   });
 });
 
-describe("PeerMap: mapPreservedNodes", () => {
-  it("preserves fx and fy coordinates for dragged/pinned nodes across polls", () => {
+void describe("PeerMap: mapPreservedNodes", () => {
+  void it("preserves fx and fy coordinates for dragged/pinned nodes across polls", () => {
     const rawNodes: PeerGraphNode[] = [
       { id: "peer-1", label: "192.168.1.50:51413", type: "peer" },
       { id: "peer-2", label: "10.0.0.2:6881", type: "peer" },
@@ -80,7 +80,7 @@ describe("PeerMap: mapPreservedNodes", () => {
     assert.equal(peer2.fy, undefined);
   });
 
-  it("pins the center node to width/2 and height/2", () => {
+  void it("pins the center node to width/2 and height/2", () => {
     const rawNodes: PeerGraphNode[] = [
       { id: "center-node", label: "Seedarr", type: "center" },
     ];
@@ -94,15 +94,15 @@ describe("PeerMap: mapPreservedNodes", () => {
   });
 });
 
-describe("PeerMap: isTopologyChanged", () => {
-  it("returns true on initial mount when prevTopology is null", () => {
+void describe("PeerMap: isTopologyChanged", () => {
+  void it("returns true on initial mount when prevTopology is null", () => {
     const currentNodes = [{ id: "node-1" }, { id: "node-2" }];
     const currentLinks = [{ source: "node-1", target: "node-2" }];
 
     assert.equal(isTopologyChanged(null, currentNodes, currentLinks), true);
   });
 
-  it("returns false when nodes and links remain identical across polls", () => {
+  void it("returns false when nodes and links remain identical across polls", () => {
     const currentNodes = [{ id: "node-1" }, { id: "node-2" }];
     const currentLinks = [{ source: "node-1", target: "node-2" }];
 
@@ -117,7 +117,7 @@ describe("PeerMap: isTopologyChanged", () => {
     );
   });
 
-  it("returns false when links have been mutated by D3 into node object references", () => {
+  void it("returns false when links have been mutated by D3 into node object references", () => {
     const currentNodes = [{ id: "node-1" }, { id: "node-2" }];
     const currentLinks = [
       {
@@ -137,7 +137,7 @@ describe("PeerMap: isTopologyChanged", () => {
     );
   });
 
-  it("returns true when a node is added or removed", () => {
+  void it("returns true when a node is added or removed", () => {
     const snapshot = {
       nodeIds: new Set(["node-1", "node-2"]),
       linkKeys: new Set(["node-1->node-2"]),
@@ -153,7 +153,7 @@ describe("PeerMap: isTopologyChanged", () => {
     assert.equal(isTopologyChanged(snapshot, removedNodes, currentLinks), true);
   });
 
-  it("returns true when a link is added or removed", () => {
+  void it("returns true when a link is added or removed", () => {
     const snapshot = {
       nodeIds: new Set(["node-1", "node-2", "node-3"]),
       linkKeys: new Set(["node-1->node-2"]),
@@ -170,8 +170,8 @@ describe("PeerMap: isTopologyChanged", () => {
   });
 });
 
-describe("PeerMap: filterValidLinks", () => {
-  it("keeps links where both source and target exist in nodes", () => {
+void describe("PeerMap: filterValidLinks", () => {
+  void it("keeps links where both source and target exist in nodes", () => {
     const nodes = [{ id: "center" }, { id: "torrent-1" }, { id: "peer-1" }];
     const links = [
       { source: "center", target: "torrent-1" },
@@ -182,7 +182,7 @@ describe("PeerMap: filterValidLinks", () => {
     assert.equal(result.length, 2);
   });
 
-  it("filters out links referencing non-existent source node", () => {
+  void it("filters out links referencing non-existent source node", () => {
     const nodes = [{ id: "torrent-1" }, { id: "peer-1" }];
     const links = [
       { source: "non-existent-source", target: "torrent-1" },
@@ -195,7 +195,7 @@ describe("PeerMap: filterValidLinks", () => {
     assert.equal(result[0].target, "peer-1");
   });
 
-  it("filters out links referencing non-existent target node", () => {
+  void it("filters out links referencing non-existent target node", () => {
     const nodes = [{ id: "torrent-1" }];
     const links = [{ source: "torrent-1", target: "missing-peer" }];
 
@@ -203,7 +203,7 @@ describe("PeerMap: filterValidLinks", () => {
     assert.equal(result.length, 0);
   });
 
-  it("handles object node references for source and target", () => {
+  void it("handles object node references for source and target", () => {
     const nodes = [{ id: "torrent-1" }, { id: "peer-1" }];
     const links = [
       {

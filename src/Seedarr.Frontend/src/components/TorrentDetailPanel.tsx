@@ -121,14 +121,14 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
           {isSeeding ? (
             <button
               className="btn btn-small btn-danger"
-              onClick={() => stopSeeding.mutate(torrent.id)}
+              onClick={() => { stopSeeding.mutate(torrent.id); }}
             >
               Stop
             </button>
           ) : (
             <button
               className="btn btn-small btn-success"
-              onClick={() => startSeeding.mutate(torrent.id)}
+              onClick={() => { startSeeding.mutate(torrent.id); }}
             >
               Start
             </button>
@@ -154,7 +154,7 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
             aria-selected={tab === t.key}
             tabIndex={tab === t.key ? 0 : -1}
             className={`tab-btn${tab === t.key ? " tab-btn-active" : ""}`}
-            onClick={() => setTab(t.key)}
+            onClick={() => { setTab(t.key); }}
             onKeyDown={(e) => {
               if (e.key === "ArrowRight") {
                 e.preventDefault();

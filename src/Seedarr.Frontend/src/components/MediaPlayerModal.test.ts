@@ -10,7 +10,7 @@ import {
 } from "../utils/mediaPlayer";
 import type { SubtitleTrack, Torrent } from "../api/types";
 
-describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
+void describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
   const mockTorrent: Pick<Torrent, "id" | "name" | "mediaTitle"> = {
     id: 10,
     name: "Big.Buck.Bunny.1080p.HEVC.mkv",
@@ -23,7 +23,7 @@ describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
     size: 276_000_000,
   };
 
-  it("constructs correct stream URL and download URL for media player modal", () => {
+  void it("constructs correct stream URL and download URL for media player modal", () => {
     const stream = buildStreamUrl(mockTorrent.id, mockVideoFile.id);
     const download = buildDownloadUrl(mockTorrent.id, mockVideoFile.id);
 
@@ -31,7 +31,7 @@ describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
     assert.equal(download, "/api/v1/torrent/10/files/42/download");
   });
 
-  it("constructs external player links (VLC, MPV) with full origin", () => {
+  void it("constructs external player links (VLC, MPV) with full origin", () => {
     const stream = buildStreamUrl(mockTorrent.id, mockVideoFile.id);
     const vlc = buildExternalPlayerUrl("vlc", stream, "http://localhost:5000");
     const mpv = buildExternalPlayerUrl("mpv", stream, "http://localhost:5000");
@@ -46,7 +46,7 @@ describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
     );
   });
 
-  it("cleans up media pipeline on unmount (pause, remove src, load)", () => {
+  void it("cleans up media pipeline on unmount (pause, remove src, load)", () => {
     const calls: string[] = [];
     const mediaEl = {
       pause() {
@@ -67,7 +67,7 @@ describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
     assert.deepEqual(calls, ["pause", "removeAttribute:src", "load"]);
   });
 
-  it("handles codec errors with MEDIA_ERR_SRC_NOT_SUPPORTED code 4 by providing descriptive error and player fallbacks", () => {
+  void it("handles codec errors with MEDIA_ERR_SRC_NOT_SUPPORTED code 4 by providing descriptive error and player fallbacks", () => {
     const errMessage = getCodecErrorMessage(4, mockVideoFile.path);
 
     assert.ok(
@@ -84,7 +84,7 @@ describe("MediaPlayerModal: Core Component Contract & Behaviors", () => {
     );
   });
 
-  it("dynamically manages multiple subtitle tracks and toggles track modes", () => {
+  void it("dynamically manages multiple subtitle tracks and toggles track modes", () => {
     const tracks = [
       { mode: "disabled", label: "English", language: "en" },
       { mode: "disabled", label: "Spanish", language: "es" },

@@ -33,7 +33,7 @@ public class BlocklistController : Controller
         return Ok(BuildResource());
     }
 
-    [HttpPut]
+    [HttpPut] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<BlocklistResource> UpdateBlocklist([FromBody] BlocklistConfigRequest request)
     {

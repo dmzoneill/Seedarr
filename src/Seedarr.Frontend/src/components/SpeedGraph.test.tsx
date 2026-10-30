@@ -40,16 +40,16 @@ function createQueryClient() {
   return qc;
 }
 
-describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", () => {
-  describe("Speed axis nice rounding and grid line ticks", () => {
-    it("handles zero, negative, and invalid values gracefully", () => {
+void describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", () => {
+  void describe("Speed axis nice rounding and grid line ticks", () => {
+    void it("handles zero, negative, and invalid values gracefully", () => {
       assert.equal(getNiceMax(0), 1024);
       assert.equal(getNiceMax(-500), 1024);
       assert.equal(getNiceMax(NaN), 1024);
       assert.equal(getNiceMax(Infinity), 1024);
     });
 
-    it("rounds sub-megabyte speeds to binary powers-of-two KiB increments", () => {
+    void it("rounds sub-megabyte speeds to binary powers-of-two KiB increments", () => {
       assert.equal(getNiceMax(1024), 1024); // 1 KiB
       assert.equal(getNiceMax(1500), 2048); // 2 KiB
       assert.equal(getNiceMax(2048), 2048); // 2 KiB
@@ -59,7 +59,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.equal(getNiceMax(1024 * 1024), 1024 * 1024); // 1024 KiB (1 MiB)
     });
 
-    it("rounds megabyte and gigabyte speeds to clean multiplier increments (1, 2, 5, 10, 25, 50, 100, 250, 500)", () => {
+    void it("rounds megabyte and gigabyte speeds to clean multiplier increments (1, 2, 5, 10, 25, 50, 100, 250, 500)", () => {
       const MIB = 1024 * 1024;
       assert.equal(getNiceMax(1.5 * MIB), 2 * MIB);
       assert.equal(getNiceMax(2.1 * MIB), 5 * MIB);
@@ -72,7 +72,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.equal(getNiceMax(800 * MIB), 1024 * MIB);
     });
 
-    it("calculates appropriate grid line count based on niceMax step size", () => {
+    void it("calculates appropriate grid line count based on niceMax step size", () => {
       assert.equal(getGridLineCount(512 * 1024), 4);
       assert.equal(getGridLineCount(1024 * 1024), 4); // 1 MiB (norm 1 -> 4)
       assert.equal(getGridLineCount(2 * 1024 * 1024), 4); // 2 MiB (norm 2 -> 4)
@@ -86,8 +86,8 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
   });
 
-  describe("Time range configurations & constants", () => {
-    it("defines 60s, 5m, 15m, and 30m window ranges", () => {
+  void describe("Time range configurations & constants", () => {
+    void it("defines 60s, 5m, 15m, and 30m window ranges", () => {
       assert.equal(TIME_RANGES["60s"].points, 60);
       assert.equal(TIME_RANGES["5m"].points, 300);
       assert.equal(TIME_RANGES["15m"].points, 900);
@@ -95,7 +95,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.equal(TIME_RANGE_OPTIONS.length, 4);
     });
 
-    it("declares expected canvas dimensions, padding, and channel colors", () => {
+    void it("declares expected canvas dimensions, padding, and channel colors", () => {
       assert.equal(CANVAS_HEIGHT, 180);
       assert.equal(CANVAS_PADDING.top, 12);
       assert.equal(CANVAS_PADDING.bottom, 26);
@@ -106,8 +106,8 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
   });
 
-  describe("HTML5 Canvas rendering and DOM structure", () => {
-    it("renders HTML5 canvas element with aria attributes instead of inline SVG elements", () => {
+  void describe("HTML5 Canvas rendering and DOM structure", () => {
+    void it("renders HTML5 canvas element with aria attributes instead of inline SVG elements", () => {
       const qc = createQueryClient();
       const html = renderToStaticMarkup(
         React.createElement(
@@ -139,7 +139,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       );
     });
 
-    it("renders transfer speed title, live indicator, and dual channel legend items", () => {
+    void it("renders transfer speed title, live indicator, and dual channel legend items", () => {
       const qc = createQueryClient();
       const html = renderToStaticMarkup(
         React.createElement(
@@ -166,7 +166,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       );
     });
 
-    it("renders time window range selector buttons", () => {
+    void it("renders time window range selector buttons", () => {
       const qc = createQueryClient();
       const html = renderToStaticMarkup(
         React.createElement(
@@ -187,8 +187,8 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
   });
 
-  describe("HiDPI backing store scaling formula", () => {
-    it("correctly computes retina backing store dimensions using devicePixelRatio", () => {
+  void describe("HiDPI backing store scaling formula", () => {
+    void it("correctly computes retina backing store dimensions using devicePixelRatio", () => {
       const testCases = [
         { width: 800, height: 180, dpr: 1, expectedW: 800, expectedH: 180 },
         { width: 800, height: 180, dpr: 2, expectedW: 1600, expectedH: 360 },
@@ -205,15 +205,15 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
     });
   });
 
-  describe("Zero-decay telemetry & time delta safety (Issue #309)", () => {
-    it("exports expected telemetry timing and physical speed thresholds", () => {
+  void describe("Zero-decay telemetry & time delta safety (Issue #309)", () => {
+    void it("exports expected telemetry timing and physical speed thresholds", () => {
       assert.equal(ZERO_DECAY_THRESHOLD_MS, 1500);
       assert.equal(ZERO_DECAY_INTERVAL_MS, 1000);
       assert.equal(MIN_TIME_DELTA_SEC, 0.2);
       assert.equal(MAX_PHYSICAL_SPEED_BYTES_PER_SEC, 10 * 1024 * 1024 * 1024);
     });
 
-    it("skips division and recalibrates on non-finite or negative time deltas (prevents NaN / Infinity)", () => {
+    void it("skips division and recalibrates on non-finite or negative time deltas (prevents NaN / Infinity)", () => {
       const prev = {
         totalUploaded: 1000,
         totalDownloaded: 2000,
@@ -235,7 +235,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.equal(Number.isFinite(resNaN.uploadSpeed), true);
     });
 
-    it("skips calculations without resetting baseline for rapid packets under 0.2s", () => {
+    void it("skips calculations without resetting baseline for rapid packets under 0.2s", () => {
       const prev = {
         totalUploaded: 1000,
         totalDownloaded: 2000,
@@ -251,7 +251,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.equal(res.downloadSpeed, 0);
     });
 
-    it("discards impossible physical transfer spikes (> 10 GB/s on local import) as baseline recalibration", () => {
+    void it("discards impossible physical transfer spikes (> 10 GB/s on local import) as baseline recalibration", () => {
       const prev = {
         totalUploaded: 1000,
         totalDownloaded: 2000,
@@ -270,7 +270,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.equal(res.downloadSpeed, 0);
     });
 
-    it("recalibrates baseline if telemetry counters reset", () => {
+    void it("recalibrates baseline if telemetry counters reset", () => {
       const prev = {
         totalUploaded: 50000,
         totalDownloaded: 60000,
@@ -286,7 +286,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.equal(res.downloadSpeed, 0);
     });
 
-    it("calculates exact upload and download speeds for valid telemetry updates", () => {
+    void it("calculates exact upload and download speeds for valid telemetry updates", () => {
       const prev = {
         totalUploaded: 1000,
         totalDownloaded: 2000,
@@ -302,7 +302,7 @@ describe("SpeedGraph: Canvas Telemetry & HiDPI Retina Migration (Issue #310)", (
       assert.equal(res.downloadSpeed, 2000); // 4000 bytes / 2s
     });
 
-    it("guarantees finite non-negative numbers for all speeds", () => {
+    void it("guarantees finite non-negative numbers for all speeds", () => {
       const prev = {
         totalUploaded: 1000,
         totalDownloaded: 1000,

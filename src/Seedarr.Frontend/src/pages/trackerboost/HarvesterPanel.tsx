@@ -340,7 +340,7 @@ export function HarvesterPanel({
               fontSize: "0.82rem",
             }}
             value={downloadFilter}
-            onChange={(e) => setDownloadFilter(e.target.value as "all" | "public" | "private")}
+            onChange={(e) => { setDownloadFilter(e.target.value as "all" | "public" | "private"); }}
           >
             <option value="all">
               {t("trackerBoost.filterAllSwarms", "All Swarms ({count})", {
@@ -371,7 +371,7 @@ export function HarvesterPanel({
               "Search downloads...",
             )}
             value={downloadSearch}
-            onChange={(e) => setDownloadSearch(e.target.value)}
+            onChange={(e) => { setDownloadSearch(e.target.value); }}
           />
         </div>
       </div>
@@ -461,7 +461,7 @@ export function HarvesterPanel({
                     key={item.key}
                     role="button"
                     tabIndex={0}
-                    onClick={() => onSelectKey(item.key)}
+                    onClick={() => { onSelectKey(item.key); }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
@@ -687,11 +687,9 @@ export function HarvesterPanel({
                   <button
                     className="btn btn-action"
                     style={{ fontSize: "0.85rem" }}
-                    onClick={() =>
-                      selectedItem.id
+                    onClick={() => { void (selectedItem.id
                         ? refetchTorrentInspect()
-                        : refetchHashInspect()
-                    }
+                        : refetchHashInspect()); }}
                     title={t(
                       "trackerBoost.rescrapeTooltip",
                       "Re-scrape candidate trackers for this info_hash",
@@ -703,7 +701,7 @@ export function HarvesterPanel({
                     <button
                       className="btn btn-primary"
                       style={{ fontSize: "0.85rem", fontWeight: 600 }}
-                      onClick={() => handleBoostItem(selectedItem)}
+                      onClick={() => { handleBoostItem(selectedItem); }}
                       title={t(
                         "trackerBoost.injectCandidateTooltip",
                         "Inject verified candidate trackers into this torrent",
@@ -1012,8 +1010,7 @@ export function HarvesterPanel({
                             ) : det.isVerified ? (
                               <button
                                 className="btn btn-sm btn-primary"
-                                onClick={() =>
-                                  handleInjectSingle(det.trackerUrl)
+                                onClick={() => { handleInjectSingle(det.trackerUrl); }
                                 }
                                 title={t(
                                   "trackerBoost.injectThisTooltip",

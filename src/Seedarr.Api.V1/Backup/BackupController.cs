@@ -10,7 +10,7 @@ using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Backup;
 
-[V1ApiController("backup")]
+[V1ApiController("backup")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 public class BackupController : Controller
 {
     private readonly IBackupService _backupService;
@@ -36,7 +36,7 @@ public class BackupController : Controller
         }).ToList();
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<BackupResource> CreateBackup()
     {

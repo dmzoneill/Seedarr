@@ -156,7 +156,7 @@ export function TorrentToolbar({
     const timer = setTimeout(() => {
       onFilterChange(localFilter);
     }, 200);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); };
   }, [localFilter, filter, onFilterChange]);
 
   return (
@@ -264,7 +264,7 @@ export function TorrentToolbar({
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={() => onBulkMoveQueue("top")}
+                  onClick={() => { onBulkMoveQueue("top"); }}
                   disabled={bulkPending || !canMutateTorrents}
                   title={t(
                     "torrents.contextMenu.top",
@@ -278,7 +278,7 @@ export function TorrentToolbar({
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={() => onBulkMoveQueue("up")}
+                  onClick={() => { onBulkMoveQueue("up"); }}
                   disabled={bulkPending || !canMutateTorrents}
                   title={t("torrents.contextMenu.up", undefined, "Move Up")}
                   style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
@@ -288,7 +288,7 @@ export function TorrentToolbar({
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={() => onBulkMoveQueue("down")}
+                  onClick={() => { onBulkMoveQueue("down"); }}
                   disabled={bulkPending || !canMutateTorrents}
                   title={t("torrents.contextMenu.down", undefined, "Move Down")}
                   style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
@@ -298,7 +298,7 @@ export function TorrentToolbar({
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={() => onBulkMoveQueue("bottom")}
+                  onClick={() => { onBulkMoveQueue("bottom"); }}
                   disabled={bulkPending || !canMutateTorrents}
                   title={t(
                     "torrents.contextMenu.bottom",
@@ -409,7 +409,7 @@ export function TorrentToolbar({
           </span>
           <button
             className="btn btn-small btn-success"
-            onClick={() => adjustSpeed("maxUploadSpeedKbps", 2)}
+            onClick={() => { adjustSpeed("maxUploadSpeedKbps", 2); }}
             title="Double upload speed limit"
             aria-label="Double upload speed limit"
             disabled={!seedingConfig || !canMutateTorrents}
@@ -418,7 +418,7 @@ export function TorrentToolbar({
           </button>
           <button
             className="btn btn-small btn-success"
-            onClick={() => adjustSpeed("maxUploadSpeedKbps", 0.5)}
+            onClick={() => { adjustSpeed("maxUploadSpeedKbps", 0.5); }}
             title="Halve upload speed limit"
             aria-label="Halve upload speed limit"
             disabled={!seedingConfig || !canMutateTorrents}
@@ -437,7 +437,7 @@ export function TorrentToolbar({
           </span>
           <button
             className="btn btn-small btn-danger"
-            onClick={() => adjustSpeed("maxDownloadSpeedKbps", 2)}
+            onClick={() => { adjustSpeed("maxDownloadSpeedKbps", 2); }}
             title="Double download speed limit"
             aria-label="Double download speed limit"
             disabled={!seedingConfig || !canMutateTorrents}
@@ -446,7 +446,7 @@ export function TorrentToolbar({
           </button>
           <button
             className="btn btn-small btn-danger"
-            onClick={() => adjustSpeed("maxDownloadSpeedKbps", 0.5)}
+            onClick={() => { adjustSpeed("maxDownloadSpeedKbps", 0.5); }}
             title="Halve download speed limit"
             aria-label="Halve download speed limit"
             disabled={!seedingConfig || !canMutateTorrents}
@@ -468,12 +468,12 @@ export function TorrentToolbar({
             "Filter torrents",
           )}
           value={localFilter}
-          onChange={(e) => setLocalFilter(e.target.value)}
+          onChange={(e) => { setLocalFilter(e.target.value); }}
         />
         <div className="view-toggle">
           <button
             className={`view-toggle-btn${viewMode === "table" ? " active" : ""}`}
-            onClick={() => onViewModeChange("table")}
+            onClick={() => { onViewModeChange("table"); }}
             title="Table view"
             aria-pressed={viewMode === "table"}
           >
@@ -482,7 +482,7 @@ export function TorrentToolbar({
           </button>
           <button
             className={`view-toggle-btn${viewMode === "grid" ? " active" : ""}`}
-            onClick={() => onViewModeChange("grid")}
+            onClick={() => { onViewModeChange("grid"); }}
             title="Grid view"
             aria-pressed={viewMode === "grid"}
           >

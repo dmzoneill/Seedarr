@@ -316,7 +316,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
         }
       }, remaining);
 
-      return () => clearTimeout(timer);
+      return () => { clearTimeout(timer); };
     }
   }, [rawNiceMax, targetNiceMax]);
 
@@ -969,7 +969,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
               <button
                 key={opt.value}
                 type="button"
-                onClick={() => handleRangeChange(opt.value)}
+                onClick={() => { handleRangeChange(opt.value); }}
                 style={{
                   background: isActive
                     ? "var(--accent, #c8a84e)"

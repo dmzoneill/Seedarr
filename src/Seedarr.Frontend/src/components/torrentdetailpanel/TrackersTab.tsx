@@ -381,7 +381,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
                             padding: "0.2rem 0.45rem",
                             fontSize: "0.72rem",
                           }}
-                          onClick={() => handleDeleteTracker(t.id)}
+                          onClick={() => { handleDeleteTracker(t.id); }}
                           disabled={deleteTracker.isPending}
                           title="Remove tracker from torrent and reannounce"
                         >
@@ -435,7 +435,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
             justifyContent: "space-between",
             cursor: "pointer",
           }}
-          onClick={() => setShowPickerModal(true)}
+          onClick={() => { setShowPickerModal(true); }}
           title="Open tracker picker to select, search, and filter trackers"
         >
           <span
@@ -469,7 +469,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
             padding: "0.35rem 0.85rem",
             whiteSpace: "nowrap",
           }}
-          onClick={handleAddAndAnnounceSelected}
+          onClick={(...args: Parameters<typeof handleAddAndAnnounceSelected>) => { void handleAddAndAnnounceSelected(...args); }}
           disabled={
             isAddingBatch ||
             selectedUrls.size === 0 ||
@@ -488,13 +488,13 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
 
       <TrackerMultiSelectModal
         isOpen={showPickerModal}
-        onClose={() => setShowPickerModal(false)}
+        onClose={() => { setShowPickerModal(false); }}
         trackers={pickerTrackers}
         selectedUrls={selectedUrls}
         onToggleUrl={handleToggleUrl}
         onSelectBatch={handleSelectBatch}
         onClearSelection={handleClearSelection}
-        onAddAndAnnounce={handleAddAndAnnounceSelected}
+        onAddAndAnnounce={(...args: Parameters<typeof handleAddAndAnnounceSelected>) => { void handleAddAndAnnounceSelected(...args); }}
         isAdding={isAddingBatch}
       />
     </div>

@@ -149,9 +149,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     if (theme === "system") {
       const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
-      const handler = () => applyTheme();
+      const handler = () => { applyTheme(); };
       mediaQuery.addEventListener("change", handler);
-      return () => mediaQuery.removeEventListener("change", handler);
+      return () => { mediaQuery.removeEventListener("change", handler); };
     }
   }, [theme, accent]);
 

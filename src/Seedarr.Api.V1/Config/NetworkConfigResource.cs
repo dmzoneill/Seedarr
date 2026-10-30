@@ -30,7 +30,7 @@ public class NetworkConfigResource : RestResource
 
 public static class NetworkConfigResourceMapper
 {
-    public const string SecretMask = "********";
+    public const string SecretMask = "********"; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
 
     public static NetworkConfigResource ToResource(IConfigService model)
     {

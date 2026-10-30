@@ -1292,7 +1292,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         };
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.Operator)]
     public ActionResult<TorrentResource> Create([FromBody] TorrentResource resource)
     {

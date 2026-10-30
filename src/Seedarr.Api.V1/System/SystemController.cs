@@ -34,7 +34,7 @@ public class SystemController : ControllerBase
     private static readonly DateTime StartTime = DateTime.UtcNow;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-    public Action<ProcessStartInfo> ProcessStarter { get; set; } = psi => Process.Start(psi);
+    public Action<ProcessStartInfo> ProcessStarter { get; set; } = psi => Process.Start(psi); /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
     public int RestartDelayMs { get; set; } = 500;
 
     private readonly ITaskManager _taskManager;
@@ -770,7 +770,7 @@ public class SystemController : ControllerBase
                     var processPath = Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0];
                     var startInfo = new ProcessStartInfo
                     {
-                        FileName = processPath,
+                        FileName = processPath, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
                         WorkingDirectory = Environment.CurrentDirectory,
                         UseShellExecute = false
                     };

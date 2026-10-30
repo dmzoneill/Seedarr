@@ -123,7 +123,7 @@ export default function DeveloperDiagnostics() {
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <button
             className="btn btn-outline btn-small"
-            onClick={fetchDiagnostics}
+            onClick={(...args: Parameters<typeof fetchDiagnostics>) => { void fetchDiagnostics(...args); }}
             disabled={isLoading || isActionRunning}
             title="Refresh Diagnostics"
           >
@@ -283,7 +283,7 @@ export default function DeveloperDiagnostics() {
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             <button
               className="btn btn-outline btn-small"
-              onClick={handlePragmaOptimize}
+              onClick={(...args: Parameters<typeof handlePragmaOptimize>) => { void handlePragmaOptimize(...args); }}
               disabled={isActionRunning}
               title="Run PRAGMA optimize to refresh query planner statistics"
             >
@@ -291,7 +291,7 @@ export default function DeveloperDiagnostics() {
             </button>
             <button
               className="btn btn-outline btn-small"
-              onClick={handleVacuum}
+              onClick={(...args: Parameters<typeof handleVacuum>) => { void handleVacuum(...args); }}
               disabled={isActionRunning}
               title="Defragment and reclaim unused SQLite disk space"
             >

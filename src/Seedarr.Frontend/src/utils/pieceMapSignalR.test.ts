@@ -24,27 +24,27 @@ const torrents: Torrent[] = [
   } as Torrent,
 ];
 
-describe("resolvePieceMapTorrentId", () => {
-  it("reads camelCase torrentId", () => {
+void describe("resolvePieceMapTorrentId", () => {
+  void it("reads camelCase torrentId", () => {
     assert.equal(resolvePieceMapTorrentId({ torrentId: 7 }), 7);
   });
 
-  it("reads PascalCase TorrentId and Id", () => {
+  void it("reads PascalCase TorrentId and Id", () => {
     assert.equal(resolvePieceMapTorrentId({ TorrentId: 8 }), 8);
     assert.equal(resolvePieceMapTorrentId({ Id: 9 }), 9);
   });
 
-  it("ignores non-positive ids", () => {
+  void it("ignores non-positive ids", () => {
     assert.equal(resolvePieceMapTorrentId({ torrentId: 0 }), undefined);
     assert.equal(resolvePieceMapTorrentId({ torrentId: -1 }), undefined);
   });
 
-  it("resolves by infoHash when torrent list provided", () => {
+  void it("resolves by infoHash when torrent list provided", () => {
     const id = resolvePieceMapTorrentId({ infoHash: "abcdef" }, torrents);
     assert.equal(id, 42);
   });
 
-  it("returns undefined for blank infoHash or missing list", () => {
+  void it("returns undefined for blank infoHash or missing list", () => {
     assert.equal(
       resolvePieceMapTorrentId({ infoHash: "  " }, torrents),
       undefined,
@@ -53,8 +53,8 @@ describe("resolvePieceMapTorrentId", () => {
   });
 });
 
-describe("normalizePieceMapWirePayload", () => {
-  it("maps pieceIndexes and pieceState aliases", () => {
+void describe("normalizePieceMapWirePayload", () => {
+  void it("maps pieceIndexes and pieceState aliases", () => {
     const normalized = normalizePieceMapWirePayload({
       pieceIndexes: [1, 2],
       PieceState: 2,
@@ -65,12 +65,12 @@ describe("normalizePieceMapWirePayload", () => {
     assert.equal(normalized.cleared, false);
   });
 
-  it("sets cleared from camelCase or PascalCase", () => {
+  void it("sets cleared from camelCase or PascalCase", () => {
     assert.equal(normalizePieceMapWirePayload({ cleared: true }).cleared, true);
     assert.equal(normalizePieceMapWirePayload({ Cleared: true }).cleared, true);
   });
 
-  it("drops negative pieceIndex and pieceState", () => {
+  void it("drops negative pieceIndex and pieceState", () => {
     const normalized = normalizePieceMapWirePayload({
       pieceIndex: -1,
       state: -2,
@@ -79,7 +79,7 @@ describe("normalizePieceMapWirePayload", () => {
     assert.equal(normalized.pieceState, undefined);
   });
 
-  it("reads pieceIndices and State aliases", () => {
+  void it("reads pieceIndices and State aliases", () => {
     const normalized = normalizePieceMapWirePayload({
       pieceIndices: [3, 4],
       State: 1,
@@ -91,8 +91,8 @@ describe("normalizePieceMapWirePayload", () => {
   });
 });
 
-describe("resolvePieceMapTorrentId InfoHash", () => {
-  it("reads PascalCase InfoHash for lookup", () => {
+void describe("resolvePieceMapTorrentId InfoHash", () => {
+  void it("reads PascalCase InfoHash for lookup", () => {
     const id = resolvePieceMapTorrentId({ InfoHash: "ABCDEF" }, torrents);
     assert.equal(id, 42);
   });

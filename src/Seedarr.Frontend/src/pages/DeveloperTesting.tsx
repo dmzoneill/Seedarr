@@ -271,7 +271,7 @@ export default function DeveloperTesting() {
           <button
             key={cat}
             type="button"
-            onClick={() => setSelectedCategory(cat)}
+            onClick={() => { setSelectedCategory(cat); }}
             aria-pressed={selectedCategory === cat}
             style={{
               padding: "5px 12px",
@@ -339,7 +339,7 @@ export default function DeveloperTesting() {
                         role="button"
                         tabIndex={0}
                         aria-label={`Select test ${test.name}`}
-                        onClick={() => setSelectedTest(test)}
+                        onClick={() => { setSelectedTest(test); }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();

@@ -105,7 +105,7 @@ function SystemLogFiles() {
 
   const handleConfirmClear = () => {
     clearLogFiles.mutate(undefined, {
-      onSettled: () => setConfirmClear(false),
+      onSettled: () => { setConfirmClear(false); },
     });
   };
 
@@ -318,7 +318,7 @@ function SystemLogFiles() {
                       <button
                         type="button"
                         className="btn btn-outline btn-small"
-                        onClick={() => handleDownload(file.filename)}
+                        onClick={() => { void handleDownload(file.filename); }}
                         disabled={downloadingFile === file.filename}
                         style={{
                           display: "inline-flex",
@@ -348,7 +348,7 @@ function SystemLogFiles() {
           aria-modal="true"
           tabIndex={-1}
           className="modal-overlay"
-          onClick={() => setConfirmClear(false)}
+          onClick={() => { setConfirmClear(false); }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setConfirmClear(false);
@@ -359,7 +359,7 @@ function SystemLogFiles() {
             role="button"
             tabIndex={0}
             className="modal"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -396,7 +396,7 @@ function SystemLogFiles() {
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => setConfirmClear(false)}
+                onClick={() => { setConfirmClear(false); }}
                 disabled={clearLogFiles.isPending}
               >
                 Cancel

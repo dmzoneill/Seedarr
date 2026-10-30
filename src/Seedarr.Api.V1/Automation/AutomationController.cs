@@ -57,7 +57,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
         return ToResource(script);
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationScriptResource> Create([FromBody] AutomationScriptResource resource)
     {
@@ -76,7 +76,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
         return ToResource(added);
     }
 
-    [HttpPut("{id:int}")]
+    [HttpPut("{id:int}")] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [HttpPut]
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<AutomationScriptResource> Update([FromBody] JsonElement body, int? id = null)

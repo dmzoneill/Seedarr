@@ -62,7 +62,7 @@ export function ProtocolsTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+        onSave={() => { save.mutate(form, { onSuccess: () => { setDirty(false); } }); }}
       />
 
       <SectionCard
@@ -72,25 +72,25 @@ export function ProtocolsTab() {
         <Toggle
           label="ut_metadata"
           checked={form.extensionUtMetadata}
-          onChange={(v) => set("extensionUtMetadata", v)}
+          onChange={(v) => { set("extensionUtMetadata", v); }}
           hint="Exchange metadata (.torrent files) over magnet links (BEP 9)"
         />
         <Toggle
           label="ut_pex"
           checked={form.extensionUtPex}
-          onChange={(v) => set("extensionUtPex", v)}
+          onChange={(v) => { set("extensionUtPex", v); }}
           hint="Peer Exchange extension messages (BEP 11)"
         />
         <Toggle
           label="lt_donthave"
           checked={form.extensionLtDontHave}
-          onChange={(v) => set("extensionLtDontHave", v)}
+          onChange={(v) => { set("extensionLtDontHave", v); }}
           hint="Signal uninteresting or dropped pieces to peers (lt_donthave)"
         />
         <Toggle
           label="Fast Extension"
           checked={form.extensionFastExtension}
-          onChange={(v) => set("extensionFastExtension", v)}
+          onChange={(v) => { set("extensionFastExtension", v); }}
           hint="Fast Extension allowed fast and suggest piece sets (BEP 6)"
         />
       </SectionCard>
@@ -102,19 +102,19 @@ export function ProtocolsTab() {
         <Toggle
           label="uTP Protocol"
           checked={form.utpEnabled}
-          onChange={(v) => set("utpEnabled", v)}
+          onChange={(v) => { set("utpEnabled", v); }}
           hint="Micro Transport Protocol LEDBAT congestion control (BEP 29)"
         />
         <Toggle
           label="TCP Fallback"
           checked={form.tcpFallback}
-          onChange={(v) => set("tcpFallback", v)}
+          onChange={(v) => { set("tcpFallback", v); }}
           hint="Automatically fallback to standard TCP if uTP connection fails"
         />
         <NumberInput
           label="Connection Timeout"
           value={form.transportConnectionTimeoutSeconds}
-          onChange={(v) => set("transportConnectionTimeoutSeconds", v)}
+          onChange={(v) => { set("transportConnectionTimeoutSeconds", v); }}
           min={1}
           suffix="seconds"
           hint="Transport connection handshake timeout"
@@ -128,7 +128,7 @@ export function ProtocolsTab() {
         <NumberInput
           label="PEX Interval"
           value={form.pexInterval}
-          onChange={(v) => set("pexInterval", v)}
+          onChange={(v) => { set("pexInterval", v); }}
           min={10}
           suffix="seconds"
           hint="Interval between outgoing PEX update messages"
@@ -136,7 +136,7 @@ export function ProtocolsTab() {
         <NumberInput
           label="Max Peers Per Message"
           value={form.pexMaxPeersPerMessage}
-          onChange={(v) => set("pexMaxPeersPerMessage", v)}
+          onChange={(v) => { set("pexMaxPeersPerMessage", v); }}
           min={1}
           hint="Maximum added/dropped peer entries per PEX message"
         />
@@ -149,38 +149,38 @@ export function ProtocolsTab() {
         <Toggle
           label="Multi-Tracker Enabled"
           checked={form.multiTrackerEnabled}
-          onChange={(v) => set("multiTrackerEnabled", v)}
+          onChange={(v) => { set("multiTrackerEnabled", v); }}
           hint="Enable multi-tracker tiered announce management (BEP 12)"
         />
         <Toggle
           label="Failover Enabled"
           checked={form.multiTrackerFailoverEnabled}
-          onChange={(v) => set("multiTrackerFailoverEnabled", v)}
+          onChange={(v) => { set("multiTrackerFailoverEnabled", v); }}
           hint="Automatically failover to secondary tracker tiers upon timeout"
         />
         <Toggle
           label="Announce to All Tiers"
           checked={form.announceToAllTiers}
-          onChange={(v) => set("announceToAllTiers", v)}
+          onChange={(v) => { set("announceToAllTiers", v); }}
           hint="Broadcast announces across all tiers simultaneously"
         />
         <Toggle
           label="Announce to All in Tier"
           checked={form.announceToAllInTier}
-          onChange={(v) => set("announceToAllInTier", v)}
+          onChange={(v) => { set("announceToAllInTier", v); }}
           hint="Announce to every tracker in the active tier"
         />
         <NumberInput
           label="Max Consecutive Failures"
           value={form.failoverMaxConsecutiveFailures}
-          onChange={(v) => set("failoverMaxConsecutiveFailures", v)}
+          onChange={(v) => { set("failoverMaxConsecutiveFailures", v); }}
           min={1}
           hint="Failures before tier is marked unhealthy"
         />
         <NumberInput
           label="Backoff Base"
           value={form.failoverBackoffBaseSeconds}
-          onChange={(v) => set("failoverBackoffBaseSeconds", v)}
+          onChange={(v) => { set("failoverBackoffBaseSeconds", v); }}
           min={1}
           suffix="seconds"
           hint="Base exponential backoff time"
@@ -188,7 +188,7 @@ export function ProtocolsTab() {
         <NumberInput
           label="Max Backoff"
           value={form.failoverMaxBackoffSeconds}
-          onChange={(v) => set("failoverMaxBackoffSeconds", v)}
+          onChange={(v) => { set("failoverMaxBackoffSeconds", v); }}
           min={1}
           suffix="seconds"
           hint="Maximum retry backoff cap"
@@ -202,33 +202,33 @@ export function ProtocolsTab() {
         <Toggle
           label="Auto Bootstrap"
           checked={form.dhtAutoBootstrap}
-          onChange={(v) => set("dhtAutoBootstrap", v)}
+          onChange={(v) => { set("dhtAutoBootstrap", v); }}
           hint="Automatically bootstrap from standard router nodes (router.bittorrent.com, etc.)"
         />
         <Toggle
           label="Rate Limiting"
           checked={form.dhtRateLimitEnabled}
-          onChange={(v) => set("dhtRateLimitEnabled", v)}
+          onChange={(v) => { set("dhtRateLimitEnabled", v); }}
           hint="Throttle outgoing DHT query packets to avoid ISP flood detection"
         />
         <NumberInput
           label="Max Queries/sec"
           value={form.dhtMaxQueriesPerSecond}
-          onChange={(v) => set("dhtMaxQueriesPerSecond", v)}
+          onChange={(v) => { set("dhtMaxQueriesPerSecond", v); }}
           min={1}
           disabled={!form.dhtRateLimitEnabled}
         />
         <NumberInput
           label="Routing Table Size"
           value={form.dhtRoutingTableSize}
-          onChange={(v) => set("dhtRoutingTableSize", v)}
+          onChange={(v) => { set("dhtRoutingTableSize", v); }}
           min={1}
           hint="Target Kademlia routing table node capacity"
         />
         <NumberInput
           label="Announcement Interval"
           value={form.dhtAnnouncementInterval}
-          onChange={(v) => set("dhtAnnouncementInterval", v)}
+          onChange={(v) => { set("dhtAnnouncementInterval", v); }}
           min={60}
           suffix="seconds"
           hint="Frequency to announce infohashes on the DHT"
@@ -236,33 +236,33 @@ export function ProtocolsTab() {
         <NumberInput
           label="Bootstrap Timeout"
           value={form.dhtBootstrapTimeout}
-          onChange={(v) => set("dhtBootstrapTimeout", v)}
+          onChange={(v) => { set("dhtBootstrapTimeout", v); }}
           min={1}
           suffix="seconds"
         />
         <NumberInput
           label="Query Timeout"
           value={form.dhtQueryTimeout}
-          onChange={(v) => set("dhtQueryTimeout", v)}
+          onChange={(v) => { set("dhtQueryTimeout", v); }}
           min={1}
           suffix="seconds"
         />
         <NumberInput
           label="Max Nodes"
           value={form.dhtMaxNodes}
-          onChange={(v) => set("dhtMaxNodes", v)}
+          onChange={(v) => { set("dhtMaxNodes", v); }}
           min={1}
         />
         <NumberInput
           label="Bucket Size (K)"
           value={form.dhtBucketSize}
-          onChange={(v) => set("dhtBucketSize", v)}
+          onChange={(v) => { set("dhtBucketSize", v); }}
           min={1}
         />
         <NumberInput
           label="Concurrent Queries"
           value={form.dhtConcurrentQueries}
-          onChange={(v) => set("dhtConcurrentQueries", v)}
+          onChange={(v) => { set("dhtConcurrentQueries", v); }}
           min={1}
         />
       </SectionCard>

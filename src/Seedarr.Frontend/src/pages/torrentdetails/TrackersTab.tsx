@@ -148,7 +148,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
     const interval = setInterval(() => {
       setCurrentTime(Date.now());
     }, 1000);
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); };
   }, [hasActiveCountdown]);
 
   const attachedUrls = useMemo(() => {
@@ -527,7 +527,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                             padding: "0.2rem 0.5rem",
                             fontSize: "0.75rem",
                           }}
-                          onClick={() => handleDeleteTracker(tracker.id)}
+                          onClick={() => { handleDeleteTracker(tracker.id); }}
                           disabled={deleteTracker.isPending}
                           title="Remove tracker from torrent and reannounce"
                         >
@@ -597,7 +597,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
               justifyContent: "space-between",
               cursor: "pointer",
             }}
-            onClick={() => setShowPickerModal(true)}
+            onClick={() => { setShowPickerModal(true); }}
             title="Open tracker picker to select, search, and filter trackers"
           >
             <span
@@ -627,7 +627,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
 
           <button
             className="btn btn-sm btn-primary"
-            onClick={handleAddAndAnnounceSelected}
+            onClick={(...args: Parameters<typeof handleAddAndAnnounceSelected>) => { void handleAddAndAnnounceSelected(...args); }}
             disabled={
               isAddingBatch ||
               selectedUrls.size === 0 ||
@@ -648,13 +648,13 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
       {!torrent.isPrivate && (
         <TrackerMultiSelectModal
           isOpen={showPickerModal}
-          onClose={() => setShowPickerModal(false)}
+          onClose={() => { setShowPickerModal(false); }}
           trackers={pickerTrackers}
           selectedUrls={selectedUrls}
           onToggleUrl={handleToggleUrl}
           onSelectBatch={handleSelectBatch}
           onClearSelection={handleClearSelection}
-          onAddAndAnnounce={handleAddAndAnnounceSelected}
+          onAddAndAnnounce={(...args: Parameters<typeof handleAddAndAnnounceSelected>) => { void handleAddAndAnnounceSelected(...args); }}
           isAdding={isAddingBatch}
         />
       )}

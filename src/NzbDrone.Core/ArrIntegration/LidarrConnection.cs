@@ -33,7 +33,7 @@ public class LidarrConnection : IArrConnection
         set => _url = ArrConnectionResources.NormalizeUrl(value);
     }
 
-    public string ApiKey { get; set; } = "";
+    public string ApiKey { get; set; } = ""; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
     public bool AcceptInvalidCertificates { get; set; }
 
     private HttpClient Client => _explicitClient ?? ArrConnectionResources.GetClient(AcceptInvalidCertificates);

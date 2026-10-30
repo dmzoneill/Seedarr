@@ -126,14 +126,14 @@ function TorrentDetails() {
           {isSeeding ? (
             <button
               className="btn btn-danger"
-              onClick={() => stopSeeding.mutate(torrent.id)}
+              onClick={() => { stopSeeding.mutate(torrent.id); }}
             >
               Stop Seeding
             </button>
           ) : (
             <button
               className="btn btn-success"
-              onClick={() => startSeeding.mutate(torrent.id)}
+              onClick={() => { startSeeding.mutate(torrent.id); }}
             >
               Start Seeding
             </button>
@@ -155,7 +155,7 @@ function TorrentDetails() {
           <button
             key={tab.key}
             className={`tab-btn${activeTab === tab.key ? " tab-btn-active" : ""}`}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => { setActiveTab(tab.key); }}
           >
             {tab.label}
           </button>

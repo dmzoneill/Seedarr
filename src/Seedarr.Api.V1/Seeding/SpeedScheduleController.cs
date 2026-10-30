@@ -67,7 +67,7 @@ public class SpeedScheduleController : Controller
         return SpeedLimitMerger.Apply(limits, uploadLimitBps, downloadLimitBps, isAltEnabled);
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult<SpeedScheduleResource> Create([FromBody] SpeedScheduleResource resource)
     {

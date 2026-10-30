@@ -141,7 +141,7 @@ interface MockDocument {
   dispatchEvent: (event: unknown) => void;
 }
 
-describe("FocusTrap / useFocusTrap", () => {
+void describe("FocusTrap / useFocusTrap", () => {
   let originalDocument: unknown;
   let mockDocument: MockDocument;
   let documentListeners: Map<string, Set<(e: unknown) => void>>;
@@ -183,8 +183,8 @@ describe("FocusTrap / useFocusTrap", () => {
     (globalThis as unknown as { document?: unknown }).document = originalDocument;
   });
 
-  describe("Focusable Element Queries & Visibility", () => {
-    it("identifies standard focusable selectors and filters disabled/hidden elements", () => {
+  void describe("Focusable Element Queries & Visibility", () => {
+    void it("identifies standard focusable selectors and filters disabled/hidden elements", () => {
       const container = new MockElement("div", "container");
       const btn1 = new MockElement("button", "btn1");
       const disabledBtn = new MockElement("button", "disabledBtn");
@@ -215,7 +215,7 @@ describe("FocusTrap / useFocusTrap", () => {
       assert.deepEqual(ids, ["btn1", "link", "visibleInput", "positiveTabDiv"]);
     });
 
-    it("evaluates isElementVisible and isElementConnected helpers", () => {
+    void it("evaluates isElementVisible and isElementConnected helpers", () => {
       const el = new MockElement("div");
       assert.equal(isElementVisible(el as unknown as HTMLElement), true);
 
@@ -242,8 +242,8 @@ describe("FocusTrap / useFocusTrap", () => {
     });
   });
 
-  describe("Initial Focus Placement", () => {
-    it("focuses initialFocusElement when specified and connected", () => {
+  void describe("Initial Focus Placement", () => {
+    void it("focuses initialFocusElement when specified and connected", () => {
       const container = new MockElement("div", "container");
       const btn1 = new MockElement("button", "btn1");
       const input2 = new MockElement("input", "input2");
@@ -264,7 +264,7 @@ describe("FocusTrap / useFocusTrap", () => {
       trap.deactivate();
     });
 
-    it("focuses first focusable element when initialFocusElement is not specified", () => {
+    void it("focuses first focusable element when initialFocusElement is not specified", () => {
       const container = new MockElement("div", "container");
       const btn1 = new MockElement("button", "btn1");
       const btn2 = new MockElement("button", "btn2");
@@ -284,7 +284,7 @@ describe("FocusTrap / useFocusTrap", () => {
       trap.deactivate();
     });
 
-    it("focuses container itself and adds tabindex=-1 when no focusable elements exist", () => {
+    void it("focuses container itself and adds tabindex=-1 when no focusable elements exist", () => {
       const container = new MockElement("div", "container");
       const text = new MockElement("span", "text");
       container.appendChild(text);
@@ -303,8 +303,8 @@ describe("FocusTrap / useFocusTrap", () => {
     });
   });
 
-  describe("Focus Restoration", () => {
-    it("restores focus to previousActiveElement upon deactivation", () => {
+  void describe("Focus Restoration", () => {
+    void it("restores focus to previousActiveElement upon deactivation", () => {
       const triggerBtn = new MockElement("button", "triggerBtn");
       rootBody.appendChild(triggerBtn);
       triggerBtn.focus();
@@ -328,7 +328,7 @@ describe("FocusTrap / useFocusTrap", () => {
       assert.equal(triggerBtn.focusCalls, 2); // Initial focus + restored focus
     });
 
-    it("does not restore focus if disableRestoreFocus is true", () => {
+    void it("does not restore focus if disableRestoreFocus is true", () => {
       const triggerBtn = new MockElement("button", "triggerBtn");
       rootBody.appendChild(triggerBtn);
       triggerBtn.focus();
@@ -351,7 +351,7 @@ describe("FocusTrap / useFocusTrap", () => {
       assert.equal(triggerBtn.focusCalls, 1);
     });
 
-    it("skips focus restoration if previousActiveElement is disconnected", () => {
+    void it("skips focus restoration if previousActiveElement is disconnected", () => {
       const triggerBtn = new MockElement("button", "triggerBtn");
       rootBody.appendChild(triggerBtn);
       triggerBtn.focus();
@@ -373,8 +373,8 @@ describe("FocusTrap / useFocusTrap", () => {
     });
   });
 
-  describe("Keyboard Focus Trap Cycle & Escape Handling", () => {
-    it("wraps around from last to first element on Tab keydown", () => {
+  void describe("Keyboard Focus Trap Cycle & Escape Handling", () => {
+    void it("wraps around from last to first element on Tab keydown", () => {
       const container = new MockElement("div", "container");
       const btn1 = new MockElement("button", "btn1");
       const btn2 = new MockElement("button", "btn2");
@@ -402,7 +402,7 @@ describe("FocusTrap / useFocusTrap", () => {
       trap.deactivate();
     });
 
-    it("wraps around from first to last element on Shift+Tab keydown", () => {
+    void it("wraps around from first to last element on Shift+Tab keydown", () => {
       const container = new MockElement("div", "container");
       const btn1 = new MockElement("button", "btn1");
       const btn2 = new MockElement("button", "btn2");
@@ -430,7 +430,7 @@ describe("FocusTrap / useFocusTrap", () => {
       trap.deactivate();
     });
 
-    it("reclaims focus into modal if activeElement is outside container on Tab", () => {
+    void it("reclaims focus into modal if activeElement is outside container on Tab", () => {
       const outsideBtn = new MockElement("button", "outsideBtn");
       rootBody.appendChild(outsideBtn);
 
@@ -468,7 +468,7 @@ describe("FocusTrap / useFocusTrap", () => {
       trap.deactivate();
     });
 
-    it("allows default browser tab behavior when navigating between intermediate elements", () => {
+    void it("allows default browser tab behavior when navigating between intermediate elements", () => {
       const container = new MockElement("div", "container");
       const btn1 = new MockElement("button", "btn1");
       const btn2 = new MockElement("button", "btn2");
@@ -497,7 +497,7 @@ describe("FocusTrap / useFocusTrap", () => {
       trap.deactivate();
     });
 
-    it("invokes onEscape and prevents default when Escape is pressed", () => {
+    void it("invokes onEscape and prevents default when Escape is pressed", () => {
       const container = new MockElement("div", "container");
       const btn1 = new MockElement("button", "btn1");
       container.appendChild(btn1);
@@ -521,7 +521,7 @@ describe("FocusTrap / useFocusTrap", () => {
       trap.deactivate();
     });
 
-    it("handles keydown dispatched through mockDocument listener", () => {
+    void it("handles keydown dispatched through mockDocument listener", () => {
       const container = new MockElement("div", "container");
       const btn1 = new MockElement("button", "btn1");
       const btn2 = new MockElement("button", "btn2");

@@ -86,10 +86,10 @@ function FileTreeRow({
       <tr
         className="torrent-table-row"
         style={{ cursor: node.isDir ? "pointer" : "default" }}
-        onClick={() => node.isDir && onToggle(node.path)}
+        onClick={() => { if (node.isDir) onToggle(node.path); }}
       >
         <td
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); }}
           style={{ width: 60, textAlign: "center" }}
         >
           {node.isDir ? (
@@ -102,7 +102,7 @@ function FileTreeRow({
                   el.indeterminate = dirWanted.isIndeterminate;
                 }
               }}
-              onChange={(e) => onDirectoryWanted(node, e.target.checked)}
+              onChange={(e) => { onDirectoryWanted(node, e.target.checked); }}
               style={{ cursor: "pointer" }}
             />
           ) : (
@@ -141,7 +141,7 @@ function FileTreeRow({
                 className="form-control"
                 aria-label={`Rename ${node.name}`}
                 value={editingValue}
-                onChange={(e) => onChangeRenameValue(e.target.value)}
+                onChange={(e) => { onChangeRenameValue(e.target.value); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     onSaveRename(node.path, editingValue);
@@ -163,7 +163,7 @@ function FileTreeRow({
                 aria-label="Save rename"
                 title="Save rename"
                 disabled={isRenaming || !editingValue.trim()}
-                onClick={() => onSaveRename(node.path, editingValue)}
+                onClick={() => { onSaveRename(node.path, editingValue); }}
                 style={{
                   padding: "0.15rem 0.45rem",
                   fontSize: "0.75rem",
@@ -284,8 +284,7 @@ function FileTreeRow({
                   cursor: "pointer",
                 }}
                 value={dirPriority}
-                onChange={(e) =>
-                  onDirectoryPriority(node, e.target.value as FilePriority)
+                onChange={(e) => { onDirectoryPriority(node, e.target.value as FilePriority); }
                 }
               >
                 <option value="Normal">Normal</option>
@@ -323,7 +322,7 @@ function FileTreeRow({
         </td>
         <td
           style={{ textAlign: "center" }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); }}
         >
           <div
             style={{
@@ -339,13 +338,12 @@ function FileTreeRow({
                 className="btn btn-xs btn-primary"
                 aria-label={`Stream ${node.name}`}
                 title={`Stream / Play ${node.name}`}
-                onClick={() =>
-                  onPlayMedia({
+                onClick={() => { onPlayMedia({
                     id: node.fileId ?? 0,
                     path: node.path,
                     name: node.name,
                     size: node.size,
-                  })
+                  }); }
                 }
                 style={{
                   display: "inline-flex",
@@ -365,7 +363,7 @@ function FileTreeRow({
                 className="btn btn-xs btn-default"
                 aria-label={`Rename ${node.name}`}
                 title={`Rename ${node.name}`}
-                onClick={() => onStartRename(node.path, node.name)}
+                onClick={() => { onStartRename(node.path, node.name); }}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -631,7 +629,7 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
             </button>
             <button
               className="btn btn-sm btn-default"
-              onClick={() => setExpanded(new Set())}
+              onClick={() => { setExpanded(new Set()); }}
             >
               Collapse All
             </button>
@@ -722,7 +720,7 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
       {selectedMediaFile && (
         <MediaPlayerModal
           isOpen={Boolean(selectedMediaFile)}
-          onClose={() => setSelectedMediaFile(null)}
+          onClose={() => { setSelectedMediaFile(null); }}
           torrent={torrent}
           file={selectedMediaFile}
         />

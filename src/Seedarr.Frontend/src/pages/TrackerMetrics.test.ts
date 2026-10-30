@@ -18,8 +18,8 @@ function createTrafficPoint(
   };
 }
 
-describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
-  it("generates points for upload, download, and announces sharing correct scales", () => {
+void describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
+  void it("generates points for upload, download, and announces sharing correct scales", () => {
     const data: HourlyTrafficPoint[] = [
       createTrafficPoint({ uploaded: 100, downloaded: 200, announces: 5 }),
       createTrafficPoint({ uploaded: 400, downloaded: 100, announces: 15 }),
@@ -65,7 +65,7 @@ describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
     assert.equal(peakAnnounceY, padding);
   });
 
-  it("sanitizes coordinates against NaN, null, and undefined values", () => {
+  void it("sanitizes coordinates against NaN, null, and undefined values", () => {
     const badData = [
       createTrafficPoint({
         uploaded: NaN,
@@ -119,7 +119,7 @@ describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
     }
   });
 
-  it("handles a single data point without division by zero", () => {
+  void it("handles a single data point without division by zero", () => {
     const single = [
       createTrafficPoint({ uploaded: 1000, downloaded: 2000, announces: 10 }),
     ];
@@ -137,7 +137,7 @@ describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
     assert.ok(Number.isFinite(downY));
   });
 
-  it("handles empty data gracefully", () => {
+  void it("handles empty data gracefully", () => {
     const result = calculateHourlyActivityPoints([], 600, 160, 20);
     assert.equal(result.maxTraffic, 1);
     assert.equal(result.maxAnnounce, 1);
@@ -146,7 +146,7 @@ describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
     assert.equal(result.pointsAnnounce, "");
   });
 
-  it("computes summary max upload and swarm bar percentages correctly", () => {
+  void it("computes summary max upload and swarm bar percentages correctly", () => {
     const topUploadTrackers = [
       { totalUploaded: 500_000_000 },
       { totalUploaded: 250_000_000 },
@@ -168,7 +168,7 @@ describe("TrackerMetrics: calculateHourlyActivityPoints", () => {
     assert.equal(pcts[2], 0);
   });
 
-  it("handles empty top upload trackers without exploding percentages", () => {
+  void it("handles empty top upload trackers without exploding percentages", () => {
     const emptyTrackers: { totalUploaded: number }[] = [];
     const summaryMaxUpload = Math.max(
       ...emptyTrackers.map((t) => t.totalUploaded || 0),

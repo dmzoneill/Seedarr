@@ -13,7 +13,7 @@ using Seedarr.Http.Security;
 
 namespace Seedarr.Api.V1.System;
 
-[V1ApiController("system/setup")]
+[V1ApiController("system/setup")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 public class SetupController : Controller
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();

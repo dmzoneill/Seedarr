@@ -66,12 +66,11 @@ export function TrackerMetrics() {
       )
     ) {
       resetMetric.mutate(metric.id, {
-        onSuccess: () =>
-          showToast(
+        onSuccess: () => { showToast(
             `Reset stats for ${metric.domain || metric.host}`,
             "success",
-          ),
-        onError: (err) => showToast(`Failed to reset: ${err.message}`, "error"),
+          ); },
+        onError: (err) => { showToast(`Failed to reset: ${err.message}`, "error"); },
       });
     }
   };
@@ -85,8 +84,7 @@ export function TrackerMetrics() {
           showToast(`Deleted ${metric.domain || metric.host}`, "success");
           if (selectedMetric?.id === metric.id) setSelectedMetric(null);
         },
-        onError: (err) =>
-          showToast(`Failed to delete: ${err.message}`, "error"),
+        onError: (err) => { showToast(`Failed to delete: ${err.message}`, "error"); },
       });
     }
   };
@@ -248,7 +246,7 @@ export function TrackerMetrics() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <button
             className={`btn btn-sm ${isLive ? "btn-outline" : "btn-primary"}`}
-            onClick={() => setIsLive(!isLive)}
+            onClick={() => { setIsLive(!isLive); }}
             title={isLive ? "Pause auto-updates" : "Resume live telemetry"}
           >
             {isLive ? "⏸ Pause" : "▶ Resume"}
@@ -773,7 +771,7 @@ export function TrackerMetrics() {
               className="form-control"
               placeholder="Search tracker domains, URLs, hosts..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); }}
               style={{
                 width: "100%",
                 padding: "0.35rem 0.65rem",
@@ -805,7 +803,7 @@ export function TrackerMetrics() {
                     key={p}
                     className={`btn btn-xs ${protocolFilter === p ? "btn-primary" : "btn-outline"}`}
                     style={{ fontSize: "0.72rem", padding: "0.18rem 0.45rem" }}
-                    onClick={() => setProtocolFilter(p)}
+                    onClick={() => { setProtocolFilter(p); }}
                   >
                     {p}
                   </button>
@@ -827,7 +825,7 @@ export function TrackerMetrics() {
                   key={s}
                   className={`btn btn-xs ${statusFilter === s ? "btn-primary" : "btn-outline"}`}
                   style={{ fontSize: "0.72rem", padding: "0.18rem 0.45rem" }}
-                  onClick={() => setStatusFilter(s)}
+                  onClick={() => { setStatusFilter(s); }}
                 >
                   {s}
                 </button>
@@ -1061,7 +1059,7 @@ export function TrackerMetrics() {
                         cursor: "pointer",
                         borderBottom: "1px solid var(--border-light)",
                       }}
-                      onClick={() => setSelectedMetric(m)}
+                      onClick={() => { setSelectedMetric(m); }}
                     >
                       {/* Domain / URL */}
                       <td style={{ padding: "0.45rem 0.65rem" }}>
@@ -1280,12 +1278,12 @@ export function TrackerMetrics() {
                           textAlign: "right",
                           padding: "0.45rem 0.65rem",
                         }}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); }}
                       >
                         <div style={{ display: "inline-flex", gap: "0.3rem" }}>
                           <button
                             className="btn btn-outline btn-xs"
-                            onClick={() => setSelectedMetric(m)}
+                            onClick={() => { setSelectedMetric(m); }}
                             title="Inspect tracker history"
                             style={{
                               fontSize: "0.72rem",
@@ -1296,7 +1294,7 @@ export function TrackerMetrics() {
                           </button>
                           <button
                             className="btn btn-outline btn-xs"
-                            onClick={() => handleReset(m)}
+                            onClick={() => { handleReset(m); }}
                             title="Reset statistics"
                             style={{
                               fontSize: "0.72rem",
@@ -1307,7 +1305,7 @@ export function TrackerMetrics() {
                           </button>
                           <button
                             className="btn btn-danger btn-xs"
-                            onClick={() => handleDelete(m)}
+                            onClick={() => { handleDelete(m); }}
                             title="Delete tracker metric"
                             style={{
                               fontSize: "0.72rem",
@@ -1331,8 +1329,8 @@ export function TrackerMetrics() {
       {selectedMetric && (
         <TrackerMetricDetailModal
           metric={selectedMetric}
-          onClose={() => setSelectedMetric(null)}
-          onReset={() => handleReset(selectedMetric)}
+          onClose={() => { setSelectedMetric(null); }}
+          onReset={() => { handleReset(selectedMetric); }}
         />
       )}
     </div>
@@ -1633,7 +1631,7 @@ function TrackerMetricDetailModal({
         className="card"
         role="button"
         tabIndex={0}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();

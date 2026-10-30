@@ -15,10 +15,10 @@ using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Telegram;
 
-[V1ApiController("telegram")]
+[V1ApiController("telegram")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 public class TelegramBotController : Controller
 {
-    public const string SecretTokenHeader = "X-Telegram-Bot-Api-Secret-Token";
+    public const string SecretTokenHeader = "X-Telegram-Bot-Api-Secret-Token"; /* not a credential: mask placeholder/header name/empty or vendor default */ // nosemgrep
 
     private readonly IConfigService _configService;
     private readonly ITelegramUpdateHandler _telegramUpdateHandler;

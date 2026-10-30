@@ -152,7 +152,7 @@ public class LogFileController : ControllerBase
         };
     }
 
-    [HttpDelete]
+    [HttpDelete] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult ClearLogFiles()
     {

@@ -112,8 +112,7 @@ export function CommandPalette({
     };
 
     window.addEventListener("keydown", handleGlobalKeyDown, true);
-    return () =>
-      window.removeEventListener("keydown", handleGlobalKeyDown, true);
+    return () => { window.removeEventListener("keydown", handleGlobalKeyDown, true); };
   }, [isOpen, onClose]);
 
   const items = useMemo<CommandItem[]>(() => {
@@ -303,9 +302,8 @@ export function CommandPalette({
       onSelect: () => {
         onClose();
         stopAll.mutate(undefined, {
-          onSuccess: () =>
-            showToast("All torrents and seeding swarms paused", "info"),
-          onError: (err) => showToast(`Pause failed: ${err.message}`, "error"),
+          onSuccess: () => { showToast("All torrents and seeding swarms paused", "info"); },
+          onError: (err) => { showToast(`Pause failed: ${err.message}`, "error"); },
         });
       },
     });
@@ -319,9 +317,8 @@ export function CommandPalette({
       onSelect: () => {
         onClose();
         startAll.mutate(undefined, {
-          onSuccess: () =>
-            showToast("All torrents and seeding swarms resumed", "success"),
-          onError: (err) => showToast(`Resume failed: ${err.message}`, "error"),
+          onSuccess: () => { showToast("All torrents and seeding swarms resumed", "success"); },
+          onError: (err) => { showToast(`Resume failed: ${err.message}`, "error"); },
         });
       },
     });
@@ -346,13 +343,11 @@ export function CommandPalette({
             alternativeSpeedEnabled: nextState,
           },
           {
-            onSuccess: () =>
-              showToast(
+            onSuccess: () => { showToast(
                 `Turtle mode ${nextState ? "enabled" : "disabled"}`,
                 "info",
-              ),
-            onError: (err) =>
-              showToast(`Turtle mode toggle failed: ${err.message}`, "error"),
+              ); },
+            onError: (err) => { showToast(`Turtle mode toggle failed: ${err.message}`, "error"); },
           },
         );
       },
@@ -382,7 +377,7 @@ export function CommandPalette({
               "success",
             );
           },
-          onError: (err) => showToast(`Boost failed: ${err.message}`, "error"),
+          onError: (err) => { showToast(`Boost failed: ${err.message}`, "error"); },
         });
       },
     });
@@ -397,13 +392,11 @@ export function CommandPalette({
       onSelect: () => {
         onClose();
         harvestSwarm.mutate(undefined, {
-          onSuccess: (res) =>
-            showToast(
+          onSuccess: (res) => { showToast(
               `Harvested ${res.harvestedCount ?? 0} new tracker endpoints!`,
               "success",
-            ),
-          onError: (err) =>
-            showToast(`Harvest failed: ${err.message}`, "error"),
+            ); },
+          onError: (err) => { showToast(`Harvest failed: ${err.message}`, "error"); },
         });
       },
     });
@@ -418,12 +411,11 @@ export function CommandPalette({
       onSelect: () => {
         onClose();
         syncProwlarr.mutate(undefined, {
-          onSuccess: (res) =>
-            showToast(
+          onSuccess: (res) => { showToast(
               `Synced ${res.harvestedCount ?? 0} trackers from Prowlarr!`,
               "success",
-            ),
-          onError: (err) => showToast(`Sync failed: ${err.message}`, "error"),
+            ); },
+          onError: (err) => { showToast(`Sync failed: ${err.message}`, "error"); },
         });
       },
     });
@@ -438,9 +430,8 @@ export function CommandPalette({
       onSelect: () => {
         onClose();
         scanTrackers.mutate(undefined, {
-          onSuccess: (res) =>
-            showToast(`Probed ${res.testedCount ?? 0} trackers!`, "success"),
-          onError: (err) => showToast(`Probe failed: ${err.message}`, "error"),
+          onSuccess: (res) => { showToast(`Probed ${res.testedCount ?? 0} trackers!`, "success"); },
+          onError: (err) => { showToast(`Probe failed: ${err.message}`, "error"); },
         });
       },
     });
@@ -686,7 +677,7 @@ export function CommandPalette({
           border: "1px solid var(--border-light)",
           boxShadow: "0 16px 48px rgba(0, 0, 0, 0.6)",
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); }}
         onKeyDown={handleKeyDown}
       >
         {/* Search header */}
@@ -712,7 +703,7 @@ export function CommandPalette({
             aria-controls="command-palette-results"
             aria-autocomplete="list"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); }}
             style={{
               border: "none",
               backgroundColor: "transparent",

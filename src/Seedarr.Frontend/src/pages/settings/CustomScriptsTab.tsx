@@ -86,12 +86,12 @@ export function CustomScriptsTab() {
 
   const testModalTrapRef = useFocusTrap<HTMLDivElement>({
     isOpen: Boolean(testModalData),
-    onEscape: () => setTestModalData(null),
+    onEscape: () => { setTestModalData(null); },
   });
   useModalRegistration({
     id: "custom-scripts-test-modal",
     isOpen: Boolean(testModalData),
-    onClose: () => setTestModalData(null),
+    onClose: () => { setTestModalData(null); },
     modalRef: testModalTrapRef,
   });
 
@@ -116,7 +116,7 @@ export function CustomScriptsTab() {
         customScriptTimeoutSeconds: form.customScriptTimeoutSeconds,
       },
       {
-        onSuccess: () => setDirty(false),
+        onSuccess: () => { setDirty(false); },
       },
     );
   };
@@ -171,8 +171,7 @@ export function CustomScriptsTab() {
         type="button"
         className="btn btn-outline btn-small"
         disabled={!scriptPath || !scriptPath.trim() || testMutation.isPending}
-        onClick={() =>
-          handleTestScript(scriptPath, eventType, scriptTitle, key)
+        onClick={() => { handleTestScript(scriptPath, eventType, scriptTitle, key); }
         }
         style={{ whiteSpace: "nowrap" }}
         title={
@@ -215,7 +214,7 @@ export function CustomScriptsTab() {
           <TextInput
             label="On Download Complete Script"
             value={form.onDownloadCompleteScript}
-            onChange={(v) => update("onDownloadCompleteScript", v)}
+            onChange={(v) => { update("onDownloadCompleteScript", v); }}
             placeholder="/usr/local/bin/on-download-complete.sh"
             hint="Absolute path to script executed when a torrent finishes downloading and enters seeding"
             rightElement={renderTestButton(
@@ -229,7 +228,7 @@ export function CustomScriptsTab() {
           <TextInput
             label="On Seed Goal Reached Script"
             value={form.onSeedGoalReachedScript}
-            onChange={(v) => update("onSeedGoalReachedScript", v)}
+            onChange={(v) => { update("onSeedGoalReachedScript", v); }}
             placeholder="/usr/local/bin/on-seed-goal.py"
             hint="Absolute path to script executed when a torrent reaches its target ratio or seeding time"
             rightElement={renderTestButton(
@@ -243,7 +242,7 @@ export function CustomScriptsTab() {
           <NumberInput
             label="Script Execution Timeout"
             value={form.customScriptTimeoutSeconds}
-            onChange={(v) => update("customScriptTimeoutSeconds", v)}
+            onChange={(v) => { update("customScriptTimeoutSeconds", v); }}
             min={5}
             max={3600}
             suffix="seconds"
@@ -299,7 +298,7 @@ export function CustomScriptsTab() {
           <TextInput
             label="Script Torrent Done Filename"
             value={form.scriptTorrentDoneFilename}
-            onChange={(v) => update("scriptTorrentDoneFilename", v)}
+            onChange={(v) => { update("scriptTorrentDoneFilename", v); }}
             placeholder="/usr/local/bin/transmission-done.sh"
             hint="Script run when torrent finishes downloading (TR_TORRENT_DIR, TR_TORRENT_NAME exported)"
             rightElement={renderTestButton(
@@ -313,7 +312,7 @@ export function CustomScriptsTab() {
           <TextInput
             label="Script Torrent Added Filename"
             value={form.scriptTorrentAddedFilename}
-            onChange={(v) => update("scriptTorrentAddedFilename", v)}
+            onChange={(v) => { update("scriptTorrentAddedFilename", v); }}
             placeholder="/usr/local/bin/transmission-added.sh"
             hint="Script run when a new torrent is added"
             rightElement={renderTestButton(
@@ -327,7 +326,7 @@ export function CustomScriptsTab() {
           <TextInput
             label="Script Torrent Done Seeding Filename"
             value={form.scriptTorrentDoneSeedingFilename}
-            onChange={(v) => update("scriptTorrentDoneSeedingFilename", v)}
+            onChange={(v) => { update("scriptTorrentDoneSeedingFilename", v); }}
             placeholder="/usr/local/bin/transmission-done-seeding.sh"
             hint="Script run when torrent meets seeding goal or finishes seeding"
             rightElement={renderTestButton(
@@ -343,7 +342,7 @@ export function CustomScriptsTab() {
       {testModalData && (
         <div
           className="modal-overlay"
-          onClick={() => setTestModalData(null)}
+          onClick={() => { setTestModalData(null); }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="script-test-modal-title"
@@ -367,7 +366,7 @@ export function CustomScriptsTab() {
             role="button"
             tabIndex={0}
             className="modal"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -420,7 +419,7 @@ export function CustomScriptsTab() {
               </div>
               <button
                 type="button"
-                onClick={() => setTestModalData(null)}
+                onClick={() => { setTestModalData(null); }}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -645,7 +644,7 @@ export function CustomScriptsTab() {
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => setTestModalData(null)}
+                onClick={() => { setTestModalData(null); }}
               >
                 Close
               </button>

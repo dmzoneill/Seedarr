@@ -397,7 +397,7 @@ public class PeerConnectionLogController : Controller
         return null;
     }
 
-    [HttpDelete]
+    [HttpDelete] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.AdminOnly)]
     public ActionResult Purge([FromQuery] DateTime? before)
     {

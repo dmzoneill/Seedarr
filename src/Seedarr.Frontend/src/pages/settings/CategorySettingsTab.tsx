@@ -142,12 +142,12 @@ export function CategorySettingsTab({
 
   const editingCategoryTrapRef = useFocusTrap<HTMLDivElement>({
     isOpen: Boolean(editingCategory),
-    onEscape: () => setEditingCategory(null),
+    onEscape: () => { setEditingCategory(null); },
   });
   useModalRegistration({
     id: "category-edit-modal",
     isOpen: Boolean(editingCategory),
-    onClose: () => setEditingCategory(null),
+    onClose: () => { setEditingCategory(null); },
     modalRef: editingCategoryTrapRef,
   });
 
@@ -551,7 +551,7 @@ export function CategorySettingsTab({
                           <button
                             type="button"
                             className="btn btn-outline btn-small"
-                            onClick={() => handleOpenEdit(cat)}
+                            onClick={() => { handleOpenEdit(cat); }}
                             title={`Edit ${cat.name}`}
                             style={{
                               padding: "0.2rem 0.5rem",
@@ -563,7 +563,7 @@ export function CategorySettingsTab({
                           <button
                             type="button"
                             className="btn btn-danger btn-small"
-                            onClick={() => handleDelete(cat)}
+                            onClick={() => { handleDelete(cat); }}
                             disabled={deleteMutation.isPending || cat.isDefault}
                             title={
                               cat.isDefault
@@ -597,7 +597,7 @@ export function CategorySettingsTab({
           aria-modal="true"
           tabIndex={-1}
           className="modal-overlay"
-          onClick={() => setEditingCategory(null)}
+          onClick={() => { setEditingCategory(null); }}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               setEditingCategory(null);
@@ -609,7 +609,7 @@ export function CategorySettingsTab({
             role="button"
             tabIndex={0}
             className="modal"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -666,11 +666,10 @@ export function CategorySettingsTab({
                   type="text"
                   className="input"
                   value={editingCategory.savePath || ""}
-                  onChange={(e) =>
-                    setEditingCategory({
+                  onChange={(e) => { setEditingCategory({
                       ...editingCategory,
                       savePath: e.target.value,
-                    })
+                    }); }
                   }
                   placeholder="/downloads/movies"
                   style={{
@@ -686,7 +685,7 @@ export function CategorySettingsTab({
                 <button
                   type="button"
                   className="btn btn-outline btn-small"
-                  onClick={() => handleOpenBrowser(editingCategory.savePath)}
+                  onClick={() => { handleOpenBrowser(editingCategory.savePath); }}
                   title="Browse folders / select directory"
                   style={{
                     display: "inline-flex",
@@ -726,11 +725,10 @@ export function CategorySettingsTab({
               <NumberInput
                 label="Max Download Speed"
                 value={editingCategory.defaultDownloadLimit ?? 0}
-                onChange={(v) =>
-                  setEditingCategory({
+                onChange={(v) => { setEditingCategory({
                     ...editingCategory,
                     defaultDownloadLimit: v,
-                  })
+                  }); }
                 }
                 min={0}
                 suffix="KB/s"
@@ -740,11 +738,10 @@ export function CategorySettingsTab({
               <NumberInput
                 label="Max Upload Speed"
                 value={editingCategory.defaultUploadLimit ?? 0}
-                onChange={(v) =>
-                  setEditingCategory({
+                onChange={(v) => { setEditingCategory({
                     ...editingCategory,
                     defaultUploadLimit: v,
-                  })
+                  }); }
                 }
                 min={0}
                 suffix="KB/s"
@@ -762,11 +759,10 @@ export function CategorySettingsTab({
               <NumberInput
                 label="Max Active Downloads"
                 value={editingCategory.maxActiveDownloads ?? 0}
-                onChange={(v) =>
-                  setEditingCategory({
+                onChange={(v) => { setEditingCategory({
                     ...editingCategory,
                     maxActiveDownloads: v > 0 ? v : null,
-                  })
+                  }); }
                 }
                 min={0}
                 hint="0 for unlimited concurrent downloads"
@@ -775,11 +771,10 @@ export function CategorySettingsTab({
               <NumberInput
                 label="Max Active Uploads"
                 value={editingCategory.maxActiveUploads ?? 0}
-                onChange={(v) =>
-                  setEditingCategory({
+                onChange={(v) => { setEditingCategory({
                     ...editingCategory,
                     maxActiveUploads: v > 0 ? v : null,
-                  })
+                  }); }
                 }
                 min={0}
                 hint="0 for unlimited concurrent uploads"
@@ -796,11 +791,10 @@ export function CategorySettingsTab({
               <NumberInput
                 label="Reserved Download Slots"
                 value={editingCategory.reservedDownloadSlots ?? 0}
-                onChange={(v) =>
-                  setEditingCategory({
+                onChange={(v) => { setEditingCategory({
                     ...editingCategory,
                     reservedDownloadSlots: v,
-                  })
+                  }); }
                 }
                 min={0}
                 hint="Dedicated download slots reserved for this category"
@@ -817,8 +811,7 @@ export function CategorySettingsTab({
               <NumberInput
                 label="Target Ratio"
                 value={editingCategory.targetRatio ?? 0}
-                onChange={(v) =>
-                  setEditingCategory({ ...editingCategory, targetRatio: v })
+                onChange={(v) => { setEditingCategory({ ...editingCategory, targetRatio: v }); }
                 }
                 min={0}
                 step={0.1}
@@ -828,11 +821,10 @@ export function CategorySettingsTab({
               <NumberInput
                 label="Target Seeding Time"
                 value={editingCategory.targetSeedTimeMinutes ?? 0}
-                onChange={(v) =>
-                  setEditingCategory({
+                onChange={(v) => { setEditingCategory({
                     ...editingCategory,
                     targetSeedTimeMinutes: v,
-                  })
+                  }); }
                 }
                 min={0}
                 suffix="min"
@@ -851,8 +843,7 @@ export function CategorySettingsTab({
               <Toggle
                 label="Auto Stop When Goal Reached"
                 checked={editingCategory.autoStop ?? false}
-                onChange={(v) =>
-                  setEditingCategory({ ...editingCategory, autoStop: v })
+                onChange={(v) => { setEditingCategory({ ...editingCategory, autoStop: v }); }
                 }
                 hint="Automatically pause/stop torrent once target ratio or seed time is met"
               />
@@ -860,8 +851,7 @@ export function CategorySettingsTab({
               <Toggle
                 label="Default Category"
                 checked={editingCategory.isDefault ?? false}
-                onChange={(v) =>
-                  setEditingCategory({ ...editingCategory, isDefault: v })
+                onChange={(v) => { setEditingCategory({ ...editingCategory, isDefault: v }); }
                 }
                 hint="Automatically assign this category to newly added torrents without an explicit category"
               />
@@ -895,7 +885,7 @@ export function CategorySettingsTab({
               <button
                 type="button"
                 className="btn btn-outline btn-small"
-                onClick={() => setEditingCategory(null)}
+                onClick={() => { setEditingCategory(null); }}
                 disabled={isSaving}
               >
                 Cancel
@@ -923,7 +913,7 @@ export function CategorySettingsTab({
         initialPath={browsingPath}
         title="Select Category Folder"
         onSelect={handleSelectBrowserPath}
-        onClose={() => setShowFolderBrowser(false)}
+        onClose={() => { setShowFolderBrowser(false); }}
       />
     </div>
   );

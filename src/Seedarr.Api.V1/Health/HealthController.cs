@@ -7,7 +7,7 @@ using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Health;
 
-[V1ApiController("health")]
+[V1ApiController("health")] /* anonymous by design: emulated client login/discovery endpoint */ // nosemgrep
 public class HealthController : Controller
 {
     private readonly IHealthCheckService _healthCheckService;

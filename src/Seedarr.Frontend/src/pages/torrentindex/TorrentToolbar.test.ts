@@ -26,7 +26,7 @@ function renderToolbar(props: React.ComponentProps<typeof TorrentToolbar>) {
   );
 }
 
-describe("TorrentToolbar accessibility attributes", () => {
+void describe("TorrentToolbar accessibility attributes", () => {
   const mockSeedingConfig: Partial<SeedingConfig> = {
     maxUploadSpeedKbps: 1024,
     maxDownloadSpeedKbps: 2048,
@@ -53,7 +53,7 @@ describe("TorrentToolbar accessibility attributes", () => {
     onBulkClear: () => {},
   };
 
-  it("renders speed adjustment buttons with descriptive aria-label attributes and limit labels", () => {
+  void it("renders speed adjustment buttons with descriptive aria-label attributes and limit labels", () => {
     const html = renderToolbar(defaultProps);
 
     assert.ok(
@@ -86,7 +86,7 @@ describe("TorrentToolbar accessibility attributes", () => {
     );
   });
 
-  it("renders filter search input with accessible aria-label", () => {
+  void it("renders filter search input with accessible aria-label", () => {
     const html = renderToolbar(defaultProps);
 
     assert.ok(
@@ -100,7 +100,7 @@ describe("TorrentToolbar accessibility attributes", () => {
     );
   });
 
-  it("reflects correct aria-pressed state on view mode toggle buttons for table mode", () => {
+  void it("reflects correct aria-pressed state on view mode toggle buttons for table mode", () => {
     const html = renderToolbar({
       ...defaultProps,
       viewMode: "table",
@@ -123,7 +123,7 @@ describe("TorrentToolbar accessibility attributes", () => {
     );
   });
 
-  it("reflects correct aria-pressed state on view mode toggle buttons for grid mode", () => {
+  void it("reflects correct aria-pressed state on view mode toggle buttons for grid mode", () => {
     const html = renderToolbar({
       ...defaultProps,
       viewMode: "grid",
@@ -145,7 +145,7 @@ describe("TorrentToolbar accessibility attributes", () => {
     );
   });
 
-  it("renders bulk tag assignment and removal buttons when selectedCount > 0", () => {
+  void it("renders bulk tag assignment and removal buttons when selectedCount > 0", () => {
     const html = renderToolbar({
       ...defaultProps,
       selectedCount: 3,
@@ -171,7 +171,7 @@ describe("TorrentToolbar accessibility attributes", () => {
     );
   });
 
-  it("does not render bulk Force Recheck button", () => {
+  void it("does not render bulk Force Recheck button", () => {
     const html = renderToolbar({
       ...defaultProps,
       selectedCount: 2,

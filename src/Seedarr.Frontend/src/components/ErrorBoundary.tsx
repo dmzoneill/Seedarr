@@ -67,7 +67,7 @@ class ErrorBoundary extends Component<Props, State> {
       .writeText(errorDetails)
       .then(() => {
         this.setState({ copied: true });
-        setTimeout(() => this.setState({ copied: false }), 2500);
+        setTimeout(() => { this.setState({ copied: false }); }, 2500);
       })
       .catch((err) => {
         console.warn("Failed to copy error to clipboard:", err);

@@ -6,8 +6,8 @@ import {
   RECONNECT_QUERY_KEYS,
 } from "./SignalRProvider";
 
-describe("SignalRProvider: isHandledByNamedEvent", () => {
-  it("returns true for messages with dedicated named event handlers to prevent duplicate invalidation", () => {
+void describe("SignalRProvider: isHandledByNamedEvent", () => {
+  void it("returns true for messages with dedicated named event handlers to prevent duplicate invalidation", () => {
     // Torrent events
     assert.equal(isHandledByNamedEvent("Torrent"), true);
     assert.equal(isHandledByNamedEvent("Torrents"), true);
@@ -46,7 +46,7 @@ describe("SignalRProvider: isHandledByNamedEvent", () => {
     assert.equal(isHandledByNamedEvent("TrackerAnnounced"), true);
   });
 
-  it("returns false for generic messages that are NOT dispatched via named events", () => {
+  void it("returns false for generic messages that are NOT dispatched via named events", () => {
     assert.equal(isHandledByNamedEvent("Tracker"), false);
     assert.equal(isHandledByNamedEvent("Category"), false);
     assert.equal(isHandledByNamedEvent("Tag"), false);
@@ -55,8 +55,8 @@ describe("SignalRProvider: isHandledByNamedEvent", () => {
   });
 });
 
-describe("SignalRProvider: configuration maps", () => {
-  it("EVENT_INVALIDATION_MAP includes invalidations for all primary domain events", () => {
+void describe("SignalRProvider: configuration maps", () => {
+  void it("EVENT_INVALIDATION_MAP includes invalidations for all primary domain events", () => {
     assert.ok(EVENT_INVALIDATION_MAP.TorrentAdded);
     assert.ok(EVENT_INVALIDATION_MAP.TorrentUpdated);
     assert.ok(EVENT_INVALIDATION_MAP.TorrentDeleted);
@@ -94,7 +94,7 @@ describe("SignalRProvider: configuration maps", () => {
     assert.equal(seedingKeys.includes("torrents"), false);
   });
 
-  it("RECONNECT_QUERY_KEYS includes essential caches for reconnect resynchronization", () => {
+  void it("RECONNECT_QUERY_KEYS includes essential caches for reconnect resynchronization", () => {
     const keyStrings = RECONNECT_QUERY_KEYS.map((k) => k.join("/"));
     assert.ok(keyStrings.includes("torrents"));
     assert.ok(keyStrings.includes("seeding/stats"));

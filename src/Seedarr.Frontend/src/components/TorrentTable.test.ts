@@ -64,8 +64,8 @@ function createQueryClient(torrents: Torrent[] = []) {
   return qc;
 }
 
-describe("TorrentTable Accessibility (Issue #349)", () => {
-  it("renders header select-all checkbox with accessible aria-label", () => {
+void describe("TorrentTable Accessibility (Issue #349)", () => {
+  void it("renders header select-all checkbox with accessible aria-label", () => {
     const torrent = createMockTorrent();
     const qc = createQueryClient([torrent]);
 
@@ -85,7 +85,7 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
     );
   });
 
-  it('renders table rows with role="row", tabIndex=0, and correct aria-selected state', () => {
+  void it('renders table rows with role="row", tabIndex=0, and correct aria-selected state', () => {
     const torrent1 = createMockTorrent({ id: 1, name: "Torrent 1" });
     const torrent2 = createMockTorrent({ id: 2, name: "Torrent 2" });
     const qc = createQueryClient([torrent1, torrent2]);
@@ -137,7 +137,7 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
     );
   });
 
-  it("renders row checkboxes with accessible aria-label containing torrent name", () => {
+  void it("renders row checkboxes with accessible aria-label containing torrent name", () => {
     const torrent1 = createMockTorrent({
       id: 10,
       name: "ArchLinux-2026.09.iso",
@@ -168,7 +168,7 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
     );
   });
 
-  it("handles keyboard events on table row: Space toggles selection, Enter activates torrent", () => {
+  void it("handles keyboard events on table row: Space toggles selection, Enter activates torrent", () => {
     const torrent = createMockTorrent({
       id: 42,
       name: "Debian-13-netinst.iso",
@@ -283,8 +283,8 @@ describe("TorrentTable Accessibility (Issue #349)", () => {
   });
 });
 
-describe("TorrentGrid Accessibility (Issue #349)", () => {
-  it('renders grid cards with role="button", tabIndex=0, and aria-selected', () => {
+void describe("TorrentGrid Accessibility (Issue #349)", () => {
+  void it('renders grid cards with role="button", tabIndex=0, and aria-selected', () => {
     const torrent1 = createMockTorrent({
       id: 1,
       name: "Ubuntu",
@@ -326,7 +326,7 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
     );
   });
 
-  it("renders grid card checkbox with accessible aria-label using displayTitle", () => {
+  void it("renders grid card checkbox with accessible aria-label using displayTitle", () => {
     const torrentWithMediaTitle = createMockTorrent({
       id: 10,
       name: "Big.Buck.Bunny.1080p.mkv",
@@ -362,7 +362,7 @@ describe("TorrentGrid Accessibility (Issue #349)", () => {
     );
   });
 
-  it("handles keyboard events on grid card: Space toggles selection, Enter selects torrent", () => {
+  void it("handles keyboard events on grid card: Space toggles selection, Enter selects torrent", () => {
     const torrent = createMockTorrent({
       id: 99,
       name: "OpenSUSE.iso",

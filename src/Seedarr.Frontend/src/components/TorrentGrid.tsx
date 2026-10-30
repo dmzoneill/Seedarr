@@ -84,7 +84,7 @@ function TorrentGrid({
     setContextMenu({ x: e.clientX, y: e.clientY, torrent: t });
   }, []);
 
-  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  const closeContextMenu = useCallback(() => { setContextMenu(null); }, []);
 
   if (isLoading) {
     return (
@@ -262,7 +262,7 @@ function TorrentGrid({
                 );
               }
             }}
-            onContextMenu={(e) => handleContextMenu(e, torrent)}
+            onContextMenu={(e) => { handleContextMenu(e, torrent); }}
           >
             {/* Poster Artwork Box */}
             <div
@@ -302,7 +302,7 @@ function TorrentGrid({
                   alignItems: "center",
                   gap: "6px",
                 }}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.stopPropagation();
@@ -606,7 +606,7 @@ function TorrentGrid({
                   paddingTop: "0.4rem",
                   borderTop: "1px solid var(--border-light)",
                 }}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.stopPropagation();
@@ -720,14 +720,14 @@ function TorrentGrid({
           allColumns={[]}
           onClose={closeContextMenu}
           onToggleColumn={() => {}}
-          onStart={(id) => startSeeding.mutate(id)}
-          onStop={(id) => stopSeeding.mutate(id)}
-          onUpdate={(t) => updateTorrent.mutate(t)}
-          onAnnounce={(id) => announceTorrent.mutate(id)}
-          onRecheck={(id) => recheckTorrent.mutate(id)}
-          onDelete={(payload) => deleteTorrent.mutate(payload)}
-          onMoveQueue={(payload) => moveTorrentQueue.mutate(payload)}
-          onSearchIndexers={(q) => setSearchModalQuery(q)}
+          onStart={(id) => { startSeeding.mutate(id); }}
+          onStop={(id) => { stopSeeding.mutate(id); }}
+          onUpdate={(t) => { updateTorrent.mutate(t); }}
+          onAnnounce={(id) => { announceTorrent.mutate(id); }}
+          onRecheck={(id) => { recheckTorrent.mutate(id); }}
+          onDelete={(payload) => { deleteTorrent.mutate(payload); }}
+          onMoveQueue={(payload) => { moveTorrentQueue.mutate(payload); }}
+          onSearchIndexers={(q) => { setSearchModalQuery(q); }}
         />
       )}
 
@@ -735,7 +735,7 @@ function TorrentGrid({
         <AddTorrentModal
           initialMode="search"
           initialQuery={searchModalQuery}
-          onClose={() => setSearchModalQuery(null)}
+          onClose={() => { setSearchModalQuery(null); }}
         />
       )}
 

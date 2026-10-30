@@ -104,7 +104,7 @@ export function NetworkSettingsTab() {
         peerDscp: form.peerDscp,
       },
       {
-        onSuccess: () => setDirty(false),
+        onSuccess: () => { setDirty(false); },
       },
     );
   };
@@ -248,7 +248,7 @@ export function NetworkSettingsTab() {
             <NumberInput
               label="BitTorrent Listening Port"
               value={form.listeningPort}
-              onChange={(v) => update("listeningPort", v)}
+              onChange={(v) => { update("listeningPort", v); }}
               min={1}
               max={65535}
               hint="TCP/UDP port for inbound swarm peer connections (default: 51413 / 6881)"
@@ -266,7 +266,7 @@ export function NetworkSettingsTab() {
                 type="button"
                 className="btn btn-outline"
                 style={{ fontSize: "0.85rem", padding: "0.3rem 0.65rem" }}
-                onClick={() => testPortMutation.mutate(form.listeningPort)}
+                onClick={() => { testPortMutation.mutate(form.listeningPort); }}
                 disabled={testPortMutation.isPending}
                 title="Test external reachability of configured listening port"
               >
@@ -325,14 +325,14 @@ export function NetworkSettingsTab() {
             <Toggle
               label="Enable UPnP / NAT-PMP"
               checked={form.upnpEnabled}
-              onChange={(v) => update("upnpEnabled", v)}
+              onChange={(v) => { update("upnpEnabled", v); }}
               hint="Automatically negotiate gateway port forwarding with router"
             />
 
             <Toggle
               label="Enable IPv6 Dual-Stack"
               checked={form.enableIPv6}
-              onChange={(v) => update("enableIPv6", v)}
+              onChange={(v) => { update("enableIPv6", v); }}
               hint="Listens on both IPv4 and IPv6 network sockets"
             />
           </div>
@@ -348,7 +348,7 @@ export function NetworkSettingsTab() {
             <TextInput
               label="Bind Network Interface"
               value={form.bindInterface}
-              onChange={(v) => update("bindInterface", v)}
+              onChange={(v) => { update("bindInterface", v); }}
               placeholder="tun0, wg0, eth0, or IP address"
               hint="Interface name (e.g. tun0, wg0) or IP address to restrict all torrent traffic"
               rightElement={
@@ -473,7 +473,7 @@ export function NetworkSettingsTab() {
                             fontSize: "0.75rem",
                             padding: "0.15rem 0.5rem",
                           }}
-                          onClick={() => setCustomInterfaceMode(true)}
+                          onClick={() => { setCustomInterfaceMode(true); }}
                         >
                           Edit as text
                         </button>
@@ -488,7 +488,7 @@ export function NetworkSettingsTab() {
           <Toggle
             label="Enable Automated VPN Kill Switch"
             checked={form.enableVpnKillSwitch}
-            onChange={(v) => update("enableVpnKillSwitch", v)}
+            onChange={(v) => { update("enableVpnKillSwitch", v); }}
             hint="Immediately drop all BitTorrent socket transfers in fail-closed mode if the bound VPN adapter drops"
           />
 
@@ -496,7 +496,7 @@ export function NetworkSettingsTab() {
             <NumberInput
               label="VPN Stabilization Delay (Seconds)"
               value={form.vpnStabilizationDelaySeconds}
-              onChange={(v) => update("vpnStabilizationDelaySeconds", v)}
+              onChange={(v) => { update("vpnStabilizationDelaySeconds", v); }}
               min={0}
               max={300}
               hint="Hold-down hysteresis delay to prevent reconnect storms during VPN flapping"
@@ -519,7 +519,7 @@ export function NetworkSettingsTab() {
           <NumberInput
             label="Maximum Global Connections"
             value={form.maxGlobalConnections}
-            onChange={(v) => update("maxGlobalConnections", v)}
+            onChange={(v) => { update("maxGlobalConnections", v); }}
             min={10}
             max={5000}
             hint="Total simultaneous peer socket connections across all active swarms"
@@ -528,7 +528,7 @@ export function NetworkSettingsTab() {
           <NumberInput
             label="Max Connections Per Torrent"
             value={form.maxPerTorrentConnections}
-            onChange={(v) => update("maxPerTorrentConnections", v)}
+            onChange={(v) => { update("maxPerTorrentConnections", v); }}
             min={1}
             max={500}
             hint="Maximum peer connections allocated per individual torrent swarm"
@@ -550,7 +550,7 @@ export function NetworkSettingsTab() {
           <NumberInput
             label="Max Upload Slots Per Torrent"
             value={form.maxUploadSlots}
-            onChange={(v) => update("maxUploadSlots", v)}
+            onChange={(v) => { update("maxUploadSlots", v); }}
             min={1}
             max={100}
             hint="Maximum concurrent unchoked peer upload transfers per torrent"
@@ -559,7 +559,7 @@ export function NetworkSettingsTab() {
           <NumberInput
             label="Max Connections Per Remote IP"
             value={form.maxConnectionsPerIp}
-            onChange={(v) => update("maxConnectionsPerIp", v)}
+            onChange={(v) => { update("maxConnectionsPerIp", v); }}
             min={1}
             max={50}
             hint="Limit concurrent peer sockets originating from the same remote IP"
@@ -568,7 +568,7 @@ export function NetworkSettingsTab() {
           <NumberInput
             label="Max Half-Open Connections"
             value={form.maximumHalfOpenConnections}
-            onChange={(v) => update("maximumHalfOpenConnections", v)}
+            onChange={(v) => { update("maximumHalfOpenConnections", v); }}
             min={5}
             max={500}
             hint="Maximum pending TCP socket handshakes in connection queue"
@@ -577,7 +577,7 @@ export function NetworkSettingsTab() {
           <NumberInput
             label="IP Packet DSCP QoS Marking"
             value={form.peerDscp}
-            onChange={(v) => update("peerDscp", v)}
+            onChange={(v) => { update("peerDscp", v); }}
             min={0}
             max={63}
             hint="Differentiated Services Code Point (DSCP) header priority marking (0-63)"

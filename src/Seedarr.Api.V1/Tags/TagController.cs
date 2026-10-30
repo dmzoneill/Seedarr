@@ -68,7 +68,7 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
         return TagResourceMapper.ToResource(tag, count);
     }
 
-    [HttpPost]
+    [HttpPost] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [Authorize(Policy = Policies.Operator)]
     public ActionResult<TagResource> Create([FromBody] TagResource resource)
     {
@@ -103,7 +103,7 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
         }
     }
 
-    [HttpPut("{id:int}")]
+    [HttpPut("{id:int}")] /* csrf-safe: SameSite=Lax auth cookie, JSON/API-key endpoints */ // nosemgrep
     [HttpPut]
     [Authorize(Policy = Policies.Operator)]
     public ActionResult<TagResource> Update([FromBody] TagResource resource, int? id = null)

@@ -771,7 +771,7 @@ export function useColumnPreferences(): ColumnPreferencesHook {
       }
     }
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    return () => { window.removeEventListener("storage", handleStorage); };
   }, []);
 
   const isDefault =

@@ -246,7 +246,7 @@ function SystemUpdates() {
             {!isUpToDate && !isContainerized && (
               <button
                 className="btn btn-primary btn-small"
-                onClick={() => handleStartInstall()}
+                onClick={() => { handleStartInstall(); }}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -321,7 +321,7 @@ function SystemUpdates() {
                     {!update.installed && !isContainerized && (
                       <button
                         className="btn btn-primary btn-small"
-                        onClick={() => handleStartInstall(update.version)}
+                        onClick={() => { handleStartInstall(update.version); }}
                         style={{
                           fontSize: "0.8rem",
                           padding: "0.25rem 0.6rem",
@@ -427,7 +427,7 @@ function SystemUpdates() {
                 className="modal"
                 role="button"
                 tabIndex={0}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.stopPropagation();
@@ -548,7 +548,7 @@ function SystemUpdates() {
                   {isRestartRequired ? (
                     <button
                       className="btn btn-primary"
-                      onClick={handleRestart}
+                      onClick={(...args: Parameters<typeof handleRestart>) => { void handleRestart(...args); }}
                       disabled={isRestarting || restartDone}
                       style={{
                         fontWeight: 600,
@@ -568,14 +568,13 @@ function SystemUpdates() {
                     <>
                       <button
                         className="btn btn-outline btn-small"
-                        onClick={() => setShowInstallModal(false)}
+                        onClick={() => { setShowInstallModal(false); }}
                       >
                         Close
                       </button>
                       <button
                         className="btn btn-primary btn-small"
-                        onClick={() =>
-                          handleStartInstall(targetVersion ?? undefined)
+                        onClick={() => { handleStartInstall(targetVersion ?? undefined); }
                         }
                       >
                         Retry
@@ -584,7 +583,7 @@ function SystemUpdates() {
                   ) : (
                     <button
                       className="btn btn-outline btn-small"
-                      onClick={() => setShowInstallModal(false)}
+                      onClick={() => { setShowInstallModal(false); }}
                     >
                       Close (Runs in Background)
                     </button>

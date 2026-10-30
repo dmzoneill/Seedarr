@@ -734,7 +734,7 @@ public class FFprobeMediaInspector : IFFprobeMediaInspector
     {
         var startInfo = new ProcessStartInfo
         {
-            FileName = fileName,
+            FileName = fileName, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

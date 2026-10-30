@@ -759,13 +759,13 @@ export function NotificationsTab() {
         <Toggle
           label="Enable Notifications"
           checked={form.enabled}
-          onChange={(v) => setToastPref("enabled", v)}
+          onChange={(v) => { setToastPref("enabled", v); }}
           hint="Show toast notification popups on application events"
         />
         <SelectInput
           label="Position"
           value={form.position}
-          onChange={(v) => setToastPref("position", v)}
+          onChange={(v) => { setToastPref("position", v); }}
           options={[
             { value: "top-right", label: "Top Right" },
             { value: "top-left", label: "Top Left" },
@@ -778,7 +778,7 @@ export function NotificationsTab() {
         <NumberInput
           label="Auto-Dismiss Timeout"
           value={form.autoDismissSeconds}
-          onChange={(v) => setToastPref("autoDismissSeconds", v)}
+          onChange={(v) => { setToastPref("autoDismissSeconds", v); }}
           min={1}
           max={60}
           suffix="seconds"
@@ -794,25 +794,25 @@ export function NotificationsTab() {
         <Toggle
           label="Information"
           checked={form.showInfo}
-          onChange={(v) => setToastPref("showInfo", v)}
+          onChange={(v) => { setToastPref("showInfo", v); }}
           hint="Informational background event notifications"
         />
         <Toggle
           label="Success"
           checked={form.showSuccess}
-          onChange={(v) => setToastPref("showSuccess", v)}
+          onChange={(v) => { setToastPref("showSuccess", v); }}
           hint="Successful operations, imports, and torrent actions"
         />
         <Toggle
           label="Warning"
           checked={form.showWarning}
-          onChange={(v) => setToastPref("showWarning", v)}
+          onChange={(v) => { setToastPref("showWarning", v); }}
           hint="Tracker timeouts, rate throttling, and disk threshold warnings"
         />
         <Toggle
           label="Error"
           checked={form.showError}
-          onChange={(v) => setToastPref("showError", v)}
+          onChange={(v) => { setToastPref("showError", v); }}
           hint="Critical failures and network disconnects"
         />
       </SectionCard>
@@ -834,7 +834,7 @@ export function NotificationsTab() {
                   className="provider-card"
                   role="button"
                   tabIndex={0}
-                  onClick={() => handleOpenModal(notif)}
+                  onClick={() => { handleOpenModal(notif); }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
@@ -850,7 +850,7 @@ export function NotificationsTab() {
                         rel="noopener noreferrer"
                         className="provider-card-action"
                         title={`Open ${externalUrl}`}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); }}
                         style={{ textDecoration: "none", color: "inherit" }}
                       >
                         ↗
@@ -1003,7 +1003,7 @@ export function NotificationsTab() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1057,7 +1057,7 @@ export function NotificationsTab() {
             <Toggle
               label="Enable Channel"
               checked={editing.enable}
-              onChange={(v) => setEditing({ ...editing, enable: v })}
+              onChange={(v) => { setEditing({ ...editing, enable: v }); }}
               hint="Enable or disable event alerts for this channel"
             />
 
@@ -1077,14 +1077,14 @@ export function NotificationsTab() {
                 <TextInput
                   label="Bot Username"
                   value={editing.username}
-                  onChange={(v) => setEditing({ ...editing, username: v })}
+                  onChange={(v) => { setEditing({ ...editing, username: v }); }}
                   placeholder="Seedarr"
                   hint="Override username displayed in Discord"
                 />
                 <TextInput
                   label="Avatar URL"
                   value={editing.avatarUrl}
-                  onChange={(v) => setEditing({ ...editing, avatarUrl: v })}
+                  onChange={(v) => { setEditing({ ...editing, avatarUrl: v }); }}
                   placeholder="https://..."
                   hint="Override avatar icon URL for Discord messages"
                 />
@@ -1143,7 +1143,7 @@ export function NotificationsTab() {
                 <NumberInput
                   label="Priority"
                   value={editing.priority}
-                  onChange={(v) => setEditing({ ...editing, priority: v })}
+                  onChange={(v) => { setEditing({ ...editing, priority: v }); }}
                   min={1}
                   max={10}
                   hint="Gotify message priority (1-10)"
@@ -1208,7 +1208,7 @@ export function NotificationsTab() {
                 <SelectInput
                   label="HTTP Method"
                   value={editing.method}
-                  onChange={(v) => setEditing({ ...editing, method: v })}
+                  onChange={(v) => { setEditing({ ...editing, method: v }); }}
                   options={[
                     { value: "POST", label: "POST" },
                     { value: "PUT", label: "PUT" },
@@ -1217,20 +1217,20 @@ export function NotificationsTab() {
                 <TextInput
                   label="Custom Headers (JSON)"
                   value={editing.customHeaders}
-                  onChange={(v) => setEditing({ ...editing, customHeaders: v })}
+                  onChange={(v) => { setEditing({ ...editing, customHeaders: v }); }}
                   placeholder='{"Authorization": "Bearer token", "X-Custom": "val"}'
                   hint="Optional custom HTTP headers to send with the webhook request"
                 />
                 <TextInput
                   label="Basic Auth Username"
                   value={editing.username}
-                  onChange={(v) => setEditing({ ...editing, username: v })}
+                  onChange={(v) => { setEditing({ ...editing, username: v }); }}
                   placeholder="Username (optional)"
                 />
                 <TextInput
                   label="Basic Auth Password"
                   value={editing.password}
-                  onChange={(v) => setEditing({ ...editing, password: v })}
+                  onChange={(v) => { setEditing({ ...editing, password: v }); }}
                   type="password"
                   placeholder="Password (optional)"
                 />
@@ -1252,7 +1252,7 @@ export function NotificationsTab() {
                 <NumberInput
                   label="Port"
                   value={editing.port}
-                  onChange={(v) => setEditing({ ...editing, port: v })}
+                  onChange={(v) => { setEditing({ ...editing, port: v }); }}
                   min={1}
                   max={65535}
                   hint="SMTP port (587 for STARTTLS, 465 for SSL/TLS, 25 for standard)"
@@ -1260,20 +1260,19 @@ export function NotificationsTab() {
                 <Toggle
                   label="Use SSL/TLS"
                   checked={editing.useSsl}
-                  onChange={(v) => setEditing({ ...editing, useSsl: v })}
+                  onChange={(v) => { setEditing({ ...editing, useSsl: v }); }}
                 />
                 <Toggle
                   label="Ignore SSL/TLS Certificate Errors"
                   checked={editing.ignoreSslErrors}
-                  onChange={(v) =>
-                    setEditing({ ...editing, ignoreSslErrors: v })
+                  onChange={(v) => { setEditing({ ...editing, ignoreSslErrors: v }); }
                   }
                   hint="Ignore SSL/TLS Certificate Errors (useful for self-signed certificates in private homelabs)"
                 />
                 <TextInput
                   label="From Address"
                   value={editing.from}
-                  onChange={(v) => setEditing({ ...editing, from: v })}
+                  onChange={(v) => { setEditing({ ...editing, from: v }); }}
                   placeholder="seedarr@example.com"
                   hint="Sender email address"
                 />
@@ -1290,13 +1289,13 @@ export function NotificationsTab() {
                 <TextInput
                   label="SMTP Username"
                   value={editing.username}
-                  onChange={(v) => setEditing({ ...editing, username: v })}
+                  onChange={(v) => { setEditing({ ...editing, username: v }); }}
                   placeholder="SMTP username (optional)"
                 />
                 <TextInput
                   label="SMTP Password"
                   value={editing.password}
-                  onChange={(v) => setEditing({ ...editing, password: v })}
+                  onChange={(v) => { setEditing({ ...editing, password: v }); }}
                   type="password"
                   placeholder="SMTP password (optional)"
                 />
@@ -1318,8 +1317,7 @@ export function NotificationsTab() {
                 <TextInput
                   label="Script Arguments"
                   value={editing.scriptArguments}
-                  onChange={(v) =>
-                    setEditing({ ...editing, scriptArguments: v })
+                  onChange={(v) => { setEditing({ ...editing, scriptArguments: v }); }
                   }
                   placeholder="--arg1 val1"
                   hint="Command-line arguments passed to script (event details passed via SEEDARR_* env vars)"
@@ -1338,76 +1336,68 @@ export function NotificationsTab() {
               <Toggle
                 label="On Grab"
                 checked={editing.onGrab}
-                onChange={(v) => setEditing({ ...editing, onGrab: v })}
+                onChange={(v) => { setEditing({ ...editing, onGrab: v }); }}
                 hint="Trigger when a torrent is grabbed and added"
               />
               <Toggle
                 label="On Download Complete"
                 checked={editing.onDownloadComplete}
-                onChange={(v) =>
-                  setEditing({ ...editing, onDownloadComplete: v })
+                onChange={(v) => { setEditing({ ...editing, onDownloadComplete: v }); }
                 }
                 hint="Trigger when torrent finished downloading"
               />
               <Toggle
                 label="On Seed Goal Reached"
                 checked={editing.onSeedGoalReached}
-                onChange={(v) =>
-                  setEditing({ ...editing, onSeedGoalReached: v })
+                onChange={(v) => { setEditing({ ...editing, onSeedGoalReached: v }); }
                 }
                 hint="Trigger when ratio or seeding time goal is met"
               />
               <Toggle
                 label="On Health Issue"
                 checked={editing.onHealthIssue}
-                onChange={(v) => setEditing({ ...editing, onHealthIssue: v })}
+                onChange={(v) => { setEditing({ ...editing, onHealthIssue: v }); }}
                 hint="Trigger on system or tracker health issues"
               />
               <Toggle
                 label="On Health Restored"
                 checked={editing.onHealthRestored}
-                onChange={(v) =>
-                  setEditing({ ...editing, onHealthRestored: v })
+                onChange={(v) => { setEditing({ ...editing, onHealthRestored: v }); }
                 }
                 hint="Trigger when system health returns to normal"
               />
               <Toggle
                 label="On Manual Interaction"
                 checked={editing.onManualInteractionRequired}
-                onChange={(v) =>
-                  setEditing({ ...editing, onManualInteractionRequired: v })
+                onChange={(v) => { setEditing({ ...editing, onManualInteractionRequired: v }); }
                 }
                 hint="Trigger when manual user action is required"
               />
               <Toggle
                 label="On Media Inspected"
                 checked={editing.onMediaInspected}
-                onChange={(v) =>
-                  setEditing({ ...editing, onMediaInspected: v })
+                onChange={(v) => { setEditing({ ...editing, onMediaInspected: v }); }
                 }
                 hint="Trigger when media metadata inspection finishes"
               />
               <Toggle
                 label="On Extract Complete"
                 checked={editing.onExtractComplete}
-                onChange={(v) =>
-                  setEditing({ ...editing, onExtractComplete: v })
+                onChange={(v) => { setEditing({ ...editing, onExtractComplete: v }); }
                 }
                 hint="Trigger when archive auto-extraction completes"
               />
               <Toggle
                 label="On Torrent Deleted"
                 checked={editing.onTorrentDeleted}
-                onChange={(v) =>
-                  setEditing({ ...editing, onTorrentDeleted: v })
+                onChange={(v) => { setEditing({ ...editing, onTorrentDeleted: v }); }
                 }
                 hint="Trigger when a torrent is removed from Seedarr"
               />
               <Toggle
                 label="On Application Update"
                 checked={editing.onApplicationUpdate}
-                onChange={(v) =>
-                  setEditing({ ...editing, onApplicationUpdate: v })
+                onChange={(v) => { setEditing({ ...editing, onApplicationUpdate: v }); }
                 }
                 hint="Trigger when Seedarr is updated"
               />
@@ -1671,7 +1661,7 @@ export function NotificationsTab() {
           className="modal-overlay"
           role="button"
           tabIndex={0}
-          onClick={() => setDeletingNotif(null)}
+          onClick={() => { setDeletingNotif(null); }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -1683,7 +1673,7 @@ export function NotificationsTab() {
             className="modal"
             role="button"
             tabIndex={0}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
@@ -1724,7 +1714,7 @@ export function NotificationsTab() {
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setDeletingNotif(null)}
+                onClick={() => { setDeletingNotif(null); }}
                 disabled={deleteMutation.isPending}
               >
                 Cancel

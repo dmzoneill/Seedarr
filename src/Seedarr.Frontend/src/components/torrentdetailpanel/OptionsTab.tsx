@@ -99,7 +99,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         sessionUploaded,
         sessionDownloaded,
       },
-      { onSuccess: () => setDirty(false) },
+      { onSuccess: () => { setDirty(false); } },
     );
   };
 
@@ -110,8 +110,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
       setDirty(true);
     };
   const numChange =
-    (setter: (v: number) => void) => (e: React.ChangeEvent<HTMLInputElement>) =>
-      mark(setter)(Number.parseInt(e.target.value, 10) || 0);
+    (setter: (v: number) => void) => (e: React.ChangeEvent<HTMLInputElement>) => { mark(setter)(Number.parseInt(e.target.value, 10) || 0); };
 
   return (
     <div className="detail-panel-options">
@@ -123,7 +122,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
             id="opt-priority"
             className="form-select"
             value={priority}
-            onChange={(e) => mark(setPriority)(e.target.value)}
+            onChange={(e) => { mark(setPriority)(e.target.value); }}
           >
             {PRIORITY_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -187,7 +186,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
               id="opt-active"
               type="checkbox"
               checked={active}
-              onChange={(e) => mark(setActive)(e.target.checked)}
+              onChange={(e) => { mark(setActive)(e.target.checked); }}
             />
             <span className="toggle-slider" />
           </label>
@@ -199,7 +198,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
               id="opt-super-seeding"
               type="checkbox"
               checked={superSeeding}
-              onChange={(e) => mark(setSuperSeeding)(e.target.checked)}
+              onChange={(e) => { mark(setSuperSeeding)(e.target.checked); }}
             />
             <span className="toggle-slider" />
           </label>
@@ -211,7 +210,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
               id="opt-force-start"
               type="checkbox"
               checked={forceStart}
-              onChange={(e) => mark(setForceStart)(e.target.checked)}
+              onChange={(e) => { mark(setForceStart)(e.target.checked); }}
             />
             <span className="toggle-slider" />
           </label>
@@ -223,7 +222,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
               id="opt-sequential-download"
               type="checkbox"
               checked={sequentialDownload}
-              onChange={(e) => mark(setSequentialDownload)(e.target.checked)}
+              onChange={(e) => { mark(setSequentialDownload)(e.target.checked); }}
             />
             <span className="toggle-slider" />
           </label>
@@ -235,7 +234,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
               id="opt-first-last-prio"
               type="checkbox"
               checked={firstLastPiecePrio}
-              onChange={(e) => mark(setFirstLastPiecePrio)(e.target.checked)}
+              onChange={(e) => { mark(setFirstLastPiecePrio)(e.target.checked); }}
             />
             <span className="toggle-slider" />
           </label>
@@ -247,7 +246,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
             type="text"
             className="form-input"
             value={label}
-            onChange={(e) => mark(setLabel)(e.target.value)}
+            onChange={(e) => { mark(setLabel)(e.target.value); }}
             placeholder="e.g. movies"
           />
         </div>

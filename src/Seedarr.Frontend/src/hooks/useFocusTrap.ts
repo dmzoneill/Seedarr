@@ -106,7 +106,7 @@ export class FocusTrap {
 
     this.focusInitial();
 
-    this.boundKeyDown = (e: KeyboardEvent) => this.handleKeyDown(e);
+    this.boundKeyDown = (e: KeyboardEvent) => { this.handleKeyDown(e); };
     if (typeof document !== "undefined") {
       document.addEventListener("keydown", this.boundKeyDown);
     }

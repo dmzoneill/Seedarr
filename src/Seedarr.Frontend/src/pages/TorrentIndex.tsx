@@ -571,7 +571,7 @@ function TorrentIndex() {
             : selectedTorrentId != null
               ? [selectedTorrentId]
               : [];
-        ids.forEach((id) => recheckTorrent.mutate(id));
+        ids.forEach((id) => { recheckTorrent.mutate(id); });
         return;
       }
 
@@ -603,7 +603,7 @@ function TorrentIndex() {
     }
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => { window.removeEventListener("keydown", handleKeyDown); };
   }, [
     toggleQuickControls,
     closeQuickControls,
@@ -643,20 +643,20 @@ function TorrentIndex() {
         onFilterChange={setFilter}
         viewMode={viewMode}
         onViewModeChange={handleViewMode}
-        onAddTorrent={() => setShowAddModal(true)}
-        onImportPackage={() => setShowImportPackageModal(true)}
-        onSearchIndexers={() => navigate("/settings/indexers")}
-        onStartAll={() => startAll.mutate()}
-        onStopAll={() => stopAll.mutate()}
+        onAddTorrent={() => { setShowAddModal(true); }}
+        onImportPackage={() => { setShowImportPackageModal(true); }}
+        onSearchIndexers={() => { void navigate("/settings/indexers"); }}
+        onStartAll={() => { startAll.mutate(); }}
+        onStopAll={() => { stopAll.mutate(); }}
         selectedCount={selectedIds.size}
         bulkPending={bulkPending}
-        onBulkStart={handleBulkStart}
-        onBulkStop={handleBulkStop}
+        onBulkStart={(...args: Parameters<typeof handleBulkStart>) => { void handleBulkStart(...args); }}
+        onBulkStop={(...args: Parameters<typeof handleBulkStop>) => { void handleBulkStop(...args); }}
         onBulkDelete={handleBulkDelete}
-        onBulkClear={() => setSelectedIds(new Set())}
+        onBulkClear={() => { setSelectedIds(new Set()); }}
         onBulkAddTags={handleBulkAddTags}
         onBulkRemoveTags={handleBulkRemoveTags}
-        onBulkMoveQueue={handleBulkMoveQueue}
+        onBulkMoveQueue={(...args: Parameters<typeof handleBulkMoveQueue>) => { void handleBulkMoveQueue(...args); }}
         isFilterCollapsed={isFilterCollapsed}
         onToggleFilter={toggleFilterCollapse}
         isQuickControlsOpen={isQuickControlsOpen}
@@ -720,8 +720,7 @@ function TorrentIndex() {
                   onSelectMultiple={setSelectedIds}
                   onDeleteSelected={handleBulkDelete}
                   onToggleActive={handleToggleActiveSelected}
-                  onOpenBulkTag={() =>
-                    setBulkTagModalState({ isOpen: true, mode: "add" })
+                  onOpenBulkTag={() => { setBulkTagModalState({ isOpen: true, mode: "add" }); }
                   }
                   visibleColumns={visibleColumns}
                   onToggleColumn={toggleColumn}
@@ -744,8 +743,7 @@ function TorrentIndex() {
                   onSelectTorrent={setSelectedTorrentId}
                   selectedIds={selectedIds}
                   onToggleSelect={handleToggleSelect}
-                  onSelectAll={() =>
-                    handleSelectAll(filteredTorrents.map((t) => t.id))
+                  onSelectAll={() => { handleSelectAll(filteredTorrents.map((t) => t.id)); }
                   }
                 />
               )}
@@ -753,19 +751,19 @@ function TorrentIndex() {
             {selectedTorrentId != null && (
               <TorrentDetailPanel
                 torrentId={selectedTorrentId}
-                onClose={() => setSelectedTorrentId(null)}
+                onClose={() => { setSelectedTorrentId(null); }}
               />
             )}
           </div>
         </div>
       </div>
       {showAddModal && (
-        <AddTorrentModal onClose={() => setShowAddModal(false)} />
+        <AddTorrentModal onClose={() => { setShowAddModal(false); }} />
       )}
       {showImportPackageModal && (
         <ImportPackageModal
           isOpen={showImportPackageModal}
-          onClose={() => setShowImportPackageModal(false)}
+          onClose={() => { setShowImportPackageModal(false); }}
         />
       )}
       {deleteModalState?.isOpen && (
