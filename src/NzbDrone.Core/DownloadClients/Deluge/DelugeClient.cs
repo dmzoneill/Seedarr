@@ -388,8 +388,8 @@ public class DelugeClient : IDownloadClient, IDisposable
             var state = t.TryGetProperty("state", out var s) ? s.GetString() : "unknown";
             var isPrivate = t.TryGetProperty("private", out var ip) &&
                 (ip.ValueKind == JsonValueKind.True ||
-                 (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
-                 (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
+                    (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
+                    (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
 
             items.Add(new DownloadClientItem
             {

@@ -336,7 +336,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     private static bool IsValidAbsoluteUri(string url)
     {
         return Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
-               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
     private void RollbackCreatedProvider(int providerId)

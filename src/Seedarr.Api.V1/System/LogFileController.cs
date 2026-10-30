@@ -74,7 +74,7 @@ public class LogFileController : ControllerBase
         }
 
         return fileName.StartsWith("seedarr_", StringComparison.OrdinalIgnoreCase) ||
-               fileName.StartsWith("seedarr.", StringComparison.OrdinalIgnoreCase);
+                fileName.StartsWith("seedarr.", StringComparison.OrdinalIgnoreCase);
     }
 
     [HttpGet]
