@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v3.0.22](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.22) - 2026-11-05
+
+### 🔧 Maintenance & Improvements
+- build(deps): bump the npm group in /src/Seedarr.Frontend with 8 updates (#1325)
+- Bump the nuget group with 2 updates (#1327)
+- build(deps): bump actions/setup-dotnet (#1326)
+
 ## [v3.0.21](https://github.com/dmzoneill/Seedarr/releases/tag/v3.0.21) - 2026-10-30
 
 ### 🐛 Bug Fixes
