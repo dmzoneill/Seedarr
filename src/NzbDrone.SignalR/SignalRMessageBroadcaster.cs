@@ -199,6 +199,9 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage, IDisposable
                     list.Add("torrent_deleted");
                     list.Add("torrentDeleted");
                     break;
+                default:
+                    // Other model actions do not emit named torrent events.
+                    break;
             }
         }
         else if (string.Equals(message.Name, "TorrentAdded", StringComparison.OrdinalIgnoreCase) ||

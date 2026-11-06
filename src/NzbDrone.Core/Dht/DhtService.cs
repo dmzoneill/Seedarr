@@ -762,6 +762,9 @@ public class DhtService : BackgroundService, IDhtService,
                 case "e":
                     HandleErrorResponse(message, sender);
                     break;
+                default:
+                    // Unknown DHT message types are dropped.
+                    break;
             }
         }
         catch (Exception ex)

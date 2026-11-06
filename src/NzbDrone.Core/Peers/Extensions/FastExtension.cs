@@ -329,6 +329,9 @@ public class FastExtensionHandler : IFastExtensionHandler
                 OnRequestRejected?.Invoke(connection, fastMessage.PieceIndex, fastMessage.Begin, fastMessage.Length);
                 _eventAggregator?.PublishEvent(new PeerRequestRejectedEvent(connection, fastMessage.PieceIndex, fastMessage.Begin, fastMessage.Length));
                 break;
+            default:
+                // Unknown fast message types are ignored.
+                break;
         }
     }
 

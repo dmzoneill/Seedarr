@@ -792,6 +792,9 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
                     EnrichDataJson(entry);
                     updated = true;
                     break;
+                default:
+                    // Other status transitions leave the history entry unchanged.
+                    break;
             }
 
             if (updated)
