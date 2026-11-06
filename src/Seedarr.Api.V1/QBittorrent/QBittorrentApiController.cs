@@ -500,6 +500,9 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 case "running":
                     torrents = torrents.Where(t => t.Status != TorrentStatus.Paused && t.Status != TorrentStatus.Stopped).ToList();
                     break;
+                default:
+                    // Unknown filters leave the torrent list unchanged.
+                    break;
             }
         }
 

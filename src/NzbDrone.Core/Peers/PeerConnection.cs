@@ -1784,6 +1784,9 @@ public class PeerConnection : IDisposable
                 }
 
                 break;
+            default:
+                // Other peer message types are handled elsewhere.
+                break;
         }
     }
 

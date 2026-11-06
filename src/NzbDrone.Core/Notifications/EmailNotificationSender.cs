@@ -250,6 +250,9 @@ public static class EmailNotificationSender
                     case "recipient":
                         result.To = val;
                         break;
+                    default:
+                        // Other settings keys are ignored.
+                        break;
                 }
             }
         }

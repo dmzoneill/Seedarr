@@ -473,6 +473,9 @@ if (torrent && torrent.uploadSpeed === 0 && torrent.downloadSpeed === 0) {
                         }
 
                         break;
+                    default:
+                        // Other field types are accepted without extra validation.
+                        break;
                 }
 
                 if (!string.IsNullOrWhiteSpace(field.RegexPattern))
