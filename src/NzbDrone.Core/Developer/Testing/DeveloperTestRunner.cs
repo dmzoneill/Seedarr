@@ -1107,6 +1107,7 @@ public class DeveloperTestRunner : IDeveloperTestRunner
                 }
                 catch
                 {
+                    // Cleanup of scratch test file is best-effort.
                 }
             }
         }

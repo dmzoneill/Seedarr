@@ -266,8 +266,6 @@ public class SpeedDistributionManager : ISpeedDistributionManager
             {
                 sanitizedWeights[i] = 1.0;
             }
-
-            totalWeight = count;
         }
 
         var effectiveCaps = new long[count];

@@ -366,7 +366,7 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
             {
                 if (IsVpnFailClosed() || stoppingToken.IsCancellationRequested)
                 {
-                    try { listener.Dispose(); } catch { }
+                    try { listener.Dispose(); } catch { /* best-effort dispose while fail-closed / stopping */ }
                     continue;
                 }
 
@@ -433,6 +433,7 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
                     }
                     catch
                     {
+                        // Best-effort dispose after listener teardown; ignore secondary failures.
                     }
                 }
             }

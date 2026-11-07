@@ -228,6 +228,7 @@ public class SubtitleConversionService : ISubtitleConversionService
 
     private static string ConvertMicroDvdToWebVtt(string subContent, double fps = 23.976)
     {
+        var effectiveFps = fps;
         var lines = subContent.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var sb = new StringBuilder();
         sb.Append("WEBVTT\n\n");
@@ -254,13 +255,13 @@ public class SubtitleConversionService : ISubtitleConversionService
                 var fpsStr = match.Groups["text"].Value.Trim();
                 if (double.TryParse(fpsStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var customFps) && customFps > 0)
                 {
-                    fps = customFps;
+                    effectiveFps = customFps;
                     continue;
                 }
             }
 
-            var startSec = startFrame / fps;
-            var endSec = endFrame / fps;
+            var startSec = startFrame / effectiveFps;
+            var endSec = endFrame / effectiveFps;
 
             var startTime = TimeSpan.FromSeconds(startSec);
             var endTime = TimeSpan.FromSeconds(endSec);

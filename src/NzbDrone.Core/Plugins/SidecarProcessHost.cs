@@ -491,7 +491,10 @@ public class SidecarProcessHost : ISidecarProcessHost
                 {
                     _process.Dispose();
                 }
-                catch { }
+                catch
+                {
+                    // Process may already be disposed during stop; ignore.
+                }
                 _process = null;
             }
 

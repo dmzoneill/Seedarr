@@ -545,27 +545,6 @@ public class NewznabIndexer : IIndexer
 
         searchQuery ??= new SearchQuery();
 
-        var mode = searchQuery.Mode;
-        if (mode == SearchMode.Default)
-        {
-            if (searchQuery.Season.HasValue || searchQuery.Episode.HasValue || !string.IsNullOrWhiteSpace(searchQuery.TvdbId) || !string.IsNullOrWhiteSpace(searchQuery.Rid))
-            {
-                mode = SearchMode.TvSearch;
-            }
-            else if (!string.IsNullOrWhiteSpace(searchQuery.ImdbId) || !string.IsNullOrWhiteSpace(searchQuery.TmdbId))
-            {
-                mode = SearchMode.Movie;
-            }
-            else if (!string.IsNullOrWhiteSpace(searchQuery.Artist) || !string.IsNullOrWhiteSpace(searchQuery.Album))
-            {
-                mode = SearchMode.Music;
-            }
-            else if (!string.IsNullOrWhiteSpace(searchQuery.Author) || !string.IsNullOrWhiteSpace(searchQuery.Title))
-            {
-                mode = SearchMode.Book;
-            }
-        }
-
         try
         {
             var url = BuildSearchUrl(definition, searchQuery);

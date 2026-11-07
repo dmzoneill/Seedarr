@@ -61,7 +61,7 @@ public class ExtensionManager : IExtensionManager
 
         if (_configService.ExtensionLtDontHave)
         {
-            extensions["lt_donthave"] = nextId++;
+            extensions["lt_donthave"] = nextId;
         }
 
         return extensions;
