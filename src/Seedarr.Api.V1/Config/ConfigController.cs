@@ -260,6 +260,7 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             }
             catch
             {
+                // Best-effort rollback; original error is returned below.
             }
 
             return BadRequest(new { message = ex.Message });
@@ -280,6 +281,7 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             }
             catch
             {
+                // Best-effort rollback; original error is returned below.
             }
 
             return Problem(detail: ex.Message, title: "Failed to save configuration.", statusCode: 500);

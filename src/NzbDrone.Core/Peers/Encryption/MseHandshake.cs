@@ -567,7 +567,6 @@ public class MseHandshake
         if (iaLen > 0 && initialPayload != null)
         {
             Array.Copy(initialPayload, 0, payload, offset, iaLen);
-            offset += iaLen;
         }
 
         _outCipher.ProcessInPlace(payload, 0, payload.Length);

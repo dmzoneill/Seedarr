@@ -1000,14 +1000,12 @@ public class DelugeJsonRpcController : ControllerBase
             if (cfgElem.ValueKind == JsonValueKind.Object)
             {
                 var wasAltActive = _configService.AlternativeSpeedEnabled;
-                var altEnabled = wasAltActive;
 
                 if (cfgElem.TryGetProperty("alt_speed_enabled", out var altProp))
                 {
                     if (altProp.ValueKind == JsonValueKind.True || altProp.ValueKind == JsonValueKind.False)
                     {
-                        altEnabled = altProp.GetBoolean();
-                        cfgUpdates["AlternativeSpeedEnabled"] = altEnabled;
+                        cfgUpdates["AlternativeSpeedEnabled"] = altProp.GetBoolean();
                     }
                 }
 
@@ -1375,18 +1373,6 @@ public class DelugeJsonRpcController : ControllerBase
                     }
 
                     var bytes = await _httpClient.GetByteArrayAsync(url);
-                    string fileInfoHash = null;
-                    try
-                    {
-                        using var parseMs = new MemoryStream(bytes);
-                        var parsed = _torrentFileParser?.Parse(parseMs);
-                        fileInfoHash = parsed?.InfoHash;
-                    }
-                    catch
-                    {
-                        // Ignore
-                    }
-
                     using var ms = new MemoryStream(bytes);
                     var addedFromFile = _torrentImportService.ImportFromFile(ms, "downloaded.torrent");
                     ApplyDelugeOptions(addedFromFile, optionsElem);

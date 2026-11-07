@@ -462,7 +462,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
 
             if (queuedDownloads.Count > 0 && availableDlSlots > 0)
             {
-                var toPromoteDl = new List<Torrent>();
+                List<Torrent> toPromoteDl;
                 if (_categoryService != null)
                 {
                     var currentNonForcedDl = downloadingTorrents.Count(t => !t.ForceStart);

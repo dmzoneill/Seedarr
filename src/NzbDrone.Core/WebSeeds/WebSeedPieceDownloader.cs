@@ -201,7 +201,6 @@ public class WebSeedPieceDownloader : IWebSeedPieceDownloader
         {
             // Discard buffer immediately
             Array.Clear(pieceBytes, 0, pieceBytes.Length);
-            pieceBytes = null;
 
             RecordCorruptionFailure(webSeedUrl, torrentId);
 

@@ -354,7 +354,6 @@ public class TorrentRelocationService : ITorrentRelocationService
                 torrent.SourcePath = currentPath;
                 RestoreStatusOnFailure(torrent, previousStatus);
                 UnchokePeers(torrent);
-                statusTransitioned = false;
             }
 
             return false;
