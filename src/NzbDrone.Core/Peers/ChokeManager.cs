@@ -849,6 +849,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                 Choke(previousPeer);
                 _optimisticSlots.Remove(infoHash);
                 _currentOptimisticPeerKey = null;
+                slot = null;
             }
             else
             {
