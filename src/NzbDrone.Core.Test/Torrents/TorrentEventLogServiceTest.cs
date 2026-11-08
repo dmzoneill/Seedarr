@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Torrents;
-using System.Reflection;
-using System.Threading;
 
 namespace NzbDrone.Core.Test.Torrents;
 

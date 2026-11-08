@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Core.Trackers.Metrics;
-using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace NzbDrone.Core.Test.Trackers.Metrics;
 

@@ -1,11 +1,11 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Mcp;
 using NzbDrone.Core.Plugins;
-using System.Diagnostics;
 
 namespace NzbDrone.Core.Test.Plugins;
 
