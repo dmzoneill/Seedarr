@@ -15,11 +15,11 @@ public class StartupContext
             var parts = arg.TrimStart('-', '/').Split('=', 2);
             if (parts.Length == 2)
             {
-                Args[parts[0].ToLower()] = parts[1];
+                Args[parts[0].ToLowerInvariant()] = parts[1];
             }
             else
             {
-                Flags.Add(parts[0].ToLower());
+                Flags.Add(parts[0].ToLowerInvariant());
             }
         }
     }

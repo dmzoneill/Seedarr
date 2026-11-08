@@ -19,7 +19,7 @@ using NzbDrone.Core.TrackerServer.Users;
 
 namespace NzbDrone.Core.TrackerServer;
 
-public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
+public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisposable
 {
     private static readonly byte[] MissingParametersResponse = Encoding.ASCII.GetBytes("d14:failure reason25:Missing required parameterse");
     private static readonly byte[] InvalidParametersResponse = Encoding.ASCII.GetBytes("d14:failure reason18:Invalid parameterse");
@@ -114,6 +114,12 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
                 StopListener();
             }
         }
+    }
+
+    public override void Dispose()
+    {
+        StopListener();
+        base.Dispose();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

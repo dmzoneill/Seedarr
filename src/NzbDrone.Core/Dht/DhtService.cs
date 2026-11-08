@@ -20,7 +20,7 @@ using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Dht;
 
-public class DhtService : BackgroundService, IDhtService,
+public class DhtService : BackgroundService, IDisposable, IDhtService,
     IHandle<ConfigSavedEvent>,
     IHandle<VpnKillSwitchTriggeredEvent>
 {

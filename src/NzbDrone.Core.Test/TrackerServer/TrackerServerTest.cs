@@ -1764,6 +1764,30 @@ public class TrackerServerTest
         Assert.DoesNotThrow(() => _trackerServer.Handle(new ConfigSavedEvent()));
     }
 
+    [Test]
+    public void Dispose_stops_running_listener_and_releases_cancellation_source()
+    {
+        _trackerServer.Handle(new ConfigSavedEvent());
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var listenerField = typeof(Core.TrackerServer.TrackerServer).GetField("_listener", flags);
+        var ctsField = typeof(Core.TrackerServer.TrackerServer).GetField("_listenerCts", flags);
+        Assert.That(listenerField.GetValue(_trackerServer), Is.Not.Null);
+        Assert.That(ctsField.GetValue(_trackerServer), Is.Not.Null);
+
+        _trackerServer.Dispose();
+
+        Assert.That(listenerField.GetValue(_trackerServer), Is.Null);
+        Assert.That(ctsField.GetValue(_trackerServer), Is.Null);
+    }
+
+    [Test]
+    public void Dispose_is_safe_when_never_started_and_when_called_twice()
+    {
+        Assert.DoesNotThrow(() => _trackerServer.Dispose());
+        Assert.DoesNotThrow(() => _trackerServer.Dispose());
+    }
+
     // ---- HandleAnnounce boundary and edge cases ----
 
     [Test]

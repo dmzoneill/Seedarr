@@ -17,7 +17,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.TrackerServer;
 
-public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
+public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisposable
 {
     private const long ProtocolMagic = 0x41727101980;
     private const int ConnectAction = 0;
@@ -92,6 +92,12 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
                 StopListener();
             }
         }
+    }
+
+    public override void Dispose()
+    {
+        StopListener();
+        base.Dispose();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

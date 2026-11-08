@@ -16,7 +16,7 @@ using NLog;
 
 namespace NzbDrone.Core.Terminal;
 
-public class WindowsPtyProcess : IPtyProcess
+public class WindowsPtyProcess : IPtyProcess, IDisposable
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly int _pid;
