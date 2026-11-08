@@ -46,9 +46,10 @@ public class WindowsPtyProcessTest
         pty.Dispose();
         Assert.DoesNotThrow(() => pty.Dispose());
 
-        Assert.Throws<ObjectDisposedException>(() =>
-        {
-            var unused = process.HasExited;
-        });
+        // Process.Dispose() may throw ObjectDisposedException or, on some runtimes
+        // after Close() disassociates the handle, InvalidOperationException.
+        Assert.That(
+            () => { var unused = process.HasExited; },
+            Throws.InstanceOf<ObjectDisposedException>().Or.InstanceOf<InvalidOperationException>());
     }
 }
