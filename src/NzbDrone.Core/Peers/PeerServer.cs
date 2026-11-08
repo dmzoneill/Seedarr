@@ -28,7 +28,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
-public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>, IHandle<PeerRequestRejectedEvent>, IHandle<TorrentDownloadCompletedEvent>, IHandle<TorrentFinishedEvent>, IHandle<TorrentStatusChangedEvent>
+public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>, IHandle<PeerRequestRejectedEvent>, IHandle<TorrentDownloadCompletedEvent>, IHandle<TorrentFinishedEvent>, IHandle<TorrentStatusChangedEvent>
 {
     private const int OutgoingConnectTimeoutMs = 5000;
     private const int UnauthenticatedHandshakeTimeoutMs = 5000;

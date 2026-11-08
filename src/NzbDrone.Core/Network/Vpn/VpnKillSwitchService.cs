@@ -11,7 +11,7 @@ using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Network.Vpn;
 
-public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEvent>
+public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEvent>, IDisposable
 {
     private readonly IConfigService _configService;
     private readonly IEventAggregator _eventAggregator;

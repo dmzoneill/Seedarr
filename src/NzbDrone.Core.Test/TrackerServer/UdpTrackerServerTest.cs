@@ -1588,4 +1588,33 @@ public class UdpTrackerServerTest
         var method = typeof(UdpTrackerServer).GetMethod("ReceiveLoop", BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.That(method, Is.Not.Null);
     }
+
+    [Test]
+    public void Dispose_stops_running_listener_and_releases_resources()
+    {
+        _configService.TrackerUdpPort.Returns(0);
+        _configService.TrackerBindAddress.Returns("127.0.0.1");
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var clientField = typeof(UdpTrackerServer).GetField("_client", flags);
+        var ctsField = typeof(UdpTrackerServer).GetField("_listenerCts", flags);
+        var timerField = typeof(UdpTrackerServer).GetField("_cleanupTimer", flags);
+        Assert.That(clientField.GetValue(_udpTrackerServer), Is.Not.Null);
+        Assert.That(ctsField.GetValue(_udpTrackerServer), Is.Not.Null);
+        Assert.That(timerField.GetValue(_udpTrackerServer), Is.Not.Null);
+
+        _udpTrackerServer.Dispose();
+
+        Assert.That(clientField.GetValue(_udpTrackerServer), Is.Null);
+        Assert.That(ctsField.GetValue(_udpTrackerServer), Is.Null);
+        Assert.That(timerField.GetValue(_udpTrackerServer), Is.Null);
+    }
+
+    [Test]
+    public void Dispose_is_safe_when_never_started_and_when_called_twice()
+    {
+        Assert.DoesNotThrow(() => _udpTrackerServer.Dispose());
+        Assert.DoesNotThrow(() => _udpTrackerServer.Dispose());
+    }
 }

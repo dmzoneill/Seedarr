@@ -13,7 +13,7 @@ using NzbDrone.Core.Processes;
 
 namespace NzbDrone.Core.Plugins;
 
-public class SidecarProcessHost : ISidecarProcessHost
+public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 {
     private readonly PluginManifest _manifest;
     private readonly string _pluginDirectory;
