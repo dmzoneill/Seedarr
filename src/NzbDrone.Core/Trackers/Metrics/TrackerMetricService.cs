@@ -998,7 +998,7 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
                         {
                             if (_flushSignalCts.IsCancellationRequested)
                             {
-                                Dispose(_flushSignalCts);
+                                DisposeTokenSource(_flushSignalCts);
                                 _flushSignalCts = new CancellationTokenSource();
                             }
 
@@ -1124,7 +1124,7 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
         GC.SuppressFinalize(this);
     }
 
-    private void Dispose(CancellationTokenSource source)
+    private static void DisposeTokenSource(CancellationTokenSource source)
     {
         source?.Dispose();
     }

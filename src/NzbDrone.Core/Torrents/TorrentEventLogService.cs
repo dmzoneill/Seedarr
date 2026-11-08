@@ -257,7 +257,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
                 {
                     if (_flushSignalCts.IsCancellationRequested)
                     {
-                        Dispose(_flushSignalCts);
+                        DisposeTokenSource(_flushSignalCts);
                         _flushSignalCts = new CancellationTokenSource();
                     }
 
@@ -368,7 +368,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
         GC.SuppressFinalize(this);
     }
 
-    private void Dispose(CancellationTokenSource source)
+    private static void DisposeTokenSource(CancellationTokenSource source)
     {
         source?.Dispose();
     }
