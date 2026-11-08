@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -220,6 +221,36 @@ public class SidecarProcessHostTest
         var host = new SidecarProcessHost(_manifest, _tempDir);
         host.Dispose();
         Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
+    }
+
+    [Test]
+    public void Kill_and_Dispose_release_owned_process()
+    {
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var processField = typeof(SidecarProcessHost).GetField("_process", flags);
+        var psi = new ProcessStartInfo
+        {
+            FileName = OperatingSystem.IsWindows() ? "cmd.exe" : "sleep",
+            Arguments = OperatingSystem.IsWindows() ? "/c ping 127.0.0.1 -n 30 >NUL" : "30",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        var process = Process.Start(psi);
+        Assert.That(process, Is.Not.Null);
+        processField.SetValue(host, process);
+
+        var disposeBool = typeof(SidecarProcessHost).GetMethod("Dispose", flags, null, new[] { typeof(bool) }, null);
+        disposeBool.Invoke(host, new object[] { false });
+        Assert.That(processField.GetValue(host), Is.SameAs(process));
+
+        host.Kill();
+        Assert.That(processField.GetValue(host), Is.Null);
+        host.Dispose();
+        Assert.That(processField.GetValue(host), Is.Null);
     }
 
     [Test]

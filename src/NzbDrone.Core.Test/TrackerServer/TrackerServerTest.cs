@@ -1788,6 +1788,56 @@ public class TrackerServerTest
         Assert.DoesNotThrow(() => _trackerServer.Dispose());
     }
 
+    [Test]
+    public void Stop_then_restart_then_dispose_releases_listener_and_cancellation_source()
+    {
+        _trackerServer.Handle(new ConfigSavedEvent());
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var listenerField = typeof(Core.TrackerServer.TrackerServer).GetField("_listener", flags);
+        var ctsField = typeof(Core.TrackerServer.TrackerServer).GetField("_listenerCts", flags);
+        Assert.That(listenerField.GetValue(_trackerServer), Is.Not.Null);
+        Assert.That(ctsField.GetValue(_trackerServer), Is.Not.Null);
+
+        _configService.TrackerServerEnabled.Returns(false);
+        _trackerServer.Handle(new ConfigSavedEvent());
+        Assert.That(listenerField.GetValue(_trackerServer), Is.Null);
+        Assert.That(ctsField.GetValue(_trackerServer), Is.Null);
+
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerHttpEnabled.Returns(true);
+        _trackerServer.Handle(new ConfigSavedEvent());
+        Assert.That(listenerField.GetValue(_trackerServer), Is.Not.Null);
+        Assert.That(ctsField.GetValue(_trackerServer), Is.Not.Null);
+
+        _trackerServer.Dispose();
+        Assert.That(listenerField.GetValue(_trackerServer), Is.Null);
+        Assert.That(ctsField.GetValue(_trackerServer), Is.Null);
+    }
+
+    [Test]
+    public void Dispose_bool_false_does_not_release_cancellation_source()
+    {
+        _trackerServer.Handle(new ConfigSavedEvent());
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var ctsField = typeof(Core.TrackerServer.TrackerServer).GetField("_listenerCts", flags);
+        var original = ctsField.GetValue(_trackerServer);
+        Assert.That(original, Is.Not.Null);
+
+        var disposeBool = typeof(Core.TrackerServer.TrackerServer).GetMethod(
+            "Dispose",
+            flags,
+            null,
+            new[] { typeof(bool) },
+            null);
+        disposeBool.Invoke(_trackerServer, new object[] { false });
+        Assert.That(ctsField.GetValue(_trackerServer), Is.SameAs(original));
+
+        _trackerServer.Dispose();
+        Assert.That(ctsField.GetValue(_trackerServer), Is.Null);
+    }
+
     // ---- HandleAnnounce boundary and edge cases ----
 
     [Test]

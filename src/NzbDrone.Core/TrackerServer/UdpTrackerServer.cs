@@ -192,33 +192,46 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, ID
         {
             _wasEnabled = false;
 
-            if (_cleanupTimer != null)
-            {
-                _cleanupTimer.Dispose();
-                _cleanupTimer = null;
-            }
-
             if (_listenerCts != null)
             {
                 _listenerCts.Cancel();
-                _listenerCts.Dispose();
-                _listenerCts = null;
             }
 
-            if (_client != null)
-            {
-                try
-                {
-                    _client.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex, "Error disposing UDP client");
-                }
+            var hadClient = _client != null;
+            Dispose(true);
 
-                _client = null;
+            if (hadClient)
+            {
                 _logger.Info("UDP tracker stopped");
             }
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
+        _cleanupTimer?.Dispose();
+        _cleanupTimer = null;
+
+        _listenerCts?.Dispose();
+        _listenerCts = null;
+
+        if (_client != null)
+        {
+            try
+            {
+                _client.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error disposing UDP client");
+            }
+
+            _client = null;
         }
     }
 

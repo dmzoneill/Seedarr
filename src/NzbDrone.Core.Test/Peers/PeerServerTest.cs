@@ -255,6 +255,22 @@ public class PeerServerTest
         Assert.DoesNotThrow(() => _server.Dispose());
     }
 
+    [Test]
+    public void Dispose_releases_listener_cancellation_source()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var ctsField = typeof(PeerServer).GetField("_listenerCts", flags);
+        var cts = new CancellationTokenSource();
+        ctsField.SetValue(_server, cts);
+
+        var disposeBool = typeof(PeerServer).GetMethod("Dispose", flags, null, new[] { typeof(bool) }, null);
+        disposeBool.Invoke(_server, new object[] { false });
+        Assert.That(ctsField.GetValue(_server), Is.SameAs(cts));
+
+        _server.Dispose();
+        Assert.That(ctsField.GetValue(_server), Is.Null);
+    }
+
     // GetEncryptionMode tests
 
     [Test]

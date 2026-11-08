@@ -200,8 +200,6 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
             if (_listenerCts != null)
             {
                 _listenerCts.Cancel();
-                _listenerCts.Dispose();
-                _listenerCts = null;
             }
 
             if (_listener != null)
@@ -210,7 +208,20 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
                 _listener = null;
                 _logger.Info("Built-in HTTP tracker stopped");
             }
+
+            Dispose(true);
         }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
+        _listenerCts?.Dispose();
+        _listenerCts = null;
     }
 
     private async Task AcceptLoop(TcpListener listener, CancellationToken ct)

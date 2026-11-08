@@ -90,6 +90,61 @@ public class DhtServiceTest
         _service = null; // prevent TearDown from double-disposing
     }
 
+    [Test]
+    public async Task Dispose_after_start_releases_worker_cts_and_udp_client()
+    {
+        using var service = new DhtService(_configService, port: 0);
+        using var cts = new CancellationTokenSource(1000);
+        await service.StartAsync(cts.Token);
+        await Task.Delay(200);
+
+        Assert.That(service.IsRunning, Is.True);
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var udpField = typeof(DhtService).GetField("_udpClient", flags);
+        var workerField = typeof(DhtService).GetField("_workerCts", flags);
+        Assert.That(udpField.GetValue(service), Is.Not.Null);
+        Assert.That(workerField.GetValue(service), Is.Not.Null);
+
+        var disposeBool = typeof(DhtService).GetMethod("Dispose", flags, null, new[] { typeof(bool) }, null);
+        var originalClient = udpField.GetValue(service);
+        disposeBool.Invoke(service, new object[] { false });
+        Assert.That(udpField.GetValue(service), Is.SameAs(originalClient));
+
+        service.Dispose();
+        Assert.That(udpField.GetValue(service), Is.Null);
+        Assert.That(workerField.GetValue(service), Is.Null);
+        Assert.That(service.IsRunning, Is.False);
+    }
+
+    [Test]
+    public void Stop_then_restart_then_dispose_releases_owned_fields()
+    {
+        using var service = new DhtService(_configService, port: 0);
+        service.Handle(new ConfigSavedEvent());
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var udpField = typeof(DhtService).GetField("_udpClient", flags);
+        var workerField = typeof(DhtService).GetField("_workerCts", flags);
+        Assert.That(udpField.GetValue(service), Is.Not.Null);
+        Assert.That(workerField.GetValue(service), Is.Not.Null);
+
+        _configService.EnableDht.Returns(false);
+        service.Handle(new ConfigSavedEvent());
+        Assert.That(udpField.GetValue(service), Is.Null);
+        Assert.That(workerField.GetValue(service), Is.Null);
+        Assert.That(service.IsRunning, Is.False);
+
+        _configService.EnableDht.Returns(true);
+        service.Handle(new ConfigSavedEvent());
+        Assert.That(udpField.GetValue(service), Is.Not.Null);
+        Assert.That(workerField.GetValue(service), Is.Not.Null);
+
+        service.Dispose();
+        Assert.That(udpField.GetValue(service), Is.Null);
+        Assert.That(workerField.GetValue(service), Is.Null);
+    }
+
     // ── RoutingTable / PeerStore properties ──────────────────────────
 
     [Test]

@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Messaging.Events;
@@ -111,5 +114,22 @@ public class TrackerMetricServiceBatchingTest
         Assert.That(targetPoint.Announces, Is.EqualTo(4));
         Assert.That(targetPoint.PeersDiscovered, Is.EqualTo(15));
         Assert.That(targetPoint.AvgLatencyMs, Is.EqualTo(95.5));
+    }
+
+    [Test]
+    public async Task DisposeAsync_releases_flush_signal()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var flushField = typeof(TrackerMetricService).GetField("_flushSignalCts", flags);
+        Assert.That(flushField.GetValue(_subject), Is.Not.Null);
+
+        var disposeBool = typeof(TrackerMetricService).GetMethod("Dispose", flags, null, new[] { typeof(bool) }, null);
+        var original = flushField.GetValue(_subject);
+        disposeBool.Invoke(_subject, new object[] { false });
+        Assert.That(flushField.GetValue(_subject), Is.SameAs(original));
+
+        await _subject.DisposeAsync();
+        Assert.That(flushField.GetValue(_subject), Is.Null);
+        _subject = null;
     }
 }

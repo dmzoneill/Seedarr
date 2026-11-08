@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
@@ -105,6 +107,22 @@ public class TorrentEventLogServiceTest
         await _subject.DisposeAsync();
 
         Assert.That(capturedBatches.Sum(b => b.Count), Is.EqualTo(10));
+    }
+
+    [Test]
+    public async Task DisposeAsync_releases_flush_signal_and_dispose_false_is_a_noop()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var flushField = typeof(TorrentEventLogService).GetField("_flushSignalCts", flags);
+        Assert.That(flushField.GetValue(_subject), Is.Not.Null);
+
+        var disposeBool = typeof(TorrentEventLogService).GetMethod("Dispose", flags, null, new[] { typeof(bool) }, null);
+        var original = flushField.GetValue(_subject);
+        disposeBool.Invoke(_subject, new object[] { false });
+        Assert.That(flushField.GetValue(_subject), Is.SameAs(original));
+
+        await _subject.DisposeAsync();
+        Assert.That(flushField.GetValue(_subject), Is.Null);
     }
 
     [Test]

@@ -43,6 +43,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
     private TaskCompletionSource _pendingFlushTcs;
     private int _pendingCount;
     private bool _disposed;
+    private bool _resourcesDisposed;
 
     public TorrentEventLogService(ITorrentEventLogRepository repository)
     {
@@ -256,7 +257,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
                 {
                     if (_flushSignalCts.IsCancellationRequested)
                     {
-                        _flushSignalCts.Dispose();
+                        DisposeTokenSource(_flushSignalCts);
                         _flushSignalCts = new CancellationTokenSource();
                     }
 
@@ -348,7 +349,6 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
         }
 
         _disposed = true;
-        _purgeTimer?.Dispose();
         _logChannel.Writer.TryComplete();
         TriggerFlush();
 
@@ -364,43 +364,54 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
             }
         }
 
-        _cts.Dispose();
-        _flushLock.Dispose();
-        _flushSignalCts.Dispose();
+        Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    private static void DisposeTokenSource(CancellationTokenSource source)
+    {
+        source?.Dispose();
     }
 
     protected virtual void Dispose(bool disposing)
     {
+        if (!disposing)
+        {
+            return;
+        }
+
         if (!_disposed)
         {
             _disposed = true;
-            _purgeTimer?.Dispose();
-
-            if (disposing)
+            _logChannel.Writer.TryComplete();
+            TriggerFlush();
+            if (_processTask != null)
             {
-                _logChannel.Writer.TryComplete();
-                TriggerFlush();
-                if (_processTask != null)
+                try
                 {
-                    try
+                    if (!_processTask.Wait(TimeSpan.FromSeconds(5)))
                     {
-                        if (!_processTask.Wait(TimeSpan.FromSeconds(5)))
-                        {
-                            _cts.Cancel();
-                            _processTask.Wait(TimeSpan.FromSeconds(1));
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error while waiting for torrent event log processor shutdown");
+                        _cts.Cancel();
+                        _processTask.Wait(TimeSpan.FromSeconds(1));
                     }
                 }
-
-                _cts.Dispose();
-                _flushLock.Dispose();
-                _flushSignalCts.Dispose();
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error while waiting for torrent event log processor shutdown");
+                }
             }
         }
+
+        if (_resourcesDisposed)
+        {
+            return;
+        }
+
+        _resourcesDisposed = true;
+        _purgeTimer?.Dispose();
+        _cts?.Dispose();
+        _flushLock?.Dispose();
+        _flushSignalCts?.Dispose();
+        _flushSignalCts = null;
     }
 }

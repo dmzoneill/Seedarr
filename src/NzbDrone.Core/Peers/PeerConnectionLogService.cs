@@ -38,6 +38,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
     private TaskCompletionSource _pendingFlushTcs;
     private int _pendingCount;
     private bool _disposed;
+    private bool _resourcesDisposed;
 
     public PeerConnectionLogService(IPeerConnectionLogRepository repository)
     {
@@ -243,7 +244,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
                 {
                     if (_flushSignalCts.IsCancellationRequested)
                     {
-                        _flushSignalCts.Dispose();
+                        DisposeTokenSource(_flushSignalCts);
                         _flushSignalCts = new CancellationTokenSource();
                     }
 
@@ -337,7 +338,6 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
         }
 
         _disposed = true;
-        _purgeTimer?.Dispose();
         _logChannel.Writer.TryComplete();
         TriggerFlush();
 
@@ -353,44 +353,55 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
             }
         }
 
-        _cts.Dispose();
-        _flushSignalCts.Dispose();
-        _flushLock.Dispose();
+        Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    private static void DisposeTokenSource(CancellationTokenSource source)
+    {
+        source?.Dispose();
     }
 
     protected virtual void Dispose(bool disposing)
     {
+        if (!disposing)
+        {
+            return;
+        }
+
         if (!_disposed)
         {
             _disposed = true;
-            _purgeTimer?.Dispose();
+            _logChannel.Writer.TryComplete();
+            TriggerFlush();
 
-            if (disposing)
+            if (_consumerTask != null)
             {
-                _logChannel.Writer.TryComplete();
-                TriggerFlush();
-
-                if (_consumerTask != null)
+                try
                 {
-                    try
+                    if (!_consumerTask.Wait(TimeSpan.FromSeconds(5)))
                     {
-                        if (!_consumerTask.Wait(TimeSpan.FromSeconds(5)))
-                        {
-                            _cts.Cancel();
-                            _consumerTask.Wait(TimeSpan.FromSeconds(1));
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error while waiting for peer connection log processor shutdown");
+                        _cts.Cancel();
+                        _consumerTask.Wait(TimeSpan.FromSeconds(1));
                     }
                 }
-
-                _cts.Dispose();
-                _flushSignalCts.Dispose();
-                _flushLock.Dispose();
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error while waiting for peer connection log processor shutdown");
+                }
             }
         }
+
+        if (_resourcesDisposed)
+        {
+            return;
+        }
+
+        _resourcesDisposed = true;
+        _purgeTimer?.Dispose();
+        _cts?.Dispose();
+        _flushSignalCts?.Dispose();
+        _flushSignalCts = null;
+        _flushLock?.Dispose();
     }
 }

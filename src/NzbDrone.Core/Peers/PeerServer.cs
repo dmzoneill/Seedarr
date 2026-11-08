@@ -1222,7 +1222,20 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
                 _listener = null;
             }
+
+            Dispose(true);
         }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
+        _listenerCts?.Dispose();
+        _listenerCts = null;
     }
 
     private void TriggerRebind()
@@ -1624,8 +1637,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                         _listener = null;
                     }
 
-                    _listenerCts?.Dispose();
-                    _listenerCts = null;
+                    Dispose(true);
                     IsListening = false;
                 }
             }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
@@ -263,6 +264,22 @@ public class PeerConnectionLogServiceTest
     public void Dispose_should_not_throw()
     {
         Assert.DoesNotThrow(() => _service.Dispose());
+    }
+
+    [Test]
+    public async Task DisposeAsync_releases_flush_signal()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var flushField = typeof(PeerConnectionLogService).GetField("_flushSignalCts", flags);
+        Assert.That(flushField.GetValue(_service), Is.Not.Null);
+
+        var disposeBool = typeof(PeerConnectionLogService).GetMethod("Dispose", flags, null, new[] { typeof(bool) }, null);
+        var original = flushField.GetValue(_service);
+        disposeBool.Invoke(_service, new object[] { false });
+        Assert.That(flushField.GetValue(_service), Is.SameAs(original));
+
+        await _service.DisposeAsync();
+        Assert.That(flushField.GetValue(_service), Is.Null);
     }
 
     [Test]
