@@ -381,30 +381,45 @@ public class DhtService : BackgroundService, IDisposable, IDhtService,
                 {
                     _logger.Debug(ex, "Error cancelling DHT worker cancellation token");
                 }
-
-                _workerCts.Dispose();
-                _workerCts = null;
             }
 
-            if (_udpClient != null)
-            {
-                try
-                {
-                    _udpClient.Close();
-                    _udpClient.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex, "Error closing DHT UDP client during shutdown");
-                }
+            var hadClient = _udpClient != null;
+            Dispose(true);
 
-                _udpClient = null;
+            if (hadClient)
+            {
                 _boundPort = 0;
                 _rateLimiters.Clear();
                 _logger.Info("DHT service stopped");
             }
 
             _workerTask = null;
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
+        _workerCts?.Dispose();
+        _workerCts = null;
+
+        if (_udpClient != null)
+        {
+            try
+            {
+                _udpClient.Close();
+                _udpClient.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error closing DHT UDP client during shutdown");
+            }
+
+            _udpClient = null;
         }
     }
 

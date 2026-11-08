@@ -266,8 +266,6 @@ public class WindowsPtyProcess : IPtyProcess, IDisposable
                     _fallbackProcess.Kill(entireProcessTree: true);
                     _fallbackProcess.WaitForExit(1000);
                 }
-
-                _fallbackProcess.Dispose();
             }
             else
             {
@@ -307,8 +305,19 @@ public class WindowsPtyProcess : IPtyProcess, IDisposable
         }
         finally
         {
-            _masterStream?.Dispose();
+            Dispose(true);
         }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
+        _fallbackProcess?.Dispose();
+        _masterStream?.Dispose();
     }
 
     public async Task WaitForExitAsync(CancellationToken cancellationToken = default)

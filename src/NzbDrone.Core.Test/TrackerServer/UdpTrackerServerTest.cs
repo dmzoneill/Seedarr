@@ -1617,4 +1617,63 @@ public class UdpTrackerServerTest
         Assert.DoesNotThrow(() => _udpTrackerServer.Dispose());
         Assert.DoesNotThrow(() => _udpTrackerServer.Dispose());
     }
+
+    [Test]
+    public void Stop_then_restart_then_dispose_releases_client_cts_and_timer()
+    {
+        _configService.TrackerUdpPort.Returns(0);
+        _configService.TrackerBindAddress.Returns("127.0.0.1");
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var clientField = typeof(UdpTrackerServer).GetField("_client", flags);
+        var ctsField = typeof(UdpTrackerServer).GetField("_listenerCts", flags);
+        var timerField = typeof(UdpTrackerServer).GetField("_cleanupTimer", flags);
+        Assert.That(clientField.GetValue(_udpTrackerServer), Is.Not.Null);
+        Assert.That(ctsField.GetValue(_udpTrackerServer), Is.Not.Null);
+        Assert.That(timerField.GetValue(_udpTrackerServer), Is.Not.Null);
+
+        _configService.TrackerServerEnabled.Returns(false);
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+        Assert.That(clientField.GetValue(_udpTrackerServer), Is.Null);
+        Assert.That(ctsField.GetValue(_udpTrackerServer), Is.Null);
+        Assert.That(timerField.GetValue(_udpTrackerServer), Is.Null);
+
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+        Assert.That(clientField.GetValue(_udpTrackerServer), Is.Not.Null);
+        Assert.That(ctsField.GetValue(_udpTrackerServer), Is.Not.Null);
+        Assert.That(timerField.GetValue(_udpTrackerServer), Is.Not.Null);
+
+        _udpTrackerServer.Dispose();
+        Assert.That(clientField.GetValue(_udpTrackerServer), Is.Null);
+        Assert.That(ctsField.GetValue(_udpTrackerServer), Is.Null);
+        Assert.That(timerField.GetValue(_udpTrackerServer), Is.Null);
+    }
+
+    [Test]
+    public void Dispose_bool_false_does_not_release_resources()
+    {
+        _configService.TrackerUdpPort.Returns(0);
+        _configService.TrackerBindAddress.Returns("127.0.0.1");
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var clientField = typeof(UdpTrackerServer).GetField("_client", flags);
+        var original = clientField.GetValue(_udpTrackerServer);
+        Assert.That(original, Is.Not.Null);
+
+        var disposeBool = typeof(UdpTrackerServer).GetMethod(
+            "Dispose",
+            flags,
+            null,
+            new[] { typeof(bool) },
+            null);
+        disposeBool.Invoke(_udpTrackerServer, new object[] { false });
+        Assert.That(clientField.GetValue(_udpTrackerServer), Is.SameAs(original));
+
+        _udpTrackerServer.Dispose();
+        Assert.That(clientField.GetValue(_udpTrackerServer), Is.Null);
+    }
 }

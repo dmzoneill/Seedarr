@@ -132,6 +132,7 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
     private CancellationTokenSource _flushSignalCts = new();
     private volatile bool _isProcessingBatch;
     private bool _disposed;
+    private bool _resourcesDisposed;
 
     private void TriggerFlush()
     {
@@ -997,7 +998,7 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
                         {
                             if (_flushSignalCts.IsCancellationRequested)
                             {
-                                _flushSignalCts.Dispose();
+                                Dispose(_flushSignalCts);
                                 _flushSignalCts = new CancellationTokenSource();
                             }
 
@@ -1105,7 +1106,6 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
         }
 
         _disposed = true;
-        _pruneTimer?.Dispose();
         _snapshotChannel.Writer.TryComplete();
 
         if (_flushTask != null)
@@ -1120,42 +1120,53 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
             }
         }
 
-        _cts.Dispose();
-        _flushSignalCts.Dispose();
-        _flushLock.Dispose();
+        Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    private void Dispose(CancellationTokenSource source)
+    {
+        source?.Dispose();
     }
 
     protected virtual void Dispose(bool disposing)
     {
+        if (!disposing)
+        {
+            return;
+        }
+
         if (!_disposed)
         {
             _disposed = true;
-            _pruneTimer?.Dispose();
-
-            if (disposing)
+            _snapshotChannel.Writer.TryComplete();
+            if (_flushTask != null)
             {
-                _snapshotChannel.Writer.TryComplete();
-                if (_flushTask != null)
+                try
                 {
-                    try
+                    if (!_flushTask.Wait(TimeSpan.FromSeconds(5)))
                     {
-                        if (!_flushTask.Wait(TimeSpan.FromSeconds(5)))
-                        {
-                            _cts.Cancel();
-                            _flushTask.Wait(TimeSpan.FromSeconds(1));
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error while waiting for tracker metric snapshot processor shutdown");
+                        _cts.Cancel();
+                        _flushTask.Wait(TimeSpan.FromSeconds(1));
                     }
                 }
-
-                _cts.Dispose();
-                _flushSignalCts.Dispose();
-                _flushLock.Dispose();
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error while waiting for tracker metric snapshot processor shutdown");
+                }
             }
         }
+
+        if (_resourcesDisposed)
+        {
+            return;
+        }
+
+        _resourcesDisposed = true;
+        _pruneTimer?.Dispose();
+        _cts?.Dispose();
+        _flushSignalCts?.Dispose();
+        _flushSignalCts = null;
+        _flushLock?.Dispose();
     }
 }

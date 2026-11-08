@@ -99,12 +99,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
                 if (_process != null)
                 {
-                    try
-                    {
-                        _process.Dispose();
-                    }
-                    catch { }
-                    _process = null;
+                    Dispose(true);
                 }
 
                 _process = ProcessStarter(startInfo);
@@ -272,17 +267,12 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
                     _logger.Debug(ex, "Failed to kill plugin process '{0}'", _manifest.Id);
                 }
 
-                try
-                {
-                    _process.Dispose();
-                }
-                catch { }
             }
 
             _ioCts?.Cancel();
             PluginInfo.State = PluginState.Stopped;
             PluginInfo.ProcessId = null;
-            _process = null;
+            Dispose(true);
             _stdinWriter = null;
             _isStopping = false;
         }
@@ -401,6 +391,25 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
         }
     }
 
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
+        try
+        {
+            _process?.Dispose();
+        }
+        catch
+        {
+            // Process may already be disposed during stop; ignore.
+        }
+
+        _process = null;
+    }
+
     internal static TimeSpan CalculateBackoff(int crashCount)
     {
         if (crashCount <= 0)
@@ -485,18 +494,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
     {
         lock (_stateLock)
         {
-            if (_process != null)
-            {
-                try
-                {
-                    _process.Dispose();
-                }
-                catch
-                {
-                    // Process may already be disposed during stop; ignore.
-                }
-                _process = null;
-            }
+            Dispose(true);
 
             if (_isStopping)
             {
