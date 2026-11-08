@@ -266,7 +266,6 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
                 {
                     _logger.Debug(ex, "Failed to kill plugin process '{0}'", _manifest.Id);
                 }
-
             }
 
             _ioCts?.Cancel();
