@@ -112,7 +112,7 @@ public class IndexerController : Controller
             return BadRequest("URL cannot be empty.");
         }
 
-        if (!UrlValidator.IsSafeUrl(definition.Url))
+        if (!UrlValidator.IsSafeUrl(definition.Url, allowLoopback: true, allowInternal: true))
         {
             return BadRequest("Target host/URL is not permitted.");
         }
@@ -205,7 +205,7 @@ public class IndexerController : Controller
             return BadRequest("URL cannot be empty.");
         }
 
-        if (!UrlValidator.IsSafeUrl(definition.Url))
+        if (!UrlValidator.IsSafeUrl(definition.Url, allowLoopback: true, allowInternal: true))
         {
             return BadRequest("Target host/URL is not permitted.");
         }

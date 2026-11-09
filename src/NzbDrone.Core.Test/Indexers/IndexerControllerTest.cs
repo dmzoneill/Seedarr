@@ -155,12 +155,8 @@ public class IndexerControllerTest
     }
 
     [TestCase("http://169.254.169.254/latest/meta-data")]
-    [TestCase("http://127.0.0.1:8080")]
-    [TestCase("http://localhost:9696")]
-    [TestCase("http://10.0.0.1:9696")]
-    [TestCase("http://192.168.1.1:9696")]
-    [TestCase("http://172.16.0.1:9696")]
-    public void Create_with_unsafe_url_returns_bad_request(string url)
+    [TestCase("http://169.254.1.1:9696")]
+    public void Create_with_link_local_url_returns_bad_request(string url)
     {
         var definition = new IndexerDefinition
         {
@@ -175,6 +171,27 @@ public class IndexerControllerTest
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
         Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
+    }
+
+    [TestCase("http://127.0.0.1:8080")]
+    [TestCase("http://localhost:9696")]
+    [TestCase("http://10.0.0.1:9696")]
+    [TestCase("http://192.168.1.1:9696")]
+    [TestCase("http://172.16.0.1:9696")]
+    public void Create_with_loopback_or_internal_url_is_allowed(string url)
+    {
+        var definition = new IndexerDefinition
+        {
+            Name = "Local Indexer",
+            IndexerType = "Prowlarr",
+            Url = url,
+            ApiKey = "testkey"
+        };
+
+        _indexerFactory.Create(Arg.Any<IndexerDefinition>()).Returns(ci => ci.Arg<IndexerDefinition>());
+        var result = _controller.Create(definition);
+
+        Assert.That(result.Result, Is.Not.InstanceOf<BadRequestObjectResult>());
     }
 
     [TestCase("")]
@@ -265,9 +282,8 @@ public class IndexerControllerTest
     }
 
     [TestCase("http://169.254.169.254/latest/meta-data")]
-    [TestCase("http://127.0.0.1:8080")]
-    [TestCase("http://localhost:9696")]
-    public void Update_with_unsafe_url_returns_bad_request(string url)
+    [TestCase("http://169.254.1.1:9696")]
+    public void Update_with_link_local_url_returns_bad_request(string url)
     {
         var existing = new IndexerDefinition
         {
@@ -293,6 +309,37 @@ public class IndexerControllerTest
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result;
         Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
+    }
+
+    [TestCase("http://127.0.0.1:8080")]
+    [TestCase("http://localhost:9696")]
+    [TestCase("http://10.0.0.1:9696")]
+    [TestCase("http://192.168.1.1:9696")]
+    [TestCase("http://172.16.0.1:9696")]
+    public void Update_with_loopback_or_internal_url_is_allowed(string url)
+    {
+        var existing = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Existing",
+            IndexerType = "Prowlarr",
+            Url = "https://safe-indexer.example.com",
+            ApiKey = "testkey"
+        };
+        _indexerFactory.Get(1).Returns(existing);
+
+        var updateDef = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Existing",
+            IndexerType = "Prowlarr",
+            Url = url,
+            ApiKey = "testkey"
+        };
+
+        var result = _controller.Update(1, updateDef);
+
+        Assert.That(result, Is.Not.InstanceOf<BadRequestObjectResult>());
     }
 
     [TestCase("")]
