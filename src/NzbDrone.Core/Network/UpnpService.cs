@@ -153,7 +153,7 @@ public class UpnpService : BackgroundService, IUpnpService, IHandle<ConfigSavedE
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(LifetimeSeconds / 2), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(LifetimeSeconds / 2.0), stoppingToken);
                 await CreateMappings(stoppingToken);
             }
             catch (OperationCanceledException)
@@ -176,7 +176,7 @@ public class UpnpService : BackgroundService, IUpnpService, IHandle<ConfigSavedE
 
             IsAvailable = true;
             LastRenewalUtc = DateTime.UtcNow;
-            NextRenewalUtc = DateTime.UtcNow.AddSeconds(LifetimeSeconds / 2);
+            NextRenewalUtc = DateTime.UtcNow.AddSeconds(LifetimeSeconds / 2.0);
             if (string.IsNullOrEmpty(RouterModel))
             {
                 RouterModel = "UPnP-IGD Gateway";
