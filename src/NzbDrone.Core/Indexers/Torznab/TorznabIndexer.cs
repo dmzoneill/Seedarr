@@ -18,6 +18,7 @@ namespace NzbDrone.Core.Indexers.Torznab;
 public class TorznabIndexer : IIndexer
 {
     private static readonly HttpClient DefaultClient = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
     private readonly IIndexerStatusService _indexerStatusService;
@@ -1301,6 +1302,6 @@ public class TorznabIndexer : IIndexer
 
         decoded = decoded.Replace('\u00A0', ' ');
 
-        return Regex.Replace(decoded, @"\s+", " ").Trim();
+        return Regex.Replace(decoded, @"\s+", " ", RegexOptions.None, RegexTimeout).Trim();
     }
 }

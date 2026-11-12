@@ -22,11 +22,13 @@ public class ArchiveExtractorService : IArchiveExtractorService
     private const int ExtractionBufferSize = 81920;
     private const long MinBytesForCompressionRatioCheck = 10 * 1024;
 
-    private static readonly Regex SecondaryPartRarRegex = new(@"\.part(?!0*1\.rar$)(\d+)\.rar$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex PrimaryPartRarRegex = new(@"\.part0*1\.rar$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex SecondaryVolumeRegex = new(@"\.[r-z]\d{2,}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex SecondarySplitArchiveRegex = new(@"\.(?:7z|zip)\.(?!0*1$)\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex PrimarySplitArchiveRegex = new(@"\.(?:7z|zip)\.0*1$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
+    private static readonly Regex SecondaryPartRarRegex = new(@"\.part(?!0*1\.rar$)(\d+)\.rar$", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+    private static readonly Regex PrimaryPartRarRegex = new(@"\.part0*1\.rar$", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+    private static readonly Regex SecondaryVolumeRegex = new(@"\.[r-z]\d{2,}$", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+    private static readonly Regex SecondarySplitArchiveRegex = new(@"\.(?:7z|zip)\.(?!0*1$)\d+$", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+    private static readonly Regex PrimarySplitArchiveRegex = new(@"\.(?:7z|zip)\.0*1$", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
 
     private readonly IEventAggregator _eventAggregator;
     private readonly IDiskProvider _diskProvider;
@@ -940,7 +942,7 @@ public class ArchiveExtractorService : IArchiveExtractorService
 
         if (PrimaryPartRarRegex.IsMatch(fileName))
         {
-            var match = Regex.Match(fileName, @"^(.*)\.part0*1\.rar$", RegexOptions.IgnoreCase);
+            var match = Regex.Match(fileName, @"^(.*)\.part0*1\.rar$", RegexOptions.IgnoreCase, RegexTimeout);
             if (match.Success)
             {
                 var baseName = match.Groups[1].Value;
@@ -978,7 +980,7 @@ public class ArchiveExtractorService : IArchiveExtractorService
         }
         else if (PrimarySplitArchiveRegex.IsMatch(fileName))
         {
-            var extMatch = Regex.Match(fileName, @"^(.*)\.(7z|zip)\.0*1$", RegexOptions.IgnoreCase);
+            var extMatch = Regex.Match(fileName, @"^(.*)\.(7z|zip)\.0*1$", RegexOptions.IgnoreCase, RegexTimeout);
             if (extMatch.Success)
             {
                 var baseName = extMatch.Groups[1].Value;

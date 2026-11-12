@@ -68,6 +68,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
     private static readonly object _removedLock = new();
     private static readonly List<(int Id, DateTime RemovedAt)> _recentlyRemovedList = new();
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
     private static readonly DateTime _serviceStartTime = DateTime.UtcNow;
     private static readonly HttpClient _sharedHttpClient = new();
 
@@ -1047,7 +1048,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 }
                 else
                 {
-                    var match = Regex.Match(ex.Message, @"\b[0-9a-fA-F]{40}\b");
+                    var match = Regex.Match(ex.Message, @"\b[0-9a-fA-F]{40}\b", RegexOptions.None, RegexTimeout);
                     if (match.Success)
                     {
                         targetHash = match.Value.ToLowerInvariant();

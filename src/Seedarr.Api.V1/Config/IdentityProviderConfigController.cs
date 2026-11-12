@@ -58,7 +58,9 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         "Basic",
     };
 
-    private static readonly Regex ProviderIdRegex = new(@"^[a-zA-Z0-9_-]{2,32}$", RegexOptions.Compiled);
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
+    private static readonly Regex ProviderIdRegex = new(@"^[a-zA-Z0-9_-]{2,32}$", RegexOptions.Compiled, RegexTimeout);
 
     private readonly IIdentityProviderService _providerService;
     private readonly IDynamicAuthSchemeManager _dynamicAuthManager;

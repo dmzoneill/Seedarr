@@ -35,6 +35,8 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
     private static readonly char[] WhitespaceSeparators = [' ', '\t'];
 
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
     public const int MaxStreamCaptureBytes = 256 * 1024;
 
     private readonly ITorrentMediaMetadataRepository _mediaMetadataRepository;
@@ -915,12 +917,12 @@ public class CustomScriptService : ICustomScriptService, IDisposable
 
         if (trimmed.Contains("path=", StringComparison.OrdinalIgnoreCase))
         {
-            var matchPath = System.Text.RegularExpressions.Regex.Match(trimmed, @"path=([^&]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var matchPath = System.Text.RegularExpressions.Regex.Match(trimmed, @"path=([^&]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase, RegexTimeout);
             if (matchPath.Success)
             {
                 var path = Uri.UnescapeDataString(matchPath.Groups[1].Value);
                 string args = null;
-                var matchArgs = System.Text.RegularExpressions.Regex.Match(trimmed, @"arguments=([^&]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                var matchArgs = System.Text.RegularExpressions.Regex.Match(trimmed, @"arguments=([^&]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase, RegexTimeout);
                 if (matchArgs.Success)
                 {
                     args = Uri.UnescapeDataString(matchArgs.Groups[1].Value);
