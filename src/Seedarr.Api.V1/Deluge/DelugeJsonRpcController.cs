@@ -42,6 +42,7 @@ public class DelugeJsonRpcController : ControllerBase
     private static readonly HttpClient _sharedHttpClient = new();
     private static readonly char[] LabelSeparators = [',', ';'];
     private static readonly char[] PathSeparators = ['/', '\\'];
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
     private static readonly string[] DefaultPlugins = ["Label", "Extractor", "Execute", "AutoAdd", "Blocklist", "Scheduler", "Stats"];
     private static readonly string[] SystemMethods =
     [
@@ -2571,7 +2572,7 @@ public class DelugeJsonRpcController : ControllerBase
         if (ex is InvalidOperationException &&
             ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
         {
-            var match = Regex.Match(ex.Message, @"[0-9a-fA-F]{40}");
+            var match = Regex.Match(ex.Message, @"[0-9a-fA-F]{40}", RegexOptions.None, RegexTimeout);
             if (match.Success)
             {
                 infoHash = match.Value;

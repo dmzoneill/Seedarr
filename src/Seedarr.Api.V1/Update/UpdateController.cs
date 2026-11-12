@@ -23,6 +23,7 @@ public class InstallUpdateRequest
 public class UpdateController : Controller
 {
     private static readonly char[] LineSeparators = ['\r', '\n'];
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
     private readonly IUpdateService _updateService;
     private readonly IPostUpdateVerificationService _postUpdateVerificationService;
     private readonly IUpdatePackageProvider _updatePackageProvider;
@@ -319,27 +320,27 @@ public class UpdateController : Controller
         }
 
         // 1. Strip raw HTML tags (e.g. <details>, <summary>, <br>, etc.)
-        item = Regex.Replace(item, @"<[^>]*>", string.Empty);
+        item = Regex.Replace(item, @"<[^>]*>", string.Empty, RegexOptions.None, RegexTimeout);
 
         // 2. Unescape / extract text from markdown links: [text](url) -> text
-        item = Regex.Replace(item, @"\[([^\]]+)\]\([^)]+\)", "$1");
+        item = Regex.Replace(item, @"\[([^\]]+)\]\([^)]+\)", "$1", RegexOptions.None, RegexTimeout);
 
         // 3. Strip GitHub contributor mentions and PR URLs at the end of lines:
         // E.g., "by @octocat in https://github.com/owner/repo/pull/1" -> stripped
-        item = Regex.Replace(item, @"\s*by\s+@[\w-]+(?:\s+in\s+https?://\S+)?", string.Empty, RegexOptions.IgnoreCase);
+        item = Regex.Replace(item, @"\s*by\s+@[\w-]+(?:\s+in\s+https?://\S+)?", string.Empty, RegexOptions.IgnoreCase, RegexTimeout);
 
         // Strip standalone PR / commit links: "in https://github.com/..."
-        item = Regex.Replace(item, @"\s*in\s+https?://\S+", string.Empty, RegexOptions.IgnoreCase);
+        item = Regex.Replace(item, @"\s*in\s+https?://\S+", string.Empty, RegexOptions.IgnoreCase, RegexTimeout);
 
         // Strip standalone bare links: "https://github.com/..."
-        item = Regex.Replace(item, @"https?://\S+", string.Empty, RegexOptions.IgnoreCase);
+        item = Regex.Replace(item, @"https?://\S+", string.Empty, RegexOptions.IgnoreCase, RegexTimeout);
 
         // Strip @mentions: (@user) or @user
-        item = Regex.Replace(item, @"\(@[\w-]+\)", string.Empty);
-        item = Regex.Replace(item, @"@[\w-]+", string.Empty);
+        item = Regex.Replace(item, @"\(@[\w-]+\)", string.Empty, RegexOptions.None, RegexTimeout);
+        item = Regex.Replace(item, @"@[\w-]+", string.Empty, RegexOptions.None, RegexTimeout);
 
         // Clean up redundant whitespace or trailing punctuation like dangling dashes/colons/commas
-        item = Regex.Replace(item, @"\s+", " ").Trim();
+        item = Regex.Replace(item, @"\s+", " ", RegexOptions.None, RegexTimeout).Trim();
         item = item.TrimEnd(' ', '-', ':', ',');
 
         return item;

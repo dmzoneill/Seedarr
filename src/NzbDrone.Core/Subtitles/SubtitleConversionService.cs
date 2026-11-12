@@ -10,25 +10,32 @@ public class SubtitleConversionService : ISubtitleConversionService
 {
     private readonly ISubtitleEncodingDetector _encodingDetector;
 
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
     private static readonly Regex TimecodeLineRegex = new(
         @"^\s*(?:(?<sh>\d{1,2}):)?(?<sm>\d{1,2}):(?<ss>\d{2})[,.](?<sms>\d{1,3})\s*-->\s*(?:(?<eh>\d{1,2}):)?(?<em>\d{1,2}):(?<es>\d{2})[,.](?<ems>\d{1,3})(?<settings>.*)$",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled,
+        RegexTimeout);
 
     private static readonly Regex MicroDvdRegex = new(
         @"^\s*\{(?<start>\d+)\}\{(?<end>\d+)\}(?<text>.*)$",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled,
+        RegexTimeout);
 
     private static readonly Regex FontTagRegex = new(
         @"</?font[^>]*>",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        RegexTimeout);
 
     private static readonly Regex AssTagRegex = new(
         @"\{[^}]+\}",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled,
+        RegexTimeout);
 
     private static readonly Regex ValidVttSettingRegex = new(
         @"^(?:line|position|size|align|vertical):",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        RegexTimeout);
 
     public SubtitleConversionService(ISubtitleEncodingDetector encodingDetector = null)
     {

@@ -20,6 +20,7 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
     private static readonly HttpClient DefaultClient = new() { Timeout = DefaultHttpClientTimeout };
     private static readonly TimeSpan DefaultBaseBackoff = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromHours(24);
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
 
     private readonly HttpClient _httpClient;
     private readonly IConfigService _configService;
@@ -735,11 +736,11 @@ public class PeerBlocklistSyncService : IPeerBlocklistSyncService
                     return diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
                 }
 
-                var match = Regex.Match(trimmed, @"(?:retry[-_ ]?after[:= ]*|retry in )(?<val>[^\r\n]+)", RegexOptions.IgnoreCase);
+                var match = Regex.Match(trimmed, @"(?:retry[-_ ]?after[:= ]*|retry in )(?<val>[^\r\n]+)", RegexOptions.IgnoreCase, RegexTimeout);
                 if (match.Success)
                 {
                     var subVal = match.Groups["val"].Value.Trim();
-                    var digitsMatch = Regex.Match(subVal, @"^(\d+)");
+                    var digitsMatch = Regex.Match(subVal, @"^(\d+)", RegexOptions.None, RegexTimeout);
                     if (digitsMatch.Success && int.TryParse(digitsMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sec) && sec >= 0)
                     {
                         return TimeSpan.FromSeconds(sec);

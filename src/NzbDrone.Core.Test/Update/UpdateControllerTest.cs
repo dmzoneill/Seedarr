@@ -456,4 +456,53 @@ public class UpdateControllerTest
         var badRequestResult = actionResult.Result as BadRequestObjectResult;
         Assert.That(badRequestResult, Is.Not.Null);
     }
+
+    [Test]
+    public async Task GetUpdates_should_sanitize_release_note_markup()
+    {
+        var body = """
+## What's New
+- Added <b>dark mode</b> via [docs](https://example.com/docs)
+- Contributor item by @octocat in https://github.com/owner/repo/pull/1
+- Standalone in https://example.com/pr leftover
+- See the site https://example.com/path and mention @someone (@alias)
+
+## Bug Fixes
+- Fixed   the   thing:
+""";
+
+        var updateInfo = new UpdateInfo
+        {
+            CurrentVersion = "9.9.9",
+            LatestVersion = "9.9.9",
+            UpdateAvailable = false,
+            Releases = new List<ReleaseInfo>
+            {
+                new() { Version = "9.9.9", PublishedAt = DateTime.UtcNow, Body = body },
+            },
+        };
+
+        _updateService.CheckForUpdateAsync(false, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(updateInfo));
+
+        var actionResult = await _controller.GetUpdates();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var results = okResult.Value as List<UpdateResource>;
+        Assert.That(results, Is.Not.Null);
+        Assert.That(results, Has.Count.EqualTo(1));
+
+        Assert.That(results[0].Changes.New, Is.EqualTo(new List<string>
+        {
+            "Added dark mode via docs",
+            "Contributor item",
+            "Standalone leftover",
+            "See the site and mention",
+        }));
+        Assert.That(results[0].Changes.Fixed, Is.EqualTo(new List<string>
+        {
+            "Fixed the thing",
+        }));
+    }
 }

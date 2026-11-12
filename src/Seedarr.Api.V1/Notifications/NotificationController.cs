@@ -601,25 +601,32 @@ public class NotificationController : Controller
         "secret",
     };
 
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
     private static readonly Regex DiscordWebhookRegex = new(
         @"(https?://(?:[a-zA-Z0-9-]+\.)?discord(?:app)?\.com/api/webhooks/\d+/)[^/?#\s]+",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        RegexOptions.Compiled | RegexOptions.IgnoreCase,
+        RegexTimeout);
 
     private static readonly Regex SlackWebhookRegex = new(
         @"(https?://hooks\.slack\.com/services/[A-Za-z0-9]+/[A-Za-z0-9]+/)[^/?#\s]+",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        RegexOptions.Compiled | RegexOptions.IgnoreCase,
+        RegexTimeout);
 
     private static readonly Regex QueryParamSecretRegex = new(
         @"((?:^|[?&])(?:token|botToken|bot_token|apiKey|api_key|appToken|app_token|key|secret)=)[^&#\s]+",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        RegexOptions.Compiled | RegexOptions.IgnoreCase,
+        RegexTimeout);
 
     private static readonly Regex QueryParamPasswordRegex = new(
         @"((?:^|[?&])(?:password|pass|userKey|user_key)=)[^&#\s]+",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        RegexOptions.Compiled | RegexOptions.IgnoreCase,
+        RegexTimeout);
 
     private static readonly Regex UrlBasicAuthRegex = new(
         @"(https?://[^:/@\s]+:)([^@/\s]+)(@)",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        RegexOptions.Compiled | RegexOptions.IgnoreCase,
+        RegexTimeout);
 
     public static string MaskSettings(string settings, string implementation = null)
     {
@@ -1206,7 +1213,7 @@ public class NotificationController : Controller
             if (settings.Contains(prop + "="))
             {
                 var escapedProp = Regex.Escape(prop);
-                var match = Regex.Match(settings, $@"{escapedProp}=([^&]+)");
+                var match = Regex.Match(settings, $@"{escapedProp}=([^&]+)", RegexOptions.None, RegexTimeout);
                 if (match.Success)
                 {
                     return Uri.UnescapeDataString(match.Groups[1].Value);
