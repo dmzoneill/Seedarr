@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
@@ -61,6 +62,15 @@ public class TrackerAnnounceServiceTest
             eventAggregator: _eventAggregator,
             torrentService: _torrentService,
             vpnKillSwitchService: _vpnKillSwitchService);
+
+        _multiTracker.AnnounceAsync(
+                Arg.Any<TrackerAnnounceRequest>(),
+                Arg.Any<List<List<string>>>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(_multiTracker.Announce(
+                ci.ArgAt<TrackerAnnounceRequest>(0),
+                ci.ArgAt<List<List<string>>>(1))));
     }
 
     [Test]

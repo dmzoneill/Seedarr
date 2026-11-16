@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common;
 using NzbDrone.Core.Configuration;
@@ -18,8 +19,11 @@ public interface IMultiTrackerManager
 {
     TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList);
     TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList, bool isPrivate);
+    Task<TrackerAnnounceResponse> AnnounceAsync(TrackerAnnounceRequest request, List<List<string>> announceList, bool isPrivate = false, CancellationToken cancellationToken = default);
     TrackerScrapeResponse Scrape(string infoHash, List<List<string>> announceList);
     TrackerScrapeResponse Scrape(TrackerEntry entry, string infoHash);
+    Task<TrackerScrapeResponse> ScrapeAsync(string infoHash, List<List<string>> announceList, CancellationToken cancellationToken = default);
+    Task<TrackerScrapeResponse> ScrapeAsync(TrackerEntry entry, string infoHash, CancellationToken cancellationToken = default);
 }
 
 public class MultiTrackerManager : IMultiTrackerManager
@@ -134,10 +138,15 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList)
     {
-        return Announce(request, announceList, request?.IsPrivate ?? false);
+        return AnnounceAsync(request, announceList, request?.IsPrivate ?? false).GetAwaiter().GetResult();
     }
 
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList, bool isPrivate)
+    {
+        return AnnounceAsync(request, announceList, isPrivate).GetAwaiter().GetResult();
+    }
+
+    public async Task<TrackerAnnounceResponse> AnnounceAsync(TrackerAnnounceRequest request, List<List<string>> announceList, bool isPrivate = false, CancellationToken cancellationToken = default)
     {
         if (_vpnKillSwitchService?.IsFailClosedActive == true)
         {
@@ -169,19 +178,24 @@ public class MultiTrackerManager : IMultiTrackerManager
                 return new TrackerAnnounceResponse { Success = false, FailureReason = "No trackers available" };
             }
 
-            return AnnounceToTracker(request, firstTracker).Response;
+            return (await AnnounceToTrackerAsync(request, firstTracker, cancellationToken)).Response;
         }
 
-        return ExecuteTrackerOperation(
+        return await ExecuteTrackerOperationAsync(
             request.InfoHash,
             announceList,
-            trackerUrl => AnnounceToTracker(request, trackerUrl),
+            trackerUrl => AnnounceToTrackerAsync(request, trackerUrl, cancellationToken),
             () => new TrackerAnnounceResponse { Success = false, FailureReason = "All trackers failed" },
             true,
             isPrivate);
     }
 
     public TrackerScrapeResponse Scrape(TrackerEntry entry, string infoHash)
+    {
+        return ScrapeAsync(entry, infoHash).GetAwaiter().GetResult();
+    }
+
+    public async Task<TrackerScrapeResponse> ScrapeAsync(TrackerEntry entry, string infoHash, CancellationToken cancellationToken = default)
     {
         if (entry == null || string.IsNullOrWhiteSpace(entry.Url))
         {
@@ -194,10 +208,15 @@ public class MultiTrackerManager : IMultiTrackerManager
             return new TrackerScrapeResponse { Success = false, FailureReason = "VPN outage: scrape deferred" };
         }
 
-        return ScrapeTracker(infoHash, entry.Url).Response;
+        return (await ScrapeTrackerAsync(infoHash, entry.Url, cancellationToken)).Response;
     }
 
     public TrackerScrapeResponse Scrape(string infoHash, List<List<string>> announceList)
+    {
+        return ScrapeAsync(infoHash, announceList).GetAwaiter().GetResult();
+    }
+
+    public async Task<TrackerScrapeResponse> ScrapeAsync(string infoHash, List<List<string>> announceList, CancellationToken cancellationToken = default)
     {
         if (_vpnKillSwitchService?.IsFailClosedActive == true)
         {
@@ -218,21 +237,21 @@ public class MultiTrackerManager : IMultiTrackerManager
                 return new TrackerScrapeResponse { Success = false, FailureReason = "No trackers available" };
             }
 
-            return ScrapeTracker(infoHash, firstTracker).Response;
+            return (await ScrapeTrackerAsync(infoHash, firstTracker, cancellationToken)).Response;
         }
 
-        return ExecuteTrackerOperation(
+        return await ExecuteTrackerOperationAsync(
             infoHash,
             announceList,
-            trackerUrl => ScrapeTracker(infoHash, trackerUrl),
+            trackerUrl => ScrapeTrackerAsync(infoHash, trackerUrl, cancellationToken),
             () => new TrackerScrapeResponse { Success = false, FailureReason = "All trackers failed" },
             false);
     }
 
-    private TResponse ExecuteTrackerOperation<TResponse>(
+    private async Task<TResponse> ExecuteTrackerOperationAsync<TResponse>(
         string infoHash,
         List<List<string>> announceList,
-        Func<string, (TResponse Response, bool IsNetworkError)> operation,
+        Func<string, Task<(TResponse Response, bool IsNetworkError)>> operation,
         Func<TResponse> fallbackResponse,
         bool logBackoffSkip,
         bool isPrivate = false)
@@ -272,7 +291,7 @@ public class MultiTrackerManager : IMultiTrackerManager
                     continue;
                 }
 
-                var (response, isNetworkError) = operation(trackerUrl);
+                var (response, isNetworkError) = await operation(trackerUrl);
 
                 if (response != null && response.Success)
                 {
@@ -415,7 +434,7 @@ public class MultiTrackerManager : IMultiTrackerManager
         }
     }
 
-    private (TrackerAnnounceResponse Response, bool IsNetworkError) AnnounceToTracker(TrackerAnnounceRequest request, string trackerUrl)
+    private async Task<(TrackerAnnounceResponse Response, bool IsNetworkError)> AnnounceToTrackerAsync(TrackerAnnounceRequest request, string trackerUrl, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
         try
@@ -427,7 +446,7 @@ public class MultiTrackerManager : IMultiTrackerManager
                 return (new TrackerAnnounceResponse { Success = false, FailureReason = "Unknown tracker protocol", TrackerUrl = trackerUrl }, true);
             }
 
-            var response = provider.Announce(trackerRequest);
+            var response = await provider.AnnounceAsync(trackerRequest, cancellationToken);
             sw.Stop();
             var responseTimeMs = sw.ElapsedMilliseconds;
 
@@ -454,7 +473,7 @@ public class MultiTrackerManager : IMultiTrackerManager
         }
     }
 
-    private (TrackerScrapeResponse Response, bool IsNetworkError) ScrapeTracker(string infoHash, string trackerUrl)
+    private async Task<(TrackerScrapeResponse Response, bool IsNetworkError)> ScrapeTrackerAsync(string infoHash, string trackerUrl, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
         try
@@ -465,7 +484,7 @@ public class MultiTrackerManager : IMultiTrackerManager
                 return (new TrackerScrapeResponse { Success = false, FailureReason = "Unknown tracker protocol" }, true);
             }
 
-            var response = provider.Scrape(infoHash, trackerUrl);
+            var response = await provider.ScrapeAsync(infoHash, trackerUrl, cancellationToken);
             sw.Stop();
 
             if (response != null)

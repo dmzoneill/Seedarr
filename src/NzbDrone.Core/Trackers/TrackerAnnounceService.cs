@@ -26,7 +26,9 @@ namespace NzbDrone.Core.Trackers;
 public interface ITrackerAnnounceService
 {
     List<TrackerAnnounceResult> AnnounceTorrent(Torrent torrent, bool force = false, AnnounceEvent eventType = AnnounceEvent.None);
+    Task<List<TrackerAnnounceResult>> AnnounceTorrentAsync(Torrent torrent, bool force = false, AnnounceEvent eventType = AnnounceEvent.None, CancellationToken cancellationToken = default);
     TrackerAnnounceResult AnnounceTracker(Torrent torrent, TrackerEntry entry, bool force = false, AnnounceEvent eventType = AnnounceEvent.None);
+    Task<TrackerAnnounceResult> AnnounceTrackerAsync(Torrent torrent, TrackerEntry entry, bool force = false, AnnounceEvent eventType = AnnounceEvent.None, CancellationToken cancellationToken = default);
     TrackerScrapeResponse ScrapeTorrent(Torrent torrent);
 }
 
@@ -159,6 +161,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     }
 
     public List<TrackerAnnounceResult> AnnounceTorrent(Torrent torrent, bool force = false, AnnounceEvent eventType = AnnounceEvent.None)
+    {
+        return AnnounceTorrentAsync(torrent, force, eventType).GetAwaiter().GetResult();
+    }
+
+    public async Task<List<TrackerAnnounceResult>> AnnounceTorrentAsync(Torrent torrent, bool force = false, AnnounceEvent eventType = AnnounceEvent.None, CancellationToken cancellationToken = default)
     {
         var results = new List<TrackerAnnounceResult>();
         if (torrent == null || string.IsNullOrWhiteSpace(torrent.InfoHash))
@@ -419,7 +426,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         var sw = Stopwatch.StartNew();
         try
         {
-            response = _multiTracker.Announce(request, announceList);
+            response = await _multiTracker.AnnounceAsync(request, announceList, request.IsPrivate, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -664,6 +671,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
     public TrackerAnnounceResult AnnounceTracker(Torrent torrent, TrackerEntry entry, bool force = false, AnnounceEvent eventType = AnnounceEvent.None)
     {
+        return AnnounceTrackerAsync(torrent, entry, force, eventType).GetAwaiter().GetResult();
+    }
+
+    public async Task<TrackerAnnounceResult> AnnounceTrackerAsync(Torrent torrent, TrackerEntry entry, bool force = false, AnnounceEvent eventType = AnnounceEvent.None, CancellationToken cancellationToken = default)
+    {
         if (torrent == null || entry == null || string.IsNullOrWhiteSpace(entry.Url))
         {
             return new TrackerAnnounceResult { Success = false, FailureReason = "Invalid torrent or tracker" };
@@ -709,7 +721,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             };
         }
 
-        return ExecuteAnnounce(torrent, entry, isFirstAnnounce, eventType);
+        return await ExecuteAnnounceAsync(torrent, entry, isFirstAnnounce, eventType, cancellationToken);
     }
 
     public TrackerScrapeResponse ScrapeTorrent(Torrent torrent)
@@ -747,7 +759,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         return _multiTracker.Scrape(torrent.InfoHash, announceList);
     }
 
-    private TrackerAnnounceResult ExecuteAnnounce(Torrent torrent, TrackerEntry entry, bool isFirstAnnounce, AnnounceEvent eventType = AnnounceEvent.None)
+    private async Task<TrackerAnnounceResult> ExecuteAnnounceAsync(Torrent torrent, TrackerEntry entry, bool isFirstAnnounce, AnnounceEvent eventType = AnnounceEvent.None, CancellationToken cancellationToken = default)
     {
         if (_vpnKillSwitchService?.IsFailClosedActive == true)
         {
@@ -874,7 +886,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         var sw = Stopwatch.StartNew();
         try
         {
-            response = _multiTracker.Announce(request, announceList);
+            response = await _multiTracker.AnnounceAsync(request, announceList, request.IsPrivate, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -1528,7 +1540,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             {
                 if (!torrent.IsVpnPaused && (torrent.Status == TorrentStatus.Downloading || torrent.Status == TorrentStatus.Seeding))
                 {
-                    AnnounceTorrent(torrent, force: true);
+                    await AnnounceTorrentAsync(torrent, force: true, cancellationToken: cancellationToken);
                 }
             }
             catch (Exception ex)

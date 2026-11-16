@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -42,6 +44,15 @@ public class MultiTrackerManagerTest
             new List<ITrackerProvider> { _httpTracker, _udpTracker },
             _configService,
             serviceFactory: null);
+
+        _httpTracker.AnnounceAsync(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(_httpTracker.Announce(ci.ArgAt<TrackerAnnounceRequest>(0))));
+        _udpTracker.AnnounceAsync(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(_udpTracker.Announce(ci.ArgAt<TrackerAnnounceRequest>(0))));
+        _httpTracker.ScrapeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(_httpTracker.Scrape(ci.ArgAt<string>(0), ci.ArgAt<string>(1))));
+        _udpTracker.ScrapeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ci => Task.FromResult(_udpTracker.Scrape(ci.ArgAt<string>(0), ci.ArgAt<string>(1))));
     }
 
     [Test]

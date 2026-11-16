@@ -160,6 +160,11 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request)
     {
+        return AnnounceAsync(request).GetAwaiter().GetResult();
+    }
+
+    public async Task<TrackerAnnounceResponse> AnnounceAsync(TrackerAnnounceRequest request, CancellationToken cancellationToken = default)
+    {
         if (_configService?.ForceProxy == true && (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled))
         {
             _logger.Warn("ForceProxy is active but proxy is not configured or enabled; suppressing HTTP announce to {0}", request?.TrackerUrl);
@@ -177,19 +182,17 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 
             var client = GetClient();
 
-            var responseBytes = (ResiliencePipeline ?? ResiliencePipeline.Empty).Execute(ct =>
+            var responseBytes = await (ResiliencePipeline ?? ResiliencePipeline.Empty).ExecuteAsync(async ct =>
             {
                 using var req = new HttpRequestMessage(HttpMethod.Get, url);
                 var userAgent = !string.IsNullOrWhiteSpace(request.UserAgent)
                     ? request.UserAgent
                     : _configService.BitTorrentUserAgent;
                 req.Headers.TryAddWithoutValidation("User-Agent", userAgent);
-                using var response = client.Send(req, ct);
+                using var response = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
                 response.EnsureSuccessStatusCode();
-                using var ms = new MemoryStream();
-                response.Content.ReadAsStream(ct).CopyTo(ms);
-                return ms.ToArray();
-            });
+                return await response.Content.ReadAsByteArrayAsync(ct);
+            }, cancellationToken);
             var parser = new BencodeParser();
             var dict = parser.Parse<BDictionary>(responseBytes);
 
@@ -276,6 +279,11 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 
     public TrackerScrapeResponse Scrape(string infoHash, string trackerUrl)
     {
+        return ScrapeAsync(infoHash, trackerUrl).GetAwaiter().GetResult();
+    }
+
+    public async Task<TrackerScrapeResponse> ScrapeAsync(string infoHash, string trackerUrl, CancellationToken cancellationToken = default)
+    {
         if (_configService?.ForceProxy == true && (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled))
         {
             _logger.Warn("ForceProxy is active but proxy is not configured or enabled; suppressing HTTP scrape for {0}", trackerUrl);
@@ -298,16 +306,14 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 
             var client = GetClient();
 
-            var responseBytes = (ResiliencePipeline ?? ResiliencePipeline.Empty).Execute(ct =>
+            var responseBytes = await (ResiliencePipeline ?? ResiliencePipeline.Empty).ExecuteAsync(async ct =>
             {
                 using var req = new HttpRequestMessage(HttpMethod.Get, scrapeUrl);
                 req.Headers.TryAddWithoutValidation("User-Agent", _configService.BitTorrentUserAgent);
-                using var response = client.Send(req, ct);
+                using var response = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
                 response.EnsureSuccessStatusCode();
-                using var ms = new MemoryStream();
-                response.Content.ReadAsStream(ct).CopyTo(ms);
-                return ms.ToArray();
-            });
+                return await response.Content.ReadAsByteArrayAsync(ct);
+            }, cancellationToken);
             var parser = new BencodeParser();
             var dict = parser.Parse<BDictionary>(responseBytes);
 
@@ -351,6 +357,11 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 
     public Dictionary<string, TrackerScrapeResponse> BatchScrape(IEnumerable<string> infoHashes, string trackerUrl)
     {
+        return BatchScrapeAsync(infoHashes, trackerUrl).GetAwaiter().GetResult();
+    }
+
+    public async Task<Dictionary<string, TrackerScrapeResponse>> BatchScrapeAsync(IEnumerable<string> infoHashes, string trackerUrl, CancellationToken cancellationToken = default)
+    {
         var result = new Dictionary<string, TrackerScrapeResponse>(StringComparer.OrdinalIgnoreCase);
         if (infoHashes == null)
         {
@@ -373,7 +384,7 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 
         foreach (var hash in infoHashes)
         {
-            result[hash] = Scrape(hash, trackerUrl);
+            result[hash] = await ScrapeAsync(hash, trackerUrl, cancellationToken);
         }
 
         return result;
