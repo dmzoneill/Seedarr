@@ -1808,7 +1808,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                         break;
                     }
 
-                    DiscoverPeersFromTracker(torrent);
+                    await DiscoverPeersFromTrackerAsync(torrent, stoppingToken);
                     ConnectToDiscoveredPeers(torrent, stoppingToken);
                 }
 
@@ -1867,7 +1867,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         }
     }
 
-    private void DiscoverPeersFromTracker(Torrent torrent)
+    private async Task DiscoverPeersFromTrackerAsync(Torrent torrent, CancellationToken stoppingToken)
     {
         if (_vpnKillSwitchService?.IsFailClosedActive == true)
         {
@@ -1876,7 +1876,14 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
         try
         {
-            _trackerAnnounceService?.AnnounceTorrent(torrent, force: false);
+            if (_trackerAnnounceService != null)
+            {
+                await _trackerAnnounceService.AnnounceTorrentAsync(torrent, force: false, cancellationToken: stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
