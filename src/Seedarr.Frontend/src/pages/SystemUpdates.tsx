@@ -83,10 +83,10 @@ function SystemUpdates() {
     progress?.percentage ?? (installUpdate.isPending ? 10 : 0);
   const isRestartRequired =
     currentStage === "RestartRequired" ||
-    currentStage?.toLowerCase() === "restartrequired";
+    currentStage.toLowerCase() === "restartrequired";
   const isFailed =
     currentStage === "Failed" ||
-    currentStage?.toLowerCase() === "failed" ||
+    currentStage.toLowerCase() === "failed" ||
     installUpdate.isError;
   const errorMessage =
     progress?.errorMessage ||
@@ -95,7 +95,7 @@ function SystemUpdates() {
       : null);
 
   const getStageDescription = () => {
-    switch (currentStage?.toLowerCase()) {
+    switch (currentStage.toLowerCase()) {
       case "downloading":
         return "Downloading release package from GitHub...";
       case "verifying":

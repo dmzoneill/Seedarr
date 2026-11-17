@@ -2317,7 +2317,7 @@ export default function DownloadHistory() {
                     );
                   } catch (err: unknown) {
                     showToast(
-                      `Failed to export history: ${(err as { message?: string })?.message || "Unknown error"}`,
+                      `Failed to export history: ${(err as { message?: string }).message || "Unknown error"}`,
                       "error",
                     );
                   } finally {

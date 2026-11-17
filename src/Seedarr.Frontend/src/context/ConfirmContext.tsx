@@ -132,11 +132,11 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [handler]);
 
   const handleConfirm = useCallback(() => {
-    handler?.handleConfirm();
+    handler.handleConfirm();
   }, [handler]);
 
   const handleCancel = useCallback(() => {
-    handler?.handleCancel();
+    handler.handleCancel();
   }, [handler]);
 
   return (

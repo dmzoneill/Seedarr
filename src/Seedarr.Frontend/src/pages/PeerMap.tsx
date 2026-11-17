@@ -19,7 +19,7 @@ export const getNodeId = (
     string | number | SimNode | d3.SimulationNodeDatum | null | undefined,
 ): string => {
   if (typeof endpoint === "object" && endpoint !== null) {
-    return (endpoint as SimNode).id ?? "";
+    return (endpoint as SimNode).id;
   }
   if (typeof endpoint === "number") {
     return String(endpoint);

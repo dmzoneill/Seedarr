@@ -598,9 +598,9 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
   }
 
   const torrentProgress =
-    torrent.status === "Seeding" || (torrent.progress ?? 0) >= 1.0
+    torrent.status === "Seeding" || (torrent.progress) >= 1.0
       ? 100
-      : (torrent.progress ?? 0) * 100;
+      : (torrent.progress) * 100;
 
   const tree =
     nonPaddingFiles.length > 0

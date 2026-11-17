@@ -42,12 +42,12 @@ export function ProxySettingsTab() {
       setForm({
         proxyType: config.proxyType || "none",
         proxyHost: config.proxyHost || "",
-        proxyPort: config.proxyPort ?? 8080,
-        proxyAuthEnabled: config.proxyAuthEnabled ?? false,
+        proxyPort: config.proxyPort,
+        proxyAuthEnabled: config.proxyAuthEnabled,
         proxyUsername: config.proxyUsername || "",
         proxyPassword: config.proxyPassword || "",
-        anonymousMode: config.anonymousMode ?? false,
-        forceProxy: config.forceProxy ?? false,
+        anonymousMode: config.anonymousMode,
+        forceProxy: config.forceProxy,
       });
       setDirty(false);
     }

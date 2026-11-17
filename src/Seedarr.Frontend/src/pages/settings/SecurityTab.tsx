@@ -171,13 +171,13 @@ export function SecurityTab() {
   useEffect(() => {
     if (blocklistData) {
       setBlocklistForm({
-        enabled: blocklistData.enabled ?? false,
-        url: blocklistData.url ?? "",
-        autoUpdateEnabled: blocklistData.autoUpdateEnabled ?? true,
-        autoUpdateIntervalDays: blocklistData.autoUpdateIntervalDays ?? 1,
+        enabled: blocklistData.enabled,
+        url: blocklistData.url,
+        autoUpdateEnabled: blocklistData.autoUpdateEnabled,
+        autoUpdateIntervalDays: blocklistData.autoUpdateIntervalDays,
       });
       const isPreset = [1, 3, 7, 14, 30].includes(
-        blocklistData.autoUpdateIntervalDays ?? 1,
+        blocklistData.autoUpdateIntervalDays,
       );
       setCustomInterval(!isPreset);
       setBlocklistDirty(false);
@@ -199,7 +199,7 @@ export function SecurityTab() {
       showToast("Peer blocklist configuration saved", "success");
     } catch (err: unknown) {
       showToast(
-        (err as { message?: string })?.message || "Failed to save blocklist configuration",
+        (err as { message?: string }).message || "Failed to save blocklist configuration",
         "error",
       );
     }
@@ -220,7 +220,7 @@ export function SecurityTab() {
         );
       }
     } catch (err: unknown) {
-      showToast((err as { message?: string })?.message || "Failed to synchronize blocklist", "error");
+      showToast((err as { message?: string }).message || "Failed to synchronize blocklist", "error");
     }
   };
 
@@ -233,7 +233,7 @@ export function SecurityTab() {
       setIpTestResult(res);
     } catch (err: unknown) {
       showToast(
-        (err as { message?: string })?.message || "Failed to verify IP against blocklist",
+        (err as { message?: string }).message || "Failed to verify IP against blocklist",
         "error",
       );
     } finally {
@@ -244,8 +244,8 @@ export function SecurityTab() {
   useEffect(() => {
     if (config) {
       setForm({
-        authenticationEnabled: config.authenticationEnabled ?? false,
-        apiKey: config.apiKey ?? "",
+        authenticationEnabled: config.authenticationEnabled,
+        apiKey: config.apiKey,
         csrfProtectionEnabled: config.csrfProtectionEnabled ?? true,
         hostHeaderValidationEnabled:
           config.hostHeaderValidationEnabled ?? false,
@@ -337,7 +337,7 @@ export function SecurityTab() {
     try {
       setLoadingApiKey(true);
       const res = await apiClient.getApiKey();
-      if (res?.apiKey) {
+      if (res.apiKey) {
         setRevealedApiKey(res.apiKey);
         setShowApiKey(true);
       }
@@ -441,7 +441,7 @@ export function SecurityTab() {
       await loadProviders();
       showToast("Identity provider saved successfully", "success");
     } catch (err: unknown) {
-      showToast((err as { message?: string })?.message || "Failed to save identity provider", "error");
+      showToast((err as { message?: string }).message || "Failed to save identity provider", "error");
     }
   };
 
@@ -456,7 +456,7 @@ export function SecurityTab() {
       await loadProviders();
       showToast("Identity provider removed", "success");
     } catch (err: unknown) {
-      showToast((err as { message?: string })?.message || "Failed to delete identity provider", "error");
+      showToast((err as { message?: string }).message || "Failed to delete identity provider", "error");
     }
   };
 
@@ -470,7 +470,7 @@ export function SecurityTab() {
     } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: (err as { message?: string })?.message || "Connection failed",
+        message: (err as { message?: string }).message || "Connection failed",
       });
     } finally {
       setTesting(false);

@@ -115,7 +115,7 @@ function getSortValue(
 ): string | number | null | undefined {
   switch (key) {
     case "#":
-      return t.sortOrder ?? t.id;
+      return t.sortOrder;
     case "queuePosition":
       return t.sortOrder ?? t.id;
     case "trackerUrl":
@@ -131,7 +131,7 @@ function getSortValue(
     case "label":
       return t.label ?? "";
     case "infoHash":
-      return t.infoHash ?? "";
+      return t.infoHash;
     case "isPrivate":
       return t.isPrivate ? 1 : 0;
     case "superSeeding":
@@ -1284,8 +1284,8 @@ export function TorrentTable({
 
     if (!sortKey) {
       const result = [...filtered].sort((a, b) => {
-        const orderA = a.sortOrder ?? 0;
-        const orderB = b.sortOrder ?? 0;
+        const orderA = a.sortOrder;
+        const orderB = b.sortOrder;
         if (orderA !== orderB) return orderA - orderB;
         return (a.id ?? 0) - (b.id ?? 0);
       });
@@ -1518,7 +1518,7 @@ export function TorrentTable({
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement ||
-        (e.target as HTMLElement)?.isContentEditable
+        (e.target as HTMLElement).isContentEditable
       ) {
         return;
       }

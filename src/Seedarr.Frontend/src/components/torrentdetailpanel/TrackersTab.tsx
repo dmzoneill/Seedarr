@@ -32,7 +32,7 @@ function getAttachedTrackerIndicator(
   icon: string;
   badgeClass: string;
 } {
-  const s = String(status ?? "");
+  const s = String(status);
   const isAnnouncing = s === "Announcing" || s === "2";
   const isWorking =
     !isAnnouncing &&
@@ -122,7 +122,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
 
   const pickerTrackers = useMemo<TrackerPickerItem[]>(() => {
     return (availableTrackers ?? []).map((tr) => {
-      const cleanUrl = (tr.url ?? "").trim().toLowerCase();
+      const cleanUrl = (tr.url).trim().toLowerCase();
       const det = detectionMap.get(cleanUrl);
       const isAttached = attachedUrls.has(cleanUrl) || det?.isAttached || false;
       const isVerified = det?.isVerified || false;
@@ -284,7 +284,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
             <tbody>
               {trackers.map((t) => {
                 const det = detectionMap.get(
-                  (t.url ?? "").trim().toLowerCase(),
+                  (t.url).trim().toLowerCase(),
                 );
                 const ind = getAttachedTrackerIndicator(t.status, det);
                 return (

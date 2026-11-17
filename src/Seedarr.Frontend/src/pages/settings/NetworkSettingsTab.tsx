@@ -45,18 +45,18 @@ export function NetworkSettingsTab() {
   useEffect(() => {
     if (config) {
       setForm({
-        listeningPort: config.listeningPort ?? 51413,
-        upnpEnabled: config.upnpEnabled ?? true,
-        enableIPv6: config.enableIPv6 ?? true,
+        listeningPort: config.listeningPort,
+        upnpEnabled: config.upnpEnabled,
+        enableIPv6: config.enableIPv6,
         bindInterface: config.bindInterface || "",
-        enableVpnKillSwitch: config.enableVpnKillSwitch ?? false,
+        enableVpnKillSwitch: config.enableVpnKillSwitch,
         vpnStabilizationDelaySeconds: config.vpnStabilizationDelaySeconds ?? 8,
-        maxGlobalConnections: config.maxGlobalConnections ?? 300,
-        maxPerTorrentConnections: config.maxPerTorrentConnections ?? 50,
-        maxUploadSlots: config.maxUploadSlots ?? 8,
-        maxConnectionsPerIp: config.maxConnectionsPerIp ?? 5,
-        maximumHalfOpenConnections: config.maximumHalfOpenConnections ?? 50,
-        peerDscp: config.peerDscp ?? 4,
+        maxGlobalConnections: config.maxGlobalConnections,
+        maxPerTorrentConnections: config.maxPerTorrentConnections,
+        maxUploadSlots: config.maxUploadSlots,
+        maxConnectionsPerIp: config.maxConnectionsPerIp,
+        maximumHalfOpenConnections: config.maximumHalfOpenConnections,
+        peerDscp: config.peerDscp,
       });
       setDirty(false);
     }
@@ -227,7 +227,7 @@ export function NetworkSettingsTab() {
             </div>
             <div>
               Active Port Mappings:{" "}
-              <strong>{netStatus.portMappings?.length ?? 0}</strong>
+              <strong>{netStatus.portMappings?.length}</strong>
             </div>
           </div>
         </div>
@@ -308,7 +308,7 @@ export function NetworkSettingsTab() {
                   }}
                 >
                   Error:{" "}
-                  {testPortMutation.error?.message || "Failed to test port"}
+                  {testPortMutation.error.message || "Failed to test port"}
                 </span>
               )}
             </div>

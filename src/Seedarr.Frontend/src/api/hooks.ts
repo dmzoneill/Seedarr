@@ -1023,8 +1023,8 @@ export function useDownloadClientItems(clientId: number | string) {
           "/downloadclients/items",
         );
         return {
-          items: response.items ?? [],
-          clientErrors: response.clientErrors ?? [],
+          items: response.items,
+          clientErrors: response.clientErrors,
         };
       }
 
@@ -1472,7 +1472,7 @@ export function useDownloadHistory(params?: {
       const res = await apiClient.getWithHeaders<DownloadHistoryEntry[]>(
         `/downloadhistory${queryString ? `?${queryString}` : ""}`,
       );
-      const items = res.data ?? [];
+      const items = res.data;
       const totalHeader = res.headers.get("X-Total-Count");
       const pageHeader = res.headers.get("X-Page-Count");
       const totalCount =
@@ -1575,7 +1575,7 @@ export function useIndexerSearch(
       params.indexerId,
     ],
     queryFn: () => apiClient.get(`/indexers/search?${queryString}`),
-    enabled: enabled && Boolean(params.query?.trim()),
+    enabled: enabled && Boolean(params.query.trim()),
     staleTime: 30_000,
   });
 }

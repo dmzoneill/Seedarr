@@ -70,7 +70,7 @@ export function isUnauthorizedOrForbidden(error?: unknown): boolean {
  */
 export function getAccessToken(): string {
   return (
-    apiClient.getStoredApiKey?.() ||
+    apiClient.getStoredApiKey() ||
     useAppStore.getState?.().apiKey ||
     (typeof window !== "undefined" && window.localStorage
       ? localStorage.getItem("seedarr_api_key") ||

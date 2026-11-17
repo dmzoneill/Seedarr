@@ -55,7 +55,7 @@ export function calculateHnrStatus(
   const requiredSeconds = requiredHours * 3600;
   const seededSeconds = torrent.seedingTime || 0;
   const isCompleted =
-    torrent.status === "Seeding" || (torrent.progress ?? 0) >= 1.0;
+    torrent.status === "Seeding" || (torrent.progress) >= 1.0;
 
   if (!isCompleted) {
     return {
@@ -111,11 +111,11 @@ export function getTorrentBadges(
   }[] = [];
 
   // Swarm Guardian: <= 2 total seeders
-  if ((torrent.seeders ?? 0) <= 2 && torrent.status === "Seeding") {
+  if ((torrent.seeders) <= 2 && torrent.status === "Seeding") {
     badges.push({
       label: "Guardian",
       icon: "🛡️",
-      title: `Swarm Guardian: Only ${torrent.seeders ?? 0} seeders in the world! You are keeping this swarm alive.`,
+      title: `Swarm Guardian: Only ${torrent.seeders} seeders in the world! You are keeping this swarm alive.`,
       color: "#e67e22",
     });
   }
@@ -140,8 +140,8 @@ export function getTorrentBadges(
 
   // Ratio Badges: Guard against Infinity / NaN and require meaningful traffic volume (>= 10 MB)
   const ratio = torrent.ratio;
-  const downloaded = torrent.downloaded ?? 0;
-  const uploaded = torrent.uploaded ?? 0;
+  const downloaded = torrent.downloaded;
+  const uploaded = torrent.uploaded;
   const hasTraffic =
     downloaded >= 10 * 1024 * 1024 || uploaded >= 10 * 1024 * 1024;
 
@@ -202,8 +202,8 @@ export function calculateAchievements(
     (t) =>
       Number.isFinite(t.ratio) &&
       !Number.isNaN(t.ratio) &&
-      ((t.downloaded ?? 0) >= MIN_TRAFFIC_BYTES ||
-        (t.uploaded ?? 0) >= MIN_TRAFFIC_BYTES),
+      ((t.downloaded) >= MIN_TRAFFIC_BYTES ||
+        (t.uploaded) >= MIN_TRAFFIC_BYTES),
   );
 
   const maxRatio =
@@ -213,7 +213,7 @@ export function calculateAchievements(
   const maxSeedTime =
     tList.length > 0 ? Math.max(...tList.map((t) => t.seedingTime || 0)) : 0;
   const swarmGuardians = tList.filter(
-    (t) => (t.seeders ?? 0) <= 2 && t.status === "Seeding",
+    (t) => (t.seeders) <= 2 && t.status === "Seeding",
   );
 
   const badges: MilestoneBadge[] = [

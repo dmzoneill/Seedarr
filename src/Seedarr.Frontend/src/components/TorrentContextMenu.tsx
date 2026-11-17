@@ -265,7 +265,7 @@ function TorrentContextMenu({
       ? history?.find(
           (h) =>
             (ct.infoHash &&
-              h.infoHash?.toLowerCase() === ct.infoHash.toLowerCase()) ||
+              h.infoHash.toLowerCase() === ct.infoHash.toLowerCase()) ||
             h.title?.toLowerCase() === ct.name?.toLowerCase(),
         )
       : null;

@@ -77,7 +77,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       onLoginSuccess(returnUrl);
     } catch (err: unknown) {
       setError(
-        (err as { message?: string })?.message ||
+        (err as { message?: string }).message ||
           t(
             "login.invalidCredentials",
             undefined,

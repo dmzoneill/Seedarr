@@ -123,8 +123,8 @@ export function getProwlarrUrl(
   const prowlarr = indexers.find(
     (i) =>
       i.enable &&
-      (i.indexerType?.toLowerCase() === "prowlarr" ||
-        i.name?.toLowerCase().includes("prowlarr")),
+      (i.indexerType.toLowerCase() === "prowlarr" ||
+        i.name.toLowerCase().includes("prowlarr")),
   );
   if (!prowlarr?.url) return null;
 

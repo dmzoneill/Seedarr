@@ -932,7 +932,7 @@ function Dashboard() {
           const match = history?.find(
             (h) =>
               (t.infoHash &&
-                h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) ||
+                h.infoHash.toLowerCase() === t.infoHash.toLowerCase()) ||
               h.title?.toLowerCase() === t.name?.toLowerCase(),
           );
           const meta = match?.metadata;
@@ -1029,7 +1029,7 @@ function Dashboard() {
                   </a>
                 )}
                 <span
-                  className={`badge badge-${(t.status ?? "unknown").toLowerCase()}`}
+                  className={`badge badge-${(t.status).toLowerCase()}`}
                   style={{ borderRadius: "4px" }}
                 >
                   {t.status}

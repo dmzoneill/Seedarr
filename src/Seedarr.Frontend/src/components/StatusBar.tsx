@@ -88,11 +88,11 @@ export function StatusBar({
 
   // Aggregate peer counts across all torrents
   const totalSeeders = (torrents ?? []).reduce(
-    (sum, t) => sum + (t.seeders ?? 0),
+    (sum, t) => sum + (t.seeders),
     0,
   );
   const totalLeechers = (torrents ?? []).reduce(
-    (sum, t) => sum + (t.leechers ?? 0),
+    (sum, t) => sum + (t.leechers),
     0,
   );
   const totalPeers = totalSeeders + totalLeechers;

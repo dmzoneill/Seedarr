@@ -100,7 +100,7 @@ export function AiTab() {
       showToast(
         t("settingsTabs.ai.switchError", {
           error:
-            (err as { message?: string })?.message ||
+            (err as { message?: string }).message ||
             t("settingsTabs.notifications.unknownError"),
         }),
         "error",

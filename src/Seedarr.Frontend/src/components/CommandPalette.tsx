@@ -368,7 +368,7 @@ export function CommandPalette({
               ? res.reduce(
                   (acc, r) =>
                     acc +
-                    (r.addedTrackersCount || r.addedTrackers?.length || 0),
+                    (r.addedTrackersCount || r.addedTrackers.length || 0),
                   0,
                 )
               : 0;
@@ -393,7 +393,7 @@ export function CommandPalette({
         onClose();
         harvestSwarm.mutate(undefined, {
           onSuccess: (res) => { showToast(
-              `Harvested ${res.harvestedCount ?? 0} new tracker endpoints!`,
+              `Harvested ${res.harvestedCount} new tracker endpoints!`,
               "success",
             ); },
           onError: (err) => { showToast(`Harvest failed: ${err.message}`, "error"); },
@@ -412,7 +412,7 @@ export function CommandPalette({
         onClose();
         syncProwlarr.mutate(undefined, {
           onSuccess: (res) => { showToast(
-              `Synced ${res.harvestedCount ?? 0} trackers from Prowlarr!`,
+              `Synced ${res.harvestedCount} trackers from Prowlarr!`,
               "success",
             ); },
           onError: (err) => { showToast(`Sync failed: ${err.message}`, "error"); },
@@ -430,7 +430,7 @@ export function CommandPalette({
       onSelect: () => {
         onClose();
         scanTrackers.mutate(undefined, {
-          onSuccess: (res) => { showToast(`Probed ${res.testedCount ?? 0} trackers!`, "success"); },
+          onSuccess: (res) => { showToast(`Probed ${res.testedCount} trackers!`, "success"); },
           onError: (err) => { showToast(`Probe failed: ${err.message}`, "error"); },
         });
       },

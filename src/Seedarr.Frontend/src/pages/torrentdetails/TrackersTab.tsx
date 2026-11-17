@@ -67,7 +67,7 @@ function getAttachedTrackerIndicator(
   icon: string;
   badgeClass: string;
 } {
-  const s = String(status ?? "");
+  const s = String(status);
   const isAnnouncing = s === "Announcing" || s === "2";
   const isWorking =
     !isAnnouncing &&
@@ -172,7 +172,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
 
   const pickerTrackers = useMemo<TrackerPickerItem[]>(() => {
     return (availableTrackers ?? []).map((tr) => {
-      const cleanUrl = (tr.url ?? "").trim().toLowerCase();
+      const cleanUrl = (tr.url).trim().toLowerCase();
       const det = detectionMap.get(cleanUrl);
       const isAttached = attachedUrls.has(cleanUrl) || det?.isAttached || false;
       const isVerified = det?.isVerified || false;
@@ -363,7 +363,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
             <tbody>
               {trackers.map((tracker) => {
                 const det = detectionMap.get(
-                  (tracker.url ?? "").trim().toLowerCase(),
+                  (tracker.url).trim().toLowerCase(),
                 );
                 const ind = getAttachedTrackerIndicator(tracker.status, det);
                 const countdown = getReannounceCountdown(tracker);
@@ -487,9 +487,9 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                                 },
                                 onError: (err) => {
                                   const isRateLimit =
-                                    err.message?.includes("Rate limited") ||
-                                    err.message?.includes("429") ||
-                                    err.message?.includes("Too Many Requests");
+                                    err.message.includes("Rate limited") ||
+                                    err.message.includes("429") ||
+                                    err.message.includes("Too Many Requests");
                                   if (isRateLimit) {
                                     showToast(
                                       err.message.includes("Rate limited")

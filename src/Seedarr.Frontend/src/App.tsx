@@ -300,7 +300,7 @@ function App() {
     apiClient
       .getSetupStatus()
       .then((status) => {
-        if (typeof window !== "undefined" && window.navigator?.webdriver) {
+        if (typeof window !== "undefined" && window.navigator.webdriver) {
           setShowGettingStartedModal(false);
           return;
         }
@@ -565,7 +565,7 @@ function App() {
     if (unmaskedApiKey) return unmaskedApiKey;
     try {
       const res = await apiClient.getApiKey();
-      if (res?.apiKey) {
+      if (res.apiKey) {
         setUnmaskedApiKey(res.apiKey);
         return res.apiKey;
       }
@@ -709,7 +709,7 @@ function App() {
 
         if (keyLower === "d") {
           e.preventDefault();
-          e.stopImmediatePropagation?.();
+          e.stopImmediatePropagation();
           void navigate("/");
         } else if (keyLower === "t") {
           e.preventDefault();

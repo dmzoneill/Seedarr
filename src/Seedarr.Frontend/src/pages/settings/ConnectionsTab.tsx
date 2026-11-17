@@ -135,7 +135,7 @@ export function ConnectionsTab() {
             </button>
             {syncMutation.isError && (
               <span style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
-                Sync failed: {syncMutation.error?.message}
+                Sync failed: {syncMutation.error.message}
               </span>
             )}
             {syncMutation.isSuccess && syncMutation.data && (

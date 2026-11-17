@@ -48,8 +48,8 @@ export const DiskStorageBadge: React.FC<DiskStorageBadgeProps> = ({
           (d.label.toLowerCase().includes("config") ||
             d.label.toLowerCase().includes("data"))),
     ) ?? diskSpaces[0];
-  const freeBytes = primary.freeSpace ?? 0;
-  const totalBytes = primary.totalSpace ?? 1;
+  const freeBytes = primary.freeSpace;
+  const totalBytes = primary.totalSpace;
   const usedBytes = Math.max(0, totalBytes - freeBytes);
   const usedPct = Math.min(
     100,

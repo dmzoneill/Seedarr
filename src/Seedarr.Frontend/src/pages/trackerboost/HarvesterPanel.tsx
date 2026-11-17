@@ -802,7 +802,7 @@ export function HarvesterPanel({
                   {t(
                     "trackerBoost.scrapingCandidateForHash",
                     "Scraping candidate trackers for hash {hash}...",
-                    { hash: (selectedItem?.infoHash || "").slice(0, 8) },
+                    { hash: (selectedItem.infoHash || "").slice(0, 8) },
                   )}
                 </div>
               ) : (

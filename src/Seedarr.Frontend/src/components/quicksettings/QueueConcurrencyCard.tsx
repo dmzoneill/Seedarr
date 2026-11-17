@@ -31,13 +31,13 @@ export function QueueConcurrencyCard() {
   // Compute live active downloads and seeds
   const activeDownloads = (torrents ?? []).filter(
     (t) =>
-      (t.status === "Downloading" || (t.downloadSpeed ?? 0) > 0) &&
+      (t.status === "Downloading" || (t.downloadSpeed) > 0) &&
       t.status !== "Stopped",
   ).length;
 
   const activeSeeds = (torrents ?? []).filter(
     (t) =>
-      (t.status === "Seeding" || (t.uploadSpeed ?? 0) > 0) &&
+      (t.status === "Seeding" || (t.uploadSpeed) > 0) &&
       t.status !== "Stopped",
   ).length;
 

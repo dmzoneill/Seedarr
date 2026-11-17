@@ -191,7 +191,7 @@ function TorrentGrid({
           selectedTorrentId === torrent.id ||
           (selectedIds?.has(torrent.id) ?? false);
         const isSeeding = torrent.status === "Seeding";
-        const pct = Math.min((torrent.progress ?? 0) * 100, 100);
+        const pct = Math.min((torrent.progress) * 100, 100);
         const arrLink = getMediaDeepLink(
           {
             source: torrent.source,
@@ -250,7 +250,7 @@ function TorrentGrid({
               }
               if (e.key === " ") {
                 e.preventDefault();
-                e.stopPropagation?.();
+                e.stopPropagation();
                 onToggleSelect?.(torrent.id);
               } else if (e.key === "Enter") {
                 e.preventDefault();

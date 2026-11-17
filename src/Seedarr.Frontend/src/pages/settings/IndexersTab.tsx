@@ -462,7 +462,7 @@ export function IndexersTab() {
                             false,
                           );
                           showToast(
-                            err?.message || "Failed to delete indexer",
+                            err.message || "Failed to delete indexer",
                             "error",
                           );
                         },
@@ -1229,7 +1229,7 @@ export function IndexersTab() {
                           key={mode}
                           className={`provider-card-badge ${s.available ? "provider-card-badge-green" : "provider-card-badge-gray"}`}
                           title={
-                            s.supportedParams?.length
+                            s.supportedParams.length
                               ? `Supported params: ${s.supportedParams.join(", ")}`
                               : undefined
                           }

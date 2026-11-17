@@ -363,7 +363,7 @@ function SystemNetwork() {
                 border: "1px solid var(--danger, #dc3545)",
               }}
             >
-              Error: {testPortMutation.error?.message || "Failed to test port"}
+              Error: {testPortMutation.error.message || "Failed to test port"}
             </span>
           )}
         </div>

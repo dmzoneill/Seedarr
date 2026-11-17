@@ -697,7 +697,7 @@ export function DownloadClientsTab() {
                 setEditing({
                   ...editing,
                   clientType: v,
-                  port: clientDefaults[v]?.port || editing.port || 8080,
+                  port: clientDefaults[v].port || editing.port || 8080,
                 });
               }}
               options={[
@@ -1308,7 +1308,7 @@ export function DownloadClientsTab() {
 
             {testMappingMutation.isError && (
               <div className="modal-error" style={{ marginTop: "1rem" }}>
-                {testMappingMutation.error?.message}
+                {testMappingMutation.error.message}
               </div>
             )}
 
