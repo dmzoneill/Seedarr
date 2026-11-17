@@ -167,7 +167,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
             className="error"
             style={{ marginLeft: "0.75rem", fontSize: "0.85rem" }}
           >
-            Failed to save: {updateTorrent.error?.message ?? "Unknown error"}
+            Failed to save: {updateTorrent.error?.message}
           </span>
         )}
         {updateTorrent.isSuccess && !dirty && (

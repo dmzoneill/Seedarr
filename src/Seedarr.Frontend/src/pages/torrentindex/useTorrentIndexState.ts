@@ -81,8 +81,8 @@ export function useTorrentIndexState() {
   useEffect(() => {
     const handleTagDeleted = (e: Event) => {
       const customEvent = e as CustomEvent<{ id: number; label?: string }>;
-      const deletedId = customEvent.detail?.id;
-      const deletedLabel = customEvent.detail?.label;
+      const deletedId = customEvent.detail.id;
+      const deletedLabel = customEvent.detail.label;
 
       if (deletedId !== undefined) {
         setSelectedTagIds((prev) => {
@@ -390,8 +390,8 @@ export function useTorrentIndexState() {
     let ul = 0;
     let dl = 0;
     for (const t of torrents ?? []) {
-      ul += t.uploadSpeed ?? 0;
-      dl += t.downloadSpeed ?? 0;
+      ul += t.uploadSpeed;
+      dl += t.downloadSpeed;
     }
     return { totalUploadSpeed: ul, totalDownloadSpeed: dl };
   }, [torrents]);

@@ -646,7 +646,7 @@ export function FilesTab({
 
       // Right arrow: expand folder if collapsed
       if (e.key === "ArrowRight") {
-        if (currentNode?.isFolder) {
+        if (currentNode.isFolder) {
           e.preventDefault();
           if (!expandedPaths.has(currentNode.fullPath)) {
             setExpandedPaths(
@@ -665,7 +665,7 @@ export function FilesTab({
 
       // Left arrow: collapse folder if expanded, or move to parent
       if (e.key === "ArrowLeft") {
-        if (currentNode?.isFolder && expandedPaths.has(currentNode.fullPath)) {
+        if (currentNode.isFolder && expandedPaths.has(currentNode.fullPath)) {
           e.preventDefault();
           setExpandedPaths((prev) => {
             const next = new Set(prev);

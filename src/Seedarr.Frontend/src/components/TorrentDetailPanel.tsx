@@ -163,7 +163,7 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
                 const nextBtn = e.currentTarget.parentElement?.children[
                   nextIdx
                 ] as HTMLElement;
-                nextBtn?.focus();
+                nextBtn.focus();
               } else if (e.key === "ArrowLeft") {
                 e.preventDefault();
                 const prevIdx =
@@ -172,7 +172,7 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
                 const prevBtn = e.currentTarget.parentElement?.children[
                   prevIdx
                 ] as HTMLElement;
-                prevBtn?.focus();
+                prevBtn.focus();
               }
             }}
           >

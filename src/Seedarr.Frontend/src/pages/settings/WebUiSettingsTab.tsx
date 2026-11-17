@@ -39,9 +39,9 @@ export function WebUiSettingsTab() {
           config.colorScheme === "green"
             ? "emerald"
             : config.colorScheme || currentContextAccent || "auto",
-        port: config.port ?? 9898,
+        port: config.port,
         bindAddress: config.bindAddress || "0.0.0.0",
-        authenticationEnabled: config.authenticationEnabled ?? false,
+        authenticationEnabled: config.authenticationEnabled,
       });
       setDirty(false);
     }

@@ -30,7 +30,7 @@ export function isElementConnected(el: HTMLElement): boolean {
 
 export function isElementVisible(el: HTMLElement): boolean {
   if (el.hidden) return false;
-  if (el.getAttribute?.("aria-hidden") === "true") return false;
+  if (el.getAttribute("aria-hidden") === "true") return false;
   if (el.style?.display === "none" || el.style?.visibility === "hidden")
     return false;
   return true;

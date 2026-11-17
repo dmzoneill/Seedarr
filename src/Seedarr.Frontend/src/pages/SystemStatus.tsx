@@ -60,7 +60,7 @@ function SystemStatus() {
       pollReconnect();
     } catch (err: unknown) {
       setIsRestarting(false);
-      const errMsg = (err as { message?: string })?.message || "Unknown error";
+      const errMsg = (err as { message?: string }).message || "Unknown error";
       showToast(
         t(
           "systemStatus.restartFailedToast",
@@ -315,7 +315,7 @@ function SystemStatus() {
             style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}
           >
             {warningOrErrorChecks.map((check, i) => {
-              const isError = check.type?.toLowerCase() === "error";
+              const isError = check.type.toLowerCase() === "error";
               return (
                 <div
                   key={i}
@@ -408,7 +408,7 @@ function SystemStatus() {
                     color: "var(--text-muted)",
                   }}
                 >
-                  ({status.openFileDescriptors?.toLocaleString() ?? 0}
+                  ({status.openFileDescriptors?.toLocaleString()}
                   {" / "}
                   {status.maxFileDescriptors && status.maxFileDescriptors > 0
                     ? status.maxFileDescriptors.toLocaleString()

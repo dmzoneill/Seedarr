@@ -19,7 +19,7 @@ export function SystemTerminal() {
 
   useEffect(() => {
     // If a default path is configured in Seedarr
-    const defaultPath = (generalConfig as unknown as { defaultSavePath?: string })?.defaultSavePath;
+    const defaultPath = (generalConfig as unknown as { defaultSavePath?: string }).defaultSavePath;
     if (typeof defaultPath === "string" && defaultPath) {
       setDownloadDir(defaultPath);
       if (!initialPath) {

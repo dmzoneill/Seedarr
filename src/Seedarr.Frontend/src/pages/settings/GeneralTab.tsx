@@ -105,7 +105,7 @@ export function GeneralTab() {
     try {
       setLoadingApiKey(true);
       const res = await apiClient.getApiKey();
-      if (res?.apiKey) {
+      if (res.apiKey) {
         setRevealedApiKey(res.apiKey);
         setShowApiKey(true);
       }
@@ -613,7 +613,7 @@ export function GeneralTab() {
                             : "Missing"}
                         </span>
                       </div>
-                      {sslTestResult.subjectAlternativeNames?.length > 0 && (
+                      {sslTestResult.subjectAlternativeNames.length > 0 && (
                         <div style={{ gridColumn: "1 / -1" }}>
                           <span
                             style={{

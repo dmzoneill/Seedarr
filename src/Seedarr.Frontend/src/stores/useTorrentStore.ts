@@ -107,12 +107,12 @@ export const useTorrentStore = create<TorrentStoreState>((set) => ({
             : undefined;
       const cleared =
         data?.cleared === true ||
-        (data as { Cleared?: boolean })?.Cleared === true;
+        (data as { Cleared?: boolean }).Cleared === true;
       const pieceStateRaw =
         data?.pieceState ??
-        (data as { PieceState?: number })?.PieceState ??
-        (data as { state?: number })?.state ??
-        (data as { State?: number })?.State;
+        (data as { PieceState?: number }).PieceState ??
+        (data as { state?: number }).state ??
+        (data as { State?: number }).State;
       const pieceState =
         typeof pieceStateRaw === "number" && pieceStateRaw >= 0
           ? pieceStateRaw
@@ -365,7 +365,7 @@ export function applyTelemetry(
       : !isStale && telemetry?.status
         ? telemetry.status
         : torrent.status
-  )?.toLowerCase();
+  ).toLowerCase();
 
   const isInactive =
     effectiveStatus === "paused" ||

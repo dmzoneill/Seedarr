@@ -18,17 +18,17 @@ export function BandwidthCard() {
 
   useEffect(() => {
     if (config) {
-      const isTurtle = config.alternativeSpeedEnabled ?? false;
+      const isTurtle = config.alternativeSpeedEnabled;
       setTurtleMode(isTurtle);
       setDownloadLimit(
         isTurtle
-          ? (config.altDownloadSpeedKbps ?? 0)
-          : (config.maxDownloadSpeedKbps ?? 0),
+          ? (config.altDownloadSpeedKbps)
+          : (config.maxDownloadSpeedKbps),
       );
       setUploadLimit(
         isTurtle
-          ? (config.altUploadSpeedKbps ?? 0)
-          : (config.maxUploadSpeedKbps ?? 0),
+          ? (config.altUploadSpeedKbps)
+          : (config.maxUploadSpeedKbps),
       );
     }
   }, [config]);
@@ -74,10 +74,10 @@ export function BandwidthCard() {
     setTurtleMode(nextTurtle);
     const nextDl = nextTurtle
       ? (config.altDownloadSpeedKbps ?? 0)
-      : (config.maxDownloadSpeedKbps ?? 0);
+      : (config.maxDownloadSpeedKbps);
     const nextUl = nextTurtle
       ? (config.altUploadSpeedKbps ?? 0)
-      : (config.maxUploadSpeedKbps ?? 0);
+      : (config.maxUploadSpeedKbps);
     setDownloadLimit(nextDl);
     setUploadLimit(nextUl);
     trackSpeedModeChange("alternative", nextTurtle);

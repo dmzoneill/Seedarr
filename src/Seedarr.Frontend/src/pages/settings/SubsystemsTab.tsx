@@ -125,7 +125,7 @@ export function SubsystemsTab() {
           undefined,
           "Error loading subsystems: ",
         )}
-        {(error as Error)?.message}
+        {(error as Error).message}
         <button
           onClick={() => { void refetch(); }}
           style={{

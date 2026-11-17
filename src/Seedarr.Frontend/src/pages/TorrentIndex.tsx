@@ -167,7 +167,7 @@ function TorrentIndex() {
         action: "start",
       });
       trackBulkAction("start", ids.length);
-      const succeeded = res.succeededIds ?? [];
+      const succeeded = res.succeededIds;
 
       setSelectedIds((prev) => {
         const next = new Set(prev);
@@ -395,7 +395,7 @@ function TorrentIndex() {
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||
         e.target instanceof HTMLSelectElement ||
-        (e.target as HTMLElement)?.isContentEditable
+        (e.target as HTMLElement).isContentEditable
       ) {
         return;
       }

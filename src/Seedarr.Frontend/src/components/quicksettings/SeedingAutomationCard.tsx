@@ -19,7 +19,7 @@ export function SeedingAutomationCard() {
 
   useEffect(() => {
     if (config) {
-      setRatioLimit(config.globalSeedRatioLimit ?? 0);
+      setRatioLimit(config.globalSeedRatioLimit);
     }
   }, [config]);
 

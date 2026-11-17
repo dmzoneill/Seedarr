@@ -947,8 +947,8 @@ function SystemTasks() {
     }
     if (
       executeMutation.isPending &&
-      (executeMutation.variables?.typeName === task.typeName ||
-        (task.id !== undefined && executeMutation.variables?.id === task.id))
+      (executeMutation.variables.typeName === task.typeName ||
+        (task.id !== undefined && executeMutation.variables.id === task.id))
     ) {
       return true;
     }
@@ -1102,9 +1102,9 @@ function SystemTasks() {
                   const running = isTaskRunning(task);
                   const isAborting =
                     abortTaskMutation.isPending &&
-                    (abortTaskMutation.variables?.typeName === task.typeName ||
+                    (abortTaskMutation.variables.typeName === task.typeName ||
                       (task.id !== undefined &&
-                        abortTaskMutation.variables?.id === task.id));
+                        abortTaskMutation.variables.id === task.id));
                   return (
                     <tr key={task.typeName} className="torrent-table-row">
                       <td>

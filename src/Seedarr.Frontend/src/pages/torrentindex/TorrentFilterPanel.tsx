@@ -70,7 +70,7 @@ export function TorrentFilterPanel({
   isCollapsed = false,
   onToggleCollapse,
 }: TorrentFilterPanelProps) {
-  const normalizedTagGroups: TagGroupItem[] = (tagGroups ?? []).map(
+  const normalizedTagGroups: TagGroupItem[] = (tagGroups).map(
     (tg, idx) => {
       if (Array.isArray(tg)) {
         return { id: idx + 1000, label: tg[0], count: tg[1] };

@@ -250,17 +250,17 @@ function parseNotificationToForm(
     name: notif.name || impl,
     implementation: impl,
     configContract: notif.configContract || `${impl}Settings`,
-    enable: notif.enable ?? true,
-    onGrab: notif.onGrab ?? true,
-    onDownloadComplete: notif.onDownloadComplete ?? true,
-    onMediaInspected: notif.onMediaInspected ?? false,
-    onExtractComplete: notif.onExtractComplete ?? false,
-    onSeedGoalReached: notif.onSeedGoalReached ?? true,
-    onTorrentDeleted: notif.onTorrentDeleted ?? false,
-    onHealthIssue: notif.onHealthIssue ?? true,
-    onHealthRestored: notif.onHealthRestored ?? true,
-    onManualInteractionRequired: notif.onManualInteractionRequired ?? true,
-    onApplicationUpdate: notif.onApplicationUpdate ?? false,
+    enable: notif.enable,
+    onGrab: notif.onGrab,
+    onDownloadComplete: notif.onDownloadComplete,
+    onMediaInspected: notif.onMediaInspected,
+    onExtractComplete: notif.onExtractComplete,
+    onSeedGoalReached: notif.onSeedGoalReached,
+    onTorrentDeleted: notif.onTorrentDeleted,
+    onHealthIssue: notif.onHealthIssue,
+    onHealthRestored: notif.onHealthRestored,
+    onManualInteractionRequired: notif.onManualInteractionRequired,
+    onApplicationUpdate: notif.onApplicationUpdate,
     tags: notif.tags || [],
     categories: notif.categories || [],
 
@@ -568,7 +568,7 @@ export function NotificationsTab() {
       setSaved(true);
       showToast("Toast settings saved successfully", "success");
     } catch (err: unknown) {
-      showToast((err as { message?: string })?.message || "Failed to save toast settings", "error");
+      showToast((err as { message?: string }).message || "Failed to save toast settings", "error");
     }
   };
 
@@ -633,7 +633,7 @@ export function NotificationsTab() {
           "test",
           false,
         );
-        const msg = (err as { message?: string })?.message || "Test failed";
+        const msg = (err as { message?: string }).message || "Test failed";
         setTestResults((prev) => ({
           ...prev,
           [id]: { success: false, message: msg },
@@ -701,7 +701,7 @@ export function NotificationsTab() {
         setDeletingNotif(null);
       },
       onError: (err: unknown) => {
-        showToast((err as { message?: string })?.message || "Failed to delete notification", "error");
+        showToast((err as { message?: string }).message || "Failed to delete notification", "error");
       },
     });
   };
@@ -724,7 +724,7 @@ export function NotificationsTab() {
           setModalTestResult(null);
         },
         onError: (err: unknown) => {
-          showToast((err as { message?: string })?.message || "Failed to update notification", "error");
+          showToast((err as { message?: string }).message || "Failed to update notification", "error");
         },
       });
     } else {
@@ -735,7 +735,7 @@ export function NotificationsTab() {
           setModalTestResult(null);
         },
         onError: (err: unknown) => {
-          showToast((err as { message?: string })?.message || "Failed to create notification", "error");
+          showToast((err as { message?: string }).message || "Failed to create notification", "error");
         },
       });
     }
@@ -1514,7 +1514,7 @@ export function NotificationsTab() {
                     </option>
                   ))}
                   {editing.categories
-                    ?.filter(
+                    .filter(
                       (catName) =>
                         !allCategories?.some((c) => c.name === catName),
                     )

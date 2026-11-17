@@ -284,7 +284,7 @@ export default function DownloadClientTorrents() {
     if (selectedHashes.size === 0) return;
     const missingHashes = Array.from(selectedHashes).filter((hash) => {
       const item = items?.find(
-        (i) => i.infoHash?.toLowerCase() === hash.toLowerCase(),
+        (i) => i.infoHash.toLowerCase() === hash.toLowerCase(),
       );
       return !item || !item.isInLibrary;
     });
@@ -532,7 +532,7 @@ export default function DownloadClientTorrents() {
               rel="noopener noreferrer"
               className="btn btn-outline"
               style={{ fontSize: "0.85rem", textDecoration: "none" }}
-              title={`Open ${client?.name} Web UI`}
+              title={`Open ${client.name} Web UI`}
             >
               Open Web UI ↗
             </a>
@@ -754,7 +754,7 @@ export default function DownloadClientTorrents() {
               marginBottom: "1.25rem",
             }}
           >
-            {(error as Error)?.message || "Connection refused or timed out."}
+            {(error as Error).message || "Connection refused or timed out."}
           </div>
           <Link to="/settings/download-clients" className="btn btn-outline">
             Check Client Configuration
@@ -824,9 +824,9 @@ export default function DownloadClientTorrents() {
               const match = history?.find(
                 (h) =>
                   (item.infoHash &&
-                    h.infoHash?.toLowerCase() ===
+                    h.infoHash.toLowerCase() ===
                       item.infoHash.toLowerCase()) ||
-                  h.title?.toLowerCase() === item.title.toLowerCase(),
+                  h.title.toLowerCase() === item.title.toLowerCase(),
               );
               const meta = match?.metadata;
               const displayTitle = meta?.title || item.title;
@@ -1067,12 +1067,12 @@ export default function DownloadClientTorrents() {
                     >
                       <span
                         className={`badge ${
-                          item.status?.toLowerCase() === "seeding"
+                          item.status.toLowerCase() === "seeding"
                             ? "badge-success"
-                            : item.status?.toLowerCase() === "downloading"
+                            : item.status.toLowerCase() === "downloading"
                               ? "badge-primary"
-                              : item.status?.toLowerCase() === "paused" ||
-                                  item.status?.toLowerCase() === "stopped"
+                              : item.status.toLowerCase() === "paused" ||
+                                  item.status.toLowerCase() === "stopped"
                                 ? "badge-warning"
                                 : "badge-secondary"
                         }`}
@@ -1088,7 +1088,7 @@ export default function DownloadClientTorrents() {
                           {item.clientName}
                         </span>
                       )}
-                      {duplicateHashes.has(item.infoHash?.toLowerCase()) && (
+                      {duplicateHashes.has(item.infoHash.toLowerCase()) && (
                         <span
                           className="badge badge-warning"
                           style={{ fontSize: "0.72rem" }}
@@ -1180,8 +1180,8 @@ export default function DownloadClientTorrents() {
                           </button>
                         )}
 
-                        {item.status?.toLowerCase() === "paused" ||
-                        item.status?.toLowerCase() === "stopped" ? (
+                        {item.status.toLowerCase() === "paused" ||
+                        item.status.toLowerCase() === "stopped" ? (
                           <button
                             className="btn btn-outline btn-small"
                             style={{
@@ -1499,7 +1499,7 @@ export default function DownloadClientTorrents() {
                               </span>
                             )}
                             {duplicateHashes.has(
-                              item.infoHash?.toLowerCase(),
+                              item.infoHash.toLowerCase(),
                             ) && (
                               <span
                                 className="badge badge-warning"

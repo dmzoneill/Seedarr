@@ -39,7 +39,7 @@ export function PromptModal({
   cancelText,
 }: PromptModalProps) {
   const { t } = useTranslation();
-  const [value, setValue] = useState(String(initialValue ?? ""));
+  const [value, setValue] = useState(String(initialValue));
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const modalRef = useFocusTrap<HTMLDivElement>({
@@ -57,7 +57,7 @@ export function PromptModal({
 
   useEffect(() => {
     if (isOpen) {
-      setValue(String(initialValue ?? ""));
+      setValue(String(initialValue));
       setError(null);
       setTimeout(() => {
         inputRef.current?.focus();
