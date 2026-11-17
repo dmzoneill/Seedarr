@@ -521,6 +521,42 @@ public class AppLifetimeTest
     }
 
     [Test]
+    public async Task StartAsync_should_ignore_duplicate_instance()
+    {
+        var duplicate = new AppLifetime(
+            _eventAggregator,
+            _torrentService,
+            _configService,
+            _diskSpaceService,
+            _upnpService,
+            _fastResumeService,
+            _trackerAnnounceService,
+            _connectionManager,
+            _pieceStorage,
+            _mainDatabase,
+            _peerServer);
+
+        try
+        {
+            await _subject.StartAsync(CancellationToken.None);
+            await duplicate.StartAsync(CancellationToken.None);
+
+            _fastResumeService.Received(1).LoadAll();
+            _eventAggregator.Received(1).PublishEvent(Arg.Any<ApplicationStartedEvent>());
+
+            await _subject.StopAsync(CancellationToken.None);
+            await duplicate.StopAsync(CancellationToken.None);
+
+            _peerServer.Received(1).StopListening();
+            _eventAggregator.Received(1).PublishEvent(Arg.Any<ApplicationShutdownRequested>());
+        }
+        finally
+        {
+            duplicate.Dispose();
+        }
+    }
+
+    [Test]
     public async Task StopAsync_should_continue_checkpoint_when_optimize_fails()
     {
         _torrentService.GetAll().Returns(new List<Torrent>());

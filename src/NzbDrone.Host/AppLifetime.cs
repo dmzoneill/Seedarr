@@ -32,6 +32,10 @@ public class AppLifetime : IHostedService, IDisposable
     private readonly IPeerServer _peerServer;
     private readonly IDatabaseMaintenanceService _databaseMaintenanceService;
     private readonly Logger _logger;
+    private static readonly object _activeInstanceLock = new();
+    private static AppLifetime _activeInstance;
+    private bool _isDuplicateInstance;
+    private bool _stopped;
     private bool _portForwardingFailureEmitted;
     private volatile bool _shuttingDown;
     private CancellationTokenSource _cts;
@@ -70,6 +74,18 @@ public class AppLifetime : IHostedService, IDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        lock (_activeInstanceLock)
+        {
+            if (_activeInstance != null && !ReferenceEquals(_activeInstance, this))
+            {
+                _isDuplicateInstance = true;
+                _logger.Debug("Duplicate AppLifetime instance ignored");
+                return;
+            }
+
+            _activeInstance = this;
+        }
+
         _logger.Info("Seedarr application started");
 
         if (_fastResumeService != null)
@@ -94,6 +110,20 @@ public class AppLifetime : IHostedService, IDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        lock (_activeInstanceLock)
+        {
+            if (_isDuplicateInstance || _stopped)
+            {
+                return;
+            }
+
+            _stopped = true;
+            if (ReferenceEquals(_activeInstance, this))
+            {
+                _activeInstance = null;
+            }
+        }
+
         _logger.Info("Seedarr application stopping");
         _shuttingDown = true;
 
@@ -345,6 +375,14 @@ public class AppLifetime : IHostedService, IDisposable
 
     public void Dispose()
     {
+        lock (_activeInstanceLock)
+        {
+            if (ReferenceEquals(_activeInstance, this))
+            {
+                _activeInstance = null;
+            }
+        }
+
         _cts?.Dispose();
     }
 
