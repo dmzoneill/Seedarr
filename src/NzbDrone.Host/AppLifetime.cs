@@ -32,6 +32,10 @@ public class AppLifetime : IHostedService, IDisposable
     private readonly IPeerServer _peerServer;
     private readonly IDatabaseMaintenanceService _databaseMaintenanceService;
     private readonly Logger _logger;
+    private static readonly object _activeInstanceLock = new();
+    private static AppLifetime _activeInstance;
+    private bool _isDuplicateInstance;
+    private bool _stopped;
     private bool _portForwardingFailureEmitted;
     private volatile bool _shuttingDown;
     private CancellationTokenSource _cts;
@@ -70,6 +74,13 @@ public class AppLifetime : IHostedService, IDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (!TryActivate(this))
+        {
+            _isDuplicateInstance = true;
+            _logger.Debug("Duplicate AppLifetime instance ignored");
+            return;
+        }
+
         _logger.Info("Seedarr application started");
 
         if (_fastResumeService != null)
@@ -94,6 +105,11 @@ public class AppLifetime : IHostedService, IDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        if (!TryBeginStop(this))
+        {
+            return;
+        }
+
         _logger.Info("Seedarr application stopping");
         _shuttingDown = true;
 
@@ -345,7 +361,49 @@ public class AppLifetime : IHostedService, IDisposable
 
     public void Dispose()
     {
+        lock (_activeInstanceLock)
+        {
+            ClearActiveInstance(this);
+        }
+
         _cts?.Dispose();
+    }
+
+    private static bool TryActivate(AppLifetime instance)
+    {
+        lock (_activeInstanceLock)
+        {
+            if (_activeInstance != null && !ReferenceEquals(_activeInstance, instance))
+            {
+                return false;
+            }
+
+            _activeInstance = instance;
+            return true;
+        }
+    }
+
+    private static bool TryBeginStop(AppLifetime instance)
+    {
+        lock (_activeInstanceLock)
+        {
+            if (instance._isDuplicateInstance || instance._stopped)
+            {
+                return false;
+            }
+
+            instance._stopped = true;
+            ClearActiveInstance(instance);
+            return true;
+        }
+    }
+
+    private static void ClearActiveInstance(AppLifetime instance)
+    {
+        if (ReferenceEquals(_activeInstance, instance))
+        {
+            _activeInstance = null;
+        }
     }
 
     private async Task RunWatchdogLoopAsync(CancellationToken token)
