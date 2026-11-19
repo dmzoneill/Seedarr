@@ -631,10 +631,22 @@ public class TorrentRecheckServiceTest
 
         _torrentRepository.Get(25).Returns(torrent);
 
-        _service.QueueRecheck(25);
-        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
+        // Hold the queue processor so the recheck is guaranteed to still be queued when it is cancelled.
+        var queueLock = GetQueueProcessingLock(_service);
+        queueLock.Wait();
+        try
+        {
+            _service.QueueRecheck(25);
+            Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.QueuedForChecking));
 
-        _service.CancelRecheck(25);
+            _service.CancelRecheck(25);
+        }
+        finally
+        {
+            queueLock.Release();
+        }
+
+        WaitForQueueToDrain(_service);
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
         _torrentRepository.Received(2).Update(Arg.Is<Torrent>(t => t.Id == 25));
@@ -645,7 +657,7 @@ public class TorrentRecheckServiceTest
     }
 
     [Test]
-    public async System.Threading.Tasks.Task CancelRecheck_restores_status_when_queue_processor_skips_cancelled_id()
+    public void CancelRecheck_restores_status_when_queue_processor_skips_cancelled_id()
     {
         var torrent = new Torrent
         {
@@ -658,12 +670,24 @@ public class TorrentRecheckServiceTest
 
         _torrentRepository.Get(26).Returns(torrent);
 
-        _service.QueueRecheck(26);
-        _service.CancelRecheck(26);
+        // Hold the queue processor until the cancel has happened, then let it dequeue and skip the cancelled id.
+        var queueLock = GetQueueProcessingLock(_service);
+        queueLock.Wait();
+        try
+        {
+            _service.QueueRecheck(26);
+            _service.CancelRecheck(26);
+        }
+        finally
+        {
+            queueLock.Release();
+        }
 
-        await System.Threading.Tasks.Task.Delay(100);
+        WaitForQueueToDrain(_service);
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        _torrentRepository.Received(2).Update(Arg.Is<Torrent>(t => t.Id == 26));
+        _stateMachine.DidNotReceive().TransitionToChecking(Arg.Is<Torrent>(t => t.Id == 26));
     }
 
     [Test]
@@ -769,7 +793,10 @@ public class TorrentRecheckServiceTest
 
         try
         {
-            var blockingRecheck = serviceWithSignalR.RecheckAsync(blockingTorrent);
+            // RecheckAsync completes synchronously while the semaphore is free, so run it off the test thread
+            // to keep it holding the concurrency semaphore while the second torrent is queued.
+            var blockingRecheck = System.Threading.Tasks.Task.Run(
+                () => serviceWithSignalR.RecheckAsync(blockingTorrent));
             Assert.That(
                 SpinWait.SpinUntil(() => blockingVerifyStarted.IsSet, TimeSpan.FromSeconds(5)),
                 Is.True,
@@ -859,47 +886,62 @@ public class TorrentRecheckServiceTest
             .Returns(true);
         _stateMachine.When(sm => sm.TransitionToChecking(Arg.Any<Torrent>()))
             .Do(ci => ci.Arg<Torrent>().Status = TorrentStatus.Checking);
+        var firstLeavingChecking = new ManualResetEventSlim(false);
         _stateMachine.TransitionFromChecking(Arg.Any<Torrent>())
             .Returns(ci =>
             {
-                ci.Arg<Torrent>().Status = TorrentStatus.Seeding;
+                var torrent = ci.Arg<Torrent>();
+                torrent.Status = TorrentStatus.Seeding;
+                if (torrent.Id == firstId)
+                {
+                    firstLeavingChecking.Set();
+                }
+
                 return TorrentStatus.Seeding;
             });
 
-        var activeRechecks = typeof(TorrentRecheckService)
-            .GetField("_activeRechecks", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .GetValue(_service) as ConcurrentDictionary<int, CancellationTokenSource>;
-
         _service.QueueRecheck(firstId);
 
+        // Enqueue the tail as soon as the processor is finishing the first recheck, so the enqueue races the
+        // processor draining the queue and releasing its lock. Signal on a durable event rather than polling for
+        // the transient "active" state, which a fast processor can enter and leave between two polls.
         var racer = System.Threading.Tasks.Task.Run(() =>
         {
             Assert.That(
-                SpinWait.SpinUntil(() => activeRechecks!.ContainsKey(firstId), TimeSpan.FromSeconds(5)),
+                firstLeavingChecking.Wait(TimeSpan.FromSeconds(5)),
                 Is.True,
-                "Expected first queued recheck to become active");
-            Assert.That(
-                SpinWait.SpinUntil(() => !activeRechecks!.ContainsKey(firstId), TimeSpan.FromSeconds(5)),
-                Is.True,
-                "Expected first queued recheck to finish");
-            for (var i = 0; i < 10_000; i++)
-            {
-                _service.QueueRecheck(tailId);
-                if (tail.Status == TorrentStatus.Seeding)
-                {
-                    return;
-                }
-            }
+                "Expected first queued recheck to complete");
+            _service.QueueRecheck(tailId);
         });
 
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline && tail.Status != TorrentStatus.Seeding)
-        {
-            await System.Threading.Tasks.Task.Delay(5);
-        }
-
         await racer;
-        Assert.That(tail.Status, Is.EqualTo(TorrentStatus.Seeding));
+
+        Assert.That(
+            SpinWait.SpinUntil(() => tail.Status == TorrentStatus.Seeding, TimeSpan.FromSeconds(5)),
+            Is.True,
+            "Expected tail enqueued during lock release to be processed");
+        Assert.That(first.Status, Is.EqualTo(TorrentStatus.Seeding));
+        _stateMachine.Received(1).TransitionToChecking(Arg.Is<Torrent>(t => t.Id == tailId));
+    }
+
+    private static SemaphoreSlim GetQueueProcessingLock(TorrentRecheckService service)
+    {
+        return (SemaphoreSlim)typeof(TorrentRecheckService)
+            .GetField("_queueProcessingLock", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(service)!;
+    }
+
+    private static void WaitForQueueToDrain(TorrentRecheckService service)
+    {
+        var queue = (ConcurrentQueue<int>)typeof(TorrentRecheckService)
+            .GetField("_recheckQueue", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(service)!;
+        var queueLock = GetQueueProcessingLock(service);
+
+        Assert.That(
+            SpinWait.SpinUntil(() => queue.IsEmpty && queueLock.CurrentCount == 1, TimeSpan.FromSeconds(5)),
+            Is.True,
+            "Expected recheck queue processor to drain the queue");
     }
 
     [Test]
