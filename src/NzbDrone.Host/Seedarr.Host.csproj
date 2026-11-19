@@ -18,7 +18,7 @@
   <ItemGroup>
     <PackageReference Include="DryIoc.Microsoft.DependencyInjection" Version="6.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.15" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="11.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="11.0.1" />
     <PackageReference Include="NLog.Extensions.Logging" Version="6.3.0" />
   </ItemGroup>
 
