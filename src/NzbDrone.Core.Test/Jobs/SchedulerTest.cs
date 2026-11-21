@@ -523,4 +523,63 @@ public class SchedulerTest
 
         Assert.That(scheduler.TickDelay, Is.EqualTo(TimeSpan.FromMilliseconds(50)));
     }
+
+    private sealed class AsyncOnlyScheduledTask : IAsyncScheduledTask
+    {
+        public int DefaultInterval => 1;
+        public int SyncExecuteCount { get; private set; }
+        public int AsyncExecuteCount { get; private set; }
+
+        public void Execute(CancellationToken cancellationToken)
+        {
+            SyncExecuteCount++;
+        }
+
+        public async Task ExecuteAsync(CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            cancellationToken.ThrowIfCancellationRequested();
+            AsyncExecuteCount++;
+        }
+    }
+
+    [Test]
+    public async Task ExecuteAsync_should_await_IAsyncScheduledTask_via_ExecuteAsync_not_Execute()
+    {
+        var asyncTask = new AsyncOnlyScheduledTask();
+        var scheduled = new ScheduledTask
+        {
+            TypeName = typeof(AsyncOnlyScheduledTask).FullName,
+            Interval = 1,
+            LastExecution = DateTime.UtcNow.AddMinutes(-2)
+        };
+
+        _taskManager.GetNextScheduled().Returns(scheduled, (ScheduledTask)null);
+        _subject = new Scheduler(
+            _taskManager,
+            new List<IScheduledTask> { asyncTask },
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.Zero,
+            TimeSpan.FromMilliseconds(10));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await _subject.StartAsync(cts.Token);
+        await Task.Delay(250);
+
+        Assert.That(asyncTask.AsyncExecuteCount, Is.GreaterThanOrEqualTo(1));
+        Assert.That(asyncTask.SyncExecuteCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void IsSchedulerDue_remains_true_across_tick_delay_window_after_slot()
+    {
+        var baseTime = new DateTime(2026, 10, 9, 1, 0, 54, DateTimeKind.Utc);
+        var twentyFiveSecondsAfterHourlySlot = baseTime.AddMinutes(60).AddSeconds(25);
+        var twoMinutesAfterHourlySlot = baseTime.AddMinutes(60).AddMinutes(2);
+
+        Assert.That(ScheduledTask.IsSchedulerDue(baseTime, 60, twentyFiveSecondsAfterHourlySlot), Is.True);
+        Assert.That(ScheduledTask.IsSchedulerDue(baseTime, 60, twoMinutesAfterHourlySlot), Is.True);
+    }
 }

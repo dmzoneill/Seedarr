@@ -504,4 +504,42 @@ public class SystemControllerTest
         Assert.That(status.AvailableWorkerThreads, Is.EqualTo(32700));
         Assert.That(status.AvailableCompletionPortThreads, Is.EqualTo(990));
     }
+
+    [Test]
+    public void GetStatus_caches_database_version_and_migration_per_database_instance()
+    {
+        var mainDatabase = Substitute.For<IMainDatabase>();
+        var connection = Substitute.For<IDbConnection>();
+        var command = Substitute.For<IDbCommand>();
+
+        mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);
+        mainDatabase.OpenConnection().Returns(connection);
+        connection.CreateCommand().Returns(command);
+        command.ExecuteScalar().Returns(call => command.CommandText switch
+        {
+            "SELECT sqlite_version()" => "3.45.3",
+            _ when command.CommandText.StartsWith("SELECT Version", StringComparison.Ordinal) => "71",
+            _ => null,
+        });
+
+        var controller = new SystemController(
+            _taskManager,
+            new List<IScheduledTask>(),
+            _commandQueueManager,
+            _appFolderInfo,
+            _lifetime,
+            _configService,
+            mainDatabase);
+
+        var firstResult = (controller.GetStatus().Result as OkObjectResult)?.Value as SystemResource;
+        var secondResult = (controller.GetStatus().Result as OkObjectResult)?.Value as SystemResource;
+
+        Assert.That(firstResult, Is.Not.Null);
+        Assert.That(secondResult, Is.Not.Null);
+        Assert.That(firstResult.DatabaseVersion, Is.EqualTo("3.45.3"));
+        Assert.That(firstResult.DatabaseMigration, Is.EqualTo("71"));
+        Assert.That(secondResult.DatabaseVersion, Is.EqualTo("3.45.3"));
+        Assert.That(secondResult.DatabaseMigration, Is.EqualTo("71"));
+        mainDatabase.Received(2).OpenConnection();
+    }
 }
