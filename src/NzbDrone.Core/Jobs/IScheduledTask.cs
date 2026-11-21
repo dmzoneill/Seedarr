@@ -1,4 +1,5 @@
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace NzbDrone.Core.Jobs;
 
@@ -15,4 +16,9 @@ public interface IJob
 public interface IScheduledTask : IJob
 {
     int DefaultInterval { get; }
+}
+
+public interface IAsyncScheduledTask : IScheduledTask
+{
+    Task ExecuteAsync(CancellationToken cancellationToken);
 }
