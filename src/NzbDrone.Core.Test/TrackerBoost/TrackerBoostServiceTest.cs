@@ -954,6 +954,14 @@ public class TrackerBoostServiceTest
 
         try
         {
+            var slowTorrent = new Torrent
+            {
+                Id = 1,
+                Name = "Slow Boost Torrent",
+                InfoHash = "1234567890abcdef1234567890abcdef12345678",
+                IsPrivate = false
+            };
+            _torrentService.Get(1).Returns(slowTorrent);
             _trackerRepository.All().Returns(new List<TrackerBoostTracker>
             {
                 new()
@@ -968,20 +976,140 @@ public class TrackerBoostServiceTest
                 }
             });
 
-            _configService.GetValue("TrackerBoostSettings", Arg.Any<string>())
-                .Returns("{\"autoBoostEnabled\":true,\"autoHarvestEnabled\":false}");
+            _configService.GetValueBoolean("TrackerBoostAutoBoostEnabled", Arg.Any<bool>()).Returns(true);
+            _configService.GetValueBoolean("TrackerBoostAutoHarvestEnabled", Arg.Any<bool>()).Returns(false);
+            _configService.GetValueBoolean("TrackerBoostOnlyVerified", Arg.Any<bool>()).Returns(false);
+            _configService.GetValueInt("TrackerBoostMaxTrackersPerTorrent", Arg.Any<int>()).Returns(8);
 
             _service.AutoBoostCycleTimeout = TimeSpan.FromMilliseconds(50);
 
             await _service.RunOptimizationCycleAsync(CancellationToken.None);
 
-            Assert.Pass("Cycle completed gracefully when auto-boost budget elapsed.");
+            var logs = _service.GetLogs(50, "Cycle");
+            Assert.That(
+                logs.Any(l => l.Message.Contains("Auto-boost phase reached", StringComparison.Ordinal)),
+                Is.True);
         }
         finally
         {
             TrackerBoostService.HttpClient = previousHttpClient;
             TrackerBoostService.LastScanTime = previousLastScanTime;
         }
+    }
+
+    [Test]
+    public async Task InspectTorrentTrackersAsync_marks_attached_offline_tracker_without_scraping()
+    {
+        var torrent = new Torrent
+        {
+            Id = 13,
+            Name = "Attached Offline Torrent",
+            InfoHash = "1234567890abcdef1234567890abcdef12345678",
+            IsPrivate = false
+        };
+        _torrentService.Get(13).Returns(torrent);
+        _trackerEntryService.GetByTorrentId(13).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 13, Url = "http://offline.invalid:9999/announce", Enabled = true }
+        });
+        _trackerRepository.All().Returns(new List<TrackerBoostTracker>
+        {
+            new()
+            {
+                Id = 8,
+                Url = "http://offline.invalid:9999/announce",
+                Host = "offline.invalid",
+                Port = 9999,
+                Protocol = TrackerProtocol.Http,
+                Enabled = true,
+                Status = TrackerHealthStatus.Offline
+            }
+        });
+
+        var result = await _service.InspectTorrentTrackersAsync(13);
+
+        Assert.That(result.Detections, Has.Count.EqualTo(1));
+        Assert.That(result.Detections[0].DetectionStatus, Is.EqualTo("Attached (Offline)"));
+    }
+
+    [Test]
+    public async Task BoostTorrentAsync_and_BoostHashAsync_inject_into_download_clients_async()
+    {
+        const string infoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd";
+        var torrent = new Torrent
+        {
+            Id = 31,
+            Name = "Boostable Torrent",
+            InfoHash = infoHash,
+            IsPrivate = false
+        };
+        _torrentService.Get(31).Returns(torrent);
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _trackerEntryService.GetByTorrentId(31).Returns(new List<TrackerEntry>());
+        _trackerRepository.All().Returns(new List<TrackerBoostTracker>
+        {
+            new()
+            {
+                Id = 41,
+                Url = "http://fast.tracker.invalid/announce",
+                Host = "fast.tracker.invalid",
+                Port = 80,
+                Protocol = TrackerProtocol.Http,
+                Enabled = true,
+                Status = TrackerHealthStatus.Offline
+            }
+        });
+        _configService.GetValueBoolean("TrackerBoostOnlyVerified", Arg.Any<bool>()).Returns(false);
+        _configService.GetValueInt("TrackerBoostMaxTrackersPerTorrent", Arg.Any<int>()).Returns(5);
+
+        var clientDef = new DownloadClientDefinition
+        {
+            Id = 2,
+            Name = "Transmission",
+            Enable = true,
+            ClientType = "Transmission"
+        };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+        var downloadClient = Substitute.For<IDownloadClient>();
+        downloadClient.AddTrackers(infoHash, Arg.Any<IEnumerable<string>>()).Returns(true);
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        const string externalHash = "1111111111111111111111111111111111111111";
+        downloadClient.AddTrackers(externalHash, Arg.Any<IEnumerable<string>>()).Returns(true);
+
+        var torrentResult = await _service.BoostTorrentAsync(31, onlyVerified: false);
+        var hashResult = await _service.BoostHashAsync(externalHash, force: true, onlyVerified: false);
+
+        Assert.That(torrentResult.AddedTrackersCount, Is.EqualTo(1));
+        Assert.That(hashResult.AddedTrackersCount, Is.EqualTo(1));
+        downloadClient.Received(1).AddTrackers(infoHash, Arg.Any<IEnumerable<string>>());
+        downloadClient.Received(1).AddTrackers(externalHash, Arg.Any<IEnumerable<string>>());
+    }
+
+    [Test]
+    public void InjectIntoDownloadClientsAsync_and_ReannounceDownloadClientsAsync_propagate_cancellation()
+    {
+        const string infoHash = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd";
+        var clientDef = new DownloadClientDefinition
+        {
+            Id = 3,
+            Name = "qBittorrent",
+            Enable = true,
+            ClientType = "QBitTorrent"
+        };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await _service.InjectIntoDownloadClientsAsync(
+                infoHash,
+                new[] { "udp://tracker.public.org:1337/announce" },
+                cts.Token));
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await _service.ReannounceDownloadClientsAsync(infoHash, cts.Token));
     }
 
     private sealed class FakeHttpMessageHandler : HttpMessageHandler

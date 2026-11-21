@@ -403,4 +403,41 @@ public class TrackerScrapeServiceTests
 
         Assert.That(count, Is.LessThan(torrents.Count));
     }
+    [Test]
+    public async Task ScrapeAllTorrentsAsync_continues_when_one_torrent_throws_and_stops_on_caller_cancel()
+    {
+        var torrents = new List<Torrent>
+        {
+            new() { Id = 1, Name = "Failing Torrent", InfoHash = $"{1:x40}" },
+            new() { Id = 2, Name = "Good Torrent", InfoHash = $"{2:x40}" },
+            new() { Id = 3, Name = "Cancelled Torrent", InfoHash = $"{3:x40}" }
+        };
+        _torrentService.GetAll().Returns(torrents);
+        _torrentService.Get(1).Returns(_ => throw new InvalidOperationException("DB read error"));
+        _torrentService.Get(2).Returns(torrents[1]);
+        _torrentService.Get(3).Returns(torrents[2]);
+
+        _trackerEntryService.GetByTorrentId(2).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 21, TorrentId = 2, Url = "udp://good.invalid:1337/announce", Enabled = true }
+        });
+        _trackerEntryService.GetByTorrentId(3).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 31, TorrentId = 3, Url = "udp://cancel.invalid:1337/announce", Enabled = true }
+        });
+
+        _multiTracker.ScrapeAsync(
+                Arg.Is<TrackerEntry>(e => e.Id == 21),
+                torrents[1].InfoHash,
+                Arg.Any<CancellationToken>())
+            .Returns(new TrackerScrapeResponse { Success = true, Complete = 2, Incomplete = 1 });
+
+        var errCount = await _service.ScrapeAllTorrentsAsync(CancellationToken.None);
+        Assert.That(errCount, Is.EqualTo(2));
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var canceledCount = await _service.ScrapeAllTorrentsAsync(cts.Token);
+        Assert.That(canceledCount, Is.EqualTo(0));
+    }
 }
