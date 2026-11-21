@@ -2044,6 +2044,17 @@ public class TrackerBoostService : ITrackerBoostService
     }
 
     internal TimeSpan AutoBoostCycleTimeout { get; set; } = DefaultAutoBoostCycleTimeout;
+    internal Func<bool, CancellationToken, Task> AutoBoostPhaseOverride { get; set; }
+
+    private Task RunAutoBoostPhaseAsync(bool onlyVerified, CancellationToken cancellationToken)
+    {
+        if (AutoBoostPhaseOverride != null)
+        {
+            return AutoBoostPhaseOverride(onlyVerified, cancellationToken);
+        }
+
+        return BoostAllTorrentsAsync(onlyVerified: onlyVerified, cancellationToken: cancellationToken);
+    }
 
     public async Task RunOptimizationCycleAsync(CancellationToken cancellationToken = default)
     {
@@ -2078,7 +2089,7 @@ public class TrackerBoostService : ITrackerBoostService
 
             try
             {
-                await BoostAllTorrentsAsync(onlyVerified: settings.OnlyVerified, cancellationToken: boostCts.Token);
+                await RunAutoBoostPhaseAsync(settings.OnlyVerified, boostCts.Token);
             }
             catch (OperationCanceledException)
                 when (!cancellationToken.IsCancellationRequested && boostCts.IsCancellationRequested)

@@ -846,64 +846,23 @@ public class TrackerBoostServiceTest
     [Test]
     public async Task RunOptimizationCycleAsync_completes_when_auto_boost_exceeds_cycle_budget()
     {
-        _torrentService.GetAll().Returns(new List<Torrent>
-        {
-            new()
-            {
-                Id = 1,
-                Name = "Slow Boost Torrent",
-                InfoHash = "1234567890abcdef1234567890abcdef12345678",
-                IsPrivate = false
-            }
-        });
-        _trackerEntryService.GetByTorrentId(1).Returns(new List<TrackerEntry>
-        {
-            new() { Id = 1, TorrentId = 1, Url = "udp://attached.org:1337/announce", Enabled = true }
-        });
-        _trackerEntryService.All().Returns(new List<TrackerEntry>());
-        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>());
-
-        var previousHttpClient = TrackerBoostService.HttpClient;
         var previousLastScanTime = TrackerBoostService.LastScanTime;
-        using var slowHandler = new FakeHttpMessageHandler(async (_, ct) =>
-        {
-            await Task.Delay(250, ct);
-            return new HttpResponseMessage(HttpStatusCode.OK);
-        });
-        using var slowHttpClient = new HttpClient(slowHandler);
-        TrackerBoostService.HttpClient = slowHttpClient;
         TrackerBoostService.LastScanTime = DateTime.UtcNow;
-
         try
         {
-            var slowTorrent = new Torrent
-            {
-                Id = 1,
-                Name = "Slow Boost Torrent",
-                InfoHash = "1234567890abcdef1234567890abcdef12345678",
-                IsPrivate = false
-            };
-            _torrentService.Get(1).Returns(slowTorrent);
-            _trackerRepository.All().Returns(new List<TrackerBoostTracker>
-            {
-                new()
-                {
-                    Id = 20,
-                    Url = "http://slow.tracker.invalid/announce",
-                    Host = "slow.tracker.invalid",
-                    Port = 80,
-                    Protocol = TrackerProtocol.Http,
-                    Enabled = true,
-                    Status = TrackerHealthStatus.Alive
-                }
-            });
+            _torrentService.GetAll().Returns(new List<Torrent>());
+            _trackerRepository.All().Returns(new List<TrackerBoostTracker>());
+            _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>());
 
             _configService.GetValueBoolean("TrackerBoostAutoBoostEnabled", Arg.Any<bool>()).Returns(true);
             _configService.GetValueBoolean("TrackerBoostAutoHarvestEnabled", Arg.Any<bool>()).Returns(false);
             _configService.GetValueBoolean("TrackerBoostOnlyVerified", Arg.Any<bool>()).Returns(false);
-            _configService.GetValueInt("TrackerBoostMaxTrackersPerTorrent", Arg.Any<int>()).Returns(8);
 
             _service.AutoBoostCycleTimeout = TimeSpan.FromMilliseconds(50);
+            _service.AutoBoostPhaseOverride = async (_, ct) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            };
 
             await _service.RunOptimizationCycleAsync(CancellationToken.None);
 
@@ -914,7 +873,38 @@ public class TrackerBoostServiceTest
         }
         finally
         {
-            TrackerBoostService.HttpClient = previousHttpClient;
+            TrackerBoostService.LastScanTime = previousLastScanTime;
+        }
+    }
+
+    [Test]
+    public async Task RunOptimizationCycleAsync_runs_auto_boost_phase_when_budget_is_not_exceeded()
+    {
+        var previousLastScanTime = TrackerBoostService.LastScanTime;
+        TrackerBoostService.LastScanTime = DateTime.UtcNow;
+        try
+        {
+            _torrentService.GetAll().Returns(new List<Torrent>());
+            _trackerRepository.All().Returns(new List<TrackerBoostTracker>());
+            _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>());
+
+            _configService.GetValueBoolean("TrackerBoostAutoBoostEnabled", Arg.Any<bool>()).Returns(true);
+            _configService.GetValueBoolean("TrackerBoostAutoHarvestEnabled", Arg.Any<bool>()).Returns(false);
+
+            var autoBoostRan = false;
+            _service.AutoBoostCycleTimeout = TimeSpan.FromSeconds(5);
+            _service.AutoBoostPhaseOverride = (_, _) =>
+            {
+                autoBoostRan = true;
+                return Task.CompletedTask;
+            };
+
+            await _service.RunOptimizationCycleAsync(CancellationToken.None);
+
+            Assert.That(autoBoostRan, Is.True);
+        }
+        finally
+        {
             TrackerBoostService.LastScanTime = previousLastScanTime;
         }
     }
