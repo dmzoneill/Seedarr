@@ -770,4 +770,15 @@ public class TaskManagerTest
         Assert.That(result.TypeName, Is.EqualTo(typeof(TrackerScrapeJob).FullName));
         Assert.That(ScheduledTask.IsSchedulerDue(result.LastExecution, result.Interval, now), Is.True);
     }
+    [Test]
+    public void GetSchedulerOrderingKey_and_IsSchedulerDue_handle_min_value_and_nonpositive_interval()
+    {
+        var now = DateTime.UtcNow;
+
+        var neverRunKey = ScheduledTask.GetSchedulerOrderingKey(DateTime.MinValue, 60, now);
+        var zeroIntervalDue = ScheduledTask.IsSchedulerDue(now.AddMinutes(-15), 0, now);
+
+        Assert.That(neverRunKey, Is.EqualTo(now));
+        Assert.That(zeroIntervalDue, Is.True);
+    }
 }
